@@ -1,0 +1,937 @@
+// ═══════════════════════════════════════════════════════════════
+// SIRREEL PLATFORM — PRISMA SCHEMA
+// 21 Tables · 11 Sections · All Relationships Defined
+// ═══════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════
+// 1. FLEET & ASSETS
+// ═══════════════════════════════════════
+
+enum Location {
+  CHESTNUT
+  LIMA
+  LANKERSHIM
+  UTAH
+  ON_RENTAL
+  IN_TRANSIT
+  BODY_SHOP
+  HIGH_TECH
+}
+
+enum AssetStatus {
+  AVAILABLE
+  BOOKED
+  MAINTENANCE
+  IN_TRANSIT
+  WAREHOUSE
+  RETIRED
+  SOLD
+  STOLEN
+}
+
+enum Region {
+  LA
+  NORCAL
+  UTAH
+}
+
+model AssetCategory {
+  id              String    @id @default(uuid())
+  name            String    // "Cube Truck", "PopVan", "Studios"
+  slug            String    @unique // "cube-truck"
+  totalUnits      Int       @map("total_units")
+  dailyRate       Decimal   @map("daily_rate") @db.Decimal(10, 2)
+  weeklyRate      Decimal?  @map("weekly_rate") @db.Decimal(10, 2)
+  minRentalHours  Int       @default(24) @map("min_rental_hours")
+  maxRentalDays   Int       @default(365) @map("max_rental_days")
+  region          Region    @default(LA)
+  isPublished     Boolean   @default(true) @map("is_published")
+  description     String?   @db.Text
+  imageUrl        String?   @map("image_url")
+  sortOrder       Int       @default(0) @map("sort_order")
+
+  // Integration IDs
+  planyoResourceId      Int?    @unique @map("planyo_resource_id")
+  rentalworksCategId    String? @map("rentalworks_category_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  assets       Asset[]
+  bookingItems BookingItem[]
+
+  @@map("asset_categories")
+}
+
+model Asset {
+  id           String      @id @default(uuid())
+  categoryId   String      @map("category_id")
+  unitName     String      @map("unit_name") // "18", "Sprinter #2 (A)", "Lankershim Studio"
+  status       AssetStatus @default(AVAILABLE)
+  location     Location    @default(CHESTNUT)
+
+  // Vehicle details
+  vin          String?     @db.VarChar(20)
+  licensePlate String?     @map("license_plate") @db.VarChar(20)
+  year         Int?
+  make         String?     @db.VarChar(50)
+  model        String?     @db.VarChar(50)
+  mileage      Int?
+
+  // Valuation (for insurance claims)
+  purchasePrice Decimal?   @map("purchase_price") @db.Decimal(12, 2)
+  currentValue  Decimal?   @map("current_value") @db.Decimal(12, 2)
+  insurancePolicyNum String? @map("insurance_policy_num") @db.VarChar(50)
+
+  // Integration IDs
+  rentalworksAssetId String? @map("rentalworks_asset_id")
+  damageIdRef        String? @map("damage_id_ref")
+
+  notes    String?  @db.Text
+  isActive Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  category           AssetCategory       @relation(fields: [categoryId], references: [id])
+  bookingAssignments BookingAssignment[]
+  maintenanceRecords MaintenanceRecord[]
+  dispatchTasks      DispatchTask[]
+  inspections        Inspection[]
+  insuranceClaims    InsuranceClaim[]
+  checkoutRecords    CheckoutRecord[]
+
+  @@map("assets")
+}
+
+// ═══════════════════════════════════════
+// 2. CLIENTS & CRM
+// ═══════════════════════════════════════
+
+enum ClientTier {
+  VIP
+  PREFERRED
+  STANDARD
+  NEW
+}
+
+enum ProductionType {
+  FILM
+  TV
+  COMMERCIAL
+  MUSIC_VIDEO
+  CORPORATE
+  OTHER
+}
+
+model Company {
+  id             String         @id @default(uuid())
+  name           String
+  website        String?
+  industry       ProductionType @default(OTHER)
+  tier           ClientTier     @default(NEW)
+  totalSpend     Decimal        @default(0) @map("total_spend") @db.Decimal(12, 2)
+  totalBookings  Int            @default(0) @map("total_bookings")
+
+  // Default agent
+  defaultAgentId String? @map("default_agent_id")
+
+  // Insurance (for claims — client's production insurance)
+  insuranceCarrier   String? @map("insurance_carrier")
+  insurancePolicyNum String? @map("insurance_policy_num")
+  insuranceContact   String? @map("insurance_contact")
+  coiOnFile          Boolean @default(false) @map("coi_on_file")
+  coiExpiry          DateTime? @map("coi_expiry")
+  coiDocumentUrl     String?  @map("coi_document_url")
+
+  // Integration
+  rentalworksCustomerId String? @map("rentalworks_customer_id")
+
+  billingEmail   String? @map("billing_email")
+  billingAddress String? @map("billing_address") @db.Text
+  notes          String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  defaultAgent   User?           @relation("DefaultAgent", fields: [defaultAgentId], references: [id])
+  contacts       Contact[]
+  bookings       Booking[]
+  drivers        Driver[]
+  insuranceClaims InsuranceClaim[]
+  emailMessages  EmailMessage[]
+
+  @@map("companies")
+}
+
+model Contact {
+  id         String  @id @default(uuid())
+  companyId  String? @map("company_id")
+  firstName  String  @map("first_name")
+  lastName   String  @map("last_name")
+  email      String  @unique
+  phone      String? @db.VarChar(30)
+  mobile     String? @db.VarChar(30)
+  role       String? @db.VarChar(100)
+  isPrimary  Boolean @default(false) @map("is_primary")
+
+  // Integration
+  planyoUserId Int? @map("planyo_user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company       Company?       @relation(fields: [companyId], references: [id])
+  bookings      Booking[]
+  user          User?          @relation("ContactUser")
+  emailMessages EmailMessage[]
+
+  @@map("contacts")
+}
+
+// ═══════════════════════════════════════
+// 3. DRIVERS
+// ═══════════════════════════════════════
+
+enum DriverType {
+  EXTERNAL  // Production company's driver
+  INTERNAL  // SirReel driver (Wes, Hugo, etc.)
+}
+
+model Driver {
+  id             String     @id @default(uuid())
+  firstName      String     @map("first_name")
+  lastName       String     @map("last_name")
+  phone          String?    @db.VarChar(30)
+  email          String?
+
+  // License
+  licenseNumber  String?    @map("license_number") @db.VarChar(30)
+  licenseState   String?    @map("license_state") @db.VarChar(5)
+  licenseExpiry  DateTime?  @map("license_expiry")
+  licensePhotoUrl String?   @map("license_photo_url")
+
+  type           DriverType @default(EXTERNAL)
+  companyId      String?    @map("company_id") // Which production sent them (external drivers)
+
+  // Tracking
+  totalCheckouts   Int      @default(0) @map("total_checkouts")
+  damageIncidents  Int      @default(0) @map("damage_incidents")
+  flagged          Boolean  @default(false) // Auto-set if damage history
+  flagReason       String?  @map("flag_reason") @db.Text
+
+  notes          String?    @db.Text
+  isActive       Boolean    @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  company         Company?         @relation(fields: [companyId], references: [id])
+  checkoutRecords CheckoutRecord[]
+  dispatchTasks   DispatchTask[]   @relation("TaskDriver")
+
+  @@map("drivers")
+}
+
+// ═══════════════════════════════════════
+// 4. BOOKINGS & RESERVATIONS
+// ═══════════════════════════════════════
+
+enum BookingStatus {
+  REQUEST
+  AI_REVIEW
+  PENDING_APPROVAL
+  CONFIRMED
+  ACTIVE
+  RETURNED
+  CANCELLED
+  ARCHIVED
+}
+
+enum BookingPriority {
+  URGENT
+  HIGH
+  STANDARD
+  LOW
+}
+
+enum BookingSource {
+  WEBSITE
+  PHONE
+  EMAIL
+  AGENT_DIRECT
+  AI_AUTO
+}
+
+enum UnionStatus {
+  UNION
+  NON_UNION
+  UNKNOWN
+}
+
+model Booking {
+  id             String         @id @default(uuid())
+  bookingNumber  String         @unique @map("booking_number") // SR-2026-0042
+  companyId      String         @map("company_id")
+  contactId      String         @map("contact_id")
+  agentId        String         @map("agent_id")
+  jobName        String         @map("job_name")
+  startDate      DateTime       @map("start_date") @db.Date
+  endDate        DateTime       @map("end_date") @db.Date
+  status         BookingStatus  @default(REQUEST)
+  priority       BookingPriority @default(STANDARD)
+  totalPrice     Decimal?       @map("total_price") @db.Decimal(12, 2)
+  depositAmount  Decimal?       @map("deposit_amount") @db.Decimal(10, 2)
+  depositPaid    Boolean        @default(false) @map("deposit_paid")
+
+  // Compliance
+  rentalAgreement Boolean      @default(false) @map("rental_agreement")
+  coiReceived     Boolean      @default(false) @map("coi_received")
+  unionStatus     UnionStatus  @default(UNKNOWN) @map("union_status")
+
+  // Delivery
+  deliveryAddress String?      @map("delivery_address") @db.Text
+  deliveryTime    String?      @map("delivery_time")
+  pickupAddress   String?      @map("pickup_address") @db.Text
+  pickupTime      String?      @map("pickup_time")
+
+  // Notes
+  notes      String?  @db.Text
+  adminNotes String?  @map("admin_notes") @db.Text
+
+  // AI
+  aiAnalysisId String? @map("ai_analysis_id")
+
+  // Integration
+  rentalworksOrderId   String? @map("rentalworks_order_id")
+  rentalworksInvoiceId String? @map("rentalworks_invoice_id")
+  invoiceStatus        String? @map("invoice_status") // not_created, draft, sent, paid, overdue
+
+  source      BookingSource @default(PHONE)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  returnedAt  DateTime? @map("returned_at")
+
+  // Relations
+  company         Company          @relation(fields: [companyId], references: [id])
+  contact         Contact          @relation(fields: [contactId], references: [id])
+  agent           User             @relation("BookingAgent", fields: [agentId], references: [id])
+  items           BookingItem[]
+  dispatchTasks   DispatchTask[]
+  insuranceClaims InsuranceClaim[]
+  aiDecisions     AiDecision[]
+
+  @@map("bookings")
+}
+
+enum BookingItemStatus {
+  REQUESTED
+  ASSIGNED
+  SUBSTITUTED
+  UNFULFILLED
+}
+
+model BookingItem {
+  id         String            @id @default(uuid())
+  bookingId  String            @map("booking_id")
+  categoryId String            @map("category_id")
+  quantity   Int
+  dailyRate  Decimal           @map("daily_rate") @db.Decimal(10, 2)
+  lineTotal  Decimal?          @map("line_total") @db.Decimal(10, 2)
+  status     BookingItemStatus @default(REQUESTED)
+  notes      String?           @db.Text
+
+  // Relations
+  booking     Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  category    AssetCategory       @relation(fields: [categoryId], references: [id])
+  assignments BookingAssignment[]
+
+  @@map("booking_items")
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  CHECKED_OUT
+  RETURNED
+  SWAPPED
+}
+
+model BookingAssignment {
+  id              String           @id @default(uuid())
+  bookingItemId   String           @map("booking_item_id")
+  assetId         String           @map("asset_id")
+  startDate       DateTime         @map("start_date") @db.Date
+  endDate         DateTime         @map("end_date") @db.Date
+  status          AssignmentStatus @default(ASSIGNED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bookingItem     BookingItem      @relation(fields: [bookingItemId], references: [id], onDelete: Cascade)
+  asset           Asset            @relation(fields: [assetId], references: [id])
+  checkoutRecords CheckoutRecord[]
+  inspections     Inspection[]     @relation("AssignmentInspections")
+
+  @@map("booking_assignments")
+}
+
+// ═══════════════════════════════════════
+// 5. CHECKOUT RECORDS (Fleet process)
+// ═══════════════════════════════════════
+
+model CheckoutRecord {
+  id                    String    @id @default(uuid())
+  bookingAssignmentId   String    @map("booking_assignment_id")
+  assetId               String    @map("asset_id")
+  driverId              String    @map("driver_id")
+  checkedOutBy          String    @map("checked_out_by") // Fleet team member
+
+  // Checkout
+  checkoutTime          DateTime  @map("checkout_time")
+  mileageOut            Int?      @map("mileage_out")
+  fuelOut               String?   @map("fuel_out") // full, 3/4, 1/2, 1/4, empty
+  checkoutInspectionId  String?   @map("checkout_inspection_id")
+
+  // Return
+  returnTime            DateTime? @map("return_time")
+  mileageIn             Int?      @map("mileage_in")
+  fuelIn                String?   @map("fuel_in")
+  returnInspectionId    String?   @map("return_inspection_id")
+  returnedTo            String?   @map("returned_to") // Fleet team member who received
+
+  // Verification
+  licenseVerified       Boolean   @default(false) @map("license_verified")
+  newDamageOnReturn     Boolean   @default(false) @map("new_damage_on_return")
+
+  notes                 String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
+  asset             Asset             @relation(fields: [assetId], references: [id])
+  driver            Driver            @relation(fields: [driverId], references: [id])
+  checkedOutByUser  User              @relation("CheckedOutBy", fields: [checkedOutBy], references: [id])
+
+  @@map("checkout_records")
+}
+
+// ═══════════════════════════════════════
+// 6. MAINTENANCE & SERVICE
+// ═══════════════════════════════════════
+
+enum MaintenanceType {
+  REPAIR
+  DOT
+  SERVICE
+  BODYWORK
+  SMOG
+  DAMAGE_REPAIR
+  OTHER
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model MaintenanceRecord {
+  id            String            @id @default(uuid())
+  assetId       String            @map("asset_id")
+  type          MaintenanceType   @default(REPAIR)
+  title         String
+  description   String?           @db.Text
+  startDate     DateTime          @map("start_date") @db.Date
+  endDate       DateTime?         @map("end_date") @db.Date
+  estimatedCost Decimal?          @map("estimated_cost") @db.Decimal(10, 2)
+  actualCost    Decimal?          @map("actual_cost") @db.Decimal(10, 2)
+  vendor        String?
+  status        MaintenanceStatus @default(SCHEDULED)
+
+  // Link to insurance claim if damage-related
+  relatedClaimId String? @map("related_claim_id")
+
+  createdBy String? @map("created_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  asset        Asset           @relation(fields: [assetId], references: [id])
+  relatedClaim InsuranceClaim? @relation(fields: [relatedClaimId], references: [id])
+  createdByUser User?          @relation("MaintCreatedBy", fields: [createdBy], references: [id])
+
+  @@map("maintenance_records")
+}
+
+// ═══════════════════════════════════════
+// 7. DISPATCH & TASKS
+// ═══════════════════════════════════════
+
+enum TaskType {
+  DELIVERY
+  PICKUP
+  SWAP
+  PUMP_SERVICE
+  STAGE_DELIVERY
+  STAGE_PICKUP
+  REPAIR_TRANSPORT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+model DispatchTask {
+  id             String     @id @default(uuid())
+  bookingId      String?    @map("booking_id")
+  assetId        String?    @map("asset_id")
+  type           TaskType
+  assignedTo     String?    @map("assigned_to") // FK to Driver (internal)
+  scheduledDate  DateTime   @map("scheduled_date") @db.Date
+  scheduledTime  String?    @map("scheduled_time")
+  fromLocation   Location?  @map("from_location")
+  toLocation     String?    @map("to_location") @db.Text
+  towVehicle     String?    @map("tow_vehicle") // Blue Chevy, SB01, SB02, P1, P2
+  deliveryItems  String?    @map("delivery_items") @db.Text // Grip, Elec, Production, etc.
+  status         TaskStatus @default(PENDING)
+  completedAt    DateTime?  @map("completed_at")
+  notes          String?    @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  booking  Booking? @relation(fields: [bookingId], references: [id])
+  asset    Asset?   @relation(fields: [assetId], references: [id])
+  driver   Driver?  @relation("TaskDriver", fields: [assignedTo], references: [id])
+
+  @@map("dispatch_tasks")
+}
+
+// ═══════════════════════════════════════
+// 8. DAMAGE & INSPECTIONS
+// ═══════════════════════════════════════
+
+enum InspectionType {
+  CHECKOUT
+  RETURN
+  ROUTINE
+  INCIDENT
+}
+
+enum VehicleCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+model Inspection {
+  id                    String           @id @default(uuid())
+  assetId               String           @map("asset_id")
+  bookingAssignmentId   String?          @map("booking_assignment_id")
+  type                  InspectionType
+  inspectedBy           String           @map("inspected_by")
+  inspectionDate        DateTime         @map("inspection_date")
+  overallCondition      VehicleCondition @map("overall_condition")
+  mileageAtInspection   Int?             @map("mileage_at_inspection")
+  fuelLevel             String?          @map("fuel_level")
+
+  // DamageID
+  damageIdReportUrl String? @map("damage_id_report_url")
+  damageIdRef       String? @map("damage_id_ref")
+
+  newDamageFound Boolean @default(false) @map("new_damage_found")
+  notes          String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  asset             Asset              @relation(fields: [assetId], references: [id])
+  bookingAssignment BookingAssignment? @relation("AssignmentInspections", fields: [bookingAssignmentId], references: [id])
+  inspectedByUser   User               @relation("InspectedBy", fields: [inspectedBy], references: [id])
+  damageItems       DamageItem[]
+
+  // Used in claims
+  checkoutClaims InsuranceClaim[] @relation("CheckoutInspection")
+  returnClaims   InsuranceClaim[] @relation("ReturnInspection")
+
+  @@map("inspections")
+}
+
+enum DamageType {
+  SCRATCH
+  DENT
+  CRACK
+  MISSING_PART
+  MECHANICAL
+  INTERIOR
+  OTHER
+}
+
+enum DamageSeverity {
+  MINOR
+  MODERATE
+  MAJOR
+}
+
+model DamageItem {
+  id                  String         @id @default(uuid())
+  inspectionId        String         @map("inspection_id")
+  locationOnVehicle   String         @map("location_on_vehicle") // "driver side rear panel"
+  damageType          DamageType     @map("damage_type")
+  severity            DamageSeverity
+  photoUrl            String?        @map("photo_url")
+  estimatedRepairCost Decimal?       @map("estimated_repair_cost") @db.Decimal(10, 2)
+  isPreExisting       Boolean        @default(false) @map("is_pre_existing")
+  notes               String?        @db.Text
+
+  // Link to claim
+  claimId String? @map("claim_id")
+
+  // Relations
+  inspection Inspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  claim      InsuranceClaim? @relation(fields: [claimId], references: [id])
+
+  @@map("damage_items")
+}
+
+// ═══════════════════════════════════════
+// 9. INSURANCE CLAIMS
+// ═══════════════════════════════════════
+
+enum ClaimStatus {
+  DRAFT
+  READY_TO_SEND
+  SUBMITTED
+  ACKNOWLEDGED
+  NEGOTIATING
+  SETTLED
+  DENIED
+  ESCALATED
+  CLOSED
+}
+
+model InsuranceClaim {
+  id                    String      @id @default(uuid())
+  claimNumber           String      @unique @map("claim_number") // SRC-2026-0001
+  bookingId             String      @map("booking_id")
+  assetId               String      @map("asset_id")
+  companyId             String      @map("company_id")
+  checkoutInspectionId  String      @map("checkout_inspection_id")
+  returnInspectionId    String      @map("return_inspection_id")
+  status                ClaimStatus @default(DRAFT)
+
+  // Insurance details
+  filedAgainst    String  @map("filed_against") // Insurance company name
+  adjusterName    String? @map("adjuster_name")
+  adjusterPhone   String? @map("adjuster_phone")
+  adjusterEmail   String? @map("adjuster_email")
+  policyNumber    String? @map("policy_number")
+
+  // Incident
+  incidentDate        DateTime @map("incident_date") @db.Date
+  incidentDescription String   @map("incident_description") @db.Text
+
+  // Costs
+  repairEstimate     Decimal? @map("repair_estimate") @db.Decimal(10, 2)
+  repairActual       Decimal? @map("repair_actual") @db.Decimal(10, 2)
+  repairVendor       String?  @map("repair_vendor")
+  daysOutOfService   Int?     @map("days_out_of_service")
+  dailyRevenueRate   Decimal? @map("daily_revenue_rate") @db.Decimal(10, 2)
+  lossOfRevenue      Decimal? @map("loss_of_revenue") @db.Decimal(10, 2)
+  totalDemand        Decimal? @map("total_demand") @db.Decimal(10, 2)
+  amountOffered      Decimal? @map("amount_offered") @db.Decimal(10, 2)
+  amountSettled      Decimal? @map("amount_settled") @db.Decimal(10, 2)
+
+  // AI
+  demandLetterUrl    String? @map("demand_letter_url")
+  aiGeneratedLetter  String? @map("ai_generated_letter") @db.Text
+  aiCounterResponse  String? @map("ai_counter_response") @db.Text
+
+  assignedTo String? @map("assigned_to")
+  notes      String? @db.Text
+
+  submittedAt DateTime? @map("submitted_at")
+  settledAt   DateTime? @map("settled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  booking            Booking     @relation(fields: [bookingId], references: [id])
+  asset              Asset       @relation(fields: [assetId], references: [id])
+  company            Company     @relation(fields: [companyId], references: [id])
+  checkoutInspection Inspection  @relation("CheckoutInspection", fields: [checkoutInspectionId], references: [id])
+  returnInspection   Inspection  @relation("ReturnInspection", fields: [returnInspectionId], references: [id])
+  assignedToUser     User?       @relation("ClaimAssignee", fields: [assignedTo], references: [id])
+  documents          ClaimDocument[]
+  timeline           ClaimTimeline[]
+  damageItems        DamageItem[]
+  maintenanceRecords MaintenanceRecord[]
+
+  @@map("insurance_claims")
+}
+
+enum ClaimDocType {
+  CHECKOUT_PHOTO
+  RETURN_PHOTO
+  REPAIR_ESTIMATE
+  REPAIR_INVOICE
+  DEMAND_LETTER
+  COUNTER_LETTER
+  COI
+  RENTAL_AGREEMENT
+  CORRESPONDENCE
+  SETTLEMENT
+  OTHER
+}
+
+model ClaimDocument {
+  id         String       @id @default(uuid())
+  claimId    String       @map("claim_id")
+  type       ClaimDocType
+  title      String
+  fileUrl    String       @map("file_url")
+  uploadedBy String?      @map("uploaded_by")
+  notes      String?      @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  claim          InsuranceClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  uploadedByUser User?          @relation("DocUploader", fields: [uploadedBy], references: [id])
+
+  @@map("claim_documents")
+}
+
+enum ClaimAction {
+  CREATED
+  SUBMITTED
+  ADJUSTER_ASSIGNED
+  OFFER_RECEIVED
+  COUNTER_SENT
+  NEGOTIATION_NOTE
+  SETTLED
+  DENIED
+  ESCALATED
+  DOCUMENT_ADDED
+}
+
+model ClaimTimeline {
+  id          String      @id @default(uuid())
+  claimId     String      @map("claim_id")
+  action      ClaimAction
+  description String      @db.Text
+  amount      Decimal?    @db.Decimal(10, 2)
+  performedBy String?     @map("performed_by")
+  isAi        Boolean     @default(false) @map("is_ai_generated")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  claim           InsuranceClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  performedByUser User?          @relation("TimelineActor", fields: [performedBy], references: [id])
+
+  @@map("claim_timeline")
+}
+
+// ═══════════════════════════════════════
+// 10. AI BOOKING AGENT
+// ═══════════════════════════════════════
+
+enum AiDecisionType {
+  AUTO_APPROVE
+  APPROVE_WITH_SUBS
+  NEEDS_REVIEW
+  WAITLIST
+  DENY
+}
+
+model AiDecision {
+  id                   String         @id @default(uuid())
+  bookingId            String         @map("booking_id")
+  decision             AiDecisionType
+  confidence           Int            // 0-100
+  summary              String         @db.Text
+  suggestedAssignments Json?          @map("suggested_assignments")
+  alternativesOffered  Json?          @map("alternatives_offered")
+  conflictsDetected    Json?          @map("conflicts_detected")
+  revenueEstimate      Decimal?       @map("revenue_estimate") @db.Decimal(12, 2)
+  upsellSuggestions    Json?          @map("upsell_suggestions")
+  draftClientMessage   String?        @map("draft_client_message") @db.Text
+  wasOverridden        Boolean        @default(false) @map("was_overridden")
+  overrideReason       String?        @map("override_reason") @db.Text
+  overriddenBy         String?        @map("overridden_by")
+  processingTimeMs     Int?           @map("processing_time_ms")
+  modelVersion         String?        @map("model_version")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  booking        Booking @relation(fields: [bookingId], references: [id])
+  overriddenUser User?   @relation("AiOverrider", fields: [overriddenBy], references: [id])
+
+  @@map("ai_decisions")
+}
+
+// ═══════════════════════════════════════
+// 11. GMAIL INTEGRATION
+// ═══════════════════════════════════════
+
+model EmailAccount {
+  id           String  @id @default(uuid())
+  userId       String  @map("user_id")
+  emailAddress String  @unique @map("email_address") // jose@sirreel.com
+  accessToken  String? @map("access_token") @db.Text
+  refreshToken String? @map("refresh_token") @db.Text
+  tokenExpiry  DateTime? @map("token_expiry")
+  lastSyncAt   DateTime? @map("last_sync_at")
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user     User           @relation(fields: [userId], references: [id])
+  messages EmailMessage[]
+
+  @@map("email_accounts")
+}
+
+model EmailThread {
+  id              String @id @default(uuid())
+  gmailThreadId   String @unique @map("gmail_thread_id")
+  subject         String
+  lastMessageAt   DateTime @map("last_message_at")
+  messageCount    Int      @default(0) @map("message_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  messages EmailMessage[]
+
+  @@map("email_threads")
+}
+
+model EmailMessage {
+  id              String   @id @default(uuid())
+  emailAccountId  String   @map("email_account_id")
+  threadId        String?  @map("thread_id")
+  gmailMessageId  String   @unique @map("gmail_message_id")
+
+  // Matched to CRM
+  companyId       String?  @map("company_id")
+  contactId       String?  @map("contact_id")
+
+  fromAddress     String   @map("from_address")
+  toAddresses     String[] @map("to_addresses")
+  subject         String
+  snippet         String?  @db.Text // Preview text
+  direction       String   // "inbound" or "outbound"
+
+  sentAt          DateTime @map("sent_at")
+  isRead          Boolean  @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id])
+  thread       EmailThread? @relation(fields: [threadId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+
+  @@map("email_messages")
+}
+
+// ═══════════════════════════════════════
+// 12. USERS & AUTH
+// ═══════════════════════════════════════
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  AGENT
+  DISPATCHER
+  FLEET_TECH
+  DRIVER
+  CLIENT
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      UserRole @default(AGENT)
+  phone     String?  @db.VarChar(30)
+  avatarUrl String?  @map("avatar_url")
+  location  Location? // Home base
+  isActive  Boolean  @default(true) @map("is_active")
+
+  // Link to contact if client portal user
+  contactId String? @unique @map("contact_id")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  // Relations
+  contact          Contact?          @relation("ContactUser", fields: [contactId], references: [id])
+  agentBookings    Booking[]         @relation("BookingAgent")
+  defaultForCompanies Company[]      @relation("DefaultAgent")
+  emailAccounts    EmailAccount[]
+  inspections      Inspection[]      @relation("InspectedBy")
+  checkoutsProcessed CheckoutRecord[] @relation("CheckedOutBy")
+  maintenanceCreated MaintenanceRecord[] @relation("MaintCreatedBy")
+  assignedClaims   InsuranceClaim[]  @relation("ClaimAssignee")
+  uploadedDocs     ClaimDocument[]   @relation("DocUploader")
+  timelineActions  ClaimTimeline[]   @relation("TimelineActor")
+  aiOverrides      AiDecision[]      @relation("AiOverrider")
+  auditActions     AuditLog[]
+
+  @@map("users")
+}
+
+// ═══════════════════════════════════════
+// 13. AUDIT LOG
+// ═══════════════════════════════════════
+
+model AuditLog {
+  id         String  @id @default(uuid())
+  userId     String? @map("user_id")
+  action     String  // "booking.confirmed", "asset.status_changed"
+  entityType String  @map("entity_type") // "booking", "asset", etc.
+  entityId   String  @map("entity_id")
+  oldValues  Json?   @map("old_values")
+  newValues  Json?   @map("new_values")
+  ipAddress  String? @map("ip_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
