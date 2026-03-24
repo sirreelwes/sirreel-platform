@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -19,14 +20,16 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@auth/prisma-adapter": "^1.6.0",
     "@prisma/client": "^6.4.0",
+    "@sendgrid/mail": "^8.1.4",
+    "date-fns": "^4.1.0",
+    "googleapis": "^144.0.0",
     "next": "14.2.20",
-    "next-auth": "^4.24.11",
+    "next-auth": "^4.24.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@sendgrid/mail": "^8.1.4",
-    "googleapis": "^144.0.0",
-    "date-fns": "^4.1.0",
+    "resend": "^6.9.4",
     "zod": "^3.24.2"
   },
   "devDependencies": {

@@ -3,351 +3,218 @@
 import { useState, useMemo } from 'react';
 
 // ═══ Helpers ═══
-function toDS(d: Date): string {
-  return d.toISOString().split('T')[0];
-}
-function addDays(ds: string, n: number): string {
-  const d = new Date(ds + 'T12:00:00');
-  d.setDate(d.getDate() + n);
-  return toDS(d);
-}
-function fDate(ds: string): string {
-  return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-function getDaysInMonth(y: number, m: number): number {
-  return new Date(y, m + 1, 0).getDate();
-}
-function getFirstDayOfMonth(y: number, m: number): number {
-  return new Date(y, m, 1).getDay();
-}
-
+function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
+function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
+function fDate(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+function fDateLong(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+function getDaysInMonth(y: number, m: number): number { return new Date(y, m + 1, 0).getDate(); }
+function getFirstDayOfMonth(y: number, m: number): number { return new Date(y, m, 1).getDay(); }
+function diffDays(a: string, b: string): number { return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000); }
 const today = toDS(new Date());
 
-// ═══ Sample Data (will be replaced with API calls) ═══
-type Booking = {
-  id: string;
-  cat: string;
-  catShort: string;
-  qty: number;
-  cust: string;
-  contact: string;
-  job: string;
-  agent: string;
-  start: string;
-  end: string;
-  status: 'active' | 'confirmed' | 'pending' | 'cancelled';
-  price: number;
+// ═══ Data ═══
+const CATS: Record<string, string> = { cube: 'Cube', cargo: 'Cargo', pass: 'Pass', pop: 'Pop', cam: 'Cam', dlux: 'DLUX', scout: 'Scout', studio: 'Studio', stakebed: 'Stake' };
+
+type JobItem = { cat: string; qty: number; start: string; end: string };
+type Job = {
+  id: string; company: string; jobName: string; jobNum: string;
+  contact: string; agent: string; stage: string;
+  items: JobItem[];
 };
 
-type MaintRecord = {
-  id: string;
-  unit: string;
-  title: string;
-  start: string;
-  end: string;
-  vendor?: string;
-};
-
-const BOOKINGS: Booking[] = [
-  { id: 'b1', cat: 'Cube Truck', catShort: 'Cube', qty: 6, cust: 'Cinepower & Light', contact: 'Terry Meadows', job: 'Commercial', agent: 'Jose', start: today, end: addDays(today, 3), status: 'active', price: 4200 },
-  { id: 'b2', cat: 'Cube Truck', catShort: 'Cube', qty: 4, cust: 'Justin K Productions', contact: 'Justin K', job: 'Feature Film', agent: 'Oliver', start: addDays(today, 1), end: addDays(today, 6), status: 'confirmed', price: 4200 },
-  { id: 'b3', cat: 'Cargo Van w/ LG', catShort: 'Cargo', qty: 5, cust: 'Nathan Israel Prod', contact: 'Nathan Israel', job: 'TV Series', agent: 'Jose', start: today, end: addDays(today, 4), status: 'active', price: 5000 },
-  { id: 'b4', cat: 'PopVan', catShort: 'Pop', qty: 2, cust: 'Elli Legerski Prod', contact: 'Elli L', job: 'Branded Content', agent: 'Jose', start: today, end: addDays(today, 5), status: 'active', price: 4800 },
-  { id: 'b5', cat: 'DLUX', catShort: 'DLUX', qty: 2, cust: 'Snow Story', contact: 'Jason Mayfield', job: 'Music Video', agent: 'Jose', start: addDays(today, 1), end: addDays(today, 4), status: 'confirmed', price: 3600 },
-  { id: 'b6', cat: 'Passenger Van', catShort: 'Pass', qty: 3, cust: 'Nathalie SP Film', contact: 'Nathalie S', job: 'Short Film', agent: 'Oliver', start: addDays(today, 2), end: addDays(today, 3), status: 'confirmed', price: 1050 },
-  { id: 'b7', cat: 'Camera Cube', catShort: 'Cam', qty: 2, cust: 'Maddie Harmon', contact: 'Maddie H', job: 'Documentary', agent: 'Dani', start: today, end: addDays(today, 4), status: 'active', price: 2000 },
-  { id: 'b8', cat: 'Studios', catShort: 'Studio', qty: 2, cust: 'Fabletics', contact: 'Ella S', job: 'Spring Campaign', agent: 'Jose', start: addDays(today, 1), end: addDays(today, 3), status: 'confirmed', price: 18000 },
-  { id: 'b9', cat: 'Cube Truck', catShort: 'Cube', qty: 3, cust: 'Alyssa Benedetto', contact: 'Alyssa B', job: 'Photo Shoot', agent: 'Jose', start: addDays(today, 4), end: addDays(today, 7), status: 'pending', price: 2100 },
-  { id: 'b10', cat: 'Cube Truck', catShort: 'Cube', qty: 2, cust: 'Beth Schiffman', contact: 'Beth S', job: 'TV Pilot', agent: 'Jose', start: addDays(today, 5), end: addDays(today, 9), status: 'pending', price: 1750 },
+const JOBS: Job[] = [
+  { id: 'j1', company: 'Cinepower & Light', jobName: 'Spring Auto Campaign', jobNum: 'CP-041', contact: 'Terry Meadows', agent: 'Jose', stage: 'active', items: [{ cat: 'cube', qty: 6, start: today, end: addDays(today, 3) }] },
+  { id: 'j2', company: 'Justin K Prod', jobName: 'Midnight Run 2', jobNum: 'JKP-018', contact: 'Justin Kappenstein', agent: 'Oliver', stage: 'booked', items: [{ cat: 'cube', qty: 4, start: addDays(today, 1), end: addDays(today, 6) }] },
+  { id: 'j3', company: 'Nathan Israel Prod', jobName: 'Lights Out S3', jobNum: 'NI-064', contact: 'Nathan Israel', agent: 'Jose', stage: 'active', items: [{ cat: 'cargo', qty: 5, start: today, end: addDays(today, 4) }] },
+  { id: 'j4', company: 'Elli Legerski Prod', jobName: 'Nike Branded', jobNum: 'EL-038', contact: 'Elli Legerski', agent: 'Jose', stage: 'active', items: [{ cat: 'pop', qty: 2, start: today, end: addDays(today, 5) }] },
+  { id: 'j5', company: 'Snow Story', jobName: 'Cold Front MV', jobNum: 'SS-005', contact: 'Jason Mayfield', agent: 'Jose', stage: 'booked', items: [{ cat: 'dlux', qty: 2, start: addDays(today, 1), end: addDays(today, 4) }, { cat: 'cube', qty: 3, start: addDays(today, 1), end: addDays(today, 4) }] },
+  { id: 'j6', company: 'Fabletics', jobName: 'Spring Campaign', jobNum: 'FAB-001', contact: 'Ella Swanstrom', agent: 'Jose', stage: 'booked', items: [{ cat: 'studio', qty: 2, start: addDays(today, 1), end: addDays(today, 3) }] },
+  { id: 'j7', company: 'Beth Schiffman Prod', jobName: 'Greystone Pilot', jobNum: 'BS-013', contact: 'Beth Schiffman', agent: 'Jose', stage: 'hold', items: [{ cat: 'cube', qty: 5, start: addDays(today, 3), end: addDays(today, 8) }, { cat: 'cargo', qty: 3, start: addDays(today, 3), end: addDays(today, 8) }] },
+  { id: 'j8', company: 'Paramount', jobName: 'Untitled Drama', jobNum: 'PAR-007', contact: 'Stephen Predisik', agent: 'Oliver', stage: 'hold', items: [{ cat: 'cargo', qty: 4, start: addDays(today, 2), end: addDays(today, 5) }] },
+  { id: 'j9', company: 'AJR Films', jobName: 'Megan Thee Stallion MV', jobNum: 'AJR-050', contact: 'Brandon McClover', agent: 'Jose', stage: 'inquiry', items: [{ cat: 'cube', qty: 8, start: addDays(today, 5), end: addDays(today, 12) }] },
+  { id: 'j10', company: 'Alyssa Benedetto Prod', jobName: 'Revolve Shoot', jobNum: 'AB-025', contact: 'Alyssa Benedetto', agent: 'Jose', stage: 'quoted', items: [{ cat: 'cube', qty: 3, start: addDays(today, 4), end: addDays(today, 7) }] },
 ];
 
+type MaintRecord = { id: string; unit: string; issue: string; start: string; end: string };
 const MAINT: MaintRecord[] = [
-  { id: 'm1', unit: 'Cube #24(A)', title: 'Bad motor', start: '2024-01-01', end: '2026-04-01', vendor: 'High Tech' },
-  { id: 'm2', unit: 'Cube #8', title: 'Transmission', start: addDays(today, -2), end: addDays(today, 5), vendor: 'High Tech' },
-  { id: 'm3', unit: 'Cube #15', title: 'Oil/Reverse', start: addDays(today, -5), end: addDays(today, 15) },
-  { id: 'm4', unit: 'Sprinter #2', title: 'Engine inspect', start: today, end: addDays(today, 6) },
-  { id: 'm5', unit: 'SC #38', title: 'Check engine', start: addDays(today, 1), end: addDays(today, 8) },
-  { id: 'm6', unit: 'Nissan #1', title: 'Motor mounts', start: addDays(today, -3), end: addDays(today, 4), vendor: 'Dealer' },
-  { id: 'm7', unit: 'Pop #3', title: 'Transmission', start: '2025-03-20', end: '2026-04-01' },
-  { id: 'm8', unit: 'Pop #1', title: 'Interior lights', start: today, end: addDays(today, 4) },
-  { id: 'm9', unit: 'Cube #9', title: 'Battery', start: addDays(today, 1), end: addDays(today, 7) },
+  { id: 'mt1', unit: 'Cube #24(A)', issue: 'Bad motor', start: addDays(today, -12), end: addDays(today, 5) },
+  { id: 'mt2', unit: 'Cube #8', issue: 'Transmission', start: addDays(today, -8), end: addDays(today, 7) },
+  { id: 'mt3', unit: 'SC #36', issue: 'Roof damage', start: addDays(today, -6), end: addDays(today, 14) },
+  { id: 'mt4', unit: 'Pop #3', issue: 'Trans (parts)', start: addDays(today, -21), end: addDays(today, 14) },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-emerald-500/20 border-l-emerald-400 text-emerald-300',
-  confirmed: 'bg-blue-500/15 border-l-blue-400 text-blue-300',
-  pending: 'bg-amber-500/15 border-l-amber-400 text-amber-300',
-  cancelled: 'bg-neutral-500/15 border-l-neutral-500 text-neutral-400',
+const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  active: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
+  booked: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
+  hold: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
+  quoted: { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
+  inquiry: { bg: 'bg-sky-100', text: 'text-sky-800', border: 'border-sky-200' },
 };
 
-// ═══ Calendar Page ═══
+// ═══ Component ═══
 export default function CalendarPage() {
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth());
-  const [selected, setSelected] = useState<Booking | null>(null);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
-  const monthName = new Date(year, month).toLocaleString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfMonth(year, month);
+  const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // Build calendar data
-  const calData = useMemo(() => {
-    const dim = getDaysInMonth(year, month);
-    const map: Record<string, { bookings: Booking[]; maint: MaintRecord[] }> =
-      {};
-    for (let d = 1; d <= dim; d++) {
+  function prevMonth() { setCurrentDate(new Date(year, month - 1, 1)); }
+  function nextMonth() { setCurrentDate(new Date(year, month + 1, 1)); }
+  function goToday() { setCurrentDate(new Date()); }
+
+  // Jobs active on each day
+  const jobsByDay = useMemo(() => {
+    const map: Record<number, { job: Job; items: JobItem[] }[]> = {};
+    for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      map[ds] = {
-        bookings: BOOKINGS.filter(
-          (b) => b.start <= ds && b.end >= ds && b.status !== 'cancelled'
-        ),
-        maint: MAINT.filter(
-          (m) => m.start <= ds && (m.end || '2099-01-01') >= ds
-        ),
-      };
+      const active: { job: Job; items: JobItem[] }[] = [];
+      JOBS.forEach(job => {
+        const matchingItems = job.items.filter(item => item.start <= ds && item.end >= ds);
+        if (matchingItems.length > 0) active.push({ job, items: matchingItems });
+      });
+      map[d] = active;
     }
     return map;
-  }, [year, month]);
+  }, [year, month, daysInMonth]);
 
-  function prevMonth() {
-    if (month === 0) {
-      setMonth(11);
-      setYear((y) => y - 1);
-    } else {
-      setMonth((m) => m - 1);
+  const maintByDay = useMemo(() => {
+    const map: Record<number, MaintRecord[]> = {};
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      map[d] = MAINT.filter(m => m.start <= ds && m.end >= ds);
     }
-  }
+    return map;
+  }, [year, month, daysInMonth]);
 
-  function nextMonth() {
-    if (month === 11) {
-      setMonth(0);
-      setYear((y) => y + 1);
-    } else {
-      setMonth((m) => m + 1);
-    }
-  }
-
-  function goToday() {
-    setYear(new Date().getFullYear());
-    setMonth(new Date().getMonth());
-  }
-
-  const firstDay = getFirstDayOfMonth(year, month);
-  const daysInMonth = getDaysInMonth(year, month);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
     <div>
-      {/* Calendar header */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevMonth}
-            className="btn-secondary px-2.5 py-1.5 text-sm"
-          >
-            ◀
-          </button>
-          <h1 className="text-lg font-bold text-white min-w-[180px] text-center">
-            {monthName}
-          </h1>
-          <button
-            onClick={nextMonth}
-            className="btn-secondary px-2.5 py-1.5 text-sm"
-          >
-            ▶
-          </button>
-          <button
-            onClick={goToday}
-            className="btn-secondary text-[11px] font-semibold"
-          >
-            Today
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 text-[11px]">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="text-sirreel-text-muted">Active</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-blue-400" />
-            <span className="text-sirreel-text-muted">Confirmed</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-sirreel-text-muted">Pending</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-red-400" />
-            <span className="text-sirreel-text-muted">Maint</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Day headers */}
-      <div className="grid grid-cols-7 gap-px mb-px">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div
-            key={d}
-            className="py-1.5 text-center text-[10px] font-bold text-sirreel-text-dim uppercase tracking-wider"
-          >
-            {d}
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-gray-900">{monthLabel}</h1>
+          <div className="flex gap-1">
+            <button onClick={prevMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">‹</button>
+            <button onClick={goToday} className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200">Today</button>
+            <button onClick={nextMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">›</button>
           </div>
-        ))}
+        </div>
+        <div className="flex gap-3 text-[10px] text-gray-400">
+          <span>🟢 Active</span>
+          <span>🔵 Booked</span>
+          <span>🟡 Hold</span>
+          <span>🟣 Quoted</span>
+          <span>🔴 Maintenance</span>
+        </div>
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-px">
-        {/* Empty cells before first day */}
-        {Array.from({ length: firstDay }).map((_, i) => (
-          <div key={`e${i}`} className="min-h-[100px] bg-[#0b0b0b] rounded" />
-        ))}
+      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+        {/* Day headers */}
+        <div className="grid grid-cols-7 border-b border-gray-200">
+          {days.map(d => (
+            <div key={d} className="py-2 text-center text-[11px] font-bold text-gray-400 bg-gray-50">{d}</div>
+          ))}
+        </div>
 
         {/* Day cells */}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const data = calData[ds] || { bookings: [], maint: [] };
-          const isToday = ds === today;
-          const isWeekend =
-            new Date(ds + 'T12:00:00').getDay() === 0 ||
-            new Date(ds + 'T12:00:00').getDay() === 6;
+        <div className="grid grid-cols-7">
+          {/* Empty cells before first day */}
+          {Array.from({ length: firstDay }, (_, i) => (
+            <div key={`e${i}`} className="min-h-[110px] bg-gray-50/50 border-b border-r border-gray-100" />
+          ))}
 
-          return (
-            <div
-              key={day}
-              className={`min-h-[100px] p-1 rounded transition-colors overflow-hidden ${
-                isToday
-                  ? 'bg-white/5 ring-1 ring-white/20'
-                  : isWeekend
-                    ? 'bg-[#0a0a0a]'
-                    : 'bg-[#0c0c0c]'
-              } hover:bg-[#141414]`}
-            >
-              {/* Day number */}
-              <div
-                className={`text-[11px] mb-0.5 ${
-                  isToday
-                    ? 'font-extrabold text-white'
-                    : 'font-medium text-sirreel-text-dim'
-                }`}
-              >
-                {isToday ? (
-                  <span className="bg-white text-black px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                    {day}
+          {/* Day cells */}
+          {Array.from({ length: daysInMonth }, (_, i) => {
+            const d = i + 1;
+            const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isToday = ds === today;
+            const isWeekend = [0, 6].includes(new Date(ds + 'T12:00:00').getDay());
+            const dayJobs = jobsByDay[d] || [];
+            const dayMaint = maintByDay[d] || [];
+
+            return (
+              <div key={d} className={`min-h-[110px] border-b border-r border-gray-100 p-1 ${isWeekend ? 'bg-gray-50/50' : 'bg-white'} hover:bg-blue-50/30 transition-colors`}>
+                {/* Date number */}
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className={`text-[12px] font-semibold ${isToday ? 'bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center' : 'text-gray-700 px-0.5'}`}>
+                    {d}
                   </span>
-                ) : (
-                  day
-                )}
+                  {dayMaint.length > 0 && <span className="text-[9px] text-red-400">🔧{dayMaint.length}</span>}
+                </div>
+
+                {/* Job pills */}
+                <div className="space-y-0.5">
+                  {dayJobs.slice(0, 4).map(({ job, items }) => {
+                    const st = STAGE_STYLES[job.stage] || STAGE_STYLES.inquiry;
+                    const assetSummary = items.map(i => `${i.qty}${CATS[i.cat] || i.cat}`).join('+');
+                    return (
+                      <div key={job.id} onClick={() => setSelectedJob(job)}
+                        className={`px-1.5 py-0.5 rounded-md text-[9px] font-medium cursor-pointer truncate border ${st.bg} ${st.text} ${st.border} hover:opacity-80`}>
+                        <span className="font-bold">{job.company.split(' ')[0]}</span>
+                        <span className="opacity-60"> {assetSummary}</span>
+                      </div>
+                    );
+                  })}
+                  {dayJobs.length > 4 && <div className="text-[9px] text-gray-400 pl-1">+{dayJobs.length - 4} more</div>}
+
+                  {/* Maintenance pills */}
+                  {dayMaint.slice(0, 2).map(m => (
+                    <div key={m.id} className="px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-red-50 text-red-600 border border-red-200 truncate">
+                      🔧 {m.unit}
+                    </div>
+                  ))}
+                </div>
               </div>
-
-              {/* Maintenance */}
-              {data.maint.slice(0, 1).map((m) => (
-                <div
-                  key={m.id}
-                  className="text-[8px] px-1 py-0.5 mb-0.5 rounded bg-red-500/10 text-red-400 font-semibold truncate"
-                >
-                  🔧 {m.unit}
-                </div>
-              ))}
-
-              {/* Bookings */}
-              {data.bookings.slice(0, 3).map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => setSelected(b)}
-                  className={`w-full text-left text-[8px] px-1 py-0.5 mb-0.5 rounded border-l-2 font-semibold truncate transition-all hover:brightness-125 ${STATUS_COLORS[b.status]}`}
-                >
-                  {b.qty}× {b.catShort} {b.cust.split(' ')[0]}
-                </button>
-              ))}
-
-              {data.bookings.length > 3 && (
-                <div className="text-[8px] text-sirreel-text-dim pl-1">
-                  +{data.bookings.length - 3} more
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Booking Detail Modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="bg-[#141414] border border-sirreel-border-hover rounded-2xl w-[420px] max-w-[95vw] p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex justify-between items-start mb-4">
+      {/* Job detail modal */}
+      {selectedJob && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setSelectedJob(null)}>
+          <div className="bg-white rounded-2xl w-[480px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-3">
               <div>
-                <h3 className="text-lg font-bold text-white">
-                  {selected.cust}
-                </h3>
-                <p className="text-[12px] text-sirreel-text-muted mt-0.5">
-                  {selected.cat} · {selected.qty} units
-                </p>
-              </div>
-              <button
-                onClick={() => setSelected(null)}
-                className="text-sirreel-text-muted hover:text-white transition-colors text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Status badge */}
-            <div className="mb-4">
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${STATUS_COLORS[selected.status]}`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    selected.status === 'active'
-                      ? 'bg-emerald-400'
-                      : selected.status === 'confirmed'
-                        ? 'bg-blue-400'
-                        : 'bg-amber-400'
-                  }`}
-                />
-                {selected.status}
-              </span>
-            </div>
-
-            {/* Details grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ['Job', selected.job],
-                ['Contact', selected.contact],
-                ['Agent', selected.agent],
-                ['Dates', `${fDate(selected.start)} — ${fDate(selected.end)}`],
-                ['Rate', `$${Math.round(selected.price / selected.qty / (Math.max(1, Math.round((new Date(selected.end + 'T12:00:00').getTime() - new Date(selected.start + 'T12:00:00').getTime()) / 86400000)) + 1))}/day`],
-                ['Total', `$${selected.price.toLocaleString()}`],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <div className="label">{label}</div>
-                  <div className="text-[13px] text-sirreel-text mt-0.5">
-                    {value}
-                  </div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).bg} ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).text}`}>
+                    {selectedJob.stage}
+                  </span>
+                  <span className="text-[10px] text-gray-400">#{selectedJob.jobNum}</span>
                 </div>
-              ))}
+                <h3 className="text-lg font-bold text-gray-900">{selectedJob.company}</h3>
+                <div className="text-[13px] text-gray-500">{selectedJob.jobName}</div>
+              </div>
+              <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 mt-5">
-              <button className="btn-secondary flex-1 text-[11px]">
-                Edit Booking
-              </button>
-              <button className="btn-primary flex-1 text-[11px]">
-                Open in Bookings
-              </button>
+            <div className="grid grid-cols-2 gap-2 mb-3 text-[11px]">
+              <div><span className="text-gray-400">Contact: </span><span className="text-gray-700">{selectedJob.contact}</span></div>
+              <div><span className="text-gray-400">Agent: </span><span className="text-gray-700">{selectedJob.agent}</span></div>
+            </div>
+
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Assets</div>
+            <div className="space-y-2">
+              {selectedJob.items.map((item, i) => {
+                const days = diffDays(item.start, item.end) + 1;
+                return (
+                  <div key={i} className="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex justify-between">
+                      <span className="text-[13px] font-bold text-gray-900">{item.qty}× {CATS[item.cat] || item.cat}</span>
+                      <span className="text-[11px] text-gray-500">{days} days</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5">
+                      {fDateLong(item.start)} → {fDateLong(item.end)}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -16,10 +16,10 @@ type Unit = {
 };
 
 const STATUS_CONFIG: Record<UnitStatus, { label: string; color: string; bg: string }> = {
-  available: { label: 'Available', color: 'text-status-available', bg: 'bg-emerald-500/10' },
+  available: { label: 'Available', color: 'text-status-available', bg: 'bg-emerald-50' },
   booked: { label: 'Booked', color: 'text-status-booked', bg: 'bg-blue-500/10' },
-  maintenance: { label: 'Maint', color: 'text-status-maintenance', bg: 'bg-red-500/10' },
-  warehouse: { label: 'W/House', color: 'text-status-warehouse', bg: 'bg-purple-500/10' },
+  maintenance: { label: 'Maint', color: 'text-status-maintenance', bg: 'bg-red-50' },
+  warehouse: { label: 'W/House', color: 'text-status-warehouse', bg: 'bg-purple-50' },
 };
 
 const CATS = [
@@ -107,7 +107,7 @@ export default function FleetPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-white">Fleet Status</h1>
+        <h1 className="text-lg font-bold text-gray-900">Fleet Status</h1>
         <div className="flex gap-2">
           <input
             value={search}
@@ -140,13 +140,13 @@ export default function FleetPage() {
               className={`flex-1 min-w-[80px] p-2.5 rounded-lg text-left transition-all border ${
                 active
                   ? `${s.bg} border-current ${s.color}`
-                  : 'bg-[#0d0d0d] border-sirreel-border text-sirreel-text-muted hover:border-sirreel-border-hover'
+                  : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'
               }`}
             >
-              <div className={`text-[8px] font-bold uppercase tracking-wider ${active ? s.color : 'text-sirreel-text-dim'}`}>
+              <div className={`text-[8px] font-bold uppercase tracking-wider ${active ? s.color : 'text-gray-400'}`}>
                 {s.label}
               </div>
-              <div className={`text-xl font-extrabold ${active ? s.color : 'text-white'}`}>
+              <div className={`text-xl font-extrabold ${active ? s.color : 'text-gray-900'}`}>
                 {statusCounts[k] || 0}
               </div>
             </button>
@@ -155,8 +155,8 @@ export default function FleetPage() {
       </div>
 
       {/* Units table */}
-      <div className="bg-[#0d0d0d] rounded-lg border border-sirreel-border overflow-hidden">
-        <div className="grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 text-[9px] font-bold text-sirreel-text-dim uppercase tracking-wider border-b border-sirreel-border">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200">
           <div>Unit</div>
           <div>Status</div>
           <div>Location</div>
@@ -170,13 +170,13 @@ export default function FleetPage() {
             return (
               <div
                 key={u.id}
-                className={`grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 items-center border-b border-sirreel-border/50 transition-colors hover:bg-white/[0.02] ${
-                  i % 2 ? 'bg-white/[0.01]' : ''
+                className={`grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 items-center border-b border-gray-100 transition-colors hover:bg-gray-50 ${
+                  i % 2 ? 'bg-gray-50' : ''
                 }`}
               >
                 <div>
-                  <div className="text-[12px] font-semibold text-sirreel-text">{u.name}</div>
-                  <div className="text-[9px] text-sirreel-text-dim">{u.catLabel}</div>
+                  <div className="text-[12px] font-semibold text-gray-700">{u.name}</div>
+                  <div className="text-[9px] text-gray-400">{u.catLabel}</div>
                 </div>
 
                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
@@ -184,8 +184,8 @@ export default function FleetPage() {
                   {s.label}
                 </span>
 
-                <span className="text-[10px] text-sirreel-text-muted">{u.location}</span>
-                <span className="text-[10px] text-sirreel-text-dim">{u.note}</span>
+                <span className="text-[10px] text-gray-500">{u.location}</span>
+                <span className="text-[10px] text-gray-400">{u.note}</span>
 
                 <div className="flex gap-1">
                   {([
@@ -201,7 +201,7 @@ export default function FleetPage() {
                         className={`w-6 h-6 rounded flex items-center justify-center text-[10px] transition-all ${
                           isOn
                             ? `${STATUS_CONFIG[btn.k].bg} ${STATUS_CONFIG[btn.k].color} ring-1 ring-current`
-                            : 'bg-sirreel-surface text-sirreel-text-dim hover:text-sirreel-text-muted'
+                            : 'bg-white text-gray-400 hover:text-gray-500'
                         }`}
                       >
                         {btn.l}
@@ -214,7 +214,7 @@ export default function FleetPage() {
           })}
         </div>
 
-        <div className="px-3 py-2 border-t border-sirreel-border text-[10px] text-sirreel-text-dim">
+        <div className="px-3 py-2 border-t border-gray-200 text-[10px] text-gray-400">
           {filtered.length} units shown
         </div>
       </div>

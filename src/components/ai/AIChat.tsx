@@ -69,21 +69,21 @@ export default function AIChat({
   }
 
   return (
-    <div className="w-80 flex-shrink-0 border-l border-sirreel-border bg-[#0d0d0d] flex flex-col">
+    <div className="w-80 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col">
       {/* Header */}
-      <div className="px-3 py-2.5 border-b border-sirreel-border flex items-center justify-between">
+      <div className="px-3 py-2.5 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-base">⚡</span>
           <div>
-            <div className="text-[13px] font-bold text-white">SirReel AI</div>
-            <div className="text-[9px] text-sirreel-text-dim">
+            <div className="text-[13px] font-bold text-gray-900">SirReel AI</div>
+            <div className="text-[9px] text-gray-400">
               Fleet Assistant
             </div>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="text-sirreel-text-muted hover:text-white transition-colors text-sm p-1"
+          className="text-gray-500 hover:text-gray-900 transition-colors text-sm p-1"
         >
           ✕
         </button>
@@ -109,7 +109,7 @@ export default function AIChat({
               className={`px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap break-words ${
                 m.role === 'user'
                   ? 'bg-white text-black rounded-xl rounded-br-sm'
-                  : 'bg-sirreel-surface text-sirreel-text rounded-xl rounded-bl-sm'
+                  : 'bg-white text-gray-700 rounded-xl rounded-bl-sm'
               }`}
             >
               {m.content}
@@ -118,7 +118,7 @@ export default function AIChat({
         ))}
         {loading && (
           <div className="self-start max-w-[88%]">
-            <div className="px-3 py-2 bg-sirreel-surface rounded-xl rounded-bl-sm">
+            <div className="px-3 py-2 bg-white rounded-xl rounded-bl-sm">
               <div className="flex gap-1">
                 {[0, 1, 2].map((i) => (
                   <div
@@ -135,7 +135,7 @@ export default function AIChat({
       </div>
 
       {/* Input */}
-      <div className="px-3 py-2.5 border-t border-sirreel-border">
+      <div className="px-3 py-2.5 border-t border-gray-200">
         <div className="flex gap-2">
           <input
             value={input}
@@ -150,13 +150,13 @@ export default function AIChat({
             className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm transition-colors ${
               input.trim()
                 ? 'bg-white text-black'
-                : 'bg-sirreel-border text-sirreel-text-dim'
+                : 'bg-sirreel-border text-gray-400'
             }`}
           >
             ↑
           </button>
         </div>
-        <div className="text-[9px] text-sirreel-text-dim text-center mt-1.5">
+        <div className="text-[9px] text-gray-400 text-center mt-1.5">
           Live fleet data · Powered by Claude
         </div>
       </div>

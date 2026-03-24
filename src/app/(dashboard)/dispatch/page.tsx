@@ -15,9 +15,9 @@ export default function DispatchPage() {
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-center">
         <div className="text-5xl mb-4">{data.icon}</div>
-        <h1 className="text-xl font-bold text-white mb-2">{data.title}</h1>
-        <p className="text-sm text-[#666] max-w-md">{data.desc}</p>
-        <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#111] border border-[#1a1a1a] text-sm text-[#555]">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">{data.title}</h1>
+        <p className="text-sm text-[#9090a4] max-w-md">{data.desc}</p>
+        <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-[#33343e] text-sm text-[#808094]">
           Building next...
         </div>
       </div>

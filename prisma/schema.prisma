@@ -167,7 +167,7 @@ model Company {
 
   // Relations
   defaultAgent   User?           @relation("DefaultAgent", fields: [defaultAgentId], references: [id])
-  contacts       Contact[]
+  affiliations   Affiliation[]
   bookings       Booking[]
   drivers        Driver[]
   insuranceClaims InsuranceClaim[]
@@ -176,30 +176,86 @@ model Company {
   @@map("companies")
 }
 
-model Contact {
-  id         String  @id @default(uuid())
-  companyId  String? @map("company_id")
-  firstName  String  @map("first_name")
-  lastName   String  @map("last_name")
-  email      String  @unique
-  phone      String? @db.VarChar(30)
-  mobile     String? @db.VarChar(30)
-  role       String? @db.VarChar(100)
-  isPrimary  Boolean @default(false) @map("is_primary")
+enum PersonRole {
+  UPM
+  PRODUCER
+  LINE_PRODUCER
+  PRODUCTION_COORDINATOR
+  PRODUCTION_SUPERVISOR
+  TRANSPORTATION_COORDINATOR
+  ART_COORDINATOR
+  COORDINATOR
+  OWNER
+  OTHER
+}
+
+model Person {
+  id         String      @id @default(uuid())
+  firstName  String      @map("first_name")
+  lastName   String      @map("last_name")
+  email      String      @unique
+  phone      String?     @db.VarChar(30)
+  mobile     String?     @db.VarChar(30)
+  role       PersonRole  @default(OTHER)
+  tier       ClientTier  @default(NEW)
+
+  // Assigned agent at SirReel
+  assignedAgentId String? @map("assigned_agent_id")
+
+  // Lifetime stats (across ALL companies)
+  totalSpend    Decimal  @default(0) @map("total_spend") @db.Decimal(12, 2)
+  totalBookings Int      @default(0) @map("total_bookings")
+  lastBookingAt DateTime? @map("last_booking_at")
+
+  // "Works with" — e.g. UPM's regular coordinator
+  worksWithId String? @map("works_with_id")
 
   // Integration
   planyoUserId Int? @map("planyo_user_id")
+
+  notes    String?  @db.Text
+  isActive Boolean  @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  company       Company?       @relation(fields: [companyId], references: [id])
-  bookings      Booking[]
-  user          User?          @relation("ContactUser")
-  emailMessages EmailMessage[]
+  assignedAgent  User?          @relation("PersonAgent", fields: [assignedAgentId], references: [id])
+  worksWith      Person?        @relation("WorksWith", fields: [worksWithId], references: [id])
+  worksWithBack  Person[]       @relation("WorksWith")
+  affiliations   Affiliation[]
+  bookings       Booking[]      @relation("BookingContact")
+  referredBookings Booking[]    @relation("BookingReferrer")
+  user           User?          @relation("ContactUser")
+  emailMessages  EmailMessage[]
 
-  @@map("contacts")
+  @@map("people")
+}
+
+model Affiliation {
+  id             String    @id @default(uuid())
+  personId       String    @map("person_id")
+  companyId      String    @map("company_id")
+  productionName String?   @map("production_name") // "Stranger Things S5", "MI:7"
+  roleOnShow     PersonRole? @map("role_on_show")
+  startDate      DateTime? @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  isCurrent      Boolean   @default(true) @map("is_current")
+
+  // Revenue from this person+company combo
+  totalSpend    Decimal  @default(0) @map("total_spend") @db.Decimal(12, 2)
+  totalBookings Int      @default(0) @map("total_bookings")
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  person  Person  @relation(fields: [personId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([personId, companyId, productionName])
+  @@map("affiliations")
 }
 
 // ═══════════════════════════════════════
@@ -287,8 +343,10 @@ model Booking {
   id             String         @id @default(uuid())
   bookingNumber  String         @unique @map("booking_number") // SR-2026-0042
   companyId      String         @map("company_id")
-  contactId      String         @map("contact_id")
+  personId       String         @map("person_id")        // Who called / requested (coordinator or UPM)
+  referredById   String?        @map("referred_by_id")   // The UPM, if a coordinator called on their behalf
   agentId        String         @map("agent_id")
+  productionName String?        @map("production_name")  // "Stranger Things S5"
   jobName        String         @map("job_name")
   startDate      DateTime       @map("start_date") @db.Date
   endDate        DateTime       @map("end_date") @db.Date
@@ -330,12 +388,14 @@ model Booking {
 
   // Relations
   company         Company          @relation(fields: [companyId], references: [id])
-  contact         Contact          @relation(fields: [contactId], references: [id])
+  person          Person           @relation("BookingContact", fields: [personId], references: [id])
+  referredBy      Person?          @relation("BookingReferrer", fields: [referredById], references: [id])
   agent           User             @relation("BookingAgent", fields: [agentId], references: [id])
   items           BookingItem[]
   dispatchTasks   DispatchTask[]
   insuranceClaims InsuranceClaim[]
   aiDecisions     AiDecision[]
+  paperworkRequests PaperworkRequest[]
 
   @@map("bookings")
 }
@@ -843,7 +903,7 @@ model EmailMessage {
 
   // Matched to CRM
   companyId       String?  @map("company_id")
-  contactId       String?  @map("contact_id")
+  personId        String?  @map("person_id")
 
   fromAddress     String   @map("from_address")
   toAddresses     String[] @map("to_addresses")
@@ -853,6 +913,13 @@ model EmailMessage {
 
   sentAt          DateTime @map("sent_at")
   isRead          Boolean  @default(false) @map("is_read")
+// Triage
+  category      EmailCategory? @map("category")
+  status        EmailStatus    @default(UNREAD) @map("status")
+  priority      Int            @default(5) @map("priority")
+  assignedToId  String?        @map("assigned_to_id")
+  triageNotes   String?        @map("triage_notes") @db.Text
+  triageAt      DateTime?      @map("triage_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -860,12 +927,33 @@ model EmailMessage {
   emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id])
   thread       EmailThread? @relation(fields: [threadId], references: [id])
   company      Company?     @relation(fields: [companyId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
+  person       Person?      @relation(fields: [personId], references: [id])
 
   @@map("email_messages")
 }
 
 // ═══════════════════════════════════════
+
+enum EmailCategory {
+  BOOKING_INQUIRY
+  RENTAL_REQUEST
+  SUPPORT
+  BILLING
+  COMPLAINT
+  FLEET_ISSUE
+  GENERAL
+  SPAM
+}
+
+enum EmailStatus {
+  UNREAD
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  ARCHIVED
+}
+
 // 12. USERS & AUTH
 // ═══════════════════════════════════════
 
@@ -889,14 +977,15 @@ model User {
   location  Location? // Home base
   isActive  Boolean  @default(true) @map("is_active")
 
-  // Link to contact if client portal user
-  contactId String? @unique @map("contact_id")
+  // Link to person if client portal user
+  personId String? @unique @map("person_id")
 
   createdAt   DateTime  @default(now()) @map("created_at")
   lastLoginAt DateTime? @map("last_login_at")
 
   // Relations
-  contact          Contact?          @relation("ContactUser", fields: [contactId], references: [id])
+  person           Person?           @relation("ContactUser", fields: [personId], references: [id])
+  assignedPeople   Person[]          @relation("PersonAgent")
   agentBookings    Booking[]         @relation("BookingAgent")
   defaultForCompanies Company[]      @relation("DefaultAgent")
   emailAccounts    EmailAccount[]
@@ -908,6 +997,8 @@ model User {
   timelineActions  ClaimTimeline[]   @relation("TimelineActor")
   aiOverrides      AiDecision[]      @relation("AiOverrider")
   auditActions     AuditLog[]
+  accounts        Account[]
+  sessions        Session[]
 
   @@map("users")
 }
@@ -934,4 +1025,61 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_log")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ====================================
+// 14. PAPERWORK REQUESTS
+// ====================================
+
+model PaperworkRequest {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  token       String   @unique @default(uuid()) // unique link token
+  sentTo      String   @map("sent_to") // client email
+  sentAt      DateTime @default(now()) @map("sent_at")
+  completedAt DateTime? @map("completed_at")
+
+  // Completion tracking
+  coiReceived       Boolean @default(false) @map("coi_received")
+  rentalAgreement   Boolean @default(false) @map("rental_agreement")
+  creditCardAuth    Boolean @default(false) @map("credit_card_auth")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("paperwork_requests")
 }

@@ -5,8 +5,8 @@ import prisma from './prisma';
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId: process.env.AUTH_GOOGLE_ID!,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
       authorization: {
         params: {
           scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',

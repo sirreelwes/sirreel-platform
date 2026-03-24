@@ -3,7 +3,7 @@
 // Run with: npx prisma db seed
 // ═══════════════════════════════════════════════════════════════
 
-import { PrismaClient, UserRole, AssetStatus, Location, Region, ClientTier, ProductionType, DriverType } from '@prisma/client';
+import { PrismaClient, UserRole, AssetStatus, Location, Region, ClientTier, ProductionType, DriverType, PersonRole } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -47,51 +47,135 @@ async function main() {
   categories.forEach(c => { catMap[c.slug] = c.id; });
 
   // ═══ 3. COMPANIES & CONTACTS (from Planyo users.csv) ═══
-  console.log('👥 Creating companies & contacts...');
+  console.log('👥 Creating people, companies & affiliations...');
 
-  const clientData = [
-    { company: 'Cinepower & Light', first: 'Terry', last: 'Meadows', email: 'rentals@cinepowerlight.com', phone: '818-846-0123', bookings: 45, spend: 87500, type: ProductionType.COMMERCIAL, tier: ClientTier.VIP, agent: 'Jose' },
-    { company: 'Justin K Productions', first: 'Justin', last: 'Kappenstein', email: 'jtkappenstein@gmail.com', phone: '610-733-5834', bookings: 75, spend: 142000, type: ProductionType.FILM, tier: ClientTier.VIP, agent: 'Oliver' },
-    { company: 'Nathan Israel Prod', first: 'Nathan', last: 'Israel', email: 'nathan.israel@me.com', phone: '562-708-4444', bookings: 64, spend: 118000, type: ProductionType.TV, tier: ClientTier.VIP, agent: 'Jose' },
-    { company: 'Elli Legerski Prod', first: 'Elli', last: 'Legerski', email: 'elli.legerski@gmail.com', phone: '719-406-8300', bookings: 38, spend: 64200, type: ProductionType.COMMERCIAL, tier: ClientTier.PREFERRED, agent: 'Jose' },
-    { company: 'AJR Films', first: 'Brandon', last: 'McClover', email: 'brandon.ajrfilms@gmail.com', phone: '323-921-6504', bookings: 21, spend: 38500, type: ProductionType.MUSIC_VIDEO, tier: ClientTier.PREFERRED, agent: 'Jose' },
-    { company: 'JayKat Productions', first: 'Jason', last: 'Friedman-Mendez', email: 'jason@jaykatproductions.com', phone: '917-755-5002', bookings: 4, spend: 6800, type: ProductionType.FILM, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Nathalie SP Film', first: 'Nathalie', last: 'Sar Shalom', email: 'natspfilm@gmail.com', phone: '818-825-2861', bookings: 17, spend: 28400, type: ProductionType.FILM, tier: ClientTier.PREFERRED, agent: 'Oliver' },
-    { company: 'Taylor Woods Prod', first: 'Taylor', last: 'Woods', email: 'taylor.rose.woods@gmail.com', phone: '347-401-3357', bookings: 9, spend: 15200, type: ProductionType.COMMERCIAL, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Snow Story Media', first: 'Jason', last: 'Mayfield', email: 'jason@snowstory.com', phone: '817-874-2259', bookings: 5, spend: 12600, type: ProductionType.MUSIC_VIDEO, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Alyssa Benedetto', first: 'Alyssa', last: 'Benedetto', email: 'alycancreate@gmail.com', phone: '516-458-7846', bookings: 24, spend: 41000, type: ProductionType.COMMERCIAL, tier: ClientTier.PREFERRED, agent: 'Jose' },
-    { company: 'Maddie Harmon Prod', first: 'Maddie', last: 'Harmon', email: 'madharmon96@gmail.com', phone: '602-748-0393', bookings: 10, spend: 16800, type: ProductionType.FILM, tier: ClientTier.STANDARD, agent: 'Dani' },
-    { company: 'Wild Factory', first: 'Laura', last: 'DuBois', email: 'laura@thewildfactory.com', phone: '516-241-1371', bookings: 4, spend: 7200, type: ProductionType.COMMERCIAL, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Beth Schiffman Prod', first: 'Beth', last: 'Schiffman', email: 'bschiffman@icloud.com', phone: '818-599-1267', bookings: 12, spend: 22000, type: ProductionType.TV, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Alex Fymat Prod', first: 'Alex', last: 'Fymat', email: 'afymat@yahoo.com', phone: '323-493-1011', bookings: 11, spend: 19500, type: ProductionType.FILM, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Fabletics', first: 'Ella', last: 'Swanstrom', email: 'ESwanstrom@fabletics.com', phone: '503-871-6121', bookings: 0, spend: 0, type: ProductionType.COMMERCIAL, tier: ClientTier.NEW, agent: 'Jose' },
-    { company: 'Stephen Predisik', first: 'Stephen', last: 'Predisik', email: 's.predisik@gmail.com', phone: '310-975-4462', bookings: 32, spend: 54000, type: ProductionType.FILM, tier: ClientTier.PREFERRED, agent: 'Oliver' },
-    { company: 'Bethel Teshome', first: 'Bethel', last: 'Teshome', email: 'bethel.teshome18@gmail.com', phone: '562-688-7392', bookings: 9, spend: 14500, type: ProductionType.MUSIC_VIDEO, tier: ClientTier.STANDARD, agent: 'Jose' },
-    { company: 'Neka Berrian', first: 'Neka', last: 'Berrian', email: 'neka.berrian@gmail.com', phone: '323-590-2379', bookings: 4, spend: 5800, type: ProductionType.FILM, tier: ClientTier.STANDARD, agent: 'Dani' },
+  // ═══ PEOPLE (the real clients — UPMs, producers, coordinators) ═══
+  const peopleData = [
+    { first: 'Terry', last: 'Meadows', email: 'rentals@cinepowerlight.com', phone: '818-846-0123', role: PersonRole.UPM, tier: ClientTier.VIP, agent: 'Jose', bookings: 45, spend: 87500, notes: 'Major account. Always needs cubes + cargo. Fast turnaround.' },
+    { first: 'Justin', last: 'Kappenstein', email: 'jtkappenstein@gmail.com', phone: '610-733-5834', role: PersonRole.PRODUCER, tier: ClientTier.VIP, agent: 'Oliver', bookings: 75, spend: 142000, notes: 'Highest booking count. Feature films, very organized.' },
+    { first: 'Nathan', last: 'Israel', email: 'nathan.israel@me.com', phone: '562-708-4444', role: PersonRole.UPM, tier: ClientTier.VIP, agent: 'Jose', bookings: 64, spend: 118000, notes: 'TV series work. Repeat client, prefers cargo vans.' },
+    { first: 'Elli', last: 'Legerski', email: 'elli.legerski@gmail.com', phone: '719-406-8300', role: PersonRole.PRODUCER, tier: ClientTier.PREFERRED, agent: 'Jose', bookings: 38, spend: 64200, notes: 'Branded content. Uses PopVans heavily.' },
+    { first: 'Brandon', last: 'McClover', email: 'brandon.ajrfilms@gmail.com', phone: '323-921-6504', role: PersonRole.PRODUCER, tier: ClientTier.PREFERRED, agent: 'Jose', bookings: 21, spend: 38500, notes: 'Music videos. Quick bookings, usually 1-2 day rentals.' },
+    { first: 'Alyssa', last: 'Benedetto', email: 'alycancreate@gmail.com', phone: '516-458-7846', role: PersonRole.PRODUCER, tier: ClientTier.PREFERRED, agent: 'Jose', bookings: 24, spend: 41000, notes: 'Photo shoots & commercials. Consistent booker.' },
+    { first: 'Stephen', last: 'Predisik', email: 's.predisik@gmail.com', phone: '310-975-4462', role: PersonRole.UPM, tier: ClientTier.PREFERRED, agent: 'Oliver', bookings: 32, spend: 54000, notes: 'Feature films. Reliable. Should follow up for spring projects.' },
+    { first: 'Nathalie', last: 'Sar Shalom', email: 'natspfilm@gmail.com', phone: '818-825-2861', role: PersonRole.PRODUCER, tier: ClientTier.PREFERRED, agent: 'Oliver', bookings: 17, spend: 28400, notes: 'AFI projects. Uses Lankershim standing sets frequently.' },
+    { first: 'Beth', last: 'Schiffman', email: 'bschiffman@icloud.com', phone: '818-599-1267', role: PersonRole.UPM, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 12, spend: 22000, notes: "TV pilots. Haven't heard from her since December." },
+    { first: 'Alex', last: 'Fymat', email: 'afymat@yahoo.com', phone: '323-493-1011', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 11, spend: 19500, notes: 'Went quiet in November. Was a regular.' },
+    { first: 'Maddie', last: 'Harmon', email: 'madharmon96@gmail.com', phone: '602-748-0393', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Dani', bookings: 10, spend: 16800, notes: 'Documentaries. Camera cubes.' },
+    { first: 'Taylor', last: 'Woods', email: 'taylor.rose.woods@gmail.com', phone: '347-401-3357', role: PersonRole.PRODUCTION_COORDINATOR, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 9, spend: 15200, notes: "Commercials. Hasn't booked in a while." },
+    { first: 'Bethel', last: 'Teshome', email: 'bethel.teshome18@gmail.com', phone: '562-688-7392', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 9, spend: 14500, notes: 'Music videos. Lost touch — need to re-engage.' },
+    { first: 'Jason', last: 'Mayfield', email: 'jason@snowstory.com', phone: '817-874-2259', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 5, spend: 12600, notes: 'Music videos. Likes DLUX trailers for talent.' },
+    { first: 'Laura', last: 'DuBois', email: 'laura@thewildfactory.com', phone: '516-241-1371', role: PersonRole.PRODUCTION_COORDINATOR, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 4, spend: 7200, notes: 'Scout vans mostly.' },
+    { first: 'Jason', last: 'Friedman-Mendez', email: 'jason@jaykatproductions.com', phone: '917-755-5002', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Jose', bookings: 4, spend: 6800, notes: 'Growing account. Short films, expanding to features.' },
+    { first: 'Neka', last: 'Berrian', email: 'neka.berrian@gmail.com', phone: '323-590-2379', role: PersonRole.PRODUCER, tier: ClientTier.STANDARD, agent: 'Dani', bookings: 4, spend: 5800, notes: 'Indie films.' },
+    { first: 'Ella', last: 'Swanstrom', email: 'ESwanstrom@fabletics.com', phone: '503-871-6121', role: PersonRole.PRODUCTION_COORDINATOR, tier: ClientTier.NEW, agent: 'Jose', bookings: 0, spend: 0, notes: 'New client. Spring campaign inquiry. Big potential — studio + fleet.' },
   ];
 
-  for (const c of clientData) {
+  const personMap: Record<string, string> = {};
+  for (const p of peopleData) {
+    const person = await prisma.person.create({
+      data: {
+        firstName: p.first,
+        lastName: p.last,
+        email: p.email,
+        phone: p.phone,
+        role: p.role,
+        tier: p.tier,
+        assignedAgentId: agentMap[p.agent] || undefined,
+        totalSpend: p.spend,
+        totalBookings: p.bookings,
+        notes: p.notes,
+      }
+    });
+    personMap[p.email] = person.id;
+  }
+
+  // ═══ COMPANIES (the check payers — production companies) ═══
+  const companyData = [
+    { name: 'Cinepower & Light', type: ProductionType.COMMERCIAL, spend: 87500, bookings: 45 },
+    { name: 'Justin K Productions', type: ProductionType.FILM, spend: 142000, bookings: 75 },
+    { name: 'Nathan Israel Prod', type: ProductionType.TV, spend: 118000, bookings: 64 },
+    { name: 'Elli Legerski Prod', type: ProductionType.COMMERCIAL, spend: 64200, bookings: 38 },
+    { name: 'AJR Films', type: ProductionType.MUSIC_VIDEO, spend: 38500, bookings: 21 },
+    { name: 'Nathalie SP Film', type: ProductionType.FILM, spend: 28400, bookings: 17 },
+    { name: 'Snow Story Media', type: ProductionType.MUSIC_VIDEO, spend: 12600, bookings: 5 },
+    { name: 'Wild Factory', type: ProductionType.COMMERCIAL, spend: 7200, bookings: 4 },
+    { name: 'JayKat Productions', type: ProductionType.FILM, spend: 6800, bookings: 4 },
+    { name: 'Fabletics', type: ProductionType.COMMERCIAL, spend: 0, bookings: 0 },
+    { name: 'Beth Schiffman Prod', type: ProductionType.TV, spend: 22000, bookings: 12 },
+    { name: 'Alex Fymat Prod', type: ProductionType.FILM, spend: 19500, bookings: 11 },
+    { name: 'Maddie Harmon Prod', type: ProductionType.FILM, spend: 16800, bookings: 10 },
+    { name: 'Alyssa Benedetto Prod', type: ProductionType.COMMERCIAL, spend: 41000, bookings: 24 },
+    { name: 'Stephen Predisik Films', type: ProductionType.FILM, spend: 54000, bookings: 32 },
+    { name: 'Taylor Woods Prod', type: ProductionType.COMMERCIAL, spend: 15200, bookings: 9 },
+    { name: 'Bethel Teshome Prod', type: ProductionType.MUSIC_VIDEO, spend: 14500, bookings: 9 },
+    { name: 'Neka Berrian Prod', type: ProductionType.FILM, spend: 5800, bookings: 4 },
+    // Companies that multiple people have worked for
+    { name: 'Netflix', type: ProductionType.TV, spend: 45000, bookings: 8 },
+    { name: 'Paramount Pictures', type: ProductionType.FILM, spend: 38000, bookings: 6 },
+    { name: 'HBO / Max', type: ProductionType.TV, spend: 22000, bookings: 4 },
+  ];
+
+  const companyMap: Record<string, string> = {};
+  for (const c of companyData) {
     const company = await prisma.company.create({
       data: {
-        name: c.company,
+        name: c.name,
         industry: c.type,
-        tier: c.tier,
         totalSpend: c.spend,
         totalBookings: c.bookings,
-        defaultAgentId: agentMap[c.agent] || undefined,
       }
     });
+    companyMap[c.name] = company.id;
+  }
 
-    await prisma.contact.create({
-      data: {
-        companyId: company.id,
-        firstName: c.first,
-        lastName: c.last,
-        email: c.email,
-        phone: c.phone,
-        isPrimary: true,
-      }
-    });
+  // ═══ AFFILIATIONS (connects people to companies per production) ═══
+  const affiliationData = [
+    // Terry Meadows works across multiple companies
+    { email: 'rentals@cinepowerlight.com', company: 'Cinepower & Light', production: 'Spring Auto Campaign', spend: 52000 },
+    { email: 'rentals@cinepowerlight.com', company: 'Netflix', production: 'Stranger Things S5', spend: 25000 },
+    { email: 'rentals@cinepowerlight.com', company: 'Paramount Pictures', production: 'MI: Dead Reckoning P2', spend: 10500 },
+    // Justin K works across companies
+    { email: 'jtkappenstein@gmail.com', company: 'Justin K Productions', production: 'Midnight Run 2', spend: 82000 },
+    { email: 'jtkappenstein@gmail.com', company: 'Paramount Pictures', production: 'Untitled Thriller', spend: 28000 },
+    { email: 'jtkappenstein@gmail.com', company: 'Netflix', production: 'Glass Onion 3', spend: 20000 },
+    { email: 'jtkappenstein@gmail.com', company: 'HBO / Max', production: 'White Lotus S4', spend: 12000 },
+    // Nathan Israel
+    { email: 'nathan.israel@me.com', company: 'Nathan Israel Prod', production: 'Lights Out S3', spend: 78000 },
+    { email: 'nathan.israel@me.com', company: 'HBO / Max', production: 'Industry S4', spend: 10000 },
+    { email: 'nathan.israel@me.com', company: 'Netflix', production: 'Unknown Project', spend: 30000 },
+    // Stephen Predisik — multiple companies
+    { email: 's.predisik@gmail.com', company: 'Stephen Predisik Films', production: 'Feature — The Last Mile', spend: 32000 },
+    { email: 's.predisik@gmail.com', company: 'Paramount Pictures', production: 'Untitled Drama', spend: 22000 },
+    // Others — single company each for now
+    { email: 'elli.legerski@gmail.com', company: 'Elli Legerski Prod', production: null, spend: 64200 },
+    { email: 'brandon.ajrfilms@gmail.com', company: 'AJR Films', production: null, spend: 38500 },
+    { email: 'alycancreate@gmail.com', company: 'Alyssa Benedetto Prod', production: null, spend: 41000 },
+    { email: 'natspfilm@gmail.com', company: 'Nathalie SP Film', production: null, spend: 28400 },
+    { email: 'bschiffman@icloud.com', company: 'Beth Schiffman Prod', production: null, spend: 22000 },
+    { email: 'afymat@yahoo.com', company: 'Alex Fymat Prod', production: null, spend: 19500 },
+    { email: 'madharmon96@gmail.com', company: 'Maddie Harmon Prod', production: null, spend: 16800 },
+    { email: 'taylor.rose.woods@gmail.com', company: 'Taylor Woods Prod', production: null, spend: 15200 },
+    { email: 'bethel.teshome18@gmail.com', company: 'Bethel Teshome Prod', production: null, spend: 14500 },
+    { email: 'jason@snowstory.com', company: 'Snow Story Media', production: null, spend: 12600 },
+    { email: 'laura@thewildfactory.com', company: 'Wild Factory', production: null, spend: 7200 },
+    { email: 'jason@jaykatproductions.com', company: 'JayKat Productions', production: null, spend: 6800 },
+    { email: 'neka.berrian@gmail.com', company: 'Neka Berrian Prod', production: null, spend: 5800 },
+    { email: 'ESwanstrom@fabletics.com', company: 'Fabletics', production: 'Spring Campaign', spend: 0 },
+  ];
+
+  for (const a of affiliationData) {
+    if (personMap[a.email] && companyMap[a.company]) {
+      await prisma.affiliation.create({
+        data: {
+          personId: personMap[a.email],
+          companyId: companyMap[a.company],
+          productionName: a.production,
+          totalSpend: a.spend,
+          totalBookings: a.spend > 0 ? Math.max(1, Math.floor(a.spend / 3000)) : 0,
+        }
+      });
+    }
   }
 
   // ═══ 4. INTERNAL DRIVERS ═══
@@ -102,16 +186,18 @@ async function main() {
   const counts = {
     users: await prisma.user.count(),
     categories: await prisma.assetCategory.count(),
+    people: await prisma.person.count(),
     companies: await prisma.company.count(),
-    contacts: await prisma.contact.count(),
+    affiliations: await prisma.affiliation.count(),
     drivers: await prisma.driver.count(),
   };
 
   console.log('\n✅ Seed complete!');
   console.log(`   ${counts.users} users`);
   console.log(`   ${counts.categories} asset categories`);
+  console.log(`   ${counts.people} people (UPMs, producers, coordinators)`);
   console.log(`   ${counts.companies} companies`);
-  console.log(`   ${counts.contacts} contacts`);
+  console.log(`   ${counts.affiliations} affiliations (people ↔ companies)`);
   console.log(`   ${counts.drivers} drivers`);
   console.log('\n🚀 Ready to start Phase 1!');
 }

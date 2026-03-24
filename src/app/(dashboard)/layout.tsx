@@ -5,10 +5,11 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import { getPermissions, getNavItems } from '@/lib/permissions';
-import AIChat from '@/components/ai/AIChat';
+import AIChat from '@/components/ai/AIChat'
+import InboxBell from '@/components/ui/InboxBell';
 
 // TODO: Replace with actual auth session
-const MOCK_USER = {
+const MOCK_USER: { id: string; name: string; email: string; role: UserRole } = {
   id: '1',
   name: 'Jose Pacheco',
   email: 'jose@sirreel.com',
@@ -29,11 +30,12 @@ const ROLE_LABELS: Record<string, string> = {
 const DEMO_USERS = [
   { name: 'Wes', role: UserRole.ADMIN, label: 'Owner' },
   { name: 'Dani Novoa', role: UserRole.ADMIN, label: 'COO' },
-  { name: 'Hugo', role: UserRole.MANAGER, label: 'Fleet Mgr' },
-  { name: 'Julian', role: UserRole.MANAGER, label: 'Fleet Dir' },
-  { name: 'Jose Pacheco', role: UserRole.AGENT, label: 'Agent' },
-  { name: 'Oliver Carlson', role: UserRole.AGENT, label: 'Agent' },
-  { name: 'Christian DeAngelis', role: UserRole.AGENT, label: 'Billing' },
+  { name: 'Jose Pacheco', role: UserRole.AGENT, label: 'Sales Director' },
+  { name: 'Oliver Carlson', role: UserRole.AGENT, label: 'Account Mgr' },
+  { name: 'Hugo', role: UserRole.MANAGER, label: 'General Mgr' },
+  { name: 'Julian Ponce', role: UserRole.FLEET_TECH, label: 'Fleet Director' },
+  { name: 'Chris Valencia', role: UserRole.FLEET_TECH, label: 'Fleet Assoc' },
+  { name: 'Ana DeAngelis', role: UserRole.AGENT, label: 'Billing' },
 ];
 
 export default function DashboardLayout({
@@ -52,21 +54,19 @@ export default function DashboardLayout({
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'calendar';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-sirreel-bg">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-[#0d0d0d] border-r border-sirreel-border flex flex-col">
+      <aside className="w-52 flex-shrink-0 bg-[#1a1b2e] border-r border-gray-200 flex flex-col">
         {/* Logo */}
-        <div className="px-4 py-4 border-b border-sirreel-border">
+        <div className="px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center font-black text-sm text-black">
-              S
-            </div>
+            <img src="/s-logo.jpg" alt="SirReel" className="w-8 h-8 rounded-md object-cover invert" />
             <div>
               <div className="font-extrabold text-sm text-white tracking-tight">
                 SirReel
               </div>
-              <div className="text-[8px] font-semibold text-sirreel-text-dim tracking-[0.15em] uppercase">
-                Fleet Hub
+              <div className="text-[8px] font-semibold text-gray-400 tracking-[0.15em] uppercase">
+                Team HQ
               </div>
             </div>
           </div>
@@ -82,8 +82,8 @@ export default function DashboardLayout({
                 href={item.href}
                 className={`flex items-center gap-2.5 px-4 py-2 text-[13px] border-l-2 transition-all ${
                   isActive
-                    ? 'bg-sirreel-surface border-l-white text-white font-semibold'
-                    : 'border-l-transparent text-sirreel-text-muted hover:bg-sirreel-surface/50'
+                    ? 'bg-white border-l-white text-gray-900 font-semibold'
+                    : 'border-l-transparent text-gray-400 hover:bg-white/50'
                 }`}
               >
                 <span className="text-sm">{item.icon}</span>
@@ -99,8 +99,8 @@ export default function DashboardLayout({
                 onClick={() => setAiOpen((v) => !v)}
                 className={`w-full flex items-center gap-2.5 px-4 py-2 text-[13px] border-l-2 transition-all ${
                   aiOpen
-                    ? 'bg-sirreel-surface border-l-amber-500 text-amber-400 font-semibold'
-                    : 'border-l-transparent text-sirreel-text-muted hover:bg-sirreel-surface/50'
+                    ? 'bg-white border-l-amber-500 text-amber-400 font-semibold'
+                    : 'border-l-transparent text-gray-400 hover:bg-white/50'
                 }`}
               >
                 <span className="text-sm">⚡</span>
@@ -111,11 +111,11 @@ export default function DashboardLayout({
         </nav>
 
         {/* User / Role Switcher */}
-        <div className="border-t border-sirreel-border">
+        <div className="border-t border-gray-200">
           {/* Demo role switcher */}
           {showRoleSwitcher && (
-            <div className="px-3 py-2 border-b border-sirreel-border bg-[#080808]">
-              <div className="text-[9px] font-bold text-sirreel-text-dim uppercase tracking-wider mb-2">
+            <div className="px-3 py-2 border-b border-gray-200 bg-white">
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-2">
                 Demo: Switch Role
               </div>
               <div className="flex flex-col gap-1">
@@ -130,15 +130,20 @@ export default function DashboardLayout({
                         role: u.role,
                       });
                       setShowRoleSwitcher(false);
+                      try {
+                        localStorage.setItem('sirreel_demo_name', u.name);
+                        localStorage.setItem('sirreel_demo_role', u.role);
+                        window.dispatchEvent(new Event('sirreel_role_change'));
+                      } catch {}
                     }}
                     className={`text-left px-2 py-1.5 rounded text-[11px] transition-colors ${
                       currentUser.name === u.name
                         ? 'bg-white/10 text-white font-semibold'
-                        : 'text-sirreel-text-muted hover:bg-white/5'
+                        : 'text-gray-500 hover:bg-gray-100'
                     }`}
                   >
                     {u.name}{' '}
-                    <span className="text-sirreel-text-dim">· {u.label}</span>
+                    <span className="text-gray-400">· {u.label}</span>
                   </button>
                 ))}
               </div>
@@ -147,20 +152,20 @@ export default function DashboardLayout({
 
           <button
             onClick={() => setShowRoleSwitcher((v) => !v)}
-            className="w-full px-4 py-3 flex items-center gap-2.5 hover:bg-sirreel-surface/50 transition-colors"
+            className="w-full px-4 py-3 flex items-center gap-2.5 hover:bg-gray-500 transition-colors"
           >
-            <div className="w-6 h-6 rounded-full bg-sirreel-border flex items-center justify-center text-[10px] font-bold text-sirreel-text-muted">
+            <div className="w-6 h-6 rounded-full bg-sirreel-border flex items-center justify-center text-[10px] font-bold text-gray-500">
               {currentUser.name.charAt(0)}
             </div>
             <div className="text-left flex-1 min-w-0">
-              <div className="text-[11px] font-semibold text-sirreel-text truncate">
+              <div className="text-[11px] font-semibold text-gray-300 truncate">
                 {currentUser.name}
               </div>
-              <div className="text-[9px] text-sirreel-text-dim">
+              <div className="text-[9px] text-gray-500">
                 {ROLE_LABELS[currentUser.role] || currentUser.role}
               </div>
             </div>
-            <span className="text-[9px] text-sirreel-text-dim">▼</span>
+            <span className="text-[9px] text-gray-500">▼</span>
           </button>
         </div>
       </aside>
@@ -168,10 +173,10 @@ export default function DashboardLayout({
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-12 px-4 border-b border-sirreel-border flex items-center justify-between flex-shrink-0 bg-sirreel-bg">
+        <header className="h-12 px-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 bg-gray-50">
           <div className="flex gap-1.5">
-            <StatBadge label="Fleet" value="137" color="text-white" />
-            <StatBadge label="Active" value="10" color="text-status-available" />
+            <StatBadge label="Fleet" value="137" color="text-gray-900" />
+            <StatBadge label="Active" value="10" color="text-green-600" />
             {perms.bookings && (
               <StatBadge label="Pending" value="2" color="text-amber-400" />
             )}
@@ -182,26 +187,20 @@ export default function DashboardLayout({
           </div>
 
           <div className="flex gap-2 items-center">
+            <InboxBell />
             {perms.ai && (
               <button
                 onClick={() => setAiOpen((v) => !v)}
                 className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-colors ${
                   aiOpen
-                    ? 'bg-amber-400 text-black'
-                    : 'bg-sirreel-surface border border-sirreel-border text-sirreel-text-muted hover:border-sirreel-border-hover'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'
                 }`}
               >
                 ⚡ AI
               </button>
             )}
-            {perms.canCreateBooking && (
-              <Link
-                href="/bookings/new"
-                className="px-3 py-1.5 rounded-md bg-white text-black text-xs font-bold hover:bg-gray-100 transition-colors"
-              >
-                + New Booking
-              </Link>
-            )}
+            
           </div>
         </header>
 
@@ -244,7 +243,7 @@ function StatBadge({
 }) {
   return (
     <div className="stat-card flex items-center gap-1.5">
-      <span className="text-[9px] font-semibold text-sirreel-text-muted uppercase">
+      <span className="text-[9px] font-semibold text-gray-500 uppercase">
         {label}
       </span>
       <span className={`text-sm font-extrabold ${color}`}>{value}</span>
