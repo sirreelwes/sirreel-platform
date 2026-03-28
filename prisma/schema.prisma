@@ -531,6 +531,8 @@ model MaintenanceRecord {
   relatedClaimId String? @map("related_claim_id")
 
   createdBy String? @map("created_by")
+  fleetioId  String? @unique @map("fleetio_id")
+  unitName   String? @map("unit_name")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -887,6 +889,8 @@ model EmailThread {
   lastMessageAt   DateTime @map("last_message_at")
   messageCount    Int      @default(0) @map("message_count")
 
+  aiSummary       String?  @map("ai_summary") @db.Text
+  aiSummaryAt     DateTime? @map("ai_summary_at")
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations

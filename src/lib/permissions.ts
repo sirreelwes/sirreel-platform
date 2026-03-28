@@ -164,17 +164,18 @@ export function getNavItems(role: UserRole) {
   const items: { id: string; label: string; icon: string; href: string }[] = [];
 
   // Dashboard is first for Admin
-  items.push({ id: 'dashboard', label: 'Dashboard', icon: '⚡', href: '/dashboard' });
-  if (perms.calendar) items.push({ id: 'calendar', label: 'Calendar', icon: '📅', href: '/calendar' });
-  if (perms.gantt) items.push({ id: 'gantt', label: 'Gantt', icon: '📊', href: '/gantt' });
-  if (perms.bookings) items.push({ id: 'bookings', label: 'Jobs', icon: '📋', href: '/bookings' });
-  if (perms.crm) items.push({ id: 'crm', label: 'Clients', icon: '👥', href: '/crm' });
-  if (perms.fleet) items.push({ id: 'fleet', label: 'Fleet', icon: '🚛', href: '/fleet' });
-  if (perms.maintenance) items.push({ id: 'maintenance', label: 'Maintenance', icon: '🔧', href: '/maintenance' });
-  if (perms.dispatch) items.push({ id: 'dispatch', label: 'Dispatch', icon: '📦', href: '/dispatch' });
-  if (perms.claims) items.push({ id: 'claims', label: 'Claims', icon: '🛡️', href: '/claims' });
-  if (perms.reporting) items.push({ id: 'reporting', label: 'Reporting', icon: '📈', href: '/reporting' });
-  if (perms.bookings) items.push({ id: 'inbox', label: 'Inbox', icon: '📬', href: '/inbox' });
+  items.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
+  if (perms.calendar) items.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
+  if (perms.gantt) items.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
+  if (perms.bookings) items.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
+  if (perms.crm) items.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
+  if (perms.fleet) items.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
+  if (perms.maintenance) items.push({ id: "maintenance", label: "Maintenance", icon: "🔧", href: "/maintenance" });
+  if (perms.bookings) items.push({ id: "coi-check", label: "COI Check", icon: "🔍", href: "/tools/coi-check" });
+  if (perms.bookings) items.push({ id: "contract-review", label: "Contract Review", icon: "📝", href: "/tools/contract-review" });
+  if (perms.dispatch) items.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
+  if (perms.claims) items.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
+  if (perms.reporting) items.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
 
   return items;
 }

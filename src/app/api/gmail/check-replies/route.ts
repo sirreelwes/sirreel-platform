@@ -4,37 +4,79 @@ import { EmailCategory } from "@prisma/client"
 
 export async function GET() {
   try {
-    // Get latest message per thread
     const threads = await prisma.emailThread.findMany({
       where: {
-        messages: {
-          some: { direction: "inbound" }
-        }
+        messages: { some: { direction: "inbound" } }
       },
-      include: {
+      select: {
+        id: true,
+        aiSummary: true,
         messages: {
-          where: { direction: "inbound" },
-          orderBy: { sentAt: "desc" },
-          take: 1,
+          orderBy: { sentAt: "asc" },
           select: {
-            id: true, fromAddress: true, subject: true, snippet: true,
-            category: true, priority: true, status: true, sentAt: true, isRead: true,
+            id: true, fromAddress: true, toAddresses: true, subject: true,
+            snippet: true, category: true, priority: true, status: true,
+            sentAt: true, isRead: true, gmailMessageId: true, direction: true,
           }
         }
       },
       orderBy: { lastMessageAt: "desc" },
-      take: 50,
+      take: 200,
     })
 
-    // Flatten to one email per thread (the latest)
-    const emails = threads
-      .map(t => t.messages[0])
-      .filter(Boolean)
-      .map(e => ({ ...e, sentAt: e.sentAt.toISOString() }))
+    const seenMsgIds = new Set<string>()
 
-    const urgent = emails.filter(e => e.priority <= 1)
-    const unassigned = emails.filter(e =>
-      e.priority <= 2 &&
+    const emails = threads
+      .map(thread => {
+        const msgs = thread.messages
+        if (!msgs.length) return null
+
+        const lastInbound = [...msgs].reverse().find(m => m.direction === "inbound")
+        if (!lastInbound) return null
+
+        const lastInboundTime = lastInbound.sentAt.getTime()
+        const hasReply = msgs.some(
+          m => m.direction === "outbound" && m.sentAt.getTime() > lastInboundTime
+        )
+
+        const waitMs = Date.now() - lastInboundTime
+        const waitHours = Math.floor(waitMs / 3600000)
+        const waitMins = Math.floor(waitMs / 60000)
+
+        return {
+          ...lastInbound,
+          sentAt: lastInbound.sentAt.toISOString(),
+          threadId: thread.id,
+          aiSummary: thread.aiSummary,
+          messageCount: msgs.length,
+          needsReply: !hasReply,
+          hasReply,
+          waitHours,
+          waitMins,
+          waitLabel: waitHours > 24
+            ? `${Math.floor(waitHours / 24)}d`
+            : waitHours > 0
+            ? `${waitHours}h`
+            : `${waitMins}m`,
+          urgencyFromWait:
+            waitHours >= 24 ? 0 :
+            waitHours >= 4  ? 1 :
+            waitHours >= 1  ? 2 :
+            3,
+        }
+      })
+      .filter(Boolean)
+      .filter(e => {
+        if (!e) return false
+        if (seenMsgIds.has(e.gmailMessageId)) return false
+        seenMsgIds.add(e.gmailMessageId)
+        return true
+      }) as any[]
+
+    const needsReply = emails.filter(e => e.needsReply)
+    const replied = emails.filter(e => !e.needsReply)
+    const urgent = needsReply.filter(e => e.priority <= 1 || e.urgencyFromWait <= 1)
+    const unassigned = needsReply.filter(e =>
       [EmailCategory.BOOKING_INQUIRY, EmailCategory.RENTAL_REQUEST, EmailCategory.COMPLAINT, EmailCategory.FLEET_ISSUE].includes(e.category as any)
     )
 
@@ -44,15 +86,20 @@ export async function GET() {
       _count: { id: true },
     })
 
-    const alerts = emails.filter(e => e.priority <= 2).length
+    const alerts = needsReply.filter(e => e.priority <= 2 || e.urgencyFromWait <= 1).length
+
     return NextResponse.json({
       ok: true,
       alerts,
       urgent,
       unassigned,
       all: emails,
+      needsReply,
+      replied,
       summary: categoryCounts.map(c => ({ category: c.category, count: c._count.id })),
-      message: alerts > 0 ? `${alerts} thread(s) need attention` : "Inbox clear",
+      message: needsReply.length > 0
+        ? `${needsReply.length} thread(s) waiting for reply`
+        : "All threads replied",
     })
   } catch (err: any) {
     console.error("[check-replies] error:", err)

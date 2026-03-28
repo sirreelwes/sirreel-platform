@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import JobDrawer from '@/components/jobs/JobDrawer';
+import CreateSendModal from "@/components/bookings/CreateSendModal";
+import JobDashboard from '@/components/jobs/JobDashboard';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -39,6 +40,7 @@ export default function BookingsPage() {
   const [showNew, setShowNew] = useState(false);
   const [toast, setToast] = useState('');
   const [page, setPage] = useState(1);
+  const [showCreateSend, setShowCreateSend] = useState(false);
   const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [drawerOrderNumber, setDrawerOrderNumber] = useState('');
 
@@ -131,7 +133,7 @@ export default function BookingsPage() {
 
   return (
     <div>
-      <JobDrawer
+      <JobDashboard
         orderId={drawerOrderId}
         orderNumber={drawerOrderNumber}
         onClose={() => setDrawerOrderId(null)}
@@ -143,17 +145,21 @@ export default function BookingsPage() {
           <p className="text-[11px] text-gray-400">
             {loading ? 'Loading from RentalWorks...' : `${orders.length} total orders · Live from RentalWorks`}
           </p>
-        </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-200">
             🔴 Live · RentalWorks
           </span>
+          <button onClick={() => setShowCreateSend(true)} className="px-4 py-2 bg-gray-900 text-white rounded-xl text-[12px] font-bold hover:bg-gray-700 transition-colors">Create &amp; Send Portal</button>
           <button onClick={() => setShowNew(true)}
             className="px-4 py-2 rounded-lg bg-black text-white text-[12px] font-bold hover:bg-gray-800">
             + New Inquiry
           </button>
-        </div>
-      </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+        {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
 
       <div className="grid grid-cols-5 gap-2 mb-4">
         {['ACTIVE', 'CONFIRMED', 'COMPLETE', 'CANCELLED', 'CLOSED'].map(s => {
@@ -166,7 +172,8 @@ export default function BookingsPage() {
             </button>
           );
         })}
-      </div>
+        {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
 
       <div className="flex gap-2 mb-3">
         <input value={search} onChange={e => setSearch(e.target.value)}
@@ -184,27 +191,31 @@ export default function BookingsPage() {
             <option key={s} value={s}>{STATUS_CONFIG[s].label} ({counts[s] || 0})</option>
           ))}
         </select>
-      </div>
+        {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
 
       <div className="flex justify-between items-center mb-2">
         <span className="text-[11px] text-gray-400">
           {filtered.length} orders{totalPages > 1 ? ` · page ${page} of ${totalPages}` : ''}
         </span>
         <span className="text-[11px] font-bold text-gray-700">Total: <span className="text-emerald-600">${totalValue.toLocaleString()}</span></span>
-      </div>
+        {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
 
       {loading && (
         <div className="text-center py-16 text-gray-400">
           <div className="text-3xl mb-2">⏳</div>
           <div className="text-[13px]">Loading orders from RentalWorks...</div>
-        </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
       )}
 
       {!loading && filtered.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <div className="text-3xl mb-2">📋</div>
           <div className="text-[13px]">No orders match your filters</div>
-        </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
       )}
 
       <div className="space-y-2">
@@ -224,30 +235,38 @@ export default function BookingsPage() {
                     {o.marketType && (
                       <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-50 text-purple-600">{o.marketType}</span>
                     )}
-                  </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                   <div className="text-[11px] text-gray-700 font-medium truncate">{o.description}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-[10px] text-gray-400">#{o.orderNumber}</span>
                     {o.department && <span className="text-[10px] text-gray-400">· {o.department}</span>}
                     {o.agent && <span className="text-[10px] text-gray-400">· {o.agent}</span>}
                     {o.poNumber && <span className="text-[10px] text-blue-500">· PO: {o.poNumber}</span>}
-                  </div>
-                </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                 <div className="text-right flex-shrink-0">
                   <div className="text-[15px] font-extrabold text-gray-900">${o.total.toLocaleString()}</div>
                   {o.startDate && (
                     <div className="text-[10px] text-gray-400">
                       {fDate(o.startDate)}{o.endDate ? ` – ${fDate(o.endDate)}` : ''}
                       {dur ? <span className="ml-1 text-gray-300">({dur}d)</span> : ''}
-                    </div>
+                      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                   )}
                   <div className="text-[9px] text-gray-300 mt-0.5">tap to view →</div>
-                </div>
-              </div>
-            </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+              {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
           );
         })}
-      </div>
+        {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
@@ -262,7 +281,8 @@ export default function BookingsPage() {
             className="px-4 py-2 rounded-lg border border-gray-200 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">
             Next →
           </button>
-        </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
       )}
 
       {showNew && (
@@ -274,9 +294,11 @@ export default function BookingsPage() {
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900">New Inquiry</h2>
                 <p className="text-[11px] text-gray-400">Log inquiry · create order in RentalWorks</p>
-              </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
               <button onClick={() => { setShowNew(false); resetForm(); }} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-            </div>
+              {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
             <div className="p-5 space-y-4">
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Contact</div>
@@ -285,8 +307,10 @@ export default function BookingsPage() {
                   <input value={nCompany} onChange={e => setNCompany(e.target.value)} placeholder="Company *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nPhone} onChange={e => setNPhone(e.target.value)} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nEmail} onChange={e => setNEmail(e.target.value)} placeholder="Email" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                </div>
-              </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Job</div>
                 <div className="grid grid-cols-2 gap-2">
@@ -295,8 +319,10 @@ export default function BookingsPage() {
                   <select value={nAgent} onChange={e => setNAgent(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400">
                     {AGENTS.map(a => <option key={a}>{a}</option>)}
                   </select>
-                </div>
-              </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Vehicle Request</div>
                 <div className="grid grid-cols-[2fr_1fr] gap-2 mb-2">
@@ -307,48 +333,63 @@ export default function BookingsPage() {
                     <button onClick={() => setNQty(Math.max(1, nQty - 1))} className="w-8 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold">-</button>
                     <span className="w-8 text-center text-[13px] font-bold">{nQty}</span>
                     <button onClick={() => setNQty(nQty + 1)} className="w-8 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold">+</button>
-                  </div>
-                </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <div className="text-[9px] text-gray-400 mb-0.5">Pickup Date</div>
                     <input type="date" value={nStart} onChange={e => setNStart(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                   <div>
                     <div className="text-[9px] text-gray-400 mb-0.5">Return Date</div>
                     <input type="date" value={nEnd} onChange={e => setNEnd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  </div>
-                </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+                  {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                 {days > 0 && (
                   <div className="mt-2 p-2 rounded-lg bg-gray-50 border border-gray-100 text-[11px] text-gray-500">
                     {nQty}× {nVehicle} · {days} day{days !== 1 ? 's' : ''} · {fDate(nStart)} – {fDate(nEnd)}
-                  </div>
+                    {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
                 )}
-              </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Notes</div>
                 <textarea value={nNotes} onChange={e => setNNotes(e.target.value)} placeholder="Delivery instructions, special requests, add-ons needed..." rows={3} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400 resize-none" />
-              </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
               <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-[11px] text-blue-700">
                 💡 After logging, create the order in <strong>RentalWorks</strong> to confirm availability and generate the contract.
-              </div>
-            </div>
+                {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+              {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
             <div className="p-5 border-t border-gray-100 flex gap-2">
               <button onClick={() => { setShowNew(false); resetForm(); }} className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold hover:bg-gray-200">Cancel</button>
               <button onClick={submitInquiry} disabled={!nContact || !nCompany || !nJob}
                 className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nContact && nCompany && nJob ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
                 Log Inquiry →
               </button>
-            </div>
-          </div>
-        </div>
+              {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+            {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
       )}
 
       {toast && (
         <div className="fixed bottom-4 right-4 px-4 py-3 rounded-lg bg-emerald-500 text-white text-[12px] font-semibold shadow-lg z-50 max-w-sm">
           {toast}
-        </div>
+          {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
+    </div>
       )}
+      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} />}
     </div>
   );
 }

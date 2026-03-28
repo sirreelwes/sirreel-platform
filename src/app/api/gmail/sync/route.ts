@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
+import Anthropic from "@anthropic-ai/sdk"
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const WATCHED_INBOXES = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -25,6 +28,55 @@ function quickTriage(subject: string, snippet: string): { category: string; prio
   return { category: "GENERAL", priority: 3 }
 }
 
+async function generateThreadSummary(
+  subject: string,
+  snippet: string,
+  fromAddress: string,
+  previousSummary: string | null
+): Promise<string> {
+  try {
+    const prompt = previousSummary
+      ? `You are summarizing an email thread for a production vehicle rental company (SirReel).
+
+Previous thread summary: "${previousSummary}"
+
+New message received:
+From: ${fromAddress}
+Subject: ${subject}
+Preview: ${snippet}
+
+Write ONE sentence (max 15 words) updating the thread status. Focus on what's happening and what action is needed, if any. Examples:
+- "Donovan confirmed the Cloaked quote at $2,000 — waiting on COI and paperwork"
+- "Chelsea completed the rental agreement — all paperwork received for Beyond Studios"
+- "Emma requesting hold on 3 cube trucks and 1 VTR van for April 3-4"
+- "Blaine sent Workers Comp COI from Wrapbook — Oliver to confirm receipt"
+
+Just the sentence, no quotes.`
+      : `You are summarizing an email for a production vehicle rental company (SirReel).
+
+From: ${fromAddress}
+Subject: ${subject}
+Preview: ${snippet}
+
+Write ONE sentence (max 15 words) describing what this email is about. Focus on who, what they need, and any dates. Examples:
+- "Kevin Chang asking about 2x passenger vans for March 30 pickup"
+- "Cognito form: Wieden+Kennedy rental agreement submitted for Nike MM UConn job"
+- "Miki from Toboggan reporting mirror damage on returned cargo van"
+
+Just the sentence, no quotes.`
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 60,
+      messages: [{ role: "user", content: prompt }]
+    })
+
+    return response.content[0].type === "text" ? response.content[0].text.trim() : snippet.slice(0, 100)
+  } catch {
+    return snippet.slice(0, 100)
+  }
+}
+
 export async function POST() {
   try {
     const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -40,7 +92,7 @@ export async function POST() {
       try {
         const gmail = getGmailClient(email)
         const listRes = await gmail.users.messages.list({
-          userId: "me", labelIds: ["INBOX"], maxResults: 20, q: "newer_than:14d",
+          userId: "me", labelIds: ["INBOX"], maxResults: 100, q: "newer_than:1d",
         })
 
         const messages = listRes.data.messages || []
@@ -48,24 +100,17 @@ export async function POST() {
 
         const account = await prisma.emailAccount.upsert({
           where: { emailAddress: email },
-          create: { emailAddress: email, userId: systemUser.id },
-          update: {},
+          create: { emailAddress: email, accessToken: "service-account", isActive: true, userId: systemUser.id },
+          update: { isActive: true },
         })
 
         for (const msg of messages) {
-          if (!msg.id) continue
-
-          const exists = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id } }).catch(() => null)
-          if (exists) { skipped++; continue }
-
           try {
-            const full = await gmail.users.messages.get({
-              userId: "me", id: msg.id, format: "metadata",
-              metadataHeaders: ["From", "Subject"],
-            })
+            const existing = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id! } })
+            if (existing) { skipped++; continue }
 
-            const headers = full.data.payload?.headers || []
-            const get = (n: string) => headers.find((h: any) => h.name?.toLowerCase() === n.toLowerCase())?.value || ""
+            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "To", "Subject", "Date"] })
+            const get = (h: string) => full.data.payload?.headers?.find(x => x.name === h)?.value || ""
 
             const fromAddress = get("From")
             const subject = get("Subject") || "(no subject)"
@@ -82,18 +127,41 @@ export async function POST() {
             const { category, priority } = quickTriage(subject, snippet)
             if (priority === 9) { skipped++; continue }
 
-            // Upsert EmailThread using gmailThreadId — get internal UUID back
+            // Upsert thread — get existing summary for context
+            const existingThread = await prisma.emailThread.findUnique({ where: { gmailThreadId: gmailThreadId! } })
+
+            // Generate AI summary using previous summary as context
+            const aiSummary = await generateThreadSummary(
+              subject,
+              snippet,
+              fromAddress,
+              existingThread?.aiSummary || null
+            )
+
+            // Upsert thread with updated summary
             const thread = await prisma.emailThread.upsert({
-              where: { gmailThreadId },
-              create: { gmailThreadId, subject, lastMessageAt: sentAt, messageCount: 1 },
-              update: { lastMessageAt: sentAt, messageCount: { increment: 1 } },
+              where: { gmailThreadId: gmailThreadId! },
+              create: {
+                gmailThreadId: gmailThreadId!,
+                subject,
+                lastMessageAt: sentAt,
+                messageCount: 1,
+                aiSummary,
+                aiSummaryAt: new Date(),
+              },
+              update: {
+                lastMessageAt: sentAt,
+                messageCount: { increment: 1 },
+                aiSummary,
+                aiSummaryAt: new Date(),
+              },
             })
 
             await prisma.emailMessage.create({
               data: {
                 emailAccountId: account.id,
-                threadId: thread.id,  // internal UUID, not gmailThreadId
-                gmailMessageId: msg.id,
+                threadId: thread.id,
+                gmailMessageId: msg.id!,
                 fromAddress,
                 toAddresses: [email],
                 subject,

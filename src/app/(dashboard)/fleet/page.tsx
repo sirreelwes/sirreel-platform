@@ -1,209 +1,175 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
-// ═══ Types ═══
-type UnitStatus = 'available' | 'booked' | 'maintenance' | 'warehouse';
-
-type Unit = {
+type Asset = {
   id: string;
-  name: string;
-  cat: string;
-  catLabel: string;
-  status: UnitStatus;
+  unitName: string;
+  status: string;
   location: string;
-  note: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  mileage: number | null;
+  notes: string | null;
+  categoryId: string;
+  categoryName: string;
+  currentBooking: { company: string; agent: string; endDate: string } | null;
+  maintenanceNote: string | null;
 };
 
-const STATUS_CONFIG: Record<UnitStatus, { label: string; color: string; bg: string }> = {
-  available: { label: 'Available', color: 'text-status-available', bg: 'bg-emerald-50' },
-  booked: { label: 'Booked', color: 'text-status-booked', bg: 'bg-blue-500/10' },
-  maintenance: { label: 'Maint', color: 'text-status-maintenance', bg: 'bg-red-50' },
-  warehouse: { label: 'W/House', color: 'text-status-warehouse', bg: 'bg-purple-50' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
+  AVAILABLE:   { label: 'Available',   color: 'text-emerald-700', bg: 'bg-emerald-50',  dot: 'bg-emerald-500' },
+  BOOKED:      { label: 'Booked',      color: 'text-blue-700',    bg: 'bg-blue-50',     dot: 'bg-blue-500' },
+  CHECKED_OUT: { label: 'Out',         color: 'text-purple-700',  bg: 'bg-purple-50',   dot: 'bg-purple-500' },
+  MAINTENANCE: { label: 'Maint',       color: 'text-red-700',     bg: 'bg-red-50',      dot: 'bg-red-500' },
+  INACTIVE:    { label: 'Inactive',    color: 'text-gray-500',    bg: 'bg-gray-50',     dot: 'bg-gray-400' },
 };
 
-const CATS = [
-  { key: 'cube', label: 'Cube Truck', short: 'Cube', units: 15 },
-  { key: 'cargo', label: 'Cargo Van w/ LG', short: 'Cargo', units: 12 },
-  { key: 'pass', label: 'Passenger Van', short: 'Pass', units: 7 },
-  { key: 'pop', label: 'PopVan', short: 'Pop', units: 9 },
-  { key: 'cam', label: 'Camera Cube', short: 'Cam', units: 7 },
-  { key: 'dlux', label: 'DLUX', short: 'DLUX', units: 4 },
-  { key: 'scout', label: 'ProScout/VTR', short: 'Scout', units: 3 },
-  { key: 'studio', label: 'Studios', short: 'Studio', units: 6 },
-];
+export default function FleetPage() {
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterCat, setFilterCat] = useState('All');
+  const [search, setSearch] = useState('');
+  const [updating, setUpdating] = useState<string | null>(null);
 
-function generateUnits(): Unit[] {
-  const units: Unit[] = [];
-  const maintUnits: Record<string, string> = {
-    'Cube #8': 'Transmission @ High Tech',
-    'Cube #9': 'Battery issue',
-    'Cube #15': 'Oil / Reverse',
-    'Cargo #2': 'Engine inspect',
-    'Pop #1': 'Interior lights',
-    'Pop #3': 'Transmission',
-    'Pass #1': 'Motor mounts @ Dealer',
+  const load = () => {
+    setLoading(true);
+    fetch('/api/fleet')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setAssets(d.assets);
+          setCategories(d.categories);
+          setStatusCounts(d.statusCounts);
+        }
+      })
+      .finally(() => setLoading(false));
   };
 
-  CATS.forEach((cat) => {
-    for (let i = 1; i <= cat.units; i++) {
-      const name = `${cat.short} #${i}`;
-      const maintNote = maintUnits[name];
-      let status: UnitStatus = 'available';
-      let note = '';
-
-      if (maintNote) {
-        status = 'maintenance';
-        note = maintNote;
-      } else if (i <= Math.ceil(cat.units * 0.3)) {
-        status = 'booked';
-        note = 'On rental';
-      }
-
-      units.push({
-        id: `${cat.key}-${i}`,
-        name,
-        cat: cat.key,
-        catLabel: cat.label,
-        status,
-        location: cat.key === 'studio' ? 'Lankershim' : ['Chestnut', 'Lima', 'Lankershim'][i % 3],
-        note,
-      });
-    }
-  });
-  return units;
-}
-
-// ═══ Page ═══
-export default function FleetPage() {
-  const [units, setUnits] = useState<Unit[]>(generateUnits);
-  const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [filterCat, setFilterCat] = useState<string>('All');
-  const [search, setSearch] = useState('');
+  useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
-    return units.filter((u) => {
+    return assets.filter(a => {
       const q = search.toLowerCase();
       return (
-        (!q || u.name.toLowerCase().includes(q) || u.note.toLowerCase().includes(q)) &&
-        (filterCat === 'All' || u.cat === filterCat) &&
-        (filterStatus === 'All' || u.status === filterStatus)
+        (!q || a.unitName.toLowerCase().includes(q) || a.categoryName.toLowerCase().includes(q) || (a.currentBooking?.company || '').toLowerCase().includes(q)) &&
+        (filterCat === 'All' || a.categoryId === filterCat) &&
+        (filterStatus === 'All' || a.status === filterStatus)
       );
     });
-  }, [units, search, filterCat, filterStatus]);
+  }, [assets, search, filterCat, filterStatus]);
 
-  const statusCounts = useMemo(() => {
-    const c: Record<string, number> = { available: 0, booked: 0, maintenance: 0, warehouse: 0 };
-    units.forEach((u) => { if (c[u.status] !== undefined) c[u.status]++; });
-    return c;
-  }, [units]);
-
-  function changeStatus(unitId: string, newStatus: UnitStatus) {
-    setUnits((prev) =>
-      prev.map((u) => (u.id === unitId ? { ...u, status: newStatus } : u))
-    );
+  async function setStatus(assetId: string, status: string) {
+    setUpdating(assetId);
+    await fetch('/api/fleet', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assetId, status })
+    });
+    await load();
+    setUpdating(null);
   }
+
+  const totalAssets = assets.length;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">Fleet Status</h1>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900">Fleet</h1>
+          <p className="text-[11px] text-gray-400">{totalAssets} units total</p>
+        </div>
         <div className="flex gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search units..."
-            className="input w-44 text-[11px] py-1.5"
-          />
-          <select
-            value={filterCat}
-            onChange={(e) => setFilterCat(e.target.value)}
-            className="input w-36 text-[11px] py-1.5 appearance-none cursor-pointer"
-          >
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400" />
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400">
             <option value="All">All Types</option>
-            {CATS.map((c) => (
-              <option key={c.key} value={c.key}>{c.label}</option>
-            ))}
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Status cards */}
+      {/* Status filter cards */}
       <div className="flex gap-1.5 mb-3 flex-wrap">
-        {(Object.keys(STATUS_CONFIG) as UnitStatus[]).map((k) => {
-          const s = STATUS_CONFIG[k];
+        <button onClick={() => setFilterStatus('All')}
+          className={`flex-1 min-w-[70px] p-2.5 rounded-lg text-left border transition-all ${filterStatus === 'All' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}>
+          <div className="text-[8px] font-bold uppercase tracking-wider opacity-70">All</div>
+          <div className="text-xl font-extrabold">{totalAssets}</div>
+        </button>
+        {Object.entries(STATUS_CONFIG).map(([k, s]) => {
+          const count = statusCounts[k] || 0;
+          if (count === 0) return null;
           const active = filterStatus === k;
           return (
-            <button
-              key={k}
-              onClick={() => setFilterStatus(filterStatus === k ? 'All' : k)}
-              className={`flex-1 min-w-[80px] p-2.5 rounded-lg text-left transition-all border ${
-                active
-                  ? `${s.bg} border-current ${s.color}`
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'
-              }`}
-            >
-              <div className={`text-[8px] font-bold uppercase tracking-wider ${active ? s.color : 'text-gray-400'}`}>
-                {s.label}
-              </div>
-              <div className={`text-xl font-extrabold ${active ? s.color : 'text-gray-900'}`}>
-                {statusCounts[k] || 0}
-              </div>
+            <button key={k} onClick={() => setFilterStatus(filterStatus === k ? 'All' : k)}
+              className={`flex-1 min-w-[70px] p-2.5 rounded-lg text-left border transition-all ${active ? `${s.bg} border-current ${s.color}` : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}>
+              <div className={`text-[8px] font-bold uppercase tracking-wider ${active ? s.color : 'text-gray-400'}`}>{s.label}</div>
+              <div className={`text-xl font-extrabold ${active ? s.color : 'text-gray-900'}`}>{count}</div>
             </button>
           );
         })}
       </div>
 
       {/* Units table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="grid grid-cols-[1.5fr_110px_100px_1.5fr_90px] gap-2 px-4 py-2.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
           <div>Unit</div>
           <div>Status</div>
           <div>Location</div>
-          <div>Notes</div>
-          <div>Quick Set</div>
+          <div>Current / Notes</div>
+          <div>Set Status</div>
         </div>
 
-        <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
-          {filtered.map((u, i) => {
-            const s = STATUS_CONFIG[u.status];
+        <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-gray-50">
+          {loading ? (
+            <div className="text-center py-12 text-gray-400 text-sm">Loading fleet...</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">No units found</div>
+          ) : filtered.map(a => {
+            const s = STATUS_CONFIG[a.status] || STATUS_CONFIG.AVAILABLE;
+            const isUpdating = updating === a.id;
             return (
-              <div
-                key={u.id}
-                className={`grid grid-cols-[1fr_100px_90px_1fr_80px] gap-2 px-3 py-2 items-center border-b border-gray-100 transition-colors hover:bg-gray-50 ${
-                  i % 2 ? 'bg-gray-50' : ''
-                }`}
-              >
+              <div key={a.id} className={`grid grid-cols-[1.5fr_110px_100px_1.5fr_90px] gap-2 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors ${isUpdating ? 'opacity-50' : ''}`}>
                 <div>
-                  <div className="text-[12px] font-semibold text-gray-700">{u.name}</div>
-                  <div className="text-[9px] text-gray-400">{u.catLabel}</div>
+                  <div className="text-[12px] font-semibold text-gray-800">{a.unitName}</div>
+                  <div className="text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
+                  {a.mileage && <div className="text-[9px] text-gray-300">{a.mileage.toLocaleString()} mi</div>}
                 </div>
 
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${s.color === 'text-status-available' ? 'bg-status-available' : s.color === 'text-status-booked' ? 'bg-status-booked' : s.color === 'text-status-maintenance' ? 'bg-status-maintenance' : 'bg-status-warehouse'}`} />
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
                   {s.label}
                 </span>
 
-                <span className="text-[10px] text-gray-500">{u.location}</span>
-                <span className="text-[10px] text-gray-400">{u.note}</span>
+                <span className="text-[10px] text-gray-500">{a.location?.toLowerCase().replace('_', ' ')}</span>
+
+                <div className="text-[10px] text-gray-500 truncate">
+                  {a.currentBooking ? (
+                    <span className="text-blue-600 font-semibold">{a.currentBooking.company}</span>
+                  ) : a.maintenanceNote ? (
+                    <span className="text-red-500">{a.maintenanceNote}</span>
+                  ) : a.notes ? (
+                    <span className="text-gray-400">{a.notes}</span>
+                  ) : '—'}
+                </div>
 
                 <div className="flex gap-1">
-                  {([
-                    { k: 'available' as UnitStatus, l: '✓' },
-                    { k: 'maintenance' as UnitStatus, l: '🔧' },
-                    { k: 'warehouse' as UnitStatus, l: '🏭' },
-                  ]).map((btn) => {
-                    const isOn = u.status === btn.k;
+                  {[
+                    { k: 'AVAILABLE',   l: '✓' },
+                    { k: 'MAINTENANCE', l: '🔧' },
+                    { k: 'INACTIVE',    l: '○' },
+                  ].map(btn => {
+                    const isOn = a.status === btn.k;
+                    const cfg = STATUS_CONFIG[btn.k];
                     return (
-                      <button
-                        key={btn.k}
-                        onClick={() => changeStatus(u.id, btn.k)}
-                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] transition-all ${
-                          isOn
-                            ? `${STATUS_CONFIG[btn.k].bg} ${STATUS_CONFIG[btn.k].color} ring-1 ring-current`
-                            : 'bg-white text-gray-400 hover:text-gray-500'
-                        }`}
-                      >
+                      <button key={btn.k} onClick={() => setStatus(a.id, btn.k)} disabled={isUpdating}
+                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] transition-all ${isOn ? `${cfg.bg} ${cfg.color} ring-1 ring-current` : 'bg-white text-gray-300 hover:text-gray-500 border border-gray-100'}`}>
                         {btn.l}
                       </button>
                     );
@@ -214,8 +180,8 @@ export default function FleetPage() {
           })}
         </div>
 
-        <div className="px-3 py-2 border-t border-gray-200 text-[10px] text-gray-400">
-          {filtered.length} units shown
+        <div className="px-4 py-2 border-t border-gray-100 text-[10px] text-gray-400">
+          {filtered.length} of {totalAssets} units
         </div>
       </div>
     </div>

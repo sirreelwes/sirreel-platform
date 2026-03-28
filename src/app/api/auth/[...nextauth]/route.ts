@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
+import { prisma } from '@/lib/prisma';
 
 const handler = NextAuth({
   providers: [
@@ -31,6 +32,17 @@ const handler = NextAuth({
     async session({ session, token }) {
       (session as any).accessToken = token.accessToken;
       (session as any).error = token.error;
+      // Pull role fresh from DB on every session check
+      if (session.user?.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { role: true, name: true }
+        });
+        if (dbUser) {
+          (session.user as any).role = dbUser.role;
+          if (dbUser.name) session.user.name = dbUser.name;
+        }
+      }
       return session;
     },
   },

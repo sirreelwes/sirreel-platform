@@ -1,0 +1,641 @@
+'use client';
+import { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
+
+const TERMS = [
+  { n: 1, title: 'Indemnity', text: 'You agree to defend, indemnify, and hold SirReel harmless from all claims arising from the Equipment, except as the result of our sole negligence or willful act.' },
+  { n: 2, title: 'Loss of or Damage to Equipment', text: 'You are responsible for loss, damage or destruction of the Equipment during the rental period, except for damage caused by our sole negligence.' },
+  { n: 3, title: 'Protection of Others', text: 'You will take reasonable precautions to protect all persons and property. Equipment shall be used only by qualified employees or agents.' },
+  { n: 4, title: 'Equipment in Working Order', text: 'Equipment is rented without warranty except as required by law. We have tested it and found it in working order.' },
+  { n: 5, title: 'Property Insurance', text: 'You shall maintain all risk property insurance naming SirReel as additional insured and loss payee, minimum $1,000,000, primary & non-contributory.' },
+  { n: 6, title: 'Workers Compensation', text: 'You shall maintain workers compensation/employers liability insurance with minimum limits of $1,000,000.' },
+  { n: 7, title: 'Liability Insurance', text: 'You shall maintain commercial general liability naming SirReel as additional insured, minimum $2,000,000 aggregate and $1,000,000 per occurrence, primary & non-contributory.' },
+  { n: 8, title: 'Vehicle Insurance', text: 'You shall maintain business motor vehicle liability including hired auto physical damage. SirReel named additional insured. Minimum $1,000,000 combined single limits.' },
+  { n: 9, title: 'Insurance Generally', text: 'All insurance shall contain a waiver of subrogation. Lapse or cancellation of required insurance is an immediate default.' },
+  { n: 10, title: 'Cancellation of Insurance', text: '30 days written notice required before any cancellation or material change.' },
+  { n: 11, title: 'Certificates of Insurance', text: 'Before taking possession you shall provide Certificates of Insurance confirming all required coverages.' },
+  { n: 12, title: 'Drivers', text: 'All drivers must be duly licensed and qualified. They are deemed your employee and must be covered as additional insured on your policies.' },
+  { n: 13, title: 'Compliance With Law', text: 'You agree to comply with all applicable federal, state, and local laws regarding transportation and use of the Equipment.' },
+  { n: 14, title: 'Valuation of Loss', text: 'You are responsible for replacement cost or repair cost, whichever is less. WE WILL NOT BE LIABLE FOR CONSEQUENTIAL, SPECIAL OR INCIDENTAL DAMAGES.' },
+  { n: 15, title: 'Subrogation', text: 'You agree SirReel shall be allowed to subrogate for any recovery rights you may have for damage to the Equipment.' },
+  { n: 16, title: 'Bailment', text: 'This is a bailment agreement, not a sale. You acquire no title or interest in the Equipment.' },
+  { n: 17, title: 'Condition of Equipment', text: 'You assume all liability for the Equipment during the rental. You will maintain it in good condition at your own expense.' },
+  { n: 18, title: 'Identity', text: 'We may place "Property of SirReel" markings on Equipment. You will not remove or deface them.' },
+  { n: 19, title: 'Expenses', text: 'You are responsible for all expenses including fuel, lubricants, and all operational charges.' },
+  { n: 20, title: 'Accident Reports', text: 'You will promptly notify us of any damage, loss, theft, injury, or accident and file all required reports.' },
+  { n: 21, title: 'Default', text: 'Failure to pay or material breach constitutes Default. Upon Default we may terminate this Agreement.' },
+  { n: 22, title: 'Return', text: 'You will return all Equipment free from damage, with all accessories, in the same condition as received.' },
+  { n: 23, title: 'Additional Equipment', text: 'Additional Equipment may be added by written amendment signed by both parties.' },
+  { n: 24, title: 'Entire Agreement', text: 'This Agreement constitutes the entire agreement. No other representations are binding unless in writing signed by both parties.' },
+  { n: 25, title: 'Applicable Law', text: 'This Agreement is governed by the laws of the State of California.' },
+  { n: 26, title: 'Arbitration', text: 'Disputes will be settled by arbitration in Los Angeles under JAMS. The arbitrator decision is final and binding.' },
+  { n: 27, title: 'Severability', text: 'If any provision is held invalid, the remainder remains in full force and effect.' },
+  { n: 28, title: 'Facsimile Signature', text: 'Facsimile signatures are valid and binding.' },
+  { n: 29, title: 'Non-smoking Policy', text: 'All vehicles are non-smoking. A $250/day fee applies for violations plus repair costs.' },
+];
+
+type TabId = 'overview' | 'agreement' | 'lcdw' | 'coi' | 'cc';
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Overview', icon: '📋' },
+  { id: 'agreement', label: 'Agreement', icon: '✍️' },
+  { id: 'lcdw', label: 'LCDW', icon: '🛡️' },
+  { id: 'coi', label: 'COI', icon: '📄' },
+  { id: 'cc', label: 'CC Auth', icon: '💳' },
+];
+const fmtShort = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+function SigCanvas({ canvasRef, drawn, onClear }: { canvasRef: React.RefObject<HTMLCanvasElement>; drawn: boolean; onClear: () => void }) {
+  return (
+    <div>
+      <div className="border-2 border-dashed border-gray-300 rounded-xl overflow-hidden bg-white relative" style={{ touchAction: 'none' }}>
+        <canvas ref={canvasRef} width={600} height={150} className="w-full" style={{ cursor: 'crosshair' }} />
+        {!drawn && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><span className="text-gray-400 text-sm">Sign here</span></div>}
+      </div>
+      <button type="button" onClick={onClear} className="mt-1 text-[11px] text-blue-600 hover:underline">Clear</button>
+    </div>
+  );
+}
+
+export default function ClientPortal() {
+  const params = useParams();
+  const token = params?.token as string;
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState<any>(null);
+  const [paperwork, setPaperwork] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [submitting, setSubmitting] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [done, setDone] = useState({ agreement: false, lcdw: false, coi: false, cc: false });
+
+  // Agreement
+  const [signerName, setSignerName] = useState('');
+  const [signerTitle, setSignerTitle] = useState('');
+  const [signerEmail, setSignerEmail] = useState('');
+  const [signerPhone, setSignerPhone] = useState('');
+  const [poNumber, setPoNumber] = useState('');
+  const [dotNumber, setDotNumber] = useState('');
+  const [termsRead, setTermsRead] = useState(false);
+  const [additionalContacts, setAdditionalContacts] = useState([{ name: '', email: '', phone: '', position: '' }]);
+
+  // LCDW
+  const [lcdwAccepted, setLcdwAccepted] = useState(false);
+  const [fuelAcknowledged, setFuelAcknowledged] = useState(false);
+
+  // COI
+  const [coiFile, setCoiFile] = useState<File | null>(null);
+  const [coiReview, setCoiReview] = useState<any>(null);
+  const [coiReviewing, setCoiReviewing] = useState(false);
+
+  // Workers Comp
+  const [wcFile, setWcFile] = useState<File | null>(null);
+  const [wcReview, setWcReview] = useState<any>(null);
+  const [wcReviewing, setWcReviewing] = useState(false);
+
+  // Redline
+  const [redlineFile, setRedlineFile] = useState<File | null>(null);
+  const [redlineReview, setRedlineReview] = useState<any>(null);
+  const [redlineSubmitting, setRedlineSubmitting] = useState(false);
+
+  // CC
+  const [ccRepFirst, setCcRepFirst] = useState('');
+  const [ccRepLast, setCcRepLast] = useState('');
+  const [ccRepPhone, setCcRepPhone] = useState('');
+  const [ccRepEmail, setCcRepEmail] = useState('');
+  const [ccCardholderFirst, setCcCardholderFirst] = useState('');
+  const [ccCardholderLast, setCcCardholderLast] = useState('');
+  const [ccAddress1, setCcAddress1] = useState('');
+  const [ccAddress2, setCcAddress2] = useState('');
+  const [ccCity, setCcCity] = useState('');
+  const [ccState, setCcState] = useState('');
+  const [ccZip, setCcZip] = useState('');
+  const [ccBillingPhone, setCcBillingPhone] = useState('');
+  const [ccBillingEmail, setCcBillingEmail] = useState('');
+  const [ccCardType, setCcCardType] = useState('');
+  const [ccChargeSummary, setCcChargeSummary] = useState('');
+  const [ccChargeEstimate, setCcChargeEstimate] = useState('');
+  const [ccAcknowledged, setCcAcknowledged] = useState(false);
+
+  const mainSigRef = useRef<HTMLCanvasElement>(null);
+  const lcdwSigRef = useRef<HTMLCanvasElement>(null);
+  const ccSigRef = useRef<HTMLCanvasElement>(null);
+  const [mainSigDrawn, setMainSigDrawn] = useState(false);
+  const [lcdwSigDrawn, setLcdwSigDrawn] = useState(false);
+  const [ccSigDrawn, setCcSigDrawn] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/portal/${token}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) { setError(data.error); return; }
+        setBooking(data.booking);
+        setPaperwork(data.request);
+        setSignerName(data.booking.person?.name || '');
+        setSignerEmail(data.booking.person?.email || '');
+        if (data.booking.depositAmount) setCcChargeEstimate(String(data.booking.depositAmount));
+        const req = data.request as any;
+        setDone({
+          agreement: req?.rentalAgreement || false,
+          lcdw: req?.lcdwAccepted || false,
+          coi: (req?.coiReceived && req?.wcReceived) || false,
+          cc: req?.creditCardAuth || false,
+        });
+        setLocked(['CONFIRMED', 'ACTIVE', 'COMPLETE', 'CLOSED'].includes(data.booking.status));
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const initCanvas = (canvas: HTMLCanvasElement | null, setDrawn: (v: boolean) => void) => {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    ctx.strokeStyle = '#111827'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    let drawing = false, lx = 0, ly = 0;
+    const getPos = (e: MouseEvent | TouchEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const sx = canvas.width / r.width, sy = canvas.height / r.height;
+      if ('touches' in e) return { x: (e.touches[0].clientX - r.left) * sx, y: (e.touches[0].clientY - r.top) * sy };
+      return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
+    };
+    canvas.onmousedown = canvas.ontouchstart = (e: any) => { e.preventDefault(); drawing = true; const p = getPos(e); lx = p.x; ly = p.y; };
+    canvas.onmousemove = canvas.ontouchmove = (e: any) => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(p.x, p.y); ctx.stroke(); lx = p.x; ly = p.y; setDrawn(true); };
+    canvas.onmouseup = canvas.ontouchend = () => { drawing = false; };
+  };
+
+  useEffect(() => { if (activeTab === 'agreement') setTimeout(() => initCanvas(mainSigRef.current, setMainSigDrawn), 200); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'lcdw') setTimeout(() => initCanvas(lcdwSigRef.current, setLcdwSigDrawn), 200); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'cc') setTimeout(() => initCanvas(ccSigRef.current, setCcSigDrawn), 200); }, [activeTab]);
+
+  const clearSig = (ref: React.RefObject<HTMLCanvasElement>, setDrawn: (v: boolean) => void) => {
+    if (!ref.current) return;
+    ref.current.getContext('2d')!.clearRect(0, 0, ref.current.width, ref.current.height);
+    setDrawn(false);
+  };
+  const sigData = (ref: React.RefObject<HTMLCanvasElement>) => ref.current?.toDataURL('image/png') || '';
+
+  const post = async (path: string, body: any) => {
+    if (locked) return false;
+    setSubmitting(true);
+    try {
+      const r = await fetch(`/api/portal/${token}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return r.ok;
+    } finally { setSubmitting(false); }
+  };
+
+  const tabColor = (id: TabId): string => {
+    if (id === 'overview') return 'neutral';
+    if (id === 'coi') {
+      if (done.coi) return 'done';
+      if (coiReview?.requiresAdminApproval) return 'pending_admin';
+      if (coiReview && !coiReview.hardPass) return 'fail';
+      return 'pending';
+    }
+    return done[id] ? 'done' : 'pending';
+  };
+
+  const allDone = done.agreement && done.lcdw && done.coi && done.cc;
+
+  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400 text-sm">Loading...</div></div>;
+
+  if (error || !booking) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="text-center">
+        <div className="text-4xl mb-3">🔒</div>
+        <div className="text-gray-800 font-semibold">Link Not Found</div>
+        <div className="text-gray-500 text-sm mt-1">{error || 'This link is invalid or expired.'}</div>
+        <div className="mt-3 text-sm">📞 <a href="tel:8185152389" className="font-semibold text-gray-700">(818) 515-2389</a></div>
+      </div>
+    </div>
+  );
+
+  const renderLockedCard = (title: string) => (
+    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center">
+      <div className="text-4xl mb-3">🔒</div>
+      <div className="font-bold text-base text-gray-800">{title} — Locked</div>
+      <div className="text-sm mt-1 text-gray-500">This rental has been confirmed. Documents are read-only.</div>
+    </div>
+  );
+
+  const renderDoneCard = (title: string, sub: string) => (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center">
+      <div className="text-4xl mb-3">✅</div>
+      <div className="text-emerald-800 font-bold text-base">{title}</div>
+      <div className="text-emerald-600 text-sm mt-1">{sub}</div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#F8F7F4]">
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center"><span className="text-white text-xs font-bold">SR</span></div>
+            <div>
+              <div className="text-sm font-semibold text-gray-900">SirReel Studio Services</div>
+              <div className="text-[10px] text-gray-400">{booking.jobName} · {booking.bookingNumber}</div>
+            </div>
+          </div>
+          <div className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${allDone ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+            {[done.agreement, done.lcdw, done.coi, done.cc].filter(Boolean).length}/4 complete
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto px-2 flex overflow-x-auto border-t border-gray-100">
+          {TABS.map(tab => {
+            const color = tabColor(tab.id);
+            const isActive = activeTab === tab.id;
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold border-b-2 transition-all whitespace-nowrap ${
+                  isActive
+                    ? color === 'done' ? 'border-emerald-500 text-emerald-700'
+                    : color === 'pending_admin' ? 'border-amber-500 text-amber-700'
+                    : color === 'fail' ? 'border-red-500 text-red-600'
+                    : color === 'pending' ? 'border-red-500 text-red-600'
+                    : 'border-gray-900 text-gray-900'
+                    : color === 'done' ? 'border-transparent text-emerald-600'
+                    : color === 'pending_admin' ? 'border-transparent text-amber-500'
+                    : color === 'fail' ? 'border-transparent text-red-400'
+                    : color === 'pending' ? 'border-transparent text-red-400'
+                    : 'border-transparent text-gray-400'
+                }`}>
+                <span className="text-sm">{color === 'done' ? '✓' : color === 'pending_admin' ? '⚠' : color === 'fail' ? '✗' : tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+        {/* OVERVIEW */}
+        {activeTab === 'overview' && (
+          <div className="space-y-4">
+            <div className="bg-gray-900 rounded-2xl p-5 text-white relative overflow-hidden">
+              <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'repeating-linear-gradient(45deg,white 0,white 1px,transparent 0,transparent 50%)', backgroundSize: '8px 8px' }} />
+              <div className="relative">
+                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Production</div>
+                <h1 className="text-xl font-bold mb-3">{booking.jobName}</h1>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/10 rounded-xl p-2.5"><div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Company</div><div className="text-sm font-semibold">{booking.company?.name}</div></div>
+                  <div className="bg-white/10 rounded-xl p-2.5"><div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Dates</div><div className="text-sm font-semibold">{fmtShort(booking.startDate)} – {fmtShort(booking.endDate)}</div></div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rental Agreement</div>
+              <p className="text-xs text-gray-500 mb-3">Download the agreement to review with your legal team. You can upload a redlined version below.</p>
+              <div className="flex gap-2 mb-4">
+                <a href={`/api/portal/${token}/contract/download?format=pdf`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800">📄 Download PDF</a>
+                <a href={`/api/portal/${token}/contract/download?format=docx`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50">📝 Download Word</a>
+              </div>
+              {!locked && (
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Upload Redlined Version</div>
+                  <p className="text-xs text-gray-400 mb-3">If your legal team has proposed changes, upload the redlined document here.</p>
+                  {!redlineReview ? (
+                    <div className="space-y-2">
+                      <div onDragOver={e => { e.preventDefault(); }} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setRedlineFile(f); }} onClick={() => document.getElementById('redline-file')?.click()}
+                        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${redlineFile ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}>
+                        {redlineFile ? <div><div className="text-xl mb-1">📝</div><div className="text-xs font-semibold text-blue-700">{redlineFile.name}</div></div> : <div><div className="text-xl mb-1">📤</div><div className="text-xs text-gray-500">Drop redlined contract here or click to browse</div><div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div></div>}
+                        <input id="redline-file" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => setRedlineFile(e.target.files?.[0] || null)} />
+                      </div>
+                      <button onClick={async () => {
+                        if (!redlineFile) return;
+                        setRedlineSubmitting(true);
+                        try {
+                          const fd = new FormData(); fd.append('file', redlineFile);
+                          const res = await fetch(`/api/portal/${token}/contract/redline`, { method: 'POST', body: fd });
+                          const data = await res.json();
+                          if (data.review) setRedlineReview(data.review);
+                          else alert('Error: ' + (data.error || 'Unknown'));
+                        } finally { setRedlineSubmitting(false); }
+                      }} disabled={!redlineFile || redlineSubmitting} className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 disabled:opacity-40">
+                        {redlineSubmitting ? '📋 Reviewing...' : 'Submit for Review →'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl p-3 border ${redlineReview.recommendation === 'approve' ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'reject' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{redlineReview.recommendation === 'approve' ? '✅' : redlineReview.recommendation === 'reject' ? '❌' : '📋'}</span>
+                        <div>
+                          <div className="text-xs font-bold text-gray-800">{redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">Your redlined contract has been received and is being reviewed by the SirReel team.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paperwork Required</div>
+              <p className="text-xs text-gray-400 mb-4">Tap any item to complete it — you can do them in any order.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {TABS.filter(t => t.id !== 'overview').map(tab => {
+                  const color = tabColor(tab.id);
+                  const isDone = color === 'done';
+                  const isAmber = color === 'pending_admin';
+                  const isFail = color === 'fail';
+                  return (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${isDone ? 'border-emerald-200 bg-emerald-50' : isAmber ? 'border-amber-200 bg-amber-50' : isFail ? 'border-red-200 bg-red-50' : 'border-red-200 bg-red-50/60 hover:border-red-300'}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${isDone ? 'bg-emerald-100' : isAmber ? 'bg-amber-100' : 'bg-red-100'}`}>{isDone ? '✓' : isAmber ? '⚠' : isFail ? '✗' : tab.icon}</div>
+                      <div>
+                        <div className={`text-[12px] font-semibold ${isDone ? 'text-emerald-700' : isAmber ? 'text-amber-700' : 'text-red-700'}`}>{tab.label}</div>
+                        <div className={`text-[10px] ${isDone ? 'text-emerald-500' : isAmber ? 'text-amber-500' : 'text-red-400'}`}>{isDone ? 'Complete ✓' : isAmber ? 'Pending review' : 'Required'}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {allDone && <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-sm text-emerald-700 font-semibold">🎉 All paperwork complete!</div>}
+            </div>
+          </div>
+        )}
+
+        {/* AGREEMENT */}
+        {activeTab === 'agreement' && (
+          locked ? renderLockedCard('Rental Agreement') :
+          done.agreement ? renderDoneCard('Rental Agreement Signed', `Signed by ${paperwork?.signerName || signerName}`) : (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-4">Your Information</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['Full Name *', 'Title *', 'Email *', 'Phone', 'PO Number', 'DOT #'] as string[]).map((label, idx) => {
+                    const vals = [signerName, signerTitle, signerEmail, signerPhone, poNumber, dotNumber];
+                    const sets = [setSignerName, setSignerTitle, setSignerEmail, setSignerPhone, setPoNumber, setDotNumber];
+                    return <div key={label}><label className="text-[11px] font-semibold text-gray-600 mb-1 block">{label}</label><input value={vals[idx]} onChange={e => sets[idx](e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" /></div>;
+                  })}
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-gray-900">Additional Contacts</h2><button type="button" onClick={() => setAdditionalContacts([...additionalContacts, { name: '', email: '', phone: '', position: '' }])} className="text-[11px] text-blue-600 font-semibold">+ Add</button></div>
+                {additionalContacts.map((c, i) => (
+                  <div key={i} className="grid grid-cols-2 gap-2 mb-2">
+                    {['name', 'email', 'phone', 'position'].map(f => <input key={f} value={(c as any)[f]} placeholder={f.charAt(0).toUpperCase() + f.slice(1)} onChange={e => { const a = [...additionalContacts]; (a[i] as any)[f] = e.target.value; setAdditionalContacts(a); }} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />)}
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-2">Terms & Conditions</h2>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1 mb-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
+                  {TERMS.map(t => <div key={t.n} className="text-xs text-gray-600 leading-relaxed"><span className="font-semibold text-gray-800">{t.n}. {t.title}. </span>{t.text}</div>)}
+                </div>
+                <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={termsRead} onChange={e => setTermsRead(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I have read and agree to all terms and conditions.</span></label>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-2">Signature</h2>
+                <SigCanvas canvasRef={mainSigRef} drawn={mainSigDrawn} onClear={() => clearSig(mainSigRef, setMainSigDrawn)} />
+              </div>
+              <button onClick={async () => { if (await post('sign', { step: 'agreement', signerName, signerTitle, signerEmail, signerPhone, poNumber, dotNumber, additionalContacts, termsRead, signatureData: sigData(mainSigRef) })) { setDone(d => ({ ...d, agreement: true })); setActiveTab('lcdw'); } }} disabled={!signerName || !signerTitle || !signerEmail || !termsRead || !mainSigDrawn || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Saving...' : 'Sign & Save →'}</button>
+            </div>
+          )
+        )}
+
+        {/* LCDW */}
+        {activeTab === 'lcdw' && (
+          locked ? renderLockedCard('LCDW') :
+          done.lcdw ? renderDoneCard('LCDW Acknowledged', 'Signed & on file') : (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-3">Limited Collision Damage Waiver</h2>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4"><div className="text-sm font-bold text-amber-800">$24.00 / day / vehicle</div></div>
+                <p className="text-sm text-gray-600 leading-relaxed mb-5">The LCDW limits your liability for physical damage to SirReel vehicles at $24.00/day/vehicle.</p>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={lcdwAccepted} onChange={e => setLcdwAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I accept LCDW at $24.00/day/vehicle.</span></label>
+                  <label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={fuelAcknowledged} onChange={e => setFuelAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I acknowledge the $10.00/gallon fuel return policy.</span></label>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-2">Signature</h2>
+                <SigCanvas canvasRef={lcdwSigRef} drawn={lcdwSigDrawn} onClear={() => clearSig(lcdwSigRef, setLcdwSigDrawn)} />
+              </div>
+              <button onClick={async () => { if (await post('sign', { step: 'lcdw', lcdwAccepted, fuelAcknowledged, lcdwSignatureData: sigData(lcdwSigRef) })) { setDone(d => ({ ...d, lcdw: true })); setActiveTab('coi'); } }} disabled={!lcdwSigDrawn || !fuelAcknowledged || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Saving...' : 'Sign & Save →'}</button>
+            </div>
+          )
+        )}
+
+        {/* COI */}
+        {activeTab === 'coi' && locked && renderLockedCard('Insurance Documents')}
+        {activeTab === 'coi' && !locked && done.coi && !coiReview && !wcReview && renderDoneCard('Insurance Documents Approved', 'COI and Workers Comp on file')}
+        {activeTab === 'coi' && !locked && (!done.coi || coiReview || wcReview) && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="font-bold text-gray-900">Certificate of Insurance</h2>
+                {coiReview && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${coiReview.overallPass ? 'bg-emerald-100 text-emerald-700' : coiReview.requiresAdminApproval ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                    {coiReview.overallPass ? '✓ Approved' : coiReview.requiresAdminApproval ? '⚠ Pending Review' : '✗ Issues'}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mb-3">Upload your COI — we'll review it instantly against SirReel's requirements.</p>
+              <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-600"><div className="font-semibold text-gray-700 mb-0.5">Certificate holder must read:</div><div>SirReel Production Vehicles Inc. · 8500 Lankershim Blvd, Sun Valley, CA 91352</div></div>
+              {!coiReview ? (
+                <div className="space-y-3">
+                  <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCoiFile(f); }} onClick={() => document.getElementById('coi-file')?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${coiFile ? 'border-emerald-300 bg-emerald-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'}`}>
+                    {coiFile ? <div><div className="text-2xl mb-1">📄</div><div className="text-sm font-semibold text-emerald-700">{coiFile.name}</div></div> : <div><div className="text-2xl mb-1">📎</div><div className="text-sm text-gray-600">Drop COI here or click to browse</div><div className="text-xs text-gray-400">PDF, JPG, or PNG</div></div>}
+                    <input id="coi-file" type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCoiFile(e.target.files?.[0] || null)} />
+                  </div>
+                  <button onClick={async () => {
+                    if (!coiFile) return;
+                    setCoiReviewing(true);
+                    try {
+                      const fd = new FormData(); fd.append('file', coiFile);
+                      const res = await fetch(`/api/portal/${token}/coi-review`, { method: 'POST', body: fd });
+                      const data = await res.json();
+                      if (data.review) {
+                        setCoiReview(data.review);
+                        if (data.review.overallPass && (data.review.workersComp?.pass || wcReview?.pass)) setDone(d => ({ ...d, coi: true }));
+                      } else alert('Review error: ' + (data.error || 'Unknown'));
+                      const fd2 = new FormData(); fd2.append('file', coiFile);
+                      await fetch(`/api/portal/${token}/coi`, { method: 'POST', body: fd2 });
+                    } catch (err: any) { alert('Upload failed: ' + err.message); }
+                    finally { setCoiReviewing(false); }
+                  }} disabled={!coiFile || coiReviewing} className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">
+                    {coiReviewing ? '🔍 Reviewing COI...' : 'Upload & Review →'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className={`rounded-xl p-3 flex items-center gap-3 ${coiReview.overallPass ? 'bg-emerald-50 border border-emerald-200' : coiReview.requiresAdminApproval ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+                    <span className="text-xl">{coiReview.overallPass ? '✅' : coiReview.requiresAdminApproval ? '⚠️' : '❌'}</span>
+                    <div>
+                      <div className={`text-sm font-bold ${coiReview.overallPass ? 'text-emerald-800' : coiReview.requiresAdminApproval ? 'text-amber-800' : 'text-red-700'}`}>
+                        {coiReview.overallPass ? 'COI Approved' : coiReview.requiresAdminApproval ? 'Pending SirReel Review' : 'COI Needs Corrections'}
+                      </div>
+                      <div className={`text-xs mt-0.5 ${coiReview.overallPass ? 'text-emerald-600' : coiReview.requiresAdminApproval ? 'text-amber-600' : 'text-red-500'}`}>
+                        {coiReview.overallPass ? 'All requirements met.' : coiReview.requiresAdminApproval ? 'Required coverages are in place. A SirReel team member will review the remaining items shortly.' : 'Please work with your broker to correct the issues below.'}
+                      </div>
+                    </div>
+                  </div>
+                  {coiReview.hardIssues?.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                      <div className="text-[10px] font-bold text-red-700 uppercase mb-2">Must Correct</div>
+                      <ul className="space-y-1">{coiReview.hardIssues.map((issue: string, i: number) => <li key={i} className="text-[11px] text-red-700">• {issue}</li>)}</ul>
+                    </div>
+                  )}
+                  {coiReview.manageableIssues?.length > 0 && coiReview.requiresAdminApproval && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <div className="text-[10px] font-bold text-amber-700 uppercase mb-2">Under Review by SirReel</div>
+                      <ul className="space-y-1">{coiReview.manageableIssues.map((issue: string, i: number) => <li key={i} className="text-[11px] text-amber-700">• {issue}</li>)}</ul>
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'Certificate Holder: SirReel', item: coiReview.certificateHolder, hard: true },
+                      { label: 'General Liability', item: coiReview.generalLiability, hard: true },
+                      { label: 'Auto Liability', item: coiReview.autoLiability, hard: true },
+                      { label: 'Additional Insured', item: coiReview.additionalInsured, hard: true },
+                      { label: 'Loss Payee', item: coiReview.lossPayee, hard: true },
+                      { label: 'Primary & Non-Contributory', item: coiReview.primaryNonContributory, hard: true },
+                      { label: 'Umbrella/Excess', item: coiReview.umbrella, hard: false },
+                      { label: 'Waiver of Subrogation', item: coiReview.waiverOfSubrogation, hard: false },
+                      { label: 'Entertainment Package', item: coiReview.entertainmentPackage, hard: false },
+                      { label: 'Workers Comp (on COI)', item: coiReview.workersComp, hard: false },
+                    ].filter(r => r.item).map((r, i) => (
+                      <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] ${r.item.pass ? 'bg-emerald-50 text-emerald-700' : r.hard ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
+                        <span className="font-bold">{r.item.pass ? '✓' : r.hard ? '✗' : '⚠'}</span>
+                        <span className="flex-1">{r.label}</span>
+                        {!r.hard && !r.item.pass && <span className="text-[9px] bg-amber-100 px-1.5 py-0.5 rounded font-bold">Admin review</span>}
+                        {r.item.found && <span className="text-gray-400 text-[10px] truncate max-w-[80px]">{r.item.found}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  {!coiReview.hardPass && <button onClick={() => { setCoiReview(null); setCoiFile(null); }} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Upload a New COI</button>}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="font-bold text-gray-900">Workers Compensation</h2>
+                {wcReview && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${wcReview.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{wcReview.pass ? '✓ Approved' : '✗ Issues'}</span>}
+              </div>
+              <p className="text-sm text-gray-500 mb-3">If Workers Comp is on your main COI it will be reviewed automatically. If provided separately by your payroll company (ADP, Entertainment Partners, Cast & Crew, etc.), upload it here.</p>
+              {coiReview?.workersComp?.pass ? (
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl"><span className="text-emerald-500">✓</span><span className="text-sm text-emerald-700">Workers Comp found on main COI — no separate upload needed.</span></div>
+              ) : !wcReview ? (
+                <div className="space-y-3">
+                  <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setWcFile(f); }} onClick={() => document.getElementById('wc-file')?.click()}
+                    className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer ${wcFile ? 'border-blue-300 bg-blue-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'}`}>
+                    {wcFile ? <div><div className="text-2xl mb-1">📄</div><div className="text-sm font-semibold text-blue-700">{wcFile.name}</div></div> : <div><div className="text-2xl mb-1">🛡️</div><div className="text-sm text-gray-600">Drop WC certificate here or click to browse</div><div className="text-xs text-gray-400 mt-0.5">PDF, JPG, or PNG</div></div>}
+                    <input id="wc-file" type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setWcFile(e.target.files?.[0] || null)} />
+                  </div>
+                  <button onClick={async () => {
+                    if (!wcFile) return;
+                    setWcReviewing(true);
+                    try {
+                      const fd = new FormData(); fd.append('file', wcFile);
+                      const res = await fetch(`/api/portal/${token}/wc-review`, { method: 'POST', body: fd });
+                      const data = await res.json();
+                      if (data.review) { setWcReview(data.review); if (data.review.pass && coiReview?.overallPass) setDone(d => ({ ...d, coi: true })); }
+                      else alert('Error: ' + (data.error || 'Unknown'));
+                    } catch (err: any) { alert('Upload failed: ' + err.message); }
+                    finally { setWcReviewing(false); }
+                  }} disabled={!wcFile || wcReviewing} className="w-full bg-gray-900 text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">
+                    {wcReviewing ? '🔍 Reviewing...' : 'Upload & Review →'}
+                  </button>
+                  <p className="text-center text-xs text-gray-400">Don't have it? Your SirReel rep can upload it if you send it to them directly.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className={`rounded-xl p-3 flex items-center gap-3 ${wcReview.pass ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+                    <span className="text-xl">{wcReview.pass ? '✅' : '❌'}</span>
+                    <div><div className={`text-sm font-bold ${wcReview.pass ? 'text-emerald-800' : 'text-red-700'}`}>{wcReview.pass ? 'Workers Comp Approved' : 'Needs Correction'}</div><div className="text-xs text-gray-500">{wcReview.provider && `Provider: ${wcReview.provider}`}{wcReview.expiryDate && ` · Expires ${wcReview.expiryDate}`}</div></div>
+                  </div>
+                  {!wcReview.pass && <button onClick={() => { setWcReview(null); setWcFile(null); }} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Upload New Document</button>}
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => setActiveTab('cc')} className={`w-full rounded-xl py-4 font-semibold text-sm transition-colors ${(coiReview?.overallPass || coiReview?.requiresAdminApproval) && (coiReview?.workersComp?.pass || wcReview?.pass) ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+              {(coiReview?.overallPass || coiReview?.requiresAdminApproval) ? 'Continue to CC Auth →' : 'Skip for now →'}
+            </button>
+          </div>
+        )}
+
+        {/* CC AUTH */}
+        {activeTab === 'cc' && (
+          locked ? renderLockedCard('Credit Card Authorization') :
+          done.cc ? renderDoneCard('Credit Card Authorized', 'Authorization on file with SirReel') : (
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-1">Credit Card Authorization</h2>
+                <p className="text-sm text-gray-500 mb-5">Authorize SirReel to charge your card for rental fees, deposits, and applicable charges.</p>
+                <div className="space-y-5">
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Contracting Rep</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['First', 'Last', 'Phone', 'Email'] as string[]).map((label, idx) => {
+                        const vals = [ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail];
+                        const sets = [setCcRepFirst, setCcRepLast, setCcRepPhone, setCcRepEmail];
+                        return <div key={label}><label className="text-[10px] text-gray-400 mb-1 block">{label}</label><input value={vals[idx]} onChange={e => sets[idx](e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" /></div>;
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Cardholder *</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="text-[10px] text-gray-400 mb-1 block">First Name *</label><input value={ccCardholderFirst} onChange={e => setCcCardholderFirst(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" /></div>
+                      <div><label className="text-[10px] text-gray-400 mb-1 block">Last Name *</label><input value={ccCardholderLast} onChange={e => setCcCardholderLast(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" /></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Billing Address</div>
+                    <div className="space-y-2">
+                      <input value={ccAddress1} onChange={e => setCcAddress1(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Address Line 1" />
+                      <input value={ccAddress2} onChange={e => setCcAddress2(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Address Line 2 (optional)" />
+                      <div className="grid grid-cols-3 gap-2">
+                        <input value={ccCity} onChange={e => setCcCity(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="City" />
+                        <input value={ccState} onChange={e => setCcState(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="State" />
+                        <input value={ccZip} onChange={e => setCcZip(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="ZIP" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={ccBillingPhone} onChange={e => setCcBillingPhone(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Phone" />
+                        <input type="email" value={ccBillingEmail} onChange={e => setCcBillingEmail(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Email" />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Type</div>
+                    <div className="flex gap-2">
+                      {['AMEX', 'VISA', 'MASTERCARD'].map(type => (
+                        <label key={type} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${ccCardType === type ? 'border-gray-900 bg-gray-50 font-semibold' : 'border-gray-200'}`}>
+                          <input type="radio" name="cardType" checked={ccCardType === type} onChange={() => setCcCardType(type)} className="accent-gray-900" />
+                          <span className="text-sm">{type === 'MASTERCARD' ? 'MC' : type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Summary of Charges</div>
+                    <textarea value={ccChargeSummary} onChange={e => setCcChargeSummary(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 resize-none" rows={2} placeholder="e.g. Truck Rentals, Production Supplies..." />
+                    <input type="number" value={ccChargeEstimate} onChange={e => setCcChargeEstimate(e.target.value)} className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Approximate estimate ($)" />
+                  </div>
+                </div>
+                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2"><span className="text-blue-400 mt-0.5 text-sm">🔒</span><p className="text-xs text-blue-700"><span className="font-semibold">Secure card entry coming soon.</span> Your SirReel rep will collect card details via our secure payment processor.</p></div>
+                <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs text-gray-600">This Credit Card Authorization guarantees payment of all fees due SirReel including Charges, Deposits, Cancellation Fees, Damage, Past Due Balances, Fines, and Parking Fees.</div>
+                <label className="flex items-start gap-3 cursor-pointer mt-4"><input type="checkbox" checked={ccAcknowledged} onChange={e => setCcAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I authorize SirReel to charge my card for all applicable fees.</span></label>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-2">Cardholder Signature</h2>
+                <SigCanvas canvasRef={ccSigRef} drawn={ccSigDrawn} onClear={() => clearSig(ccSigRef, setCcSigDrawn)} />
+              </div>
+              <button onClick={async () => {
+                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccChargeSummary, ccChargeEstimate, ccSignatureData: sigData(ccSigRef) })) {
+                  setDone(d => ({ ...d, cc: true })); setActiveTab('overview');
+                }
+              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
+            </div>
+          )
+        )}
+
+        <p className="text-center text-[11px] text-gray-400 pb-4">SirReel Studio Services · (818) 515-2389</p>
+      </div>
+    </div>
+  );
+}

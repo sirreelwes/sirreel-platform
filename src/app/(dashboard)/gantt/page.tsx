@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -115,6 +115,32 @@ export default function GanttPage() {
   const [weeks, setWeeks] = useState(2);
   const [catFilter, setCatFilter] = useState('all');
   const [selected, setSelected] = useState<Job | null>(null);
+  const [rwJobs, setRwJobs] = useState<Job[] | null>(null);
+  const [rwLoading, setRwLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/timeline')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.jobs?.length > 0) {
+          // Map RW jobs to the Job type
+          const mapped: Job[] = d.jobs.map((j: any, idx: number) => ({
+            id: j.id || String(idx),
+            company: j.company,
+            jobName: j.jobName,
+            jobNum: j.orderNumber,
+            contact: '',
+            agent: j.agent,
+            stage: j.status,
+            color: j.status === 'active' ? '#10b981' : j.status === 'booked' ? '#3b82f6' : j.status === 'hold' ? '#f59e0b' : '#a78bfa',
+            items: j.items || [],
+          }));
+          setRwJobs(mapped);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRwLoading(false));
+  }, []);
 
   // Date range
   const startDate = addDays(today, -2);
@@ -132,9 +158,11 @@ export default function GanttPage() {
   const todayOffset = diffDays(startDate, today);
 
   // Asset assignments: map each unit to its jobs
+  const allJobs = rwJobs ?? JOBS;
+
   const unitAssignments = useMemo(() => {
     const map: Record<string, { job: Job; item: JobItem; unitIndex: number }[]> = {};
-    JOBS.forEach(job => {
+    allJobs.forEach(job => {
       job.items.forEach(item => {
         const cat = item.cat;
         // Assign to specific unit numbers
@@ -217,7 +245,7 @@ export default function GanttPage() {
 
           {view === 'job' ? (
             /* Job labels */
-            JOBS.map(job => (
+            allJobs.map(job => (
               <div key={job.id}>
                 {/* Job header */}
                 <div className="h-8 border-b border-gray-200 px-3 flex items-center cursor-pointer hover:bg-gray-100" onClick={() => setSelected(job)}>
@@ -275,7 +303,7 @@ export default function GanttPage() {
 
             {view === 'job' ? (
               /* ═══ JOB VIEW ═══ */
-              JOBS.map(job => {
+              allJobs.map(job => {
                 const sc = STAGE_COLORS[job.stage] || STAGE_COLORS.inquiry;
                 return (
                   <div key={job.id}>
@@ -294,9 +322,13 @@ export default function GanttPage() {
                         const bar = getBarStyle(jobStart, jobEnd);
                         if (!bar) return null;
                         return (
-                          <div className={`absolute top-1 h-6 rounded ${sc.bg} opacity-20 cursor-pointer`}
+                          <div className="absolute top-1 h-6 flex items-center px-1 overflow-hidden cursor-pointer"
                             style={{ left: bar.left, width: bar.width }}
-                            onClick={() => setSelected(job)} />
+                            onClick={() => setSelected(job)}>
+                            <span className="text-[10px] font-bold text-gray-900 truncate whitespace-nowrap">
+                              {job.company} · {job.jobName}
+                            </span>
+                          </div>
                         );
                       })()}
                     </div>
