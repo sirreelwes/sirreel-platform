@@ -117,6 +117,20 @@ export default function GanttPage() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [rwJobs, setRwJobs] = useState<Job[] | null>(null);
   const [rwLoading, setRwLoading] = useState(true);
+  const [realAssets, setRealAssets] = useState<any[]>([]);
+  const [realMaint, setRealMaint] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/timeline/assets')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setRealAssets(d.assets || []);
+          setRealMaint(d.maintenance || []);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/timeline')
@@ -160,6 +174,36 @@ export default function GanttPage() {
   // Asset assignments: map each unit to its jobs
   const allJobs = rwJobs ?? JOBS;
 
+  // Map real assets to Unit shape
+  const CAT_ID_MAP: Record<string, string> = {
+    'f0ebd373-dbf3-4625-bfc3-5353292116fc': 'cam',
+    'c6bffb8b-f047-404b-a48a-b9e6862ce8d3': 'cargo',
+    'c564d46e-12f7-4a04-a3f1-e87ca57ce37b': 'cube',
+    '1ce0a285-22d2-4dce-99e6-f4f9da026157': 'dlux',
+    'dbd045b9-fc0d-4006-ace6-53183a9640bd': 'studio',
+    'efe74778-de92-4329-8954-6a21e0df6f1c': 'pass',
+    '4c810d9c-96ed-4954-a4bf-dd1a0442bd44': 'pop',
+    '23d4c204-dd31-4303-a434-16ab878a4966': 'scout',
+  };
+  const liveUnits: Unit[] = realAssets.length > 0
+    ? realAssets.map(a => ({
+        id: a.id,
+        name: a.unitName,
+        cat: CAT_ID_MAP[a.categoryId] || 'general',
+        status: a.status === 'MAINTENANCE' ? 'maintenance' : 'available',
+      }))
+    : ALL_UNITS;
+
+  // Map real maintenance records
+  const liveMaint = realMaint.length > 0
+    ? realMaint.map(m => ({
+        unitName: m.unitName || '',
+        issue: m.title,
+        start: m.startDate ? m.startDate.split('T')[0] : today,
+        end: m.endDate ? m.endDate.split('T')[0] : today,
+      }))
+    : MAINT_BLOCKS;
+
   const unitAssignments = useMemo(() => {
     const map: Record<string, { job: Job; item: JobItem; unitIndex: number }[]> = {};
     allJobs.forEach(job => {
@@ -186,9 +230,9 @@ export default function GanttPage() {
 
   // Filtered units for asset view
   const filteredUnits = useMemo(() => {
-    if (catFilter === 'all') return ALL_UNITS;
-    return ALL_UNITS.filter(u => u.cat === catFilter);
-  }, [catFilter]);
+    if (catFilter === 'all') return liveUnits;
+    return liveUnits.filter(u => u.cat === catFilter);
+  }, [catFilter, liveUnits]);
 
   return (
     <div>
@@ -265,7 +309,7 @@ export default function GanttPage() {
           ) : (
             /* Asset labels */
             filteredUnits.map(unit => {
-              const maint = MAINT_BLOCKS.find(m => m.unitName === unit.name);
+              const maint = liveMaint.find(m => m.unitName === unit.name);
               return (
                 <div key={unit.id} className="h-7 border-b border-gray-100 px-3 flex items-center justify-between">
                   <span className={`text-[10px] font-medium ${maint ? 'text-red-500' : 'text-gray-700'}`}>{unit.name}</span>
@@ -362,7 +406,7 @@ export default function GanttPage() {
               /* ═══ ASSET VIEW ═══ */
               filteredUnits.map(unit => {
                 const assignments = unitAssignments[unit.id] || [];
-                const maint = MAINT_BLOCKS.find(m => m.unitName === unit.name);
+                const maint = liveMaint.find(m => m.unitName === unit.name);
                 return (
                   <div key={unit.id} className="relative h-7 border-b border-gray-100">
                     {/* Grid */}
