@@ -122,6 +122,8 @@ export default function ClientPortal() {
   const [mainSigDrawn, setMainSigDrawn] = useState(false);
   const [lcdwSigDrawn, setLcdwSigDrawn] = useState(false);
   const [ccSigDrawn, setCcSigDrawn] = useState(false);
+  const [cpIframeUrl, setCpIframeUrl] = useState('');
+  const [cpToken, setCpToken] = useState('');
 
   useEffect(() => {
     fetch(`/api/portal/${token}`)
@@ -165,6 +167,22 @@ export default function ClientPortal() {
   useEffect(() => { if (activeTab === 'agreement') setTimeout(() => initCanvas(mainSigRef.current, setMainSigDrawn), 200); }, [activeTab]);
   useEffect(() => { if (activeTab === 'lcdw') setTimeout(() => initCanvas(lcdwSigRef.current, setLcdwSigDrawn), 200); }, [activeTab]);
   useEffect(() => { if (activeTab === 'cc') setTimeout(() => initCanvas(ccSigRef.current, setCcSigDrawn), 200); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab !== 'cc' || cpIframeUrl) return;
+    fetch('/api/cardpointe/config').then(r => r.json()).then(d => { if (d.iframeUrl) setCpIframeUrl(d.iframeUrl); });
+  }, [activeTab]);
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (typeof e.data === 'string' && e.data.startsWith('{"message":')) {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.message?.token) setCpToken(msg.message.token);
+        } catch {}
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const clearSig = (ref: React.RefObject<HTMLCanvasElement>, setDrawn: (v: boolean) => void) => {
     if (!ref.current) return;
@@ -617,7 +635,18 @@ export default function ClientPortal() {
                     <input type="number" value={ccChargeEstimate} onChange={e => setCcChargeEstimate(e.target.value)} className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Approximate estimate ($)" />
                   </div>
                 </div>
-                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2"><span className="text-blue-400 mt-0.5 text-sm">🔒</span><p className="text-xs text-blue-700"><span className="font-semibold">Secure card entry coming soon.</span> Your SirReel rep will collect card details via our secure payment processor.</p></div>
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Number *</div>
+                  <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`} style={{height: '48px'}}>
+                    {cpIframeUrl ? (
+                      <iframe src={cpIframeUrl} frameBorder="0" scrolling="no" width="100%" height="48" title="Card Entry" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading secure card entry...</div>
+                    )}
+                  </div>
+                  {cpToken && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold"><span>✓</span><span>Card captured securely</span></div>}
+                  {!cpToken && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above — it is encrypted and never stored.</div>}
+                </div>
                 <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs text-gray-600">This Credit Card Authorization guarantees payment of all fees due SirReel including Charges, Deposits, Cancellation Fees, Damage, Past Due Balances, Fines, and Parking Fees.</div>
                 <label className="flex items-start gap-3 cursor-pointer mt-4"><input type="checkbox" checked={ccAcknowledged} onChange={e => setCcAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">I authorize SirReel to charge my card for all applicable fees.</span></label>
               </div>
@@ -626,10 +655,10 @@ export default function ClientPortal() {
                 <SigCanvas canvasRef={ccSigRef} drawn={ccSigDrawn} onClear={() => clearSig(ccSigRef, setCcSigDrawn)} />
               </div>
               <button onClick={async () => {
-                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccChargeSummary, ccChargeEstimate, ccSignatureData: sigData(ccSigRef) })) {
+                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccChargeSummary, ccChargeEstimate, ccToken: cpToken, ccSignatureData: sigData(ccSigRef) })) {
                   setDone(d => ({ ...d, cc: true })); setActiveTab('overview');
                 }
-              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
+              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
             </div>
           )
         )}

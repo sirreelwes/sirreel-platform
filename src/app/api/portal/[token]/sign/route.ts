@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         body.ccCardholderFirst, body.ccCardholderLast,
         body.ccAddress1, body.ccAddress2, body.ccCity,
         body.ccState, body.ccZip, body.ccBillingPhone, body.ccBillingEmail,
-        body.ccCardType, body.ccCardNumber?.slice(-4), body.ccCardNumber,
+        body.ccCardType, body.ccToken?.slice(-4), body.ccToken,
         body.ccExpiry, body.ccCcv,
         body.ccChargeSummary, body.ccChargeEstimate ? parseFloat(body.ccChargeEstimate) : null,
         body.ccSignatureData, now, params.token
