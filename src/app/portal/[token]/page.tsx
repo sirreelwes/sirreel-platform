@@ -830,6 +830,14 @@ export default function ClientPortal() {
           )
         )}
 
+        {activeTab === 'overview' && (
+          <div className="pb-2 px-1">
+            <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Paperwork Link — ${booking.jobName}&body=Hi,%0A%0AHere is your link to complete your SirReel rental paperwork:%0A%0Ahttps://sirreel-fleet.vercel.app/portal/${token}%0A%0AYou can return to this link at any time to pick up where you left off.%0A%0AThanks,%0ASirReel Studio Services%0A(818) 515-2389`}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              📧 Email me this link for later
+            </a>
+          </div>
+        )}
         <p className="text-center text-[11px] text-gray-400 pb-4">SirReel Studio Services · (818) 515-2389</p>
       </div>
     </div>
