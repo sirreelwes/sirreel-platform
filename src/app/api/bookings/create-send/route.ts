@@ -1,0 +1,81 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const {
+      companyId, companyName, personId, personEmail, personName, personPhone,
+      agentId, jobName, startDate, endDate, vehicleTypes, notes,
+    } = body;
+
+    if (!jobName || !startDate || !personEmail) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Get or create company
+    let coId = companyId;
+    if (!coId && companyName) {
+      const co = await prisma.company.upsert({
+        where: { name: companyName },
+        update: {},
+        create: { name: companyName },
+      });
+      coId = co.id;
+    }
+    if (!coId) return NextResponse.json({ error: 'Company required' }, { status: 400 });
+
+    // Get or create person
+    let pId = personId;
+    if (!pId) {
+      const person = await prisma.person.upsert({
+        where: { email: personEmail },
+        update: { name: personName || personEmail, phone: personPhone },
+        create: { name: personName || personEmail, email: personEmail, phone: personPhone },
+      });
+      pId = person.id;
+    }
+
+    // Get agent - use provided or fall back to first admin
+    let aId = agentId;
+    if (!aId) {
+      const agent = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      if (agent) aId = agent.id;
+    }
+    if (!aId) return NextResponse.json({ error: 'No agent found' }, { status: 400 });
+
+    // Create booking
+    const bookingNumber = `SR-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const booking = await prisma.booking.create({
+      data: {
+        bookingNumber,
+        companyId: coId,
+        personId: pId,
+        agentId: aId,
+        jobName,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : new Date(startDate),
+        status: 'REQUEST',
+        notes: notes || null,
+      },
+    });
+
+    // Create paperwork request
+    const request = await prisma.paperworkRequest.create({
+      data: {
+        bookingId: booking.id,
+        sentTo: personEmail,
+        sentAt: new Date(),
+      },
+    });
+
+    const base = process.env.NEXT_PUBLIC_APP_URL || 'https://sirreel-fleet.vercel.app';
+    const portalUrl = `${base}/portal/${request.token}`;
+    const clientUrl = `${base}/client/${request.token}`;
+
+    return NextResponse.json({ ok: true, token: request.token, portalUrl, clientUrl, bookingId: booking.id });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
