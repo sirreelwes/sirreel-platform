@@ -82,6 +82,7 @@ export default function ClientPortal() {
 
   // LCDW
   const [lcdwAccepted, setLcdwAccepted] = useState(false);
+  const [lcdwDeclined, setLcdwDeclined] = useState(false);
   const [fuelAcknowledged, setFuelAcknowledged] = useState(false);
 
   // COI
