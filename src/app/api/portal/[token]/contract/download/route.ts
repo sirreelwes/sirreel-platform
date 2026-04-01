@@ -51,7 +51,7 @@ function buildHtml(booking: any, format: string) {
 <head>
 <meta charset="utf-8">
 <style>
-  body { font-family: 'Times New Roman', serif; margin: 0; padding: 40px; color: #111; }
+  body { font-family: 'Times New Roman', serif; margin: 0; padding: 20px 40px; color: #111; }
   .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
   .logo img { height: 60px; width: auto; }
   .subtitle { font-size: 10pt; color: #555; margin-top: 4px; }
