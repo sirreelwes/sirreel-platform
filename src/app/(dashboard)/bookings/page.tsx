@@ -92,7 +92,7 @@ export default function BookingsPage() {
           orderNumber: b.bookingNumber,
           description: b.jobName,
           customer: b.company?.name || 'Unknown',
-          agent: b.agent ? `${b.agent.firstName || ''} ${b.agent.lastName || ''}`.trim() : '',
+          agent: b.agent?.name || '',
           status: 'FLEET_HQ',
           total: Number(b.totalPrice) || 0,
           startDate: b.startDate || '',

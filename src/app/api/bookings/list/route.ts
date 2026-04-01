@@ -8,7 +8,7 @@ export async function GET() {
       include: {
         company: { select: { name: true } },
         person: { select: { firstName: true, lastName: true, email: true } },
-        agent: { select: { firstName: true, lastName: true } },
+        agent: { select: { name: true } },
         paperworkRequests: {
           orderBy: { sentAt: 'desc' },
           take: 1,
