@@ -340,13 +340,13 @@ export default function PaperworkTab({ booking, token }: { booking: any; token?:
         )}
       </div>
 
-      {/* Contract Redline Section */}
+      {/* Contract Section */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">Contract Redline</div>
+          <div className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">Contract</div>
           {redlineState.review && <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${redlineState.review.recommendation === 'approve' ? 'bg-emerald-100 text-emerald-700' : redlineState.review.recommendation === 'reject' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>{redlineState.review.riskLevel?.toUpperCase()} RISK</div>}
         </div>
-        <DropZone label="Drop redlined contract here" sublabel="Client's proposed changes · PDF or Word" accept=".pdf,.doc,.docx" docType="redline" state={redlineState} onFile={handleRedline} />
+        <DropZone label="Drop contract here" sublabel="Signed contract or redlined version · PDF or Word" accept=".pdf,.doc,.docx" docType="redline" state={redlineState} onFile={handleRedline} />
         {redlineState.error && <div className="mt-2 text-[11px] text-red-600 bg-red-50 rounded-lg p-2">{redlineState.error}</div>}
         {redlineState.review && <div className="mt-2"><RedlineResults review={redlineState.review} onReset={() => setRedlineState(initState())} /></div>}
       </div>

@@ -302,52 +302,6 @@ export default function ClientPortal() {
               </div>
             </div>
             <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rental Agreement</div>
-              <p className="text-xs text-gray-500 mb-3">Download the agreement to review with your legal team. You can upload a redlined version below.</p>
-              <div className="flex gap-2 mb-4">
-                <a href={`/api/portal/${token}/contract/download?format=pdf`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800">📄 Download PDF</a>
-                <a href={`/api/portal/${token}/contract/download?format=docx`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50">📝 Download Word</a>
-              </div>
-              {!locked && (
-                <div className="border-t border-gray-100 pt-4">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Upload Redlined Version</div>
-                  <p className="text-xs text-gray-400 mb-3">If your legal team has proposed changes, upload the redlined document here.</p>
-                  {!redlineReview ? (
-                    <div className="space-y-2">
-                      <div onDragOver={e => { e.preventDefault(); }} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setRedlineFile(f); }} onClick={() => document.getElementById('redline-file')?.click()}
-                        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${redlineFile ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}>
-                        {redlineFile ? <div><div className="text-xl mb-1">📝</div><div className="text-xs font-semibold text-blue-700">{redlineFile.name}</div></div> : <div><div className="text-xl mb-1">📤</div><div className="text-xs text-gray-500">Drop redlined contract here or click to browse</div><div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div></div>}
-                        <input id="redline-file" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => setRedlineFile(e.target.files?.[0] || null)} />
-                      </div>
-                      <button onClick={async () => {
-                        if (!redlineFile) return;
-                        setRedlineSubmitting(true);
-                        try {
-                          const fd = new FormData(); fd.append('file', redlineFile);
-                          const res = await fetch(`/api/portal/${token}/contract/redline`, { method: 'POST', body: fd });
-                          const data = await res.json();
-                          if (data.review) setRedlineReview(data.review);
-                          else alert('Error: ' + (data.error || 'Unknown'));
-                        } finally { setRedlineSubmitting(false); }
-                      }} disabled={!redlineFile || redlineSubmitting} className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 disabled:opacity-40">
-                        {redlineSubmitting ? '📋 Reviewing...' : 'Submit for Review →'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className={`rounded-xl p-3 border ${redlineReview.recommendation === 'approve' ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'reject' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{redlineReview.recommendation === 'approve' ? '✅' : redlineReview.recommendation === 'reject' ? '❌' : '📋'}</span>
-                        <div>
-                          <div className="text-xs font-bold text-gray-800">{redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">Your redlined contract has been received and is being reviewed by the SirReel team.</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paperwork Required</div>
               <p className="text-xs text-gray-400 mb-4">Tap any item to complete it — you can do them in any order.</p>
               <div className="grid grid-cols-2 gap-2">
@@ -378,6 +332,67 @@ export default function ClientPortal() {
           locked ? renderLockedCard('Rental Agreement') :
           done.agreement ? renderDoneCard('Rental Agreement Signed', `Signed by ${paperwork?.signerName || signerName}`) : (
             <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <h2 className="font-bold text-gray-900 mb-2">Rental Agreement</h2>
+                <p className="text-xs text-gray-500 mb-3">Download and review the agreement below. Upload your signed copy when ready — let us know if it contains any proposed changes.</p>
+                <div className="flex gap-2 mb-4">
+                  <a href={`/api/portal/${token}/contract/download?format=pdf`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800">📄 Download PDF</a>
+                  <a href={`/api/portal/${token}/contract/download?format=docx`} target="_blank" className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50">📝 Download Word</a>
+                </div>
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Upload Signed Contract</div>
+                  {!redlineReview ? (
+                    <div className="space-y-2">
+                      <div onDragOver={e => { e.preventDefault(); }} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setRedlineFile(f); }} onClick={() => document.getElementById('redline-file')?.click()}
+                        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${redlineFile ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}>
+                        {redlineFile ? <div><div className="text-xl mb-1">📄</div><div className="text-xs font-semibold text-blue-700">{redlineFile.name}</div></div> : <div><div className="text-xl mb-1">📤</div><div className="text-xs text-gray-500">Drop contract here or click to browse</div><div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div></div>}
+                        <input id="redline-file" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => setRedlineFile(e.target.files?.[0] || null)} />
+                      </div>
+                      {redlineFile && (
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-semibold text-gray-700">Does this contract contain proposed changes?</div>
+                          <div className="flex gap-2">
+                            <button onClick={async () => {
+                              if (!redlineFile) return;
+                              setRedlineSubmitting(true);
+                              try {
+                                const fd = new FormData(); fd.append('file', redlineFile);
+                                const res = await fetch(`/api/portal/${token}/contract/redline`, { method: 'POST', body: fd });
+                                const data = await res.json();
+                                if (data.review) setRedlineReview(data.review);
+                                else alert('Error: ' + (data.error || 'Unknown'));
+                              } finally { setRedlineSubmitting(false); }
+                            }} disabled={redlineSubmitting} className="flex-1 py-2 bg-amber-500 text-white rounded-xl text-xs font-semibold hover:bg-amber-600 disabled:opacity-40">
+                              {redlineSubmitting ? '📋 Reviewing...' : '✏️ Yes, has changes'}
+                            </button>
+                            <button onClick={async () => {
+                              if (!redlineFile) return;
+                              setRedlineSubmitting(true);
+                              try {
+                                const fd = new FormData(); fd.append('file', redlineFile);
+                                await fetch(`/api/portal/${token}/contract/redline`, { method: 'POST', body: fd });
+                                setRedlineReview({ recommendation: 'approve', noChanges: true });
+                              } finally { setRedlineSubmitting(false); }
+                            }} disabled={redlineSubmitting} className="flex-1 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800 disabled:opacity-40">
+                              {redlineSubmitting ? '...' : '✓ No changes'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl p-3 border ${redlineReview.noChanges ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'approve' ? 'bg-emerald-50 border-emerald-200' : redlineReview.recommendation === 'reject' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{redlineReview.noChanges ? '✅' : redlineReview.recommendation === 'approve' ? '✅' : redlineReview.recommendation === 'reject' ? '❌' : '📋'}</span>
+                        <div>
+                          <div className="text-xs font-bold text-gray-800">{redlineReview.noChanges ? 'Contract Received' : redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">{redlineReview.noChanges ? 'Your signed contract is on file with SirReel.' : 'Your contract has been received and is being reviewed by the SirReel team.'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-4">Your Information</h2>
                 <div className="grid grid-cols-2 gap-3">
