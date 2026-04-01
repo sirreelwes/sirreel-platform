@@ -1078,10 +1078,31 @@ model PaperworkRequest {
   sentAt      DateTime @default(now()) @map("sent_at")
   completedAt DateTime? @map("completed_at")
 
+  // Contract type
+  contractType  String  @default("vehicles") @map("contract_type") // vehicles | stage | both
+
+  // Stage details (JSON)
+  stageDetails  String? @map("stage_details") @db.Text
+
   // Completion tracking
-  coiReceived       Boolean @default(false) @map("coi_received")
-  rentalAgreement   Boolean @default(false) @map("rental_agreement")
-  creditCardAuth    Boolean @default(false) @map("credit_card_auth")
+  coiReceived          Boolean @default(false) @map("coi_received")
+  wcReceived           Boolean @default(false) @map("wc_received")
+  rentalAgreement      Boolean @default(false) @map("rental_agreement")
+  lcdwAccepted         Boolean @default(false) @map("lcdw_accepted")
+  studioContractSigned Boolean @default(false) @map("studio_contract_signed")
+  creditCardAuth       Boolean @default(false) @map("credit_card_auth")
+
+  // CC Auth details
+  ccCardholderFirst    String? @map("cc_cardholder_first")
+  ccCardholderLast     String? @map("cc_cardholder_last")
+  ccCardType           String? @map("cc_card_type")
+  ccCardLast4          String? @map("cc_card_last4")
+  ccCardNumberEncrypted String? @map("cc_card_number_encrypted") @db.Text
+  ccChargeEstimate     Decimal? @map("cc_charge_estimate") @db.Decimal(10,2)
+  ccAuthSignedAt       DateTime? @map("cc_auth_signed_at")
+
+  // Signer info
+  signerName           String? @map("signer_name")
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 

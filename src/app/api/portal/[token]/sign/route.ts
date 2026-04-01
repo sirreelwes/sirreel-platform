@@ -58,6 +58,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       )
     }
 
+    if (body.step === 'studio') {
+      await prisma.$executeRawUnsafe(`
+        UPDATE paperwork_requests SET
+          studio_contract_signed=true,
+          rental_agreement=true,
+          completed_at=$1
+        WHERE token=$2`,
+        now, params.token
+      )
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error('[portal/sign]', err)

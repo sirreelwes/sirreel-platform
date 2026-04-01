@@ -34,13 +34,14 @@ const TERMS = [
   { n: 29, title: 'Non-smoking Policy', text: `All vehicles are non-smoking. A $250 per day fee may be charged in addition to repair costs if the smoking policy is not observed.` },
 ];
 
-type TabId = 'overview' | 'agreement' | 'lcdw' | 'coi' | 'cc';
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: '📋' },
-  { id: 'agreement', label: 'Agreement', icon: '✍️' },
-  { id: 'lcdw', label: 'LCDW', icon: '🛡️' },
-  { id: 'coi', label: 'COI', icon: '📄' },
-  { id: 'cc', label: 'CC Auth', icon: '💳' },
+type TabId = 'overview' | 'agreement' | 'lcdw' | 'coi' | 'cc' | 'studio';
+const ALL_TABS: { id: TabId; label: string; icon: string; contractTypes: string[] }[] = [
+  { id: 'overview', label: 'Overview', icon: '📋', contractTypes: ['vehicles', 'stage', 'both'] },
+  { id: 'agreement', label: 'Agreement', icon: '✍️', contractTypes: ['vehicles', 'both'] },
+  { id: 'lcdw', label: 'LCDW', icon: '🛡️', contractTypes: ['vehicles', 'both'] },
+  { id: 'studio', label: 'Studio Contract', icon: '🎬', contractTypes: ['stage', 'both'] },
+  { id: 'coi', label: 'COI', icon: '📄', contractTypes: ['vehicles', 'stage', 'both'] },
+  { id: 'cc', label: 'CC Auth', icon: '💳', contractTypes: ['vehicles', 'stage', 'both'] },
 ];
 const fmtShort = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
@@ -62,11 +63,12 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<any>(null);
   const [paperwork, setPaperwork] = useState<any>(null);
+  const [contractType, setContractType] = useState<string>('vehicles');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [submitting, setSubmitting] = useState(false);
   const [locked, setLocked] = useState(false);
-  const [done, setDone] = useState({ agreement: false, lcdw: false, coi: false, cc: false });
+  const [done, setDone] = useState({ agreement: false, lcdw: false, coi: false, cc: false, studio: false });
 
   // Agreement
   const [signerName, setSignerName] = useState('');
@@ -132,6 +134,7 @@ export default function ClientPortal() {
         if (data.error) { setError(data.error); return; }
         setBooking(data.booking);
         setPaperwork(data.request);
+        setContractType(data.request?.contractType || 'vehicles');
         setSignerName(data.booking.person?.name || '');
         setSignerEmail(data.booking.person?.email || '');
         if (data.booking.depositAmount) setCcChargeEstimate(String(data.booking.depositAmount));
@@ -141,6 +144,7 @@ export default function ClientPortal() {
           lcdw: req?.lcdwAccepted || false,
           coi: (req?.coiReceived && req?.wcReceived) || false,
           cc: req?.creditCardAuth || false,
+          studio: req?.studioContractSigned || false,
         });
         setLocked(['CONFIRMED', 'ACTIVE', 'COMPLETE', 'CLOSED'].includes(data.booking.status));
       })
@@ -211,7 +215,10 @@ export default function ClientPortal() {
     return done[id] ? 'done' : 'pending';
   };
 
-  const allDone = done.agreement && done.lcdw && done.coi && done.cc;
+  const TABS = ALL_TABS.filter(t => t.contractTypes.includes(contractType));
+  const showAgreement = contractType === 'vehicles' || contractType === 'both';
+  const showStudio = contractType === 'stage' || contractType === 'both';
+  const allDone = (showAgreement ? (done.agreement && done.lcdw) : true) && (showStudio ? done.studio : true) && done.coi && done.cc;
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-400 text-sm">Loading...</div></div>;
 
@@ -589,6 +596,101 @@ export default function ClientPortal() {
               {(coiReview?.overallPass || coiReview?.requiresAdminApproval) ? 'Continue to CC Auth →' : 'Skip for now →'}
             </button>
           </div>
+        )}
+
+        {/* STUDIO CONTRACT */}
+        {activeTab === 'studio' && (
+          locked ? renderLockedCard('Studio Contract') :
+          done.studio ? renderDoneCard('Studio Contract Signed', 'Signed & on file with SirReel') : (
+            <div className="space-y-4">
+              {(() => {
+                const sd = paperwork?.stageDetails ? JSON.parse(paperwork.stageDetails) : null;
+                const sets = sd?.sets || [];
+                const prelitSets = sd?.prelitSets || [];
+                const ratePerDay = sd?.ratePerDay || '';
+                const otRate = sd?.otRate || '300';
+                const prepDays = sd?.prepDays || '';
+                const shootDays = sd?.shootDays || '';
+                const strikeDays = sd?.strikeDays || '';
+                const darkDays = sd?.darkDays || '';
+                const stageNotes = sd?.notes || '';
+                const SET_LABELS: Record<string, string> = { hospital: 'Hospital Set', morgue: 'Morgue / Laboratory', police: 'Police Station / Jail' };
+                return (
+                  <>
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                      <h2 className="font-bold text-gray-900 mb-1">Standing Sets Contract</h2>
+                      <p className="text-xs text-gray-500 mb-4">SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352</p>
+                      <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gray-50 rounded-xl text-xs">
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Production</span><div className="font-semibold mt-0.5">{booking.jobName}</div></div>
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Company</span><div className="font-semibold mt-0.5">{booking.company?.name}</div></div>
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental Start</span><div className="font-semibold mt-0.5">{booking.startDate ? new Date(booking.startDate).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '—'}</div></div>
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental End</span><div className="font-semibold mt-0.5">{booking.endDate ? new Date(booking.endDate).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '—'}</div></div>
+                      </div>
+                      {sets.length > 0 && (
+                        <div className="mb-4">
+                          <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Sets</div>
+                          <div className="space-y-1">
+                            {sets.map((s: string) => (
+                              <div key={s} className="flex items-center gap-2 text-sm"><span>🎬</span><span>{SET_LABELS[s] || s}{prelitSets.includes(s) ? ' (Pre-lit)' : ''}</span></div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 mb-4 text-xs">
+                        <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">Rate Per Day</span><span className="font-bold text-sm">${ratePerDay}</span></div>
+                        <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">OT Rate</span><span className="font-bold text-sm">${otRate}/hr</span></div>
+                        {prepDays && <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">Prep Days</span><span className="font-bold">{prepDays}</span></div>}
+                        {shootDays && <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">Shoot Days</span><span className="font-bold">{shootDays}</span></div>}
+                        {strikeDays && <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">Strike Days</span><span className="font-bold">{strikeDays}</span></div>}
+                        {darkDays && <div className="p-2 bg-gray-50 rounded-lg"><span className="text-gray-400 block mb-0.5">Dark Days</span><span className="font-bold">{darkDays}</span></div>}
+                      </div>
+                      {stageNotes && <div className="text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg p-2 mb-4"><span className="font-bold">Notes: </span>{stageNotes}</div>}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                      <h2 className="font-bold text-gray-900 mb-3">Terms & Conditions</h2>
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1 mb-4 border border-gray-100 rounded-xl p-3 bg-gray-50 text-xs text-gray-600 leading-relaxed">
+                        <p><strong>1. Grant.</strong> Licensor grants Producer the non-assignable and non-exclusive right to enter upon the Premises at 8500 Lankershim Blvd, Sun Valley, CA and to use designated Sets for the purpose of making still and motion pictures, commercials, trailers and soundtrack recordings.</p>
+                        <p><strong>2. Description.</strong> Producer shall have the right to use the Sets including furniture and fixtures located on or about the Sets.</p>
+                        <p><strong>3. Fees, Term and Re-Entry.</strong> Producer may use the Property on the dates specified. Re-entry within 60 days requires 5 days advance written notice and is subject to availability.</p>
+                        <p><strong>4. Use, Protection and Restoration.</strong> No smoking, eating or drinking on Sets. No alcohol or illegal drugs. No nudity without written consent. Layout board recommended under all equipment. Producer shall remove all personnel and equipment by end of Term.</p>
+                        <p><strong>5. Fees.</strong> Location Fee is due in advance for each day. All additional rentals including Grip, Lighting, and Production Supplies must be contracted through SirReel Studios unless otherwise agreed.</p>
+                        <p><strong>6. Utilities.</strong> Producer agrees to pay for any necessary unclogging, pumping or damages to bathrooms caused by misuse.</p>
+                        <p><strong>7. Security Deposit.</strong> Producer agrees to pay 100% of the Location Fee as a Security Deposit. The deposit will be deducted from the final bill.</p>
+                        <p><strong>8. Time of Payment.</strong> Total Due and Security Deposit must be paid prior to commencement of Term.</p>
+                        <p><strong>9. Dark Days.</strong> Any day on which set dressing is left on the Property with no production personnel present. Access during a Dark Day converts it to a Prep, Shoot, or Strike Day.</p>
+                        <p><strong>10. Postponement/Cancellation Policy.</strong> All cancellations must be made one week prior to start date. Cancellations inside one week will be billed the full rental rate.</p>
+                        <p><strong>12. Products Release.</strong> SirReel has secured rights to use identified products on Standing Sets. Producer may utilize these materials for the Production.</p>
+                        <p><strong>13. Production Ownership.</strong> Producer shall be the sole and exclusive owner of all rights in photographs, film, video and sound recordings made pursuant to this Agreement.</p>
+                        <p><strong>14. Miscellaneous.</strong> Producer shall not assign this Agreement without Licensor consent. Producer shall indemnify and hold harmless Licensor from any claims arising from Producer's use of the Property. This Agreement is governed by California law with venue in Los Angeles County.</p>
+                        {sets.includes('hospital') && <p><strong>Stryker Addendum.</strong> By using the Hospital Set, Producer acknowledges the Stryker Master Media Agreement and agrees to its terms regarding Stryker medical equipment on set.</p>}
+                      </div>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" checked={lcdwAccepted} onChange={e => setLcdwAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" />
+                        <span className="text-sm text-gray-700 font-medium">I have read and agree to all terms and conditions of this Studio Contract.</span>
+                      </label>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                      <h2 className="font-bold text-gray-900 mb-2">Authorized Signature</h2>
+                      <p className="text-xs text-gray-500 mb-3">I am an Authorized Representative of the Producer and I understand and accept the terms and conditions in this contract.</p>
+                      <SigCanvas canvasRef={mainSigRef} drawn={mainSigDrawn} onClear={() => clearSig(mainSigRef, setMainSigDrawn)} />
+                    </div>
+
+                    <button onClick={async () => {
+                      if (await post('sign', { step: 'studio', studioAgreed: lcdwAccepted, signatureData: sigData(mainSigRef) })) {
+                        setDone(d => ({ ...d, studio: true }));
+                        setActiveTab('coi');
+                      }
+                    }} disabled={!lcdwAccepted || !mainSigDrawn || submitting}
+                      className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">
+                      {submitting ? 'Saving...' : 'Sign Studio Contract →'}
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          )
         )}
 
         {/* CC AUTH */}

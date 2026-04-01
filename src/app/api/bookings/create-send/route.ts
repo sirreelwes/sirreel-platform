@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
     const {
       companyId, companyName, personId, personEmail, personName, personPhone,
       agentId, jobName, startDate, endDate, vehicleTypes, notes,
+      contractType, stageDetails,
     } = body;
 
     if (!jobName || !startDate || !personEmail) {
@@ -77,6 +78,8 @@ export async function POST(req: NextRequest) {
         bookingId: booking.id,
         sentTo: personEmail,
         sentAt: new Date(),
+        contractType: contractType || 'vehicles',
+        stageDetails: stageDetails ? JSON.stringify(stageDetails) : null,
       },
     });
 
