@@ -281,7 +281,12 @@ export default function JobDashboard({ orderId, orderNumber, onClose, userRole, 
               {/* ── PAPERWORK ── */}
               {activeSection === 'paperwork' && (
                 <PaperworkTab
-                  booking={dbData}
+                  booking={dbData || {
+                    rentalAgreement: false,
+                    lcdwAccepted: false,
+                    coiReceived: false,
+                    paperworkRequests: [],
+                  }}
                   token={dbData?.paperworkRequests?.[0]?.token}
                 />
               )}
