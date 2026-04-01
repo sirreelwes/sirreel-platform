@@ -17,12 +17,13 @@ export async function POST(req: NextRequest) {
     // Get or create company
     let coId = companyId;
     if (!coId && companyName) {
-      const co = await prisma.company.upsert({
-        where: { name: companyName },
-        update: {},
-        create: { name: companyName },
-      });
-      coId = co.id;
+      const existing = await prisma.company.findFirst({ where: { name: companyName } });
+      if (existing) {
+        coId = existing.id;
+      } else {
+        const co = await prisma.company.create({ data: { name: companyName } });
+        coId = co.id;
+      }
     }
     if (!coId) return NextResponse.json({ error: 'Company required' }, { status: 400 });
 
