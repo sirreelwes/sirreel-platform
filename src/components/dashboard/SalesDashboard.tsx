@@ -75,7 +75,7 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-gray-900">{greeting}, {agentName.split(' ')[0]} 👋</h1>
-          <p className="text-[12px] text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · SirReel Fleet HQ</p>
+          <p className="text-[12px] text-gray-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · SirReel HQ</p>
         </div>
         <span className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">🔴 Live · RentalWorks</span>
       </div>

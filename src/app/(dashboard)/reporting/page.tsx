@@ -105,7 +105,7 @@ export default function ReportingPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Reporting</h1>
-          <p className="text-[12px] text-gray-500">{monthName} · SirReel Team HQ</p>
+          <p className="text-[12px] text-gray-500">{monthName} · SirReel HQ</p>
         </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           {(['week', 'month', 'quarter', 'year'] as const).map(p => (

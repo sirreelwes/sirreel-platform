@@ -152,7 +152,7 @@ export default function JobDetailPage() {
         {items.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm">
             <div className="text-3xl mb-2">🚛</div>
-            No booking items found in Fleet HQ.
+            No booking items found in SirReel HQ.
             <div className="text-xs mt-1">This job may only exist in RentalWorks.</div>
           </div>
         ) : (

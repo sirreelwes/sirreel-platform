@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'SirReel Team HQ',
+  title: 'SirReel HQ',
   description: 'Production vehicle fleet management platform',
   icons: { icon: '/favicon.ico' },
 };
