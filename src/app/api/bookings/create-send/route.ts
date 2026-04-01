@@ -34,8 +34,14 @@ export async function POST(req: NextRequest) {
       if (existingPerson) {
         pId = existingPerson.id;
       } else {
+        const nameParts = (personName || personEmail).split(' ');
         const person = await prisma.person.create({
-          data: { name: personName || personEmail, email: personEmail, phone: personPhone || null },
+          data: {
+            firstName: nameParts[0] || personEmail,
+            lastName: nameParts.slice(1).join(' ') || '',
+            email: personEmail,
+            phone: personPhone || null,
+          },
         });
         pId = person.id;
       }
