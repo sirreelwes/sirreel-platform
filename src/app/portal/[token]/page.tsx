@@ -385,8 +385,8 @@ export default function ClientPortal() {
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{redlineReview.noChanges ? '✅' : redlineReview.recommendation === 'approve' ? '✅' : redlineReview.recommendation === 'reject' ? '❌' : '📋'}</span>
                         <div>
-                          <div className="text-xs font-bold text-gray-800">{redlineReview.noChanges ? 'Contract Received' : redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">{redlineReview.noChanges ? 'Your signed contract is on file with SirReel.' : 'Your contract has been received and is being reviewed by the SirReel team.'}</div>
+                          <div className="text-xs font-bold text-gray-800">{redlineReview.noChanges && redlineReview.recommendation === 'approve' ? 'Contract Confirmed — No Issues' : redlineReview.noChanges ? 'Contract Received — Under Review' : redlineReview.recommendation === 'approve' ? 'Changes Acceptable' : redlineReview.recommendation === 'reject' ? 'Changes Not Acceptable' : 'Under Review'}</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">{redlineReview.noChanges && redlineReview.recommendation === 'approve' ? 'Your contract matches our standard agreement and is on file.' : 'Your contract has been received and is being reviewed by the SirReel team.'}</div>
                         </div>
                       </div>
                     </div>
