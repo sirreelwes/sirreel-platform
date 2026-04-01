@@ -35,6 +35,9 @@ type RWOrder = {
 export default function BookingsPage() {
   const [orders, setOrders] = useState<RWOrder[]>([]);
   const [fleetBookings, setFleetBookings] = useState<RWOrder[]>([]);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkRwNumber, setLinkRwNumber] = useState('');
+  const [linkSaving, setLinkSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -277,6 +280,43 @@ export default function BookingsPage() {
     </div>
                   )}
                   <div className="text-[9px] text-gray-300 mt-0.5">tap to view →</div>
+                  {(o as any)._fleetHQ && (
+                    <div onClick={e => e.stopPropagation()} className="mt-1">
+                      {linkingId === o.orderId ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            value={linkRwNumber}
+                            onChange={e => setLinkRwNumber(e.target.value)}
+                            placeholder="RW Order # (e.g. A000K7QF)"
+                            className="border border-gray-300 rounded-lg px-2 py-1 text-[10px] w-40 focus:outline-none focus:border-violet-400"
+                            autoFocus
+                          />
+                          <button onClick={async () => {
+                            if (!linkRwNumber.trim()) return;
+                            setLinkSaving(true);
+                            try {
+                              await fetch(`/api/bookings/${o.orderId}/link-rw`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ rentalworksOrderId: linkRwNumber.trim() })
+                              });
+                              setFleetBookings(prev => prev.filter(b => b.orderId !== o.orderId));
+                              setLinkingId(null);
+                              setLinkRwNumber('');
+                            } finally { setLinkSaving(false); }
+                          }} className="text-[10px] font-bold px-2 py-1 bg-violet-600 text-white rounded-lg">
+                            {linkSaving ? '...' : 'Link'}
+                          </button>
+                          <button onClick={() => { setLinkingId(null); setLinkRwNumber(''); }} className="text-[10px] text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setLinkingId(o.orderId); setLinkRwNumber(''); }}
+                          className="text-[10px] text-violet-500 hover:text-violet-700 font-semibold">
+                          + Link to RW Order
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {(o as any)._fleetHQ && (o as any)._paperworkStatus && (() => {
                     const pw = (o as any)._paperworkStatus;
                     const ct = pw.contractType || 'vehicles';
