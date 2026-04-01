@@ -1,4 +1,5 @@
 'use client';
+import { useSession } from 'next-auth/react';
 
 import { useState, useMemo, useEffect } from 'react';
 import CreateSendModal from "@/components/bookings/CreateSendModal";
@@ -33,6 +34,9 @@ type RWOrder = {
 };
 
 export default function BookingsPage() {
+  const { data: session } = useSession();
+  const sessionUser = session?.user as any;
+  const agentName = sessionUser?.name || sessionUser?.firstName || '';
   const [orders, setOrders] = useState<RWOrder[]>([]);
   const [fleetBookings, setFleetBookings] = useState<RWOrder[]>([]);
   const [linkingId, setLinkingId] = useState<string | null>(null);
@@ -358,7 +362,7 @@ export default function BookingsPage() {
     </div>
       )}
 
-      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} agentId={undefined} />}
+      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} agentId={undefined} agentName={agentName} />}
       {showNew && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
           onClick={() => { setShowNew(false); resetForm(); }}>

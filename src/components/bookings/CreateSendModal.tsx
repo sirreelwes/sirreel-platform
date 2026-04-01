@@ -12,9 +12,9 @@ const STAGE_SETS = [
   { id: 'police', label: 'Police Station / Jail' },
 ];
 
-type Props = { onClose: () => void; agentId?: string; };
+type Props = { onClose: () => void; agentId?: string; agentName?: string; };
 
-export default function CreateSendModal({ onClose, agentId }: Props) {
+export default function CreateSendModal({ onClose, agentId, agentName }: Props) {
   const [companyQuery, setCompanyQuery] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState<any[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
