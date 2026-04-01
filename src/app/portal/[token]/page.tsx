@@ -135,6 +135,8 @@ export default function ClientPortal() {
         setBooking(data.booking);
         setPaperwork(data.request);
         setContractType(data.request?.contractType || 'vehicles');
+        if (data.request?.lcdwAccepted) setLcdwAccepted(true);
+        if (data.request?.lcdwAccepted) setLcdwAccepted(true);
         setSignerName(data.booking.person?.name || '');
         setSignerEmail(data.booking.person?.email || '');
         if (data.booking.depositAmount) setCcChargeEstimate(String(data.booking.depositAmount));
@@ -437,7 +439,7 @@ export default function ClientPortal() {
         {/* LCDW */}
         {activeTab === 'lcdw' && (
           locked ? renderLockedCard('LCDW') :
-          done.lcdw ? renderDoneCard('LCDW Acknowledged', 'Signed & on file') : (
+          done.lcdw ? renderDoneCard(lcdwAccepted ? 'LCDW Accepted — $24/day/vehicle' : 'LCDW Declined', lcdwAccepted ? 'Accepted & signed' : 'Client declined LCDW coverage') : (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-3">Limited Collision Damage Waiver</h2>
