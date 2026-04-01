@@ -439,7 +439,31 @@ export default function ClientPortal() {
         {/* LCDW */}
         {activeTab === 'lcdw' && (
           locked ? renderLockedCard('LCDW') :
-          done.lcdw ? renderDoneCard(lcdwAccepted ? 'LCDW Accepted — $24/day/vehicle' : 'LCDW Declined', lcdwAccepted ? 'Accepted & signed' : 'Client declined LCDW coverage') : (
+          done.lcdw ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="text-3xl">✅</div>
+                <div>
+                  <div className="text-emerald-800 font-bold text-base">{lcdwAccepted ? 'LCDW Accepted — $24/day/vehicle' : 'LCDW Declined'}</div>
+                  <div className="text-emerald-600 text-sm">{lcdwAccepted ? 'Client accepted LCDW coverage' : 'Client declined LCDW coverage'}</div>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
+                  <span className="text-emerald-500">✓</span>
+                  <span className="text-gray-700">{lcdwAccepted ? 'LCDW accepted at $24.00/day/vehicle' : 'LCDW declined — client providing own coverage'}</span>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
+                  <span className="text-emerald-500">✓</span>
+                  <span className="text-gray-700">Fuel policy acknowledged — $10.00/gallon</span>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-emerald-100">
+                  <span className="text-emerald-500">✓</span>
+                  <span className="text-gray-700">Signed by: <strong>{paperwork?.signerName || signerName || 'Client'}</strong></span>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-3">Limited Collision Damage Waiver</h2>
