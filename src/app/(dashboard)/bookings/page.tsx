@@ -277,6 +277,24 @@ export default function BookingsPage() {
     </div>
                   )}
                   <div className="text-[9px] text-gray-300 mt-0.5">tap to view →</div>
+                  {(o as any)._fleetHQ && (o as any)._paperworkStatus && (() => {
+                    const pw = (o as any)._paperworkStatus;
+                    const ct = pw.contractType || 'vehicles';
+                    const steps = [
+                      ct !== 'stage' && pw.rentalAgreement,
+                      ct !== 'stage' && pw.lcdwAccepted,
+                      ct !== 'vehicles' && pw.studioContractSigned,
+                      pw.coiReceived,
+                      pw.creditCardAuth,
+                    ].filter(s => s !== false);
+                    const total = steps.length;
+                    const done = steps.filter(Boolean).length;
+                    return (
+                      <div className={`text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${done === total ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>
+                        {done}/{total} paperwork
+                      </div>
+                    );
+                  })()}
     </div>
     </div>
     </div>
