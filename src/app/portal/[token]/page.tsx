@@ -325,7 +325,7 @@ export default function ClientPortal() {
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${isDone ? 'bg-emerald-100' : isAmber ? 'bg-amber-100' : 'bg-red-100'}`}>{isDone ? '✓' : isAmber ? '⚠' : isFail ? '✗' : tab.icon}</div>
                       <div>
                         <div className={`text-[12px] font-semibold ${isDone ? 'text-emerald-700' : isAmber ? 'text-amber-700' : 'text-red-700'}`}>{tab.label}</div>
-                        <div className={`text-[10px] ${isDone ? 'text-emerald-500' : isAmber ? 'text-amber-500' : 'text-red-400'}`}>{isDone ? 'Complete ✓' : isAmber ? 'Pending review' : 'Required'}</div>
+                        <div className={`text-[10px] ${isDone ? 'text-emerald-500' : isAmber ? 'text-amber-500' : 'text-red-400'}`}>{isDone ? (tab.id === 'lcdw' ? (paperwork?.lcdwAccepted ? 'Accepted ✓' : 'Complete ✓') : 'Complete ✓') : isAmber ? 'Pending review' : 'Required'}</div>
                       </div>
                     </button>
                   );
