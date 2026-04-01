@@ -85,7 +85,7 @@ export default function CreateSendModal({ onClose, agentId }: Props) {
   };
 
   const submit = async () => {
-    if (!jobName || !startDate || !endDate || !personEmail) return;
+    if (!jobName || !startDate || !personEmail) return;
     setSubmitting(true);
     try {
       const res = await fetch('/api/bookings/create-send', {
@@ -112,7 +112,7 @@ export default function CreateSendModal({ onClose, agentId }: Props) {
     } finally { setSubmitting(false); }
   };
 
-  const canSubmit = jobName && startDate && endDate && personEmail && (selectedCompany || companyQuery.length > 1);
+  const canSubmit = jobName && startDate && personEmail && (selectedCompany || companyQuery.length > 1);
 
   return (
     <>
@@ -223,7 +223,7 @@ export default function CreateSendModal({ onClose, agentId }: Props) {
                       <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 mb-1 block">End Date *</label>
+                      <label className="text-[10px] text-gray-400 mb-1 block">End Date (optional)</label>
                       <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                   </div>
