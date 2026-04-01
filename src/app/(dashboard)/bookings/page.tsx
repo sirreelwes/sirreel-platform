@@ -358,6 +358,7 @@ export default function BookingsPage() {
     </div>
       )}
 
+      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} agentId={undefined} />}
       {showNew && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
           onClick={() => { setShowNew(false); resetForm(); }}>
