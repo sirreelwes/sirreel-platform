@@ -53,7 +53,7 @@ function buildHtml(booking: any, format: string) {
 <style>
   body { font-family: 'Times New Roman', serif; margin: 0; padding: 40px; color: #111; }
   .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
-  .logo { font-size: 24pt; font-weight: bold; letter-spacing: 2px; }
+  .logo img { height: 60px; width: auto; }
   .subtitle { font-size: 10pt; color: #555; margin-top: 4px; }
   h1 { font-size: 18pt; text-align: center; margin: 20px 0; text-transform: uppercase; letter-spacing: 1px; }
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; border: 1px solid #ccc; padding: 16px; }
@@ -71,7 +71,7 @@ function buildHtml(booking: any, format: string) {
 </head>
 <body>
   <div class="header">
-    <div class="logo">SIRREEL</div>
+    <div class="logo"><img src="https://sirreel-fleet.vercel.app/sirreel-logo.png" alt="SirReel Studio Services" style="height:60px;width:auto;" /></div>
     <div class="subtitle">Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · (818) 515-2389 · info@sirreel.com</div>
   </div>
 
