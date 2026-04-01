@@ -30,12 +30,15 @@ export async function POST(req: NextRequest) {
     // Get or create person
     let pId = personId;
     if (!pId) {
-      const person = await prisma.person.upsert({
-        where: { email: personEmail },
-        update: { name: personName || personEmail, phone: personPhone },
-        create: { name: personName || personEmail, email: personEmail, phone: personPhone },
-      });
-      pId = person.id;
+      const existingPerson = await prisma.person.findFirst({ where: { email: personEmail } });
+      if (existingPerson) {
+        pId = existingPerson.id;
+      } else {
+        const person = await prisma.person.create({
+          data: { name: personName || personEmail, email: personEmail, phone: personPhone || null },
+        });
+        pId = person.id;
+      }
     }
 
     // Get agent - use provided or fall back to first admin
