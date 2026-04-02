@@ -381,7 +381,7 @@ export default function BookingsPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <input value={nContact} onChange={e => setNContact(e.target.value)} placeholder="Name *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nCompany} onChange={e => setNCompany(e.target.value)} placeholder="Company *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <input value={nPhone} onChange={e => setNPhone(e.target.value)} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
+                  <input value={nPhone} onChange={e => setNPhone(e.target.value.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3').replace(/(\d{3})(\d{1,3})$/, '($1) $2').replace(/(\d{1,3})$/, '($1').slice(0, 14))} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nEmail} onChange={e => setNEmail(e.target.value)} placeholder="Email" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
     </div>
     </div>

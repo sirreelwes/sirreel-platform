@@ -201,7 +201,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-gray-400 mb-1 block">Phone</label>
-                    <input value={personPhone} onChange={e => setPersonPhone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="(310) 555-1234" />
+                    <input value={personPhone} onChange={e => setPersonPhone(e.target.value.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3').replace(/(\d{3})(\d{1,3})$/, '($1) $2').replace(/(\d{1,3})$/, '($1').slice(0, 14))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="(310) 555-1234" />
                   </div>
                   <div>
                     <label className="text-[10px] text-gray-400 mb-1 block">Email * (portal link)</label>

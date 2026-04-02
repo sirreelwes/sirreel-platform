@@ -780,7 +780,7 @@ export default function ClientPortal() {
                         <input value={ccZip} onChange={e => setCcZip(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="ZIP" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <input value={ccBillingPhone} onChange={e => setCcBillingPhone(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Phone" />
+                        <input value={ccBillingPhone} onChange={e => setCcBillingPhone(e.target.value.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3').replace(/(\d{3})(\d{1,3})$/, '($1) $2').replace(/(\d{1,3})$/, '($1').slice(0, 14))} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Phone" />
                         <input type="email" value={ccBillingEmail} onChange={e => setCcBillingEmail(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Email" />
                       </div>
                     </div>
