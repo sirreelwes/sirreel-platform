@@ -369,7 +369,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                     className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-colors ${copied === 'portal' ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
                     {copied === 'portal' ? '✓ Copied!' : 'Copy Link'}
                   </button>
-                  <a href={`mailto:${personEmail}?subject=SirReel Rental Paperwork - ${jobName}&body=Hi ${personName.split(' ')[0]},%0A%0APlease complete your rental paperwork here:%0A%0A${result.portalUrl}%0A%0AThanks,%0ASirReel Studio Services`}
+                  <a href={`mailto:${personEmail}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${personName.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
                     className="flex-1 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700 text-center">
                     Send Email
                   </a>
