@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 import SalesDashboard from '@/components/dashboard/SalesDashboard';
 import ReviewsWidget from "@/components/dashboard/ReviewsWidget";
 import CollectionsDashboard from '@/components/dashboard/CollectionsDashboard';
+import DaniDashboard from '@/components/dashboard/DaniDashboard';
 
 const ADMIN_DASHBOARD_USERS = ['Wes', 'Dani Novoa'];
 const SALES_USERS = ['Jose Pacheco', 'Oliver Carlson'];
@@ -45,6 +46,9 @@ export default function DashboardPage() {
     return <SalesDashboard agentName={currentUserName || 'Jose'} />;
   }
 
+  if (currentUserName.includes('Dani')) {
+    return <DaniDashboard userName={currentUserName || 'Dani'} />;
+  }
   return <AdminDashboard userName={currentUserName || 'Wes'} />;
 }
 
