@@ -521,7 +521,7 @@ export default function ClientPortal() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-500 mb-3">Upload your COI — we'll review it instantly against SirReel's requirements.</p>
+              <p className="text-sm text-gray-500 mb-3">Upload your COI and our team will review it against SirReel's requirements.</p>
               <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-600"><div className="font-semibold text-gray-700 mb-0.5">Certificate holder must read:</div><div>SirReel Production Vehicles Inc. · 8500 Lankershim Blvd, Sun Valley, CA 91352</div></div>
               {!coiReview ? (
                 <div className="space-y-3">
@@ -550,52 +550,29 @@ export default function ClientPortal() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className={`rounded-xl p-3 flex items-center gap-3 ${coiReview.overallPass ? 'bg-emerald-50 border border-emerald-200' : coiReview.requiresAdminApproval ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
-                    <span className="text-xl">{coiReview.overallPass ? '✅' : coiReview.requiresAdminApproval ? '⚠️' : '❌'}</span>
-                    <div>
-                      <div className={`text-sm font-bold ${coiReview.overallPass ? 'text-emerald-800' : coiReview.requiresAdminApproval ? 'text-amber-800' : 'text-red-700'}`}>
-                        {coiReview.overallPass ? 'COI Approved' : coiReview.requiresAdminApproval ? 'Pending SirReel Review' : 'COI Needs Corrections'}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${coiReview.overallPass ? 'text-emerald-600' : coiReview.requiresAdminApproval ? 'text-amber-600' : 'text-red-500'}`}>
-                        {coiReview.overallPass ? 'All requirements met.' : coiReview.requiresAdminApproval ? 'Required coverages are in place. A SirReel team member will review the remaining items shortly.' : 'Please work with your broker to correct the issues below.'}
+                <div className="space-y-3">
+                  {coiReview.overallPass ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <div className="text-sm font-bold text-emerald-800">COI Approved</div>
+                        <div className="text-xs text-emerald-600 mt-0.5">All requirements met. Your certificate of insurance is on file with SirReel.</div>
                       </div>
                     </div>
-                  </div>
-                  {coiReview.hardIssues?.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                      <div className="text-[10px] font-bold text-red-700 uppercase mb-2">Must Correct</div>
-                      <ul className="space-y-1">{coiReview.hardIssues.map((issue: string, i: number) => <li key={i} className="text-[11px] text-red-700">• {issue}</li>)}</ul>
-                    </div>
-                  )}
-                  {coiReview.manageableIssues?.length > 0 && coiReview.requiresAdminApproval && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                      <div className="text-[10px] font-bold text-amber-700 uppercase mb-2">Under Review by SirReel</div>
-                      <ul className="space-y-1">{coiReview.manageableIssues.map((issue: string, i: number) => <li key={i} className="text-[11px] text-amber-700">• {issue}</li>)}</ul>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                      <span className="text-2xl">🕐</span>
+                      <div>
+                        <div className="text-sm font-bold text-amber-800">COI Under Review</div>
+                        <div className="text-xs text-amber-700 mt-1 leading-relaxed">Thanks for uploading your COI. Our team will review it and let you know if it meets the requirements. You will hear from us shortly.</div>
+                      </div>
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    {[
-                      { label: 'Certificate Holder: SirReel', item: coiReview.certificateHolder, hard: true },
-                      { label: 'General Liability', item: coiReview.generalLiability, hard: true },
-                      { label: 'Auto Liability', item: coiReview.autoLiability, hard: true },
-                      { label: 'Additional Insured', item: coiReview.additionalInsured, hard: true },
-                      { label: 'Loss Payee', item: coiReview.lossPayee, hard: true },
-                      { label: 'Primary & Non-Contributory', item: coiReview.primaryNonContributory, hard: true },
-                      { label: 'Umbrella/Excess', item: coiReview.umbrella, hard: false },
-                      { label: 'Waiver of Subrogation', item: coiReview.waiverOfSubrogation, hard: false },
-                      { label: 'Entertainment Package', item: coiReview.entertainmentPackage, hard: false },
-                      { label: 'Workers Comp (on COI)', item: coiReview.workersComp, hard: false },
-                    ].filter(r => r.item).map((r, i) => (
-                      <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] ${r.item.pass ? 'bg-emerald-50 text-emerald-700' : r.hard ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
-                        <span className="font-bold">{r.item.pass ? '✓' : r.hard ? '✗' : '⚠'}</span>
-                        <span className="flex-1">{r.label}</span>
-                        {!r.hard && !r.item.pass && <span className="text-[9px] bg-amber-100 px-1.5 py-0.5 rounded font-bold">Admin review</span>}
-                        {r.item.found && <span className="text-gray-400 text-[10px] truncate max-w-[80px]">{r.item.found}</span>}
-                      </div>
-                    ))}
-                  </div>
-                  {!coiReview.hardPass && <button onClick={() => { setCoiReview(null); setCoiFile(null); }} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Upload a New COI</button>}
+                  {!coiReview.overallPass && (
+                    <button onClick={() => { setCoiReview(null); setCoiFile(null); }} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                      Upload a Different COI
+                    </button>
+                  )}
                 </div>
               )}
             </div>
