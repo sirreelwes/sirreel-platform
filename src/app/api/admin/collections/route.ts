@@ -1,30 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-function startOfWeek(d: Date) {
-  const day = d.getDay()
-  const diff = (day === 0 ? -6 : 1 - day)
-  const mon = new Date(d)
-  mon.setDate(d.getDate() + diff)
-  mon.setHours(0, 0, 0, 0)
-  return mon
-}
-
-function toUTCDate(d: Date) {
-  return new Date(d.toISOString().slice(0, 10) + 'T00:00:00.000Z')
-}
-
-function sumPeriod(rows: any[], from: Date, to: Date) {
-  const f = from.getTime(), t = to.getTime()
+function sumPeriod(rows: any[], from: string, to: string) {
   const filtered = rows.filter(r => {
-    const d = new Date(r.date).getTime()
-    return d >= f && d <= t
+    const d = r.date.toISOString().slice(0, 10)
+    return d >= from && d <= to
   })
   return {
     cardpointe:    filtered.reduce((s, r) => s + Number(r.cardpointe), 0),
     rentalworks:   filtered.reduce((s, r) => s + Number(r.rentalworks), 0),
-    ordersCreated: filtered.reduce((s, r) => s + Number(r.ordersCreated), 0),
-    quotesCreated: filtered.reduce((s, r) => s + Number(r.quotesCreated), 0),
+    ordersCreated: filtered.reduce((s, r) => s + Number(r.orders_created), 0),
+    quotesCreated: filtered.reduce((s, r) => s + Number(r.quotes_created), 0),
     days: filtered.length,
   }
 }
@@ -37,8 +23,7 @@ function pct(curr: number, prev: number) {
 function compare(curr: any, prev: any) {
   const total = (p: any) => p.cardpointe + p.rentalworks
   return {
-    curr,
-    prev,
+    curr, prev,
     pctCardpointe:  pct(curr.cardpointe, prev.cardpointe),
     pctRentalworks: pct(curr.rentalworks, prev.rentalworks),
     pctTotal:       pct(total(curr), total(prev)),
@@ -46,57 +31,61 @@ function compare(curr: any, prev: any) {
   }
 }
 
+function startOfWeek(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00:00Z')
+  const day = d.getUTCDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setUTCDate(d.getUTCDate() + diff)
+  return d.toISOString().slice(0, 10)
+}
+
+function addDays(dateStr: string, n: number) {
+  const d = new Date(dateStr + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 export async function GET() {
   try {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT date, cardpointe, rentalworks, orders_created, quotes_created
+      FROM daily_collections
+      ORDER BY date DESC
+      LIMIT 400
+    `
+
+    if (!rows.length) {
+      return NextResponse.json({ ok: true, day: null, week: null, month: null, year: null, recent: [] })
+    }
+
     const now = new Date()
-    const today = toUTCDate(now)
+    const today     = now.toISOString().slice(0, 10)
+    const yesterday = addDays(today, -1)
 
-    // Fetch last 400 days of data
-    const since = new Date(today)
-    since.setDate(since.getDate() - 400)
-    const rows = await prisma.dailyCollections.findMany({
-      where: { date: { gte: since } },
-      orderBy: { date: 'desc' },
-    })
+    const thisWeekStart = startOfWeek(today)
+    const lastWeekStart = addDays(thisWeekStart, -7)
+    const lastWeekEnd   = addDays(thisWeekStart, -1)
 
-    // --- Day ---
-    const yesterday = toUTCDate(new Date(today.getTime() - 86400000))
-    const day  = compare(sumPeriod(rows, today, today), sumPeriod(rows, yesterday, yesterday))
+    const thisMonthStart = today.slice(0, 7) + '-01'
+    const lastMonthDate  = new Date(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
+    const lastMonthStart = lastMonthDate.toISOString().slice(0, 10)
+    const lastMonthEnd   = addDays(thisMonthStart, -1)
 
-    // --- Week ---
-    const thisWeekStart = toUTCDate(startOfWeek(now))
-    const lastWeekStart = toUTCDate(new Date(thisWeekStart.getTime() - 7 * 86400000))
-    const lastWeekEnd   = toUTCDate(new Date(thisWeekStart.getTime() - 86400000))
-    const week = compare(
-      sumPeriod(rows, thisWeekStart, today),
-      sumPeriod(rows, lastWeekStart, lastWeekEnd)
-    )
+    const thisYearStart = today.slice(0, 4) + '-01-01'
+    const lastYearStart = (parseInt(today.slice(0, 4)) - 1) + '-01-01'
+    const lastYearEnd   = (parseInt(today.slice(0, 4)) - 1) + '-12-31'
 
-    // --- Month ---
-    const thisMonthStart = toUTCDate(new Date(now.getFullYear(), now.getMonth(), 1))
-    const lastMonthStart = toUTCDate(new Date(now.getFullYear(), now.getMonth() - 1, 1))
-    const lastMonthEnd   = toUTCDate(new Date(now.getFullYear(), now.getMonth(), 0))
-    const month = compare(
-      sumPeriod(rows, thisMonthStart, today),
-      sumPeriod(rows, lastMonthStart, lastMonthEnd)
-    )
+    const day   = compare(sumPeriod(rows, today, today),         sumPeriod(rows, yesterday, yesterday))
+    const week  = compare(sumPeriod(rows, thisWeekStart, today), sumPeriod(rows, lastWeekStart, lastWeekEnd))
+    const month = compare(sumPeriod(rows, thisMonthStart, today),sumPeriod(rows, lastMonthStart, lastMonthEnd))
+    const year  = compare(sumPeriod(rows, thisYearStart, today), sumPeriod(rows, lastYearStart, lastYearEnd))
 
-    // --- Year ---
-    const thisYearStart = toUTCDate(new Date(now.getFullYear(), 0, 1))
-    const lastYearStart = toUTCDate(new Date(now.getFullYear() - 1, 0, 1))
-    const lastYearEnd   = toUTCDate(new Date(now.getFullYear() - 1, 11, 31))
-    const year = compare(
-      sumPeriod(rows, thisYearStart, today),
-      sumPeriod(rows, lastYearStart, lastYearEnd)
-    )
-
-    // Recent daily rows for sparkline
-    const recent = rows.slice(0, 30).reverse().map(r => ({
-      date:          r.date,
+    const recent = [...rows].reverse().slice(-30).map(r => ({
+      date:          r.date.toISOString().slice(0, 10),
       cardpointe:    Number(r.cardpointe),
       rentalworks:   Number(r.rentalworks),
-      ordersCreated: Number(r.ordersCreated),
-      quotesCreated: Number(r.quotesCreated),
+      ordersCreated: Number(r.orders_created),
+      quotesCreated: Number(r.quotes_created),
     }))
 
     return NextResponse.json({ ok: true, day, week, month, year, recent })
