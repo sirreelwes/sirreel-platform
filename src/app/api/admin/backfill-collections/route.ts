@@ -36,6 +36,34 @@ function extractAmount(text: string, label: string): number {
   return parseFloat(match[1].replace(/,/g, ''))
 }
 
+function parseCollections(body: string) {
+  // Normalize aliases: Stax = CardPointe, RTPro = RentalWorks
+  const normalized = body
+    .replace(/\bStax\b/gi, 'CardPointe')
+    .replace(/\bRTPro\b/gi, 'RentalWorks')
+
+  // Handle "Updated" emails — find the LAST occurrence of a total line
+  // e.g. "Totals for today is now $13,520.09" overrides earlier numbers
+  const updatedMatch = normalized.match(/totals?\s+for\s+today\s+is\s+now\s+\$([\d,]+\.?\d*)/i)
+
+  let cardpointe    = extractAmount(normalized, 'cardpointe')
+  let rentalworks   = extractAmount(normalized, 'rentalworks')
+  const ordersCreated = extractAmount(normalized, 'value of orders created')
+  const quotesCreated = extractAmount(normalized, 'value of quotes created')
+
+  // If there's an "updated total", use it for both CardPointe and RentalWorks
+  // (Christian's updates appear to be a single combined total)
+  if (updatedMatch) {
+    const updatedTotal = parseFloat(updatedMatch[1].replace(/,/g, ''))
+    if (updatedTotal > 0) {
+      cardpointe  = updatedTotal
+      rentalworks = updatedTotal
+    }
+  }
+
+  return { cardpointe, rentalworks, ordersCreated, quotesCreated }
+}
+
 async function backfillInbox(email: string, thisYear: number) {
   const gmail = getGmailClient(email)
   const listRes = await gmail.users.messages.list({
