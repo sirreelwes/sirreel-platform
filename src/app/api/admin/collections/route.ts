@@ -45,6 +45,8 @@ function addDays(dateStr: string, n: number) {
   return d.toISOString().slice(0, 10)
 }
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const rows = await prisma.$queryRaw<any[]>`
