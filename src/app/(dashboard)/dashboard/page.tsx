@@ -155,12 +155,39 @@ function AdminDashboard({ userName }: { userName: string }) {
   const urgentEmails = emails.filter(e => e.priority <= 1);
   const unreadEmails = emails.filter(e => !e.isRead);
 
-  const ALERTS = [
-    { text: '2 urgent email inquiries unanswered', severity: 'critical', link: '/inbox' },
-    { text: 'Jason Mayfield deposit missing — delivery tomorrow', severity: 'high', link: '/bookings' },
-    { text: 'Fabletics COI still not received', severity: 'high', link: '/bookings' },
-    { text: 'SC #36 insurance claim — adjuster inspection pending', severity: 'medium', link: '/claims' },
-  ];
+  // Build team response alerts from live email data
+  const AGENT_INBOX: Record<string, string> = {
+    'jose@sirreel.com': 'Jose',
+    'oliver@sirreel.com': 'Oliver',
+    'info@sirreel.com': 'Info',
+    'ana@sirreel.com': 'Ana',
+  };
+
+  const agentAlerts = (() => {
+    const unanswered = emails.filter(e => e.needsReply);
+    const byAgent: Record<string, { count: number; maxWait: number; oldest: any }> = {};
+    
+    unanswered.forEach((e: any) => {
+      const inbox = (e.toAddresses || [])[0] || '';
+      const agent = AGENT_INBOX[inbox] || inbox.split('@')[0];
+      if (!byAgent[agent]) byAgent[agent] = { count: 0, maxWait: 0, oldest: e };
+      byAgent[agent].count++;
+      if (e.waitHours > byAgent[agent].maxWait) {
+        byAgent[agent].maxWait = e.waitHours;
+        byAgent[agent].oldest = e;
+      }
+    });
+
+    return Object.entries(byAgent)
+      .map(([agent, data]) => ({
+        agent,
+        count: data.count,
+        maxWait: data.maxWait,
+        subject: data.oldest?.subject || '',
+        severity: data.maxWait >= 4 ? 'critical' : data.maxWait >= 1 ? 'high' : 'medium',
+      }))
+      .sort((a, b) => b.maxWait - a.maxWait);
+  })();
 
   return (
     <div>
@@ -171,7 +198,7 @@ function AdminDashboard({ userName }: { userName: string }) {
         </div>
         <div className="flex items-center gap-2">
           <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px]">
-            <span className="text-amber-600 font-bold">⚡ {ALERTS.length} items need attention</span>
+            <span className="text-amber-600 font-bold">⚡ {agentAlerts.length > 0 ? `${agentAlerts.reduce((s,a) => s + a.count, 0)} unanswered emails` : 'All caught up'}</span>
           </div>
           {rwConnected && (
             <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">
@@ -278,13 +305,19 @@ function AdminDashboard({ userName }: { userName: string }) {
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚡ Needs Attention</div>
           <div className="space-y-2">
-            {ALERTS.map((a, i) => (
-              <a key={i} href={a.link} className={`block p-2 rounded-lg border text-[11px] hover:opacity-80 ${
+            {agentAlerts.length === 0 ? (
+              <div className="text-[11px] text-gray-400 py-4 text-center">✅ All client emails replied</div>
+            ) : agentAlerts.map((a, i) => (
+              <div key={i} className={`p-2 rounded-lg border text-[11px] ${
                 a.severity === 'critical' ? 'bg-red-50 border-red-200 text-red-700' :
                 a.severity === 'high' ? 'bg-amber-50 border-amber-200 text-amber-700' :
                 'bg-gray-50 border-gray-200 text-gray-600'}`}>
-                {a.severity === 'critical' ? '🔴 ' : a.severity === 'high' ? '🟡 ' : '⚪ '}{a.text}
-              </a>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">{a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟡' : '⚪'} {a.agent}</span>
+                  <span className="font-bold">{a.count} unanswered</span>
+                </div>
+                <div className="mt-0.5 opacity-75 truncate">Waiting {a.maxWait}h · {a.subject}</div>
+              </div>
             ))}
           </div>
         </div>
