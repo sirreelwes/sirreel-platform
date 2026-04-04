@@ -83,7 +83,7 @@ export default function CollectionsReportWidget() {
     <div className="p-4 bg-white rounded-xl border border-gray-200">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💳 CardPointe Collections</div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💵 Collections</div>
         <div className="flex gap-1">
           {(['day','week','month','year'] as Period[]).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
