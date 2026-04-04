@@ -39,7 +39,7 @@ function Sparkline({ data }: { data: any[] }) {
   return (
     <div className="flex items-end gap-0.5 h-8 mt-3">
       {data.map((d, i) => {
-        const total = d.cardpointe + d.rentalworks
+        const total = d.rentalworks // RW is total
         const h = Math.max(2, Math.round((total / max) * 32))
         return (
           <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group relative">
@@ -75,8 +75,8 @@ export default function CollectionsReportWidget() {
   }, [])
 
   const p = data?.[period]
-  const total = p ? p.curr.cardpointe + p.curr.rentalworks : 0
-  const prevTotal = p ? p.prev.cardpointe + p.prev.rentalworks : 0
+  const total = p ? p.curr.rentalworks : 0  // RW is total collected
+  const prevTotal = p ? p.prev.rentalworks : 0
   const { label, vsLabel } = PERIOD_LABELS[period]
 
   return (
@@ -122,8 +122,8 @@ export default function CollectionsReportWidget() {
 
           {/* Breakdown */}
           <div className="bg-gray-50 rounded-lg px-3 py-1 mb-3">
-            <MoneyRow label="💳 CardPointe" curr={p.curr.cardpointe} prev={p.prev.cardpointe} pct={p.pctCardpointe} />
-            <MoneyRow label="📋 RentalWorks" curr={p.curr.rentalworks} prev={p.prev.rentalworks} pct={p.pctRentalworks} />
+            <MoneyRow label="💳 CardPointe (CC)" curr={p.curr.cardpointe} prev={p.prev.cardpointe} pct={p.pctCardpointe} />
+            <MoneyRow label="📋 Total Collected (RW)" curr={p.curr.rentalworks} prev={p.prev.rentalworks} pct={p.pctRentalworks} />
             <MoneyRow label="📝 Quotes Created" curr={p.curr.quotesCreated} prev={p.prev.quotesCreated} pct={0} />
           </div>
 

@@ -21,7 +21,7 @@ function pct(curr: number, prev: number) {
 }
 
 function compare(curr: any, prev: any) {
-  const total = (p: any) => p.cardpointe + p.rentalworks
+  const total = (p: any) => p.rentalworks // RW is the total; CP is a subset (CC portion only)
   return {
     curr, prev,
     pctCardpointe:  pct(curr.cardpointe, prev.cardpointe),
