@@ -61,6 +61,17 @@ function parseCollections(body: string) {
     }
   }
 
+  // Sanity check — flag suspiciously large single-day numbers (>$100K)
+  const MAX_DAILY = 100000
+  if (cardpointe > MAX_DAILY) {
+    console.warn(`[EOD] Suspicious CardPointe amount: $${cardpointe} — capping at previous value, manual review needed`)
+    cardpointe = 0
+  }
+  if (rentalworks > MAX_DAILY) {
+    console.warn(`[EOD] Suspicious RentalWorks amount: $${rentalworks} — capping at previous value, manual review needed`)
+    rentalworks = 0
+  }
+
   return { cardpointe, rentalworks, ordersCreated, quotesCreated }
 }
 
