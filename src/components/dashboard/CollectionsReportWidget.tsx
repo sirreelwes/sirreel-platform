@@ -45,7 +45,7 @@ function Sparkline({ data }: { data: any[] }) {
           <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group relative">
             <div className="w-full rounded-sm bg-blue-200" style={{ height: h }} />
             <div className="absolute bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-[9px] rounded px-1.5 py-0.5 whitespace-nowrap z-10">
-              {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {fmt(total)}
+              {new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {fmt(total)}
             </div>
           </div>
         )
