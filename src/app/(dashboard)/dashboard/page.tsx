@@ -76,23 +76,37 @@ function AdminDashboard({ userName }: { userName: string }) {
   const [rwOrders, setRwOrders] = useState<any[]>([]);
   const [rwConnected, setRwConnected] = useState(false);
   const [emails, setEmails] = useState<any[]>([]);
+  const [planyoUnits, setPlanyoUnits] = useState<any[]>([]);
   const [emailLoading, setEmailLoading] = useState(true);
 
+  // Count units booked today from Planyo
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const countOut = (cat: string) => planyoUnits.filter(u =>
+    u.cat === cat && u.bookings?.some((b: any) => b.start <= todayStr && b.end >= todayStr)
+  ).length;
+
   const FLEET = [
-    { cat: 'Cube Truck', short: 'Cube', total: 41, out: 19, maint: 4, rate: 175, color: '#3b82f6', icon: '🚛' },
-    { cat: 'Cargo Van w/ LG', short: 'Cargo', total: 30, out: 14, maint: 4, rate: 200, color: '#8b5cf6', icon: '🚐' },
-    { cat: 'Cargo Van w/o LG', short: 'Cargo (no LG)', total: 8, out: 3, maint: 0, rate: 150, color: '#a78bfa', icon: '🚐' },
-    { cat: 'Passenger Van', short: 'Pass Van', total: 10, out: 4, maint: 1, rate: 175, color: '#06b6d4', icon: '🚌' },
-    { cat: 'PopVan', short: 'PopVan', total: 9, out: 3, maint: 2, rate: 400, color: '#f59e0b', icon: '🎬' },
-    { cat: 'Camera Cube', short: 'Cam Cube', total: 7, out: 2, maint: 0, rate: 200, color: '#ec4899', icon: '📷' },
-    { cat: 'DLUX', short: 'DLUX', total: 8, out: 4, maint: 0, rate: 450, color: '#10b981', icon: '✨' },
-    { cat: 'ProScout/VTR', short: 'Scout', total: 3, out: 1, maint: 0, rate: 450, color: '#f97316', icon: '📡' },
-    { cat: 'Studios', short: 'Studios', total: 10, out: 4, maint: 0, rate: 3000, color: '#6366f1', icon: '🏢' },
+    { cat: 'Cube Truck', short: 'Cube', total: 41, out: planyoUnits.length ? countOut('cube') : 19, maint: 4, rate: 175, color: '#3b82f6', icon: '🚛' },
+    { cat: 'Cargo Van w/ LG', short: 'Cargo', total: 30, out: planyoUnits.length ? countOut('cargo') : 14, maint: 4, rate: 200, color: '#8b5cf6', icon: '🚐' },
+    { cat: 'Cargo Van w/o LG', short: 'Cargo (no LG)', total: 8, out: planyoUnits.length ? countOut('cargo') : 3, maint: 0, rate: 150, color: '#a78bfa', icon: '🚐' },
+    { cat: 'Passenger Van', short: 'Pass Van', total: 10, out: planyoUnits.length ? countOut('pass') : 4, maint: 1, rate: 175, color: '#06b6d4', icon: '🚌' },
+    { cat: 'PopVan', short: 'PopVan', total: 9, out: planyoUnits.length ? countOut('pop') : 3, maint: 2, rate: 400, color: '#f59e0b', icon: '🎬' },
+    { cat: 'Camera Cube', short: 'Cam Cube', total: 7, out: planyoUnits.length ? countOut('cam') : 2, maint: 0, rate: 200, color: '#ec4899', icon: '📷' },
+    { cat: 'DLUX', short: 'DLUX', total: 8, out: planyoUnits.length ? countOut('dlux') : 4, maint: 0, rate: 450, color: '#10b981', icon: '✨' },
+    { cat: 'ProScout/VTR', short: 'Scout', total: 3, out: planyoUnits.length ? countOut('scout') : 1, maint: 0, rate: 450, color: '#f97316', icon: '📡' },
+    { cat: 'Studios', short: 'Studios', total: 10, out: planyoUnits.length ? countOut('studio') : 4, maint: 0, rate: 3000, color: '#6366f1', icon: '🏢' },
   ];
   const totalUnits = FLEET.reduce((s, f) => s + f.total, 0);
   const totalOut = FLEET.reduce((s, f) => s + f.out, 0);
   const totalMaint = FLEET.reduce((s, f) => s + f.maint, 0);
   const totalAvail = totalUnits - totalOut - totalMaint;
+
+  useEffect(() => {
+    fetch('/api/timeline')
+      .then(r => r.json())
+      .then(d => { if (d.ok) setPlanyoUnits(d.units || []) })
+      .catch(() => {})
+  }, []);
 
   useEffect(() => {
     fetch('/api/rentalworks').then(r => r.json()).then(data => {
