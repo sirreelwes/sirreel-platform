@@ -1108,3 +1108,21 @@ model PaperworkRequest {
 
   @@map("paperwork_requests")
 }
+
+// ====================================
+// 15. DAILY COLLECTIONS
+// ====================================
+
+model DailyCollections {
+  id            String   @id @default(uuid())
+  date          DateTime @unique @db.Date
+  cardpointe    Decimal  @default(0) @db.Decimal(10,2)
+  rentalworks   Decimal  @default(0) @db.Decimal(10,2)
+  ordersCreated Decimal  @default(0) @map("orders_created") @db.Decimal(10,2)
+  quotesCreated Decimal  @default(0) @map("quotes_created") @db.Decimal(10,2)
+  rawEmail      String?  @map("raw_email") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("daily_collections")
+}

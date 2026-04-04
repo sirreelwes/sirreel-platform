@@ -1,5 +1,7 @@
 'use client'
 
+import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWidget'
+
 import { useState, useEffect } from 'react'
 
 const nowHour = new Date().getHours()
@@ -310,7 +312,7 @@ export default function DaniDashboard({ userName }: { userName: string }) {
         <RecentActivityWidget items={recentActivity} loading={loading} />
       </div>
 
-      <CollectionsWidget rwOrders={rwOrders} loading={loading} />
+      <CollectionsReportWidget />
     </div>
   )
 }

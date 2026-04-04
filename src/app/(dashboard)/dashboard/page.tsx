@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 import SalesDashboard from '@/components/dashboard/SalesDashboard';
 import ReviewsWidget from "@/components/dashboard/ReviewsWidget";
 import CollectionsDashboard from '@/components/dashboard/CollectionsDashboard';
+import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWidget';
 import DaniDashboard from '@/components/dashboard/DaniDashboard';
 
 const ADMIN_DASHBOARD_USERS = ['Wes', 'Dani Novoa'];
@@ -314,36 +315,7 @@ function AdminDashboard({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {/* Collections widget */}
-      <div className="p-4 bg-white rounded-xl border border-gray-200 mb-4">
-        <div className="flex justify-between items-center mb-3">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">💵 Collections This Week · Ana</div>
-          <span className="text-[10px] text-gray-400">CardPointe · manual log</span>
-        </div>
-        <div className="grid grid-cols-7 gap-2">
-          {[
-            { day: 'Mon', amount: 4200, count: 3 },
-            { day: 'Tue', amount: 7850, count: 5 },
-            { day: 'Wed', amount: 2100, count: 2 },
-            { day: 'Thu', amount: 9400, count: 6 },
-            { day: 'Fri', amount: 5600, count: 4 },
-            { day: 'Sat', amount: 0, count: 0 },
-            { day: 'Today', amount: 2554, count: 2, today: true },
-          ].map((d, i) => (
-            <div key={i} className={`p-2 rounded-lg border text-center ${(d as any).today ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-100'}`}>
-              <div className={`text-[9px] font-bold uppercase ${(d as any).today ? 'text-emerald-600' : 'text-gray-400'}`}>{d.day}</div>
-              <div className={`text-[13px] font-extrabold ${d.amount > 0 ? ((d as any).today ? 'text-emerald-600' : 'text-gray-900') : 'text-gray-300'}`}>
-                {d.amount > 0 ? '$' + (d.amount/1000).toFixed(1) + 'K' : '—'}
-              </div>
-              <div className="text-[9px] text-gray-400">{d.count > 0 ? d.count + ' pmts' : ''}</div>
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between items-center mt-3 pt-2 border-t border-gray-100 text-[11px]">
-          <span className="text-gray-500">Week total: <span className="font-bold text-gray-900">$31,704</span></span>
-          <span className="text-gray-500">MTD: <span className="font-bold text-emerald-600">{rwConnected ? fmtK(revenueMTD) : "—"}</span></span>
-        </div>
-      </div>
+      <div className="mb-4"><CollectionsReportWidget /></div>
 
       {/* Pending Reviews */}
       <ReviewsWidget />
