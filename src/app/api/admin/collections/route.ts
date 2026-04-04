@@ -49,6 +49,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
+    // One-time fix for Mar 12 data entry typo ($20,1319.90 should be $20,319.90)
+    await prisma.$executeRaw`UPDATE daily_collections SET rentalworks = 20319.90 WHERE rentalworks > 50000`
+
     const rows = await prisma.$queryRaw<any[]>`
       SELECT date, cardpointe, rentalworks, orders_created, quotes_created
       FROM daily_collections
