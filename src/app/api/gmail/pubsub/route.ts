@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 
-const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
+const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com", "christian@sirreel.com"]
 
 function getGmailClient(email: string) {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
