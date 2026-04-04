@@ -67,7 +67,7 @@ export default function CollectionsReportWidget() {
   const [period, setPeriod] = useState<Period>('week')
 
   useEffect(() => {
-    fetch('/api/admin/collections')
+    fetch('/api/admin/collections?t=' + Date.now())
       .then(r => r.json())
       .then(d => setData(d))
       .catch(() => {})
