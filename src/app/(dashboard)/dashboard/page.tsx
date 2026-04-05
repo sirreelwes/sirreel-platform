@@ -318,7 +318,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                       <span className="text-gray-300 text-[10px]">↗</span>
                       <button
                         onClick={e2 => { e2.preventDefault(); e2.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
-                        className="text-[11px] text-gray-400 hover:text-red-500 font-bold leading-none px-1">×</button>
+                        className="text-[13px] text-gray-400 hover:text-red-500 font-bold leading-none w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                     </div>
                   </a>
                 );
