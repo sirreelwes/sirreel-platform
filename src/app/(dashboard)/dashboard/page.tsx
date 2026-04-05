@@ -153,6 +153,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   const displayFleet = showAllFleet ? FLEET : FLEET.filter(f => f.out > 0 || f.maint > 0);
 
   const urgentEmails = emails.filter(e => e.priority <= 1);
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const unreadEmails = emails.filter(e => !e.isRead);
 
   // Build team response alerts from live email data
@@ -288,10 +289,15 @@ function AdminDashboard({ userName }: { userName: string }) {
                         </div>
                       </div>
                       <div className={`text-[11px] truncate mb-0.5 ${!e.isRead ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>{e.subject}</div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 mb-0.5">
                         <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${cat.bg} ${cat.color}`}>{cat.label}</span>
-                        {e.needsReply && <span className="text-[8px] font-bold text-red-600">needs reply</span>}
+                        {e.needsReply && waitH >= 1 && <span className="text-[8px] font-bold text-red-600">↩ needs reply</span>}
                       </div>
+                      {(e.aiSummary || e.snippet) && (
+                        <div className="text-[10px] text-gray-400 leading-relaxed line-clamp-2">
+                          {e.aiSummary || e.snippet}
+                        </div>
+                      )}
                     </div>
                     <span className="text-gray-300 flex-shrink-0 text-[10px] mt-1">↗</span>
                   </a>
@@ -307,18 +313,57 @@ function AdminDashboard({ userName }: { userName: string }) {
           <div className="space-y-2">
             {agentAlerts.length === 0 ? (
               <div className="text-[11px] text-gray-400 py-4 text-center">✅ All client emails replied</div>
-            ) : agentAlerts.map((a, i) => (
-              <div key={i} className={`p-2 rounded-lg border text-[11px] ${
-                a.severity === 'critical' ? 'bg-red-50 border-red-200 text-red-700' :
-                a.severity === 'high' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                'bg-gray-50 border-gray-200 text-gray-600'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="font-bold">{a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟡' : '⚪'} {a.agent}</span>
-                  <span className="font-bold">{a.count} unanswered</span>
+            ) : agentAlerts.map((a, i) => {
+              const isExpanded = expandedAgent === a.agent;
+              const agentEmails = emails.filter((e: any) => {
+                const inbox = (e.toAddresses || [])[0] || '';
+                const AGENT_INBOX: Record<string,string> = {
+                  'jose@sirreel.com': 'Jose', 'oliver@sirreel.com': 'Oliver',
+                  'info@sirreel.com': 'Info', 'ana@sirreel.com': 'Ana',
+                };
+                return e.needsReply && AGENT_INBOX[inbox] === a.agent;
+              });
+              return (
+                <div key={i} className={`rounded-lg border text-[11px] overflow-hidden ${
+                  a.severity === 'critical' ? 'border-red-200' :
+                  a.severity === 'high' ? 'border-amber-200' : 'border-gray-200'}`}>
+                  <div
+                    onClick={() => setExpandedAgent(isExpanded ? null : a.agent)}
+                    className={`p-2 cursor-pointer flex items-center justify-between ${
+                      a.severity === 'critical' ? 'bg-red-50 text-red-700' :
+                      a.severity === 'high' ? 'bg-amber-50 text-amber-700' :
+                      'bg-gray-50 text-gray-600'}`}>
+                    <span className="font-bold">{a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟡' : '⚪'} {a.agent}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold">{a.count} unanswered</span>
+                      <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="bg-white divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                      {agentEmails.map((e: any, j: number) => {
+                        const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${e.threadId || e.gmailMessageId || ''}`;
+                        return (
+                          <a key={j} href={gmailUrl} target="_blank" rel="noopener noreferrer"
+                            className="block px-3 py-2 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-gray-900 truncate">
+                                {e.fromAddress?.match(/^([^<]+)</)?.[1]?.trim() || e.fromAddress?.split('@')[0] || 'Unknown'}
+                              </span>
+                              <span className="text-[9px] text-gray-400 flex-shrink-0">↩ {e.waitLabel}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 truncate">{e.subject}</div>
+                            {(e.aiSummary || e.snippet) && (
+                              <div className="text-[9px] text-gray-400 truncate mt-0.5">{e.aiSummary || e.snippet}</div>
+                            )}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="mt-0.5 opacity-75 truncate">Waiting {a.maxWait}h · {a.subject}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
