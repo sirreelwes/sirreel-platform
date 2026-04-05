@@ -169,6 +169,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   const urgentEmails = emails.filter(e => e.priority <= 1);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [dismissedEmails, setDismissedEmails] = useState<Set<string>>(new Set());
+  const [dismissedAgents, setDismissedAgents] = useState<Set<string>>(new Set());
   const unreadEmails = emails.filter(e => !e.isRead);
 
   // Build team response alerts from live email data
@@ -368,7 +369,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             ))}
 
             {/* Team email response */}
-            {agentAlerts.map((a, i) => {
+            {agentAlerts.filter(a => !dismissedAgents.has(a.agent)).map((a, i) => {
               const isExpanded = expandedAgent === a.agent;
               const agentEmails = emails.filter((e: any) => {
                 const inbox = (e.toAddresses || [])[0] || '';
@@ -392,6 +393,9 @@ function AdminDashboard({ userName }: { userName: string }) {
                     <div className="flex items-center gap-2">
                       <span className="font-bold">{a.count} unanswered</span>
                       <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); setDismissedAgents(prev => new Set([...prev, a.agent])); }}
+                        className="text-[13px] text-gray-400 hover:text-red-500 font-bold w-5 h-5 flex items-center justify-center rounded hover:bg-red-100/50">×</button>
                     </div>
                   </div>
                   {isExpanded && (
