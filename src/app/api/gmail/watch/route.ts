@@ -7,7 +7,6 @@ const WATCHED_INBOXES = [
   "jose@sirreel.com", 
   "oliver@sirreel.com",
   "ana@sirreel.com",
-  "christian@sirreel.com",
 ]
 
 async function renewWatches() {

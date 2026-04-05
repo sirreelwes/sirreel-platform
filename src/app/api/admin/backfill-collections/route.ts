@@ -92,7 +92,7 @@ export async function GET() {
     let stored = 0, skipped = 0
 
     // Search both inboxes
-    const inboxes = ['ana@sirreel.com', 'christian@sirreel.com']
+    const inboxes = ['ana@sirreel.com']
 
     for (const email of inboxes) {
       let gmail: any, messages: any[]
