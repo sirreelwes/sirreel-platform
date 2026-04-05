@@ -77,6 +77,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   const [rwConnected, setRwConnected] = useState(false);
   const [emails, setEmails] = useState<any[]>([]);
   const [planyoUnits, setPlanyoUnits] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [emailLoading, setEmailLoading] = useState(true);
 
   // Count units booked today from Planyo
@@ -100,6 +101,19 @@ function AdminDashboard({ userName }: { userName: string }) {
   const totalOut = FLEET.reduce((s, f) => s + f.out, 0);
   const totalMaint = FLEET.reduce((s, f) => s + f.maint, 0);
   const totalAvail = totalUnits - totalOut - totalMaint;
+
+  useEffect(() => {
+    // Seed recurring alerts then fetch
+    fetch('/api/alerts/seed').catch(() => {})
+    const fetchAlerts = () => {
+      const email = userName.toLowerCase().includes('dani') ? 'dani@sirreel.com' : 'wes@sirreel.com'
+      fetch(`/api/alerts?user=${encodeURIComponent(email)}`)
+        .then(r => r.json())
+        .then(d => { if (d.ok) setAlerts(d.alerts || []) })
+        .catch(() => {})
+    }
+    fetchAlerts()
+  }, []);
 
   useEffect(() => {
     fetch('/api/timeline')
@@ -307,13 +321,48 @@ function AdminDashboard({ userName }: { userName: string }) {
           )}
         </div>
 
-        {/* Alerts */}
+        {/* Needs Attention — live alerts + team response */}
         <div className="p-4 bg-white rounded-xl border border-gray-200">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">⚡ Needs Attention</div>
-          <div className="space-y-2">
-            {agentAlerts.length === 0 ? (
-              <div className="text-[11px] text-gray-400 py-4 text-center">✅ All client emails replied</div>
-            ) : agentAlerts.map((a, i) => {
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+
+            {/* System alerts */}
+            {alerts.map((alert: any) => (
+              <div key={alert.id} className={`rounded-lg border text-[11px] overflow-hidden ${
+                alert.severity === 'critical' ? 'border-red-200 bg-red-50' :
+                alert.severity === 'high' ? 'border-amber-200 bg-amber-50' :
+                'border-gray-200 bg-gray-50'}`}>
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold flex items-center gap-1 ${
+                      alert.severity === 'critical' ? 'text-red-700' :
+                      alert.severity === 'high' ? 'text-amber-700' : 'text-gray-700'}`}>
+                      {alert.severity === 'critical' ? '🔴' : alert.severity === 'high' ? '🟡' : '⚪'}
+                      {alert.link ? (
+                        <a href={alert.link} className="hover:underline">{alert.title}</a>
+                      ) : alert.title}
+                    </div>
+                    {alert.body && <div className="text-[10px] text-gray-500 mt-0.5">{alert.body}</div>}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const email = 'wes@sirreel.com'
+                      await fetch('/api/alerts/dismiss', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ alertId: alert.id, userEmail: email }),
+                      })
+                      setAlerts((prev: any[]) => prev.filter((a: any) => a.id !== alert.id))
+                    }}
+                    className="text-[9px] text-gray-400 hover:text-gray-600 font-semibold flex-shrink-0 px-1.5 py-0.5 rounded hover:bg-white/60">
+                    dismiss
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Team email response */}
+            {agentAlerts.map((a, i) => {
               const isExpanded = expandedAgent === a.agent;
               const agentEmails = emails.filter((e: any) => {
                 const inbox = (e.toAddresses || [])[0] || '';
@@ -329,12 +378,12 @@ function AdminDashboard({ userName }: { userName: string }) {
                   a.severity === 'high' ? 'border-amber-200' : 'border-gray-200'}`}>
                   <div
                     onClick={() => setExpandedAgent(isExpanded ? null : a.agent)}
-                    className={`p-2 cursor-pointer flex items-center justify-between ${
+                    className={`px-3 py-2 cursor-pointer flex items-center justify-between ${
                       a.severity === 'critical' ? 'bg-red-50 text-red-700' :
                       a.severity === 'high' ? 'bg-amber-50 text-amber-700' :
                       'bg-gray-50 text-gray-600'}`}>
                     <span className="font-bold">{a.severity === 'critical' ? '🔴' : a.severity === 'high' ? '🟡' : '⚪'} {a.agent}</span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <span className="font-bold">{a.count} unanswered</span>
                       <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
                     </div>
@@ -364,6 +413,10 @@ function AdminDashboard({ userName }: { userName: string }) {
                 </div>
               );
             })}
+
+            {alerts.length === 0 && agentAlerts.length === 0 && (
+              <div className="text-[11px] text-gray-400 py-4 text-center">✅ All caught up</div>
+            )}
           </div>
         </div>
       </div>
