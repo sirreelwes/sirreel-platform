@@ -168,6 +168,7 @@ function AdminDashboard({ userName }: { userName: string }) {
 
   const urgentEmails = emails.filter(e => e.priority <= 1);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [dismissedEmails, setDismissedEmails] = useState<Set<string>>(new Set());
   const unreadEmails = emails.filter(e => !e.isRead);
 
   // Build team response alerts from live email data
@@ -274,7 +275,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             <div className="text-[11px] text-gray-400 py-4 text-center">No emails</div>
           ) : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {emails.filter(e => e.priority <= 2 || e.category === "BOOKING_INQUIRY").slice(0, 8).map((e, i) => {
+              {emails.filter(e => (e.priority <= 2 || e.category === "BOOKING_INQUIRY") && !dismissedEmails.has(e.gmailMessageId)).slice(0, 8).map((e, i) => {
                 const cat = CATEGORY_CFG[e.category] || CATEGORY_CFG.GENERAL;
                 const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${e.threadId || e.gmailMessageId || ''}`;
                 const waitH = e.waitHours || 0;
@@ -313,7 +314,12 @@ function AdminDashboard({ userName }: { userName: string }) {
                         </div>
                       )}
                     </div>
-                    <span className="text-gray-300 flex-shrink-0 text-[10px] mt-1">↗</span>
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <span className="text-gray-300 text-[10px]">↗</span>
+                      <button
+                        onClick={e2 => { e2.preventDefault(); e2.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
+                        className="text-[9px] text-gray-300 hover:text-gray-500 font-bold leading-none">×</button>
+                    </div>
                   </a>
                 );
               })}
