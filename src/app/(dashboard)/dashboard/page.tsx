@@ -403,21 +403,26 @@ function AdminDashboard({ userName }: { userName: string }) {
                       {agentEmails.map((e: any, j: number) => {
                         const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${e.threadId || e.gmailMessageId || ''}`;
                         return (
-                          <a key={j} href={gmailUrl} target="_blank" rel="noopener noreferrer"
-                            className="block px-3 py-2 hover:bg-gray-50 transition-colors">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-gray-900 truncate">
-                                {e.fromAddress?.match(/^([^<]+)</)?.[1]?.trim() || e.fromAddress?.split('@')[0] || 'Unknown'}
-                              </span>
-                              <span className="text-[9px] text-gray-400 flex-shrink-0">↩ {e.waitLabel}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 truncate">{e.subject}</div>
-                            {(e.aiSummary || e.snippet) && (
-                              <div className="text-[9px] text-gray-400 truncate mt-0.5">
-                                {(e.aiSummary || e.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+                          <div key={j} className="flex items-start gap-1 hover:bg-gray-50 transition-colors pr-2">
+                            <a href={gmailUrl} target="_blank" rel="noopener noreferrer"
+                              className="flex-1 block px-3 py-2 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-semibold text-gray-900 truncate">
+                                  {e.fromAddress?.match(/^([^<]+)</)?.[1]?.trim() || e.fromAddress?.split('@')[0] || 'Unknown'}
+                                </span>
+                                <span className="text-[9px] text-gray-400 flex-shrink-0">↩ {e.waitLabel}</span>
                               </div>
-                            )}
-                          </a>
+                              <div className="text-[10px] text-gray-500 truncate">{e.subject}</div>
+                              {(e.aiSummary || e.snippet) && (
+                                <div className="text-[9px] text-gray-400 truncate mt-0.5">
+                                  {(e.aiSummary || e.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+                                </div>
+                              )}
+                            </a>
+                            <button
+                              onClick={() => setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]))}
+                              className="text-[13px] text-gray-300 hover:text-red-500 font-bold mt-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
+                          </div>
                         );
                       })}
                     </div>
