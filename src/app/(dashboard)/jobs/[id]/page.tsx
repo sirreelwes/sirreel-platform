@@ -87,7 +87,8 @@ export default function JobDetailPage() {
     Promise.all([
       fetch('/api/timeline').then(r => r.json()).catch(() => ({})),
       fetch(`/api/bookings/by-rw-order?orderId=${id}`).then(r => r.json()).catch(() => ({})),
-    ]).then(([timeline, bookingData]) => {
+      fetch(`/api/rentalworks/order?id=${id}`).then(r => r.json()).catch(() => ({})),
+    ]).then(([timeline, bookingData, rwData]) => {
       if (timeline.ok) {
         const found = timeline.jobs?.find((j: any) =>
           j.id === id || j.rwOrderNumber === id || j.jobNum === `#${id}` || j.jobNum === id
@@ -99,6 +100,27 @@ export default function JobDetailPage() {
         }
       }
       if (bookingData.booking) setBooking(bookingData.booking)
+      // Fall back to RW data if no Planyo match
+      if (rwData?.order) {
+        const o = rwData.order
+        const agentRaw = o.Agent || ''
+        const agentName = agentRaw.split(',').reverse().join(' ').trim()
+        const startDate = o.EstimatedStartDate || ''
+        const endDate = o.EstimatedStopDate || ''
+        setPlanyoJob((prev: any) => prev || {
+          company: o.Customer || '',
+          jobName: o.Description || o.Deal || '',
+          status: (o.Status || '').toLowerCase(),
+          startDate,
+          endDate,
+          agent: agentName,
+          rwOrderNumber: o.OrderNumber || id,
+          jobNum: o.OrderNumber || id,
+          items: [],
+        })
+        setAddStart(startDate)
+        setAddEnd(endDate)
+      }
     }).finally(() => setLoading(false))
   }, [id])
 
