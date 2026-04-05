@@ -57,6 +57,7 @@ export default function JobDetailPage() {
   const id = params?.id as string;
 
   const [planyoJob, setPlanyoJob] = useState<any>(null);
+  const [planyoVehicles, setPlanyoVehicles] = useState<any[]>([]);
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview'|'vehicles'|'paperwork'|'chat'>('overview');
@@ -81,6 +82,16 @@ export default function JobDetailPage() {
   const [createError, setCreateError] = useState('');
 
   const userEmail = session?.user?.email || ''
+
+  // Fetch Planyo vehicles once rwOrderNumber is known
+  useEffect(() => {
+    const rwNum = planyoJob?.rwOrderNumber
+    if (!rwNum) return
+    fetch(`/api/planyo/job-reservations?rwOrder=${rwNum}`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setPlanyoVehicles(d.vehicles || []) })
+      .catch(() => {})
+  }, [planyoJob?.rwOrderNumber])
   const rwOrder = planyoJob?.rwOrderNumber || id
 
   useEffect(() => {
@@ -121,6 +132,14 @@ export default function JobDetailPage() {
         setAddStart(startDate)
         setAddEnd(endDate)
       }
+    }).then(() => {
+      // Fetch Planyo reservations for this RW order
+      const orderNum = id.startsWith('A0') ? null : id
+      const fetchOrder = orderNum || id
+      fetch(`/api/planyo/job-reservations?rwOrder=${fetchOrder}`)
+        .then(r => r.json())
+        .then(d => { if (d.ok) setPlanyoVehicles(d.vehicles || []) })
+        .catch(() => {})
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -226,7 +245,7 @@ export default function JobDetailPage() {
   const status = planyoJob?.status || booking?.status || 'unknown'
   const statusColor = STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'
   const paperwork = booking?.paperworkRequests?.[0]
-  const vehicles = planyoJob?.items || []
+  const vehicles = planyoVehicles.length > 0 ? planyoVehicles : (planyoJob?.items || [])
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)]">
@@ -243,7 +262,13 @@ export default function JobDetailPage() {
           </div>
           <div className="flex flex-col items-end gap-2">
             <span className={`text-xs font-bold px-3 py-1 rounded-full ${statusColor}`}>{status.toUpperCase()}</span>
-            {planyoJob?.rwOrderNumber && <div className="text-[11px] text-gray-400">RW #{planyoJob.rwOrderNumber}</div>}
+            {planyoJob?.rwOrderNumber && (
+              <a href={`https://sirreel.rentalworks.cloud/order/${planyoJob.rwOrderNumber}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-[11px] text-blue-300 hover:text-blue-200 underline">
+                RW #{planyoJob.rwOrderNumber} ↗
+              </a>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -265,7 +290,7 @@ export default function JobDetailPage() {
       <div className="flex gap-1 mb-4 flex-shrink-0">
         {([
           { id: 'overview', label: 'Overview' },
-          { id: 'vehicles', label: `Vehicles (${vehicles.length})` },
+          { id: 'vehicles', label: `Vehicles (${vehicles.length})` } as const,
           { id: 'paperwork', label: 'Paperwork' },
           { id: 'chat', label: unreadCount > 0 ? `Chat 🔴${unreadCount}` : `Chat (${messages.length})` },
         ] as const).map(tab => (
