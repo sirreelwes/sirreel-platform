@@ -83,15 +83,18 @@ export default function JobDetailPage() {
 
   const userEmail = session?.user?.email || ''
 
-  // Fetch Planyo vehicles once rwOrderNumber is known
+  // Fetch Planyo vehicles once job data is known
   useEffect(() => {
-    const rwNum = planyoJob?.rwOrderNumber
-    if (!rwNum) return
-    fetch(`/api/planyo/job-reservations?rwOrder=${rwNum}`)
+    if (!planyoJob) return
+    const rwNum = planyoJob.rwOrderNumber || ''
+    const company = encodeURIComponent(planyoJob.company || '')
+    const start = planyoJob.startDate || ''
+    const end = planyoJob.endDate || ''
+    fetch(`/api/planyo/job-reservations?rwOrder=${rwNum}&company=${company}&start=${start}&end=${end}`)
       .then(r => r.json())
       .then(d => { if (d.ok) setPlanyoVehicles(d.vehicles || []) })
       .catch(() => {})
-  }, [planyoJob?.rwOrderNumber])
+  }, [planyoJob?.rwOrderNumber, planyoJob?.company])
   const rwOrder = planyoJob?.rwOrderNumber || id
 
   useEffect(() => {

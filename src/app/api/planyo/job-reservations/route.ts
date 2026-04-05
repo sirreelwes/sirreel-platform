@@ -13,12 +13,21 @@ function mapStatus(status: string): string {
   return 'booked'
 }
 
-export async function GET(req: NextRequest) {
-  const rwOrder = new URL(req.url).searchParams.get('rwOrder')
-  if (!rwOrder) return NextResponse.json({ error: 'rwOrder required' }, { status: 400 })
+function normalize(s: string) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
 
-  const from = new Date(); from.setFullYear(from.getFullYear() - 1)
-  const to = new Date(); to.setFullYear(to.getFullYear() + 1)
+export async function GET(req: NextRequest) {
+  const url2 = new URL(req.url)
+  const rwOrder   = url2.searchParams.get('rwOrder') || ''
+  const company   = url2.searchParams.get('company') || ''
+  const startDate = url2.searchParams.get('start') || ''
+  const endDate   = url2.searchParams.get('end') || ''
+
+  const from = new Date(startDate || Date.now())
+  from.setDate(from.getDate() - 14)
+  const to = new Date(endDate || Date.now())
+  to.setDate(to.getDate() + 14)
   const fmt = (d: Date) => d.toISOString().slice(0, 10) + ' 00:00:00'
 
   const url = new URL(BASE)
@@ -34,10 +43,23 @@ export async function GET(req: NextRequest) {
   const data = await fetch(url.toString()).then(r => r.json())
   const all: any[] = data.data?.results || []
 
-  const matched = all.filter((r: any) => {
+  // Match by RW order number in user_notes
+  let matched = rwOrder ? all.filter((r: any) => {
     const notes = r.user_notes || ''
     return notes.includes('#' + rwOrder) || notes.trim().startsWith(rwOrder)
-  })
+  }) : []
+
+  // Fallback: match by company name + date overlap
+  if (matched.length === 0 && company) {
+    const normCompany = normalize(company)
+    matched = all.filter((r: any) => {
+      const planyoCompany = normalize(r.properties?.Company_Name || r.first_name + r.last_name)
+      return planyoCompany && normCompany && (
+        planyoCompany.includes(normCompany.slice(0, 8)) ||
+        normCompany.includes(planyoCompany.slice(0, 8))
+      )
+    })
+  }
 
   const vehicles = matched.map((r: any) => ({
     reservationId: r.reservation_id,
@@ -50,6 +72,7 @@ export async function GET(req: NextRequest) {
     jobName: (r.properties && r.properties.Job_Name) || '',
     agent: (r.properties && r.properties.SirReel_Agent) || '',
     adminNotes: r.admin_notes || '',
+    matchedBy: matched === all.filter((x: any) => (x.user_notes || '').includes('#' + rwOrder)) ? 'orderNumber' : 'company',
   }))
 
   return NextResponse.json({ ok: true, vehicles, total: matched.length })
