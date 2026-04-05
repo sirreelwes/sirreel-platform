@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/gmail/watch",
-      "schedule": "0 9 * * 1"
-    },
-    {
-      "path": "/api/fleetio/sync",
-      "schedule": "0 2 * * *"
+      "schedule": "0 0 */6 * *"
     }
   ]
 }
