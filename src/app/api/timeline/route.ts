@@ -66,7 +66,7 @@ export async function GET() {
     const data = await planyo('list_reservations', {
       start_time: fmt(from),
       end_time: fmt(to),
-      detail_level: '1',
+      detail_level: '3',
       results_per_page: '500',
     })
 
@@ -90,6 +90,13 @@ export async function GET() {
       const clientName = `${first.first_name || ''} ${first.last_name || ''}`.trim()
       const status = mapStatus(first.status)
 
+      // Parse RW order number from user_notes (first line starting with #)
+      const rwOrderMatch = (first.user_notes || '').match(/#(\d+)/)
+      const rwOrderNumber = rwOrderMatch ? rwOrderMatch[1] : null
+      const companyName = first.properties?.Company_Name || `${first.first_name || ''} ${first.last_name || ''}`.trim()
+      const jobName = first.properties?.Job_Name || ''
+      const agentName = first.properties?.SirReel_Agent || ''
+
       // Each item in the cart = one vehicle reservation
       const jobItems = items.map(r => ({
         cat: mapCategory(r.name || ''),
@@ -109,11 +116,12 @@ export async function GET() {
       return {
         id: cartId,
         cartId,
-        company: clientName,
-        jobName: first.admin_notes?.split('\n')[0] || first.name || '',
-        jobNum: `R${first.reservation_id}`,
-        contact: clientName,
-        agent: '',
+        company: companyName,
+        jobName,
+        jobNum: rwOrderNumber ? `#${rwOrderNumber}` : `R${first.reservation_id}`,
+        rwOrderNumber,
+        contact: `${first.first_name || ''} ${first.last_name || ''}`.trim(),
+        agent: agentName,
         status,
         stage: status,
         startDate,
@@ -131,7 +139,10 @@ export async function GET() {
       unitMap[unitName].push({
         reservationId: r.reservation_id,
         cartId: r.cart_id,
-        clientName: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+        clientName: r.properties?.Company_Name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+        jobName: r.properties?.Job_Name || '',
+        agent: r.properties?.SirReel_Agent || '',
+        rwOrderNumber: (r.user_notes || '').match(/#(\d+)/)?.[1] || null,
         resourceName: r.name || '',
         cat: mapCategory(r.name || ''),
         status: mapStatus(r.status),

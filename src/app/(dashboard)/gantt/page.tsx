@@ -185,7 +185,7 @@ export default function GanttPage() {
                         style={{ left: bar.left, width: bar.width }}
                         onClick={() => setSelected({ ...b, unitName: unit.unitName, isUnit: true })}>
                         <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                          {b.clientName} · {fMonth(b.start)}–{fMonth(b.end)}
+                          {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
                         </span>
                       </div>
                     )
@@ -233,12 +233,19 @@ export default function GanttPage() {
                     <div className="text-[10px] text-gray-400 uppercase font-bold">{selected.resourceName}</div>
                     <h3 className="text-lg font-bold text-gray-900">{selected.unitName}</h3>
                     <div className="text-[13px] text-gray-500">{selected.clientName}</div>
+                    {selected.jobName && <div className="text-[11px] text-gray-400 mt-0.5">{selected.jobName}</div>}
+                    {selected.agent && <div className="text-[11px] text-gray-400">Agent: {selected.agent}</div>}
+                    {selected.rwOrderNumber && (
+                      <a href={`/jobs?rw=${selected.rwOrderNumber}`} className="text-[11px] text-blue-600 hover:underline">RW #{selected.rwOrderNumber} →</a>
+                    )}
                   </>
                 ) : (
                   <>
                     <div className="text-[10px] text-gray-400 uppercase font-bold">{selected.status?.toUpperCase()} · {selected.jobNum}</div>
                     <h3 className="text-lg font-bold text-gray-900">{selected.company}</h3>
                     {selected.jobName && <div className="text-[13px] text-gray-500">{selected.jobName}</div>}
+                    {selected.agent && <div className="text-[11px] text-gray-400 mt-0.5">Agent: {selected.agent}</div>}
+                    {selected.contact && selected.contact !== selected.company && <div className="text-[11px] text-gray-400">Contact: {selected.contact}</div>}
                   </>
                 )}
               </div>
