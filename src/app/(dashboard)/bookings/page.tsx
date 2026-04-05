@@ -255,7 +255,7 @@ export default function BookingsPage() {
           const dur = o.startDate && o.endDate ? diffDays(o.startDate, o.endDate) + 1 : null;
           return (
             <div key={o.orderId}
-              onClick={() => openDrawer(o)}
+              onClick={() => window.location.href = `/jobs/${o.orderId}`}
               className="p-3 rounded-xl border bg-white hover:shadow-md hover:border-gray-300 transition-all cursor-pointer active:scale-[0.99]"
               style={{ borderLeftWidth: 3, borderLeftColor: cfg.border }}>
               <div className="flex justify-between items-start gap-3">
