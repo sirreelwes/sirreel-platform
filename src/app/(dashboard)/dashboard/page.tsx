@@ -318,7 +318,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                       <span className="text-gray-300 text-[10px]">↗</span>
                       <button
                         onClick={e2 => { e2.preventDefault(); e2.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
-                        className="text-[9px] text-gray-300 hover:text-gray-500 font-bold leading-none">×</button>
+                        className="text-[11px] text-gray-400 hover:text-red-500 font-bold leading-none px-1">×</button>
                     </div>
                   </a>
                 );
@@ -409,7 +409,9 @@ function AdminDashboard({ userName }: { userName: string }) {
                             </div>
                             <div className="text-[10px] text-gray-500 truncate">{e.subject}</div>
                             {(e.aiSummary || e.snippet) && (
-                              <div className="text-[9px] text-gray-400 truncate mt-0.5">{e.aiSummary || e.snippet}</div>
+                              <div className="text-[9px] text-gray-400 truncate mt-0.5">
+                                {(e.aiSummary || e.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}
+                              </div>
                             )}
                           </a>
                         );
