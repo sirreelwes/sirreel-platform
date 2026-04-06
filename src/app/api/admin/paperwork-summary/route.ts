@@ -12,7 +12,7 @@ export async function GET() {
       LEFT JOIN companies c ON b.company_id = c.id
       LEFT JOIN people p ON b.agent_id = p.id
       LEFT JOIN paperwork_requests pr ON pr.booking_id = b.id
-      WHERE b.status NOT IN ('CANCELLED','COMPLETE','CLOSED')
+      WHERE b.status NOT IN ('CANCELLED','ARCHIVED')
         AND (pr.coi_received = false OR pr.wc_received = false OR pr.id IS NULL)
       ORDER BY b.created_at DESC LIMIT 30`
 
