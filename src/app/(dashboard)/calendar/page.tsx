@@ -53,6 +53,7 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }>
 
 // ═══ Component ═══
 export default function CalendarPage() {
+  const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [JOBS, setJOBS] = useState<Job[]>([]);
