@@ -377,7 +377,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                   'jose@sirreel.com': 'Jose', 'oliver@sirreel.com': 'Oliver',
                   'info@sirreel.com': 'Info', 'ana@sirreel.com': 'Ana',
                 };
-                return e.needsReply && AGENT_INBOX[inbox] === a.agent;
+                return e.needsReply && AGENT_INBOX[inbox] === a.agent && !dismissedEmails.has(e.gmailMessageId);
               });
               return (
                 <div key={i} className={`rounded-lg border text-[11px] overflow-hidden ${
