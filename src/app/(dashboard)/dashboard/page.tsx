@@ -116,6 +116,15 @@ function AdminDashboard({ userName }: { userName: string }) {
   }, []);
 
   useEffect(() => {
+    // Load persisted dismissed emails
+    const userEmail = (session?.user as any)?.email || 'wes@sirreel.com'
+    fetch(`/api/emails/dismiss?user=${encodeURIComponent(userEmail)}`)
+      .then(r => r.json())
+      .then(d => { if (d.ids) setDismissedEmails(new Set(d.ids)) })
+      .catch(() => {})
+  }, [session])
+
+  useEffect(() => {
     fetch('/api/timeline')
       .then(r => r.json())
       .then(d => { if (d.ok) setPlanyoUnits(d.units || []) })
@@ -318,7 +327,12 @@ function AdminDashboard({ userName }: { userName: string }) {
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <span className="text-gray-300 text-[10px]">↗</span>
                       <button
-                        onClick={e2 => { e2.preventDefault(); e2.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
+                        onClick={e2 => {
+                          e2.preventDefault(); e2.stopPropagation();
+                          setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]));
+                          fetch('/api/emails/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: (session?.user as any)?.email || 'wes@sirreel.com' }) }).catch(() => {});
+                        }}
                         className="text-[13px] text-gray-400 hover:text-red-500 font-bold leading-none w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                     </div>
                   </a>
@@ -420,7 +434,12 @@ function AdminDashboard({ userName }: { userName: string }) {
                               )}
                             </a>
                             <button
-                              onClick={(evt) => { evt.preventDefault(); evt.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
+                              onClick={(evt) => {
+                              evt.preventDefault(); evt.stopPropagation();
+                              setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]));
+                              fetch('/api/emails/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: (session?.user as any)?.email || 'wes@sirreel.com' }) }).catch(() => {});
+                            }}
                               className="text-[13px] text-gray-300 hover:text-red-500 font-bold mt-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                           </div>
                         );
