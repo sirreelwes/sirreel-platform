@@ -303,18 +303,7 @@ export default function JobDetailPage() {
       </div>
 
       <div className="flex gap-1 mb-4 flex-shrink-0">
-        {([
-          { id: 'overview', label: 'Overview' },
-          { id: 'vehicles', label: `Vehicles (${vehicles.length})` } as const,
-          { id: 'paperwork', label: 'Paperwork' },
-        ] as const).map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg text-[12px] font-semibold transition-colors ${
-              activeTab === tab.id ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-            }`}>
-            {tab.label}
-          </button>
-        ))}
+
         <div className="flex-1" />
         <button onClick={() => setShowAddVehicle(true)}
           className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700">
