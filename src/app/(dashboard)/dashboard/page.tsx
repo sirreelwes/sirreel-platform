@@ -420,7 +420,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                               )}
                             </a>
                             <button
-                              onClick={() => setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]))}
+                              onClick={(evt) => { evt.preventDefault(); evt.stopPropagation(); setDismissedEmails(prev => new Set([...prev, e.gmailMessageId])); }}
                               className="text-[13px] text-gray-300 hover:text-red-500 font-bold mt-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                           </div>
                         );
