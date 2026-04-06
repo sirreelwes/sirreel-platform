@@ -60,7 +60,7 @@ export default function JobDetailPage() {
   const [planyoVehicles, setPlanyoVehicles] = useState<any[]>([]);
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview'|'vehicles'|'paperwork'|'chat'>('overview');
+
 
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -81,6 +81,8 @@ export default function JobDetailPage() {
   const [createSuccess, setCreateSuccess] = useState('');
   const [createError, setCreateError] = useState('');
 
+  const activeTab = 'overview';
+  const setActiveTab = (_: any) => {};
   const userEmail = session?.user?.email || ''
 
   // Fetch Planyo vehicles once job data is known
@@ -153,7 +155,7 @@ export default function JobDetailPage() {
       .then(d => {
         if (d.ok) {
           setMessages(d.messages || [])
-          if (activeTab !== 'chat') {
+          if (true) {
             const newCount = (d.messages || []).filter((m: any) =>
               new Date(m.created_at).getTime() > lastReadRef.current
             ).length
@@ -170,7 +172,7 @@ export default function JobDetailPage() {
   }, [fetchMessages])
 
   useEffect(() => {
-    if (activeTab === 'chat') {
+    if (false) {
       lastReadRef.current = Date.now()
       setUnreadCount(0)
       setTimeout(() => chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
@@ -313,7 +315,7 @@ export default function JobDetailPage() {
 
       <div className="flex-1 overflow-y-auto space-y-4 pb-6">
 
-        {activeTab === 'overview' && (
+        {true && (
           <>
             <div className="bg-white rounded-2xl border border-gray-100 p-5">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Vehicles on Job</div>
@@ -356,7 +358,7 @@ export default function JobDetailPage() {
           </>
         )}
 
-        {activeTab === 'vehicles' && (
+        {true && (
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Vehicles · Planyo Live</div>
@@ -383,7 +385,7 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {activeTab === 'paperwork' && (
+        {true && (
           <div className="bg-white rounded-2xl border border-gray-100 p-5">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Paperwork</div>
             {!paperwork ? (
