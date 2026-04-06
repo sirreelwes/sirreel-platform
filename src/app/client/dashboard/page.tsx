@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 
 function fmt(d: string) {
@@ -19,7 +19,7 @@ function PaperworkBadge({ done, label }: { done: boolean; label: string }) {
   )
 }
 
-export default function ClientDashboardPage() {
+function ClientDashboardInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('token') || ''
@@ -202,5 +202,17 @@ function JobCard({ job, token, onSelect }: { job: any; token: string; onSelect: 
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ClientDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">Loading...</div>
+      </div>
+    }>
+      <ClientDashboardInner />
+    </Suspense>
   )
 }
