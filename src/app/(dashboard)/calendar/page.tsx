@@ -217,7 +217,13 @@ export default function CalendarPage() {
                 <h3 className="text-lg font-bold text-gray-900">{selectedJob.company}</h3>
                 <div className="text-[13px] text-gray-500">{selectedJob.jobName}</div>
               </div>
-              <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { router.push('/jobs/' + (selectedJob.id || '')); setSelectedJob(null); }}
+                  className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-[11px] font-semibold hover:bg-gray-800">
+                  Open Job →
+                </button>
+                <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-3 text-[11px]">
