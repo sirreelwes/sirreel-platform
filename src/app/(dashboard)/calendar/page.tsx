@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -55,6 +55,32 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }>
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [JOBS, setJOBS] = useState<Job[]>([]);
+
+  useEffect(() => {
+    fetch('/api/timeline')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) return
+        const jobs: Job[] = (d.jobs || []).map((j: any) => ({
+          id: j.id || j.cartId,
+          company: j.company || 'Unknown',
+          jobName: j.jobName || '',
+          jobNum: j.rwOrderNumber ? '#' + j.rwOrderNumber : j.jobNum || '',
+          contact: j.contact || '',
+          agent: j.agent || '',
+          stage: j.status || 'booked',
+          items: (j.items || []).map((item: any) => ({
+            cat: item.cat || 'cube',
+            qty: item.qty || 1,
+            start: item.start || today,
+            end: item.end || today,
+          })),
+        }))
+        setJOBS(jobs)
+      })
+      .catch(() => {})
+  }, [])
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -156,7 +182,7 @@ export default function CalendarPage() {
                     return (
                       <div key={job.id} onClick={() => setSelectedJob(job)}
                         className={`px-1.5 py-0.5 rounded-md text-[9px] font-medium cursor-pointer truncate border ${st.bg} ${st.text} ${st.border} hover:opacity-80`}>
-                        <span className="font-bold">{job.company.split(' ')[0]}</span>
+                        <span className="font-bold truncate max-w-[80px] inline-block">{job.company}</span>
                         <span className="opacity-60"> {assetSummary}</span>
                       </div>
                     );
