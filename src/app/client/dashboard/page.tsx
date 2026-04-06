@@ -66,7 +66,7 @@ export default function ClientDashboardPage() {
     </div>
   )
 
-  const completedJobs = jobs.filter(j => j.status === 'COMPLETE' || j.status === 'CLOSED' || j.completed_at)
+  const completedJobs = jobs.filter(j => ['RETURNED','CANCELLED','ARCHIVED'].includes(j.status) || j.completed_at)
   const activeJobs = jobs.filter(j => !completedJobs.includes(j))
 
   return (
