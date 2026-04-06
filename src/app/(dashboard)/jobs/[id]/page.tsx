@@ -251,7 +251,8 @@ export default function JobDetailPage() {
   const vehicles = planyoVehicles.length > 0 ? planyoVehicles : (planyoJob?.items || [])
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
+    <div className="flex gap-4 h-[calc(100vh-80px)]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
       <button onClick={() => router.back()} className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1 mb-3 flex-shrink-0">
         ← Back to Jobs
       </button>
@@ -407,53 +408,59 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {activeTab === 'chat' && (
-          <div className="bg-white rounded-2xl border border-gray-100 flex flex-col" style={{height: '520px'}}>
-            <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Job Chat</div>
-              <div className="text-[10px] text-gray-300">Visible to all team members · updates every 15s</div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-              {messages.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-sm">No messages yet. Start the conversation.</div>
-              ) : messages.map((msg: any, i: number) => {
-                const isMe = msg.user_email === userEmail
-                return (
-                  <div key={i} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
-                    <Avatar name={msg.user_name} />
-                    <div className={`max-w-[75%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
-                      <div className="flex items-center gap-1.5">
-                        {!isMe && <span className="text-[10px] font-bold text-gray-500">{msg.user_name}</span>}
-                        <span className="text-[9px] text-gray-300">{timeAgo(msg.created_at)}</span>
-                      </div>
-                      <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
-                        isMe ? 'bg-gray-900 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-900 rounded-tl-sm'
-                      }`}>
-                        {msg.content}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              <div ref={chatBottomRef} />
-            </div>
-            <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
-              <div className="flex gap-2">
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                  placeholder="Message the team... (Enter to send)"
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
-                />
-                <button onClick={sendMessage} disabled={!chatInput.trim() || sending}
-                  className="px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-800 disabled:opacity-40">
-                  {sending ? '...' : 'Send'}
-                </button>
-              </div>
-            </div>
+
+      </div>
+
+      </div>
+
+      {/* Chat sidebar */}
+      <div className="w-80 flex-shrink-0 flex flex-col bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Job Chat</div>
+            {unreadCount > 0 && <span className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-full">{unreadCount}</span>}
           </div>
-        )}
+          <div className="text-[10px] text-gray-300 mt-0.5">All team members · every 15s</div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+          {messages.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-[12px]">No messages yet.</div>
+          ) : messages.map((msg: any, i: number) => {
+            const isMe = msg.user_email === userEmail
+            return (
+              <div key={i} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                <Avatar name={msg.user_name} />
+                <div className={`max-w-[85%] flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className="flex items-center gap-1">
+                    {!isMe && <span className="text-[10px] font-bold text-gray-500">{msg.user_name}</span>}
+                    <span className="text-[9px] text-gray-300">{timeAgo(msg.created_at)}</span>
+                  </div>
+                  <div className={`px-3 py-2 rounded-2xl text-[12px] leading-relaxed ${
+                    isMe ? 'bg-gray-900 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-900 rounded-tl-sm'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          <div ref={chatBottomRef} />
+        </div>
+        <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0">
+          <div className="flex gap-2">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+              placeholder="Message team..."
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-[12px] focus:outline-none focus:border-gray-400"
+            />
+            <button onClick={sendMessage} disabled={!chatInput.trim() || sending}
+              className="px-3 py-2 bg-gray-900 text-white rounded-xl text-[12px] font-semibold hover:bg-gray-800 disabled:opacity-40">
+              {sending ? '...' : '↑'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {showAddVehicle && (
