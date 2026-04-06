@@ -335,24 +335,7 @@ export default function JobDetailPage() {
                 </div>
               )}
             </div>
-            {paperwork && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Paperwork</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Rental Agreement', done: paperwork.rentalAgreement },
-                    { label: 'LCDW', done: paperwork.lcdwAccepted },
-                    { label: 'COI', done: paperwork.coiReceived },
-                    { label: 'CC Auth', done: paperwork.creditCardAuth },
-                  ].map(item => (
-                    <div key={item.label} className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${item.done ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100'}`}>
-                      <span className={item.done ? 'text-emerald-500' : 'text-gray-300'}>{item.done ? '✓' : '○'}</span>
-                      <span className={`text-sm font-medium ${item.done ? 'text-emerald-700' : 'text-gray-500'}`}>{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </>
         )}
 
@@ -383,30 +366,62 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {true && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Paperwork</div>
-            {!paperwork ? (
-              <div className="text-sm text-gray-400">No paperwork request sent yet.</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: 'Rental Agreement', done: paperwork.rentalAgreement },
-                  { label: 'LCDW', done: paperwork.lcdwAccepted },
-                  { label: 'COI', done: paperwork.coiReceived },
-                  { label: 'Workers Comp', done: paperwork.wcReceived },
-                  { label: 'CC Auth', done: paperwork.creditCardAuth },
-                  { label: 'Studio Contract', done: paperwork.studioContractSigned },
-                ].map(item => (
-                  <div key={item.label} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${item.done ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100'}`}>
-                    <span className={item.done ? 'text-emerald-500' : 'text-gray-300'}>{item.done ? '✓' : '○'}</span>
-                    <span className={`text-sm font-medium ${item.done ? 'text-emerald-700' : 'text-gray-500'}`}>{item.label}</span>
-                  </div>
-                ))}
-              </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Paperwork</div>
+            {paperwork?.token && (
+              <a href={`/portal/${paperwork.token}`} target="_blank"
+                className="text-[10px] text-blue-600 font-semibold hover:underline">View Portal →</a>
             )}
           </div>
-        )}
+          {!paperwork ? (
+            <div className="text-sm text-gray-400 text-center py-4">
+              <div className="text-2xl mb-2">📋</div>No paperwork request sent yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {[
+                { label: 'Rental Agreement', done: paperwork.rentalAgreement, icon: '📄' },
+                { label: 'LCDW Waiver', done: paperwork.lcdwAccepted, icon: '🛡️' },
+                { label: 'Certificate of Insurance', done: paperwork.coiReceived, icon: '📋' },
+                { label: 'Workers Comp', done: paperwork.wcReceived, icon: '🏥' },
+                { label: 'Credit Card Auth', done: paperwork.creditCardAuth, icon: '💳' },
+                { label: 'Studio Contract', done: paperwork.studioContractSigned, icon: '🎬' },
+              ].map(item => (
+                <div key={item.label} className={`flex items-center justify-between px-3 py-2.5 rounded-xl border ${
+                  item.done ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span>{item.icon}</span>
+                    <span className={`text-sm font-medium ${item.done ? 'text-emerald-700' : 'text-gray-500'}`}>{item.label}</span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                  }`}>{item.done ? '✓ Done' : 'Pending'}</span>
+                </div>
+              ))}
+              {paperwork.creditCardAuth && paperwork.ccCardholderFirst && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                  <div className="text-[9px] font-bold text-blue-400 uppercase mb-1">CC Auth on File</div>
+                  <div className="text-sm text-blue-800 font-semibold">
+                    {paperwork.ccCardholderFirst} {paperwork.ccCardholderLast} · {paperwork.ccCardType} ···· {paperwork.ccCardLast4}
+                  </div>
+                  {paperwork.ccChargeEstimate && (
+                    <div className="text-[11px] text-blue-600 mt-0.5">Est. charge: ${paperwork.ccChargeEstimate}</div>
+                  )}
+                </div>
+              )}
+              {paperwork.coiReceived && paperwork.coiAiReview && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                  <div className="text-[9px] font-bold text-amber-600 uppercase mb-1">COI Review Status</div>
+                  <div className="text-[11px] text-amber-700">
+                    {typeof paperwork.coiAiReview === 'string' ? paperwork.coiAiReview : paperwork.coiAiReview?.overallStatus || 'Under Review'}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
 
       </div>
