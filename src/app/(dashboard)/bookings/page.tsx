@@ -21,6 +21,19 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 };
 
 const AGENTS = ['Jose', 'Oliver', 'Dani', 'Christian'];
+const VEHICLE_TYPE_TO_CAT: Record<string,string> = {
+  'Cube Truck': 'cube',
+  'Cargo Van w/ LG': 'cargo',
+  'Cargo Van w/o LG': 'cargoNoLG',
+  'Passenger Van': 'pass',
+  'PopVan': 'pop',
+  'Camera Cube': 'cam',
+  'DLUX': 'dlux',
+  'ProScout/VTR': 'scout',
+  'Studio': 'studio',
+  'Other': 'cube',
+}
+
 const VEHICLE_TYPES = [
   'Cube Truck', 'Cargo Van w/ LG', 'Cargo Van w/o LG', 'Passenger Van',
   'PopVan', 'Camera Cube', 'DLUX', 'ProScout/VTR', 'Studio', 'Other'
@@ -65,6 +78,11 @@ export default function BookingsPage() {
   const [nAgent, setNAgent] = useState('Jose');
   const [nNotes, setNNotes] = useState('');
   const [nPoNumber, setNPoNumber] = useState('');
+  const [nAvailableUnits, setNAvailableUnits] = useState<any[]>([]);
+  const [nSelectedUnits, setNSelectedUnits] = useState<string[]>([]);
+  const [nCheckingAvail, setNCheckingAvail] = useState(false);
+  const [nStep, setNStep] = useState<'form'|'units'|'creating'|'done'>('form');
+  const [nCreatedIds, setNCreatedIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetch('/api/rentalworks').then(r => r.json()).then(data => {
@@ -145,10 +163,63 @@ export default function BookingsPage() {
   const totalValue = useMemo(() => filtered.reduce((s, o) => s + o.total, 0), [filtered]);
 
   function resetForm() {
+    setNStep('form');
+    setNAvailableUnits([]);
+    setNSelectedUnits([]);
+    setNCreatedIds([]);
     setNContact(''); setNCompany(''); setNPhone(''); setNEmail('');
     setNJob(''); setNVehicle('Cube Truck'); setNQty(1);
     setNStart(addDays(today, 1)); setNEnd(addDays(today, 3));
     setNAgent('Jose'); setNNotes(''); setNPoNumber('');
+  }
+
+  async function checkAvailability() {
+    setNCheckingAvail(true)
+    setNStep('form')
+    try {
+      const cat = VEHICLE_TYPE_TO_CAT[nVehicle] || 'cube'
+      const res = await fetch(`/api/planyo/available-units?cat=${cat}&start=${nStart}&end=${nEnd}`)
+      const data = await res.json()
+      if (data.ok) {
+        setNAvailableUnits(data.units || [])
+        // Auto-select first nQty available units
+        const avail = (data.units || []).filter((u: any) => u.available).slice(0, nQty)
+        setNSelectedUnits(avail.map((u: any) => u.name))
+        setNStep('units')
+      }
+    } finally { setNCheckingAvail(false) }
+  }
+
+  async function createReservations() {
+    if (!nSelectedUnits.length) return
+    setNStep('creating')
+    const cat = VEHICLE_TYPE_TO_CAT[nVehicle] || 'cube'
+    const ids: string[] = []
+    for (const unit of nSelectedUnits) {
+      try {
+        const res = await fetch('/api/planyo/reserve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cat, unit,
+            startDate: nStart, endDate: nEnd,
+            status: 'hold',
+            companyName: nCompany,
+            jobName: nJob,
+            agentName: nAgent,
+            clientFirstName: nContact.split(' ')[0] || nContact,
+            clientLastName: nContact.split(' ').slice(1).join(' ') || '',
+            clientEmail: nEmail,
+          }),
+        })
+        const data = await res.json()
+        if (data.ok) ids.push(data.reservationId)
+      } catch {}
+    }
+    setNCreatedIds(ids)
+    setNStep('done')
+    setToast(`✓ ${ids.length} unit${ids.length !== 1 ? 's' : ''} reserved as Hold in Planyo for ${nCompany}`)
+    setTimeout(() => setToast(''), 5000)
   }
 
   function submitInquiry() {
@@ -427,16 +498,70 @@ export default function BookingsPage() {
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Notes</div>
                 <textarea value={nNotes} onChange={e => setNNotes(e.target.value)} placeholder="Delivery instructions, special requests, add-ons needed..." rows={3} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400 resize-none" />
     </div>
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-[11px] text-blue-700">
-                💡 After logging, create the order in <strong>RentalWorks</strong> to confirm availability and generate the contract.
+
     </div>
-    </div>
+            {/* Availability step */}
+            {nStep === 'units' && (
+              <div className="px-5 pb-4 space-y-2">
+                <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">
+                  Select Units — {nAvailableUnits.filter((u:any)=>u.available).length} available for {fDate(nStart)}–{fDate(nEnd)}
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {nAvailableUnits.map((u: any, i: number) => (
+                    <label key={i} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                      nSelectedUnits.includes(u.name)
+                        ? 'bg-blue-50 border-blue-300'
+                        : u.available ? 'bg-white border-gray-200 hover:bg-gray-50' : 'bg-gray-50 border-gray-100 opacity-50'
+                    }`}>
+                      <input type="checkbox"
+                        checked={nSelectedUnits.includes(u.name)}
+                        disabled={!u.available && !nSelectedUnits.includes(u.name)}
+                        onChange={e => {
+                          if (e.target.checked) setNSelectedUnits(prev => [...prev, u.name])
+                          else setNSelectedUnits(prev => prev.filter(n => n !== u.name))
+                        }}
+                        className="rounded" />
+                      <span className="text-[12px] font-medium text-gray-900 flex-1">{u.name}</span>
+                      {!u.available && <span className="text-[10px] text-red-500">{u.bookedBy || 'Booked'}</span>}
+                      {u.available && <span className="text-[10px] text-emerald-600">Available</span>}
+                    </label>
+                  ))}
+                </div>
+                <div className="text-[10px] text-gray-400">{nSelectedUnits.length} of {nQty} requested selected</div>
+              </div>
+            )}
+
+            {nStep === 'done' && (
+              <div className="px-5 pb-4 text-center">
+                <div className="text-3xl mb-2">✅</div>
+                <div className="text-[13px] font-bold text-gray-900">{nCreatedIds.length} unit{nCreatedIds.length !== 1 ? 's' : ''} reserved as Hold</div>
+                <div className="text-[11px] text-gray-500 mt-1">Reservations created in Planyo. Create the RW order to confirm billing.</div>
+              </div>
+            )}
+
             <div className="p-5 border-t border-gray-100 flex gap-2">
-              <button onClick={() => { setShowNew(false); resetForm(); }} className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold hover:bg-gray-200">Cancel</button>
-              <button onClick={submitInquiry} disabled={!nContact || !nCompany || !nJob}
-                className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nContact && nCompany && nJob ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                Log Inquiry →
+              <button onClick={() => { setShowNew(false); resetForm(); }} className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold hover:bg-gray-200">
+                {nStep === 'done' ? 'Close' : 'Cancel'}
               </button>
+              {nStep === 'form' && (
+                <button onClick={checkAvailability}
+                  disabled={!nContact || !nCompany || !nJob || !nStart || !nEnd || nCheckingAvail}
+                  className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nContact && nCompany && nJob && nStart && nEnd ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                  {nCheckingAvail ? 'Checking...' : 'Check Availability →'}
+                </button>
+              )}
+              {nStep === 'units' && (
+                <button onClick={createReservations}
+                  disabled={!nSelectedUnits.length}
+                  className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nSelectedUnits.length ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                  Reserve {nSelectedUnits.length} Unit{nSelectedUnits.length !== 1 ? 's' : ''} as Hold →
+                </button>
+              )}
+              {nStep === 'creating' && (
+                <button disabled className="flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold bg-blue-100 text-blue-400">
+                  Creating reservations...
+                </button>
+              )}
     </div>
     </div>
     </div>
