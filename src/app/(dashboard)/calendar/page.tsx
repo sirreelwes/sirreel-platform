@@ -37,12 +37,7 @@ const JOBS: Job[] = [
 ];
 
 type MaintRecord = { id: string; unit: string; issue: string; start: string; end: string };
-const MAINT: MaintRecord[] = [
-  { id: 'mt1', unit: 'Cube #24(A)', issue: 'Bad motor', start: addDays(today, -12), end: addDays(today, 5) },
-  { id: 'mt2', unit: 'Cube #8', issue: 'Transmission', start: addDays(today, -8), end: addDays(today, 7) },
-  { id: 'mt3', unit: 'SC #36', issue: 'Roof damage', start: addDays(today, -6), end: addDays(today, 14) },
-  { id: 'mt4', unit: 'Pop #3', issue: 'Trans (parts)', start: addDays(today, -21), end: addDays(today, 14) },
-];
+const MAINT: MaintRecord[] = [];
 
 const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   active: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
