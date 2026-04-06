@@ -102,7 +102,7 @@ export default function CalendarPage() {
       map[d] = active;
     }
     return map;
-  }, [year, month, daysInMonth]);
+  }, [year, month, daysInMonth, JOBS]);
 
   const maintByDay = useMemo(() => {
     const map: Record<number, MaintRecord[]> = {};
