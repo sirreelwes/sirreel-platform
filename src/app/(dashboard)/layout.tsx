@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role: UserRole = user.role || UserRole.AGENT;
   const perms = getPermissions(role);
   const navItems = getNavItems(role);
-  const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'dashboard';
+  const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || (pathname.startsWith('/jobs') ? 'bookings' : 'dashboard');
 
   const initials = user.name
     ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
