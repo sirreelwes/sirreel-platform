@@ -58,6 +58,7 @@ export default function JobDetailPage() {
 
   const [planyoJob, setPlanyoJob] = useState<any>(null);
   const [planyoVehicles, setPlanyoVehicles] = useState<any[]>([]);
+  const [rwOrderData, setRwOrderData] = useState<any>(null);
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -145,6 +146,14 @@ export default function JobDetailPage() {
         .then(r => r.json())
         .then(d => { if (d.ok) setPlanyoVehicles(d.vehicles || []) })
         .catch(() => {})
+    }).then(() => {
+      // Also fetch RW order financials
+      if (id) {
+        fetch(`/api/rentalworks/order?id=${id}`)
+          .then(r => r.json())
+          .then(d => { if (d.order) setRwOrderData(d.order) })
+          .catch(() => {})
+      }
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -298,7 +307,6 @@ export default function JobDetailPage() {
           { id: 'overview', label: 'Overview' },
           { id: 'vehicles', label: `Vehicles (${vehicles.length})` } as const,
           { id: 'paperwork', label: 'Paperwork' },
-          { id: 'chat', label: unreadCount > 0 ? `Chat 🔴${unreadCount}` : `Chat (${messages.length})` },
         ] as const).map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 rounded-lg text-[12px] font-semibold transition-colors ${
@@ -307,8 +315,9 @@ export default function JobDetailPage() {
             {tab.label}
           </button>
         ))}
+        <div className="flex-1" />
         <button onClick={() => setShowAddVehicle(true)}
-          className="ml-auto px-4 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700">
+          className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700">
           + Add Vehicle
         </button>
       </div>
