@@ -195,7 +195,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   };
 
   const agentAlerts = (() => {
-    const unanswered = emails.filter(e => e.needsReply);
+    const unanswered = emails.filter(e => e.needsReply && !dismissedEmails.has(e.gmailMessageId));
     const byAgent: Record<string, { count: number; maxWait: number; oldest: any }> = {};
     
     unanswered.forEach((e: any) => {
