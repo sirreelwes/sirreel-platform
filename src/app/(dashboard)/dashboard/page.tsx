@@ -117,12 +117,17 @@ function AdminDashboard({ userName }: { userName: string }) {
 
   useEffect(() => {
     // Load persisted dismissed emails
-    const userEmail = (session?.user as any)?.email || 'wes@sirreel.com'
+    const NAME_TO_EMAIL: Record<string,string> = {
+      'Wes': 'wes@sirreel.com', 'Dani': 'dani@sirreel.com',
+      'Jose': 'jose@sirreel.com', 'Oliver': 'oliver@sirreel.com',
+      'Ana': 'ana@sirreel.com', 'Julian': 'julian@sirreel.com',
+    }
+    const userEmail = NAME_TO_EMAIL[userName] || 'wes@sirreel.com'
     fetch(`/api/emails/dismiss?user=${encodeURIComponent(userEmail)}`)
       .then(r => r.json())
       .then(d => { if (d.ids) setDismissedEmails(new Set(d.ids)) })
       .catch(() => {})
-  }, [session])
+  }, [])
 
   useEffect(() => {
     fetch('/api/timeline')
@@ -331,7 +336,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                           e2.preventDefault(); e2.stopPropagation();
                           setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]));
                           fetch('/api/emails/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: (session?.user as any)?.email || 'wes@sirreel.com' }) }).catch(() => {});
+                            body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: 'wes@sirreel.com' }) }).catch(() => {});
                         }}
                         className="text-[13px] text-gray-400 hover:text-red-500 font-bold leading-none w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                     </div>
@@ -438,7 +443,7 @@ function AdminDashboard({ userName }: { userName: string }) {
                               evt.preventDefault(); evt.stopPropagation();
                               setDismissedEmails(prev => new Set([...prev, e.gmailMessageId]));
                               fetch('/api/emails/dismiss', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: (session?.user as any)?.email || 'wes@sirreel.com' }) }).catch(() => {});
+                                body: JSON.stringify({ gmailMessageId: e.gmailMessageId, userEmail: 'wes@sirreel.com' }) }).catch(() => {});
                             }}
                               className="text-[13px] text-gray-300 hover:text-red-500 font-bold mt-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-red-50">×</button>
                           </div>
