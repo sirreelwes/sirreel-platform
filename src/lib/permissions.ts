@@ -168,6 +168,7 @@ export function getNavItems(role: UserRole) {
   if (perms.calendar) items.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
   if (perms.gantt) items.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
   if (perms.bookings) items.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
+  if (perms.seePricing) items.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.crm) items.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
   if (perms.fleet) items.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   if (perms.maintenance) items.push({ id: "maintenance", label: "Maintenance", icon: "🔧", href: "/maintenance" });
