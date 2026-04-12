@@ -258,7 +258,7 @@ export async function POST(
 
     // Send internal alert email if any issues found
     if (!review.overallPass && process.env.RESEND_API_KEY) {
-      const reviewUrl = `https://sirreel-fleet.vercel.app/jobs/${request.bookingId}?tab=paperwork`
+      const reviewUrl = `https://hq.sirreel.com/jobs/${request.bookingId}`
       const html = buildEmailHtml(companyName, jobName, review, reviewUrl)
       const subject = review.criticalPass
         ? `🟡 COI Alert — ${companyName} · ${jobName}`

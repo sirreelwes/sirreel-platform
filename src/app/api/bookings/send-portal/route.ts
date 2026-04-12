@@ -29,8 +29,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://sirreel-fleet.vercel.app'}/portal/${request!.token}`
-    const clientUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://sirreel-fleet.vercel.app'}/client/${request!.token}`
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com'}/portal/${request!.token}`
+    const clientUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com'}/client/${request!.token}`
 
     return NextResponse.json({ 
       ok: true, 

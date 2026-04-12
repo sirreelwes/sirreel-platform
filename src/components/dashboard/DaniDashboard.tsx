@@ -46,7 +46,7 @@ function IncompleteJobsWidget({ jobs, loading }: { jobs: any[]; loading: boolean
       ) : (
         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
           {jobs.map((j: any, i: number) => (
-            <a key={i} href={`/jobs/${j.id}?tab=paperwork`}
+            <a key={i} href={`/jobs/${j.id}`}
               className="flex items-center justify-between p-2.5 rounded-lg border border-amber-100 bg-amber-50/40 hover:bg-amber-50 transition-colors">
               <div className="min-w-0 mr-2">
                 <div className="text-[12px] font-bold text-gray-900 truncate">{j.companyName || '—'}</div>
@@ -82,7 +82,7 @@ function CoiQueueWidget({ items, loading }: { items: any[]; loading: boolean }) 
             const critFails = !review?.criticalPass
             const alertFails = !review?.alertPass
             return (
-              <a key={i} href={`/jobs/${item.bookingId}?tab=paperwork`}
+              <a key={i} href={`/jobs/${item.bookingId}`}
                 className="flex items-center justify-between p-2.5 rounded-lg border border-red-100 bg-red-50/40 hover:bg-red-50 transition-colors">
                 <div className="min-w-0 mr-2">
                   <div className="text-[12px] font-bold text-gray-900 truncate">{item.companyName || '—'}</div>
@@ -127,7 +127,7 @@ function RedlineWidget({ items, loading }: { items: any[]; loading: boolean }) {
               ? 'bg-amber-100 text-amber-700'
               : 'bg-gray-100 text-gray-600'
             return (
-              <a key={i} href={`/jobs/${item.bookingId}?tab=paperwork`}
+              <a key={i} href={`/jobs/${item.bookingId}`}
                 className={`flex items-center justify-between p-2.5 rounded-lg border transition-colors ${riskBg}`}>
                 <div className="min-w-0 mr-2">
                   <div className="text-[12px] font-bold text-gray-900 truncate">{item.companyName || '—'}</div>
@@ -165,7 +165,7 @@ function RecentActivityWidget({ items, loading }: { items: any[]; loading: boole
           {items.map((item: any, i: number) => {
             const done = [item.coiReceived, item.wcReceived].filter(Boolean).length
             return (
-              <a key={i} href={`/jobs/${item.bookingId}?tab=paperwork`}
+              <a key={i} href={`/jobs/${item.bookingId}`}
                 className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 transition-colors">
                 <div className="min-w-0 mr-2">
                   <div className="text-[12px] font-bold text-gray-900 truncate">{item.companyName || '—'}</div>

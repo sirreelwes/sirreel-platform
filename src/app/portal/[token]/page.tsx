@@ -809,7 +809,7 @@ export default function ClientPortal() {
 
         {activeTab === 'overview' && (
           <div className="pb-2 px-1">
-            <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0Ahttps://sirreel-fleet.vercel.app/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
+            <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0Ahttps://hq.sirreel.com/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
               📧 Email me this link for later
             </a>

@@ -298,9 +298,9 @@ export default function PaperworkTab({ booking, token }: { booking: any; token?:
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] font-bold text-blue-600 uppercase">Client Portal</div>
-            <div className="text-[11px] text-blue-700 font-mono truncate">{`https://sirreel-fleet.vercel.app/portal/${token}`}</div>
+            <div className="text-[11px] text-blue-700 font-mono truncate">{`https://hq.sirreel.com/portal/${token}`}</div>
           </div>
-          <button onClick={() => navigator.clipboard.writeText(`https://sirreel-fleet.vercel.app/portal/${token}`)}
+          <button onClick={() => navigator.clipboard.writeText(`https://hq.sirreel.com/portal/${token}`)}
             className="px-3 py-1.5 bg-blue-600 text-white text-[11px] font-semibold rounded-lg hover:bg-blue-700 flex-shrink-0">
             Copy Link
           </button>

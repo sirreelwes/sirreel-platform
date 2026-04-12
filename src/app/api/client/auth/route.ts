@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const BASE_URL = process.env.NEXTAUTH_URL || 'https://sirreel-fleet.vercel.app'
+const BASE_URL = process.env.NEXTAUTH_URL || 'https://hq.sirreel.com'
 
 export async function POST(req: NextRequest) {
   try {

@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const base = process.env.NEXT_PUBLIC_APP_URL || 'https://sirreel-fleet.vercel.app';
+    const base = process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com';
     const portalUrl = `${base}/portal/${request.token}`;
     const clientUrl = `${base}/client/${request.token}`;
 

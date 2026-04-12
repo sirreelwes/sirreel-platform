@@ -71,7 +71,7 @@ function buildHtml(booking: any, format: string) {
 </head>
 <body>
   <div class="header">
-    <div class="logo"><img src="https://sirreel-fleet.vercel.app/sirreel-logo.png" alt="SirReel Studio Services" style="height:60px;width:auto;" /></div>
+    <div class="logo"><img src="https://hq.sirreel.com/sirreel-logo.png" alt="SirReel Studio Services" style="height:60px;width:auto;" /></div>
     <div class="subtitle">Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · (818) 515-2389 · info@sirreel.com</div>
   </div>
 

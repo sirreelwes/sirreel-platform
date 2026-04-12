@@ -3,13 +3,15 @@ import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import { EmailCategory, EmailStatus } from "@prisma/client"
 
-const WATCHED_INBOXES = ["info@sirreel.com", "rentals@sirreel.com"]
+const WATCHED_INBOXES = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
 function getGmailClient(email: string) {
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
+  const credentials = JSON.parse(rawKey)
   const auth = new google.auth.JWT(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+    credentials.client_email,
     undefined,
-    process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
+    credentials.private_key,
     ["https://www.googleapis.com/auth/gmail.readonly"],
     email
   )
