@@ -6,7 +6,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const body = await req.json();
-  const { dailyRate, weeklyRate, qtyOwned, replacementCost, description } = body;
+  const { dailyRate, weeklyRate, qtyOwned, replacementCost, description, imageUrl } = body;
 
   const data: Record<string, unknown> = {};
   if (dailyRate !== undefined) data.dailyRate = parseFloat(dailyRate) || 0;
@@ -14,6 +14,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (qtyOwned !== undefined) data.qtyOwned = parseInt(qtyOwned) || 0;
   if (replacementCost !== undefined) data.replacementCost = replacementCost ? parseFloat(replacementCost) : null;
   if (description !== undefined) data.description = description;
+  if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
 
   const item = await prisma.inventoryItem.update({
     where: { id },

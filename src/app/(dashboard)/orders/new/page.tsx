@@ -18,7 +18,8 @@ export default function NewOrderPage() {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [taxRate, setTaxRate] = useState("0.095");
+  const [taxRate, setTaxRate] = useState("0");
+  const [addTax, setAddTax] = useState(false);
 
   useEffect(() => {
     fetch("/api/orders/lookups")
@@ -137,20 +138,31 @@ export default function NewOrderPage() {
           </div>
         </div>
 
-        <div className="max-w-[200px]">
-          <label className="block text-sm font-medium text-zinc-400 mb-1">Tax Rate</label>
-          <div className="relative">
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
-              type="number"
-              step="0.001"
-              value={taxRate}
-              onChange={(e) => setTaxRate(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500"
+              type="checkbox"
+              checked={addTax}
+              onChange={(e) => {
+                setAddTax(e.target.checked);
+                setTaxRate(e.target.checked ? "0.095" : "0");
+              }}
+              className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-blue-600 focus:ring-blue-500"
             />
-            <span className="absolute right-3 top-2 text-sm text-zinc-500">
-              ({(parseFloat(taxRate) * 100).toFixed(1)}%)
-            </span>
-          </div>
+            <span className="text-sm text-zinc-300">Charge sales tax</span>
+          </label>
+          {addTax && (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.001"
+                value={taxRate}
+                onChange={(e) => setTaxRate(e.target.value)}
+                className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500"
+              />
+              <span className="text-xs text-zinc-500">({(parseFloat(taxRate || "0") * 100).toFixed(1)}%)</span>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">
