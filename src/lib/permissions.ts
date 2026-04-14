@@ -159,27 +159,42 @@ export function can(role: UserRole, permission: keyof Permissions): boolean {
 }
 
 // Navigation items per role
-export function getNavItems(role: UserRole) {
+export type NavItem = { id: string; label: string; icon: string; href: string };
+export type NavSection = { label: string | null; items: NavItem[] };
+
+export function getNavItems(role: UserRole): NavItem[] {
+  const sections = getNavSections(role);
+  return sections.flatMap(s => s.items);
+}
+
+export function getNavSections(role: UserRole): NavSection[] {
   const perms = getPermissions(role);
-  const items: { id: string; label: string; icon: string; href: string }[] = [];
+  const sections: NavSection[] = [];
 
-  // Dashboard is first for Admin
-  items.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
-  if (perms.calendar) items.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
-  if (perms.gantt) items.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
-  if (perms.bookings) items.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
-  if (perms.seePricing) items.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
-  if (perms.seePricing) items.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
-  if (perms.crm) items.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  if (perms.fleet) items.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
-  if (perms.maintenance) items.push({ id: "maintenance", label: "Maintenance", icon: "🔧", href: "/maintenance" });
-  if (perms.bookings) items.push({ id: "coi-check", label: "COI Check", icon: "🔍", href: "/tools/coi-check" });
-  if (perms.bookings) items.push({ id: "contract-review", label: "Contract Review", icon: "📝", href: "/tools/contract-review" });
-  if (perms.dispatch) items.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
-  if (perms.claims) items.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
-  if (perms.reporting) items.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
+  // Main — daily operations
+  const main: NavItem[] = [];
+  main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
+  if (perms.calendar) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
+  if (perms.gantt) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
+  if (perms.bookings) main.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
+  if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
+  if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
+  if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
+  sections.push({ label: null, items: main });
 
-  return items;
+  // Admin — management & configuration
+  const admin: NavItem[] = [];
+  if (perms.seePricing) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
+  if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
+  if (perms.seePricing) admin.push({ id: 'sub-rentals', label: 'Sub-Rentals', icon: '', href: '/sub-rentals' });
+  if (perms.maintenance) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
+  if (perms.bookings) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
+  if (perms.bookings) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
+  if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
+  if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
+  if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
+
+  return sections;
 }
 
 // Redact client name for fleet/warehouse roles

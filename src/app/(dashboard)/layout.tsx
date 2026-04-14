@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavItems } from '@/lib/permissions';
+import { getPermissions, getNavItems, getNavSections } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 
@@ -25,6 +25,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession();
   const [aiOpen, setAiOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/reporting'].some(a => p.startsWith(a));
+    }
+    return false;
+  });
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -86,24 +93,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Navigation */}
         <nav className="flex-1 py-3 overflow-y-auto px-2">
-          {navItems.map((item) => {
-            const isActive = activeNav === item.id;
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] mb-0.5 transition-all ${
-                  isActive
-                    ? 'bg-gray-900 text-white font-semibold'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <span className="text-[13px] font-medium">{item.label}</span>
-              </Link>
-            );
-          })}
-
-
+          {getNavSections(role).map((section, si) => (
+            <div key={si}>
+              {section.label ? (
+                <>
+                  <button
+                    onClick={() => setAdminOpen(!adminOpen)}
+                    className="w-full flex items-center justify-between px-3 py-2 mt-3 mb-0.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+                  >
+                    <span>{section.label}</span>
+                    <span className={`text-[10px] transition-transform ${adminOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                  </button>
+                  {adminOpen && section.items.map((item) => {
+                    const isActive = activeNav === item.id;
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] mb-0.5 transition-all ${
+                          isActive
+                            ? 'bg-gray-900 text-white font-semibold'
+                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                        }`}
+                      >
+                        <span className="text-[13px] font-medium">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </>
+              ) : (
+                section.items.map((item) => {
+                  const isActive = activeNav === item.id;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] mb-0.5 transition-all ${
+                        isActive
+                          ? 'bg-gray-900 text-white font-semibold'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      <span className="text-[13px] font-medium">{item.label}</span>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
+          ))}
         </nav>
 
         {/* User section */}
