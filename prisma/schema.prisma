@@ -20,6 +20,8 @@ enum Location {
   LANKERSHIM
   NAPA
   UTAH
+  CHESTNUT   // legacy
+  LIMA       // legacy
   ON_RENTAL
   IN_TRANSIT
   BODY_SHOP
@@ -78,7 +80,7 @@ model Asset {
   categoryId   String      @map("category_id")
   unitName     String      @map("unit_name") // "18", "Sprinter #2 (A)", "Lankershim Studio"
   status       AssetStatus @default(AVAILABLE)
-  location     Location    @default(CHESTNUT)
+  location     Location    @default(LANKERSHIM)
 
   // Vehicle details
   vin          String?     @db.VarChar(20)
