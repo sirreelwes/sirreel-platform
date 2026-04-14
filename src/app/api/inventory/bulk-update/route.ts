@@ -67,5 +67,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, rowsAffected: result });
   }
 
+  if (action === "reassign_category") {
+    const { itemIds, categoryId: targetCatId } = body;
+    if (!itemIds?.length || !targetCatId) {
+      return NextResponse.json({ error: "itemIds and categoryId required" }, { status: 400 });
+    }
+
+    const result = await prisma.inventoryItem.updateMany({
+      where: { id: { in: itemIds } },
+      data: { categoryId: targetCatId },
+    });
+
+    return NextResponse.json({ success: true, rowsAffected: result.count });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

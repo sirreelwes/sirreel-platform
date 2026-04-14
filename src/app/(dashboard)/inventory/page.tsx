@@ -12,6 +12,7 @@ type Item = {
   qtyOwned: number;
   replacementCost: string | null;
   imageUrl: string | null;
+  location: string;
   category: { id: string; name: string };
 };
 
@@ -26,12 +27,16 @@ export default function InventoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
-  // Bulk update state
+  // Bulk operations
   const [showBulk, setShowBulk] = useState(false);
   const [bulkField, setBulkField] = useState("weeklyRate");
   const [bulkPct, setBulkPct] = useState("");
   const [bulkCatId, setBulkCatId] = useState("");
   const [bulkMsg, setBulkMsg] = useState("");
+
+  // Multi-select for bulk reassignment
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [reassignCatId, setReassignCatId] = useState("");
 
   const fmt = (n: string | number | null) =>
     n && Number(n) > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n)) : "--";
@@ -62,6 +67,8 @@ export default function InventoryPage() {
       qtyOwned: String(item.qtyOwned),
       replacementCost: item.replacementCost ? String(Number(item.replacementCost)) : "",
       description: item.description || item.code,
+      location: item.location,
+      categoryId: item.category.id,
     });
   };
 
@@ -77,10 +84,9 @@ export default function InventoryPage() {
 
   const applyBulkUpdate = async () => {
     if (!bulkPct) return;
-    const confirmed = confirm(
-      `Apply ${Number(bulkPct) > 0 ? "+" : ""}${bulkPct}% to ${bulkField === "dailyRate" ? "daily rates" : bulkField === "weeklyRate" ? "weekly rates" : "replacement costs"} for ${bulkCatId ? categories.find(c => c.id === bulkCatId)?.name : "ALL categories"}?`
-    );
-    if (!confirmed) return;
+    const catName = bulkCatId ? categories.find(c => c.id === bulkCatId)?.name : "ALL categories";
+    const fieldLabel = bulkField === "dailyRate" ? "daily rates" : bulkField === "weeklyRate" ? "weekly rates" : "replacement costs";
+    if (!confirm(`Apply ${Number(bulkPct) > 0 ? "+" : ""}${bulkPct}% to ${fieldLabel} for ${catName}?`)) return;
 
     const res = await fetch("/api/inventory/bulk-update", {
       method: "POST",
@@ -99,6 +105,39 @@ export default function InventoryPage() {
     setTimeout(() => setBulkMsg(""), 3000);
   };
 
+  const toggleSelect = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
+  const toggleAll = () => {
+    if (selected.size === items.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(items.map(i => i.id)));
+    }
+  };
+
+  const bulkReassign = async () => {
+    if (!reassignCatId || selected.size === 0) return;
+    const catName = categories.find(c => c.id === reassignCatId)?.name;
+    if (!confirm(`Move ${selected.size} item(s) to ${catName}?`)) return;
+
+    await fetch("/api/inventory/bulk-update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "reassign_category",
+        itemIds: Array.from(selected),
+        categoryId: reassignCatId,
+      }),
+    });
+    setSelected(new Set());
+    setReassignCatId("");
+    fetchItems();
+  };
+
   const totalOwned = items.reduce((s, i) => s + i.qtyOwned, 0);
   const totalValue = items.reduce((s, i) => {
     const rc = i.replacementCost ? Number(i.replacementCost) : 0;
@@ -106,7 +145,7 @@ export default function InventoryPage() {
   }, 0);
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="p-6 max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-white">Inventory</h1>
@@ -119,81 +158,90 @@ export default function InventoryPage() {
           onClick={() => setShowBulk(!showBulk)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${showBulk ? "bg-zinc-700 text-zinc-300" : "bg-blue-600 hover:bg-blue-500 text-white"}`}
         >
-          {showBulk ? "Close" : "Bulk Pricing"}
+          {showBulk ? "Close Tools" : "Bulk Tools"}
         </button>
       </div>
 
-      {/* Bulk Pricing Panel */}
+      {/* Bulk Tools Panel */}
       {showBulk && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Adjust Pricing by Percentage</h3>
-          <div className="flex gap-3 items-end">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Rate Field</label>
-              <select value={bulkField} onChange={(e) => setBulkField(e.target.value)}
-                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
-                <option value="dailyRate">Daily Rate</option>
-                <option value="weeklyRate">Weekly Rate</option>
-                <option value="replacementCost">Replacement Cost</option>
-              </select>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4 space-y-4">
+          {/* Pricing */}
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-3">Adjust Pricing by Percentage</h3>
+            <div className="flex gap-3 items-end">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Rate Field</label>
+                <select value={bulkField} onChange={(e) => setBulkField(e.target.value)}
+                  className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  <option value="dailyRate">Daily Rate</option>
+                  <option value="weeklyRate">Weekly Rate</option>
+                  <option value="replacementCost">Replacement Cost</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Category</label>
+                <select value={bulkCatId} onChange={(e) => setBulkCatId(e.target.value)}
+                  className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  <option value="">All Categories</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">% Change</label>
+                <input type="number" step="0.1" value={bulkPct} onChange={(e) => setBulkPct(e.target.value)}
+                  placeholder="e.g. 10 or -5"
+                  className="w-32 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500" />
+              </div>
+              <button onClick={applyBulkUpdate} disabled={!bulkPct}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors">
+                Apply
+              </button>
             </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Category</label>
-              <select value={bulkCatId} onChange={(e) => setBulkCatId(e.target.value)}
-                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
-                <option value="">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">% Change</label>
-              <input
-                type="number"
-                step="0.1"
-                value={bulkPct}
-                onChange={(e) => setBulkPct(e.target.value)}
-                placeholder="e.g. 10 or -5"
-                className="w-32 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500"
-              />
-            </div>
-            <button
-              onClick={applyBulkUpdate}
-              disabled={!bulkPct}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Apply
-            </button>
+            {bulkMsg && <p className="text-sm text-emerald-400 mt-2">{bulkMsg}</p>}
           </div>
-          {bulkMsg && <p className="text-sm text-emerald-400 mt-2">{bulkMsg}</p>}
-          <p className="text-xs text-zinc-500 mt-2">
-            Use positive numbers to increase (e.g. 10 = +10%) or negative to decrease (e.g. -5 = -5%). Only items with existing rates above $0 are affected.
-          </p>
+
+          {/* Category Reassignment */}
+          {selected.size > 0 && (
+            <div className="border-t border-zinc-800 pt-4">
+              <h3 className="text-sm font-semibold text-white mb-3">
+                Reassign {selected.size} Selected Item{selected.size > 1 ? "s" : ""}
+              </h3>
+              <div className="flex gap-3 items-end">
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Move to Category</label>
+                  <select value={reassignCatId} onChange={(e) => setReassignCatId(e.target.value)}
+                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                    <option value="">Select category...</option>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={bulkReassign} disabled={!reassignCatId}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors">
+                  Move Items
+                </button>
+                <button onClick={() => setSelected(new Set())}
+                  className="px-3 py-2 text-zinc-400 hover:text-white text-sm transition-colors">
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Search items..."
-          value={search}
+        <input type="text" placeholder="Search items..." value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 max-w-sm px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
-        />
-        <select
-          value={categoryId}
-          onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
-          className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500"
-        >
+          className="flex-1 max-w-sm px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+        <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
+          className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500">
           <option value="">All Categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} ({c._count.items})
-            </option>
-          ))}
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name} ({c._count.items})</option>)}
         </select>
+        {selected.size > 0 && !showBulk && (
+          <span className="text-sm text-blue-400 self-center">{selected.size} selected</span>
+        )}
       </div>
 
       {/* Table */}
@@ -201,24 +249,34 @@ export default function InventoryPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-400 text-left text-xs uppercase tracking-wide">
-              <th className="px-4 py-3 font-medium">Item</th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium text-center">Qty</th>
-              <th className="px-4 py-3 font-medium text-right">Daily</th>
-              <th className="px-4 py-3 font-medium text-right">Weekly</th>
-              <th className="px-4 py-3 font-medium text-right">Replacement</th>
-              <th className="px-4 py-3 font-medium text-right">Total Value</th>
-              <th className="px-4 py-3 font-medium w-[100px]"></th>
+              <th className="px-3 py-3 w-[40px]">
+                <input type="checkbox" checked={items.length > 0 && selected.size === items.length}
+                  onChange={toggleAll}
+                  className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-blue-600" />
+              </th>
+              <th className="px-3 py-3 font-medium">Item</th>
+              <th className="px-3 py-3 font-medium">Category</th>
+              <th className="px-3 py-3 font-medium text-center">Qty</th>
+              <th className="px-3 py-3 font-medium text-right">Daily</th>
+              <th className="px-3 py-3 font-medium text-right">Weekly</th>
+              <th className="px-3 py-3 font-medium text-right">Replacement</th>
+              <th className="px-3 py-3 font-medium">Location</th>
+              <th className="px-3 py-3 font-medium text-right">Total Value</th>
+              <th className="px-3 py-3 font-medium w-[100px]"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-zinc-500">Loading...</td></tr>
+              <tr><td colSpan={10} className="px-4 py-12 text-center text-zinc-500">Loading...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-zinc-500">No items found</td></tr>
+              <tr><td colSpan={10} className="px-4 py-12 text-center text-zinc-500">No items found</td></tr>
             ) : items.map((item) => (
-              <tr key={item.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                <td className="px-4 py-2.5 text-xs">
+              <tr key={item.id} className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 ${selected.has(item.id) ? "bg-blue-900/10" : ""}`}>
+                <td className="px-3 py-2">
+                  <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)}
+                    className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-blue-600" />
+                </td>
+                <td className="px-3 py-2 text-xs">
                   {editingId === item.id ? (
                     <input type="text" value={editValues.description} onChange={(e) => setEditValues({...editValues, description: e.target.value})}
                       className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white" />
@@ -226,41 +284,63 @@ export default function InventoryPage() {
                     <span className="text-white">{item.description || item.code}</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-zinc-400 text-xs">{item.category.name}</td>
+                <td className="px-3 py-2 text-xs">
+                  {editingId === item.id ? (
+                    <select value={editValues.categoryId} onChange={(e) => setEditValues({...editValues, categoryId: e.target.value})}
+                      className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white">
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  ) : (
+                    <span className="text-zinc-400">{item.category.name}</span>
+                  )}
+                </td>
                 {editingId === item.id ? (
                   <>
-                    <td className="px-4 py-1.5 text-center">
+                    <td className="px-3 py-1.5 text-center">
                       <input type="number" value={editValues.qtyOwned} onChange={(e) => setEditValues({...editValues, qtyOwned: e.target.value})}
-                        className="w-16 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                        className="w-14 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
                     </td>
-                    <td className="px-4 py-1.5 text-right">
+                    <td className="px-3 py-1.5 text-right">
                       <input type="number" step="0.01" value={editValues.dailyRate} onChange={(e) => setEditValues({...editValues, dailyRate: e.target.value})}
                         className="w-20 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
                     </td>
-                    <td className="px-4 py-1.5 text-right">
+                    <td className="px-3 py-1.5 text-right">
                       <input type="number" step="0.01" value={editValues.weeklyRate} onChange={(e) => setEditValues({...editValues, weeklyRate: e.target.value})}
                         className="w-20 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
                     </td>
-                    <td className="px-4 py-1.5 text-right">
+                    <td className="px-3 py-1.5 text-right">
                       <input type="number" step="0.01" value={editValues.replacementCost} onChange={(e) => setEditValues({...editValues, replacementCost: e.target.value})}
                         className="w-24 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
                     </td>
-                    <td className="px-4 py-2.5 text-right text-zinc-500 text-xs">--</td>
-                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                    <td className="px-3 py-1.5">
+                      <select value={editValues.location} onChange={(e) => setEditValues({...editValues, location: e.target.value})}
+                        className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white">
+                        <option value="LANKERSHIM">Lankershim</option>
+                        <option value="NAPA">Napa</option>
+                        <option value="UTAH">Utah</option>
+                        <option value="ON_RENTAL">On Rental</option>
+                        <option value="IN_TRANSIT">In Transit</option>
+                        <option value="BODY_SHOP">Body Shop</option>
+                        <option value="HIGH_TECH">High Tech</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2 text-right text-zinc-500 text-xs">--</td>
+                    <td className="px-3 py-1.5 text-right whitespace-nowrap">
                       <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
                       <button onClick={() => setEditingId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">Cancel</button>
                     </td>
                   </>
                 ) : (
                   <>
-                    <td className="px-4 py-2.5 text-center text-zinc-300">{item.qtyOwned}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono text-xs">{fmt(item.dailyRate)}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono text-xs">{fmt(item.weeklyRate)}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono text-xs">{fmt(item.replacementCost)}</td>
-                    <td className="px-4 py-2.5 text-right text-white font-mono text-xs">
+                    <td className="px-3 py-2 text-center text-zinc-300">{item.qtyOwned}</td>
+                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.dailyRate)}</td>
+                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.weeklyRate)}</td>
+                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.replacementCost)}</td>
+                    <td className="px-3 py-2 text-zinc-400 text-xs">{item.location.replace(/_/g, " ")}</td>
+                    <td className="px-3 py-2 text-right text-white font-mono text-xs">
                       {item.replacementCost && Number(item.replacementCost) > 0 ? fmt(Number(item.replacementCost) * item.qtyOwned) : "--"}
                     </td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="px-3 py-2 text-right">
                       <button onClick={() => startEdit(item)} className="text-zinc-500 hover:text-blue-400 text-xs">Edit</button>
                     </td>
                   </>
