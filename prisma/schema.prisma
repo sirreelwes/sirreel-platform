@@ -1192,12 +1192,15 @@ model InventoryItem {
   dailyRate    Decimal  @default(0) @map("daily_rate") @db.Decimal(10, 2)
   weeklyRate   Decimal  @default(0) @map("weekly_rate") @db.Decimal(10, 2)
   qtyOwned     Int      @default(0) @map("qty_owned")
+  replacementCost Decimal? @map("replacement_cost") @db.Decimal(10, 2)
+  imageUrl    String?  @map("image_url")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   category     InventoryCategory @relation(fields: [categoryId], references: [id])
   lineItems    OrderLineItem[]
+  subRentals   SubRental[]
 
   @@map("inventory_items")
 }
@@ -1228,6 +1231,7 @@ model Order {
   agent          User        @relation("OrderAgent", fields: [agentId], references: [id])
   lineItems      OrderLineItem[]
   invoices       Invoice[]
+  subRentals     SubRental[]
 
   @@map("sr_orders")
 }
@@ -1279,4 +1283,64 @@ model Invoice {
   order          Order         @relation(fields: [orderId], references: [id])
 
   @@map("sr_invoices")
+}
+
+
+model Vendor {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  contactName String?  @map("contact_name")
+  email       String?
+  phone       String?  @db.VarChar(30)
+  website     String?
+  notes       String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  subRentals  SubRental[]
+
+  @@map("vendors")
+}
+
+enum SubRentalStatus {
+  REQUESTED
+  CONFIRMED
+  PICKED_UP
+  ON_RENT
+  RETURNED
+  CANCELLED
+}
+
+model SubRental {
+  id              String          @id @default(uuid())
+  orderId         String?         @map("order_id")
+  inventoryItemId String?         @map("inventory_item_id")
+  vendorId        String          @map("vendor_id")
+  status          SubRentalStatus @default(REQUESTED)
+
+  itemDescription String          @map("item_description")
+  quantity        Int             @default(1)
+  startDate       DateTime?       @map("start_date") @db.Date
+  endDate         DateTime?       @map("end_date") @db.Date
+
+  vendorDailyRate  Decimal?       @map("vendor_daily_rate") @db.Decimal(10, 2)
+  vendorWeeklyRate Decimal?       @map("vendor_weekly_rate") @db.Decimal(10, 2)
+  vendorTotal      Decimal?       @map("vendor_total") @db.Decimal(12, 2)
+
+  clientDailyRate  Decimal?       @map("client_daily_rate") @db.Decimal(10, 2)
+  clientWeeklyRate Decimal?       @map("client_weekly_rate") @db.Decimal(10, 2)
+  clientTotal      Decimal?       @map("client_total") @db.Decimal(12, 2)
+
+  poNumber        String?         @map("po_number")
+  notes           String?         @db.Text
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  order           Order?          @relation(fields: [orderId], references: [id])
+  inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id])
+  vendor          Vendor          @relation(fields: [vendorId], references: [id])
+
+  @@map("sub_rentals")
 }
