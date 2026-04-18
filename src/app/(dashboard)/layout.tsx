@@ -67,7 +67,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!session) return null;
 
   const user = session.user as any;
-  const role: UserRole = user.role || UserRole.AGENT;
+  const actualRole: UserRole = user.role || UserRole.AGENT;
+  const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
+
+  useEffect(() => {
+    if (actualRole === 'ADMIN') {
+      const saved = localStorage.getItem('viewAsRole');
+      if (saved && saved !== actualRole) setViewAsRole(saved as UserRole);
+    }
+  }, [actualRole]);
+
+  const role: UserRole = viewAsRole || actualRole;
   const perms = getPermissions(role);
   const navItems = getNavItems(role);
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || (pathname.startsWith('/jobs') ? 'bookings' : 'dashboard');
@@ -170,6 +180,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <div className="text-[12px] font-semibold text-gray-900">{user.name}</div>
                   <div className="text-[10px] text-gray-400">{user.email}</div>
                 </div>
+
+                {actualRole === 'ADMIN' && (
+                  <div className="px-3 py-2.5 border-b border-gray-100 bg-amber-50/50">
+                    <label className="block text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-1">
+                      View As {viewAsRole ? `(${ROLE_LABELS[viewAsRole] || viewAsRole})` : ''}
+                    </label>
+                    <select
+                      value={viewAsRole || ''}
+                      onChange={(e) => {
+                        const val = e.target.value as UserRole | '';
+                        if (val) {
+                          localStorage.setItem('viewAsRole', val);
+                        } else {
+                          localStorage.removeItem('viewAsRole');
+                        }
+                        window.location.reload();
+                      }}
+                      className="w-full px-2 py-1 text-[11px] border border-amber-300 rounded bg-white"
+                    >
+                      <option value="">Admin (default)</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="AGENT">Sales Agent</option>
+                      <option value="DISPATCHER">Dispatcher</option>
+                      <option value="FLEET_TECH">Fleet Tech</option>
+                      <option value="DRIVER">Driver</option>
+                      <option value="CLIENT">Client</option>
+                    </select>
+                  </div>
+                )}
+
                 <button
                   onClick={() => signOut({ callbackUrl: '/login' })}
                   className="w-full text-left px-3 py-2.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors font-medium"
