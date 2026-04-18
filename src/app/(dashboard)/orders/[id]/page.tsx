@@ -87,6 +87,7 @@ export default function OrderDetailPage() {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editRate, setEditRate] = useState("");
   const [editQty, setEditQty] = useState("");
+  const [editDays, setEditDays] = useState("");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
 
@@ -198,16 +199,19 @@ export default function OrderDetailPage() {
     setEditingLineId(li.id);
     setEditRate(String(Number(li.rate)));
     setEditQty(String(li.quantity));
+    setEditDays(li.days !== null && li.days !== undefined ? String(li.days) : "");
   };
 
   const saveEditLine = async (lineId: string) => {
+    const body: Record<string, unknown> = {
+      rate: parseFloat(editRate) || 0,
+      quantity: parseInt(editQty) || 1,
+    };
+    if (editDays !== "") body.days = parseFloat(editDays);
     await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rate: parseFloat(editRate) || 0,
-        quantity: parseInt(editQty) || 1,
-      }),
+      body: JSON.stringify(body),
     });
     setEditingLineId(null);
     fetchOrder();
@@ -416,7 +420,11 @@ export default function OrderDetailPage() {
                         <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
                           className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
                       </td>
-                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
+                      <td className="px-4 py-2 text-center">
+                        <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
+                          placeholder="auto"
+                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                      </td>
                       <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
                       <td className="px-4 py-2 whitespace-nowrap">
                         <button onClick={() => saveEditLine(li.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>

@@ -11,7 +11,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const {
       type, description, inventoryItemId, assetCategoryId,
-      startDate, endDate, rateType, rate, quantity, sortOrder, notes,
+      startDate, endDate, rateType, rate, quantity, sortOrder, notes, days: manualDays,
     } = body;
 
     const data: Record<string, unknown> = {};
@@ -27,18 +27,37 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
     if (notes !== undefined) data.notes = notes || null;
 
-    if (rateType !== undefined || rate !== undefined || quantity !== undefined || startDate !== undefined || endDate !== undefined) {
+    if (rateType !== undefined || rate !== undefined || quantity !== undefined || startDate !== undefined || endDate !== undefined || manualDays !== undefined) {
       const existing = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
       if (existing) {
-        const { days, lineTotal } = computeLineTotal({
-          rateType: (rateType ?? existing.rateType) as "DAILY" | "WEEKLY" | "FLAT",
-          rate: Number(rate ?? existing.rate),
-          quantity: quantity ?? existing.quantity,
-          startDate: startDate !== undefined ? (startDate ? new Date(startDate) : null) : existing.startDate,
-          endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : existing.endDate,
-        });
-        data.days = days;
-        data.lineTotal = lineTotal;
+        const effectiveRateType = (rateType ?? existing.rateType) as "DAILY" | "WEEKLY" | "FLAT";
+        const effectiveRate = Number(rate ?? existing.rate);
+        const effectiveQty = quantity ?? existing.quantity;
+
+        // If manualDays provided, compute lineTotal manually; otherwise let computeLineTotal do it
+        if (manualDays !== undefined && manualDays !== null) {
+          const d = parseFloat(String(manualDays)) || 0;
+          let lineTotal = 0;
+          if (effectiveRateType === "DAILY") {
+            lineTotal = effectiveRate * d * effectiveQty;
+          } else if (effectiveRateType === "WEEKLY") {
+            lineTotal = effectiveRate * (d / 7) * effectiveQty;
+          } else {
+            lineTotal = effectiveRate * effectiveQty;
+          }
+          data.days = d;
+          data.lineTotal = lineTotal;
+        } else {
+          const { days, lineTotal } = computeLineTotal({
+            rateType: effectiveRateType,
+            rate: effectiveRate,
+            quantity: effectiveQty,
+            startDate: startDate !== undefined ? (startDate ? new Date(startDate) : null) : existing.startDate,
+            endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : existing.endDate,
+          });
+          data.days = days;
+          data.lineTotal = lineTotal;
+        }
       }
     }
 
