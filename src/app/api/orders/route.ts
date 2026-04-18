@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
+import { getServerSession } from "next-auth";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -46,11 +47,21 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { companyId, agentId, bookingId, description, startDate, endDate, taxRate } = body;
+    const { companyId, bookingId, description, startDate, endDate, taxRate } = body;
+    let { agentId } = body;
+
+    // Fall back to logged-in user for agentId if not supplied
+    if (!agentId) {
+      const session = await getServerSession();
+      if (session?.user?.email) {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+        if (user) agentId = user.id;
+      }
+    }
 
     if (!companyId || !agentId) {
       return NextResponse.json(
-        { error: "companyId and agentId are required" },
+        { error: "companyId and agentId are required", gotCompanyId: !!companyId, gotAgentId: !!agentId },
         { status: 400 }
       );
     }
