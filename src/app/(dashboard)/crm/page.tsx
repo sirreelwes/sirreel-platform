@@ -263,7 +263,8 @@ export default function CRMPage() {
               ) : people.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">No contacts found</td></tr>
               ) : people.map((p) => (
-                <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                <tr key={p.id} onClick={() => router.push(`/crm/people/${p.id}`)}
+                  className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer transition-colors">
                   <td className="px-4 py-3 text-white font-medium">{p.firstName} {p.lastName}</td>
                   <td className="px-4 py-3 text-zinc-400 text-xs">{p.role.replace(/_/g, " ")}</td>
                   <td className="px-4 py-3 text-zinc-400 text-xs">
