@@ -402,9 +402,10 @@ model Booking {
   insuranceClaims InsuranceClaim[]
   aiDecisions     AiDecision[]
   paperworkRequests PaperworkRequest[]
+  orders            Order[]
+  activities        Activity[]
 
   @@map("bookings")
-  orders         Order[]
 }
 
 enum BookingItemStatus {
