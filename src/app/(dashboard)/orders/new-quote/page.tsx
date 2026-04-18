@@ -112,12 +112,34 @@ export default function NewQuotePage() {
     if (!selectedClientId) { alert("Select a client first"); return; }
     setCreating(true);
     try {
+      let finalClientId = selectedClientId;
+
+      // Auto-create company if user chose "__new__"
+      if (selectedClientId === "__new__" && parsed?.clientName) {
+        const coRes = await fetch("/api/crm/companies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: parsed.clientName,
+            tier: "NEW",
+            billingEmail: parsed.contactEmail || null,
+          }),
+        });
+        if (!coRes.ok) {
+          alert("Failed to create new company");
+          setCreating(false);
+          return;
+        }
+        const newCo = await coRes.json();
+        finalClientId = newCo.id;
+      }
+
       // Create order
       const orderRes = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyId: selectedClientId,
+          companyId: finalClientId,
           description: editing.productionName || editing.notes || "Quote from AI extraction",
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
@@ -360,7 +382,7 @@ export default function NewQuotePage() {
 
       {/* Actions */}
       <div className="flex gap-3">
-        <button onClick={createQuote} disabled={!selectedClientId || selectedClientId === "__new__" || creating}
+        <button onClick={createQuote} disabled={!selectedClientId || creating}
           className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white font-medium rounded-lg transition-colors">
           {creating ? "Creating Quote..." : "Create Quote"}
         </button>
