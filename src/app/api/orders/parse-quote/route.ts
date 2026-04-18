@@ -131,14 +131,44 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    // Try to match client to existing company
+    // Try to match client to existing company — fuzzy match with stripped suffixes
     let clientMatch = null;
     if (parsed.clientName) {
-      const companies = await prisma.company.findMany({
+      // Strip common suffixes for matching
+      const stripSuffixes = (s: string) => s.toLowerCase()
+        .replace(/[,.]/g, " ")
+        .replace(/\b(llc|inc|llp|ltd|corp|co|corporation|company|productions?|films?|studios?|media|entertainment|group|pictures)\b/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const searchTerm = stripSuffixes(parsed.clientName);
+      const words = searchTerm.split(" ").filter(w => w.length >= 3);
+
+      // Try full match first
+      let companies = await prisma.company.findMany({
         where: { name: { contains: parsed.clientName, mode: "insensitive" } },
         select: { id: true, name: true, tier: true, coiOnFile: true, defaultAgentId: true },
-        take: 5,
+        take: 10,
       });
+
+      // If no match, try with stripped version
+      if (companies.length === 0 && searchTerm) {
+        companies = await prisma.company.findMany({
+          where: { name: { contains: searchTerm, mode: "insensitive" } },
+          select: { id: true, name: true, tier: true, coiOnFile: true, defaultAgentId: true },
+          take: 10,
+        });
+      }
+
+      // Still no match? Try matching by the first significant word
+      if (companies.length === 0 && words.length > 0) {
+        companies = await prisma.company.findMany({
+          where: { name: { contains: words[0], mode: "insensitive" } },
+          select: { id: true, name: true, tier: true, coiOnFile: true, defaultAgentId: true },
+          take: 10,
+        });
+      }
+
       clientMatch = companies;
     }
 
