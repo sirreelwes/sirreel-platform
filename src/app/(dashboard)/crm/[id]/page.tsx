@@ -14,7 +14,7 @@ type CompanyDetail = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
   website: string | null; billingEmail: string | null; industry: string;
   coiOnFile: boolean; coiExpiry: string | null; notes: string | null;
-  affiliations: { id: string; productionName: string | null; isCurrent: boolean;
+  affiliations: { id: string; productionName: string | null; isCurrent: boolean; roleOnShow: string | null;
     person: { id: string; firstName: string; lastName: string; email: string; phone: string | null; role: string } }[];
   orders: { id: string; orderNumber: string; status: string; total: string; description: string | null; startDate: string | null; createdAt: string }[];
   activities: Activity[];
@@ -44,6 +44,15 @@ export default function CompanyDetailPage() {
   const [actDueDate, setActDueDate] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Link contact modal
+  const [showLinkContact, setShowLinkContact] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactResults, setContactResults] = useState<Array<{id: string; firstName: string; lastName: string; email: string; role: string}>>([]);
+  const [selectedContactId, setSelectedContactId] = useState("");
+  const [linkProduction, setLinkProduction] = useState("");
+  const [linkRole, setLinkRole] = useState("");
+  const [linkIsCurrent, setLinkIsCurrent] = useState(true);
+
   const fetchCompany = useCallback(async () => {
     const res = await fetch(`/api/crm/companies/${companyId}`);
     if (!res.ok) { router.push("/crm"); return; }
@@ -70,6 +79,39 @@ export default function CompanyDetailPage() {
       }),
     });
     setActSubject(""); setActBody(""); setActDueDate(""); setSaving(false);
+    fetchCompany();
+  };
+
+  const searchContacts = async (q: string) => {
+    setContactSearch(q);
+    if (!q || q.length < 2) { setContactResults([]); return; }
+    const res = await fetch(`/api/crm/people?search=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    setContactResults(data.people?.slice(0, 8) || []);
+  };
+
+  const linkContact = async () => {
+    if (!selectedContactId) return;
+    await fetch("/api/crm/affiliations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personId: selectedContactId,
+        companyId,
+        productionName: linkProduction || null,
+        roleOnShow: linkRole || null,
+        isCurrent: linkIsCurrent,
+      }),
+    });
+    setShowLinkContact(false);
+    setContactSearch(""); setContactResults([]); setSelectedContactId("");
+    setLinkProduction(""); setLinkRole(""); setLinkIsCurrent(true);
+    fetchCompany();
+  };
+
+  const removeAffiliation = async (id: string) => {
+    if (!confirm("Remove this contact from the company?")) return;
+    await fetch(`/api/crm/affiliations/${id}`, { method: "DELETE" });
     fetchCompany();
   };
 
@@ -116,23 +158,36 @@ export default function CompanyDetailPage() {
       <div className="grid grid-cols-3 gap-6">
         {/* Left: Contacts + Orders */}
         <div className="col-span-2 space-y-6">
-          {/* Contacts */}
+          {/* Contacts + Affiliations */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-            <h2 className="text-base font-semibold text-white mb-3">Contacts</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-white">Contacts on Shows</h2>
+              <button onClick={() => setShowLinkContact(true)}
+                className="text-xs text-blue-400 hover:text-blue-300 font-medium">+ Link Contact</button>
+            </div>
             {company.affiliations.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No contacts linked</p>
+              <p className="text-zinc-500 text-sm">No contacts linked. Add a freelancer who worked on a production with this company.</p>
             ) : (
               <div className="space-y-2">
                 {company.affiliations.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0">
-                    <div>
-                      <p className="text-sm text-white font-medium">{a.person.firstName} {a.person.lastName}</p>
-                      <p className="text-xs text-zinc-400">{a.person.role.replace(/_/g, " ")} {a.productionName ? `| ${a.productionName}` : ""}</p>
+                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0 group">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-white font-medium">{a.person.firstName} {a.person.lastName}</p>
+                        {a.isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Current</span>}
+                      </div>
+                      <p className="text-xs text-zinc-400">
+                        {a.productionName ? <span className="text-zinc-300">{a.productionName}</span> : ""}
+                        {a.productionName && a.roleOnShow ? " | " : ""}
+                        {a.roleOnShow ? a.roleOnShow.replace(/_/g, " ") : (a.productionName ? "" : a.person.role.replace(/_/g, " "))}
+                      </p>
                     </div>
-                    <div className="text-right text-xs text-zinc-400">
+                    <div className="text-right text-xs text-zinc-400 mr-3">
                       <p>{a.person.email}</p>
                       <p>{a.person.phone || ""}</p>
                     </div>
+                    <button onClick={() => removeAffiliation(a.id)}
+                      className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-300 transition-opacity">Remove</button>
                   </div>
                 ))}
               </div>
@@ -228,6 +283,73 @@ export default function CompanyDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Link Contact Modal */}
+      {showLinkContact && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLinkContact(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-4">Link Contact to {company.name}</h2>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Search Contact</label>
+                <input type="text" value={contactSearch} onChange={(e) => searchContacts(e.target.value)}
+                  placeholder="Type name or email..."
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                {contactResults.length > 0 && !selectedContactId && (
+                  <div className="mt-2 bg-zinc-800 border border-zinc-700 rounded-lg max-h-60 overflow-y-auto">
+                    {contactResults.map((c) => (
+                      <button key={c.id} onClick={() => {
+                        setSelectedContactId(c.id);
+                        setContactSearch(`${c.firstName} ${c.lastName} (${c.email})`);
+                        setContactResults([]);
+                      }} className="w-full text-left px-3 py-2 hover:bg-zinc-700 text-sm border-b border-zinc-700 last:border-0">
+                        <p className="text-white">{c.firstName} {c.lastName}</p>
+                        <p className="text-xs text-zinc-400">{c.email} | {c.role.replace(/_/g, " ")}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Production / Show Name</label>
+                <input type="text" value={linkProduction} onChange={(e) => setLinkProduction(e.target.value)}
+                  placeholder="e.g. Stranger Things S5"
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Role on This Show</label>
+                <select value={linkRole} onChange={(e) => setLinkRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  <option value="">(same as contact default)</option>
+                  <option value="UPM">UPM</option>
+                  <option value="PRODUCER">Producer</option>
+                  <option value="LINE_PRODUCER">Line Producer</option>
+                  <option value="PRODUCTION_COORDINATOR">Production Coordinator</option>
+                  <option value="PRODUCTION_SUPERVISOR">Production Supervisor</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={linkIsCurrent} onChange={(e) => setLinkIsCurrent(e.target.checked)}
+                  className="w-4 h-4 rounded" />
+                <span className="text-sm text-zinc-300">Currently active on this show</span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={linkContact} disabled={!selectedContactId}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg">
+                Link Contact
+              </button>
+              <button onClick={() => setShowLinkContact(false)} className="px-4 py-2 text-zinc-400 hover:text-white text-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

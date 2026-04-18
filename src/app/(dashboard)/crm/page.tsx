@@ -57,6 +57,15 @@ export default function CRMPage() {
   const [newTier, setNewTier] = useState("NEW");
   const [newEmail, setNewEmail] = useState("");
 
+  // Add contact modal
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [cFirst, setCFirst] = useState("");
+  const [cLast, setCLast] = useState("");
+  const [cEmail, setCEmail] = useState("");
+  const [cPhone, setCPhone] = useState("");
+  const [cMobile, setCMobile] = useState("");
+  const [cRole, setCRole] = useState("OTHER");
+
   const fetchCompanies = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
@@ -88,6 +97,27 @@ export default function CRMPage() {
     ]).then(() => setLoading(false));
   }, [tab, fetchCompanies, fetchPeople, fetchFollowUps]);
 
+  const addContact = async () => {
+    if (!cFirst || !cLast || !cEmail) return;
+    const res = await fetch("/api/crm/people", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: cFirst, lastName: cLast, email: cEmail,
+        phone: cPhone || null, mobile: cMobile || null,
+        role: cRole, tier: "STANDARD",
+      }),
+    });
+    if (res.ok) {
+      setShowAddContact(false);
+      setCFirst(""); setCLast(""); setCEmail(""); setCPhone(""); setCMobile(""); setCRole("OTHER");
+      fetchPeople();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Failed to add contact");
+    }
+  };
+
   const addCompany = async () => {
     if (!newName) return;
     await fetch("/api/crm/companies", {
@@ -114,10 +144,16 @@ export default function CRMPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-white">Clients</h1>
-        <button onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-          + Add Company
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowAddContact(true)}
+            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium rounded-lg transition-colors">
+            + Add Contact
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+            + Add Company
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -284,6 +320,65 @@ export default function CRMPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Add Contact Modal */}
+      {showAddContact && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddContact(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-4">Add Contact</h2>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">First Name *</label>
+                  <input type="text" value={cFirst} onChange={(e) => setCFirst(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Last Name *</label>
+                  <input type="text" value={cLast} onChange={(e) => setCLast(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Email *</label>
+                <input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Office Phone</label>
+                  <input type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Mobile</label>
+                  <input type="tel" value={cMobile} onChange={(e) => setCMobile(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Role</label>
+                <select value={cRole} onChange={(e) => setCRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  <option value="OTHER">Other</option>
+                  <option value="UPM">UPM</option>
+                  <option value="PRODUCER">Producer</option>
+                  <option value="LINE_PRODUCER">Line Producer</option>
+                  <option value="PRODUCTION_COORDINATOR">Production Coordinator</option>
+                  <option value="PRODUCTION_SUPERVISOR">Production Supervisor</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={addContact} disabled={!cFirst || !cLast || !cEmail}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg">
+                Add Contact
+              </button>
+              <button onClick={() => setShowAddContact(false)} className="px-4 py-2 text-zinc-400 hover:text-white text-sm">Cancel</button>
+            </div>
+          </div>
         </div>
       )}
 

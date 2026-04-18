@@ -134,6 +134,7 @@ enum ProductionType {
   COMMERCIAL
   MUSIC_VIDEO
   CORPORATE
+  EVENT_PLANNER
   OTHER
 }
 
