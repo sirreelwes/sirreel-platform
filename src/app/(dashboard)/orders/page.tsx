@@ -74,12 +74,20 @@ export default function OrdersPage() {
             {total} order{total !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={() => router.push("/orders/new")}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          + New Order
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push("/orders/new-quote")}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            ✨ AI Quote
+          </button>
+          <button
+            onClick={() => router.push("/orders/new")}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            + New Order
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-3 mb-4">
