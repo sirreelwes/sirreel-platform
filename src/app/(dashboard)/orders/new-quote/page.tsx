@@ -41,6 +41,8 @@ export default function NewQuotePage() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [creating, setCreating] = useState(false);
   const [selectedMatches, setSelectedMatches] = useState<Record<number, { id: string; type: string; description: string; rate: number } | null>>({});
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountLabel, setDiscountLabel] = useState("");
   const [editing, setEditing] = useState<Parsed>({});
 
   const parseEmail = async () => {
@@ -176,6 +178,21 @@ export default function NewQuotePage() {
             rate: match.rate,
             rateType,
             [match.type === "ASSET" ? "assetId" : "inventoryItemId"]: match.id,
+          }),
+        });
+      }
+
+      // Add discount line item if set
+      if (discountAmount && parseFloat(discountAmount) !== 0) {
+        await fetch(`/api/orders/${order.id}/line-items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "DISCOUNT",
+            description: discountLabel || "Discount",
+            quantity: 1,
+            rate: parseFloat(discountAmount),
+            rateType: "FLAT",
           }),
         });
       }
@@ -346,31 +363,52 @@ export default function NewQuotePage() {
                 {allMatches.length === 0 ? (
                   <p className="text-xs text-amber-400 mt-2">No match in catalog. Will need to add manually after creation.</p>
                 ) : (
-                  <div className="mt-2">
-                    <label className="block text-xs text-zinc-500 mb-1">Match to:</label>
-                    <select
-                      value={selected?.id || ""}
-                      onChange={(e) => {
-                        const match = allMatches.find(m => m.id === e.target.value);
-                        updateSelectedMatch(idx, match || null);
-                      }}
-                      className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white"
-                    >
-                      <option value="">-- Skip this item --</option>
-                      {allMatches.map(m => {
-                        const rateType = editing.rateType || "WEEKLY";
-                        const rate = Number(rateType === "WEEKLY" ? m.weeklyRate : m.dailyRate);
-                        return (
-                          <option key={m.id} value={m.id}>
-                            [{m.type === "ASSET" ? "Fleet" : "Inv"}] {m.description} | {fmt(rate)}/{rateType === "WEEKLY" ? "wk" : "day"} | {m.category}
-                          </option>
-                        );
-                      })}
-                    </select>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label className="block text-xs text-zinc-500 mb-1">Match to:</label>
+                      <select
+                        value={selected?.id || ""}
+                        onChange={(e) => {
+                          const match = allMatches.find(m => m.id === e.target.value);
+                          updateSelectedMatch(idx, match || null);
+                        }}
+                        className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white"
+                      >
+                        <option value="">-- Skip this item --</option>
+                        {allMatches.map(m => {
+                          const rateType = editing.rateType || "WEEKLY";
+                          const rate = Number(rateType === "WEEKLY" ? m.weeklyRate : m.dailyRate);
+                          return (
+                            <option key={m.id} value={m.id}>
+                              [{m.type === "ASSET" ? "Fleet" : "Inv"}] {m.description} | {fmt(rate)}/{rateType === "WEEKLY" ? "wk" : "day"} | {m.category}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
                     {selected && (
-                      <p className="text-xs text-emerald-400 mt-1">
-                        = {fmt(selected.rate * item.quantity)} {editing.rateType === "WEEKLY" ? "per week" : "per day"}
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <label className="block text-xs text-zinc-500 mb-1">Rate ({editing.rateType === "WEEKLY" ? "per week" : "per day"}) — adjust for discount</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={selected.rate}
+                            onChange={(e) => {
+                              const rate = parseFloat(e.target.value) || 0;
+                              setSelectedMatches({
+                                ...selectedMatches,
+                                [idx]: { ...selected, rate },
+                              });
+                            }}
+                            className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-white font-mono"
+                          />
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-zinc-500">Subtotal</p>
+                          <p className="text-sm text-emerald-400 font-mono">{fmt(selected.rate * item.quantity)}</p>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -378,6 +416,26 @@ export default function NewQuotePage() {
             );
           })}
         </div>
+      </div>
+
+      {/* Discount */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4">
+        <h2 className="text-base font-semibold text-white mb-3">Discount (Optional)</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Discount Label</label>
+            <input type="text" value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)}
+              placeholder="e.g. Loyalty Discount, 10% Repeat Client"
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Discount Amount (negative $)</label>
+            <input type="number" step="0.01" value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)}
+              placeholder="e.g. -500"
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white font-mono" />
+          </div>
+        </div>
+        <p className="text-xs text-zinc-500 mt-2">Enter discount as a negative number (e.g. -500 for $500 off, or -1000 for $1,000 off)</p>
       </div>
 
       {/* Actions */}

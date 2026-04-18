@@ -84,6 +84,9 @@ export default function OrderDetailPage() {
   const [liEndDate, setLiEndDate] = useState("");
   const [liRateType, setLiRateType] = useState("DAILY");
   const [liRate, setLiRate] = useState("");
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [editRate, setEditRate] = useState("");
+  const [editQty, setEditQty] = useState("");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
 
@@ -189,6 +192,25 @@ export default function OrderDetailPage() {
       }),
     });
     resetForm(); setAdding(false); fetchOrder();
+  };
+
+  const startEditLine = (li: LineItem) => {
+    setEditingLineId(li.id);
+    setEditRate(String(Number(li.rate)));
+    setEditQty(String(li.quantity));
+  };
+
+  const saveEditLine = async (lineId: string) => {
+    await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rate: parseFloat(editRate) || 0,
+        quantity: parseInt(editQty) || 1,
+      }),
+    });
+    setEditingLineId(null);
+    fetchOrder();
   };
 
   const deleteLineItem = async (lineId: string) => {
@@ -383,16 +405,39 @@ export default function OrderDetailPage() {
                   <td className="px-4 py-3 text-zinc-400 whitespace-nowrap text-xs">
                     {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">
-                    {fmt(li.rate)}<span className="text-zinc-500 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
-                  <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
-                  <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
-                  {isEditable && (
-                    <td className="px-4 py-3">
-                      <button onClick={() => deleteLineItem(li.id)} className="text-zinc-500 hover:text-red-400 transition-colors" title="Remove">&times;</button>
-                    </td>
+                  {editingLineId === li.id ? (
+                    <>
+                      <td className="px-4 py-2">
+                        <input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)}
+                          className="w-24 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right font-mono" />
+                        <span className="text-zinc-500 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
+                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                      </td>
+                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <button onClick={() => saveEditLine(li.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
+                        <button onClick={() => setEditingLineId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">X</button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">
+                        {fmt(li.rate)}<span className="text-zinc-500 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
+                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      {isEditable && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button onClick={() => startEditLine(li)} className="text-zinc-500 hover:text-blue-400 text-xs mr-2">Edit</button>
+                          <button onClick={() => deleteLineItem(li.id)} className="text-zinc-500 hover:text-red-400 transition-colors" title="Remove">&times;</button>
+                        </td>
+                      )}
+                    </>
                   )}
                 </tr>
               ))
