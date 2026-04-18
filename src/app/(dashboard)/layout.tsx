@@ -25,6 +25,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, status } = useSession();
   const [aiOpen, setAiOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('viewAsRole');
+      if (saved) setViewAsRole(saved as UserRole);
+    }
+  }, []);
   const [adminOpen, setAdminOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
@@ -68,16 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const user = session.user as any;
   const actualRole: UserRole = user.role || UserRole.AGENT;
-  const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
 
-  useEffect(() => {
-    if (actualRole === 'ADMIN') {
-      const saved = localStorage.getItem('viewAsRole');
-      if (saved && saved !== actualRole) setViewAsRole(saved as UserRole);
-    }
-  }, [actualRole]);
-
-  const role: UserRole = viewAsRole || actualRole;
+  const role: UserRole = (actualRole === 'ADMIN' && viewAsRole) ? viewAsRole : actualRole;
   const perms = getPermissions(role);
   const navItems = getNavItems(role);
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || (pathname.startsWith('/jobs') ? 'bookings' : 'dashboard');
