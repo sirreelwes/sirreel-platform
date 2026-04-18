@@ -150,6 +150,7 @@ model Company {
   defaultAgentId String? @map("default_agent_id")
 
   orders         Order[]
+  activities     Activity[]
 
   // Insurance (for claims — client's production insurance)
   insuranceCarrier   String? @map("insurance_carrier")
@@ -209,6 +210,7 @@ model Person {
   // Lifetime stats (across ALL companies)
   totalSpend    Decimal  @default(0) @map("total_spend") @db.Decimal(12, 2)
   totalBookings Int      @default(0) @map("total_bookings")
+  activities    Activity[]
   lastBookingAt DateTime? @map("last_booking_at")
 
   // "Works with" — e.g. UPM's regular coordinator
@@ -1010,6 +1012,7 @@ model User {
   sessions        Session[]
 
   agentOrders    Order[]  @relation("OrderAgent")
+  agentActivities Activity[] @relation("ActivityAgent")
   @@map("users")
 }
 
@@ -1344,4 +1347,36 @@ model SubRental {
   vendor          Vendor          @relation(fields: [vendorId], references: [id])
 
   @@map("sub_rentals")
+}
+
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+  FOLLOW_UP
+  BOOKING_NOTE
+}
+
+model Activity {
+  id          String       @id @default(uuid())
+  companyId   String?      @map("company_id")
+  personId    String?      @map("person_id")
+  bookingId   String?      @map("booking_id")
+  agentId     String       @map("agent_id")
+  type        ActivityType @default(NOTE)
+  subject     String?
+  body        String       @db.Text
+  dueDate     DateTime?    @map("due_date") @db.Date
+  completed   Boolean      @default(false)
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  company     Company?     @relation(fields: [companyId], references: [id])
+  person      Person?      @relation(fields: [personId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
+  agent       User         @relation("ActivityAgent", fields: [agentId], references: [id])
+
+  @@map("activities_crm")
 }
