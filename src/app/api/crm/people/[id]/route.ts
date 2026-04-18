@@ -20,7 +20,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
         orderBy: { createdAt: "desc" },
         take: 50,
       },
-      assignedAgent: { select: { id: true, name: true } },
     },
   });
   if (!person) return NextResponse.json({ error: "Not found" }, { status: 404 });

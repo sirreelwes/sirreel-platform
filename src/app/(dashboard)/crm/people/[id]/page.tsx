@@ -30,7 +30,6 @@ type PersonDetail = {
   role: string; tier: string;
   totalSpend: string; totalBookings: number;
   notes: string | null;
-  assignedAgent: { id: string; name: string } | null;
   affiliations: Affiliation[];
   activities: Activity[];
 };
