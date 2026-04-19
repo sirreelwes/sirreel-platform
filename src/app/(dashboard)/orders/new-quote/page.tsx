@@ -136,12 +136,48 @@ export default function NewQuotePage() {
         finalClientId = newCo.id;
       }
 
+      // AUTO-CREATE JOB FALLBACK — temporary until proper job selection UX in new-quote flow.
+      // Creates an "Untitled" job tied to the client. Wes can rename/manage in the jobs view.
+      let jobId: string;
+      try {
+        const jobName =
+          editing.productionName ||
+          parsed?.productionName ||
+          `Quote — ${parsed?.clientName || "Untitled"} — ${new Date().toLocaleDateString()}`;
+        const jobRes = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: jobName,
+            companyId: finalClientId,
+            agentId: (session?.user as { id?: string })?.id,
+            startDate: editing.startDate || null,
+            endDate: editing.endDate || null,
+            notes: "Auto-created from quote parser",
+          }),
+        });
+        if (!jobRes.ok) {
+          const err = await jobRes.json();
+          alert("Failed to create job for quote: " + (err.error || "unknown"));
+          setCreating(false);
+          return;
+        }
+        const jobData = await jobRes.json();
+        jobId = jobData.job.id;
+      } catch (e) {
+        console.error("Auto-create job failed:", e);
+        alert("Failed to create job for quote");
+        setCreating(false);
+        return;
+      }
+
       // Create order
       const orderRes = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: finalClientId,
+          jobId,
           description: editing.productionName || editing.notes || "Quote from AI extraction",
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,

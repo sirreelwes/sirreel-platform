@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { JobPicker } from "@/components/orders/JobPicker";
+import { NewJobModal } from "@/components/orders/NewJobModal";
 
 type Company = { id: string; name: string; tier: string };
 type Agent = { id: string; name: string; email: string };
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +25,14 @@ export default function NewOrderPage() {
   const [taxRate, setTaxRate] = useState("0");
   const [addTax, setAddTax] = useState(false);
 
+  // Job feature
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [showNewJobModal, setShowNewJobModal] = useState(false);
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
+
+  // Reset jobId when company changes — previously selected job no longer applies
+  useEffect(() => { setJobId(null); }, [companyId]);
+
   useEffect(() => {
     fetch("/api/orders/lookups")
       .then((r) => r.json())
@@ -32,7 +44,7 @@ export default function NewOrderPage() {
   }, []);
 
   const handleCreate = async () => {
-    if (!companyId || !agentId) return;
+    if (!companyId || !agentId || !jobId) return;
     setCreating(true);
 
     const res = await fetch("/api/orders", {
@@ -41,6 +53,7 @@ export default function NewOrderPage() {
       body: JSON.stringify({
         companyId,
         agentId,
+        jobId,
         description: description || null,
         startDate: startDate || null,
         endDate: endDate || null,
@@ -90,6 +103,17 @@ export default function NewOrderPage() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">Job *</label>
+          <JobPicker
+            companyId={companyId || null}
+            value={jobId}
+            onChange={setJobId}
+            onCreateNew={() => setShowNewJobModal(true)}
+            refreshKey={jobsRefreshKey}
+          />
         </div>
 
         <div>
@@ -168,7 +192,7 @@ export default function NewOrderPage() {
         <div className="flex gap-3 pt-2">
           <button
             onClick={handleCreate}
-            disabled={!companyId || !agentId || creating}
+            disabled={!companyId || !agentId || !jobId || creating}
             className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
             {creating ? "Creating..." : "Create Draft Order"}
@@ -181,6 +205,20 @@ export default function NewOrderPage() {
           </button>
         </div>
       </div>
-    </div>
+    
+      {showNewJobModal && companyId && (
+        <NewJobModal
+          open={showNewJobModal}
+          onClose={() => setShowNewJobModal(false)}
+          companyId={companyId}
+          companyName={companies.find((c) => c.id === companyId)?.name || ""}
+          currentUserId={(session?.user as { id?: string })?.id || agentId}
+          onCreated={(job) => {
+            setJobId(job.id);
+            setJobsRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
+</div>
   );
 }

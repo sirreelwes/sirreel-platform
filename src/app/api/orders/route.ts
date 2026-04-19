@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { companyId, bookingId, description, startDate, endDate, taxRate } = body;
+    const { companyId, jobId, bookingId, description, startDate, endDate, taxRate } = body;
     let { agentId } = body;
 
     // Fall back to logged-in user for agentId if not supplied
@@ -59,9 +59,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!companyId || !agentId) {
+    if (!companyId || !agentId || !jobId) {
       return NextResponse.json(
-        { error: "companyId and agentId are required", gotCompanyId: !!companyId, gotAgentId: !!agentId },
+        {
+          error: "companyId, agentId, and jobId are required",
+          gotCompanyId: !!companyId,
+          gotAgentId: !!agentId,
+          gotJobId: !!jobId,
+        },
         { status: 400 }
       );
     }
@@ -73,6 +78,7 @@ export async function POST(req: NextRequest) {
         orderNumber,
         companyId,
         agentId,
+        jobId,
         bookingId: bookingId || null,
         description: description || null,
         startDate: startDate ? new Date(startDate) : null,
