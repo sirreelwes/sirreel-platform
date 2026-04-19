@@ -113,6 +113,7 @@ model Asset {
   inspections        Inspection[]
   insuranceClaims    InsuranceClaim[]
   checkoutRecords    CheckoutRecord[]
+  lotChecks          LotCheck[]
 
   @@map("assets")
 }
@@ -1019,6 +1020,7 @@ model User {
   agentOrders     Order[]    @relation("OrderAgent")
   agentActivities Activity[] @relation("ActivityAgent")
   jobsAsAgent     Job[]      @relation("JobAgent")
+  lotChecks       LotCheck[] @relation("LotCheckedBy")
 
   @@map("users")
 }
@@ -1556,4 +1558,27 @@ enum JobRole {
   TRANSPO
   ACCOUNTING
   OTHER
+}
+
+// ============================================================
+// LOT CHECK — Julian's yard audit
+// Physical presence of an asset at the Lankershim lot,
+// captured separately from AssetStatus since a truck can
+// be "on rental" AND "parked in the lot overnight".
+// ============================================================
+
+model LotCheck {
+  id        String   @id @default(uuid())
+  assetId   String   @map("asset_id")
+  present   Boolean
+  checkedBy String   @map("checked_by")
+  checkedAt DateTime @default(now()) @map("checked_at")
+  notes     String?  @db.Text
+
+  asset Asset @relation(fields: [assetId], references: [id])
+  user  User  @relation("LotCheckedBy", fields: [checkedBy], references: [id])
+
+  @@index([assetId, checkedAt])
+  @@index([checkedAt])
+  @@map("sr_lot_checks")
 }
