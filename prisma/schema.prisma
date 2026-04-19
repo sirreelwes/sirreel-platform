@@ -1511,6 +1511,7 @@ model Job {
   endDate        DateTime?      @map("end_date") @db.Date
   agentId        String         @map("agent_id")
   planyoCartId   String?        @unique @map("planyo_cart_id")
+  estimatedValue Decimal?       @map("estimated_value") @db.Decimal(12, 2)
   notes          String?        @db.Text
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")

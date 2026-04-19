@@ -1,21 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import type { JobStatus } from '@prisma/client'
+import type { JobStatus, OrderStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/jobs?companyId=xxx&status=ACTIVE&search=foo
+// GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&search=foo
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
   const status = searchParams.get('status') as JobStatus | null
+  const statusesParam = searchParams.get('statuses')
+  const agentId = searchParams.get('agentId')
   const search = searchParams.get('search')
+
+  const statuses = statusesParam
+    ? (statusesParam.split(',').filter(Boolean) as JobStatus[])
+    : null
 
   try {
     const jobs = await prisma.job.findMany({
       where: {
         ...(companyId && { companyId }),
-        ...(status && { status }),
+        ...(agentId && { agentId }),
+        ...(statuses && statuses.length > 0 ? { status: { in: statuses } } : status ? { status } : {}),
         ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
@@ -31,13 +38,48 @@ export async function GET(req: NextRequest) {
             person: { select: { id: true, firstName: true, lastName: true, email: true } },
           },
         },
+        orders: {
+          select: { status: true, subtotal: true },
+        },
         _count: { select: { orders: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 200,
     })
 
-    return NextResponse.json({ jobs })
+    const enriched = jobs.map((j) => {
+      const orderTotal = j.orders
+        .filter((o) => o.status !== ('CANCELLED' as OrderStatus))
+        .reduce((sum, o) => sum + Number(o.subtotal || 0), 0)
+
+      const primaryContact =
+        j.jobContacts.find((jc) => jc.role === 'PM' && jc.isPrimary) ||
+        j.jobContacts.find((jc) => jc.role === 'PM') ||
+        j.jobContacts.find((jc) => jc.role === 'PC' && jc.isPrimary) ||
+        j.jobContacts.find((jc) => jc.role === 'PC') ||
+        j.jobContacts.find((jc) => jc.isPrimary) ||
+        j.jobContacts[0] ||
+        null
+
+      const { orders, ...rest } = j
+      return {
+        ...rest,
+        estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
+        orderTotal,
+        primaryContact: primaryContact
+          ? {
+              id: primaryContact.person.id,
+              firstName: primaryContact.person.firstName,
+              lastName: primaryContact.person.lastName,
+              email: primaryContact.person.email,
+              role: primaryContact.role,
+              isPrimary: primaryContact.isPrimary,
+            }
+          : null,
+      }
+    })
+
+    return NextResponse.json({ jobs: enriched })
   } catch (error) {
     console.error('GET /api/jobs error:', error)
     return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 })
@@ -57,6 +99,7 @@ export async function POST(req: NextRequest) {
       endDate,
       agentId,
       notes,
+      estimatedValue,
       contacts, // [{ personId, role, isPrimary }]
     } = body
 
@@ -88,6 +131,8 @@ export async function POST(req: NextRequest) {
         endDate: endDate ? new Date(endDate) : null,
         agentId,
         notes,
+        estimatedValue:
+          estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),
         ...(contacts && contacts.length > 0 && {
           jobContacts: {
             create: contacts.map((c: any) => ({
@@ -105,7 +150,15 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ job }, { status: 201 })
+    return NextResponse.json(
+      {
+        job: {
+          ...job,
+          estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
+        },
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('POST /api/jobs error:', error)
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })

@@ -9,6 +9,7 @@ export interface Permissions {
   calendar: boolean;
   gantt: boolean;
   bookings: boolean;
+  pipeline: boolean;    // Sales pipeline kanban
   maintenance: boolean;
   fleet: boolean;
   dispatch: boolean;
@@ -49,7 +50,7 @@ export interface Permissions {
 const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // Wes, Dani — sees everything
   ADMIN: {
-    calendar: true, gantt: true, bookings: true, maintenance: true,
+    calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: true,
     reporting: true, ai: true, tasks: true, inspections: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
@@ -64,7 +65,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   // Hugo — warehouse + fleet manager. Sees production co + job, NOT client contacts
   MANAGER: {
-    calendar: true, gantt: true, bookings: false, maintenance: true,
+    calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -79,7 +80,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   // Jose, Oliver — agents. Full client + booking + fleet/dispatch view access
   AGENT: {
-    calendar: true, gantt: true, bookings: true, maintenance: true,
+    calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
@@ -94,7 +95,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   // Julian, Chris — fleet associates. Calendar/gantt with production co + job visible, NOT client contacts
   FLEET_TECH: {
-    calendar: true, gantt: true, bookings: false, maintenance: true,
+    calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -108,7 +109,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   },
 
   DISPATCHER: {
-    calendar: true, gantt: true, bookings: false, maintenance: true,
+    calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -122,7 +123,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   },
 
   DRIVER: {
-    calendar: false, gantt: false, bookings: false, maintenance: false,
+    calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: true, inspections: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
@@ -136,7 +137,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   },
 
   CLIENT: {
-    calendar: false, gantt: false, bookings: true, maintenance: false,
+    calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
@@ -177,6 +178,7 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.calendar) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
   if (perms.gantt) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
   if (perms.bookings) main.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
+  if (perms.pipeline) main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });

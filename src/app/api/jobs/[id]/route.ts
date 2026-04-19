@@ -24,6 +24,7 @@ export async function GET(
             id: true,
             orderNumber: true,
             status: true,
+            subtotal: true,
             total: true,
             startDate: true,
             endDate: true,
@@ -47,7 +48,23 @@ export async function GET(
       job.jobContacts[0] ||
       null
 
-    return NextResponse.json({ job: { ...job, primaryContact } })
+    const orderTotal = job.orders
+      .filter(o => o.status !== 'CANCELLED')
+      .reduce((sum, o) => sum + Number(o.subtotal || 0), 0)
+
+    return NextResponse.json({
+      job: {
+        ...job,
+        estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
+        orderTotal,
+        orders: job.orders.map(o => ({
+          ...o,
+          subtotal: Number(o.subtotal || 0),
+          total: Number(o.total || 0),
+        })),
+        primaryContact,
+      },
+    })
   } catch (error) {
     console.error(`GET /api/jobs/${params.id} error:`, error)
     return NextResponse.json({ error: 'Failed to fetch job' }, { status: 500 })
@@ -61,7 +78,7 @@ export async function PATCH(
 ) {
   try {
     const body = await req.json()
-    const { name, status, startDate, endDate, productionType, agentId, notes } = body
+    const { name, status, startDate, endDate, productionType, agentId, notes, estimatedValue } = body
 
     const job = await prisma.job.update({
       where: { id: params.id },
@@ -73,10 +90,19 @@ export async function PATCH(
         ...(notes !== undefined && { notes }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+        ...(estimatedValue !== undefined && {
+          estimatedValue:
+            estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),
+        }),
       },
     })
 
-    return NextResponse.json({ job })
+    return NextResponse.json({
+      job: {
+        ...job,
+        estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
+      },
+    })
   } catch (error) {
     console.error(`PATCH /api/jobs/${params.id} error:`, error)
     return NextResponse.json({ error: 'Failed to update job' }, { status: 500 })
