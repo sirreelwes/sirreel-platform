@@ -1,21 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
 import type { JobStatus, OrderStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&search=foo
+// GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&mine=1&search=foo
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
   const status = searchParams.get('status') as JobStatus | null
   const statusesParam = searchParams.get('statuses')
-  const agentId = searchParams.get('agentId')
+  let agentId = searchParams.get('agentId')
+  const mine = searchParams.get('mine') === '1'
   const search = searchParams.get('search')
 
   const statuses = statusesParam
     ? (statusesParam.split(',').filter(Boolean) as JobStatus[])
     : null
+
+  // Resolve mine=1 to the session user's id
+  if (mine && !agentId) {
+    const session = await getServerSession()
+    if (session?.user?.email) {
+      const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
+      if (user) agentId = user.id
+      else return NextResponse.json({ jobs: [] })
+    } else {
+      return NextResponse.json({ jobs: [] })
+    }
+  }
 
   try {
     const jobs = await prisma.job.findMany({
@@ -97,15 +114,32 @@ export async function POST(req: NextRequest) {
       status,
       startDate,
       endDate,
-      agentId,
       notes,
       estimatedValue,
       contacts, // [{ personId, role, isPrimary }]
     } = body
+    let { agentId } = body
+
+    // Fall back to logged-in user for agentId if not supplied
+    if (!agentId) {
+      const session = await getServerSession()
+      if (session?.user?.email) {
+        const user = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true },
+        })
+        if (user) agentId = user.id
+      }
+    }
 
     if (!name || !companyId || !agentId) {
       return NextResponse.json(
-        { error: 'name, companyId, and agentId are required' },
+        {
+          error: 'name, companyId, and agentId are required',
+          gotName: !!name,
+          gotCompanyId: !!companyId,
+          gotAgentId: !!agentId,
+        },
         { status: 400 }
       )
     }

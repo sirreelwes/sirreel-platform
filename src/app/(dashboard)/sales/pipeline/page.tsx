@@ -46,30 +46,31 @@ function fmtMoney(n: number | null | undefined) {
 export default function PipelinePage() {
   const { data: session, status: authStatus } = useSession();
   const user = session?.user as any;
-  const role: string = user?.role || 'AGENT';
-  const userId: string | undefined = user?.id;
+  const role: string | undefined = user?.role;
 
-  const defaultScope: 'my' | 'team' = role === 'ADMIN' || role === 'MANAGER' ? 'team' : 'my';
+  // AGENT defaults to My Deals; everyone else (including unknown role) defaults to Team.
+  const defaultScope: 'my' | 'team' = role === 'AGENT' ? 'my' : 'team';
   const [scope, setScope] = useState<'my' | 'team'>(defaultScope);
   const [jobs, setJobs] = useState<PipelineJob[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
-    setScope(role === 'ADMIN' || role === 'MANAGER' ? 'team' : 'my');
+    setScope(role === 'AGENT' ? 'my' : 'team');
   }, [authStatus, role]);
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || !userId) return;
+    console.log('pipeline effect', { authStatus, scope, sessionUser: session?.user });
+    if (authStatus !== 'authenticated') return;
     setLoading(true);
     const params = new URLSearchParams({ statuses: 'QUOTED,ACTIVE,WRAPPED' });
-    if (scope === 'my') params.set('agentId', userId);
+    if (scope === 'my') params.set('mine', '1');
     fetch(`/api/jobs?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => setJobs(d.jobs || []))
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  }, [scope, userId, authStatus]);
+  }, [scope, authStatus, session?.user]);
 
   const byStatus = useMemo(() => {
     const groups: Record<string, PipelineJob[]> = { QUOTED: [], ACTIVE: [], WRAPPED: [] };

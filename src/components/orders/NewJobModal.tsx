@@ -34,7 +34,6 @@ interface NewJobModalProps {
   onClose: () => void;
   companyId: string;
   companyName: string;
-  currentUserId: string;
   onCreated: (job: { id: string; jobCode: string; name: string }) => void;
 }
 
@@ -52,7 +51,6 @@ export function NewJobModal({
   onClose,
   companyId,
   companyName,
-  currentUserId,
   onCreated,
 }: NewJobModalProps) {
   const [name, setName] = useState("");
@@ -131,7 +129,6 @@ export function NewJobModal({
           productionType,
           startDate: startDate || null,
           endDate: endDate || null,
-          agentId: currentUserId,
           notes: notes || null,
           estimatedValue: estimatedValue.trim() === "" ? null : Number(estimatedValue),
           contacts: contacts

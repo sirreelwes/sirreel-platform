@@ -212,7 +212,6 @@ export default function NewOrderPage() {
           onClose={() => setShowNewJobModal(false)}
           companyId={companyId}
           companyName={companies.find((c) => c.id === companyId)?.name || ""}
-          currentUserId={(session?.user as { id?: string })?.id || agentId}
           onCreated={(job) => {
             setJobId(job.id);
             setJobsRefreshKey((k) => k + 1);
