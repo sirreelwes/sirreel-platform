@@ -5,19 +5,19 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { JobPicker } from "@/components/orders/JobPicker";
 import { NewJobModal } from "@/components/orders/NewJobModal";
+import { CompanyPicker } from "@/components/orders/CompanyPicker";
 
-type Company = { id: string; name: string; tier: string };
 type Agent = { id: string; name: string; email: string };
 
 export default function NewOrderPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const [companyId, setCompanyId] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [agentId, setAgentId] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -37,7 +37,6 @@ export default function NewOrderPage() {
     fetch("/api/orders/lookups")
       .then((r) => r.json())
       .then((data) => {
-        setCompanies(data.companies || []);
         setAgents(data.agents || []);
         setLoading(false);
       });
@@ -93,16 +92,14 @@ export default function NewOrderPage() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
         <div>
           <label className="block text-sm font-medium text-zinc-400 mb-1">Company *</label>
-          <select
-            value={companyId}
-            onChange={(e) => setCompanyId(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500"
-          >
-            <option value="">Select company...</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <CompanyPicker
+            value={companyId || null}
+            selectedName={companyName || null}
+            onChange={(id, name) => {
+              setCompanyId(id);
+              setCompanyName(name);
+            }}
+          />
         </div>
 
         <div>
@@ -211,7 +208,7 @@ export default function NewOrderPage() {
           open={showNewJobModal}
           onClose={() => setShowNewJobModal(false)}
           companyId={companyId}
-          companyName={companies.find((c) => c.id === companyId)?.name || ""}
+          companyName={companyName}
           onCreated={(job) => {
             setJobId(job.id);
             setJobsRefreshKey((k) => k + 1);
