@@ -6,3 +6,4 @@ node_modules/
 next-env.d.ts
 .env*.local
 *.bak.*
+scripts/
