@@ -180,6 +180,8 @@ model Company {
   insuranceClaims InsuranceClaim[]
   emailMessages   EmailMessage[]
   jobs            Job[]
+  contractReviews ContractReview[]
+  coiChecks       CoiCheck[]
 
   @@map("companies")
 }
@@ -1022,6 +1024,11 @@ model User {
   jobsAsAgent     Job[]      @relation("JobAgent")
   lotChecks       LotCheck[] @relation("LotCheckedBy")
 
+  uploadedContractReviews ContractReview[] @relation("ContractReviewUploader")
+  decidedContractReviews  ContractReview[] @relation("ContractReviewDecider")
+  uploadedCoiChecks       CoiCheck[]       @relation("CoiCheckUploader")
+  decidedCoiChecks        CoiCheck[]       @relation("CoiCheckDecider")
+
   @@map("users")
 }
 
@@ -1520,6 +1527,8 @@ model Job {
   agent       User         @relation("JobAgent", fields: [agentId], references: [id])
   orders      Order[]
   jobContacts JobContact[]
+  contractReviews ContractReview[]
+  coiChecks       CoiCheck[]
 
   @@index([companyId])
   @@index([status])
@@ -1582,4 +1591,110 @@ model LotCheck {
   @@index([assetId, checkedAt])
   @@index([checkedAt])
   @@map("sr_lot_checks")
+}
+
+// ============================================================
+// PAPERWORK PERSISTENCE — contract reviews + COI checks
+// PDFs live in Vercel Blob; AI analysis JSON + audit metadata
+// live here. Soft delete only (CCPA/audit safety); hard
+// blob deletion happens via separate cron after 30-day buffer.
+// ============================================================
+
+enum ReviewDecision {
+  PENDING
+  APPROVED
+  COUNTERED
+  REJECTED
+}
+
+enum ReviewType {
+  CONTRACT
+  COI
+}
+
+model ContractReview {
+  id               String  @id @default(uuid())
+  fileKey          String  @map("file_key")
+  fileUrl          String  @map("file_url")
+  originalFilename String  @map("original_filename")
+  fileSize         Int     @map("file_size")
+  mimeType         String  @map("mime_type")
+
+  jobId     String?  @map("job_id")
+  companyId String?  @map("company_id")
+
+  uploadedById String @map("uploaded_by_id")
+
+  aiResponse       Json    @map("ai_response")
+  aiRiskLevel      String? @map("ai_risk_level")
+  aiRecommendation String? @map("ai_recommendation")
+
+  humanDecision     ReviewDecision @default(PENDING) @map("human_decision")
+  humanDecisionNote String?        @map("human_decision_note") @db.Text
+  humanDecisionById String?        @map("human_decision_by_id")
+  humanDecisionAt   DateTime?      @map("human_decision_at")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  uploadedBy      User     @relation("ContractReviewUploader", fields: [uploadedById], references: [id])
+  humanDecisionBy User?    @relation("ContractReviewDecider", fields: [humanDecisionById], references: [id])
+
+  @@index([jobId])
+  @@index([companyId])
+  @@index([uploadedById])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@index([humanDecision])
+  @@map("sr_contract_reviews")
+}
+
+model CoiCheck {
+  id               String  @id @default(uuid())
+  fileKey          String  @map("file_key")
+  fileUrl          String  @map("file_url")
+  originalFilename String  @map("original_filename")
+  fileSize         Int     @map("file_size")
+  mimeType         String  @map("mime_type")
+
+  jobId     String?  @map("job_id")
+  companyId String?  @map("company_id")
+
+  uploadedById String @map("uploaded_by_id")
+
+  aiResponse       Json    @map("ai_response")
+  aiRiskLevel      String? @map("ai_risk_level")
+  aiRecommendation String? @map("ai_recommendation")
+
+  policyExpiryDate  DateTime? @map("policy_expiry_date")
+  coverageVerified  Boolean   @default(false) @map("coverage_verified")
+  additionalInsured Boolean   @default(false) @map("additional_insured")
+
+  humanDecision     ReviewDecision @default(PENDING) @map("human_decision")
+  humanDecisionNote String?        @map("human_decision_note") @db.Text
+  humanDecisionById String?        @map("human_decision_by_id")
+  humanDecisionAt   DateTime?      @map("human_decision_at")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by_id")
+
+  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  uploadedBy      User     @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
+  humanDecisionBy User?    @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
+
+  @@index([jobId])
+  @@index([companyId])
+  @@index([uploadedById])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@index([humanDecision])
+  @@index([policyExpiryDate])
+  @@map("sr_coi_checks")
 }

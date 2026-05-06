@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { randomUUID } from 'crypto'
+import { put } from '@vercel/blob'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -102,9 +106,23 @@ HARD RULES:
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const sessionUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    })
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const companyName = (formData.get('companyName') as string) || ''
+    const jobId = (formData.get('jobId') as string) || null
+    const companyId = (formData.get('companyId') as string) || null
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
@@ -148,6 +166,16 @@ export async function POST(req: NextRequest) {
         error: 'Standard agreement baseline is missing on the server. Contact admin.'
       }, { status: 500 })
     }
+
+    // Upload PDF to Blob before running AI so the file is preserved even if AI errors.
+    const now = new Date()
+    const yyyy = now.getUTCFullYear()
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
+    const blobKey = `contracts/${yyyy}/${mm}/${randomUUID()}.pdf`
+    const blob = await put(blobKey, file, {
+      access: 'public',
+      contentType: 'application/pdf',
+    })
 
     const userText = `The first attached PDF is the client's redlined version of our rental agreement (look for red text, strikethroughs, and underlined additions).
 
@@ -204,7 +232,25 @@ Compare the redlined document against the baseline per your instructions. Output
       }
     }
 
-    return NextResponse.json({ ok: true, review })
+    const reviewRecord = await prisma.contractReview.create({
+      data: {
+        fileKey: blobKey,
+        fileUrl: blob.url,
+        originalFilename: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        jobId,
+        companyId,
+        uploadedById: sessionUser.id,
+        aiResponse: review,
+        aiRiskLevel: typeof review.riskLevel === 'string' ? review.riskLevel : null,
+        aiRecommendation:
+          typeof review.recommendation === 'string' ? review.recommendation : null,
+      },
+      select: { id: true },
+    })
+
+    return NextResponse.json({ ok: true, review, reviewRecordId: reviewRecord.id })
   } catch (err: any) {
     console.error('[contract-review]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
