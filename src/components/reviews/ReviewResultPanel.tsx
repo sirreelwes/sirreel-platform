@@ -1,5 +1,8 @@
 'use client';
 import { useState } from 'react';
+import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
+
+const BASELINE_BY_REF = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c]));
 
 const TYPE_CONFIG = {
   auto_approved: { color: 'bg-emerald-50 border-emerald-200 text-emerald-800', icon: '✓', badge: 'bg-emerald-100 text-emerald-700', label: 'Auto-approved' },
@@ -49,6 +52,7 @@ interface ReviewResultPanelProps {
 
 export function ReviewResultPanel({ review, decisions, onDecisionChange }: ReviewResultPanelProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [baselineOpen, setBaselineOpen] = useState<Record<number, boolean>>({});
 
   if (!review) return null;
   const interactive = !!decisions && !!onDecisionChange;
@@ -149,21 +153,90 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
                           );
                         })}
                       </div>
-                      {decision.decision === 'COUNTER' && (
-                        <div>
-                          <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Counter-language</div>
-                          <textarea
-                            value={decision.counterLanguage}
-                            onChange={(e) =>
-                              onDecisionChange!(i, { ...decision, counterLanguage: e.target.value })
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            rows={3}
-                            placeholder="Specific counter-language to propose…"
-                            className="w-full bg-white border border-gray-300 rounded-lg p-2 text-[11px] text-gray-900 resize-none focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
-                      )}
+                      {decision.decision === 'COUNTER' && (() => {
+                        const ref = String(change.clause || '').trim();
+                        const baseline = BASELINE_BY_REF.get(ref);
+                        const refLabel = ref ? `§${ref}` : 'this clause';
+                        const isBaselineOpen = !!baselineOpen[i];
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              {baseline ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setBaselineOpen((prev) => ({ ...prev, [i]: !prev[i] }));
+                                  }}
+                                  className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                                >
+                                  <span className="text-[8px]">{isBaselineOpen ? '▼' : '▶'}</span>
+                                  {isBaselineOpen ? 'Hide' : 'Show'} baseline {refLabel}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-gray-400 italic">
+                                  No single baseline clause for {refLabel} (grouped or non-numbered)
+                                </span>
+                              )}
+                              {change.suggestedCounter && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDecisionChange!(i, {
+                                      ...decision,
+                                      counterLanguage: change.suggestedCounter || '',
+                                    });
+                                  }}
+                                  className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline decoration-dotted"
+                                >
+                                  ↺ Reset to AI suggestion
+                                </button>
+                              )}
+                            </div>
+
+                            {baseline && isBaselineOpen && (
+                              <div className="bg-white border border-gray-200 rounded-lg p-2.5 text-[11px] text-gray-700 leading-relaxed">
+                                <div className="font-bold text-gray-500 uppercase text-[9px] mb-1">
+                                  Baseline §{baseline.ref} — {baseline.title}
+                                </div>
+                                <div>{baseline.body}</div>
+                              </div>
+                            )}
+
+                            <div>
+                              <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">
+                                Counter clause text
+                              </div>
+                              <div className="text-[10px] text-gray-500 mb-1">
+                                This exact text will appear in {refLabel} of the counter-PDF.
+                                Write a complete contract clause in the same voice as the baseline.
+                              </div>
+                              <textarea
+                                value={decision.counterLanguage}
+                                onChange={(e) =>
+                                  onDecisionChange!(i, { ...decision, counterLanguage: e.target.value })
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                rows={5}
+                                placeholder="Replacement clause text — written as binding legal language, not strategy…"
+                                className="w-full bg-white border border-gray-300 rounded-lg p-2 text-[11px] text-gray-900 resize-y focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+
+                            {change.counterReasoning && (
+                              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+                                <div className="font-bold text-gray-500 uppercase text-[9px] mb-1">
+                                  AI&apos;s reasoning (not included in PDF)
+                                </div>
+                                <div className="text-[11px] text-gray-600 leading-relaxed">
+                                  {change.counterReasoning}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div>
                         <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Note (optional)</div>
                         <textarea

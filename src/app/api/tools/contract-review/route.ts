@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto'
 import { put } from '@vercel/blob'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { CANONICAL_CLAUSES, FLEET_AGREEMENT, LCDW_ADDENDUM } from '@/lib/contracts/contractClauses'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -81,7 +82,8 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
       "original": "<short description of the original baseline language>",
       "proposed": "<short description of what the client is proposing>",
       "reasoning": "<one or two sentences on why this matters to SirReel>",
-      "suggestedCounter": "<specific counter-language SirReel could propose, or null for auto_approved>"
+      "suggestedCounter": "<the actual replacement clause text SirReel would put in the counter-PDF — see CRITICAL RULES below — or null for auto_approved>",
+      "counterReasoning": "<the strategic guidance — why the counter pushes back this way, what's negotiable, what's not — never appears in the PDF; or null for auto_approved>"
     }
   ],
   "recommendation": "approve" | "counter" | "reject",
@@ -89,6 +91,30 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
   "comparisonPerformed": true | false,
   "comparisonNote": "<if comparisonPerformed is false, explain why>"
 }
+
+CRITICAL RULES FOR suggestedCounter (this is the most common source of bad output — read carefully):
+
+\`suggestedCounter\` is the ACTUAL CONTRACT CLAUSE TEXT that will be rendered verbatim into the counter-PDF as the binding language for that clause. It is NOT strategic guidance. It is NOT a description of what to do. It is the operative legal sentence(s).
+
+- DO write replacement clause language in the same legal voice and register as the SirReel baseline (third-person, defined-term style, Lessee/Lessor framing).
+- DO write it so a reader could substitute it directly into the contract and have a complete, grammatical, legally operative clause.
+- DO match the structure of the baseline clause (same defined terms, similar length, similar formality).
+- DO NOT write meta-commentary like "Reject the mutual indemnity language" or "Restore the baseline" or "Push back on X".
+- DO NOT write conditional/negotiation framing like "SirReel could propose…" or "We are willing to accept…".
+- DO NOT include "[bracketed instructions]" or other notes meant for the human.
+- The strategic guidance ("what to do, why, what's negotiable") goes in \`counterReasoning\`, not here.
+
+Examples for clause 1 (Indemnity), where the client added mutual indemnity:
+
+❌ BAD suggestedCounter: "Reject the mutual indemnity subclauses entirely. Restore the baseline one-way indemnity language in clause 1."
+✅ GOOD suggestedCounter: "Lessee/Renter (\\"You\\") agree to defend, indemnify, and hold SirReel Production Vehicles, Inc. dba SirReel Studio Rentals, our agents, employees, assignees, suppliers, sub-lessors and sub-renters (\\"Us\\" or \\"We\\") harmless from and against any and all claims, actions, causes of action, demands, rights, damages of any kind, costs, loss of profit, expenses and compensation whatsoever including court costs and attorneys' fees, in any way arising from, or in connection with the Equipment, except as the result of our sole negligence or willful act, from the time the Equipment leaves our place of business until the Equipment is returned to us during normal business hours and we sign a written receipt for it."
+
+Examples for clause 6 (Workers Compensation), where the client tried to reduce to statutory minimums:
+
+❌ BAD suggestedCounter: "Push back on reduction to statutory limits — hold the $1M minimum."
+✅ GOOD suggestedCounter: "Lessee shall, at Lessee's own expense, maintain workers compensation/employers liability insurance during the course of the Equipment rental with minimum limits of $1,000,000, including coverage for any volunteers, interns, or independent contractors working on Lessee's behalf and under Lessee's supervision."
+
+The PRIMARY source of truth for the voice and structure of \`suggestedCounter\` is the SirReel baseline clause text provided in the user message. When in doubt, copy the baseline clause verbatim and edit it minimally to address the client's redline. Do NOT invent novel legal language when the baseline already covers SirReel's position.
 
 HARD RULES:
 
@@ -146,7 +172,8 @@ export async function POST(req: NextRequest) {
             original: 'SirReel rental agreement',
             proposed: 'Client redlined Word document (tracked changes not visible to AI)',
             reasoning: 'Word tracked changes are not preserved when sent to vision API.',
-            suggestedCounter: 'Open in Word, accept-or-reject all tracked changes to flatten them, then export to PDF.'
+            suggestedCounter: null,
+            counterReasoning: 'Open in Word, accept-or-reject all tracked changes to flatten them, then export to PDF and re-upload.'
           }],
           recommendation: 'counter',
           recommendationNote: 'Convert the Word file to PDF and re-upload.',
@@ -177,11 +204,22 @@ export async function POST(req: NextRequest) {
       contentType: 'application/pdf',
     })
 
+    const baselineClauseText =
+      CANONICAL_CLAUSES.map((c) => `[${c.ref}] ${c.title}\n${c.body}`).join('\n\n') +
+      `\n\n[Fleet Agreement] ${FLEET_AGREEMENT.title}\n${FLEET_AGREEMENT.intro}\n${FLEET_AGREEMENT.fuelPolicy}` +
+      `\n\n[LCDW] ${LCDW_ADDENDUM.title}\n${LCDW_ADDENDUM.rate}\n${LCDW_ADDENDUM.scope}\n${LCDW_ADDENDUM.note}`
+
     const userText = `The first attached PDF is the client's redlined version of our rental agreement (look for red text, strikethroughs, and underlined additions).
 
 The second PDF is SirReel's clean standard rental agreement baseline.
 
-${companyName ? `Client company: "${companyName}".` : ''}
+${companyName ? `Client company: "${companyName}".\n\n` : ''}When you draft \`suggestedCounter\` for any change, use the baseline clause text below as the source of truth for voice, structure, and defined terms. The text in \`suggestedCounter\` will be rendered verbatim into the counter-PDF as the operative clause language — it must read as a complete contract clause, not as guidance or commentary. Strategic reasoning belongs in \`counterReasoning\`.
+
+=== SIRREEL BASELINE CLAUSE TEXT (canonical source of truth) ===
+
+${baselineClauseText}
+
+=== END BASELINE CLAUSE TEXT ===
 
 Compare the redlined document against the baseline per your instructions. Output ONLY the JSON object — no preamble, no markdown fences.`
 
