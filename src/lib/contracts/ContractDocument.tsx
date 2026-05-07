@@ -110,10 +110,18 @@ function resolveClause(
   if (!match) return { ...canonical }
   const { change, decision } = match
   if (decision.decision === 'ACCEPT') {
+    const proposed = (change.proposed || '').trim()
+    // Defense-in-depth: if proposed is missing, empty, or suspiciously short
+    // compared to the canonical clause, render the baseline rather than what
+    // looks like AI summary text. Mirrors the route.ts coercion pass.
+    const looksLikeSummary =
+      !proposed ||
+      proposed.length < 80 ||
+      proposed.length < canonical.body.length * 0.5
     return {
       ref: canonical.ref,
       title: canonical.title,
-      body: change.proposed || canonical.body,
+      body: looksLikeSummary ? canonical.body : proposed,
       decision: 'ACCEPT',
       change,
     }
@@ -395,11 +403,18 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
               (e.g., Fleet sub-clauses or grouped sections).
             </Text>
             {unmapped.map(({ change, decision }, idx) => {
+              const acceptBody = (() => {
+                const proposed = typeof change.proposed === 'string' ? change.proposed.trim() : ''
+                if (!proposed || proposed.length < 80) {
+                  return `(Item retained as originally drafted.) Original: ${change.original}`
+                }
+                return proposed
+              })()
               const body =
                 decision.decision === 'COUNTER' && decision.counterLanguage
                   ? decision.counterLanguage
                   : decision.decision === 'ACCEPT'
-                    ? change.proposed
+                    ? acceptBody
                     : `(Item retained as originally drafted.) Original: ${change.original}`
               return (
                 <View key={`unmapped-${idx}`} style={styles.clause} wrap={false}>

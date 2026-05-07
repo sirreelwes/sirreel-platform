@@ -362,12 +362,26 @@ export default function ContractReviewDetailPage() {
                 canRegenerate={canGenerate}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-2">
+              <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-3">
                 <div className="text-2xl">📄</div>
-                <div className="text-sm font-semibold text-gray-700">Counter-PDF generation is temporarily unavailable</div>
+                <div className="text-sm font-semibold text-gray-700">No counter-proposal generated yet</div>
                 <div className="text-[12px] text-gray-500 max-w-md mx-auto leading-relaxed">
-                  The per-clause decisions above are saved and can be referenced when drafting your response to the client by hand. We&apos;re working on a more reliable PDF generation approach for a future update.
+                  {!allDecided
+                    ? `Decide all ${totalChanges} clause${totalChanges === 1 ? '' : 's'} below, then save to enable generation.`
+                    : decisionsDirty
+                      ? 'Save your decisions to enable counter-PDF generation.'
+                      : 'Your decisions are saved. Click below to generate the counter-PDF.'}
                 </div>
+                <button
+                  onClick={handleGenerateClick}
+                  disabled={!canGenerate || generating}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+                >
+                  {generating ? 'Generating…' : 'Generate counter-PDF'}
+                </button>
+                {generateError && (
+                  <div className="text-[11px] text-red-600 max-w-md mx-auto">{generateError}</div>
+                )}
               </div>
             )}
           </>
@@ -414,8 +428,33 @@ export default function ContractReviewDetailPage() {
               >
                 {savingDecisions ? 'Saving…' : 'Save decisions'}
               </button>
+              <button
+                onClick={handleGenerateClick}
+                disabled={!canGenerate || generating}
+                title={
+                  !allDecided
+                    ? 'Decide all clauses first'
+                    : decisionsDirty
+                      ? 'Save your decisions first'
+                      : counterExists
+                        ? 'Regenerate counter-PDF'
+                        : 'Generate counter-PDF'
+                }
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+              >
+                {generating
+                  ? counterExists
+                    ? 'Regenerating…'
+                    : 'Generating…'
+                  : counterExists
+                    ? 'Regenerate counter-PDF'
+                    : 'Generate counter-PDF'}
+              </button>
             </div>
           </div>
+          {generateError && (
+            <div className="text-[11px] text-red-600 text-right">{generateError}</div>
+          )}
         </div>
       )}
 

@@ -81,7 +81,7 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
       "type": "auto_approved" | "needs_review" | "not_acceptable",
       "description": "<one-line summary of the change for the UI list, e.g. 'Adds mutual indemnity subsection 1a.'>",
       "original": "<short description of the original baseline language>",
-      "proposed": "<the actual redlined clause text from the client's PDF — see CRITICAL RULES below — this is what appears verbatim in the counter-PDF if SirReel accepts the change>",
+      "proposed": "<the actual redlined clause text from the client's PDF — REQUIRED non-null, non-empty for needs_review and not_acceptable changes — see CRITICAL RULES below — this is what appears verbatim in the counter-PDF if SirReel accepts the change>",
       "reasoning": "<one or two sentences on why this matters to SirReel>",
       "suggestedCounter": "<the actual replacement clause text SirReel would put in the counter-PDF — REQUIRED non-null, non-empty for needs_review and not_acceptable changes — see CRITICAL RULES below — null is only acceptable for auto_approved>",
       "counterReasoning": "<the strategic guidance — why the counter pushes back this way, what's negotiable, what's not — never appears in the PDF; REQUIRED non-null for needs_review and not_acceptable; null is only acceptable for auto_approved>"
@@ -95,6 +95,8 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
 
 CRITICAL RULES FOR proposed (read carefully):
 
+\`proposed\` is REQUIRED for every change classified as \`needs_review\` or \`not_acceptable\`. Returning null or an empty string for those changes is a bug — when the human picks "Accept", the text in \`proposed\` is rendered verbatim into the counter-PDF and there is no fallback. Default behavior when uncertain (illegible redline, ambiguous markup, can't tell which paragraph the redline applies to): copy the canonical baseline clause text verbatim. That is always a safe \`proposed\` because accepting it preserves SirReel's standard language.
+
 \`proposed\` is the ACTUAL CLIENT-REDLINED CLAUSE TEXT, transcribed verbatim from the redlined PDF. When the human picks "Accept" on a change, the text in \`proposed\` is rendered verbatim into the counter-PDF as the binding language for that clause. It is NOT a description of the change. It is NOT a summary. It is the operative legal sentence(s) the client wrote.
 
 - DO transcribe the clause exactly as it appears in the redlined PDF, including the client's additions, deletions, and rewordings as a single resolved clause (i.e., apply the redline mentally and write the resulting clause).
@@ -104,7 +106,7 @@ CRITICAL RULES FOR proposed (read carefully):
 - DO NOT write a summary or a one-liner — that goes in \`description\`.
 - If the redline only deletes a phrase, write the surviving clause text after the deletion.
 - If the redline inserts a new subsection, write the full clause including the new subsection in line with the original numbering style.
-- If you cannot transcribe the clause text from the PDF (e.g., illegible, fully redacted), set \`proposed\` to null and explain in \`reasoning\`.
+- If you cannot transcribe the clause text from the PDF (illegible, fully redacted, ambiguous markup), copy the canonical baseline clause text verbatim into \`proposed\` and explain in \`reasoning\` that the redline could not be read. Do NOT set \`proposed\` to null and do NOT substitute a summary.
 
 Examples for clause 1 (Indemnity), where the client added a mutual-indemnity subsection 1a:
 
@@ -289,6 +291,32 @@ Compare the redlined document against the baseline per your instructions. Output
       if (hasNotAcceptable && review.recommendation !== 'reject') {
         review.recommendation = 'reject'
         review.riskLevel = 'high'
+      }
+
+      // Coerce summary-shaped `proposed` back to the canonical baseline so an
+      // ACCEPT decision never renders AI commentary into the counter-PDF.
+      const baselineByRef = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c.body]))
+      const coercedClauses: string[] = []
+      for (const ch of review.changes) {
+        if (ch.type === 'auto_approved') continue
+        const proposed = typeof ch.proposed === 'string' ? ch.proposed.trim() : ''
+        const original = typeof ch.original === 'string' ? ch.original : ''
+        const ref = String(ch.clause ?? '').trim()
+        const baseline = baselineByRef.get(ref)
+        if (!baseline) continue // grouped/non-canonical refs (e.g. "1-3", "Fleet 5(b)") — leave alone
+        const looksLikeSummary =
+          !proposed ||
+          proposed.length < 80 ||
+          (original.length > 0 && proposed.length < original.length * 0.5)
+        if (looksLikeSummary) {
+          ch.proposed = baseline
+          coercedClauses.push(ref)
+        }
+      }
+      if (coercedClauses.length > 0) {
+        review.recommendationNote =
+          `[Auto-corrected] proposed for clause${coercedClauses.length === 1 ? '' : 's'} ${coercedClauses.join(', ')} looked like a summary; replaced with canonical baseline. ` +
+          (review.recommendationNote || '')
       }
     }
 

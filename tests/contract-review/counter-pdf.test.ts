@@ -120,11 +120,16 @@ async function main() {
     'clause 14 (REJECT) keeps canonical liability cap'
   )
 
-  // Clause 19 ACCEPT → renders AI's `proposed` text.
+  // Clause 19 ACCEPT → renders the full-clause `proposed` text verbatim.
   checkContains(
     text,
     'subject to reasonable wear and tear',
-    'clause 19 (ACCEPT) renders AI proposed text'
+    'clause 19 (ACCEPT) renders client-redlined clause text'
+  )
+  checkContains(
+    text,
+    'fuel, lubricants',
+    'clause 19 (ACCEPT) renders the full clause body, not just the qualifier'
   )
 
   // Clause 6 COUNTER → renders human counterLanguage, not the AI proposed text.
@@ -135,8 +140,9 @@ async function main() {
   )
   checkNotContains(text, 'statutory limits only', 'clause 6 does not show AI proposed text')
 
-  // Clause 29 ACCEPT.
-  checkContains(text, 'Adjust smoking violation fee to $200/day', 'clause 29 ACCEPT renders proposed')
+  // Clause 29 ACCEPT → renders the full-clause `proposed` text with the $200 fee.
+  checkContains(text, 'A $200 per day fee', 'clause 29 (ACCEPT) renders the reduced fee in full clause text')
+  checkContains(text, 'non-smoking vehicles', 'clause 29 (ACCEPT) renders the full clause body')
 
   // 6. Fleet + LCDW sections rendered.
   checkContains(text, 'Fleet Agreement', 'Fleet section heading')
