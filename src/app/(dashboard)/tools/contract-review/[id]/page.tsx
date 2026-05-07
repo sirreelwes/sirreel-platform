@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ReviewResultPanel } from '@/components/reviews/ReviewResultPanel';
+import { ReviewResultPanel, type DecisionState, type ClauseDecisionValue } from '@/components/reviews/ReviewResultPanel';
+import { CounterPdfPreview } from '@/components/reviews/CounterPdfPreview';
 
 const RISK_BADGE: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -17,6 +18,18 @@ const DECISION_BADGE: Record<string, string> = {
   COUNTERED: 'bg-amber-100 text-amber-700',
   REJECTED: 'bg-red-100 text-red-700',
 };
+
+interface ServerDecision {
+  id: string;
+  clauseRef: string;
+  changeType: string;
+  changeIndex: number;
+  decision: ClauseDecisionValue;
+  counterLanguage: string | null;
+  note: string | null;
+  decidedAt: string | null;
+  decidedBy: { id: string; name: string; email: string } | null;
+}
 
 interface ReviewRecord {
   id: string;
@@ -34,6 +47,10 @@ interface ReviewRecord {
   job: { id: string; jobCode: string; name: string } | null;
   uploadedBy: { id: string; name: string; email: string } | null;
   humanDecisionBy: { id: string; name: string; email: string } | null;
+  changeDecisions: ServerDecision[];
+  counterPdfKey: string | null;
+  counterGeneratedAt: string | null;
+  counterGeneratedBy: { id: string; name: string; email: string } | null;
 }
 
 function fmtDateTime(iso: string | null) {
@@ -48,6 +65,20 @@ function fmtDateTime(iso: string | null) {
   });
 }
 
+function buildInitialDecisions(record: ReviewRecord): Record<number, DecisionState> {
+  const out: Record<number, DecisionState> = {};
+  for (const d of record.changeDecisions || []) {
+    out[d.changeIndex] = {
+      decision: d.decision,
+      counterLanguage: d.counterLanguage || '',
+      note: d.note || '',
+    };
+  }
+  return out;
+}
+
+type Tab = 'original' | 'counter';
+
 export default function ContractReviewDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -58,6 +89,17 @@ export default function ContractReviewDetailPage() {
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState<string | null>(null);
+
+  const [decisions, setDecisions] = useState<Record<number, DecisionState>>({});
+  const [savingDecisions, setSavingDecisions] = useState(false);
+  const [decisionsDirty, setDecisionsDirty] = useState(false);
+  const [decisionsSavedAt, setDecisionsSavedAt] = useState<string | null>(null);
+
+  const [tab, setTab] = useState<Tab>('original');
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState('');
+  const [pdfCacheKey, setPdfCacheKey] = useState<string>('');
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -76,13 +118,41 @@ export default function ContractReviewDetailPage() {
       })
       .then((data) => {
         if (data?.review) {
-          setRecord(data.review);
-          setNote(data.review.humanDecisionNote || '');
+          const rec = data.review as ReviewRecord;
+          setRecord(rec);
+          setNote(rec.humanDecisionNote || '');
+          setDecisions(buildInitialDecisions(rec));
+          setDecisionsDirty(false);
+          setPdfCacheKey(rec.counterGeneratedAt || '');
         }
       })
       .catch(() => setError('Failed to load review.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const aiChanges: any[] = record?.aiResponse?.changes || [];
+  const totalChanges = aiChanges.length;
+
+  const counts = useMemo(() => {
+    let pending = 0, accept = 0, counter = 0, reject = 0;
+    for (let i = 0; i < totalChanges; i++) {
+      const d = decisions[i]?.decision || 'PENDING';
+      if (d === 'ACCEPT') accept++;
+      else if (d === 'COUNTER') counter++;
+      else if (d === 'REJECT') reject++;
+      else pending++;
+    }
+    return { pending, accept, counter, reject };
+  }, [decisions, totalChanges]);
+
+  const allDecided = totalChanges > 0 && counts.pending === 0;
+  const canGenerate = allDecided && !decisionsDirty;
+  const counterExists = !!record?.counterPdfKey;
+
+  const handleDecisionChange = (changeIndex: number, next: DecisionState) => {
+    setDecisions((prev) => ({ ...prev, [changeIndex]: next }));
+    setDecisionsDirty(true);
+  };
 
   const recordDecision = async (decision: 'APPROVED' | 'COUNTERED' | 'REJECTED') => {
     if (!record) return;
@@ -105,6 +175,98 @@ export default function ContractReviewDetailPage() {
       }
     } finally {
       setSubmitting(null);
+    }
+  };
+
+  const saveDecisions = async () => {
+    if (!record) return;
+    const payload = aiChanges.flatMap((ch: any, i: number) => {
+      const local = decisions[i];
+      if (!local) return [];
+      const existed = record.changeDecisions.some((d) => d.changeIndex === i);
+      if (local.decision === 'PENDING' && !existed) return [];
+      return [{
+        clauseRef: String(ch.clause ?? ''),
+        changeType: String(ch.type ?? 'needs_review'),
+        changeIndex: i,
+        decision: local.decision,
+        counterLanguage: local.counterLanguage || null,
+        note: local.note || null,
+      }];
+    });
+
+    if (payload.length === 0) {
+      setDecisionsDirty(false);
+      return;
+    }
+
+    for (const d of payload) {
+      if (d.decision === 'COUNTER' && !d.counterLanguage) {
+        alert(`Counter-language required for clause ${d.clauseRef || `#${d.changeIndex + 1}`}.`);
+        return;
+      }
+    }
+
+    setSavingDecisions(true);
+    try {
+      const res = await fetch(`/api/tools/contract-review/${id}/decisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decisions: payload }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to save decisions');
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data?.decisions)) {
+        setRecord((r) => (r ? { ...r, changeDecisions: data.decisions } : r));
+      }
+      setDecisionsDirty(false);
+      setDecisionsSavedAt(new Date().toISOString());
+    } finally {
+      setSavingDecisions(false);
+    }
+  };
+
+  const refreshRecord = async () => {
+    const res = await fetch(`/api/tools/contract-review/${id}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.review) {
+        setRecord(data.review);
+        setPdfCacheKey(data.review.counterGeneratedAt || String(Date.now()));
+      }
+    }
+  };
+
+  const runGenerate = async () => {
+    if (!record) return;
+    setGenerating(true);
+    setGenerateError('');
+    try {
+      const res = await fetch(`/api/tools/contract-review/${id}/generate-counter-pdf`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setGenerateError(err.error || 'Failed to generate counter-PDF');
+        return;
+      }
+      await refreshRecord();
+      setTab('counter');
+    } finally {
+      setGenerating(false);
+      setShowRegenerateConfirm(false);
+    }
+  };
+
+  const handleGenerateClick = () => {
+    if (counterExists) {
+      setShowRegenerateConfirm(true);
+    } else {
+      runGenerate();
     }
   };
 
@@ -174,32 +336,161 @@ export default function ContractReviewDetailPage() {
         </div>
       </div>
 
-      {/* PDF iframe */}
+      {/* PDF tabs */}
       <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Original PDF</div>
-          <a
-            href={`/api/tools/contract-review/${id}/file`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[11px] font-semibold text-gray-500 hover:text-gray-900"
-          >
-            Open in new tab ↗
-          </a>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTab('original')}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg ${
+                tab === 'original'
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Original
+            </button>
+            <button
+              onClick={() => setTab('counter')}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg ${
+                tab === 'counter'
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Counter Proposal
+              {counterExists && <span className="ml-1.5 text-emerald-400">●</span>}
+            </button>
+          </div>
         </div>
-        <iframe
-          src={`/api/tools/contract-review/${id}/file`}
-          className="w-full h-[600px] rounded-lg border border-gray-100 bg-gray-50"
-          title="Contract PDF"
-        />
+
+        {tab === 'original' && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Original PDF</div>
+              <a
+                href={`/api/tools/contract-review/${id}/file`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-semibold text-gray-500 hover:text-gray-900"
+              >
+                Open in new tab ↗
+              </a>
+            </div>
+            <iframe
+              src={`/api/tools/contract-review/${id}/file`}
+              className="w-full h-[600px] rounded-lg border border-gray-100 bg-gray-50"
+              title="Contract PDF"
+            />
+          </div>
+        )}
+
+        {tab === 'counter' && (
+          <>
+            {counterExists ? (
+              <CounterPdfPreview
+                reviewId={id}
+                generatedAt={record.counterGeneratedAt}
+                generatedBy={record.counterGeneratedBy}
+                cacheKey={pdfCacheKey || record.counterGeneratedAt || ''}
+                onRegenerate={() => setShowRegenerateConfirm(true)}
+                regenerating={generating}
+                canRegenerate={canGenerate}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center space-y-3">
+                <div className="text-3xl">📄</div>
+                <div className="text-sm font-semibold text-gray-700">No counter-PDF yet</div>
+                <div className="text-[12px] text-gray-500 max-w-sm mx-auto">
+                  {totalChanges === 0
+                    ? 'No AI-flagged changes to decide on.'
+                    : counts.pending > 0
+                      ? `Resolve all ${counts.pending} pending decision${counts.pending === 1 ? '' : 's'} below, then generate.`
+                      : decisionsDirty
+                        ? 'Save your decisions below before generating.'
+                        : 'All decisions are in. Click below to generate the counter-PDF.'}
+                </div>
+                <button
+                  onClick={runGenerate}
+                  disabled={!canGenerate || generating}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+                >
+                  {generating ? 'Generating…' : 'Generate Counter PDF'}
+                </button>
+                {generateError && <div className="text-[11px] text-red-600">{generateError}</div>}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* AI analysis */}
-      <ReviewResultPanel review={ai} />
+      {/* AI analysis with per-clause decisions */}
+      <ReviewResultPanel
+        review={ai}
+        decisions={decisions}
+        onDecisionChange={handleDecisionChange}
+      />
 
-      {/* Human decision */}
+      {/* Per-clause decision summary + Generate button */}
+      {totalChanges > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Per-clause decisions</div>
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="text-emerald-700 font-semibold">{counts.accept} accepted</span>
+              <span className="text-gray-300">·</span>
+              <span className="text-amber-700 font-semibold">{counts.counter} countered</span>
+              <span className="text-gray-300">·</span>
+              <span className="text-red-700 font-semibold">{counts.reject} rejected</span>
+              <span className="text-gray-300">·</span>
+              <span className="text-gray-500 font-semibold">{counts.pending} pending</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[11px] text-gray-500">
+              {decisionsDirty
+                ? 'Unsaved changes.'
+                : decisionsSavedAt
+                  ? `Saved ${fmtDateTime(decisionsSavedAt)}.`
+                  : record.changeDecisions.length > 0
+                    ? `Last saved ${fmtDateTime(record.changeDecisions[0]?.decidedAt ?? null)}.`
+                    : 'No decisions saved yet.'}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={saveDecisions}
+                disabled={savingDecisions || !decisionsDirty}
+                className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 text-gray-800 text-[12px] font-bold rounded-xl"
+              >
+                {savingDecisions ? 'Saving…' : 'Save decisions'}
+              </button>
+              <button
+                onClick={handleGenerateClick}
+                disabled={!canGenerate || generating}
+                title={
+                  !allDecided
+                    ? `${counts.pending} decision${counts.pending === 1 ? '' : 's'} still pending`
+                    : decisionsDirty
+                      ? 'Save decisions first'
+                      : ''
+                }
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+              >
+                {generating
+                  ? 'Generating…'
+                  : counterExists
+                    ? 'Regenerate Counter PDF'
+                    : 'Generate Counter PDF'}
+              </button>
+            </div>
+          </div>
+          {generateError && <div className="text-[11px] text-red-600">{generateError}</div>}
+        </div>
+      )}
+
+      {/* Human decision (overall) */}
       <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Human Decision</div>
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Overall Decision</div>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -243,7 +534,47 @@ export default function ContractReviewDetailPage() {
             {record.humanDecision} {fmtDateTime(record.humanDecisionAt)} by {record.humanDecisionBy.name}
           </div>
         )}
+        {record.counterGeneratedAt && record.counterGeneratedBy && (
+          <div>
+            Counter-PDF generated {fmtDateTime(record.counterGeneratedAt)} by {record.counterGeneratedBy.name}
+          </div>
+        )}
       </div>
+
+      {/* Regenerate confirmation modal */}
+      {showRegenerateConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !generating && setShowRegenerateConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-gray-900">Regenerate counter-PDF?</h2>
+            <p className="text-[12px] text-gray-600">
+              This will replace the previous counter-PDF (generated {fmtDateTime(record.counterGeneratedAt)})
+              with a fresh one based on your current decisions. The previous version will not be kept.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                disabled={generating}
+                className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-[12px] font-bold rounded-xl disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runGenerate}
+                disabled={generating}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[12px] font-bold rounded-xl"
+              >
+                {generating ? 'Regenerating…' : 'Replace and regenerate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

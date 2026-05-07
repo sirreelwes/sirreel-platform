@@ -83,6 +83,14 @@ Use `python3 - << 'EOF'` heredoc syntax to avoid zsh parsing issues.
 - Orders now require jobId
 - new-quote page has temporary auto-create-job fallback (production name → job name); proper UX redesign deferred
 
+## Recently Shipped (May 7, 2026)
+- Contract review Phase 4a: per-clause decisions + counter-PDF generation
+  - New model `ReviewChangeDecision` (`sr_review_change_decisions`) — one row per AI-flagged change with decision (PENDING/ACCEPT/COUNTER/REJECT), counter-language, and audit fields. Unique key is `(reviewId, changeIndex)` since `clauseRef` can be a grouping (e.g. "1-3") and isn't always unique within a review
+  - Counter-PDF tracking on `ContractReview`: `counterPdfKey`, `counterPdfUrl`, `counterGeneratedAt`, `counterGeneratedById` — replace semantics (one current counter-PDF per review)
+  - PDF generation pattern: HTML template (`src/lib/contracts/contractTemplate.ts`) + Puppeteer (`puppeteer-core` + `@sparticuz/chromium` on Vercel, falls back to local Chrome in dev). Canonical clause text in `src/lib/contracts/contractClauses.ts` — must stay in lockstep with `public/contracts/sirreel-rental-agreement.pdf`
+  - Regression fixture: `npm run test:counter-pdf` snapshots the rendered HTML; bump with `UPDATE_SNAPSHOTS=1`
+  - Counter-PDF is a *negotiation document*, not a contract-to-sign — no signature block. Signing happens through the existing portal flow when client agrees
+
 ## Active Roadmap
 1. Julian's dispatch view
 2. AI fleet optimization

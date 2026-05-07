@@ -1,0 +1,97 @@
+{
+  "name": "known-redline-v1",
+  "description": "Hand-crafted fixture: a synthetic AI review of a redlined contract with five flagged changes covering all three change types (auto_approved, needs_review, not_acceptable) and decisions covering all three actions (ACCEPT, COUNTER, REJECT). Used by tests/contract-review/counter-pdf.test.ts to verify counter-PDF rendering stays consistent.",
+  "company": {
+    "name": "Mockingbird Productions LLC",
+    "industry": "FILM",
+    "billingAddress": "5800 Franklin Ave, Los Angeles, CA 90028",
+    "billingEmail": "ap@mockingbirdprods.com",
+    "notes": null
+  },
+  "job": {
+    "jobCode": "SR-JOB-9999",
+    "name": "Pilot Episode — Mockingbird S1",
+    "productionType": "TV",
+    "startDate": "2026-06-01",
+    "endDate": "2026-06-21"
+  },
+  "aiChanges": [
+    {
+      "clause": "1",
+      "type": "not_acceptable",
+      "original": "One-way indemnity from Lessee to SirReel.",
+      "proposed": "Mutual indemnity (Lessor also indemnifies Lessee for SirReel's negligence).",
+      "reasoning": "Mutual indemnity shifts material risk back onto SirReel.",
+      "suggestedCounter": "SirReel will agree only to its existing carve-out for sole negligence/willful act; mutual indemnity is not acceptable."
+    },
+    {
+      "clause": "14",
+      "type": "not_acceptable",
+      "original": "Cap on consequential/special/incidental damages.",
+      "proposed": "Strikes the consequential-damages waiver entirely.",
+      "reasoning": "Removing the cap exposes SirReel to unbounded production-loss claims.",
+      "suggestedCounter": "Retain consequential-damages waiver as written; SirReel cannot accept removal of the cap."
+    },
+    {
+      "clause": "19",
+      "type": "auto_approved",
+      "original": "Lessee responsible for fuel and operating expenses.",
+      "proposed": "Adds 'subject to reasonable wear and tear' to operating costs.",
+      "reasoning": "Standard industry softening; no material risk shift.",
+      "suggestedCounter": null
+    },
+    {
+      "clause": "6",
+      "type": "needs_review",
+      "original": "Workers compensation insurance minimum $1,000,000.",
+      "proposed": "Reduce workers compensation minimum to statutory limits only.",
+      "reasoning": "Statutory minimums vary by state; we typically require $1M.",
+      "suggestedCounter": "Maintain $1,000,000 workers compensation/employers liability minimum."
+    },
+    {
+      "clause": "29",
+      "type": "auto_approved",
+      "original": "$250/day smoking violation fee.",
+      "proposed": "Adjust smoking violation fee to $200/day.",
+      "reasoning": "Minor fee adjustment; not material.",
+      "suggestedCounter": null
+    }
+  ],
+  "decisions": [
+    {
+      "changeIndex": 0,
+      "clauseRef": "1",
+      "decision": "REJECT",
+      "counterLanguage": null,
+      "note": "Mutual indemnity is non-negotiable for SirReel."
+    },
+    {
+      "changeIndex": 1,
+      "clauseRef": "14",
+      "decision": "REJECT",
+      "counterLanguage": null,
+      "note": "Liability cap stays."
+    },
+    {
+      "changeIndex": 2,
+      "clauseRef": "19",
+      "decision": "ACCEPT",
+      "counterLanguage": null,
+      "note": null
+    },
+    {
+      "changeIndex": 3,
+      "clauseRef": "6",
+      "decision": "COUNTER",
+      "counterLanguage": "Lessee shall maintain workers compensation/employers liability insurance with minimum limits of $1,000,000, including coverage for any volunteers, interns, or independent contractors working on Lessee's behalf and under Lessee's supervision.",
+      "note": "Hold the $1M minimum; offered as written counter."
+    },
+    {
+      "changeIndex": 4,
+      "clauseRef": "29",
+      "decision": "ACCEPT",
+      "counterLanguage": null,
+      "note": null
+    }
+  ]
+}
