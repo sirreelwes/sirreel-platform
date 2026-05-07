@@ -12,13 +12,6 @@ const RISK_BADGE: Record<string, string> = {
   low: 'bg-emerald-100 text-emerald-700',
 };
 
-const DECISION_BADGE: Record<string, string> = {
-  PENDING: 'bg-gray-100 text-gray-600',
-  APPROVED: 'bg-emerald-100 text-emerald-700',
-  COUNTERED: 'bg-amber-100 text-amber-700',
-  REJECTED: 'bg-red-100 text-red-700',
-};
-
 interface ServerDecision {
   id: string;
   clauseRef: string;
@@ -87,8 +80,6 @@ export default function ContractReviewDetailPage() {
   const [record, setRecord] = useState<ReviewRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState<string | null>(null);
 
   const [decisions, setDecisions] = useState<Record<number, DecisionState>>({});
   const [savingDecisions, setSavingDecisions] = useState(false);
@@ -120,7 +111,6 @@ export default function ContractReviewDetailPage() {
         if (data?.review) {
           const rec = data.review as ReviewRecord;
           setRecord(rec);
-          setNote(rec.humanDecisionNote || '');
           setDecisions(buildInitialDecisions(rec));
           setDecisionsDirty(false);
           setPdfCacheKey(rec.counterGeneratedAt || '');
@@ -152,30 +142,6 @@ export default function ContractReviewDetailPage() {
   const handleDecisionChange = (changeIndex: number, next: DecisionState) => {
     setDecisions((prev) => ({ ...prev, [changeIndex]: next }));
     setDecisionsDirty(true);
-  };
-
-  const recordDecision = async (decision: 'APPROVED' | 'COUNTERED' | 'REJECTED') => {
-    if (!record) return;
-    setSubmitting(decision);
-    try {
-      const res = await fetch(`/api/tools/contract-review/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ humanDecision: decision, humanDecisionNote: note || null }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Failed to record decision');
-        return;
-      }
-      const data = await res.json();
-      if (data?.review) {
-        setRecord(data.review);
-        setNote(data.review.humanDecisionNote || '');
-      }
-    } finally {
-      setSubmitting(null);
-    }
   };
 
   const saveDecisions = async () => {
@@ -314,9 +280,6 @@ export default function ContractReviewDetailPage() {
                 {record.aiRiskLevel.toUpperCase()} RISK
               </span>
             )}
-            <span className={`text-[10px] font-bold px-2 py-1 rounded ${DECISION_BADGE[record.humanDecision] || 'bg-gray-100 text-gray-600'}`}>
-              {record.humanDecision}
-            </span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
@@ -399,26 +362,12 @@ export default function ContractReviewDetailPage() {
                 canRegenerate={canGenerate}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center space-y-3">
-                <div className="text-3xl">📄</div>
-                <div className="text-sm font-semibold text-gray-700">No counter-PDF yet</div>
-                <div className="text-[12px] text-gray-500 max-w-sm mx-auto">
-                  {totalChanges === 0
-                    ? 'No AI-flagged changes to decide on.'
-                    : counts.pending > 0
-                      ? `Resolve all ${counts.pending} pending decision${counts.pending === 1 ? '' : 's'} below, then generate.`
-                      : decisionsDirty
-                        ? 'Save your decisions below before generating.'
-                        : 'All decisions are in. Click below to generate the counter-PDF.'}
+              <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-2">
+                <div className="text-2xl">📄</div>
+                <div className="text-sm font-semibold text-gray-700">Counter-PDF generation is temporarily unavailable</div>
+                <div className="text-[12px] text-gray-500 max-w-md mx-auto leading-relaxed">
+                  The per-clause decisions above are saved and can be referenced when drafting your response to the client by hand. We&apos;re working on a more reliable PDF generation approach for a future update.
                 </div>
-                <button
-                  onClick={runGenerate}
-                  disabled={!canGenerate || generating}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
-                >
-                  {generating ? 'Generating…' : 'Generate Counter PDF'}
-                </button>
-                {generateError && <div className="text-[11px] text-red-600">{generateError}</div>}
               </div>
             )}
           </>
@@ -465,64 +414,10 @@ export default function ContractReviewDetailPage() {
               >
                 {savingDecisions ? 'Saving…' : 'Save decisions'}
               </button>
-              <button
-                onClick={handleGenerateClick}
-                disabled={!canGenerate || generating}
-                title={
-                  !allDecided
-                    ? `${counts.pending} decision${counts.pending === 1 ? '' : 's'} still pending`
-                    : decisionsDirty
-                      ? 'Save decisions first'
-                      : ''
-                }
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
-              >
-                {generating
-                  ? 'Generating…'
-                  : counterExists
-                    ? 'Regenerate Counter PDF'
-                    : 'Generate Counter PDF'}
-              </button>
             </div>
           </div>
-          {generateError && <div className="text-[11px] text-red-600">{generateError}</div>}
         </div>
       )}
-
-      {/* Human decision (overall) */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Overall Decision</div>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          placeholder="Note for the record (optional)..."
-          className="w-full border border-gray-200 rounded-xl p-2.5 text-[12px] resize-none focus:outline-none focus:border-gray-400"
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={() => recordDecision('APPROVED')}
-            disabled={submitting !== null}
-            className="flex-1 py-2 bg-emerald-600 text-white text-[12px] font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {submitting === 'APPROVED' ? 'Saving…' : '✓ Approve'}
-          </button>
-          <button
-            onClick={() => recordDecision('COUNTERED')}
-            disabled={submitting !== null}
-            className="flex-1 py-2 bg-amber-500 text-white text-[12px] font-bold rounded-xl hover:bg-amber-600 disabled:opacity-50"
-          >
-            {submitting === 'COUNTERED' ? 'Saving…' : '↩ Counter'}
-          </button>
-          <button
-            onClick={() => recordDecision('REJECTED')}
-            disabled={submitting !== null}
-            className="flex-1 py-2 bg-red-600 text-white text-[12px] font-bold rounded-xl hover:bg-red-700 disabled:opacity-50"
-          >
-            {submitting === 'REJECTED' ? 'Saving…' : '✗ Reject'}
-          </button>
-        </div>
-      </div>
 
       {/* Audit footer */}
       <div className="text-[10px] text-gray-400 space-y-0.5 px-1">
@@ -530,11 +425,6 @@ export default function ContractReviewDetailPage() {
           Uploaded {fmtDateTime(record.createdAt)}
           {record.uploadedBy && <> by {record.uploadedBy.name} ({record.uploadedBy.email})</>}
         </div>
-        {record.humanDecisionAt && record.humanDecisionBy && (
-          <div>
-            {record.humanDecision} {fmtDateTime(record.humanDecisionAt)} by {record.humanDecisionBy.name}
-          </div>
-        )}
         {record.counterGeneratedAt && record.counterGeneratedBy && (
           <div>
             Counter-PDF generated {fmtDateTime(record.counterGeneratedAt)} by {record.counterGeneratedBy.name}

@@ -61,15 +61,14 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
     <div className="space-y-4">
       {/* Summary */}
       <div className={`rounded-2xl p-5 border ${
-        review.recommendation === 'approve' ? 'bg-emerald-50 border-emerald-200' :
         review.recommendation === 'reject' ? 'bg-red-50 border-red-200' :
         'bg-amber-50 border-amber-200'
       }`}>
         <div className="flex items-start gap-4">
-          <div className="text-3xl">{review.recommendation === 'approve' ? '✅' : review.recommendation === 'reject' ? '❌' : '📋'}</div>
+          <div className="text-3xl">{review.recommendation === 'reject' ? '❌' : '📋'}</div>
           <div className="flex-1">
-            <div className={`text-base font-bold ${review.recommendation === 'approve' ? 'text-emerald-800' : review.recommendation === 'reject' ? 'text-red-700' : 'text-amber-800'}`}>
-              AI Recommendation: {review.recommendation === 'approve' ? 'Approve' : review.recommendation === 'reject' ? 'Reject' : 'Counter-propose'}
+            <div className={`text-base font-bold ${review.recommendation === 'reject' ? 'text-red-700' : 'text-amber-800'}`}>
+              AI Recommendation: {review.recommendation === 'reject' ? 'Reject' : 'Counter-propose'}
             </div>
             <p className="text-sm mt-1 text-gray-600">{review.summary}</p>
             <div className="flex gap-3 mt-2 text-[11px]">
@@ -143,11 +142,17 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const ref = String(change.clause || '').trim();
+                                const baselineBody = BASELINE_BY_REF.get(ref)?.body || '';
+                                const seed =
+                                  change.suggestedCounter ||
+                                  baselineBody ||
+                                  '';
                                 const next: DecisionState = {
                                   decision: kind,
                                   counterLanguage:
                                     kind === 'COUNTER' && !decision.counterLanguage
-                                      ? (change.suggestedCounter || '')
+                                      ? seed
                                       : decision.counterLanguage,
                                   note: decision.note,
                                 };

@@ -83,11 +83,11 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
       "original": "<short description of the original baseline language>",
       "proposed": "<the actual redlined clause text from the client's PDF — see CRITICAL RULES below — this is what appears verbatim in the counter-PDF if SirReel accepts the change>",
       "reasoning": "<one or two sentences on why this matters to SirReel>",
-      "suggestedCounter": "<the actual replacement clause text SirReel would put in the counter-PDF — see CRITICAL RULES below — or null for auto_approved>",
-      "counterReasoning": "<the strategic guidance — why the counter pushes back this way, what's negotiable, what's not — never appears in the PDF; or null for auto_approved>"
+      "suggestedCounter": "<the actual replacement clause text SirReel would put in the counter-PDF — REQUIRED non-null, non-empty for needs_review and not_acceptable changes — see CRITICAL RULES below — null is only acceptable for auto_approved>",
+      "counterReasoning": "<the strategic guidance — why the counter pushes back this way, what's negotiable, what's not — never appears in the PDF; REQUIRED non-null for needs_review and not_acceptable; null is only acceptable for auto_approved>"
     }
   ],
-  "recommendation": "approve" | "counter" | "reject",
+  "recommendation": "counter" | "reject",
   "recommendationNote": "<one paragraph explaining the overall recommendation>",
   "comparisonPerformed": true | false,
   "comparisonNote": "<if comparisonPerformed is false, explain why>"
@@ -120,6 +120,8 @@ The \`description\` field carries the short one-liner ("Adds mutual indemnity su
 
 CRITICAL RULES FOR suggestedCounter (this is the most common source of bad output — read carefully):
 
+\`suggestedCounter\` is REQUIRED for every change classified as \`needs_review\` or \`not_acceptable\`. Returning null or an empty string for those changes is a bug — the human reviewer needs an editable starting point. Default behavior when uncertain: copy the canonical baseline clause text verbatim. That is always a safe \`suggestedCounter\` because it restores SirReel's standard language.
+
 \`suggestedCounter\` is the ACTUAL CONTRACT CLAUSE TEXT that will be rendered verbatim into the counter-PDF as the binding language for that clause. It is NOT strategic guidance. It is NOT a description of what to do. It is the operative legal sentence(s).
 
 - DO write replacement clause language in the same legal voice and register as the SirReel baseline (third-person, defined-term style, Lessee/Lessor framing).
@@ -144,15 +146,15 @@ The PRIMARY source of truth for the voice and structure of \`suggestedCounter\` 
 
 HARD RULES:
 
-1. If the document appears identical to the baseline (no modifications), set "comparisonPerformed" to false, "changes" to empty array, "recommendation" to "counter". DO NOT recommend "approve".
+1. "recommendation" must always be "counter" or "reject". NEVER "approve". Even if every change is auto_approved, the overall recommendation is "counter" — SirReel always responds with a redline back. There is no "approve" path in this product.
 
-2. If you cannot determine which document is the redlined version, set "comparisonPerformed" to false, "recommendation" to "counter". DO NOT recommend "approve".
+2. If the document appears identical to the baseline (no modifications), set "comparisonPerformed" to false, "changes" to empty array, "recommendation" to "counter".
 
-3. If ANY change is "not_acceptable", "recommendation" MUST be "reject" or "counter" — NEVER "approve" — and "riskLevel" MUST be "high".
+3. If you cannot determine which document is the redlined version, set "comparisonPerformed" to false, "recommendation" to "counter".
 
-4. If any change is "needs_review" but none are "not_acceptable", "recommendation" MUST be "counter" — NEVER "approve" — and "riskLevel" MUST be at least "medium".
+4. If ANY change is "not_acceptable", "recommendation" MUST be "reject" and "riskLevel" MUST be "high".
 
-5. Only recommend "approve" when ALL changes are "auto_approved" AND comparisonPerformed is true AND there is at least one change detected.
+5. If any change is "needs_review" but none are "not_acceptable", "recommendation" MUST be "counter" and "riskLevel" MUST be at least "medium".
 
 6. Identify the redlined document by visual cues: red text, strikethroughs, underlines indicating additions. The baseline PDF will be clean black text only with empty form fields.`
 
@@ -279,21 +281,14 @@ Compare the redlined document against the baseline per your instructions. Output
 
     if (Array.isArray(review.changes)) {
       const hasNotAcceptable = review.changes.some((c: any) => c.type === 'not_acceptable')
-      const hasNeedsReview = review.changes.some((c: any) => c.type === 'needs_review')
 
-      if (hasNotAcceptable && review.recommendation === 'approve') {
+      if (review.recommendation === 'approve') {
+        review.recommendation = hasNotAcceptable ? 'reject' : 'counter'
+        review.recommendationNote = '[Auto-corrected] approve is not a valid recommendation. ' + (review.recommendationNote || '')
+      }
+      if (hasNotAcceptable && review.recommendation !== 'reject') {
         review.recommendation = 'reject'
         review.riskLevel = 'high'
-        review.recommendationNote = '[Auto-corrected] Contains not_acceptable changes. ' + (review.recommendationNote || '')
-      }
-      if (hasNeedsReview && !hasNotAcceptable && review.recommendation === 'approve') {
-        review.recommendation = 'counter'
-        if (review.riskLevel === 'low') review.riskLevel = 'medium'
-        review.recommendationNote = '[Auto-corrected] Contains needs_review changes. ' + (review.recommendationNote || '')
-      }
-      if (review.comparisonPerformed === false && review.recommendation === 'approve') {
-        review.recommendation = 'counter'
-        review.recommendationNote = '[Auto-corrected] Comparison not performed. ' + (review.recommendationNote || '')
       }
     }
 
