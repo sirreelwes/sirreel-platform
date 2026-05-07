@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
     const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
     const blobKey = `contracts/${yyyy}/${mm}/${randomUUID()}.pdf`
     const blob = await put(blobKey, file, {
-      access: 'public',
+      access: 'private',
       contentType: 'application/pdf',
     })
 
