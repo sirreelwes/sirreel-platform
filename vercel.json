@@ -7,7 +7,6 @@
   ],
   "functions": {
     "src/app/api/tools/contract-review/[id]/generate-counter-pdf/route.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 60
     }
   }

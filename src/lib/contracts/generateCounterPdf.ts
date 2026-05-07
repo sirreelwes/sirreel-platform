@@ -23,6 +23,7 @@ export async function generateCounterPdf(args: RenderArgs): Promise<Buffer> {
     const chromium = (await import('@sparticuz/chromium')).default
     launchOptions = {
       args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless as any,
     }
