@@ -9,10 +9,11 @@ import type {
   DecisionForRender,
   CompanyForRender,
   JobForRender,
-} from '@/lib/contracts/contractTemplate'
+  ContactForRender,
+} from '@/lib/contracts/generateCounterPdf'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 15
 
 export async function POST(
   _req: NextRequest,
@@ -34,7 +35,13 @@ export async function POST(
     where: { id: params.id, deletedAt: null },
     include: {
       company: true,
-      job: true,
+      job: {
+        include: {
+          jobContacts: {
+            include: { person: true },
+          },
+        },
+      },
       changeDecisions: true,
     },
   })
@@ -87,6 +94,30 @@ export async function POST(
       }
     : null
 
+  const primaryContact: ContactForRender | null = review.job
+    ? (() => {
+        const contacts = review.job.jobContacts ?? []
+        if (contacts.length === 0) return null
+        const byRole = (role: string) => contacts.find((jc) => jc.role === role)
+        const primary =
+          byRole('PM') ||
+          byRole('PC') ||
+          contacts.find((jc) => jc.isPrimary) ||
+          contacts[0]
+        if (!primary) return null
+        const fullName = [primary.person.firstName, primary.person.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+        return {
+          fullName: fullName || null,
+          role: primary.role,
+          email: primary.person.email,
+          phone: primary.person.phone || primary.person.mobile || null,
+        }
+      })()
+    : null
+
   const job: JobForRender | null = review.job
     ? {
         jobCode: review.job.jobCode,
@@ -94,6 +125,7 @@ export async function POST(
         productionType: review.job.productionType,
         startDate: review.job.startDate,
         endDate: review.job.endDate,
+        primaryContact,
       }
     : null
 
