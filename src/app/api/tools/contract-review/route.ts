@@ -79,8 +79,9 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
     {
       "clause": "<clause number from the baseline, e.g. '14' or '1-3' for grouped, or 'Fleet 5(b)' for fleet-agreement clauses>",
       "type": "auto_approved" | "needs_review" | "not_acceptable",
+      "description": "<one-line summary of the change for the UI list, e.g. 'Adds mutual indemnity subsection 1a.'>",
       "original": "<short description of the original baseline language>",
-      "proposed": "<short description of what the client is proposing>",
+      "proposed": "<the actual redlined clause text from the client's PDF — see CRITICAL RULES below — this is what appears verbatim in the counter-PDF if SirReel accepts the change>",
       "reasoning": "<one or two sentences on why this matters to SirReel>",
       "suggestedCounter": "<the actual replacement clause text SirReel would put in the counter-PDF — see CRITICAL RULES below — or null for auto_approved>",
       "counterReasoning": "<the strategic guidance — why the counter pushes back this way, what's negotiable, what's not — never appears in the PDF; or null for auto_approved>"
@@ -91,6 +92,31 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown fences, no preamble:
   "comparisonPerformed": true | false,
   "comparisonNote": "<if comparisonPerformed is false, explain why>"
 }
+
+CRITICAL RULES FOR proposed (read carefully):
+
+\`proposed\` is the ACTUAL CLIENT-REDLINED CLAUSE TEXT, transcribed verbatim from the redlined PDF. When the human picks "Accept" on a change, the text in \`proposed\` is rendered verbatim into the counter-PDF as the binding language for that clause. It is NOT a description of the change. It is NOT a summary. It is the operative legal sentence(s) the client wrote.
+
+- DO transcribe the clause exactly as it appears in the redlined PDF, including the client's additions, deletions, and rewordings as a single resolved clause (i.e., apply the redline mentally and write the resulting clause).
+- DO write a complete, grammatical, legally operative clause that could be substituted into the contract as-is.
+- DO match the structure and length of the corresponding baseline clause unless the client's redline materially restructures it.
+- DO NOT write meta-commentary like "Adds mutual indemnity" or "Reduces minimum to statutory limits".
+- DO NOT write a summary or a one-liner — that goes in \`description\`.
+- If the redline only deletes a phrase, write the surviving clause text after the deletion.
+- If the redline inserts a new subsection, write the full clause including the new subsection in line with the original numbering style.
+- If you cannot transcribe the clause text from the PDF (e.g., illegible, fully redacted), set \`proposed\` to null and explain in \`reasoning\`.
+
+Examples for clause 1 (Indemnity), where the client added a mutual-indemnity subsection 1a:
+
+❌ BAD proposed: "Adds subsection 1a: Lessor indemnifies Lessee for SirReel's negligence."
+✅ GOOD proposed: "(a) Lessee/Renter (\\"You\\") agree to defend, indemnify, and hold SirReel harmless from any and all claims arising from the Equipment, except as the result of our sole negligence or willful act. (b) SirReel shall, in the same manner, defend, indemnify, and hold Lessee harmless from any claims arising solely from SirReel's negligence or willful misconduct."
+
+Examples for clause 6 (Workers Compensation), where the client struck the $1M minimum:
+
+❌ BAD proposed: "Reduce workers compensation minimum to statutory limits only."
+✅ GOOD proposed: "Lessee shall, at Lessee's own expense, maintain workers compensation/employers liability insurance during the course of the Equipment rental at statutory limits, including coverage for any volunteers, interns, or independent contractors working on Lessee's behalf."
+
+The \`description\` field carries the short one-liner ("Adds mutual indemnity subsection 1a") for the human reviewing the change list. The \`proposed\` field carries the binding clause text.
 
 CRITICAL RULES FOR suggestedCounter (this is the most common source of bad output — read carefully):
 
@@ -169,8 +195,9 @@ export async function POST(req: NextRequest) {
           changes: [{
             clause: 'All clauses',
             type: 'needs_review',
+            description: 'Client redlined Word document (tracked changes not visible to AI)',
             original: 'SirReel rental agreement',
-            proposed: 'Client redlined Word document (tracked changes not visible to AI)',
+            proposed: null,
             reasoning: 'Word tracked changes are not preserved when sent to vision API.',
             suggestedCounter: null,
             counterReasoning: 'Open in Word, accept-or-reject all tracked changes to flatten them, then export to PDF and re-upload.'

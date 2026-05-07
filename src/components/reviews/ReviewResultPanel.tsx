@@ -106,15 +106,22 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${badge.cls}`}>{badge.label}</span>
                       )}
                     </div>
-                    <div className="text-[11px] opacity-70 truncate mt-0.5">{change.proposed}</div>
+                    <div className="text-[11px] opacity-70 truncate mt-0.5">{change.description ?? change.proposed}</div>
                   </div>
                 </div>
                 <span className="text-[10px] opacity-40 flex-shrink-0">{expanded === i ? '▲' : '▼'}</span>
               </div>
               {expanded === i && (
                 <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2 text-[11px]">
+                  {change.description && (
+                    <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Summary</div><div>{change.description}</div></div>
+                  )}
                   <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Original</div><div>{change.original}</div></div>
-                  <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Proposed</div><div>{change.proposed}</div></div>
+                  <div>
+                    <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Client&apos;s redlined text</div>
+                    <div className="text-[10px] opacity-60 mb-1">This text is rendered verbatim into the counter-PDF if you Accept this change.</div>
+                    <div className="bg-white/50 rounded-lg p-2">{change.proposed || <span className="opacity-50 italic">No clause text extracted.</span>}</div>
+                  </div>
                   <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Reasoning</div><div className="opacity-80">{change.reasoning}</div></div>
                   {change.suggestedCounter && (
                     <div className="bg-white/50 rounded-lg p-2">
