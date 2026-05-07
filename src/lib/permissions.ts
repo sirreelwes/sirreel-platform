@@ -192,6 +192,7 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.maintenance) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
   if (perms.bookings) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
   if (perms.bookings) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
+  if (perms.bookings) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
   if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
   if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
