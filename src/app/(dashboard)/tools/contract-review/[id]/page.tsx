@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ReviewResultPanel, type DecisionState, type ClauseDecisionValue } from '@/components/reviews/ReviewResultPanel';
 import { CounterPdfPreview } from '@/components/reviews/CounterPdfPreview';
+import { CounterProposalEmail } from '@/components/reviews/CounterProposalEmail';
 
 const RISK_BADGE: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -352,15 +353,33 @@ export default function ContractReviewDetailPage() {
         {tab === 'counter' && (
           <>
             {counterExists ? (
-              <CounterPdfPreview
-                reviewId={id}
-                generatedAt={record.counterGeneratedAt}
-                generatedBy={record.counterGeneratedBy}
-                cacheKey={pdfCacheKey || record.counterGeneratedAt || ''}
-                onRegenerate={() => setShowRegenerateConfirm(true)}
-                regenerating={generating}
-                canRegenerate={canGenerate}
-              />
+              <>
+                <CounterPdfPreview
+                  reviewId={id}
+                  generatedAt={record.counterGeneratedAt}
+                  generatedBy={record.counterGeneratedBy}
+                  cacheKey={pdfCacheKey || record.counterGeneratedAt || ''}
+                  onRegenerate={() => setShowRegenerateConfirm(true)}
+                  regenerating={generating}
+                  canRegenerate={canGenerate}
+                />
+                <CounterProposalEmail
+                  aiChanges={aiChanges}
+                  decisions={(record.changeDecisions || []).map((d) => ({
+                    clauseRef: d.clauseRef,
+                    decision: d.decision,
+                    note: d.note,
+                    changeIndex: d.changeIndex,
+                  }))}
+                  company={{ name: record.company?.name || null }}
+                  job={{
+                    jobCode: record.job?.jobCode || null,
+                    name: record.job?.name || null,
+                  }}
+                  primaryContact={null}
+                  senderName={record.uploadedBy?.name || 'the SirReel team'}
+                />
+              </>
             ) : (
               <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center space-y-3">
                 <div className="text-2xl">📄</div>
