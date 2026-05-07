@@ -1,5 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CompanyPicker } from '@/components/orders/CompanyPicker';
+import { JobPicker } from '@/components/orders/JobPicker';
+import { NewJobModal } from '@/components/orders/NewJobModal';
 
 const TYPE_CONFIG = {
   auto_approved: { color: 'bg-emerald-50 border-emerald-200 text-emerald-800', icon: '✓', badge: 'bg-emerald-100 text-emerald-700', label: 'Auto-approved' },
@@ -9,7 +12,12 @@ const TYPE_CONFIG = {
 
 export default function ContractReviewPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [companyId, setCompanyId] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [showJobConfirmModal, setShowJobConfirmModal] = useState(false);
+  const [showNewJobModal, setShowNewJobModal] = useState(false);
+  const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [review, setReview] = useState<any>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -17,6 +25,9 @@ export default function ContractReviewPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [sent, setSent] = useState(false);
+
+  // Reset job when company changes — previously selected job no longer applies
+  useEffect(() => { setJobId(null); }, [companyId]);
 
   const handleFile = (f: File) => { setFile(f); setReview(null); setError(''); };
 
@@ -28,6 +39,8 @@ export default function ContractReviewPage() {
       const fd = new FormData();
       fd.append('file', file);
       if (companyName) fd.append('companyName', companyName);
+      if (companyId) fd.append('companyId', companyId);
+      if (jobId) fd.append('jobId', jobId);
       const res = await fetch('/api/tools/contract-review', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.review) setReview(data.review);
@@ -39,7 +52,30 @@ export default function ContractReviewPage() {
     }
   };
 
-  const reset = () => { setFile(null); setReview(null); setError(''); setNote(''); setSent(false); };
+  const handleSubmit = () => {
+    if (!file) return;
+    if (!jobId) {
+      setShowJobConfirmModal(true);
+      return;
+    }
+    runReview();
+  };
+
+  const continueWithoutJob = () => {
+    setShowJobConfirmModal(false);
+    runReview();
+  };
+
+  const reset = () => {
+    setFile(null);
+    setReview(null);
+    setError('');
+    setNote('');
+    setSent(false);
+    setCompanyId('');
+    setCompanyName('');
+    setJobId(null);
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -77,14 +113,36 @@ export default function ContractReviewPage() {
             <input id="contract-input" type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           </div>
 
-          <div>
-            <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Production / Company Name (optional)</label>
-            <input value={companyName} onChange={e => setCompanyName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400" placeholder="e.g. Warner Bros., Cinepower & Light..." />
+          <div className="bg-zinc-900 rounded-2xl p-4 space-y-3">
+            <p className="text-[11px] text-zinc-500">
+              Optional but strongly suggested — link this review to a Company and Job so you can find it later.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Company</label>
+              <CompanyPicker
+                value={companyId || null}
+                selectedName={companyName || null}
+                onChange={(id, name) => {
+                  setCompanyId(id);
+                  setCompanyName(name);
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Job</label>
+              <JobPicker
+                companyId={companyId || null}
+                value={jobId}
+                onChange={setJobId}
+                onCreateNew={() => setShowNewJobModal(true)}
+                refreshKey={jobsRefreshKey}
+              />
+            </div>
           </div>
 
           {error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">{error}</div>}
 
-          <button onClick={runReview} disabled={!file || reviewing}
+          <button onClick={handleSubmit} disabled={!file || reviewing}
             className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-gray-800 disabled:opacity-40 transition-colors">
             {reviewing ? '📋 Reviewing changes...' : 'Review Contract →'}
           </button>
@@ -175,6 +233,44 @@ export default function ContractReviewPage() {
 
           <button onClick={reset} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Review Another Document</button>
         </div>
+      )}
+
+      {showJobConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h2 className="text-base font-bold text-gray-900">No Job linked</h2>
+            <p className="text-sm text-gray-600">
+              Contracts are usually associated with a Job. Skipping this means the review will be saved as an orphan and you&apos;ll need to link it later.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowJobConfirmModal(false)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Pick a Job
+              </button>
+              <button
+                onClick={continueWithoutJob}
+                className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-gray-800"
+              >
+                Continue without Job
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNewJobModal && companyId && (
+        <NewJobModal
+          open={showNewJobModal}
+          onClose={() => setShowNewJobModal(false)}
+          companyId={companyId}
+          companyName={companyName}
+          onCreated={(job) => {
+            setJobId(job.id);
+            setJobsRefreshKey((k) => k + 1);
+          }}
+        />
       )}
     </div>
   );
