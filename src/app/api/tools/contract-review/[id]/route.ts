@@ -104,6 +104,13 @@ export async function PATCH(
         job: { select: { id: true, jobCode: true, name: true } },
         uploadedBy: { select: { id: true, name: true, email: true } },
         humanDecisionBy: { select: { id: true, name: true, email: true } },
+        counterGeneratedBy: { select: { id: true, name: true, email: true } },
+        changeDecisions: {
+          orderBy: { changeIndex: 'asc' },
+          include: {
+            decidedBy: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
     })
     return NextResponse.json({ review: updated })

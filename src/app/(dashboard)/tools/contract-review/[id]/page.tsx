@@ -180,10 +180,11 @@ export default function ContractReviewDetailPage() {
 
   const saveDecisions = async () => {
     if (!record) return;
+    const existingDecisions = record.changeDecisions || [];
     const payload = aiChanges.flatMap((ch: any, i: number) => {
       const local = decisions[i];
       if (!local) return [];
-      const existed = record.changeDecisions.some((d) => d.changeIndex === i);
+      const existed = existingDecisions.some((d) => d.changeIndex === i);
       if (local.decision === 'PENDING' && !existed) return [];
       return [{
         clauseRef: String(ch.clause ?? ''),
@@ -452,8 +453,8 @@ export default function ContractReviewDetailPage() {
                 ? 'Unsaved changes.'
                 : decisionsSavedAt
                   ? `Saved ${fmtDateTime(decisionsSavedAt)}.`
-                  : record.changeDecisions.length > 0
-                    ? `Last saved ${fmtDateTime(record.changeDecisions[0]?.decidedAt ?? null)}.`
+                  : (record.changeDecisions || []).length > 0
+                    ? `Last saved ${fmtDateTime((record.changeDecisions || [])[0]?.decidedAt ?? null)}.`
                     : 'No decisions saved yet.'}
             </div>
             <div className="flex items-center gap-2">
