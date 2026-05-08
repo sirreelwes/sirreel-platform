@@ -3,7 +3,7 @@
 // Run with: npx prisma db seed
 // ═══════════════════════════════════════════════════════════════
 
-import { PrismaClient, UserRole, AssetStatus, Location, Region, ClientTier, ProductionType, DriverType, PersonRole } from '@prisma/client';
+import { PrismaClient, UserRole, AssetStatus, Location, Region, ClientTier, ProductionType, DriverType, PersonRole, LineItemDepartment } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -28,19 +28,19 @@ async function main() {
   // ═══ 2. ASSET CATEGORIES (from Planyo resources.csv) ═══
   console.log('🚛 Creating asset categories...');
   const categories = await Promise.all([
-    prisma.assetCategory.create({ data: { name: 'Cube Truck', slug: 'cube-truck', totalUnits: 41, dailyRate: 175, weeklyRate: 875, region: Region.LA, planyoResourceId: 116560, sortOrder: 1 } }),
-    prisma.assetCategory.create({ data: { name: 'Cargo Van w/ Liftgate', slug: 'cargo-van-liftgate', totalUnits: 30, dailyRate: 200, region: Region.LA, planyoResourceId: 117102, sortOrder: 2 } }),
-    prisma.assetCategory.create({ data: { name: 'Cargo Van w/o Liftgate', slug: 'cargo-van-no-liftgate', totalUnits: 8, dailyRate: 150, region: Region.LA, planyoResourceId: 117105, sortOrder: 3 } }),
-    prisma.assetCategory.create({ data: { name: 'Passenger Van', slug: 'passenger-van', totalUnits: 10, dailyRate: 175, region: Region.LA, planyoResourceId: 117158, sortOrder: 4 } }),
-    prisma.assetCategory.create({ data: { name: 'PopVan', slug: 'popvan', totalUnits: 9, dailyRate: 400, region: Region.LA, planyoResourceId: 117155, sortOrder: 5 } }),
-    prisma.assetCategory.create({ data: { name: 'Camera Cube', slug: 'camera-cube', totalUnits: 7, dailyRate: 200, region: Region.LA, planyoResourceId: 117156, sortOrder: 6 } }),
-    prisma.assetCategory.create({ data: { name: 'DLUX', slug: 'dlux', totalUnits: 4, dailyRate: 450, region: Region.LA, planyoResourceId: 119962, sortOrder: 7 } }),
-    prisma.assetCategory.create({ data: { name: 'DLUX (NorCal)', slug: 'dlux-norcal', totalUnits: 4, dailyRate: 450, region: Region.NORCAL, planyoResourceId: 224971, sortOrder: 8 } }),
-    prisma.assetCategory.create({ data: { name: 'ProScout / VTR', slug: 'proscout-vtr', totalUnits: 3, dailyRate: 450, region: Region.LA, planyoResourceId: 117159, sortOrder: 9 } }),
-    prisma.assetCategory.create({ data: { name: 'Stakebed', slug: 'stakebed', totalUnits: 3, dailyRate: 200, region: Region.LA, planyoResourceId: 117160, sortOrder: 10 } }),
-    prisma.assetCategory.create({ data: { name: 'Scissor Lift', slug: 'scissor-lift', totalUnits: 4, dailyRate: 0, region: Region.LA, planyoResourceId: 217515, sortOrder: 11 } }),
-    prisma.assetCategory.create({ data: { name: 'Studios', slug: 'studios', totalUnits: 10, dailyRate: 3000, region: Region.LA, planyoResourceId: 128064, sortOrder: 12, description: 'Lankershim & Lima stages. Standing sets: hospital, police, morgue.' } }),
-    prisma.assetCategory.create({ data: { name: 'UTAH Vehicles', slug: 'utah-vehicles', totalUnits: 8, dailyRate: 150, region: Region.UTAH, planyoResourceId: 234184, sortOrder: 13 } }),
+    prisma.assetCategory.create({ data: { name: 'Cube Truck', slug: 'cube-truck', totalUnits: 41, dailyRate: 175, weeklyRate: 875, region: Region.LA, planyoResourceId: 116560, sortOrder: 1, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Cargo Van w/ Liftgate', slug: 'cargo-van-liftgate', totalUnits: 30, dailyRate: 200, region: Region.LA, planyoResourceId: 117102, sortOrder: 2, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Cargo Van w/o Liftgate', slug: 'cargo-van-no-liftgate', totalUnits: 8, dailyRate: 150, region: Region.LA, planyoResourceId: 117105, sortOrder: 3, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Passenger Van', slug: 'passenger-van', totalUnits: 10, dailyRate: 175, region: Region.LA, planyoResourceId: 117158, sortOrder: 4, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'PopVan', slug: 'popvan', totalUnits: 9, dailyRate: 400, region: Region.LA, planyoResourceId: 117155, sortOrder: 5, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Camera Cube', slug: 'camera-cube', totalUnits: 7, dailyRate: 200, region: Region.LA, planyoResourceId: 117156, sortOrder: 6, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'DLUX', slug: 'dlux', totalUnits: 4, dailyRate: 450, region: Region.LA, planyoResourceId: 119962, sortOrder: 7, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'DLUX (NorCal)', slug: 'dlux-norcal', totalUnits: 4, dailyRate: 450, region: Region.NORCAL, planyoResourceId: 224971, sortOrder: 8, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'ProScout / VTR', slug: 'proscout-vtr', totalUnits: 3, dailyRate: 450, region: Region.LA, planyoResourceId: 117159, sortOrder: 9, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Stakebed', slug: 'stakebed', totalUnits: 3, dailyRate: 200, region: Region.LA, planyoResourceId: 117160, sortOrder: 10, department: LineItemDepartment.VEHICLES } }),
+    prisma.assetCategory.create({ data: { name: 'Scissor Lift', slug: 'scissor-lift', totalUnits: 4, dailyRate: 0, region: Region.LA, planyoResourceId: 217515, sortOrder: 11, department: LineItemDepartment.GE } }),
+    prisma.assetCategory.create({ data: { name: 'Studios', slug: 'studios', totalUnits: 10, dailyRate: 3000, region: Region.LA, planyoResourceId: 128064, sortOrder: 12, description: 'Lankershim & Lima stages. Standing sets: hospital, police, morgue.', department: LineItemDepartment.STAGES } }),
+    prisma.assetCategory.create({ data: { name: 'UTAH Vehicles', slug: 'utah-vehicles', totalUnits: 8, dailyRate: 150, region: Region.UTAH, planyoResourceId: 234184, sortOrder: 13, department: LineItemDepartment.VEHICLES } }),
   ]);
 
   const catMap: Record<string, string> = {};
