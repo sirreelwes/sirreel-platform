@@ -36,15 +36,19 @@ export function computeLineTotal(params: {
   quantity: number;
   startDate?: Date | null;
   endDate?: Date | null;
-}): { days: number | null; lineTotal: number } {
+}): { days: number; lineTotal: number } {
+  // `days` is the schema's required rental-days field (Phase 1 sales pipeline).
+  // It defaults to 1 — used as a sentinel for FLAT rates and for
+  // not-yet-scheduled line items. Callers can still distinguish by inspecting
+  // rateType + the line item's start/end dates.
   const { rateType, rate, quantity, startDate, endDate } = params;
 
   if (rateType === "FLAT") {
-    return { days: null, lineTotal: rate * quantity };
+    return { days: 1, lineTotal: rate * quantity };
   }
 
   if (!startDate || !endDate) {
-    return { days: null, lineTotal: 0 };
+    return { days: 1, lineTotal: 0 };
   }
 
   const totalDays = rentalDays(startDate, endDate);

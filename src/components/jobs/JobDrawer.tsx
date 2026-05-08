@@ -6,6 +6,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   CONFIRMED: { label: 'Confirmed', color: 'text-blue-700',    bg: 'bg-blue-50'    },
   COMPLETE:  { label: 'Complete',  color: 'text-gray-500',    bg: 'bg-gray-50'    },
   CANCELLED: { label: 'Cancelled', color: 'text-red-600',     bg: 'bg-red-50'     },
+  LOST:      { label: 'Lost',      color: 'text-red-600',     bg: 'bg-red-50'     },
   CLOSED:    { label: 'Closed',    color: 'text-gray-400',    bg: 'bg-gray-50'    },
 };
 

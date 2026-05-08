@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
-type JobStatus = 'QUOTED' | 'ACTIVE' | 'WRAPPED' | 'HOLD' | 'CANCELLED';
+type JobStatus = 'QUOTED' | 'ACTIVE' | 'WRAPPED' | 'HOLD' | 'LOST';
 
-const COLUMNS: { key: Exclude<JobStatus, 'HOLD' | 'CANCELLED'>; label: string; accent: string }[] = [
+const COLUMNS: { key: Exclude<JobStatus, 'HOLD' | 'LOST'>; label: string; accent: string }[] = [
   { key: 'QUOTED',  label: 'Quoted',  accent: 'border-purple-800 text-purple-300' },
   { key: 'ACTIVE',  label: 'Active',  accent: 'border-emerald-800 text-emerald-300' },
   { key: 'WRAPPED', label: 'Wrapped', accent: 'border-zinc-700 text-zinc-400' },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recalcOrderTotals } from "@/lib/orders";
+import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -39,7 +41,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const { status, description, startDate, endDate, taxRate, notes, companyId, agentId, bookingId } = body;
 
     const data: Record<string, unknown> = {};
-    if (status !== undefined) data.status = status;
+    if (status !== undefined) {
+      data.status = status;
+      // Phase 1 sales pipeline: keep quoteStatus in lockstep with status
+      // and stamp the sales-stage timestamps on first transition.
+      const current = await prisma.order.findUnique({
+        where: { id },
+        select: { sentAt: true, wonAt: true, lostAt: true },
+      });
+      if (current) {
+        const sync = computeQuoteStatusSync(status as OrderStatus, current);
+        Object.assign(data, sync);
+      }
+    }
     if (description !== undefined) data.description = description;
     if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;

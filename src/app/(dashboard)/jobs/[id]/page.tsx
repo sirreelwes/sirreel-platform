@@ -4,15 +4,15 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'CANCELLED'] as const;
+const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
 
 const STATUS_BADGE: Record<JobStatus, string> = {
-  QUOTED:    'bg-purple-900/40 text-purple-300 border-purple-800',
-  ACTIVE:    'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-  WRAPPED:   'bg-zinc-800 text-zinc-400 border-zinc-700',
-  HOLD:      'bg-amber-900/40 text-amber-300 border-amber-800',
-  CANCELLED: 'bg-red-900/40 text-red-300 border-red-800',
+  QUOTED:  'bg-purple-900/40 text-purple-300 border-purple-800',
+  ACTIVE:  'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  WRAPPED: 'bg-zinc-800 text-zinc-400 border-zinc-700',
+  HOLD:    'bg-amber-900/40 text-amber-300 border-amber-800',
+  LOST:    'bg-red-900/40 text-red-300 border-red-800',
 };
 
 const ORDER_STATUS_BADGE: Record<string, string> = {

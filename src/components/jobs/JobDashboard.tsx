@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   CONFIRMED: { label: 'Confirmed', color: 'text-blue-700',    bg: 'bg-blue-50',    dot: 'bg-blue-500'    },
   COMPLETE:  { label: 'Complete',  color: 'text-gray-500',    bg: 'bg-gray-50',    dot: 'bg-gray-400'    },
   CANCELLED: { label: 'Cancelled', color: 'text-red-600',     bg: 'bg-red-50',     dot: 'bg-red-500'     },
+  LOST:      { label: 'Lost',      color: 'text-red-600',     bg: 'bg-red-50',     dot: 'bg-red-500'     },
   CLOSED:    { label: 'Closed',    color: 'text-gray-400',    bg: 'bg-gray-50',    dot: 'bg-gray-300'    },
   REQUEST:   { label: 'Request',   color: 'text-amber-700',   bg: 'bg-amber-50',   dot: 'bg-amber-500'   },
 };
