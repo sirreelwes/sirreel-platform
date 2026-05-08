@@ -70,10 +70,8 @@ export function InquiriesSection() {
     setRefreshKey((k) => k + 1);
   };
 
-  const convert = (_id: string) => {
-    // Phase 2 will wire prefill via ?inquiryId=...; for Phase 1 just navigate
-    // to the existing new-quote flow.
-    router.push('/orders/new-quote');
+  const convert = (id: string) => {
+    router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(id)}`);
   };
 
   return (

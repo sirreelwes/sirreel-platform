@@ -30,31 +30,42 @@ export function rentalDays(start: Date, end: Date): number {
   return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)) + 1);
 }
 
+/**
+ * Phase 2 sales pipeline: per-line rental-days override.
+ *
+ * - If `rentalDays` is provided, use it directly (the new builder UI lets
+ *   users set days per line independent of the order-level start/end).
+ * - Otherwise derive from start/end dates (legacy behavior).
+ *
+ * WEEKLY rate uses a 5-day work week per the Phase 2 brief — total =
+ * quantity × rate × ceil(rentalDays / 5). FLAT preserves the existing
+ * "rate × quantity" semantics regardless of duration.
+ */
 export function computeLineTotal(params: {
   rateType: "DAILY" | "WEEKLY" | "FLAT";
   rate: number;
   quantity: number;
+  rentalDays?: number | null;
   startDate?: Date | null;
   endDate?: Date | null;
 }): { days: number; lineTotal: number } {
-  // `days` is the schema's required rental-days field (Phase 1 sales pipeline).
-  // It defaults to 1 — used as a sentinel for FLAT rates and for
-  // not-yet-scheduled line items. Callers can still distinguish by inspecting
-  // rateType + the line item's start/end dates.
-  const { rateType, rate, quantity, startDate, endDate } = params;
+  const { rateType, rate, quantity, rentalDays: explicitDays, startDate, endDate } = params;
 
   if (rateType === "FLAT") {
-    return { days: 1, lineTotal: rate * quantity };
+    return { days: explicitDays && explicitDays > 0 ? explicitDays : 1, lineTotal: rate * quantity };
   }
 
-  if (!startDate || !endDate) {
+  let totalDays: number
+  if (explicitDays && explicitDays > 0) {
+    totalDays = Math.floor(explicitDays);
+  } else if (startDate && endDate) {
+    totalDays = rentalDays(startDate, endDate);
+  } else {
     return { days: 1, lineTotal: 0 };
   }
 
-  const totalDays = rentalDays(startDate, endDate);
-
   if (rateType === "WEEKLY") {
-    const weeks = Math.ceil(totalDays / 7);
+    const weeks = Math.ceil(totalDays / 5);
     return { days: totalDays, lineTotal: rate * weeks * quantity };
   }
 

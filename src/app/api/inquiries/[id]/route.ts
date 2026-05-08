@@ -4,6 +4,26 @@ import type { InquiryStatus } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
 
+export async function GET(_req: NextRequest, { params }: Params) {
+  const { id } = await params
+  const inquiry = await prisma.inquiry.findUnique({
+    where: { id },
+    include: {
+      company: { select: { id: true, name: true } },
+      person: { select: { id: true, firstName: true, lastName: true, email: true } },
+      assignedTo: { select: { id: true, name: true } },
+      convertedJob: { select: { id: true, jobCode: true, name: true } },
+    },
+  })
+  if (!inquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json({
+    inquiry: {
+      ...inquiry,
+      estimatedValue: inquiry.estimatedValue == null ? null : Number(inquiry.estimatedValue),
+    },
+  })
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params
   try {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { LineItemDepartment } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeLineTotal, recalcOrderTotals } from "@/lib/orders";
 
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const {
       type, description, inventoryItemId, assetCategoryId,
       startDate, endDate, rateType = "DAILY", rate, quantity = 1, notes,
+      department, qualifier, rentalDays,
     } = body;
 
     if (!type || !description || rate === undefined) {
@@ -31,6 +33,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       rateType,
       rate: Number(rate),
       quantity,
+      rentalDays: rentalDays != null ? Number(rentalDays) : undefined,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
     });
@@ -44,6 +47,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         endDate: endDate ? new Date(endDate) : null,
         rateType, rate, quantity, days, lineTotal,
         notes: notes || null,
+        ...(department ? { department: department as LineItemDepartment } : {}),
+        ...(qualifier !== undefined ? { qualifier: qualifier || null } : {}),
       },
       include: {
         inventoryItem: { select: { id: true, code: true, description: true } },
