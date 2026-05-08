@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
-import type { JobStatus, OrderStatus } from '@prisma/client'
+import type { JobStatus, OrderStatus, OrderQuoteStatus, LineItemDepartment } from '@prisma/client'
+import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&mine=1&search=foo
+//                &include=quoteStatus,departments  (Phase 1 sales pipeline)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
@@ -14,6 +16,10 @@ export async function GET(req: NextRequest) {
   let agentId = searchParams.get('agentId')
   const mine = searchParams.get('mine') === '1'
   const search = searchParams.get('search')
+  const includeParam = searchParams.get('include') || ''
+  const includes = new Set(includeParam.split(',').map((s) => s.trim()).filter(Boolean))
+  const includeQuoteStatus = includes.has('quoteStatus')
+  const includeDepartments = includes.has('departments')
 
   const statuses = statusesParam
     ? (statusesParam.split(',').filter(Boolean) as JobStatus[])
@@ -56,7 +62,18 @@ export async function GET(req: NextRequest) {
           },
         },
         orders: {
-          select: { status: true, subtotal: true },
+          select: {
+            status: true,
+            subtotal: true,
+            ...(includeQuoteStatus ? { quoteStatus: true } : {}),
+            ...(includeDepartments
+              ? {
+                  lineItems: {
+                    select: { department: true },
+                  },
+                }
+              : {}),
+          },
         },
         _count: { select: { orders: true } },
       },
@@ -78,6 +95,35 @@ export async function GET(req: NextRequest) {
         j.jobContacts[0] ||
         null
 
+      let pipelineColumn: PipelineColumn | null = null
+      let quoteBreakdown:
+        | { quotes: number; won: number; pending: number; lost: number; expired: number }
+        | undefined
+      let departments: LineItemDepartment[] | undefined
+
+      if (includeQuoteStatus) {
+        const qs = j.orders
+          .map((o) => (o as { quoteStatus?: OrderQuoteStatus }).quoteStatus)
+          .filter((s): s is OrderQuoteStatus => !!s)
+        pipelineColumn = derivePipelineColumn(qs)
+        quoteBreakdown = {
+          quotes: qs.length,
+          won: qs.filter((s) => s === 'WON').length,
+          pending: qs.filter((s) => s === 'DRAFT' || s === 'SENT').length,
+          lost: qs.filter((s) => s === 'LOST').length,
+          expired: qs.filter((s) => s === 'EXPIRED').length,
+        }
+      }
+
+      if (includeDepartments) {
+        const deptSet = new Set<LineItemDepartment>()
+        for (const o of j.orders) {
+          const lis = (o as { lineItems?: { department: LineItemDepartment }[] }).lineItems
+          if (lis) for (const li of lis) deptSet.add(li.department)
+        }
+        departments = Array.from(deptSet)
+      }
+
       const { orders, ...rest } = j
       return {
         ...rest,
@@ -93,6 +139,8 @@ export async function GET(req: NextRequest) {
               isPrimary: primaryContact.isPrimary,
             }
           : null,
+        ...(includeQuoteStatus ? { pipelineColumn, quoteBreakdown } : {}),
+        ...(includeDepartments ? { departments } : {}),
       }
     })
 

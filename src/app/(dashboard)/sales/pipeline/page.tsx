@@ -1,52 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import Link from 'next/link';
-
-type JobStatus = 'QUOTED' | 'ACTIVE' | 'WRAPPED' | 'HOLD' | 'LOST';
-
-const COLUMNS: { key: Exclude<JobStatus, 'HOLD' | 'LOST'>; label: string; accent: string }[] = [
-  { key: 'QUOTED',  label: 'Quoted',  accent: 'border-purple-800 text-purple-300' },
-  { key: 'ACTIVE',  label: 'Active',  accent: 'border-emerald-800 text-emerald-300' },
-  { key: 'WRAPPED', label: 'Wrapped', accent: 'border-zinc-700 text-zinc-400' },
-];
+import { InquiriesSection } from '@/components/sales/InquiriesSection';
+import { OpenQuotesKanban } from '@/components/sales/OpenQuotesKanban';
+import { ActiveJobsKanban } from '@/components/sales/ActiveJobsKanban';
+import { ProspectsSection } from '@/components/sales/ProspectsSection';
+import type { LineItemDepartment } from '@prisma/client';
+import type { PipelineColumn } from '@/lib/sales/pipeline';
 
 interface PipelineJob {
   id: string;
   jobCode: string;
   name: string;
-  status: JobStatus;
+  status: 'QUOTED' | 'ACTIVE' | 'WRAPPED' | 'HOLD' | 'LOST';
+  startDate: string | null;
+  endDate: string | null;
   estimatedValue: number | null;
   orderTotal: number;
   updatedAt: string;
   company: { id: string; name: string };
   agent: { id: string; name: string };
-  primaryContact: {
-    firstName: string;
-    lastName: string;
-    role: string;
-  } | null;
-  _count: { orders: number };
-}
-
-function daysSince(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const d = Math.floor(diff / 86400000);
-  if (d <= 0) return 'today';
-  if (d === 1) return '1 day';
-  return `${d} days`;
-}
-
-function fmtMoney(n: number | null | undefined) {
-  if (n == null) return null;
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  pipelineColumn?: PipelineColumn | null;
+  quoteBreakdown?: {
+    quotes: number;
+    won: number;
+    pending: number;
+    lost: number;
+    expired: number;
+  };
+  departments?: LineItemDepartment[];
 }
 
 export default function PipelinePage() {
   const { data: session, status: authStatus } = useSession();
-  const user = session?.user as any;
-  const role: string | undefined = user?.role;
+  const user = session?.user as { role?: string } | undefined;
+  const role = user?.role;
 
   // AGENT defaults to My Deals; everyone else (including unknown role) defaults to Team.
   const defaultScope: 'my' | 'team' = role === 'AGENT' ? 'my' : 'team';
@@ -60,45 +49,42 @@ export default function PipelinePage() {
   }, [authStatus, role]);
 
   useEffect(() => {
-    console.log('pipeline effect', { authStatus, scope, sessionUser: session?.user });
     if (authStatus !== 'authenticated') return;
     setLoading(true);
-    const params = new URLSearchParams({ statuses: 'QUOTED,ACTIVE,WRAPPED' });
+    const params = new URLSearchParams({
+      statuses: 'QUOTED,ACTIVE,WRAPPED',
+      include: 'quoteStatus,departments',
+    });
     if (scope === 'my') params.set('mine', '1');
     fetch(`/api/jobs?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => setJobs(d.jobs || []))
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  }, [scope, authStatus, session?.user]);
-
-  const byStatus = useMemo(() => {
-    const groups: Record<string, PipelineJob[]> = { QUOTED: [], ACTIVE: [], WRAPPED: [] };
-    (jobs || []).forEach((j) => {
-      if (groups[j.status]) groups[j.status].push(j);
-    });
-    return groups;
-  }, [jobs]);
-
-  const totals = useMemo(() => {
-    const out: Record<string, number> = { QUOTED: 0, ACTIVE: 0, WRAPPED: 0 };
-    Object.entries(byStatus).forEach(([k, list]) => {
-      out[k] = list.reduce((sum, j) => sum + (j.orderTotal > 0 ? j.orderTotal : j.estimatedValue || 0), 0);
-    });
-    return out;
-  }, [byStatus]);
+  }, [scope, authStatus]);
 
   if (authStatus === 'loading') {
     return <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-sm">Loading…</div>;
   }
 
+  // Open Quotes = Jobs with at least one Order. Cards land in DRAFT/SENT/WON/LOST
+  // columns per the earliest-unfinished-state rule (computed server-side as
+  // pipelineColumn).
+  const openQuoteJobs = (jobs || []).filter(
+    (j) => j.pipelineColumn != null && j.status === 'QUOTED'
+  );
+  // Active Jobs = Jobs that are in production (ACTIVE) or have wrapped.
+  const activeJobs = (jobs || []).filter(
+    (j) => j.status === 'ACTIVE' || j.status === 'WRAPPED'
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold text-white">Sales Pipeline</h1>
           <p className="text-xs text-zinc-500 mt-1">
-            Deals in flight. Kanban is read-only — click a card to open the job.
+            Inquiries → Open Quotes → Active Jobs. Click any card to open the job.
           </p>
         </div>
 
@@ -108,39 +94,42 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {COLUMNS.map((col) => {
-          const list = byStatus[col.key] || [];
-          return (
-            <div
-              key={col.key}
-              className={`bg-zinc-900 border border-zinc-800 rounded-xl p-3 border-t-2 ${col.accent}`}
-            >
-              <div className="flex items-center justify-between mb-3 px-1">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-bold uppercase tracking-wider ${col.accent.split(' ')[1]}`}>
-                    {col.label}
-                  </span>
-                  <span className="text-[10px] text-zinc-500">{list.length}</span>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-400">
-                  {fmtMoney(totals[col.key]) || '—'}
-                </span>
-              </div>
+      <InquiriesSection />
 
-              <div className="space-y-2 min-h-[120px]">
-                {loading ? (
-                  <div className="text-xs text-zinc-600 text-center py-6">Loading…</div>
-                ) : list.length === 0 ? (
-                  <div className="text-xs text-zinc-600 text-center py-6">No deals</div>
-                ) : (
-                  list.map((j) => <DealCard key={j.id} job={j} />)
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <OpenQuotesKanban
+        jobs={openQuoteJobs.map((j) => ({
+          id: j.id,
+          jobCode: j.jobCode,
+          name: j.name,
+          estimatedValue: j.estimatedValue,
+          orderTotal: j.orderTotal,
+          updatedAt: j.updatedAt,
+          company: j.company,
+          agent: j.agent,
+          pipelineColumn: j.pipelineColumn ?? null,
+          quoteBreakdown: j.quoteBreakdown,
+          departments: j.departments,
+        }))}
+        loading={loading}
+      />
+
+      <ActiveJobsKanban
+        jobs={activeJobs.map((j) => ({
+          id: j.id,
+          jobCode: j.jobCode,
+          name: j.name,
+          status: j.status,
+          startDate: j.startDate,
+          endDate: j.endDate,
+          estimatedValue: j.estimatedValue,
+          orderTotal: j.orderTotal,
+          company: j.company,
+          agent: j.agent,
+        }))}
+        loading={loading}
+      />
+
+      <ProspectsSection />
     </div>
   );
 }
@@ -163,47 +152,5 @@ function ScopeButton({
     >
       {children}
     </button>
-  );
-}
-
-function DealCard({ job }: { job: PipelineJob }) {
-  const deal =
-    job.orderTotal > 0
-      ? fmtMoney(job.orderTotal)
-      : job.estimatedValue != null
-      ? `Est. ${fmtMoney(job.estimatedValue)}`
-      : '—';
-
-  const contact = job.primaryContact
-    ? `${job.primaryContact.firstName} ${job.primaryContact.lastName}`
-    : null;
-
-  return (
-    <Link
-      href={`/jobs/${job.id}`}
-      className="block bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded-lg p-3 transition-colors"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-white truncate">{job.name}</div>
-          <div className="text-xs text-zinc-400 truncate">{job.company.name}</div>
-        </div>
-        <span className="text-[9px] font-mono text-zinc-600 flex-shrink-0">{job.jobCode}</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-mono text-amber-400">{deal}</span>
-        <span className="text-[10px] text-zinc-500">{daysSince(job.updatedAt)} in stage</span>
-      </div>
-
-      {contact && (
-        <div className="mt-1.5 text-[11px] text-zinc-500 truncate">
-          {contact}
-          {job.primaryContact?.role && (
-            <span className="text-zinc-600"> · {job.primaryContact.role}</span>
-          )}
-        </div>
-      )}
-    </Link>
   );
 }
