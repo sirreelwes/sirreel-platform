@@ -342,11 +342,23 @@ function NewQuotePageInner() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // Department-group bulk update: patch billableDays on every item whose
-  // current department matches `dept`. Pickup/return dates are untouched.
-  const setBulkDaysForDept = (dept: LineItemDepartment, days: number) => {
+  // Department-group bulk update: apply a partial patch to every line item
+  // in the group. Empty / undefined fields are skipped. Apply is an explicit
+  // override action — it overwrites custom per-line values too (vs. the
+  // quote-level date propagation which respects per-line overrides).
+  const setBulkForDept = (
+    dept: LineItemDepartment,
+    patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
+  ) => {
     setItems((prev) =>
-      prev.map((it) => (it.department === dept ? { ...it, billableDays: days } : it)),
+      prev.map((it) => {
+        if (it.department !== dept) return it;
+        const next = { ...it };
+        if (patch.pickupDate) next.pickupDate = patch.pickupDate;
+        if (patch.returnDate) next.returnDate = patch.returnDate;
+        if (patch.billableDays && patch.billableDays > 0) next.billableDays = patch.billableDays;
+        return next;
+      }),
     );
   };
 
@@ -761,7 +773,7 @@ function NewQuotePageInner() {
                 rows={group}
                 onChange={updateItem}
                 onDelete={removeItem}
-                onBulkSetDays={setBulkDaysForDept}
+                onBulkApply={setBulkForDept}
               />
             );
           })
@@ -882,58 +894,130 @@ function AttachJobPicker({
   );
 }
 
+// Shared grid template for the dept-group "table" — header row, line item
+// rows, and subtotal row all use this so columns align vertically.
+//   QTY · DESCRIPTION · PRICE/DAY · PICKUP · RETURN · DAYS · TOTAL · ACTIONS
+const TABLE_GRID = 'grid-cols-[64px_minmax(220px,1fr)_96px_136px_136px_120px_104px_36px]';
+
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onBulkSetDays,
+  department, rows, onChange, onDelete, onBulkApply,
 }: {
   department: LineItemDepartment;
   rows: { it: ResolvedItem; idx: number }[];
   onChange: (idx: number, patch: Partial<ResolvedItem>) => void;
   onDelete: (idx: number) => void;
-  onBulkSetDays: (dept: LineItemDepartment, days: number) => void;
+  onBulkApply: (
+    dept: LineItemDepartment,
+    patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
+  ) => void;
 }) {
-  const [bulk, setBulk] = useState('');
+  const [bulkPickup, setBulkPickup] = useState('');
+  const [bulkReturn, setBulkReturn] = useState('');
+  const [bulkDays, setBulkDays] = useState('');
+  const [appliedFlash, setAppliedFlash] = useState(false);
+  const isExpendable = department === 'EXPENDABLES';
+  const showBulk = !isExpendable;
+
   const apply = () => {
-    const n = parseInt(bulk, 10);
-    if (Number.isFinite(n) && n > 0) {
-      onBulkSetDays(department, n);
-      setBulk('');
-    }
+    const patch: { pickupDate?: string; returnDate?: string; billableDays?: number } = {};
+    if (bulkPickup) patch.pickupDate = bulkPickup;
+    if (bulkReturn) patch.returnDate = bulkReturn;
+    const n = parseInt(bulkDays, 10);
+    if (Number.isFinite(n) && n > 0) patch.billableDays = n;
+    if (Object.keys(patch).length === 0) return;
+    onBulkApply(department, patch);
+    setBulkPickup('');
+    setBulkReturn('');
+    setBulkDays('');
+    setAppliedFlash(true);
+    setTimeout(() => setAppliedFlash(false), 1800);
   };
-  const showBulk = department !== 'EXPENDABLES';
+
+  const subtotal = rows.reduce(
+    (sum, { it }) =>
+      sum +
+      computeLineTotal({
+        quantity: it.quantity,
+        rate: it.rate,
+        billableDays: it.billableDays,
+        rateType: it.rateType,
+        department: it.department,
+      }),
+    0,
+  );
+
   return (
-    <section className="border border-zinc-800 rounded-lg">
+    <section className="border border-zinc-800 rounded-lg overflow-x-auto">
+      {/* Group header — dept name + count + bulk-set strip */}
       <header className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-900/60 border-b border-zinc-800 rounded-t-lg flex-wrap">
         <div className="flex items-center gap-2">
           <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}>
             {DEPARTMENT_SHORT[department]}
           </span>
-          <span className="text-[11px] text-zinc-300 font-semibold">{DEPARTMENT_LABEL[department]}</span>
-          <span className="text-[10px] text-zinc-500">· {rows.length} line{rows.length === 1 ? '' : 's'}</span>
+          <span className="text-[11px] text-zinc-200 font-semibold">{DEPARTMENT_LABEL[department].toUpperCase()}</span>
+          <span className="text-[10px] text-zinc-500">· {rows.length} item{rows.length === 1 ? '' : 's'}</span>
         </div>
         {showBulk && (
           <div className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-zinc-500">Set all days:</span>
+            <span className="text-zinc-500">Apply to category:</span>
             <input
-              type="number" min={1} step={1} value={bulk}
-              onChange={(e) => setBulk(e.target.value)}
+              type="date" value={bulkPickup}
+              onChange={(e) => setBulkPickup(e.target.value)}
+              title="Pickup"
+              className="w-32 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white"
+            />
+            <input
+              type="date" value={bulkReturn}
+              onChange={(e) => setBulkReturn(e.target.value)}
+              title="Return"
+              className="w-32 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white"
+            />
+            <input
+              type="number" min={1} step={1} value={bulkDays}
+              onChange={(e) => setBulkDays(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
-              placeholder="—"
-              className="w-14 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white font-mono"
+              placeholder="Days"
+              title="Billable days"
+              className="w-16 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white font-mono"
             />
             <button
               onClick={apply}
-              disabled={!bulk}
+              disabled={!bulkPickup && !bulkReturn && !bulkDays}
               className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-[10px] font-bold rounded"
             >
               Apply
             </button>
+            {appliedFlash && (
+              <span className="text-[10px] font-semibold text-emerald-400 ml-1">Applied ✓</span>
+            )}
           </div>
         )}
       </header>
-      <div className="p-2 space-y-2">
+
+      {/* Column header row — same grid as item rows so columns align */}
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-zinc-900/40 border-b border-zinc-800 text-[9px] uppercase tracking-wider text-zinc-500 font-bold items-center`}>
+        <div>Qty</div>
+        <div>Description</div>
+        <div>Price/day</div>
+        <div>Pickup</div>
+        <div>Return</div>
+        <div>Billable days</div>
+        <div className="text-right">Total</div>
+        <div></div>
+      </div>
+
+      {/* Line item rows */}
+      <div className="divide-y divide-zinc-800/60">
         {rows.map(({ it, idx }) => (
           <LineItemRow key={idx} item={it} idx={idx} onChange={onChange} onDelete={onDelete} />
         ))}
+      </div>
+
+      {/* Subtotal row */}
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-zinc-900/40 border-t border-zinc-800 text-[11px] text-zinc-400 items-center`}>
+        <div className="col-span-6 font-semibold uppercase tracking-wider text-[10px]">Subtotal</div>
+        <div className="text-right font-mono text-emerald-400 text-sm">{fmtMoney(subtotal)}</div>
+        <div></div>
       </div>
     </section>
   );
@@ -996,7 +1080,6 @@ function LineItemRow({
   const visibleRateTypes: RateType[] = item.department === 'STAGES'
     ? ['DAILY', 'WEEKLY', 'MONTHLY']
     : [];
-  const showDaysField = !isExpendable;
 
   const applyMatch = (m: CatalogSearchResult) => {
     onChange(idx, {
@@ -1012,106 +1095,137 @@ function LineItemRow({
     setSearchResults([]);
   };
 
+  // Stages discount text — only shown for WEEKLY/MONTHLY since DAILY (and
+  // every other dept) is self-explanatory from the columnar values.
+  const showStagesDiscountNote =
+    item.department === 'STAGES' &&
+    (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY');
+
+  const dash = <span className="text-zinc-700">—</span>;
+
   return (
-    <div className="border border-zinc-800 rounded-lg p-3 bg-zinc-950">
-      <div className="flex items-start gap-2 mb-2">
+    <div className="px-3 py-2 hover:bg-zinc-900/30">
+      <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
+        {/* QTY */}
         <input
-          type="text"
-          value={item.description}
-          onChange={(e) => onChange(idx, { description: e.target.value })}
-          className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-semibold focus:outline-none focus:border-zinc-600"
+          type="number" min={1} step={1} value={item.quantity}
+          onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+          className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
         />
-        <DepartmentTag
-          department={item.department}
-          onChange={(d) => onChange(idx, { department: d })}
-        />
-        <button
-          onClick={() => onDelete(idx)}
-          className="text-zinc-600 hover:text-red-400 text-sm px-1"
-          title="Remove line"
-        >
-          ×
-        </button>
-      </div>
 
-      {item.qualifier && (
-        <div className="text-[11px] text-zinc-400 italic mb-1.5">— {item.qualifier}</div>
-      )}
-
-      {/* Match status */}
-      {matched ? (
-        <div className="flex items-center gap-2 mb-2 text-[11px]">
-          <span className="bg-emerald-900/40 text-emerald-300 px-2 py-0.5 rounded font-semibold">
-            ✓ Matched: {item.matchedProduct?.name}
-          </span>
-          {item.matchSource === 'ALIAS_FALLBACK' && (
-            <span className="text-zinc-500 text-[10px]">(via alias fallback)</span>
+        {/* DESCRIPTION column — vertical stack */}
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={item.description}
+              onChange={(e) => onChange(idx, { description: e.target.value })}
+              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-semibold focus:outline-none focus:border-zinc-600"
+            />
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${DEPT_BADGE[item.department]}`}
+              title={DEPARTMENT_LABEL[item.department]}
+            >
+              {DEPARTMENT_SHORT[item.department]}
+            </span>
+          </div>
+          {item.qualifier && (
+            <div className="text-[11px] text-zinc-400 italic">— {item.qualifier}</div>
           )}
-          <button
-            onClick={() => setShowOverride((s) => !s)}
-            className="text-zinc-500 hover:text-white underline decoration-dotted"
-          >
-            Change match
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 mb-2 text-[11px]">
-          <span className="bg-amber-900/40 text-amber-300 px-2 py-0.5 rounded font-semibold">
-            ⚠ No catalog match — pick one
-          </span>
-        </div>
-      )}
-
-      {showOverride && (
-        <div className="mb-2 p-2 border border-zinc-800 rounded bg-zinc-900">
-          <input
-            type="text"
-            value={searchQ}
-            onChange={(e) => setSearchQ(e.target.value)}
-            placeholder="Search the catalog…"
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white focus:outline-none focus:border-zinc-600"
-          />
-          {searching && <div className="text-[11px] text-zinc-500 mt-1">Searching…</div>}
-          {searchResults.length > 0 && (
-            <div className="mt-1.5 max-h-44 overflow-y-auto space-y-0.5">
-              {searchResults.map((r) => (
-                <button
-                  key={`${r.type}-${r.id}`}
-                  onClick={() => applyMatch(r)}
-                  className="block w-full text-left px-2 py-1 hover:bg-zinc-800 rounded text-[11px] text-zinc-300"
-                >
-                  <span className="text-zinc-500">[{r.type === 'INVENTORY' ? 'Inv' : 'Fleet'}]</span>{' '}
-                  {r.name}
-                  <span className="text-zinc-500 ml-2">· {DEPARTMENT_LABEL[r.department]}</span>
-                </button>
-              ))}
+          {matched ? (
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded font-semibold">
+                ✓ Matched: {item.matchedProduct?.name}
+              </span>
+              <button
+                onClick={() => setShowOverride((s) => !s)}
+                className="text-zinc-500 hover:text-white underline decoration-dotted"
+              >
+                Change match
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className="bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded font-semibold">
+                ⚠ No catalog match
+              </span>
+              <button
+                onClick={() => setShowOverride((s) => !s)}
+                className="text-zinc-500 hover:text-white underline decoration-dotted"
+              >
+                Pick one
+              </button>
+            </div>
+          )}
+          {showOverride && (
+            <div className="p-2 border border-zinc-800 rounded bg-zinc-900">
+              <input
+                type="text"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder="Search the catalog…"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white focus:outline-none focus:border-zinc-600"
+              />
+              {searching && <div className="text-[11px] text-zinc-500 mt-1">Searching…</div>}
+              {searchResults.length > 0 && (
+                <div className="mt-1.5 max-h-44 overflow-y-auto space-y-0.5">
+                  {searchResults.map((r) => (
+                    <button
+                      key={`${r.type}-${r.id}`}
+                      onClick={() => applyMatch(r)}
+                      className="block w-full text-left px-2 py-1 hover:bg-zinc-800 rounded text-[11px] text-zinc-300"
+                    >
+                      <span className="text-zinc-500">[{r.type === 'INVENTORY' ? 'Inv' : 'Fleet'}]</span>{' '}
+                      {r.name}
+                      <span className="text-zinc-500 ml-2">· {DEPARTMENT_LABEL[r.department]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
 
-      {/* Date row — hidden for EXPENDABLES (purchase items have no duration). */}
-      {!isExpendable && (
-        <div className="grid grid-cols-12 gap-2 mb-2">
-          <div className="col-span-3">
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Pickup</label>
+        {/* PRICE/DAY */}
+        <input
+          type="number" step="0.50" min={0} value={item.rate}
+          onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
+          className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+        />
+
+        {/* PICKUP */}
+        {isExpendable ? (
+          <div className="text-center text-sm self-center">{dash}</div>
+        ) : (
+          <input
+            type="date" value={item.pickupDate}
+            onChange={(e) => onChange(idx, { pickupDate: e.target.value })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+          />
+        )}
+
+        {/* RETURN */}
+        {isExpendable ? (
+          <div className="text-center text-sm self-center">{dash}</div>
+        ) : (
+          <input
+            type="date" value={item.returnDate}
+            onChange={(e) => onChange(idx, { returnDate: e.target.value })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+          />
+        )}
+
+        {/* BILLABLE DAYS — input + (STAGES) inline rate-type toggle below */}
+        {isExpendable ? (
+          <div className="text-center text-sm self-center">{dash}</div>
+        ) : (
+          <div className="space-y-1">
             <input
-              type="date" value={item.pickupDate}
-              onChange={(e) => onChange(idx, { pickupDate: e.target.value })}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+              type="number" min={1} step={1} value={item.billableDays}
+              onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
             />
-          </div>
-          <div className="col-span-3">
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Return</label>
-            <input
-              type="date" value={item.returnDate}
-              onChange={(e) => onChange(idx, { returnDate: e.target.value })}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
-            />
-          </div>
-          {showToggle && (
-            <div className="col-span-6">
-              <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate type</label>
+            {showToggle && (
               <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
                 {visibleRateTypes.map((rt) => {
                   const enabled = allowedRateTypes.includes(rt);
@@ -1127,7 +1241,7 @@ function LineItemRow({
                       onClick={() => enabled && onChange(idx, { rateType: rt })}
                       disabled={!enabled}
                       title={reason}
-                      className={`flex-1 px-2 py-1 text-[11px] font-semibold rounded ${
+                      className={`flex-1 px-1 py-0.5 text-[9px] font-semibold rounded ${
                         item.rateType === rt
                           ? 'bg-amber-600 text-white'
                           : enabled
@@ -1135,59 +1249,33 @@ function LineItemRow({
                             : 'text-zinc-700 cursor-not-allowed'
                       }`}
                     >
-                      {rt === 'DAILY' ? 'Day' : rt === 'WEEKLY' ? 'Week' : 'Month'}
+                      {rt === 'DAILY' ? 'D' : rt === 'WEEKLY' ? 'W' : 'M'}
                     </button>
                   );
                 })}
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Numeric controls */}
-      <div className="grid grid-cols-12 gap-2 items-end">
-        <div className="col-span-2">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Qty</label>
-          <input
-            type="number" min={1} step={1} value={item.quantity}
-            onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-          />
-        </div>
-        <div className="col-span-3">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate</label>
-          <input
-            type="number" step="0.50" min={0} value={item.rate}
-            onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-          />
-        </div>
-        {isExpendable ? (
-          <div className="col-span-5">
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Billing</label>
-            <div className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-300">
-              <span className="font-semibold text-orange-300">Purchase</span>
-              <span className="text-zinc-500 ml-2">(qty × rate)</span>
-            </div>
-          </div>
-        ) : (
-          <div className="col-span-5">
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
-            <input
-              type="number" min={1} step={1} value={item.billableDays}
-              onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-            />
+            )}
           </div>
         )}
-        <div className="col-span-2 text-right">
-          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total</div>
-          <div className="text-sm font-mono text-emerald-400">{fmtMoney(total)}</div>
+
+        {/* TOTAL */}
+        <div className="text-right text-sm font-mono text-emerald-400 self-center pt-1">
+          {fmtMoney(total)}
+        </div>
+
+        {/* ACTIONS */}
+        <div className="self-center">
+          <RowActionsMenu
+            currentDepartment={item.department}
+            onChangeDepartment={(d) => onChange(idx, { department: d })}
+            onDelete={() => onDelete(idx)}
+          />
         </div>
       </div>
 
-      <div className="mt-1.5 text-[10px] text-zinc-500 leading-tight">{breakdown}</div>
+      {showStagesDiscountNote && (
+        <div className="mt-1 text-[10px] text-zinc-500 leading-tight">{breakdown}</div>
+      )}
       {item.rateTypeAutoResetNote && (
         <div className="mt-1 text-[10px] text-amber-400 italic">{item.rateTypeAutoResetNote}</div>
       )}
@@ -1195,35 +1283,58 @@ function LineItemRow({
   );
 }
 
-function DepartmentTag({
-  department, onChange,
+function RowActionsMenu({
+  currentDepartment, onChangeDepartment, onDelete,
 }: {
-  department: LineItemDepartment;
-  onChange: (d: LineItemDepartment) => void;
+  currentDepartment: LineItemDepartment;
+  onChangeDepartment: (d: LineItemDepartment) => void;
+  onDelete: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  if (editing) {
-    return (
-      <select
-        value={department}
-        onChange={(e) => { onChange(e.target.value as LineItemDepartment); setEditing(false); }}
-        onBlur={() => setEditing(false)}
-        autoFocus
-        className="text-[10px] font-bold bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-white"
-      >
-        {DEPARTMENTS.map((d) => (
-          <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
-        ))}
-      </select>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const [editingDept, setEditingDept] = useState(false);
   return (
-    <button
-      onClick={() => setEditing(true)}
-      className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}
-      title={`${DEPARTMENT_LABEL[department]} — click to override`}
-    >
-      {DEPARTMENT_SHORT[department]}
-    </button>
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="px-1 py-0.5 text-zinc-500 hover:text-white text-sm"
+        title="Row actions"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-10 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg p-1 space-y-0.5">
+          {editingDept ? (
+            <select
+              value={currentDepartment}
+              onChange={(e) => {
+                onChangeDepartment(e.target.value as LineItemDepartment);
+                setEditingDept(false);
+                setOpen(false);
+              }}
+              autoFocus
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white"
+            >
+              {DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
+              ))}
+            </select>
+          ) : (
+            <button
+              onClick={() => setEditingDept(true)}
+              className="w-full text-left px-2 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-800 rounded"
+            >
+              Change department
+            </button>
+          )}
+          <button
+            onClick={() => { onDelete(); setOpen(false); }}
+            className="w-full text-left px-2 py-1.5 text-[11px] text-red-400 hover:bg-zinc-800 rounded"
+          >
+            Remove line item
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
+
