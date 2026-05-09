@@ -10,6 +10,7 @@ import {
   type CatalogProduct,
   type CatalogType,
 } from '@/lib/sales/catalogMatcher'
+import { BILLING_RULES, computeBillableDays } from '@/lib/orders/billing'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -50,6 +51,8 @@ Return ONLY valid JSON, no markdown fences, no preamble. Omit top-level fields y
       "department": "VEHICLES" | "COMMUNICATIONS" | "STAGES" | "PRO_SUPPLIES" | "EXPENDABLES" | "GE" | "ART",
       "qualifier": "Client modifier preserved verbatim, or null",
       "rateType": "DAILY" | "WEEKLY",
+      "pickupDate": "YYYY-MM-DD",
+      "returnDate": "YYYY-MM-DD",
       "billableDays": 1
     }
   ]
@@ -109,11 +112,21 @@ Default \`rateType\` to "DAILY". Flip to "WEEKLY" only on explicit weekly-rate
 language ("weekly rate", "for the week", "$X/week"). Duration alone (4-day shoot)
 does NOT imply weekly rate — let the human flip per-line in the UI when needed.
 
-RENTAL DAYS
+PER-LINE DATES + BILLABLE DAYS
 
-If startDate and endDate are present, set \`billableDays\` to the inclusive day
-count between them (Mar 30 → Apr 2 = 4). Otherwise default 1. The user can
-adjust per line.
+For each line item, set \`pickupDate\` and \`returnDate\` to the rental window
+that line covers. Default to the quote-level startDate/endDate unless the
+client specifies different dates for specific items (rare). Use ISO format
+YYYY-MM-DD.
+
+\`billableDays\` is what the client is charged for. For routine rentals in
+COMMUNICATIONS, PRO_SUPPLIES, ART, VEHICLES, GE, this is typically LESS
+than the actual rental duration because of weekly caps. The system pre-fills
+a suggested default after extraction and the human reviewer adjusts if the
+deal is non-standard. You don't need to compute this — just return your
+best estimate of actual rental duration in pickupDate/returnDate, and set
+billableDays to the inclusive day count between those dates as a safe
+starting value (the server will override with the dept-specific cap default).
 
 GENERAL RULES
 
@@ -131,10 +144,22 @@ interface AiItem {
   department: LineItemDepartment
   qualifier: string | null
   rateType: 'DAILY' | 'WEEKLY'
+  pickupDate?: string | null
+  returnDate?: string | null
   billableDays: number
 }
 
-interface ResolvedItem extends AiItem {
+interface ResolvedItem {
+  description: string
+  quantity: number
+  catalogProductId: string | null
+  catalogType: CatalogType | null
+  department: LineItemDepartment
+  qualifier: string | null
+  rateType: 'DAILY' | 'WEEKLY'
+  pickupDate: string  // ISO date
+  returnDate: string  // ISO date
+  billableDays: number
   rate: number
   matchedProduct: { id: string; type: CatalogType; name: string } | null
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null
@@ -204,12 +229,44 @@ async function resolveItem(
   const rateType = raw.rateType === 'WEEKLY' ? 'WEEKLY' : 'DAILY'
   const rate = matchedProduct ? pickRate(matchedProduct, rateType) : 0
 
-  // Step 5: billableDays — trust AI; verify against parsed range; final fallback 1.
-  let billableDays = Number.isFinite(raw.billableDays) && raw.billableDays > 0 ? Math.floor(raw.billableDays) : 1
-  const computedDays = inclusiveDayCount(parsedRange.startDate, parsedRange.endDate)
-  if (computedDays && Math.abs(computedDays - billableDays) > 1) {
-    // AI's billableDays drifted from the dates — trust the dates.
-    billableDays = computedDays
+  // Step 5: dates — prefer per-line; fall back to quote-level; default to today + 1d.
+  const isoDate = (d: Date): string => d.toISOString().slice(0, 10)
+  const today = new Date()
+  const tomorrow = new Date(today.getTime() + 86400000)
+  const pickupDate =
+    raw.pickupDate || parsedRange.startDate || isoDate(today)
+  const returnDate =
+    raw.returnDate || parsedRange.endDate || isoDate(tomorrow)
+
+  // Step 6: billableDays — pre-fill the dept-aware suggested default.
+  // Cap-per-week depts get the cap math as a starting point; STAGES gets
+  // the calendar duration; EXPENDABLES gets 1 (vestigial).
+  // The rep can override this freely in the UI.
+  const actualDays = inclusiveDayCount(pickupDate, returnDate) ?? 1
+  const rules = BILLING_RULES[department]
+  let suggestedDays = 1
+  if (rules.model === 'CAP_PER_WEEK') {
+    suggestedDays = computeBillableDays(actualDays, rules.cap)
+  } else if (rules.model === 'PERCENT_DISCOUNT') {
+    suggestedDays = actualDays
+  }
+  // If the AI provided a sensible billableDays we still respect it; otherwise
+  // hand back the suggested default.
+  const aiDays = Number.isFinite(raw.billableDays) && raw.billableDays > 0
+    ? Math.floor(raw.billableDays)
+    : null
+  // Heuristic: trust the AI's value only if it matches actualDays (the AI
+  // doesn't compute caps). If the AI just echoed the calendar duration on
+  // a cap-per-week dept, replace with the cap-suggested default.
+  let billableDays = suggestedDays
+  if (aiDays != null) {
+    if (rules.model === 'PERCENT_DISCOUNT' || rules.model === 'PURCHASE') {
+      billableDays = aiDays
+    } else {
+      // CAP_PER_WEEK: prefer the cap default unless AI gave a smaller value
+      // (rare, but signals a manual deal-specific override surfaced by the AI).
+      billableDays = Math.min(aiDays, suggestedDays)
+    }
   }
 
   return {
@@ -220,6 +277,8 @@ async function resolveItem(
     department,
     qualifier: raw.qualifier?.trim() || null,
     rateType,
+    pickupDate,
+    returnDate,
     billableDays,
     rate,
     matchedProduct: matchedProduct

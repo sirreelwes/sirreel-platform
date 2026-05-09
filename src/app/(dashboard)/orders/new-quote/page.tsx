@@ -26,6 +26,8 @@ interface ResolvedItem {
   department: LineItemDepartment;
   qualifier: string | null;
   rateType: RateType;
+  pickupDate: string;  // ISO YYYY-MM-DD
+  returnDate: string;  // ISO YYYY-MM-DD
   billableDays: number;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
@@ -301,18 +303,23 @@ function NewQuotePageInner() {
             next.rateType = 'DAILY';
             next.rateTypeAutoResetNote = null;
           }
-        } else if (patch.billableDays !== undefined && patch.billableDays !== it.billableDays) {
-          // billableDays change: only relevant for departments with a visible
-          // toggle (STAGES). For cap-per-week depts the toggle is hidden and
-          // rateType has no user-visible meaning, so don't surface a note.
-          const valid = availableRateTypes(next.department, next.billableDays);
+        } else if (
+          (patch.pickupDate !== undefined && patch.pickupDate !== it.pickupDate) ||
+          (patch.returnDate !== undefined && patch.returnDate !== it.returnDate)
+        ) {
+          // Per-line date change: re-evaluate rateType availability against
+          // the new calendar window. Only matters for STAGES; cap-per-week
+          // and EXPENDABLES have no toggle.
+          const pickup = new Date(next.pickupDate);
+          const ret = new Date(next.returnDate);
+          const valid = availableRateTypes(next.department, pickup, ret);
           if (valid.length > 0 && !valid.includes(next.rateType)) {
-            const reset = defaultRateType(next.department, next.billableDays);
+            const reset = defaultRateType(next.department, pickup, ret);
             const reason =
               next.rateType === 'MONTHLY'
-                ? 'Monthly requires more than 28 days'
+                ? 'Monthly requires more than 28 calendar days'
                 : next.rateType === 'WEEKLY'
-                  ? 'Weekly requires more than 7 days'
+                  ? 'Weekly requires more than 7 calendar days'
                   : 'rate type unavailable';
             next.rateType = reset;
             next.rateTypeAutoResetNote = `Rate type reset to ${rateTypeLabel(reset)} — ${reason}.`;
@@ -336,6 +343,10 @@ function NewQuotePageInner() {
   };
 
   const addBlankItem = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const pickup = editing.startDate || today;
+    const ret = editing.endDate || tomorrow;
     setItems((prev) => [
       ...prev,
       {
@@ -346,6 +357,8 @@ function NewQuotePageInner() {
         department: 'PRO_SUPPLIES',
         qualifier: null,
         rateType: 'DAILY',
+        pickupDate: pickup,
+        returnDate: ret,
         billableDays: 1,
         rate: 0,
         matchedProduct: null,
@@ -874,7 +887,11 @@ function LineItemRow({
   });
   const matched = item.catalogProductId != null;
   const isExpendable = item.department === 'EXPENDABLES';
-  const allowedRateTypes = availableRateTypes(item.department, item.billableDays);
+  const allowedRateTypes = availableRateTypes(
+    item.department,
+    new Date(item.pickupDate),
+    new Date(item.returnDate),
+  );
   // Toggle is only shown when allowedRateTypes is non-empty (STAGES today).
   // EXPENDABLES is purchase-only; cap-per-week depts apply cap math
   // automatically based on billableDays alone — no user-facing toggle.

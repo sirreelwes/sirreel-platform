@@ -28,44 +28,58 @@ export const BILLING_RULES: Record<LineItemDepartment, BillingRule> = {
 }
 
 /**
- * Which RateType options the UI should expose for a (department, days) pair.
- * An empty array means the user has no toggle — billing is determined
- * automatically by the department's BillingRule.
+ * Calendar days between pickup and return (1-day floor).
  *
- *   - EXPENDABLES — purchase-only, no toggle, no rentalDays.
- *   - CAP_PER_WEEK depts (COM, PRO_SUPPLIES, ART, VEHICLES, GE) — cap math
- *     ALWAYS applies based on rentalDays alone; no toggle.
- *   - STAGES — DAILY always; WEEKLY at >7 days; MONTHLY at >28 days. Each
- *     option represents a negotiated discount level.
+ * Used for rate-type gating only. The total/breakdown math reads
+ * billableDays directly — calendar duration is just the input that
+ * decides which rate-type buckets the rep can choose from.
+ */
+export function calendarDays(pickup: Date, returnDate: Date): number {
+  return Math.max(1, Math.ceil((returnDate.getTime() - pickup.getTime()) / 86400000))
+}
+
+/**
+ * Which RateType options the UI should expose for a department + calendar
+ * range. An empty array means no toggle — billing is direct multiplication
+ * of billableDays.
+ *
+ *   - EXPENDABLES        — purchase-only, no toggle.
+ *   - CAP_PER_WEEK depts — no toggle; rep enters billableDays directly.
+ *                          The cap math is a SUGGESTED default produced by
+ *                          the AI extractor (computeBillableDays), not
+ *                          enforced by this layer.
+ *   - STAGES             — DAILY always; WEEKLY at >7 calendar days;
+ *                          MONTHLY at >28 calendar days.
  */
 export function availableRateTypes(
   department: LineItemDepartment,
-  rentalDays: number
+  pickup: Date,
+  returnDate: Date
 ): RateType[] {
   if (department === 'EXPENDABLES') return []
   const rules = BILLING_RULES[department]
   if (rules.model === 'CAP_PER_WEEK') return []
   // STAGES (PERCENT_DISCOUNT)
+  const days = calendarDays(pickup, returnDate)
   const types: RateType[] = ['DAILY']
-  if (rentalDays > 7) types.push('WEEKLY')
-  if (rentalDays > 28) types.push('MONTHLY')
+  if (days > 7) types.push('WEEKLY')
+  if (days > 28) types.push('MONTHLY')
   return types
 }
 
 /**
- * Pick a sensible default RateType from the available list — the highest
- * tier that's available. Used by the auto-reset logic when the user
- * changes department or rentalDays in a way that invalidates the current
- * rateType. For departments with no user-facing toggle, returns DAILY as
- * a vestigial-but-harmless storage value.
+ * Default RateType — highest tier available for the given range.
+ * For departments with no toggle, returns DAILY (vestigial storage value).
  */
 export function defaultRateType(
   department: LineItemDepartment,
-  rentalDays: number
+  pickup: Date,
+  returnDate: Date
 ): RateType {
   if (department === 'EXPENDABLES') return 'FLAT'
-  const list = availableRateTypes(department, rentalDays)
-  if (list.length === 0) return 'DAILY' // cap-per-week: rateType is vestigial
+  const list = availableRateTypes(department, pickup, returnDate)
+  if (list.length === 0) return 'DAILY'
+  if (list.includes('MONTHLY')) return 'MONTHLY'
   if (list.includes('WEEKLY')) return 'WEEKLY'
   return list[0]
 }
@@ -85,28 +99,32 @@ function asNumber(r: number | DecimalLike): number {
 }
 
 /**
- * Cap-per-week billable-day formula, exposed for breakdown rendering.
+ * Suggested default billable-day count for cap-per-week departments — the
+ * AI extractor pre-fills this on new line items based on the calendar
+ * duration. The rep is free to override.
  *
- *   billableDays = floor(rentalDays / 7) * cap + min(rentalDays % 7, cap)
+ *   billableDays = floor(actualDays / 7) * cap + min(actualDays % 7, cap)
  *
- * For GE (cap=7) this collapses to billableDays === rentalDays.
+ * For GE (cap=7) this collapses to billableDays === actualDays.
+ * For other models (PERCENT_DISCOUNT, PURCHASE) callers should bypass
+ * this helper — STAGES bills calendar days directly, EXPENDABLES has no
+ * day concept.
  */
-export function capBillableDays(rentalDays: number, cap: number): number {
-  const fullWeeks = Math.floor(rentalDays / 7)
-  const remainder = rentalDays % 7
+export function computeBillableDays(actualDays: number, cap: number): number {
+  const fullWeeks = Math.floor(actualDays / 7)
+  const remainder = actualDays % 7
   return fullWeeks * cap + Math.min(remainder, cap)
 }
 
 /**
  * Single source of truth for line-item totals — used both client-side
- * for live UI display and server-side at write time. Server should never
- * trust a client-submitted total; recompute from (qty, rate, days,
- * rateType, department).
+ * for live UI display and server-side at write time. Server never
+ * trusts a client-submitted total; always recompute from
+ * (qty, rate, billableDays, rateType, department).
  *
- * NOTE: rateType is only consulted for STAGES (PERCENT_DISCOUNT). For
- * CAP_PER_WEEK departments the cap math always applies regardless of
- * the rateType column value (the column is now vestigial for those
- * departments and may carry legacy WEEKLY values from older data).
+ * Math is now direct multiplication. The cap auto-math we shipped previously
+ * is a *suggested default* that the extractor pre-fills — the rep can
+ * override billableDays freely without the system pushing back.
  */
 export function computeLineTotal(item: BillingInput): number {
   const rate = asNumber(item.rate)
@@ -116,16 +134,16 @@ export function computeLineTotal(item: BillingInput): number {
     return item.quantity * rate
   }
 
+  let multiplier = 1.0
   if (rules.model === 'PERCENT_DISCOUNT') {
-    let multiplier = 1.0
     if (item.rateType === 'WEEKLY') multiplier = rules.weekly
     if (item.rateType === 'MONTHLY') multiplier = rules.monthly
-    return item.quantity * rate * item.billableDays * multiplier
   }
+  // CAP_PER_WEEK ignores rateType — billableDays is the source of truth,
+  // however the rep arrived at it (cap suggestion accepted, manual override,
+  // or zero for negotiated freebies).
 
-  // CAP_PER_WEEK — always cap, regardless of rateType.
-  const billable = capBillableDays(item.billableDays, rules.cap)
-  return item.quantity * rate * billable
+  return item.quantity * rate * item.billableDays * multiplier
 }
 
 const fmtMoney = (n: number) =>
@@ -150,20 +168,12 @@ export function billingBreakdown(item: BillingInput): string {
     return `${item.quantity} × ${fmtMoney(rate)} = ${fmtMoney(total)}`
   }
 
-  if (rules.model === 'PERCENT_DISCOUNT') {
-    if (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY') {
-      const pct = item.rateType === 'WEEKLY' ? rules.weekly : rules.monthly
-      const label = item.rateType === 'WEEKLY' ? 'weekly' : 'monthly'
-      return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days × ${Math.round(pct * 100)}% (${label}) = ${fmtMoney(total)}`
-    }
-    return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days = ${fmtMoney(total)}`
+  if (rules.model === 'PERCENT_DISCOUNT' && (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY')) {
+    const pct = item.rateType === 'WEEKLY' ? rules.weekly : rules.monthly
+    const label = item.rateType === 'WEEKLY' ? 'weekly' : 'monthly'
+    return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days × ${Math.round(pct * 100)}% (${label}) = ${fmtMoney(total)}`
   }
 
-  // CAP_PER_WEEK — cap always applies; rateType is vestigial.
-  const billable = capBillableDays(item.billableDays, rules.cap)
-  if (billable === item.billableDays) {
-    // Cap didn't kick in (short rental, or GE cap=7).
-    return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days = ${fmtMoney(total)}`
-  }
-  return `${item.quantity} × ${fmtMoney(rate)} × ${billable} billable days (${item.billableDays}-day rental, ${rules.cap}-day cap) = ${fmtMoney(total)}`
+  // CAP_PER_WEEK or STAGES DAILY — direct multiplication.
+  return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days = ${fmtMoney(total)}`
 }
