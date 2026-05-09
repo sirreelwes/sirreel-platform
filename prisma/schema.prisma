@@ -1258,7 +1258,10 @@ model InventoryCategory {
 
 model InventoryItem {
   id              String              @id @default(uuid())
-  categoryId      String              @map("category_id")
+  // Nullable since the May 2026 RW import — auto-created rows from RW
+  // start with no SirReel category until the admin reassigns. Existing
+  // hand-curated rows always have one.
+  categoryId      String?             @map("category_id")
   code            String              @unique
   description     String?
   dailyRate       Decimal             @default(0) @map("daily_rate") @db.Decimal(10, 2)
@@ -1289,10 +1292,10 @@ model InventoryItem {
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
-  category   InventoryCategory @relation(fields: [categoryId], references: [id])
+  category   InventoryCategory? @relation(fields: [categoryId], references: [id])
   lineItems  OrderLineItem[]
   subRentals SubRental[]
-  location   Location          @default(LANKERSHIM)
+  location   Location           @default(LANKERSHIM)
 
   @@index([rwId])
   @@index([needsReview])

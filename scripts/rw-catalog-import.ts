@@ -417,23 +417,9 @@ async function main() {
   let alignedCount = 0
   let createdCount = 0
 
-  // Find the InventoryCategory id for "Misc" or first category, used as a
-  // placeholder for auto-created items. categoryId is NOT NULL in the
-  // schema; brief says "categoryId=NULL initially" but the column is
-  // non-null in this DB. Use the existing "Miscellaneous" category if
-  // present, else the first one.
-  const cats = await prisma.inventoryCategory.findMany({
-    select: { id: true, name: true, slug: true },
-    orderBy: { sortOrder: 'asc' },
-  })
-  const placeholderCategory =
-    cats.find((c) => /misc/i.test(c.name)) ??
-    cats.find((c) => /unassigned|review/i.test(c.name)) ??
-    cats[0]
-  if (!placeholderCategory) {
-    throw new Error('No InventoryCategory rows exist; cannot create RW-only items.')
-  }
-  console.log(`  Using "${placeholderCategory.name}" (${placeholderCategory.slug}) as placeholder category for auto-created rows.`)
+  // categoryId is now nullable on InventoryItem (changed for the May 2026
+  // RW import). Auto-created rows start with categoryId=null + needsReview=
+  // true; admin assigns a category in the catalog UI later.
 
   for (const p of aMatches) {
     await applyEnrichment(p.sirreel.id, p.rw!, p.sirreel, now, /*alignCode*/ false)
@@ -448,7 +434,7 @@ async function main() {
       data: {
         code: m.iCode,
         description: m.description,
-        categoryId: placeholderCategory.id,
+        categoryId: null,
         department: inferDepartment(m.description),
         dailyRate: m.dailyRate,
         weeklyRate: m.weeklyRate,
@@ -479,7 +465,7 @@ async function main() {
   applied.push(`- Untouched SirReel-only:                **${dOnly.length}**`)
   applied.push(`- Rate conflicts logged but unchanged:    **${rateConflicts.length}**`)
   applied.push('')
-  applied.push(`Placeholder InventoryCategory for new rows: \`${placeholderCategory.slug}\` ("${placeholderCategory.name}"). Admin should reassign via the catalog UI.`)
+  applied.push('Auto-created rows have `categoryId=null` + `needsReview=true`. Admin assigns categories via the catalog UI; query is `SELECT * FROM inventory_items WHERE needs_review = true`.')
   const appliedPath = path.join(process.cwd(), 'tmp/rw-import-applied.md')
   writeFileSync(appliedPath, applied.join('\n'))
   console.log()

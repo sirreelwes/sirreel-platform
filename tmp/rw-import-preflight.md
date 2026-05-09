@@ -1,6 +1,6 @@
 # RentalWorks Catalog Import — Pre-flight Report
 
-Generated: 2026-05-09T23:28:51.431Z
+Generated: 2026-05-09T23:37:05.252Z
 RW physical items: **1797** · grouped masters: **163**
 SirReel active inventory items: **522**
 
