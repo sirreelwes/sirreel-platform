@@ -723,7 +723,7 @@ function NewQuotePageInner() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Production Name</label>
+              <label className="block text-xs text-zinc-500 mb-1">Job Name</label>
               <input
                 type="text" value={editing.productionName || ''}
                 onChange={(e) => setEditing({ ...editing, productionName: e.target.value })}
