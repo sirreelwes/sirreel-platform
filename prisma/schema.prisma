@@ -1222,6 +1222,7 @@ enum LineItemDepartment {
 enum RateType {
   DAILY
   WEEKLY
+  MONTHLY
   FLAT
 }
 

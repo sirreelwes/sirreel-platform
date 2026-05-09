@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { computeLineTotal, recalcOrderTotals } from "@/lib/orders";
+import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
+import { computeLineTotal } from "@/lib/orders/billing";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -32,22 +34,36 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     const explicitDays = rentalDays ?? manualDays;
     const dayInputProvided = explicitDays !== undefined && explicitDays !== null;
-    if (rateType !== undefined || rate !== undefined || quantity !== undefined || startDate !== undefined || endDate !== undefined || dayInputProvided) {
+    if (
+      rateType !== undefined || rate !== undefined || quantity !== undefined ||
+      startDate !== undefined || endDate !== undefined || dayInputProvided ||
+      department !== undefined || inventoryItemId !== undefined || assetCategoryId !== undefined
+    ) {
       const existing = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
       if (existing) {
-        const effectiveRateType = (rateType ?? existing.rateType) as "DAILY" | "WEEKLY" | "FLAT";
+        const effectiveRateType = (rateType ?? existing.rateType) as RateType;
         const effectiveRate = Number(rate ?? existing.rate);
-        const effectiveQty = quantity ?? existing.quantity;
-        const { days, lineTotal } = computeLineTotal({
-          rateType: effectiveRateType,
-          rate: effectiveRate,
+        const effectiveQty = Number(quantity ?? existing.quantity);
+        const effectiveDept = (department as LineItemDepartment | undefined) ?? existing.department;
+
+        let effectiveDays = existing.days;
+        if (dayInputProvided) {
+          effectiveDays = Math.max(1, Math.floor(Number(explicitDays)));
+        } else if (startDate !== undefined || endDate !== undefined) {
+          const s = startDate !== undefined ? (startDate ? new Date(startDate) : null) : existing.startDate;
+          const e = endDate !== undefined ? (endDate ? new Date(endDate) : null) : existing.endDate;
+          if (s && e) effectiveDays = computeRentalDays(s, e);
+        }
+
+        const lineTotal = computeLineTotal({
           quantity: effectiveQty,
-          rentalDays: dayInputProvided ? Number(explicitDays) : undefined,
-          startDate: startDate !== undefined ? (startDate ? new Date(startDate) : null) : existing.startDate,
-          endDate: endDate !== undefined ? (endDate ? new Date(endDate) : null) : existing.endDate,
+          rate: effectiveRate,
+          rentalDays: effectiveDays,
+          rateType: effectiveRateType,
+          department: effectiveDept,
         });
-        data.days = days;
-        data.lineTotal = lineTotal;
+        data.days = effectiveDays;
+        data.lineTotal = Math.round(lineTotal * 100) / 100;
       }
     }
 

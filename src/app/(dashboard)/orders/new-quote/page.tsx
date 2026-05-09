@@ -3,8 +3,14 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import type { LineItemDepartment } from '@prisma/client';
+import type { LineItemDepartment, RateType } from '@prisma/client';
 import { DEPARTMENT_LABEL, DEPARTMENT_SHORT } from '@/lib/sales/pipeline';
+import {
+  availableRateTypes,
+  billingBreakdown,
+  computeLineTotal,
+  defaultRateType,
+} from '@/lib/orders/billing';
 
 const DEPARTMENTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'GE', 'EXPENDABLES', 'PRO_SUPPLIES', 'ART',
@@ -19,12 +25,15 @@ interface ResolvedItem {
   catalogType: CatalogType | null;
   department: LineItemDepartment;
   qualifier: string | null;
-  rateType: 'DAILY' | 'WEEKLY';
+  rateType: RateType;
   rentalDays: number;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null;
   warnings: string[];
+  // Transient UI-only flag set when an auto-reset fires so we can show
+  // the inline note. Cleared on the next user-initiated edit.
+  rateTypeAutoResetNote?: string | null;
 }
 
 interface ParsedTop {
@@ -79,14 +88,12 @@ interface CatalogSearchResult {
   weeklyRate: number;
 }
 
-function pickRate(p: { dailyRate: number; weeklyRate: number }, rt: 'DAILY' | 'WEEKLY'): number {
-  if (rt === 'WEEKLY') return p.weeklyRate > 0 ? p.weeklyRate : p.dailyRate * 5;
+// pickRate is used when applying a catalog match to seed the line's rate.
+// Most InventoryItems only have weeklyRate populated, so derive the missing
+// side using a 5-day work-week assumption.
+function pickRate(p: { dailyRate: number; weeklyRate: number }, rt: RateType): number {
+  if (rt === 'WEEKLY' || rt === 'MONTHLY') return p.weeklyRate > 0 ? p.weeklyRate : p.dailyRate * 5;
   return p.dailyRate > 0 ? p.dailyRate : p.weeklyRate / 5;
-}
-
-function lineItemTotal(rt: 'DAILY' | 'WEEKLY', rate: number, qty: number, days: number): number {
-  if (rt === 'WEEKLY') return rate * Math.ceil(days / 5) * qty;
-  return rate * days * qty;
 }
 
 const DEPT_BADGE: Record<LineItemDepartment, string> = {
@@ -103,6 +110,16 @@ function fmtMoney(n: number) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'USD', maximumFractionDigits: 0,
   }).format(n);
+}
+
+const RATE_TYPE_LABEL: Record<RateType, string> = {
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  FLAT: 'Purchase',
+};
+function rateTypeLabel(rt: RateType): string {
+  return RATE_TYPE_LABEL[rt];
 }
 
 export default function NewQuotePage() {
@@ -257,7 +274,51 @@ function NewQuotePageInner() {
   };
 
   const updateItem = (idx: number, patch: Partial<ResolvedItem>) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    setItems((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const next: ResolvedItem = { ...it, ...patch };
+
+        // Department change: always normalize rateType to DAILY (or FLAT for
+        // EXPENDABLES). Cap-per-week math doesn't carry over across dept
+        // boundaries; safer to reset and let the user re-pick.
+        if (patch.department !== undefined && patch.department !== it.department) {
+          if (next.department === 'EXPENDABLES') {
+            if (next.rateType !== 'FLAT') {
+              next.rateType = 'FLAT';
+              next.rateTypeAutoResetNote = 'Rate type reset to Purchase — Expendables are always purchases.';
+            }
+          } else if (next.rateType !== 'DAILY') {
+            next.rateType = 'DAILY';
+            next.rateTypeAutoResetNote = 'Rate type reset to Daily — billing changes with department.';
+          }
+        } else if (patch.rentalDays !== undefined && patch.rentalDays !== it.rentalDays) {
+          // rentalDays change: keep the rateType if it's still valid;
+          // otherwise step down to the highest tier that fits.
+          const valid = availableRateTypes(next.department, next.rentalDays);
+          if (!valid.includes(next.rateType)) {
+            const reset = defaultRateType(next.department, next.rentalDays);
+            const reason =
+              next.rateType === 'MONTHLY'
+                ? 'Monthly requires more than 28 days'
+                : next.rateType === 'WEEKLY'
+                  ? 'Weekly requires more than 7 days'
+                  : 'rate type unavailable';
+            next.rateType = reset;
+            next.rateTypeAutoResetNote = `Rate type reset to ${rateTypeLabel(reset)} — ${reason}.`;
+          }
+        } else if (
+          patch.rateType !== undefined ||
+          patch.quantity !== undefined ||
+          patch.rate !== undefined ||
+          patch.description !== undefined
+        ) {
+          // User-initiated edit — clear any lingering reset note.
+          next.rateTypeAutoResetNote = null;
+        }
+        return next;
+      }),
+    );
   };
 
   const removeItem = (idx: number) => {
@@ -285,7 +346,18 @@ function NewQuotePageInner() {
   };
 
   const orderTotal = useMemo(() => {
-    const lineSum = items.reduce((sum, it) => sum + lineItemTotal(it.rateType, it.rate, it.quantity, it.rentalDays), 0);
+    const lineSum = items.reduce(
+      (sum, it) =>
+        sum +
+        computeLineTotal({
+          quantity: it.quantity,
+          rate: it.rate,
+          rentalDays: it.rentalDays,
+          rateType: it.rateType,
+          department: it.department,
+        }),
+      0,
+    );
     const discount = parseFloat(discountAmount) || 0;
     return lineSum + discount;
   }, [items, discountAmount]);
@@ -776,8 +848,29 @@ function LineItemRow({
     return () => clearTimeout(t);
   }, [searchQ]);
 
-  const total = lineItemTotal(item.rateType, item.rate, item.quantity, item.rentalDays);
+  const total = computeLineTotal({
+    quantity: item.quantity,
+    rate: item.rate,
+    rentalDays: item.rentalDays,
+    rateType: item.rateType,
+    department: item.department,
+  });
+  const breakdown = billingBreakdown({
+    quantity: item.quantity,
+    rate: item.rate,
+    rentalDays: item.rentalDays,
+    rateType: item.rateType,
+    department: item.department,
+  });
   const matched = item.catalogProductId != null;
+  const isExpendable = item.department === 'EXPENDABLES';
+  const allowedRateTypes = availableRateTypes(item.department, item.rentalDays);
+  // Toggle order: always show DAILY/WEEKLY for non-expendables; STAGES gets MONTHLY too.
+  const visibleRateTypes: RateType[] = isExpendable
+    ? ['FLAT']
+    : item.department === 'STAGES'
+      ? ['DAILY', 'WEEKLY', 'MONTHLY']
+      : ['DAILY', 'WEEKLY'];
 
   const applyMatch = (m: CatalogSearchResult) => {
     onChange(idx, {
@@ -889,35 +982,67 @@ function LineItemRow({
             className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
           />
         </div>
-        <div className="col-span-3">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate type</label>
-          <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
-            {(['DAILY', 'WEEKLY'] as const).map((rt) => (
-              <button
-                key={rt}
-                onClick={() => onChange(idx, { rateType: rt })}
-                className={`flex-1 px-2 py-1 text-[11px] font-semibold rounded ${
-                  item.rateType === rt ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {rt === 'DAILY' ? 'Day' : 'Week'}
-              </button>
-            ))}
+        {isExpendable ? (
+          <div className="col-span-5">
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Billing</label>
+            <div className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-300">
+              <span className="font-semibold text-orange-300">Purchase</span>
+              <span className="text-zinc-500 ml-2">(no rental days — qty × rate)</span>
+            </div>
           </div>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
-          <input
-            type="number" min={1} value={item.rentalDays}
-            onChange={(e) => onChange(idx, { rentalDays: Math.max(1, Number(e.target.value) || 1) })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-          />
-        </div>
+        ) : (
+          <>
+            <div className="col-span-3">
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate type</label>
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
+                {visibleRateTypes.map((rt) => {
+                  const enabled = allowedRateTypes.includes(rt);
+                  const reason =
+                    rt === 'WEEKLY' && !enabled
+                      ? 'Available at >7 days'
+                      : rt === 'MONTHLY' && !enabled
+                        ? 'Stages-only, available at >28 days'
+                        : '';
+                  return (
+                    <button
+                      key={rt}
+                      onClick={() => enabled && onChange(idx, { rateType: rt })}
+                      disabled={!enabled}
+                      title={reason}
+                      className={`flex-1 px-2 py-1 text-[11px] font-semibold rounded ${
+                        item.rateType === rt
+                          ? 'bg-amber-600 text-white'
+                          : enabled
+                            ? 'text-zinc-400 hover:text-white'
+                            : 'text-zinc-700 cursor-not-allowed'
+                      }`}
+                    >
+                      {rt === 'DAILY' ? 'Day' : rt === 'WEEKLY' ? 'Week' : 'Month'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
+              <input
+                type="number" min={1} value={item.rentalDays}
+                onChange={(e) => onChange(idx, { rentalDays: Math.max(1, Number(e.target.value) || 1) })}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+              />
+            </div>
+          </>
+        )}
         <div className="col-span-2 text-right">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total</div>
           <div className="text-sm font-mono text-emerald-400">{fmtMoney(total)}</div>
         </div>
       </div>
+
+      <div className="mt-1.5 text-[10px] text-zinc-500 leading-tight">{breakdown}</div>
+      {item.rateTypeAutoResetNote && (
+        <div className="mt-1 text-[10px] text-amber-400 italic">{item.rateTypeAutoResetNote}</div>
+      )}
     </div>
   );
 }
