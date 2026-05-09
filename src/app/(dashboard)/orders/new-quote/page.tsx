@@ -342,6 +342,32 @@ function NewQuotePageInner() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Department-group bulk update: patch billableDays on every item whose
+  // current department matches `dept`. Pickup/return dates are untouched.
+  const setBulkDaysForDept = (dept: LineItemDepartment, days: number) => {
+    setItems((prev) =>
+      prev.map((it) => (it.department === dept ? { ...it, billableDays: days } : it)),
+    );
+  };
+
+  // Quote-level date change: propagate to line items whose pickupDate /
+  // returnDate currently matches the old quote-level value (i.e., haven't
+  // been individually overridden). Lines with custom dates stay as-is.
+  const updateQuoteDate = (field: 'startDate' | 'endDate', newValue: string) => {
+    const oldValue = editing[field] || '';
+    setEditing((prev) => ({ ...prev, [field]: newValue }));
+    if (!newValue || !oldValue || newValue === oldValue) return;
+    setItems((prev) =>
+      prev.map((it) => {
+        const lineField = field === 'startDate' ? 'pickupDate' : 'returnDate';
+        if (it[lineField] === oldValue) {
+          return { ...it, [lineField]: newValue };
+        }
+        return it;
+      }),
+    );
+  };
+
   const addBlankItem = () => {
     const today = new Date().toISOString().slice(0, 10);
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -491,6 +517,8 @@ function NewQuotePageInner() {
             quantity: it.quantity,
             rate: it.rate,
             rateType: it.rateType,
+            pickupDate: it.pickupDate,
+            returnDate: it.returnDate,
             billableDays: it.billableDays,
           }),
         });
@@ -691,18 +719,18 @@ function NewQuotePageInner() {
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Start Date</label>
+              <label className="block text-xs text-zinc-500 mb-1">Pickup Date</label>
               <input
                 type="date" value={editing.startDate || ''}
-                onChange={(e) => setEditing({ ...editing, startDate: e.target.value })}
+                onChange={(e) => updateQuoteDate('startDate', e.target.value)}
                 className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">End Date</label>
+              <label className="block text-xs text-zinc-500 mb-1">Return Date</label>
               <input
                 type="date" value={editing.endDate || ''}
-                onChange={(e) => setEditing({ ...editing, endDate: e.target.value })}
+                onChange={(e) => updateQuoteDate('endDate', e.target.value)}
                 className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
               />
             </div>
@@ -710,22 +738,34 @@ function NewQuotePageInner() {
         </div>
       )}
 
-      {/* Line items */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      {/* Line items grouped by department */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-white">Line Items ({items.length})</h2>
           <button onClick={addBlankItem} className="text-[11px] font-semibold text-zinc-400 hover:text-white">
             + Add line manually
           </button>
         </div>
-        <div className="space-y-2">
-          {items.map((it, idx) => (
-            <LineItemRow key={idx} item={it} idx={idx} onChange={updateItem} onDelete={removeItem} />
-          ))}
-          {items.length === 0 && (
-            <div className="text-xs text-zinc-600 text-center py-6">No line items.</div>
-          )}
-        </div>
+        {items.length === 0 ? (
+          <div className="text-xs text-zinc-600 text-center py-6">No line items.</div>
+        ) : (
+          DEPARTMENTS.map((dept) => {
+            const group = items
+              .map((it, idx) => ({ it, idx }))
+              .filter(({ it }) => it.department === dept);
+            if (group.length === 0) return null;
+            return (
+              <DepartmentGroup
+                key={dept}
+                department={dept}
+                rows={group}
+                onChange={updateItem}
+                onDelete={removeItem}
+                onBulkSetDays={setBulkDaysForDept}
+              />
+            );
+          })
+        )}
       </div>
 
       {/* Discount */}
@@ -839,6 +879,63 @@ function AttachJobPicker({
         </div>
       )}
     </div>
+  );
+}
+
+function DepartmentGroup({
+  department, rows, onChange, onDelete, onBulkSetDays,
+}: {
+  department: LineItemDepartment;
+  rows: { it: ResolvedItem; idx: number }[];
+  onChange: (idx: number, patch: Partial<ResolvedItem>) => void;
+  onDelete: (idx: number) => void;
+  onBulkSetDays: (dept: LineItemDepartment, days: number) => void;
+}) {
+  const [bulk, setBulk] = useState('');
+  const apply = () => {
+    const n = parseInt(bulk, 10);
+    if (Number.isFinite(n) && n > 0) {
+      onBulkSetDays(department, n);
+      setBulk('');
+    }
+  };
+  const showBulk = department !== 'EXPENDABLES';
+  return (
+    <section className="border border-zinc-800 rounded-lg">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-900/60 border-b border-zinc-800 rounded-t-lg flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}>
+            {DEPARTMENT_SHORT[department]}
+          </span>
+          <span className="text-[11px] text-zinc-300 font-semibold">{DEPARTMENT_LABEL[department]}</span>
+          <span className="text-[10px] text-zinc-500">· {rows.length} line{rows.length === 1 ? '' : 's'}</span>
+        </div>
+        {showBulk && (
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-zinc-500">Set all days:</span>
+            <input
+              type="number" min={1} step={1} value={bulk}
+              onChange={(e) => setBulk(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+              placeholder="—"
+              className="w-14 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white font-mono"
+            />
+            <button
+              onClick={apply}
+              disabled={!bulk}
+              className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-[10px] font-bold rounded"
+            >
+              Apply
+            </button>
+          </div>
+        )}
+      </header>
+      <div className="p-2 space-y-2">
+        {rows.map(({ it, idx }) => (
+          <LineItemRow key={idx} item={it} idx={idx} onChange={onChange} onDelete={onDelete} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -993,44 +1090,36 @@ function LineItemRow({
         </div>
       )}
 
-      {/* Numeric controls */}
-      <div className="grid grid-cols-12 gap-2 items-end">
-        <div className="col-span-2">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Qty</label>
-          <input
-            type="number" min={1} value={item.quantity}
-            onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-          />
-        </div>
-        <div className="col-span-3">
-          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate</label>
-          <input
-            type="number" step="0.50" min={0} value={item.rate}
-            onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-          />
-        </div>
-        {isExpendable ? (
-          <div className="col-span-5">
-            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Billing</label>
-            <div className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-300">
-              <span className="font-semibold text-orange-300">Purchase</span>
-              <span className="text-zinc-500 ml-2">(no rental days — qty × rate)</span>
-            </div>
+      {/* Date row — hidden for EXPENDABLES (purchase items have no duration). */}
+      {!isExpendable && (
+        <div className="grid grid-cols-12 gap-2 mb-2">
+          <div className="col-span-3">
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Pickup</label>
+            <input
+              type="date" value={item.pickupDate}
+              onChange={(e) => onChange(idx, { pickupDate: e.target.value })}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+            />
           </div>
-        ) : showToggle ? (
-          <>
-            <div className="col-span-3">
+          <div className="col-span-3">
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Return</label>
+            <input
+              type="date" value={item.returnDate}
+              onChange={(e) => onChange(idx, { returnDate: e.target.value })}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+            />
+          </div>
+          {showToggle && (
+            <div className="col-span-6">
               <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate type</label>
               <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
                 {visibleRateTypes.map((rt) => {
                   const enabled = allowedRateTypes.includes(rt);
                   const reason =
                     rt === 'WEEKLY' && !enabled
-                      ? 'Available at >7 days'
+                      ? 'Available at >7 calendar days'
                       : rt === 'MONTHLY' && !enabled
-                        ? 'Available at >28 days'
+                        ? 'Available at >28 calendar days'
                         : '';
                   return (
                     <button
@@ -1052,26 +1141,46 @@ function LineItemRow({
                 })}
               </div>
             </div>
-            <div className="col-span-2">
-              <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
-              <input
-                type="number" min={1} value={item.billableDays}
-                onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
-              />
+          )}
+        </div>
+      )}
+
+      {/* Numeric controls */}
+      <div className="grid grid-cols-12 gap-2 items-end">
+        <div className="col-span-2">
+          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Qty</label>
+          <input
+            type="number" min={1} step={1} value={item.quantity}
+            onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+          />
+        </div>
+        <div className="col-span-3">
+          <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate</label>
+          <input
+            type="number" step="0.50" min={0} value={item.rate}
+            onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+          />
+        </div>
+        {isExpendable ? (
+          <div className="col-span-5">
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Billing</label>
+            <div className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[11px] text-zinc-300">
+              <span className="font-semibold text-orange-300">Purchase</span>
+              <span className="text-zinc-500 ml-2">(qty × rate)</span>
             </div>
-          </>
-        ) : showDaysField ? (
-          // Cap-per-week: days only, no toggle. Cap math applies automatically.
+          </div>
+        ) : (
           <div className="col-span-5">
             <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
             <input
-              type="number" min={1} value={item.billableDays}
+              type="number" min={1} step={1} value={item.billableDays}
               onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
             />
           </div>
-        ) : null}
+        )}
         <div className="col-span-2 text-right">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total</div>
           <div className="text-sm font-mono text-emerald-400">{fmtMoney(total)}</div>
