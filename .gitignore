@@ -6,4 +6,7 @@ node_modules/
 next-env.d.ts
 .env*.local
 *.bak.*
-scripts/
+scripts/*
+# Reusable scripts (re-runnable, ship with repo) — exempt from the
+# blanket scripts/ ignore.
+!scripts/rw-catalog-import.ts
