@@ -994,14 +994,17 @@ function DepartmentGroup({
         )}
       </header>
 
-      {/* Column header row — same grid as item rows so columns align */}
+      {/* Column header row — same grid as item rows so columns align across
+          groups. EXPENDABLES are consumed/sold (not rented), so Pickup /
+          Return / Billable-days don't apply — header labels in those
+          columns are suppressed and the row cells render an em-dash. */}
       <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-zinc-900/40 border-b border-zinc-800 text-[9px] uppercase tracking-wider text-zinc-500 font-bold items-center`}>
         <div>Qty</div>
         <div>Description</div>
-        <div>Price/day</div>
-        <div>Pickup</div>
-        <div>Return</div>
-        <div>Billable days</div>
+        <div>{isExpendable ? 'Price' : 'Price/day'}</div>
+        <div>{isExpendable ? '' : 'Pickup'}</div>
+        <div>{isExpendable ? '' : 'Return'}</div>
+        <div>{isExpendable ? '' : 'Billable days'}</div>
         <div className="text-right">Total</div>
         <div></div>
       </div>
