@@ -62,6 +62,12 @@ model AssetCategory {
   // Phase 2 sales pipeline — see InventoryItem for semantics.
   aliases        String[]            @default([])
   department     LineItemDepartment
+  // Defensive RW columns (May 2026). The May spike doesn't write to
+  // AssetCategory rows, but Phase 4 may map RW Categories ↔ SirReel
+  // AssetCategory; columns are in place to avoid a re-migration.
+  needsReview    Boolean             @default(false) @map("needs_review")
+  rwLastSyncedAt DateTime?           @map("rw_last_synced_at")
+  rwId           String?             @map("rw_id")
 
   // Integration IDs
   planyoResourceId   Int?    @unique @map("planyo_resource_id")
@@ -75,6 +81,8 @@ model AssetCategory {
   bookingItems   BookingItem[]
   orderLineItems OrderLineItem[]
 
+  @@index([rwId])
+  @@index([needsReview])
   @@map("asset_categories")
 }
 
@@ -1265,6 +1273,18 @@ model InventoryItem {
   // the line item's department is overridden from this field.
   aliases         String[]            @default([])
   department      LineItemDepartment
+  // RentalWorks enrichment (May 2026 spike). The first four columns are
+  // populated from RW Items grouped by InventoryId. needsReview flags
+  // auto-created rows where Wes hasn't yet picked an InventoryCategory /
+  // confirmed the dept guess. rwLastSyncedAt + rwId track the last RW
+  // pull so re-syncs can pick up where they left off.
+  manufacturer    String?
+  model           String?
+  specs           String?             @db.Text
+  dimensions      String?
+  needsReview     Boolean             @default(false) @map("needs_review")
+  rwLastSyncedAt  DateTime?           @map("rw_last_synced_at")
+  rwId            String?             @map("rw_id")
   isActive        Boolean             @default(true) @map("is_active")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
@@ -1274,6 +1294,8 @@ model InventoryItem {
   subRentals SubRental[]
   location   Location          @default(LANKERSHIM)
 
+  @@index([rwId])
+  @@index([needsReview])
   @@map("inventory_items")
 }
 
