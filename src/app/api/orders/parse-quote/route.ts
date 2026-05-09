@@ -50,7 +50,7 @@ Return ONLY valid JSON, no markdown fences, no preamble. Omit top-level fields y
       "department": "VEHICLES" | "COMMUNICATIONS" | "STAGES" | "PRO_SUPPLIES" | "EXPENDABLES" | "GE" | "ART",
       "qualifier": "Client modifier preserved verbatim, or null",
       "rateType": "DAILY" | "WEEKLY",
-      "rentalDays": 1
+      "billableDays": 1
     }
   ]
 }
@@ -111,7 +111,7 @@ does NOT imply weekly rate — let the human flip per-line in the UI when needed
 
 RENTAL DAYS
 
-If startDate and endDate are present, set \`rentalDays\` to the inclusive day
+If startDate and endDate are present, set \`billableDays\` to the inclusive day
 count between them (Mar 30 → Apr 2 = 4). Otherwise default 1. The user can
 adjust per line.
 
@@ -131,7 +131,7 @@ interface AiItem {
   department: LineItemDepartment
   qualifier: string | null
   rateType: 'DAILY' | 'WEEKLY'
-  rentalDays: number
+  billableDays: number
 }
 
 interface ResolvedItem extends AiItem {
@@ -204,12 +204,12 @@ async function resolveItem(
   const rateType = raw.rateType === 'WEEKLY' ? 'WEEKLY' : 'DAILY'
   const rate = matchedProduct ? pickRate(matchedProduct, rateType) : 0
 
-  // Step 5: rentalDays — trust AI; verify against parsed range; final fallback 1.
-  let rentalDays = Number.isFinite(raw.rentalDays) && raw.rentalDays > 0 ? Math.floor(raw.rentalDays) : 1
+  // Step 5: billableDays — trust AI; verify against parsed range; final fallback 1.
+  let billableDays = Number.isFinite(raw.billableDays) && raw.billableDays > 0 ? Math.floor(raw.billableDays) : 1
   const computedDays = inclusiveDayCount(parsedRange.startDate, parsedRange.endDate)
-  if (computedDays && Math.abs(computedDays - rentalDays) > 1) {
-    // AI's rentalDays drifted from the dates — trust the dates.
-    rentalDays = computedDays
+  if (computedDays && Math.abs(computedDays - billableDays) > 1) {
+    // AI's billableDays drifted from the dates — trust the dates.
+    billableDays = computedDays
   }
 
   return {
@@ -220,7 +220,7 @@ async function resolveItem(
     department,
     qualifier: raw.qualifier?.trim() || null,
     rateType,
-    rentalDays,
+    billableDays,
     rate,
     matchedProduct: matchedProduct
       ? { id: matchedProduct.id, type: matchedProduct.type, name: matchedProduct.name }

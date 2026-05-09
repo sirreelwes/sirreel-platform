@@ -1339,10 +1339,15 @@ model OrderLineItem {
   rateType        RateType           @default(DAILY)
   rate            Decimal            @db.Decimal(10, 2)
   quantity        Int                @default(1)
-  // `days` was nullable; tightened to NOT NULL DEFAULT 1 in Phase 1.
-  // This is the brief's "rentalDays" — kept the existing column name to
-  // avoid a rename + UI churn.
-  days            Int                @default(1)
+  // Per-line pickup / return dates. Default to the parent Order's range,
+  // but rep can override per line during quote review.
+  pickupDate      DateTime           @map("pickup_date") @db.Date
+  returnDate      DateTime           @map("return_date") @db.Date
+  // Billable days — what the client is charged for. For cap-per-week
+  // departments this typically differs from (returnDate - pickupDate)
+  // because of the weekly cap; the rep can edit it freely. Stored in
+  // the `days` column for backward compat.
+  billableDays    Int                @default(1) @map("days")
   lineTotal       Decimal            @db.Decimal(12, 2)
   // Phase 2: AI-extracted client modifier preserved verbatim (e.g.
   // "no surveillance kits"). Displayed in italics in the builder; never

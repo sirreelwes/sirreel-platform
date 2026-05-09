@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const {
       type, description, inventoryItemId, assetCategoryId,
       startDate, endDate, rateType = "DAILY", rate, quantity = 1, notes,
-      department, qualifier, rentalDays,
+      department, qualifier, billableDays, pickupDate, returnDate,
     } = body;
 
     if (!type || !description || rate === undefined) {
@@ -30,13 +30,40 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
     const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
 
-    // Resolve days: prefer client-supplied rentalDays, fall back to the
-    // start/end range, default 1.
+    // Resolve billable days: prefer client-supplied billableDays, fall back
+    // to the pickup→return range, then start/end (legacy), default 1.
     let days = 1;
-    if (rentalDays != null && Number(rentalDays) > 0) {
-      days = Math.floor(Number(rentalDays));
+    if (billableDays != null && Number(billableDays) > 0) {
+      days = Math.floor(Number(billableDays));
+    } else if (pickupDate && returnDate) {
+      days = computeRentalDays(new Date(pickupDate), new Date(returnDate));
     } else if (startDate && endDate) {
       days = computeRentalDays(new Date(startDate), new Date(endDate));
+    }
+
+    // Resolve pickup/return dates: prefer per-line, fall back to start/end,
+    // then to the parent Order's range. NOT NULL constraint requires
+    // something — if nothing usable, default to today + days.
+    let pickupResolved: Date;
+    let returnResolved: Date;
+    if (pickupDate && returnDate) {
+      pickupResolved = new Date(pickupDate);
+      returnResolved = new Date(returnDate);
+    } else if (startDate && endDate) {
+      pickupResolved = new Date(startDate);
+      returnResolved = new Date(endDate);
+    } else {
+      const parent = await prisma.order.findUnique({
+        where: { id: orderId },
+        select: { startDate: true, endDate: true },
+      });
+      if (parent?.startDate && parent?.endDate) {
+        pickupResolved = parent.startDate;
+        returnResolved = parent.endDate;
+      } else {
+        pickupResolved = new Date();
+        returnResolved = new Date(Date.now() + days * 86400000);
+      }
     }
 
     // Department is required by the new billing rules. If the client
@@ -60,7 +87,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const lineTotal = computeLineTotal({
       quantity: Number(quantity),
       rate: Number(rate),
-      rentalDays: days,
+      billableDays: days,
       rateType: rateType as RateType,
       department: resolvedDepartment,
     });
@@ -72,7 +99,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         assetCategoryId: assetCategoryId || null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
-        rateType, rate, quantity, days,
+        pickupDate: pickupResolved,
+        returnDate: returnResolved,
+        rateType, rate, quantity,
+        billableDays: days,
         lineTotal: Math.round(lineTotal * 100) / 100,
         notes: notes || null,
         department: resolvedDepartment,

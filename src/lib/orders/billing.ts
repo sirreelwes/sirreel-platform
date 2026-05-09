@@ -10,7 +10,7 @@ import type { LineItemDepartment, RateType } from '@prisma/client'
  *   PERCENT_DISCOUNT — STAGES: bills every day, multiplied by the
  *                      rateType-specific multiplier (1.0 daily, 0.90
  *                      weekly, 0.75 monthly).
- *   PURCHASE         — EXPENDABLES: qty × rate, no rentalDays concept.
+ *   PURCHASE         — EXPENDABLES: qty × rate, no billableDays concept.
  */
 export type BillingRule =
   | { model: 'CAP_PER_WEEK'; cap: number }
@@ -75,7 +75,7 @@ interface DecimalLike { toNumber(): number }
 export interface BillingInput {
   quantity: number
   rate: number | DecimalLike
-  rentalDays: number
+  billableDays: number
   rateType: RateType
   department: LineItemDepartment
 }
@@ -120,11 +120,11 @@ export function computeLineTotal(item: BillingInput): number {
     let multiplier = 1.0
     if (item.rateType === 'WEEKLY') multiplier = rules.weekly
     if (item.rateType === 'MONTHLY') multiplier = rules.monthly
-    return item.quantity * rate * item.rentalDays * multiplier
+    return item.quantity * rate * item.billableDays * multiplier
   }
 
   // CAP_PER_WEEK — always cap, regardless of rateType.
-  const billable = capBillableDays(item.rentalDays, rules.cap)
+  const billable = capBillableDays(item.billableDays, rules.cap)
   return item.quantity * rate * billable
 }
 
@@ -154,16 +154,16 @@ export function billingBreakdown(item: BillingInput): string {
     if (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY') {
       const pct = item.rateType === 'WEEKLY' ? rules.weekly : rules.monthly
       const label = item.rateType === 'WEEKLY' ? 'weekly' : 'monthly'
-      return `${item.quantity} × ${fmtMoney(rate)} × ${item.rentalDays} days × ${Math.round(pct * 100)}% (${label}) = ${fmtMoney(total)}`
+      return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days × ${Math.round(pct * 100)}% (${label}) = ${fmtMoney(total)}`
     }
-    return `${item.quantity} × ${fmtMoney(rate)} × ${item.rentalDays} days = ${fmtMoney(total)}`
+    return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days = ${fmtMoney(total)}`
   }
 
   // CAP_PER_WEEK — cap always applies; rateType is vestigial.
-  const billable = capBillableDays(item.rentalDays, rules.cap)
-  if (billable === item.rentalDays) {
+  const billable = capBillableDays(item.billableDays, rules.cap)
+  if (billable === item.billableDays) {
     // Cap didn't kick in (short rental, or GE cap=7).
-    return `${item.quantity} × ${fmtMoney(rate)} × ${item.rentalDays} days = ${fmtMoney(total)}`
+    return `${item.quantity} × ${fmtMoney(rate)} × ${item.billableDays} days = ${fmtMoney(total)}`
   }
-  return `${item.quantity} × ${fmtMoney(rate)} × ${billable} billable days (${item.rentalDays}-day rental, ${rules.cap}-day cap) = ${fmtMoney(total)}`
+  return `${item.quantity} × ${fmtMoney(rate)} × ${billable} billable days (${item.billableDays}-day rental, ${rules.cap}-day cap) = ${fmtMoney(total)}`
 }

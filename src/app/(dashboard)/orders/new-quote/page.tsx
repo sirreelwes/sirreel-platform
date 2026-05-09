@@ -26,7 +26,7 @@ interface ResolvedItem {
   department: LineItemDepartment;
   qualifier: string | null;
   rateType: RateType;
-  rentalDays: number;
+  billableDays: number;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null;
@@ -301,13 +301,13 @@ function NewQuotePageInner() {
             next.rateType = 'DAILY';
             next.rateTypeAutoResetNote = null;
           }
-        } else if (patch.rentalDays !== undefined && patch.rentalDays !== it.rentalDays) {
-          // rentalDays change: only relevant for departments with a visible
+        } else if (patch.billableDays !== undefined && patch.billableDays !== it.billableDays) {
+          // billableDays change: only relevant for departments with a visible
           // toggle (STAGES). For cap-per-week depts the toggle is hidden and
           // rateType has no user-visible meaning, so don't surface a note.
-          const valid = availableRateTypes(next.department, next.rentalDays);
+          const valid = availableRateTypes(next.department, next.billableDays);
           if (valid.length > 0 && !valid.includes(next.rateType)) {
-            const reset = defaultRateType(next.department, next.rentalDays);
+            const reset = defaultRateType(next.department, next.billableDays);
             const reason =
               next.rateType === 'MONTHLY'
                 ? 'Monthly requires more than 28 days'
@@ -346,7 +346,7 @@ function NewQuotePageInner() {
         department: 'PRO_SUPPLIES',
         qualifier: null,
         rateType: 'DAILY',
-        rentalDays: 1,
+        billableDays: 1,
         rate: 0,
         matchedProduct: null,
         matchSource: null,
@@ -362,7 +362,7 @@ function NewQuotePageInner() {
         computeLineTotal({
           quantity: it.quantity,
           rate: it.rate,
-          rentalDays: it.rentalDays,
+          billableDays: it.billableDays,
           rateType: it.rateType,
           department: it.department,
         }),
@@ -478,7 +478,7 @@ function NewQuotePageInner() {
             quantity: it.quantity,
             rate: it.rate,
             rateType: it.rateType,
-            rentalDays: it.rentalDays,
+            billableDays: it.billableDays,
           }),
         });
       }
@@ -861,23 +861,23 @@ function LineItemRow({
   const total = computeLineTotal({
     quantity: item.quantity,
     rate: item.rate,
-    rentalDays: item.rentalDays,
+    billableDays: item.billableDays,
     rateType: item.rateType,
     department: item.department,
   });
   const breakdown = billingBreakdown({
     quantity: item.quantity,
     rate: item.rate,
-    rentalDays: item.rentalDays,
+    billableDays: item.billableDays,
     rateType: item.rateType,
     department: item.department,
   });
   const matched = item.catalogProductId != null;
   const isExpendable = item.department === 'EXPENDABLES';
-  const allowedRateTypes = availableRateTypes(item.department, item.rentalDays);
+  const allowedRateTypes = availableRateTypes(item.department, item.billableDays);
   // Toggle is only shown when allowedRateTypes is non-empty (STAGES today).
   // EXPENDABLES is purchase-only; cap-per-week depts apply cap math
-  // automatically based on rentalDays alone — no user-facing toggle.
+  // automatically based on billableDays alone — no user-facing toggle.
   const showToggle = allowedRateTypes.length > 0;
   const visibleRateTypes: RateType[] = item.department === 'STAGES'
     ? ['DAILY', 'WEEKLY', 'MONTHLY']
@@ -1038,8 +1038,8 @@ function LineItemRow({
             <div className="col-span-2">
               <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
               <input
-                type="number" min={1} value={item.rentalDays}
-                onChange={(e) => onChange(idx, { rentalDays: Math.max(1, Number(e.target.value) || 1) })}
+                type="number" min={1} value={item.billableDays}
+                onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
               />
             </div>
@@ -1049,8 +1049,8 @@ function LineItemRow({
           <div className="col-span-5">
             <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
             <input
-              type="number" min={1} value={item.rentalDays}
-              onChange={(e) => onChange(idx, { rentalDays: Math.max(1, Number(e.target.value) || 1) })}
+              type="number" min={1} value={item.billableDays}
+              onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
               className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
             />
           </div>

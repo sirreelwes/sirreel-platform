@@ -14,7 +14,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const {
       type, description, inventoryItemId, assetCategoryId,
       startDate, endDate, rateType, rate, quantity, sortOrder, notes,
-      days: manualDays, rentalDays, department, qualifier,
+      days: manualDays, billableDays, rentalDays: legacyRentalDays,
+      department, qualifier, pickupDate, returnDate,
     } = body;
 
     const data: Record<string, unknown> = {};
@@ -24,6 +25,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (assetCategoryId !== undefined) data.assetCategoryId = assetCategoryId || null;
     if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
+    if (pickupDate !== undefined) data.pickupDate = pickupDate ? new Date(pickupDate) : undefined;
+    if (returnDate !== undefined) data.returnDate = returnDate ? new Date(returnDate) : undefined;
     if (rateType !== undefined) data.rateType = rateType;
     if (rate !== undefined) data.rate = rate;
     if (quantity !== undefined) data.quantity = quantity;
@@ -32,11 +35,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (department !== undefined) data.department = department;
     if (qualifier !== undefined) data.qualifier = qualifier || null;
 
-    const explicitDays = rentalDays ?? manualDays;
+    // Accept billableDays going forward, plus legacy rentalDays / days for
+    // back-compat with older callers.
+    const explicitDays = billableDays ?? legacyRentalDays ?? manualDays;
     const dayInputProvided = explicitDays !== undefined && explicitDays !== null;
     if (
       rateType !== undefined || rate !== undefined || quantity !== undefined ||
-      startDate !== undefined || endDate !== undefined || dayInputProvided ||
+      startDate !== undefined || endDate !== undefined || pickupDate !== undefined ||
+      returnDate !== undefined || dayInputProvided ||
       department !== undefined || inventoryItemId !== undefined || assetCategoryId !== undefined
     ) {
       const existing = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
@@ -46,23 +52,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
         const effectiveQty = Number(quantity ?? existing.quantity);
         const effectiveDept = (department as LineItemDepartment | undefined) ?? existing.department;
 
-        let effectiveDays = existing.days;
+        let effectiveDays = existing.billableDays;
         if (dayInputProvided) {
           effectiveDays = Math.max(1, Math.floor(Number(explicitDays)));
-        } else if (startDate !== undefined || endDate !== undefined) {
-          const s = startDate !== undefined ? (startDate ? new Date(startDate) : null) : existing.startDate;
-          const e = endDate !== undefined ? (endDate ? new Date(endDate) : null) : existing.endDate;
-          if (s && e) effectiveDays = computeRentalDays(s, e);
+        } else if (pickupDate !== undefined || returnDate !== undefined) {
+          const p = pickupDate !== undefined ? (pickupDate ? new Date(pickupDate) : existing.pickupDate) : existing.pickupDate;
+          const r = returnDate !== undefined ? (returnDate ? new Date(returnDate) : existing.returnDate) : existing.returnDate;
+          if (p && r) effectiveDays = computeRentalDays(p, r);
         }
 
         const lineTotal = computeLineTotal({
           quantity: effectiveQty,
           rate: effectiveRate,
-          rentalDays: effectiveDays,
+          billableDays: effectiveDays,
           rateType: effectiveRateType,
           department: effectiveDept,
         });
-        data.days = effectiveDays;
+        data.billableDays = effectiveDays;
         data.lineTotal = Math.round(lineTotal * 100) / 100;
       }
     }
