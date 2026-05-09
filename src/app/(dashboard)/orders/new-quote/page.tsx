@@ -279,24 +279,34 @@ function NewQuotePageInner() {
         if (i !== idx) return it;
         const next: ResolvedItem = { ...it, ...patch };
 
-        // Department change: always normalize rateType to DAILY (or FLAT for
-        // EXPENDABLES). Cap-per-week math doesn't carry over across dept
-        // boundaries; safer to reset and let the user re-pick.
+        // Department change: normalize rateType to keep stored data consistent.
+        // - EXPENDABLES → FLAT (with note; toggle disappears anyway).
+        // - STAGES → DAILY when previously something else (with note; visible toggle).
+        // - Cap-per-week (COM/PS/ART/VEH/GE) → DAILY silently. The rateType
+        //   column is vestigial for these departments — there's no toggle
+        //   to reset, so an inline note would confuse the user.
         if (patch.department !== undefined && patch.department !== it.department) {
           if (next.department === 'EXPENDABLES') {
             if (next.rateType !== 'FLAT') {
               next.rateType = 'FLAT';
               next.rateTypeAutoResetNote = 'Rate type reset to Purchase — Expendables are always purchases.';
             }
-          } else if (next.rateType !== 'DAILY') {
+          } else if (next.department === 'STAGES') {
+            if (next.rateType !== 'DAILY') {
+              next.rateType = 'DAILY';
+              next.rateTypeAutoResetNote = 'Rate type reset to Daily — billing changes with department.';
+            }
+          } else {
+            // Cap-per-week: silent normalization to DAILY.
             next.rateType = 'DAILY';
-            next.rateTypeAutoResetNote = 'Rate type reset to Daily — billing changes with department.';
+            next.rateTypeAutoResetNote = null;
           }
         } else if (patch.rentalDays !== undefined && patch.rentalDays !== it.rentalDays) {
-          // rentalDays change: keep the rateType if it's still valid;
-          // otherwise step down to the highest tier that fits.
+          // rentalDays change: only relevant for departments with a visible
+          // toggle (STAGES). For cap-per-week depts the toggle is hidden and
+          // rateType has no user-visible meaning, so don't surface a note.
           const valid = availableRateTypes(next.department, next.rentalDays);
-          if (!valid.includes(next.rateType)) {
+          if (valid.length > 0 && !valid.includes(next.rateType)) {
             const reset = defaultRateType(next.department, next.rentalDays);
             const reason =
               next.rateType === 'MONTHLY'
@@ -865,12 +875,14 @@ function LineItemRow({
   const matched = item.catalogProductId != null;
   const isExpendable = item.department === 'EXPENDABLES';
   const allowedRateTypes = availableRateTypes(item.department, item.rentalDays);
-  // Toggle order: always show DAILY/WEEKLY for non-expendables; STAGES gets MONTHLY too.
-  const visibleRateTypes: RateType[] = isExpendable
-    ? ['FLAT']
-    : item.department === 'STAGES'
-      ? ['DAILY', 'WEEKLY', 'MONTHLY']
-      : ['DAILY', 'WEEKLY'];
+  // Toggle is only shown when allowedRateTypes is non-empty (STAGES today).
+  // EXPENDABLES is purchase-only; cap-per-week depts apply cap math
+  // automatically based on rentalDays alone — no user-facing toggle.
+  const showToggle = allowedRateTypes.length > 0;
+  const visibleRateTypes: RateType[] = item.department === 'STAGES'
+    ? ['DAILY', 'WEEKLY', 'MONTHLY']
+    : [];
+  const showDaysField = !isExpendable;
 
   const applyMatch = (m: CatalogSearchResult) => {
     onChange(idx, {
@@ -977,7 +989,7 @@ function LineItemRow({
         <div className="col-span-3">
           <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate</label>
           <input
-            type="number" step="0.01" value={item.rate}
+            type="number" step="0.50" min={0} value={item.rate}
             onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
             className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
           />
@@ -990,7 +1002,7 @@ function LineItemRow({
               <span className="text-zinc-500 ml-2">(no rental days — qty × rate)</span>
             </div>
           </div>
-        ) : (
+        ) : showToggle ? (
           <>
             <div className="col-span-3">
               <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Rate type</label>
@@ -1001,7 +1013,7 @@ function LineItemRow({
                     rt === 'WEEKLY' && !enabled
                       ? 'Available at >7 days'
                       : rt === 'MONTHLY' && !enabled
-                        ? 'Stages-only, available at >28 days'
+                        ? 'Available at >28 days'
                         : '';
                   return (
                     <button
@@ -1032,7 +1044,17 @@ function LineItemRow({
               />
             </div>
           </>
-        )}
+        ) : showDaysField ? (
+          // Cap-per-week: days only, no toggle. Cap math applies automatically.
+          <div className="col-span-5">
+            <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Days</label>
+            <input
+              type="number" min={1} value={item.rentalDays}
+              onChange={(e) => onChange(idx, { rentalDays: Math.max(1, Number(e.target.value) || 1) })}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+            />
+          </div>
+        ) : null}
         <div className="col-span-2 text-right">
           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total</div>
           <div className="text-sm font-mono text-emerald-400">{fmtMoney(total)}</div>
