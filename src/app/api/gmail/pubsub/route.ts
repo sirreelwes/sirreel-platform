@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
+import { getMessageDirection } from "@/lib/email/direction"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -67,18 +68,49 @@ async function syncInbox(email: string) {
     const gmailThreadId = full.data.threadId || msg.id
     const labelIds = full.data.labelIds || []
 
-    const emailUser = email.split("@")[0]
-    if (fromAddress.toLowerCase().includes(emailUser + "@sirreel.com")) continue
-    if (fromAddress.toLowerCase().match(/(jose|oliver|ana|dani|wes|hugo|julian|chris|christian)@sirreel\.com/)) continue
+    // Direction is now classified by the central helper. Outbound
+    // messages (from any sirreel agent) ARE persisted so the thread's
+    // last-direction state stays accurate. They're tagged
+    // direction='outbound' on EmailMessage and so never appear in
+    // suggested-inquiries (which filters direction='inbound') — there's
+    // no risk of an outbound message creating an Inquiry.
+    const direction = getMessageDirection(fromAddress)
 
     const { category, priority } = quickTriage(subject, snippet)
     if (priority === 9) continue
 
+    // Upsert the thread; directional timestamp + lastDirection are
+    // updated below with max-semantics so out-of-order processing can't
+    // overwrite a newer timestamp with an older one.
     const thread = await prisma.emailThread.upsert({
       where: { gmailThreadId },
-      create: { gmailThreadId, subject, lastMessageAt: sentAt, messageCount: 1 },
+      create: {
+        gmailThreadId,
+        subject,
+        lastMessageAt: sentAt,
+        messageCount: 1,
+        lastInboundAt: direction === "INBOUND" ? sentAt : null,
+        lastOutboundAt: direction === "OUTBOUND" ? sentAt : null,
+        lastDirection: direction,
+      },
       update: { lastMessageAt: sentAt, messageCount: { increment: 1 } },
     })
+
+    // Advance the directional timestamp + lastDirection only if this
+    // message is the new latest in its direction (and the new overall
+    // latest, for lastDirection).
+    const sameDirAt = direction === "INBOUND" ? thread.lastInboundAt : thread.lastOutboundAt
+    if (!sameDirAt || sentAt > sameDirAt) {
+      const otherDirAt = direction === "INBOUND" ? thread.lastOutboundAt : thread.lastInboundAt
+      const isOverallLatest = !otherDirAt || sentAt >= otherDirAt
+      await prisma.emailThread.update({
+        where: { id: thread.id },
+        data: {
+          ...(direction === "INBOUND" ? { lastInboundAt: sentAt } : { lastOutboundAt: sentAt }),
+          ...(isOverallLatest ? { lastDirection: direction } : {}),
+        },
+      })
+    }
 
     await prisma.emailMessage.create({
       data: {
@@ -89,7 +121,7 @@ async function syncInbox(email: string) {
         toAddresses: [email],
         subject,
         snippet,
-        direction: "inbound",
+        direction: direction.toLowerCase(), // legacy column uses lowercase
         sentAt,
         isRead: !labelIds.includes("UNREAD"),
         category: category as any,

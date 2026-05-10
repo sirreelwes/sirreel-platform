@@ -921,9 +921,18 @@ model EmailThread {
   aiSummaryAt DateTime? @map("ai_summary_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
+  // Direction tracking (May 2026). Maintained by the Pub/Sub handler on
+  // every new message and by the one-time backfill seed for historical
+  // threads. Drives the suggested-inquiries filter — a thread whose most
+  // recent message is OUTBOUND drops off the Inquiries list.
+  lastInboundAt  DateTime? @map("last_inbound_at")
+  lastOutboundAt DateTime? @map("last_outbound_at")
+  lastDirection  String?   @map("last_direction")
+
   // Relations
   messages EmailMessage[]
 
+  @@index([lastDirection, lastInboundAt])
   @@map("email_threads")
 }
 
