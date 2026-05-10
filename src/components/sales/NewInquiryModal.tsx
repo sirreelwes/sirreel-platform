@@ -6,7 +6,9 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker';
 interface NewInquiryModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  // Receives the new inquiry id so the parent can route to the quote flow.
+  // Older callers that just want a refresh signal can ignore the argument.
+  onCreated: (inquiryId: string | null) => void;
 }
 
 export function NewInquiryModal({ open, onClose, onCreated }: NewInquiryModalProps) {
@@ -58,8 +60,10 @@ export function NewInquiryModal({ open, onClose, onCreated }: NewInquiryModalPro
         setError(data.error || 'Failed to create inquiry.');
         return;
       }
+      const data = await res.json().catch(() => ({}));
+      const inquiryId: string | null = data?.inquiry?.id ?? null;
       reset();
-      onCreated();
+      onCreated(inquiryId);
       onClose();
     } finally {
       setSubmitting(false);

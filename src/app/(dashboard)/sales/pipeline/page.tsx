@@ -6,6 +6,9 @@ import { InquiriesSection } from '@/components/sales/InquiriesSection';
 import { OpenQuotesKanban } from '@/components/sales/OpenQuotesKanban';
 import { ActiveJobsKanban } from '@/components/sales/ActiveJobsKanban';
 import { ProspectsSection } from '@/components/sales/ProspectsSection';
+import { FunnelMetricsStrip } from '@/components/sales/FunnelMetricsStrip';
+import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
+import { FollowUpsDuePanel } from '@/components/sales/FollowUpsDuePanel';
 import type { LineItemDepartment } from '@prisma/client';
 import type { PipelineColumn } from '@/lib/sales/pipeline';
 
@@ -42,6 +45,7 @@ export default function PipelinePage() {
   const [scope, setScope] = useState<'my' | 'team'>(defaultScope);
   const [jobs, setJobs] = useState<PipelineJob[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
@@ -61,7 +65,9 @@ export default function PipelinePage() {
       .then((d) => setJobs(d.jobs || []))
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
-  }, [scope, authStatus]);
+  }, [scope, authStatus, refreshKey]);
+
+  const refreshAll = () => setRefreshKey((k) => k + 1);
 
   if (authStatus === 'loading') {
     return <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-sm">Loading…</div>;
@@ -82,8 +88,8 @@ export default function PipelinePage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Sales Pipeline</h1>
-          <p className="text-xs text-zinc-500 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900">Sales Pipeline</h1>
+          <p className="text-xs text-gray-500 mt-1">
             Inquiries → Open Quotes → Active Jobs. Click any card to open the job.
           </p>
         </div>
@@ -93,6 +99,12 @@ export default function PipelinePage() {
           <ScopeButton active={scope === 'team'} onClick={() => setScope('team')}>Team View</ScopeButton>
         </div>
       </div>
+
+      <FunnelMetricsStrip scope={scope} />
+
+      <SalesSignalsStrip scope={scope} onChange={refreshAll} />
+
+      <FollowUpsDuePanel scope={scope} />
 
       <InquiriesSection />
 
@@ -111,6 +123,7 @@ export default function PipelinePage() {
           departments: j.departments,
         }))}
         loading={loading}
+        onChange={refreshAll}
       />
 
       <ActiveJobsKanban

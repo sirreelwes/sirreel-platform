@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { DEPARTMENT_SHORT, type PipelineColumn } from '@/lib/sales/pipeline';
 import type { LineItemDepartment } from '@prisma/client';
+import { NudgeModal } from './NudgeModal';
+import { MarkLostModal } from './MarkLostModal';
 
 interface QuoteJob {
   id: string;
@@ -27,6 +30,7 @@ interface QuoteJob {
 interface OpenQuotesKanbanProps {
   jobs: QuoteJob[];
   loading: boolean;
+  onChange?: () => void;
 }
 
 const COLUMNS: { key: PipelineColumn; label: string; accent: string }[] = [
@@ -51,7 +55,10 @@ function daysSince(iso: string) {
   return `${d} days`;
 }
 
-export function OpenQuotesKanban({ jobs, loading }: OpenQuotesKanbanProps) {
+export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanProps) {
+  const [nudge, setNudge] = useState<QuoteJob | null>(null);
+  const [lost, setLost] = useState<QuoteJob | null>(null);
+
   const byColumn: Record<PipelineColumn, QuoteJob[]> = {
     DRAFT: [],
     SENT: [],
@@ -78,8 +85,8 @@ export function OpenQuotesKanban({ jobs, loading }: OpenQuotesKanbanProps) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-bold text-white">Open Quotes</h2>
-        <p className="text-[11px] text-zinc-500 mt-0.5">
+        <h2 className="text-sm font-bold text-gray-900">Open Quotes</h2>
+        <p className="text-[11px] text-gray-500 mt-0.5">
           Job-level view of every active quote. Cards are placed by the earliest unfinished order.
         </p>
       </div>
@@ -109,18 +116,51 @@ export function OpenQuotesKanban({ jobs, loading }: OpenQuotesKanbanProps) {
                 ) : list.length === 0 ? (
                   <div className="text-xs text-zinc-600 text-center py-6">No deals</div>
                 ) : (
-                  list.map((j) => <QuoteCard key={j.id} job={j} />)
+                  list.map((j) => (
+                    <QuoteCard
+                      key={j.id}
+                      job={j}
+                      onNudge={col.key === 'SENT' ? () => setNudge(j) : undefined}
+                      onMarkLost={col.key === 'DRAFT' || col.key === 'SENT' ? () => setLost(j) : undefined}
+                    />
+                  ))
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      <NudgeModal
+        job={
+          nudge
+            ? {
+                id: nudge.id,
+                jobCode: nudge.jobCode,
+                name: nudge.name,
+                company: nudge.company,
+                agent: nudge.agent,
+                daysInStage: daysSinceNumber(nudge.updatedAt),
+              }
+            : null
+        }
+        onClose={() => setNudge(null)}
+      />
+
+      <MarkLostModal
+        job={lost ? { id: lost.id, name: lost.name, jobCode: lost.jobCode, company: lost.company } : null}
+        onClose={() => setLost(null)}
+        onMarked={() => { setLost(null); onChange?.(); }}
+      />
     </section>
   );
 }
 
-function QuoteCard({ job }: { job: QuoteJob }) {
+function daysSinceNumber(iso: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+}
+
+function QuoteCard({ job, onNudge, onMarkLost }: { job: QuoteJob; onNudge?: () => void; onMarkLost?: () => void }) {
   const deal =
     job.orderTotal > 0
       ? fmtMoney(job.orderTotal)
@@ -178,7 +218,27 @@ function QuoteCard({ job }: { job: QuoteJob }) {
         <span className="text-[10px] text-zinc-500">{daysSince(job.updatedAt)} in stage</span>
       </div>
 
-      <div className="mt-1 text-[11px] text-zinc-500 truncate">{job.agent.name}</div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className="text-[11px] text-zinc-500 truncate">{job.agent.name}</span>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {onNudge && (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNudge(); }}
+              className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-900/30 transition-colors"
+            >
+              Nudge
+            </button>
+          )}
+          {onMarkLost && (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMarkLost(); }}
+              className="text-[10px] font-semibold text-red-300 hover:text-red-200 px-1.5 py-0.5 rounded hover:bg-red-900/30 transition-colors"
+            >
+              Lost
+            </button>
+          )}
+        </div>
+      </div>
     </Link>
   );
 }

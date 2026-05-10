@@ -47,8 +47,8 @@ export function ActiveJobsKanban({ jobs, loading }: ActiveJobsKanbanProps) {
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-sm font-bold text-white">Active Jobs</h2>
-        <p className="text-[11px] text-zinc-500 mt-0.5">
+        <h2 className="text-sm font-bold text-gray-900">Active Jobs</h2>
+        <p className="text-[11px] text-gray-500 mt-0.5">
           Production-stage jobs — already on rental or wrapping up.
         </p>
       </div>
