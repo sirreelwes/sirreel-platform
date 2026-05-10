@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 type Category = { id: string; name: string; _count: { items: number } };
+type LocationOption = { id: string; name: string; code: string };
 type Item = {
   id: string;
   code: string;
@@ -12,13 +13,15 @@ type Item = {
   qtyOwned: number;
   replacementCost: string | null;
   imageUrl: string | null;
-  location: string;
+  location: string; // legacy enum value, kept for fallback display
+  locationRef: { id: string; name: string; code: string } | null;
   category: { id: string; name: string };
 };
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -54,6 +57,7 @@ export default function InventoryPage() {
     setItems(data.items || []);
     setTotal(data.total || 0);
     setCategories(data.categories || []);
+    setLocations(data.locations || []);
     setLoading(false);
   }, [search, categoryId, page]);
 
@@ -67,7 +71,7 @@ export default function InventoryPage() {
       qtyOwned: String(item.qtyOwned),
       replacementCost: item.replacementCost ? String(Number(item.replacementCost)) : "",
       description: item.description || item.code,
-      location: item.location,
+      locationId: item.locationRef?.id || "",
       categoryId: item.category.id,
     });
   };
@@ -313,15 +317,10 @@ export default function InventoryPage() {
                         className="w-24 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
                     </td>
                     <td className="px-3 py-1.5">
-                      <select value={editValues.location} onChange={(e) => setEditValues({...editValues, location: e.target.value})}
+                      <select value={editValues.locationId} onChange={(e) => setEditValues({...editValues, locationId: e.target.value})}
                         className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white">
-                        <option value="LANKERSHIM">Lankershim</option>
-                        <option value="NAPA">Napa</option>
-                        <option value="UTAH">Utah</option>
-                        <option value="ON_RENTAL">On Rental</option>
-                        <option value="IN_TRANSIT">In Transit</option>
-                        <option value="BODY_SHOP">Body Shop</option>
-                        <option value="HIGH_TECH">High Tech</option>
+                        <option value="">--</option>
+                        {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </select>
                     </td>
                     <td className="px-3 py-2 text-right text-zinc-500 text-xs">--</td>
@@ -336,7 +335,7 @@ export default function InventoryPage() {
                     <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.dailyRate)}</td>
                     <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.weeklyRate)}</td>
                     <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.replacementCost)}</td>
-                    <td className="px-3 py-2 text-zinc-400 text-xs">{item.location.replace(/_/g, " ")}</td>
+                    <td className="px-3 py-2 text-zinc-400 text-xs">{item.locationRef?.name || item.location.replace(/_/g, " ")}</td>
                     <td className="px-3 py-2 text-right text-white font-mono text-xs">
                       {item.replacementCost && Number(item.replacementCost) > 0 ? fmt(Number(item.replacementCost) * item.qtyOwned) : "--"}
                     </td>

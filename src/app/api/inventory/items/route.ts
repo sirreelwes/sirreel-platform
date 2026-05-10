@@ -18,10 +18,13 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const [items, total, categories] = await Promise.all([
+  const [items, total, categories, locations] = await Promise.all([
     prisma.inventoryItem.findMany({
       where,
-      include: { category: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true } },
+        locationRef: { select: { id: true, name: true, code: true } },
+      },
       orderBy: [{ category: { sortOrder: "asc" } }, { code: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
@@ -31,7 +34,12 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true, _count: { select: { items: true } } },
       orderBy: { sortOrder: "asc" },
     }),
+    prisma.inventoryLocation.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, code: true },
+    }),
   ]);
 
-  return NextResponse.json({ items, total, page, limit, categories });
+  return NextResponse.json({ items, total, page, limit, categories, locations });
 }

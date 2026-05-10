@@ -187,6 +187,7 @@ export function getNavSections(role: UserRole): NavSection[] {
   // Admin — management & configuration
   const admin: NavItem[] = [];
   if (perms.seePricing) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
+  if (role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
   if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
   if (perms.seePricing) admin.push({ id: 'sub-rentals', label: 'Sub-Rentals', icon: '', href: '/sub-rentals' });
   if (perms.maintenance) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
