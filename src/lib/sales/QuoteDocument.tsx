@@ -1,5 +1,19 @@
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import fs from 'fs'
+import path from 'path'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+
+// Load the SirReel logo once at module load (server-only — the QuoteDocument
+// is rendered exclusively via renderToBuffer in the API route). Passing the
+// raw Buffer to React-PDF's Image is the most reliable path on Vercel
+// serverless: no network round-trip, no host-detection for absolute URLs.
+const LOGO_PATH = path.join(process.cwd(), 'public', 'sirreel-logo.png')
+let LOGO_BUFFER: Buffer | null = null
+try {
+  LOGO_BUFFER = fs.readFileSync(LOGO_PATH)
+} catch (err) {
+  console.warn('[QuoteDocument] failed to load sirreel-logo.png, falling back to text brand:', err)
+}
 
 // SirReel Quote PDF — spirit-of the RentalWorks quote layout, modernized
 // typography and palette. Mirrors the contract-review counter-PDF
@@ -217,6 +231,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   brand: { flexDirection: 'column' },
+  brandLogo: { width: 140, height: 'auto', marginBottom: 6 },
   brandName: { fontFamily: 'Helvetica-Bold', fontSize: 20, letterSpacing: 0.5 },
   brandSub: { fontSize: 8, color: C.muted, marginTop: 3 },
   brandAddress: { fontSize: 8, color: C.muted, marginTop: 1 },
@@ -433,7 +448,11 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
         {/* Top band: brand left, title center, doc meta right */}
         <View style={styles.topBand}>
           <View style={styles.brand}>
-            <Text style={styles.brandName}>SirReel</Text>
+            {LOGO_BUFFER ? (
+              <Image src={LOGO_BUFFER} style={styles.brandLogo} />
+            ) : (
+              <Text style={styles.brandName}>SirReel</Text>
+            )}
             <Text style={styles.brandSub}>Production Vehicles, Inc.</Text>
             <Text style={styles.brandAddress}>8500 Lankershim Blvd</Text>
             <Text style={styles.brandAddress}>Sun Valley, CA 91352</Text>
