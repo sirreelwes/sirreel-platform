@@ -77,11 +77,22 @@ export default function InventoryPage() {
   };
 
   const saveEdit = async (id: string) => {
-    await fetch(`/api/inventory/items/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editValues),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/inventory/items/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editValues),
+      });
+    } catch (err) {
+      alert(`Save failed: ${err instanceof Error ? err.message : "network error"}`);
+      return;
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(`Save failed: ${data.error || `HTTP ${res.status}`}`);
+      return;
+    }
     setEditingId(null);
     fetchItems();
   };
