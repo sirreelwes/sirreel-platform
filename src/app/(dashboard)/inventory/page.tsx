@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { AddItemModal } from "@/components/inventory/AddItemModal";
 
 type Category = { id: string; name: string; _count: { items: number } };
 type LocationOption = { id: string; name: string; code: string };
@@ -29,6 +30,9 @@ export default function InventoryPage() {
   const [page, setPage] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
+
+  // Add-item modal
+  const [showAdd, setShowAdd] = useState(false);
 
   // Bulk operations
   const [showBulk, setShowBulk] = useState(false);
@@ -169,12 +173,20 @@ export default function InventoryPage() {
             {totalValue > 0 && <span> | Est. value: {fmt(totalValue)}</span>}
           </p>
         </div>
+        <div className="flex gap-2">
+        <button
+          onClick={() => setShowAdd(true)}
+          className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors"
+        >
+          + Add Item
+        </button>
         <button
           onClick={() => setShowBulk(!showBulk)}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${showBulk ? "bg-zinc-700 text-zinc-300" : "bg-blue-600 hover:bg-blue-500 text-white"}`}
         >
           {showBulk ? "Close Tools" : "Bulk Tools"}
         </button>
+        </div>
       </div>
 
       {/* Bulk Tools Panel */}
@@ -372,6 +384,15 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      <AddItemModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onCreated={() => fetchItems()}
+        categories={categories}
+        locations={locations}
+        defaultCategoryId={categoryId || undefined}
+      />
     </div>
   );
 }
