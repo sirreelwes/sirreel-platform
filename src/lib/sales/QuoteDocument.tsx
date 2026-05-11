@@ -1,7 +1,14 @@
 import React from 'react'
 import fs from 'fs'
 import path from 'path'
-import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+
+// Disable mid-word hyphenation across the document. React-PDF's default
+// behaviour breaks long words at letter boundaries (e.g. "Fox Sports
+// Produc-tions"), which looks broken on client-facing quotes. Returning
+// the word as a single-element array tells the line-break engine to
+// treat each word atomically — wrapping only occurs at whitespace.
+Font.registerHyphenationCallback((word) => [word])
 
 // Load the SirReel logo once at module load (server-only — the QuoteDocument
 // is rendered exclusively via renderToBuffer in the API route). Passing the
@@ -43,7 +50,7 @@ export interface QuoteLineItem {
   department: Department
   description: string
   qualifier: string | null
-  inventoryCode: string | null   // "I-Code" column — InventoryItem.code if matched
+  inventoryCode: string | null   // "Item" column — InventoryItem.code if matched
   quantity: number
   rate: number                   // numeric (Decimal converted)
   rateType: 'DAILY' | 'WEEKLY' | 'FLAT'
@@ -272,9 +279,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   // Info boxes
-  infoRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  infoRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
+  infoColumn: { flex: 1, flexDirection: 'column', gap: 10 },
   infoBlock: {
-    flex: 1,
     borderWidth: 0.5,
     borderColor: C.rule,
     borderRadius: 3,
@@ -483,8 +490,12 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
         </View>
         <View style={styles.hrThick} />
 
-        {/* Info-box row */}
+        {/* Info-box row — 2 columns. Left column stacks Customer over
+            Production so long company names get the full half-page
+            width and don't hyphenate. Right column is Agent alone;
+            no attempt to vertically balance height. */}
         <View style={styles.infoRow}>
+          <View style={styles.infoColumn}>
           <View style={styles.infoBlock}>
             <Text style={styles.infoTitle}>Customer</Text>
             <View style={styles.infoLine}>
@@ -542,7 +553,9 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.infoValue}>{usagePeriod}</Text>
             </View>
           </View>
+          </View>
 
+          <View style={styles.infoColumn}>
           <View style={styles.infoBlock}>
             <Text style={styles.infoTitle}>SirReel Agent</Text>
             <View style={styles.infoLine}>
@@ -564,6 +577,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.infoValue}>{props.orderNumber}</Text>
             </View>
           </View>
+          </View>
         </View>
 
         {/* Line items per department */}
@@ -574,7 +588,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.sectionSub}>{items.length} {items.length === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.tableHead}>
-              <Text style={styles.colCode}>I-Code</Text>
+              <Text style={styles.colCode}>Item</Text>
               <Text style={styles.colDesc}>Description</Text>
               <Text style={styles.colQty}>Qty</Text>
               <Text style={styles.colDays}>Days</Text>
