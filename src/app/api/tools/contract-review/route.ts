@@ -262,22 +262,67 @@ Compare the redlined document against the baseline per your instructions. Output
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 8000,
+      // Was 8000. A 29-clause redline with full proposed + suggestedCounter
+      // text per clause routinely exceeded that and got truncated mid-JSON,
+      // surfacing as "AI response could not be parsed." 16K leaves ample
+      // headroom; we still gate on stop_reason below in case a future
+      // mega-contract hits this ceiling too.
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content }]
     })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    // Logged on every run — cheap, and turns "AI broke again" tickets into
+    // a one-line answer from Vercel logs (max_tokens vs end_turn, input
+    // size, output size).
+    console.log(
+      '[contract-review] stop_reason:', response.stop_reason,
+      'usage:', response.usage,
+    )
+
+    // Find the first text block. Defends against any future tool_use /
+    // thinking / image block that lands before the text payload — the
+    // old code blindly read content[0].
+    const textBlock = response.content.find((c) => c.type === 'text')
+    const text = textBlock?.type === 'text' ? textBlock.text : ''
+
+    if (response.stop_reason === 'max_tokens') {
+      console.warn('[contract-review] truncated by max_tokens. Output length:', text.length)
+      return NextResponse.json({
+        error: 'Contract too long to review in one pass — split or shorten the document and try again.',
+        stopReason: 'max_tokens',
+        rawOutputLength: text.length,
+      }, { status: 413 })
+    }
+
+    // Robust JSON extraction. Three layers of permissiveness:
+    //  1. Strip ```json … ``` fences if present.
+    //  2. Trim any preamble/postamble around the actual object by
+    //     slicing from the first `{` to the last `}`.
+    //  3. Fall through to the raw text if neither layer finds a brace
+    //     pair (lets JSON.parse produce its own helpful error).
+    const stripped = text.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    const firstBrace = stripped.indexOf('{')
+    const lastBrace = stripped.lastIndexOf('}')
+    const cleaned =
+      firstBrace >= 0 && lastBrace > firstBrace
+        ? stripped.slice(firstBrace, lastBrace + 1)
+        : stripped
 
     let review: any
     try {
       review = JSON.parse(cleaned)
     } catch (parseErr) {
-      console.error('[contract-review] JSON parse failed. Raw output:', text)
+      const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+      console.error(
+        '[contract-review] JSON parse failed:', parseMsg,
+        '\nstop_reason:', response.stop_reason,
+        '\nRaw output (first 2000 chars):', text.slice(0, 2000),
+      )
       return NextResponse.json({
-        error: 'AI response could not be parsed. Try again.',
-        rawOutput: text.slice(0, 500)
+        error: `AI response could not be parsed: ${parseMsg}`,
+        stopReason: response.stop_reason,
+        rawOutput: text.slice(0, 500),
       }, { status: 500 })
     }
 
