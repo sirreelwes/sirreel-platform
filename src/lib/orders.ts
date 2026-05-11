@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { computeLineTotal } from "@/lib/orders/billing";
 
 export async function nextOrderNumber(): Promise<string> {
   const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
@@ -35,15 +36,36 @@ export function rentalDays(start: Date, end: Date): number {
 // PURCHASE) instead of the Phase 1 placeholder ceil(days/5). Callers should
 // import { computeLineTotal } from '@/lib/orders/billing'.
 
+// Self-healing recalc: each line's lineTotal is recomputed from its
+// canonical source fields (qty, rate, billableDays, rateType, department)
+// via the single billing.ts source of truth. Any drift between stored
+// lineTotal and the computed value is written back before summing the
+// order totals. This means historical rows written by older code paths
+// — or any future external write that bypasses the API — converge to
+// the correct number the next time anything touches the Order.
 export async function recalcOrderTotals(orderId: string) {
   const lineItems = await prisma.orderLineItem.findMany({
     where: { orderId },
   });
 
-  const subtotal = lineItems.reduce(
-    (sum, li) => sum + Number(li.lineTotal),
-    0
-  );
+  let subtotal = 0;
+  for (const li of lineItems) {
+    const computed = computeLineTotal({
+      quantity: li.quantity,
+      rate: li.rate,
+      billableDays: li.billableDays,
+      rateType: li.rateType,
+      department: li.department,
+    });
+    const rounded = Math.round(computed * 100) / 100;
+    if (Number(li.lineTotal) !== rounded) {
+      await prisma.orderLineItem.update({
+        where: { id: li.id },
+        data: { lineTotal: rounded },
+      });
+    }
+    subtotal += rounded;
+  }
 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   const taxRate = order ? Number(order.taxRate) : 0;
