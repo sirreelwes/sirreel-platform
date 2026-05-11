@@ -126,11 +126,11 @@ const DEPT_ORDER: Department[] = [
 // Below that, omit the label entirely (mixed department quote).
 export function deriveDominantCategory(items: QuoteLineItem[]): string | null {
   const nonDiscount = items.filter((l) => !l.isDiscount)
-  const totalValue = nonDiscount.reduce((sum, l) => sum + Math.abs(l.lineTotal), 0)
+  const totalValue = nonDiscount.reduce((sum, l) => sum + Math.abs(computeLineTotal(l)), 0)
   if (totalValue <= 0) return null
   const byDept = new Map<Department, number>()
   for (const l of nonDiscount) {
-    byDept.set(l.department, (byDept.get(l.department) ?? 0) + Math.abs(l.lineTotal))
+    byDept.set(l.department, (byDept.get(l.department) ?? 0) + Math.abs(computeLineTotal(l)))
   }
   for (const [dept, value] of byDept) {
     if (value / totalValue >= 0.7) return DEPT_LABELS[dept]
@@ -174,6 +174,19 @@ function rateUnit(rateType: QuoteLineItem['rateType']): string {
   return ''
 }
 
+// Compute the line total inline rather than trusting the persisted
+// lineTotal column. The OrderLineItem write path doesn't always populate
+// it, so renders pulled stale $0s — and the cascade zeroed the subtotal
+// and grand total too. Rule: quantity × days × rate for time-based
+// rentals; quantity × rate for FLAT and discount lines (where days is
+// meaningless / defaults to 1 but could be anything).
+function computeLineTotal(item: QuoteLineItem): number {
+  if (item.isDiscount || item.rateType === 'FLAT') {
+    return item.quantity * item.rate
+  }
+  return item.quantity * item.billableDays * item.rate
+}
+
 function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: Department; items: QuoteLineItem[]; subtotal: number }> {
   const lineItems = items.filter((l) => !l.isDiscount)
   const buckets = new Map<Department, QuoteLineItem[]>()
@@ -187,13 +200,13 @@ function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: Department; it
   for (const dept of DEPT_ORDER) {
     const list = buckets.get(dept)
     if (list && list.length > 0) {
-      const subtotal = list.reduce((s, l) => s + l.lineTotal, 0)
+      const subtotal = list.reduce((s, l) => s + computeLineTotal(l), 0)
       ordered.push({ dept, items: list, subtotal })
       buckets.delete(dept)
     }
   }
   for (const [dept, list] of buckets) {
-    const subtotal = list.reduce((s, l) => s + l.lineTotal, 0)
+    const subtotal = list.reduce((s, l) => s + computeLineTotal(l), 0)
     ordered.push({ dept, items: list, subtotal })
   }
   return ordered
@@ -566,7 +579,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.colQty}>Qty</Text>
               <Text style={styles.colDays}>Days</Text>
               <Text style={styles.colRate}>Rate</Text>
-              <Text style={styles.colTotal}>Period Total</Text>
+              <Text style={styles.colTotal}>Total</Text>
             </View>
             {items.map((item, idx) => {
               const sameAsHeaderRange =
@@ -589,7 +602,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                   <Text style={styles.colQty}>{item.quantity}</Text>
                   <Text style={styles.colDays}>{item.billableDays}</Text>
                   <Text style={styles.colRate}>{fmtMoney(item.rate)}{rateUnit(item.rateType)}</Text>
-                  <Text style={styles.colTotal}>{fmtMoney(item.lineTotal)}</Text>
+                  <Text style={styles.colTotal}>{fmtMoney(computeLineTotal(item))}</Text>
                 </View>
               )
             })}
@@ -604,29 +617,42 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
         {discountItems.map((item, idx) => (
           <View key={`disc-${idx}`} style={styles.discountRow}>
             <Text style={styles.discountLabel}>{item.description || 'Discount'}</Text>
-            <Text style={styles.discountValue}>{fmtMoney(item.lineTotal)}</Text>
+            <Text style={styles.discountValue}>{fmtMoney(computeLineTotal(item))}</Text>
           </View>
         ))}
 
-        {/* Totals */}
-        <View style={styles.totals}>
-          <View style={styles.totalsRow}>
-            <Text style={styles.totalsLabel}>Subtotal</Text>
-            <Text style={styles.totalsValue}>{fmtMoney(props.subtotal)}</Text>
-          </View>
-          {props.taxAmount > 0 && (
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>
-                Tax {props.taxRate > 0 ? `(${(props.taxRate * 100).toFixed(3)}%)` : ''}
-              </Text>
-              <Text style={styles.totalsValue}>{fmtMoney(props.taxAmount)}</Text>
+        {/* Totals — derived from computed line totals, NOT the stored
+            Order.subtotal/taxAmount/total fields. Those were summed
+            from a stale OrderLineItem.lineTotal column at save time
+            and routinely read as $0 (see fix in commit history). */}
+        {(() => {
+          const computedSubtotal = props.lineItems.reduce(
+            (s, l) => s + computeLineTotal(l),
+            0,
+          )
+          const computedTaxAmount = computedSubtotal > 0 ? computedSubtotal * props.taxRate : 0
+          const computedGrandTotal = computedSubtotal + computedTaxAmount
+          return (
+            <View style={styles.totals}>
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Subtotal</Text>
+                <Text style={styles.totalsValue}>{fmtMoney(computedSubtotal)}</Text>
+              </View>
+              {computedTaxAmount > 0 && (
+                <View style={styles.totalsRow}>
+                  <Text style={styles.totalsLabel}>
+                    Tax {props.taxRate > 0 ? `(${(props.taxRate * 100).toFixed(3)}%)` : ''}
+                  </Text>
+                  <Text style={styles.totalsValue}>{fmtMoney(computedTaxAmount)}</Text>
+                </View>
+              )}
+              <View style={styles.grandRow}>
+                <Text style={styles.grandLabel}>Grand Total</Text>
+                <Text style={styles.grandValue}>{fmtMoney(computedGrandTotal)}</Text>
+              </View>
             </View>
-          )}
-          <View style={styles.grandRow}>
-            <Text style={styles.grandLabel}>Period Grand Total</Text>
-            <Text style={styles.grandValue}>{fmtMoney(props.total)}</Text>
-          </View>
-        </View>
+          )
+        })()}
 
         {/* Notes (only if present) */}
         {props.notes && (
