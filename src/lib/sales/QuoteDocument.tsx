@@ -278,15 +278,23 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 12,
   },
-  // Info boxes
-  infoRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
-  infoColumn: { flex: 1, flexDirection: 'column', gap: 10 },
-  infoBlock: {
+  // Single consolidated info card with three internal sections divided
+  // by 1px vertical rules. Sections stretch to the full card height
+  // (flexbox default) so the rules extend even when content lengths
+  // differ. Proportions roughly 25/45/30 — Production carries the most
+  // content (Job, Job Code, Description, Usage Period) so it gets the
+  // widest column.
+  infoCard: {
+    flexDirection: 'row',
     borderWidth: 0.5,
     borderColor: C.rule,
     borderRadius: 3,
-    padding: 7,
+    marginBottom: 12,
   },
+  infoSection: { padding: 8 },
+  infoSectionCustomer:   { width: '25%' },
+  infoSectionProduction: { width: '45%', borderLeftWidth: 0.5, borderLeftColor: C.rule },
+  infoSectionAgent:      { width: '30%', borderLeftWidth: 0.5, borderLeftColor: C.rule },
   infoTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 8,
@@ -453,11 +461,6 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
     return d
   })()
 
-  // Customer block info (Customer + Contact)
-  const contactFullName = props.jobContact?.fullName || null
-  const contactEmail = props.jobContact?.email || props.company.billingEmail || null
-  const contactPhone = props.jobContact?.phone || null
-
   return (
     <Document
       title={`SirReel Quote ${props.orderNumber}`}
@@ -490,45 +493,21 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
         </View>
         <View style={styles.hrThick} />
 
-        {/* Info-box row — 2 columns. Left column stacks Customer over
-            Production so long company names get the full half-page
-            width and don't hyphenate. Right column is Agent alone;
-            no attempt to vertically balance height. */}
-        <View style={styles.infoRow}>
-          <View style={styles.infoColumn}>
-          <View style={styles.infoBlock}>
+        {/* Consolidated info card — one bordered container, three
+            sections divided by 1px vertical rules. Sections fill the
+            full height of the card automatically (flex row default).
+            Per-section contact info now lives in the People section
+            below; Customer here is just the Company. */}
+        <View style={styles.infoCard}>
+          <View style={[styles.infoSection, styles.infoSectionCustomer]}>
             <Text style={styles.infoTitle}>Customer</Text>
             <View style={styles.infoLine}>
               <Text style={styles.infoLabel}>Company</Text>
               <Text style={styles.infoValue}>{props.company.name}</Text>
             </View>
-            {props.company.billingAddress && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLabel}>Address</Text>
-                <Text style={styles.infoValue}>{props.company.billingAddress}</Text>
-              </View>
-            )}
-            {contactFullName && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLabel}>Contact</Text>
-                <Text style={styles.infoValue}>{contactFullName}</Text>
-              </View>
-            )}
-            {contactEmail && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{contactEmail}</Text>
-              </View>
-            )}
-            {contactPhone && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{contactPhone}</Text>
-              </View>
-            )}
           </View>
 
-          <View style={styles.infoBlock}>
+          <View style={[styles.infoSection, styles.infoSectionProduction]}>
             <Text style={styles.infoTitle}>Production</Text>
             {props.job?.name && (
               <View style={styles.infoLine}>
@@ -553,10 +532,8 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.infoValue}>{usagePeriod}</Text>
             </View>
           </View>
-          </View>
 
-          <View style={styles.infoColumn}>
-          <View style={styles.infoBlock}>
+          <View style={[styles.infoSection, styles.infoSectionAgent]}>
             <Text style={styles.infoTitle}>SirReel Agent</Text>
             <View style={styles.infoLine}>
               <Text style={styles.infoLabel}>Name</Text>
@@ -566,17 +543,10 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.infoLabel}>Email</Text>
               <Text style={styles.infoValue}>{props.agent.email}</Text>
             </View>
-            {props.agent.phone && (
-              <View style={styles.infoLine}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{props.agent.phone}</Text>
-              </View>
-            )}
             <View style={styles.infoLine}>
               <Text style={styles.infoLabel}>Quote #</Text>
               <Text style={styles.infoValue}>{props.orderNumber}</Text>
             </View>
-          </View>
           </View>
         </View>
 
