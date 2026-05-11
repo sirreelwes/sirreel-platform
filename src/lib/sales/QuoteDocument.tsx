@@ -28,7 +28,7 @@ try {
 // Vercel Blob, URL stored on Order.
 //
 // Field coverage matches the RentalWorks samples: top band with logo +
-// title (and optional dominant-department category), customer/agent/
+// "QUOTE" title, customer/agent/
 // billing/usage info-box row, three-column issued-to / outgoing /
 // incoming row, line items grouped by department with subtotals,
 // grand total, footer with page numbers.
@@ -104,7 +104,7 @@ export interface QuoteDocumentProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Department labels & dominant-category detection
+// Department labels & ordering
 // ─────────────────────────────────────────────────────────────────────
 
 const DEPT_LABELS: Record<Department, string> = {
@@ -128,22 +128,6 @@ const DEPT_ORDER: Department[] = [
   'EXPENDABLES',
   'ART',
 ]
-
-// 70% by line-item dollar value triggers a category label above QUOTE.
-// Below that, omit the label entirely (mixed department quote).
-export function deriveDominantCategory(items: QuoteLineItem[]): string | null {
-  const nonDiscount = items.filter((l) => !l.isDiscount)
-  const totalValue = nonDiscount.reduce((sum, l) => sum + Math.abs(computeLineTotal(l)), 0)
-  if (totalValue <= 0) return null
-  const byDept = new Map<Department, number>()
-  for (const l of nonDiscount) {
-    byDept.set(l.department, (byDept.get(l.department) ?? 0) + Math.abs(computeLineTotal(l)))
-  }
-  for (const [dept, value] of byDept) {
-    if (value / totalValue >= 0.7) return DEPT_LABELS[dept]
-  }
-  return null
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Formatting helpers
@@ -256,14 +240,6 @@ const styles = StyleSheet.create({
   brandSub: { fontSize: 8, color: C.muted, marginTop: 3 },
   brandAddress: { fontSize: 8, color: C.muted, marginTop: 1 },
   titleColumn: { flex: 1, alignItems: 'center' },
-  category: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: C.muted,
-    marginBottom: 2,
-  },
   docTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 22,
@@ -448,7 +424,6 @@ const styles = StyleSheet.create({
 
 export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
   const generatedAt = props.generatedAt ?? new Date()
-  const category = deriveDominantCategory(props.lineItems)
   const grouped = groupByDepartment(props.lineItems)
   const discountItems = props.lineItems.filter((l) => l.isDiscount)
   const usagePeriod = fmtDateRange(props.startDate, props.endDate)
@@ -482,7 +457,6 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
             <Text style={styles.brandAddress}>(888) 477-7335</Text>
           </View>
           <View style={styles.titleColumn}>
-            {category && <Text style={styles.category}>{category}</Text>}
             <Text style={styles.docTitle}>QUOTE</Text>
           </View>
           <View style={styles.meta}>
