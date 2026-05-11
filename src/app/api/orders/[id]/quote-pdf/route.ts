@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { randomUUID } from 'crypto'
-import { put, del } from '@vercel/blob'
+import { put, del, get } from '@vercel/blob'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
@@ -149,13 +149,15 @@ export async function POST(
   })
 }
 
-// Returns the current Quote PDF URL (and metadata) for an Order — for
-// link rendering on the Order detail page. Does not regenerate.
+// Streams the Quote PDF bytes for an Order through this auth-gated
+// route. Private Vercel Blob URLs aren't directly fetchable from the
+// browser — we always proxy through server-side auth via @vercel/blob's
+// `get()`. Mirrors the contract counter-PDF route.
 //
-// When called with ?download=1, instead proxies the blob bytes back to
-// the caller with Content-Disposition: attachment so the browser
-// triggers a file download instead of rendering inline. The Vercel
-// Blob URL itself always serves inline.
+// Modes:
+//   default          → Content-Disposition: inline   (renders in browser tab)
+//   ?download=1      → Content-Disposition: attachment (triggers file download)
+//   ?meta=1          → JSON metadata only (no proxy), for status-style polls
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -175,35 +177,37 @@ export async function GET(
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-  const wantDownload = req.nextUrl.searchParams.get('download') === '1'
-  if (wantDownload) {
-    if (!order.quotePdfUrl) {
-      return NextResponse.json({ error: 'No quote PDF for this order' }, { status: 404 })
-    }
-    let upstream: Response
-    try {
-      upstream = await fetch(order.quotePdfUrl)
-    } catch (err) {
-      console.error('[quote-pdf] fetch error:', err)
-      return NextResponse.json({ error: 'Failed to fetch PDF blob' }, { status: 502 })
-    }
-    if (!upstream.ok) {
-      return NextResponse.json({ error: `Blob fetch ${upstream.status}` }, { status: 502 })
-    }
-    const bytes = await upstream.arrayBuffer()
-    return new NextResponse(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Quote-${order.orderNumber}.pdf"`,
-        'Cache-Control': 'private, no-store',
-      },
+  const wantMeta = req.nextUrl.searchParams.get('meta') === '1'
+  if (wantMeta) {
+    return NextResponse.json({
+      url: order.quotePdfUrl,
+      key: order.quotePdfKey,
+      generatedAt: order.quotePdfGeneratedAt,
     })
   }
 
-  return NextResponse.json({
-    url: order.quotePdfUrl,
-    key: order.quotePdfKey,
-    generatedAt: order.quotePdfGeneratedAt,
-  })
+  if (!order.quotePdfKey) {
+    return NextResponse.json({ error: 'No quote PDF for this order' }, { status: 404 })
+  }
+
+  const wantDownload = req.nextUrl.searchParams.get('download') === '1'
+  const disposition = wantDownload
+    ? `attachment; filename="Quote-${order.orderNumber}.pdf"`
+    : `inline; filename="Quote-${order.orderNumber}.pdf"`
+
+  try {
+    const blob = await get(order.quotePdfKey, { access: 'private' })
+    if (!blob || blob.statusCode !== 200 || !blob.stream) {
+      return NextResponse.json({ error: 'File not available' }, { status: 502 })
+    }
+    const headers = new Headers()
+    headers.set('Content-Type', blob.blob.contentType || 'application/pdf')
+    headers.set('Content-Disposition', disposition)
+    if (blob.blob.size != null) headers.set('Content-Length', String(blob.blob.size))
+    headers.set('Cache-Control', 'private, no-store')
+    return new NextResponse(blob.stream, { status: 200, headers })
+  } catch (err) {
+    console.error('[quote-pdf] proxy error:', err)
+    return NextResponse.json({ error: 'Failed to fetch quote PDF' }, { status: 500 })
+  }
 }

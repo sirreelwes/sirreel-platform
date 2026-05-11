@@ -578,13 +578,10 @@ function NewQuotePageInner() {
       // arrives at the order detail page with the PDF already available.
       // Failure is non-fatal — the order is created either way; user can
       // regenerate from the detail page.
-      let pdfUrl: string | null = null;
+      let pdfReady = false;
       try {
         const pdfRes = await fetch(`/api/orders/${order.id}/quote-pdf`, { method: 'POST' });
-        if (pdfRes.ok) {
-          const pdfData = await pdfRes.json().catch(() => ({}));
-          pdfUrl = pdfData?.url ?? null;
-        }
+        pdfReady = pdfRes.ok;
       } catch (err) {
         console.warn('[new-quote] quote PDF generation failed (non-fatal):', err);
       }
@@ -592,8 +589,11 @@ function NewQuotePageInner() {
       // Fire the action-specific side effect, then navigate. window.open
       // and the download anchor must happen before router.push to avoid
       // browser pop-up blockers (popups need the user-gesture stack).
-      if (action === 'preview' && pdfUrl) {
-        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      // Both routes go through the auth-gated quote-pdf endpoint — the
+      // raw Vercel Blob URL is private and returns Forbidden in the
+      // browser.
+      if (action === 'preview' && pdfReady) {
+        window.open(`/api/orders/${order.id}/quote-pdf`, '_blank', 'noopener,noreferrer');
       } else if (action === 'download') {
         const link = document.createElement('a');
         link.href = `/api/orders/${order.id}/quote-pdf?download=1`;

@@ -312,7 +312,7 @@ export default function OrderDetailPage() {
           {order.quotePdfUrl ? (
             <>
               <a
-                href={order.quotePdfUrl}
+                href={`/api/orders/${orderId}/quote-pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
