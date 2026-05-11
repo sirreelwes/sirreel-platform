@@ -639,9 +639,9 @@ function NewQuotePageInner() {
         )}
 
         {inquiry && mode === 'new' && (
-          <div className="bg-emerald-900/30 text-emerald-200 border border-emerald-800/40 rounded-xl p-3 text-[12px]">
-            Prefilled from Inquiry: <span className="font-semibold">{inquiry.title}</span>
-            {inquiry.company && <> · <span className="text-emerald-100">{inquiry.company.name}</span></>}
+          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-[12px]">
+            Prefilled from Inquiry: <span className="font-semibold text-emerald-900">{inquiry.title}</span>
+            {inquiry.company && <> · <span className="font-semibold text-emerald-900">{inquiry.company.name}</span></>}
           </div>
         )}
 
