@@ -11,3 +11,5 @@ scripts/*
 # blanket scripts/ ignore.
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
+.env.local.bak
+.gcp-service-account.json
