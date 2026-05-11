@@ -564,6 +564,16 @@ function NewQuotePageInner() {
         }
       }
 
+      // Generate the client-facing Quote PDF. Block on it so the agent
+      // arrives at the order detail page with the PDF already available.
+      // Failure is non-fatal — the order is created either way; user can
+      // regenerate from the detail page.
+      try {
+        await fetch(`/api/orders/${order.id}/quote-pdf`, { method: 'POST' });
+      } catch (err) {
+        console.warn('[new-quote] quote PDF generation failed (non-fatal):', err);
+      }
+
       router.push(`/orders/${order.id}`);
     } finally {
       setCreating(false);

@@ -1379,6 +1379,14 @@ model Order {
   // (e.g. "Other vendor", "Budget", "No response", "Timing").
   lostReason String? @map("lost_reason")
 
+  // Client-facing Quote PDF (mirrors the contract review counter-PDF
+  // pattern: blob key + url + timestamp, replace-on-regenerate). PDF is
+  // generated when the agent clicks "Create Quote" on /orders/new-quote
+  // and lands in Vercel Blob behind auth.
+  quotePdfKey         String?   @map("quote_pdf_key")
+  quotePdfUrl         String?   @map("quote_pdf_url")
+  quotePdfGeneratedAt DateTime? @map("quote_pdf_generated_at")
+
   booking      Booking?        @relation(fields: [bookingId], references: [id])
   company      Company         @relation(fields: [companyId], references: [id])
   agent        User            @relation("OrderAgent", fields: [agentId], references: [id])
