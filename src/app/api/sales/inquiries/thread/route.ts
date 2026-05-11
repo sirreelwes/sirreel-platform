@@ -32,9 +32,27 @@ export async function GET(req: NextRequest) {
     toAddresses: string[];
     subject: string;
     snippet: string | null;
+    bodyText: string | null;
+    bodyHtml: string | null;
+    bodySource: string | null;
+    attachmentCount: number;
     direction: string;
     sentAt: Date;
   }> = [];
+
+  const messageSelect = {
+    id: true,
+    fromAddress: true,
+    toAddresses: true,
+    subject: true,
+    snippet: true,
+    bodyText: true,
+    bodyHtml: true,
+    bodySource: true,
+    attachmentCount: true,
+    direction: true,
+    sentAt: true,
+  } as const;
 
   if (email.threadId) {
     const [t, msgs] = await Promise.all([
@@ -45,15 +63,7 @@ export async function GET(req: NextRequest) {
       prisma.emailMessage.findMany({
         where: { threadId: email.threadId },
         orderBy: { sentAt: 'asc' },
-        select: {
-          id: true,
-          fromAddress: true,
-          toAddresses: true,
-          subject: true,
-          snippet: true,
-          direction: true,
-          sentAt: true,
-        },
+        select: messageSelect,
       }),
     ]);
     thread = t;
@@ -62,15 +72,7 @@ export async function GET(req: NextRequest) {
     // No thread — just return the single message.
     const single = await prisma.emailMessage.findUnique({
       where: { id: email.id },
-      select: {
-        id: true,
-        fromAddress: true,
-        toAddresses: true,
-        subject: true,
-        snippet: true,
-        direction: true,
-        sentAt: true,
-      },
+      select: messageSelect,
     });
     if (single) messages = [single];
   }

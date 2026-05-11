@@ -9,9 +9,30 @@ interface ThreadMessage {
   toAddresses: string[];
   subject: string;
   snippet: string | null;
+  bodyText: string | null;
+  bodyHtml: string | null;
+  bodySource: string | null;
+  attachmentCount: number;
   direction: string;
   sentAt: string;
 }
+
+// Display name for sirreel agent inboxes — Gmail's "From" header on
+// outbound mail often surfaces only "SirReel" (the org alias), losing the
+// actual agent. Map the email local-part back to a human name so the
+// drawer shows "Oliver Carlson" instead of "SirReel" on an outbound row.
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  'info': 'SirReel (info)',
+  'jose': 'Jose Pacheco',
+  'oliver': 'Oliver Carlson',
+  'ana': 'Ana',
+  'wes': 'Wes Bailey',
+  'dani': 'Dani',
+  'hugo': 'Hugo',
+  'julian': 'Julian',
+  'chris': 'Chris Valencia',
+  'christian': 'Christian',
+};
 
 interface ThreadResponse {
   email: { id: string; subject: string; threadId: string | null };
@@ -35,10 +56,32 @@ function fmtWhen(iso: string) {
   return `${date}, ${time}`;
 }
 
-function parseName(fromHeader: string) {
-  // Try "Name <addr@x>" → "Name". Fall back to the raw header.
+function parseAddress(fromHeader: string): string {
+  const angle = fromHeader.match(/<([^>]+)>/);
+  return (angle ? angle[1] : fromHeader).toLowerCase().trim();
+}
+
+function parseDisplay(fromHeader: string): string | null {
   const m = fromHeader.match(/^\s*"?([^"<]+?)"?\s*<[^>]+>/);
-  if (m) return m[1].trim();
+  const raw = m ? m[1].trim() : null;
+  if (!raw) return null;
+  // Strip surrounding quotes if any survived.
+  return raw.replace(/^"+|"+$/g, '').trim() || null;
+}
+
+function parseName(fromHeader: string) {
+  // For sirreel agent addresses, the Gmail header often shows the org
+  // alias ("SirReel" or "SirReel Production Vehicles") rather than the
+  // actual sender. Prefer the agent-name lookup keyed off the email
+  // local-part so the drawer renders the real person.
+  const addr = parseAddress(fromHeader);
+  if (addr.endsWith('@sirreel.com')) {
+    const local = addr.split('@')[0];
+    if (local && AGENT_DISPLAY_NAMES[local]) return AGENT_DISPLAY_NAMES[local];
+    // Fall through to display-name for unmapped sirreel inboxes.
+  }
+  const display = parseDisplay(fromHeader);
+  if (display) return display;
   return fromHeader.trim();
 }
 
@@ -179,12 +222,10 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
 
           {!loading && !error && (
             <>
-              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-100 text-[11px] text-amber-800">
-                Showing snippet previews only — Gmail full bodies aren&apos;t synced yet.
-              </div>
-
               {messages.map((m) => {
                 const inbound = m.direction === 'inbound' || m.direction === 'INBOUND';
+                const body = m.bodyText || m.snippet || null;
+                const onlySnippet = !m.bodyText && !!m.snippet;
                 return (
                   <div
                     key={m.id}
@@ -212,10 +253,16 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
                         to {m.toAddresses.join(', ')}
                       </div>
                     )}
-                    {m.snippet ? (
-                      <p className="text-[12px] text-gray-700 whitespace-pre-wrap">{m.snippet}</p>
+                    {body ? (
+                      <p className="text-[12px] text-gray-700 whitespace-pre-wrap break-words">{body}</p>
                     ) : (
                       <p className="text-[12px] text-gray-400 italic">(no preview available)</p>
+                    )}
+                    {(onlySnippet || m.attachmentCount > 0) && (
+                      <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-400">
+                        {onlySnippet && <span>snippet only — body not yet synced</span>}
+                        {m.attachmentCount > 0 && <span>📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</span>}
+                      </div>
                     )}
                   </div>
                 );

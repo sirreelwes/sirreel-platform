@@ -949,8 +949,17 @@ model EmailMessage {
   fromAddress String   @map("from_address")
   toAddresses String[] @map("to_addresses")
   subject     String
-  snippet     String?  @db.Text // Preview text
+  snippet     String?  @db.Text // Preview text from Gmail
   direction   String // "inbound" or "outbound"
+
+  // Full message body (populated by Pub/Sub handler with format: "full" and
+  // the May 2026 backfill). bodyText is preferred; bodyHtml is kept for
+  // display fidelity; bodySource records which path produced bodyText
+  // ('plain' = text/plain part directly, 'html-converted' = html-to-text).
+  bodyText        String? @map("body_text") @db.Text
+  bodyHtml        String? @map("body_html") @db.Text
+  bodySource      String? @map("body_source")
+  attachmentCount Int     @default(0) @map("attachment_count")
 
   sentAt       DateTime       @map("sent_at")
   isRead       Boolean        @default(false) @map("is_read")

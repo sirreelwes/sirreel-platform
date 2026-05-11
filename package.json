@@ -28,6 +28,7 @@
     "@vercel/blob": "^2.3.3",
     "date-fns": "^4.1.0",
     "googleapis": "^144.0.0",
+    "html-to-text": "^10.0.0",
     "next": "14.2.20",
     "next-auth": "^4.24.13",
     "react": "^18.3.1",
@@ -36,6 +37,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/html-to-text": "^9.0.4",
     "@types/node": "^22.13.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import { getMessageDirection } from "@/lib/email/direction"
+import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -57,9 +58,11 @@ async function syncInbox(email: string) {
     const exists = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id } }).catch(() => null)
     if (exists) continue
 
+    // format:"full" returns the entire MIME tree so we can extract the
+    // text/plain (or html-converted) body and count attachments. Headers
+    // come along for free — no metadataHeaders restriction needed.
     const full = await gmail.users.messages.get({
-      userId: "me", id: msg.id, format: "metadata",
-      metadataHeaders: ["From", "Subject"],
+      userId: "me", id: msg.id, format: "full",
     })
 
     const headers = full.data.payload?.headers || []
@@ -71,6 +74,7 @@ async function syncInbox(email: string) {
     const sentAt = new Date(parseInt(full.data.internalDate || "0"))
     const gmailThreadId = full.data.threadId || msg.id
     const labelIds = full.data.labelIds || []
+    const body = extractBodyFromGmailPayload(full.data.payload as GmailMessagePart | undefined)
 
     // Direction is now classified by the central helper. Outbound
     // messages (from any sirreel agent) ARE persisted so the thread's
@@ -125,6 +129,10 @@ async function syncInbox(email: string) {
         toAddresses: [email],
         subject,
         snippet,
+        bodyText: body.bodyText,
+        bodyHtml: body.bodyHtml,
+        bodySource: body.bodySource,
+        attachmentCount: body.attachmentCount,
         direction: direction.toLowerCase(), // legacy column uses lowercase
         sentAt,
         isRead: !labelIds.includes("UNREAD"),
