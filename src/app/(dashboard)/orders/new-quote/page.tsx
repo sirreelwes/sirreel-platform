@@ -166,6 +166,9 @@ function NewQuotePageInner() {
   const search = useSearchParams();
   const { data: session } = useSession();
   const inquiryId = search.get('inquiryId');
+  // Round-trip from /crm?selectForQuote=1 — when the user picks a
+  // company over there, they're sent back here with this param set.
+  const clientCompanyIdFromUrl = search.get('clientCompanyId');
 
   const [mode, setMode] = useState<'new' | 'attach'>('new');
   const [attachJobId, setAttachJobId] = useState<string | null>(null);
@@ -216,6 +219,28 @@ function NewQuotePageInner() {
     const j = (attachableJobs || []).find((x) => x.id === attachJobId);
     setAttachedJob(j || null);
   }, [attachJobId, attachableJobs]);
+
+  // Round-trip from /crm: when ?clientCompanyId is in the URL, fetch
+  // the company by id, inject into the candidates dropdown, and
+  // select it so the rest of the form binds correctly.
+  useEffect(() => {
+    if (!clientCompanyIdFromUrl) return;
+    fetch(`/api/crm/companies/${clientCompanyIdFromUrl}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d?.id) return;
+        const candidate: ClientCandidate = {
+          id: d.id,
+          name: d.name,
+          tier: d.tier,
+          coiOnFile: !!d.coiOnFile,
+          defaultAgentId: d.defaultAgentId ?? null,
+        };
+        setClientCandidates((prev) => (prev.find((c) => c.id === candidate.id) ? prev : [candidate, ...prev]));
+        setSelectedClientId(candidate.id);
+      })
+      .catch(() => {});
+  }, [clientCompanyIdFromUrl]);
 
   // Inquiry prefill — only when ?inquiryId is set AND mode is "new".
   useEffect(() => {
@@ -725,12 +750,12 @@ function NewQuotePageInner() {
   if (!parsed && items.length === 0) {
     return (
       <div className="p-6 max-w-3xl mx-auto space-y-4">
-        <button onClick={() => router.push('/orders')} className="text-sm text-zinc-400 hover:text-white">
+        <button onClick={() => router.push('/orders')} className="text-sm text-gray-500 hover:text-gray-900">
           &larr; Back to Orders
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-white">New Quote</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <h1 className="text-2xl font-semibold text-gray-900">New Quote</h1>
+          <p className="text-sm text-gray-600 mt-1">
             Paste an email or upload a PDF. AI extracts line items + matches them against the catalog.
           </p>
         </div>
@@ -813,12 +838,12 @@ function NewQuotePageInner() {
   // Step 2: Review
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-4">
-      <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-zinc-400 hover:text-white">
+      <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-gray-500 hover:text-gray-900">
         &larr; Start Over
       </button>
       <div>
-        <h1 className="text-2xl font-semibold text-white">Review Quote</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <h1 className="text-2xl font-semibold text-gray-900">Review Quote</h1>
+        <p className="text-sm text-gray-600 mt-1">
           Adjust each line item. Departments, rates, and rate-types are editable per row.
         </p>
       </div>
@@ -860,8 +885,18 @@ function NewQuotePageInner() {
             ) : inquiry?.company ? (
               <div className="text-sm text-zinc-300">{inquiry.company.name}</div>
             ) : (
-              <div className="text-sm text-amber-400 bg-amber-900/20 border border-amber-900/40 rounded-lg p-3">
-                No client extracted. <a href="/crm" className="underline">Pick one in CRM first</a>.
+              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                No client extracted.{' '}
+                <a
+                  href={`/crm?selectForQuote=1${inquiry?.id ? `&inquiryId=${encodeURIComponent(inquiry.id)}` : ''}`}
+                  className="underline font-semibold"
+                >
+                  Pick one in CRM
+                </a>
+                .{' '}
+                <span className="text-amber-600/80 text-[11px]">
+                  (Heads up: choosing from CRM resets your parsed line items — you&apos;ll re-paste the email afterward.)
+                </span>
               </div>
             )}
             {parsed?.clientName && (
@@ -1004,18 +1039,27 @@ function NewQuotePageInner() {
 
 function ModeToggle({ mode, setMode }: { mode: 'new' | 'attach'; setMode: (m: 'new' | 'attach') => void }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-1 inline-flex w-fit">
-      {(['new', 'attach'] as const).map((m) => (
-        <button
-          key={m}
-          onClick={() => setMode(m)}
-          className={`px-3 py-1.5 text-[12px] font-semibold rounded ${
-            mode === m ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          {m === 'new' ? 'New Job' : 'Attach to existing Job'}
-        </button>
-      ))}
+    <div className="space-y-1.5">
+      <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Job for this quote</div>
+      <div className="bg-gray-100 border border-gray-200 rounded-lg p-1 inline-flex w-fit gap-1">
+        {(['new', 'attach'] as const).map((m) => {
+          const active = mode === m;
+          return (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              aria-pressed={active}
+              className={`px-3 py-1.5 text-[12px] font-semibold rounded transition-colors ${
+                active
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+              }`}
+            >
+              {m === 'new' ? '+ Create New Job' : 'Attach to Existing Job'}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

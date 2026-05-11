@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 type Company = {
@@ -41,8 +41,19 @@ const fmtDate = (d: string | null) =>
 
 export default function CRMPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const [tab, setTab] = useState<"companies" | "people" | "followups">("companies");
+
+  // "Select-for-quote" mode — driven by /new-quote linking here when the
+  // AI couldn't extract a company. Force the Companies tab, swap row
+  // clicks from "open detail" to "select and bounce back", and surface
+  // an explicit Select button so the action is obvious.
+  const selectForQuote = searchParams?.get('selectForQuote') === '1';
+  const returnInquiryId = searchParams?.get('inquiryId') || null;
+
+  const [tab, setTab] = useState<"companies" | "people" | "followups">(
+    selectForQuote ? "companies" : "companies",
+  );
   const [companies, setCompanies] = useState<Company[]>([]);
   const [people, setPeople] = useState<PersonResult[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -140,8 +151,35 @@ export default function CRMPage() {
 
   const pendingCount = followUps.filter(f => !f.completed).length;
 
+  const selectCompanyForQuote = (companyId: string) => {
+    const params = new URLSearchParams();
+    if (returnInquiryId) params.set('inquiryId', returnInquiryId);
+    params.set('clientCompanyId', companyId);
+    router.push(`/orders/new-quote?${params.toString()}`);
+  };
+
+  const cancelSelectForQuote = () => {
+    const params = new URLSearchParams();
+    if (returnInquiryId) params.set('inquiryId', returnInquiryId);
+    router.push(`/orders/new-quote${params.toString() ? `?${params.toString()}` : ''}`);
+  };
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
+      {selectForQuote && (
+        <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-amber-900">
+            <span className="font-semibold">Select a company for your new quote.</span>{' '}
+            <span className="text-amber-700">Click any company below — you&apos;ll be returned to the quote builder with it pre-filled.</span>
+          </div>
+          <button
+            onClick={cancelSelectForQuote}
+            className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-xs font-semibold rounded-lg hover:bg-amber-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-white">Clients</h1>
         <div className="flex gap-2">
@@ -214,8 +252,13 @@ export default function CRMPage() {
               ) : companies.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">No companies found</td></tr>
               ) : companies.map((co) => (
-                <tr key={co.id} onClick={() => router.push(`/crm/${co.id}`)}
-                  className="border-b border-zinc-800/50 hover:bg-zinc-800/50 cursor-pointer transition-colors">
+                <tr
+                  key={co.id}
+                  onClick={() => selectForQuote ? selectCompanyForQuote(co.id) : router.push(`/crm/${co.id}`)}
+                  className={`border-b border-zinc-800/50 cursor-pointer transition-colors ${
+                    selectForQuote ? 'hover:bg-amber-900/10' : 'hover:bg-zinc-800/50'
+                  }`}
+                >
                   <td className="px-4 py-3 text-white font-medium">{co.name}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_STYLES[co.tier] || "bg-zinc-700 text-zinc-300"}`}>
@@ -231,7 +274,19 @@ export default function CRMPage() {
                   <td className="px-4 py-3 text-center text-zinc-300">{co.totalBookings}</td>
                   <td className="px-4 py-3 text-center text-zinc-300">{co._count.orders}</td>
                   <td className="px-4 py-3 text-center">
-                    {co.coiOnFile
+                    {selectForQuote ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className={`text-[10px] ${co.coiOnFile ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                          {co.coiOnFile ? 'COI ✓' : 'no COI'}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); selectCompanyForQuote(co.id); }}
+                          className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold rounded"
+                        >
+                          Select →
+                        </button>
+                      </div>
+                    ) : co.coiOnFile
                       ? <span className="text-emerald-400 text-xs">On File</span>
                       : <span className="text-zinc-600 text-xs">Missing</span>}
                   </td>

@@ -190,6 +190,28 @@ best estimate of actual rental duration in pickupDate/returnDate, and set
 billableDays to the inclusive day count between those dates as a safe
 starting value (the server will override with the dept-specific cap default).
 
+CLIENT NAME EXTRACTION
+
+Prefer signals in this order:
+  1. In-body signature mention ("Eve Symington, BuzzFeed Producer" / sig block
+     with "BuzzFeed, Inc." under the sender's name) — strongest signal.
+  2. Sender's email domain when it's a real company domain (eve@buzzfeed.com →
+     BuzzFeed). Ignore generic free-mail domains (gmail.com, yahoo.com,
+     hotmail.com, outlook.com, icloud.com, proton.me, aol.com, fastmail.com,
+     gmx.com, mail.com, me.com).
+  3. Email SUBJECT line patterns. Production crews commonly use:
+        [ProjectCode]_[CompanyName]_[Description]
+        e.g. "Re: DOL_Radiance Films_Super cargo w/ liftgate + supplies"
+              → company is "Radiance Films"
+        e.g. "TFT_Anchor Stone Creative_truck pickup"
+              → company is "Anchor Stone Creative"
+     Underscore-delimited, three or more segments — extract the SECOND segment
+     as the candidate company. Ignore if the segment is obviously generic
+     ("Job", "Production", "Inquiry", "Quote", etc.).
+
+If none of these signals are confident, leave clientName empty — the agent
+will pick from the CRM. Don't guess from weak signals.
+
 GENERAL RULES
 
 - Return ONLY the JSON object. No markdown fences, no preamble.
