@@ -27,9 +27,27 @@ const VALID_DEPARTMENTS: LineItemDepartment[] = [
 function buildSystemPrompt(catalogSnippet: string): string {
   return `You are a rental quote parser for SirReel Production Vehicles, a film/TV production rental company in Los Angeles.
 
-Extract structured data from a quote request (email, spec sheet, or order form) into the JSON shape below.
+Extract structured data from a quote request (email, spec sheet, order form, OR a multi-turn email thread) into the JSON shape below.
 
 Return ONLY valid JSON, no markdown fences, no preamble. Omit top-level fields you cannot determine.
+
+THREAD INPUT FORMAT
+
+When the input begins with one or more "── <timestamp> · INBOUND|OUTBOUND · <sender>" header
+lines, you're reading a full email negotiation thread (oldest turn first, most recent turn last).
+
+In that case:
+  - Identify the CURRENT ASK — what the client wants RIGHT NOW given the negotiation history.
+    The most recent INBOUND turn is most informative, but earlier turns establish the real
+    item list, dates, and constraints. A short final turn like "Sounds good, see you Monday"
+    or "Thanks!" is small talk — extract from the substantive history, not the closer.
+  - Honor counter-proposals: if the agent (OUTBOUND) suggested swapping items or adjusting
+    dates and the client (INBOUND) accepted, extract the AGREED-UPON set, not the initial ask.
+  - Contact and company info: use the inbound sender's domain/name, NOT the SirReel agent's.
+  - Do not invent items that only appear in OUTBOUND messages unless the next INBOUND turn
+    confirms them.
+
+If the input is plain text without those header lines, treat it as a single message.
 
 {
   "clientName": "Company name or person's company if clear",
