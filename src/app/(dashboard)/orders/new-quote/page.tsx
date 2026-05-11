@@ -96,7 +96,19 @@ interface AttachableJob {
   endDate: string | null;
   company: { id: string; name: string };
   agent: { id: string; name: string };
+  // Surfaces from GET /api/jobs — used by the post-parse Job picker to
+  // describe each candidate ("3 existing orders, $14,200 booked").
+  _count?: { orders: number };
+  orderTotal?: number;
 }
+
+// Post-parse Job decision. Replaces the older pre-parse "new vs attach"
+// toggle: instead of forcing the agent to decide before the AI has seen
+// anything, we wait until parse extracts a customer + dates and then
+// surface candidate Jobs that match. "Create new" is always available.
+type JobChoice =
+  | { type: 'new' }
+  | { type: 'existing'; jobId: string };
 
 interface InquiryRecord {
   id: string;
@@ -170,10 +182,10 @@ function NewQuotePageInner() {
   // company over there, they're sent back here with this param set.
   const clientCompanyIdFromUrl = search.get('clientCompanyId');
 
-  const [mode, setMode] = useState<'new' | 'attach'>('new');
-  const [attachJobId, setAttachJobId] = useState<string | null>(null);
-  const [attachableJobs, setAttachableJobs] = useState<AttachableJob[] | null>(null);
-  const [attachedJob, setAttachedJob] = useState<AttachableJob | null>(null);
+  // Job decision is deferred until AFTER AI parse — see candidateJobs
+  // fetch + JobChoicePicker render below. Default: create a new Job.
+  const [jobChoice, setJobChoice] = useState<JobChoice>({ type: 'new' });
+  const [candidateJobs, setCandidateJobs] = useState<AttachableJob[]>([]);
 
   const [inquiry, setInquiry] = useState<InquiryRecord | null>(null);
 
@@ -192,33 +204,58 @@ function NewQuotePageInner() {
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountLabel, setDiscountLabel] = useState('');
 
-  // Phase 1 brief: inquiryId + attach-to-existing-Job are incompatible.
-  // Attach wins; warn and clear inquiry context.
+  // Post-parse Job-candidate fetch. Fires when we have both a parse
+  // result AND a confirmed customer. Pulls active/recent Jobs for that
+  // customer, filters to ones within a 60-day createdAt window OR with
+  // date-overlap against the extracted shoot range. Auto-selects the
+  // candidate when there's exactly one strong match (same customer +
+  // >50% date overlap); otherwise the default "Create new Job" stays.
   useEffect(() => {
-    if (mode === 'attach' && inquiry) {
-      console.warn('[new-quote] attach-to-existing-Job mode wins over inquiryId — inquiry context discarded.');
-      setInquiry(null);
-    }
-  }, [mode, inquiry]);
-
-  // Load attachable jobs once when entering attach mode.
-  useEffect(() => {
-    if (mode !== 'attach' || attachableJobs !== null) return;
-    fetch('/api/jobs?statuses=QUOTED&include=quoteStatus')
-      .then((r) => r.json())
-      .then((d) => setAttachableJobs(d.jobs || []))
-      .catch(() => setAttachableJobs([]));
-  }, [mode, attachableJobs]);
-
-  // Sync the picked job's full record for read-only display.
-  useEffect(() => {
-    if (!attachJobId) {
-      setAttachedJob(null);
+    if (!parsed || !selectedClientId || selectedClientId === '__new__') {
+      setCandidateJobs([]);
       return;
     }
-    const j = (attachableJobs || []).find((x) => x.id === attachJobId);
-    setAttachedJob(j || null);
-  }, [attachJobId, attachableJobs]);
+    fetch(`/api/jobs?companyId=${encodeURIComponent(selectedClientId)}&statuses=QUOTED,ACTIVE`)
+      .then((r) => r.json())
+      .then((d) => {
+        const jobs: AttachableJob[] = Array.isArray(d.jobs) ? d.jobs : [];
+        const cutoff = Date.now() - 60 * 86_400_000;
+        const extractedStart = editing.startDate ? new Date(editing.startDate).getTime() : null;
+        const extractedEnd = editing.endDate ? new Date(editing.endDate).getTime() : null;
+        const filtered = jobs.filter((j) => {
+          // Recency: any Job touched in the last 60 days is a candidate.
+          const start = j.startDate ? new Date(j.startDate).getTime() : null;
+          const end = j.endDate ? new Date(j.endDate).getTime() : start;
+          const recent =
+            (start && start >= cutoff) ||
+            (end && end >= cutoff);
+          // Date overlap with the extracted range.
+          const overlap =
+            extractedStart != null && extractedEnd != null && start != null && end != null &&
+            extractedStart <= end && extractedEnd >= start;
+          return recent || overlap;
+        });
+        setCandidateJobs(filtered);
+
+        // Strong-match auto-select: exactly one candidate with >50%
+        // date overlap with the AI-extracted range.
+        if (filtered.length === 1 && extractedStart != null && extractedEnd != null) {
+          const only = filtered[0];
+          const start = only.startDate ? new Date(only.startDate).getTime() : null;
+          const end = only.endDate ? new Date(only.endDate).getTime() : start;
+          if (start != null && end != null) {
+            const overlapStart = Math.max(extractedStart, start);
+            const overlapEnd = Math.min(extractedEnd, end);
+            const overlapDays = Math.max(0, (overlapEnd - overlapStart) / 86_400_000);
+            const askedDays = Math.max(1, (extractedEnd - extractedStart) / 86_400_000);
+            if (overlapDays / askedDays > 0.5) {
+              setJobChoice({ type: 'existing', jobId: only.id });
+            }
+          }
+        }
+      })
+      .catch(() => setCandidateJobs([]));
+  }, [parsed, selectedClientId, editing.startDate, editing.endDate]);
 
   // Round-trip from /crm: when ?clientCompanyId is in the URL, fetch
   // the company by id, inject into the candidates dropdown, and
@@ -242,9 +279,9 @@ function NewQuotePageInner() {
       .catch(() => {});
   }, [clientCompanyIdFromUrl]);
 
-  // Inquiry prefill — only when ?inquiryId is set AND mode is "new".
+  // Inquiry prefill — only when ?inquiryId is set.
   useEffect(() => {
-    if (!inquiryId || mode === 'attach') return;
+    if (!inquiryId) return;
     fetch(`/api/inquiries/${inquiryId}`)
       .then((r) => r.json())
       .then((d) => {
@@ -263,7 +300,7 @@ function NewQuotePageInner() {
         }
       })
       .catch(() => {});
-  }, [inquiryId, mode]);
+  }, [inquiryId]);
 
   // Map API contacts → UI rows. include defaults true for high/medium
   // confidence (header + well-formed signature) and false for low
@@ -507,9 +544,12 @@ function NewQuotePageInner() {
     return lineSum + discount;
   }, [items, discountAmount]);
 
-  const canCreate = mode === 'attach'
-    ? !!attachJobId && items.length > 0
-    : !!selectedClientId && items.length > 0;
+  // Save is allowed when there's at least one line item AND either
+  // (a) attaching to an existing Job, or (b) a company is chosen so
+  // we can auto-create a new Job under it.
+  const canCreate =
+    items.length > 0 &&
+    (jobChoice.type === 'existing' || (jobChoice.type === 'new' && !!selectedClientId));
 
   // Three end-of-flow actions share the same Order+lineItems+PDF write,
   // then differ only in what happens after the PDF is generated:
@@ -528,10 +568,11 @@ function NewQuotePageInner() {
       let jobId: string;
       let companyId: string;
 
-      if (mode === 'attach') {
-        if (!attachedJob) { alert('Pick an existing job to attach to.'); setCreating(false); return; }
-        jobId = attachedJob.id;
-        companyId = attachedJob.company.id;
+      if (jobChoice.type === 'existing') {
+        const picked = candidateJobs.find((j) => j.id === jobChoice.jobId);
+        if (!picked) { alert('Selected Job is no longer available.'); setCreating(false); return; }
+        jobId = picked.id;
+        companyId = picked.company.id;
       } else {
         // Resolve / create company
         let finalClientId = selectedClientId;
@@ -694,8 +735,10 @@ function NewQuotePageInner() {
         });
       }
 
-      // Mark inquiry CONVERTED if we came from one (and we're in new-job mode)
-      if (inquiry && mode === 'new') {
+      // Mark inquiry CONVERTED if we came from one (and we created a
+      // new Job — attaching to an existing Job means the Inquiry was
+      // serving a different purpose, leave its status alone).
+      if (inquiry && jobChoice.type === 'new') {
         try {
           await fetch(`/api/inquiries/${inquiry.id}`, {
             method: 'PATCH',
@@ -760,18 +803,7 @@ function NewQuotePageInner() {
           </p>
         </div>
 
-        <ModeToggle mode={mode} setMode={setMode} />
-
-        {mode === 'attach' && (
-          <AttachJobPicker
-            jobs={attachableJobs}
-            selected={attachJobId}
-            onSelect={setAttachJobId}
-            attachedJob={attachedJob}
-          />
-        )}
-
-        {inquiry && mode === 'new' && (
+        {inquiry && (
           <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-[12px]">
             Prefilled from Inquiry: <span className="font-semibold text-emerald-900">{inquiry.title}</span>
             {inquiry.company && <> · <span className="font-semibold text-emerald-900">{inquiry.company.name}</span></>}
@@ -848,21 +880,8 @@ function NewQuotePageInner() {
         </p>
       </div>
 
-      {/* Header context — Job summary if attached, else editable client/dates */}
-      {mode === 'attach' && attachedJob ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-1">
-          <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-bold">Attaching to existing Job</div>
-          <div className="text-base font-semibold text-white">
-            [{attachedJob.jobCode}] {attachedJob.name}
-          </div>
-          <div className="text-[12px] text-zinc-400">
-            {attachedJob.company.name}
-            {attachedJob.startDate && (
-              <> · {new Date(attachedJob.startDate).toLocaleDateString()} → {attachedJob.endDate ? new Date(attachedJob.endDate).toLocaleDateString() : '?'}</>
-            )}
-          </div>
-        </div>
-      ) : (
+      {/* Header context — editable client/dates extracted by the AI. */}
+      {(
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Client Company</label>
@@ -931,6 +950,23 @@ function NewQuotePageInner() {
           </div>
         </div>
       )}
+
+      {/* Job for this Quote — post-parse decision. Candidates come from
+          the customer + date-overlap query; "Create new Job" is always
+          available with an inline-editable name. */}
+      <JobChoicePicker
+        choice={jobChoice}
+        setChoice={setJobChoice}
+        candidates={candidateJobs}
+        newJobName={
+          editing.productionName ||
+          parsed?.productionName ||
+          inquiry?.title ||
+          `Quote — ${parsed?.clientName || 'Untitled'} — ${new Date().toLocaleDateString()}`
+        }
+        onNewJobNameChange={(name) => setEditing((prev) => ({ ...prev, productionName: name }))}
+        clientCompanyChosen={!!selectedClientId}
+      />
 
       {/* People on this thread (AI-extracted contacts, human review) */}
       <PeopleSection contacts={contacts} setContacts={setContacts} />
@@ -1037,70 +1073,102 @@ function NewQuotePageInner() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────
 
-function ModeToggle({ mode, setMode }: { mode: 'new' | 'attach'; setMode: (m: 'new' | 'attach') => void }) {
+function JobChoicePicker({
+  choice,
+  setChoice,
+  candidates,
+  newJobName,
+  onNewJobNameChange,
+  clientCompanyChosen,
+}: {
+  choice: JobChoice;
+  setChoice: (c: JobChoice) => void;
+  candidates: AttachableJob[];
+  newJobName: string;
+  onNewJobNameChange: (name: string) => void;
+  clientCompanyChosen: boolean;
+}) {
+  // Sort candidates: most recent first.
+  const sorted = [...candidates].sort((a, b) => {
+    const aT = a.startDate ? new Date(a.startDate).getTime() : 0;
+    const bT = b.startDate ? new Date(b.startDate).getTime() : 0;
+    return bT - aT;
+  });
+
   return (
-    <div className="space-y-1.5">
-      <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Job for this quote</div>
-      <div className="bg-gray-100 border border-gray-200 rounded-lg p-1 inline-flex w-fit gap-1">
-        {(['new', 'attach'] as const).map((m) => {
-          const active = mode === m;
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <h2 className="text-sm font-bold text-white">Job for this Quote</h2>
+        <p className="text-[11px] text-zinc-500">
+          {sorted.length > 0
+            ? `${sorted.length} existing Job${sorted.length === 1 ? '' : 's'} match this customer — attach or start fresh.`
+            : clientCompanyChosen
+              ? 'No matching Jobs found — a new one will be created.'
+              : 'Pick a Client Company above to see matching Jobs.'}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {sorted.map((j) => {
+          const active = choice.type === 'existing' && choice.jobId === j.id;
+          const orders = j._count?.orders ?? 0;
           return (
             <button
-              key={m}
-              onClick={() => setMode(m)}
-              aria-pressed={active}
-              className={`px-3 py-1.5 text-[12px] font-semibold rounded transition-colors ${
+              key={j.id}
+              type="button"
+              onClick={() => setChoice({ type: 'existing', jobId: j.id })}
+              className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-start gap-3 ${
                 active
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white'
+                  ? 'bg-amber-900/20 border-amber-700'
+                  : 'bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60'
               }`}
             >
-              {m === 'new' ? '+ Create New Job' : 'Attach to Existing Job'}
+              <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border ${active ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-white truncate">
+                  [{j.jobCode}] {j.name}
+                </div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  {j.startDate && (
+                    <>
+                      {new Date(j.startDate).toLocaleDateString()}
+                      {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
+                    </>
+                  )}
+                  {j.startDate && orders > 0 && ' · '}
+                  {orders > 0 && `${orders} existing order${orders === 1 ? '' : 's'}`}
+                  {(!j.startDate && orders === 0) && 'no dates / no orders yet'}
+                </div>
+              </div>
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
 
-function AttachJobPicker({
-  jobs, selected, onSelect, attachedJob,
-}: {
-  jobs: AttachableJob[] | null;
-  selected: string | null;
-  onSelect: (id: string) => void;
-  attachedJob: AttachableJob | null;
-}) {
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-      <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-bold">Pick a Quoted Job</div>
-      {jobs === null ? (
-        <div className="text-xs text-zinc-600">Loading jobs…</div>
-      ) : jobs.length === 0 ? (
-        <div className="text-xs text-zinc-600">No QUOTED jobs available. Create a new one instead.</div>
-      ) : (
-        <select
-          value={selected || ''}
-          onChange={(e) => onSelect(e.target.value)}
-          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+        <button
+          type="button"
+          onClick={() => setChoice({ type: 'new' })}
+          className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-start gap-3 ${
+            choice.type === 'new'
+              ? 'bg-amber-900/20 border-amber-700'
+              : 'bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60'
+          }`}
         >
-          <option value="">— Select —</option>
-          {jobs.map((j) => (
-            <option key={j.id} value={j.id}>
-              [{j.jobCode}] {j.name} — {j.company.name}
-            </option>
-          ))}
-        </select>
-      )}
-      {attachedJob && (
-        <div className="text-[11px] text-zinc-500">
-          Selected: {attachedJob.company.name}
-          {attachedJob.startDate && (
-            <> · {new Date(attachedJob.startDate).toLocaleDateString()} → {attachedJob.endDate ? new Date(attachedJob.endDate).toLocaleDateString() : '?'}</>
-          )}
-        </div>
-      )}
+          <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border ${choice.type === 'new' ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold text-white">+ Create new Job</div>
+            <div className="mt-1.5">
+              <input
+                value={newJobName}
+                onChange={(e) => onNewJobNameChange(e.target.value)}
+                onClick={(e) => { e.stopPropagation(); setChoice({ type: 'new' }); }}
+                onFocus={() => setChoice({ type: 'new' })}
+                placeholder="Job name"
+                className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+              />
+            </div>
+          </div>
+        </button>
+      </div>
     </div>
   );
 }
