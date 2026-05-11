@@ -35,11 +35,15 @@ async function syncInbox(email: string) {
   if (!systemUser) return { error: "No users" }
 
   const gmail = getGmailClient(email)
-  const listRes = await gmail.users.messages.list({
-    userId: "me", labelIds: ["INBOX"], maxResults: 10, q: "newer_than:1d",
-  })
-
-  const messages = listRes.data.messages || []
+  // Pull both INBOX and SENT — Gmail's label model is mutually exclusive
+  // (a message lives in exactly one), so we issue two list calls and
+  // concat. Without SENT, outbound agent messages never enter the DB and
+  // EmailThread.lastDirection can't be maintained.
+  const [inboxList, sentList] = await Promise.all([
+    gmail.users.messages.list({ userId: "me", labelIds: ["INBOX"], maxResults: 10, q: "newer_than:1d" }),
+    gmail.users.messages.list({ userId: "me", labelIds: ["SENT"],  maxResults: 10, q: "newer_than:1d" }),
+  ])
+  const messages = [...(inboxList.data.messages || []), ...(sentList.data.messages || [])]
   let processed = 0
 
   const account = await prisma.emailAccount.upsert({
