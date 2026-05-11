@@ -24,9 +24,13 @@ async function renewWatches() {
         email
       )
       const gmail = google.gmail({ version: "v1", auth: authed })
+      // Subscribe to both INBOX and SENT — without SENT, outbound mail
+      // never triggers a notification and EmailThread.lastDirection can't
+      // be maintained by the Pub/Sub handler. labelIds is an OR filter on
+      // the Gmail Watch API, so notifications fire on changes to EITHER.
       const res = await gmail.users.watch({
         userId: "me",
-        requestBody: { topicName: TOPIC_NAME, labelIds: ["INBOX"] },
+        requestBody: { topicName: TOPIC_NAME, labelIds: ["INBOX", "SENT"] },
       })
       results.push({ email, historyId: res.data.historyId, ok: true })
     } catch (err: any) {
