@@ -59,20 +59,49 @@ export function buildThreadText(
     const dir = formatDirection(m.direction)
     const ts = fmtTimestamp(m.sentAt)
     const header = `── ${ts} · ${dir} · ${m.fromAddress}`
-    const raw = m.bodyText || m.snippet || ''
-    const body = stripQuotedReply(raw).trim() || '(no content)'
+    // bodyText is preferred. When it's null (older than the 90-day F
+    // backfill, or a Gmail-format-quirk message), we fall back to the
+    // snippet but mark the block as degraded so the AI knows that
+    // turn's context is incomplete — important when extracting items
+    // or dates that may only have appeared in the full body.
+    let raw: string
+    let degraded = false
+    if (m.bodyText) {
+      raw = m.bodyText
+    } else if (m.snippet) {
+      raw = m.snippet
+      degraded = true
+    } else {
+      raw = ''
+    }
+    const stripped = stripQuotedReply(raw).trim() || '(no content)'
+    const body = degraded ? `[snippet only - full body unavailable]\n${stripped}` : stripped
     blocks.push(`${header}\n${body}`)
   }
 
-  let out = blocks.join(SEPARATOR)
-  if (out.length > maxLen) {
-    // Truncate from the START — keep the most recent turns intact since
-    // those carry the active ask. Insert a marker so the AI knows older
-    // turns were elided.
-    const tail = out.slice(out.length - maxLen + 200)
-    const cutPoint = tail.indexOf(SEPARATOR.trim())
-    const aligned = cutPoint >= 0 ? tail.slice(cutPoint + SEPARATOR.trim().length).trimStart() : tail
-    out = `[earlier turns omitted for length — ${blocks.length} total messages]\n\n${aligned}`
+  const full = blocks.join(SEPARATOR)
+  if (full.length <= maxLen) return full
+
+  // Keep-first + last-N truncation: the first message carries the
+  // original ask (dates, items, contact); the most recent N turns
+  // carry the negotiated state. Drop the middle, never split a block.
+  const firstBlock = blocks[0]
+  let budget = maxLen - firstBlock.length - SEPARATOR.length
+  const tail: string[] = []
+  // Walk backwards from the most recent message, accumulating whole
+  // blocks until adding another would bust the budget.
+  for (let i = blocks.length - 1; i >= 1; i--) {
+    const cost = blocks[i].length + (tail.length > 0 ? SEPARATOR.length : 0)
+    if (cost > budget) break
+    tail.unshift(blocks[i])
+    budget -= cost
   }
-  return out
+  const omittedCount = blocks.length - 1 - tail.length
+  if (omittedCount <= 0) {
+    // Edge case — first block alone is already over budget, or every
+    // non-first block fits. Either way no truncation marker needed.
+    return firstBlock + SEPARATOR + tail.join(SEPARATOR)
+  }
+  const marker = `[... ${omittedCount} earlier turns omitted ...]`
+  return `${firstBlock}${SEPARATOR}${marker}${SEPARATOR}${tail.join(SEPARATOR)}`
 }
