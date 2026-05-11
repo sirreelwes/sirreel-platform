@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { NewInquiryModal } from './NewInquiryModal';
+import { ThreadDrawer } from './ThreadDrawer';
 
 // The Inquiries section is intentionally a "blank slate" between sessions.
 // It surfaces inbound emails that look like inquiry candidates (BOOKING_INQUIRY
@@ -38,9 +39,11 @@ function ageString(iso: string) {
 
 export function InquiriesSection() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [suggestions, setSuggestions] = useState<SuggestionRecord[] | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch('/api/sales/suggested-inquiries')
@@ -50,6 +53,27 @@ export function InquiriesSection() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Deep-link: open the drawer if ?thread=<emailId> is in the URL.
+  useEffect(() => {
+    const t = searchParams?.get('thread') || null;
+    setDrawerEmailId(t);
+  }, [searchParams]);
+
+  const openDrawer = useCallback((emailId: string) => {
+    setDrawerEmailId(emailId);
+    const params = new URLSearchParams(Array.from(searchParams?.entries() || []));
+    params.set('thread', emailId);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerEmailId(null);
+    const params = new URLSearchParams(Array.from(searchParams?.entries() || []));
+    params.delete('thread');
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : '?', { scroll: false });
+  }, [router, searchParams]);
 
   const capture = async (emailId: string) => {
     setBusyId(emailId);
@@ -131,7 +155,12 @@ export function InquiriesSection() {
             const busy = busyId === s.emailId;
             return (
               <div key={s.emailId} className="py-2.5 flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex-1 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => openDrawer(s.emailId)}
+                  className="min-w-0 flex-1 space-y-1 text-left rounded hover:bg-zinc-800/40 -mx-1 px-1 py-0.5 transition-colors"
+                  aria-label={`Preview thread: ${s.subject || 'no subject'}`}
+                >
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-white truncate">{s.subject || '(no subject)'}</span>
                     {s.category && (
@@ -148,17 +177,17 @@ export function InquiriesSection() {
                   {s.snippet && (
                     <p className="text-[11px] text-zinc-400 line-clamp-2">{s.snippet}</p>
                   )}
-                </div>
+                </button>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
-                    onClick={() => capture(s.emailId)}
+                    onClick={(e) => { e.stopPropagation(); capture(s.emailId); }}
                     disabled={busy}
                     className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white text-[11px] font-bold rounded"
                   >
                     {busy ? 'Capturing…' : 'Capture & Quote'}
                   </button>
                   <button
-                    onClick={() => dismiss(s.emailId)}
+                    onClick={(e) => { e.stopPropagation(); dismiss(s.emailId); }}
                     disabled={busy}
                     className="px-2.5 py-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-50 text-[11px] font-semibold"
                   >
@@ -175,6 +204,14 @@ export function InquiriesSection() {
         open={showNew}
         onClose={() => setShowNew(false)}
         onCreated={(id) => { setShowNew(false); onManualCreated(id); }}
+      />
+
+      <ThreadDrawer
+        emailId={drawerEmailId}
+        onClose={closeDrawer}
+        onCapture={async (id) => { await capture(id); closeDrawer(); }}
+        onDismiss={async (id) => { await dismiss(id); closeDrawer(); }}
+        busy={busyId !== null && busyId === drawerEmailId}
       />
     </section>
   );
