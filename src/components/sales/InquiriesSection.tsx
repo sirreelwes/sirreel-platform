@@ -75,27 +75,41 @@ export function InquiriesSection() {
     router.replace(qs ? `?${qs}` : '?', { scroll: false });
   }, [router, searchParams]);
 
-  const capture = async (emailId: string) => {
+  // Returns true when navigation was kicked off (Inquiry created and
+  // router.push fired). Callers that need to chase state mutations
+  // *only* on failure can branch on the return value — chasing on
+  // success would race the navigation and cancel it. That's exactly
+  // the drawer-vs-card bug we saw: the drawer wrapper was calling
+  // closeDrawer() unconditionally, which router.replace'd over the
+  // pending push.
+  const capture = async (emailId: string): Promise<boolean> => {
     setBusyId(emailId);
     try {
-      const res = await fetch('/api/sales/suggested-inquiries/capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailId }),
-      });
+      let res: Response;
+      try {
+        res = await fetch('/api/sales/suggested-inquiries/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emailId }),
+        });
+      } catch (err) {
+        console.error('[capture] network error:', err);
+        alert(`Failed to capture: ${err instanceof Error ? err.message : 'network error'}`);
+        return false;
+      }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        alert(d.error || 'Failed to capture');
-        setBusyId(null);
-        return;
+        alert(d.error || `Failed to capture (HTTP ${res.status})`);
+        return false;
       }
       const data = await res.json();
       const inquiryId = data.inquiry?.id;
       if (inquiryId) {
         router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`);
-      } else {
-        load();
+        return true;
       }
+      load();
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -209,7 +223,15 @@ export function InquiriesSection() {
       <ThreadDrawer
         emailId={drawerEmailId}
         onClose={closeDrawer}
-        onCapture={async (id) => { await capture(id); closeDrawer(); }}
+        // On capture success the router.push to /orders/new-quote
+        // already unmounts the drawer; only close manually on a
+        // failure (capture returns false) so the user can retry.
+        // Calling closeDrawer() unconditionally was racing the push
+        // and cancelling the navigation.
+        onCapture={async (id) => {
+          const navigated = await capture(id);
+          if (!navigated) closeDrawer();
+        }}
         onDismiss={async (id) => { await dismiss(id); closeDrawer(); }}
         busy={busyId !== null && busyId === drawerEmailId}
       />
