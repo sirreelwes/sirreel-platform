@@ -70,19 +70,61 @@ function strippedDescription(desc: string | null): string | null {
   return null
 }
 
-async function findCanonical(utah: UtahRow): Promise<{ row: CanonicalRow | null; ambiguous: boolean }> {
-  const canonDesc = strippedDescription(utah.description)
-  if (!canonDesc) return { row: null, ambiguous: false }
-  const candidates = await prisma.inventoryItem.findMany({
+// Normalize a description for matching. Catches the real-world drift
+// between Utah-imported names and main-catalog names:
+//   "EXTENSION CORD, 25'"   ↔   "Extension Cord - 25'"
+//   "DIRECTOR'S CHAIR, LOW" ↔   "Director's Chair - Low"
+// Deliberately conservative: doesn't stem words ("vac" vs "vacuum"),
+// doesn't reorder tokens ("Worklight, Dewalt" vs "Dewalt Worklight"),
+// doesn't strip parens-qualifiers ("(Analog)" stays). Mismatches in
+// those areas stay no-match so they go to manual review.
+function normalize(desc: string | null): string {
+  if (!desc) return ''
+  return desc
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")                       // curly apostrophes → straight
+    .replace(/[\u201C\u201D]/g, '"')                       // curly quotes → straight
+    .replace(/\s*[,\u2013\u2014\-]+\s*/g, ' ')             // ", " and " - " and "—" → single space
+    .replace(/[.;:!?]+\s*$/g, '')                           // trailing sentence punct
+    .replace(/\s+/g, ' ')                                   // collapse whitespace
+    .trim()
+}
+
+interface CanonicalIndex {
+  byNormDesc: Map<string, CanonicalRow[]>
+}
+
+async function buildCanonicalIndex(): Promise<CanonicalIndex> {
+  // Pre-fetch the universe of non-Utah InventoryItems and group them
+  // by normalized description. This is a single query and lets the
+  // matcher run entirely in-memory — faster than per-row Prisma lookups
+  // and avoids needing computed-column query support.
+  const all = await prisma.inventoryItem.findMany({
     where: {
-      description: { equals: canonDesc, mode: 'insensitive' },
-      id: { not: utah.id },
-      // Exclude other Utah rows so we don't accidentally chain-reassign.
-      NOT: { description: { startsWith: 'UTAH', mode: 'insensitive' } },
+      AND: [
+        { NOT: { description: { startsWith: 'UTAH', mode: 'insensitive' } } },
+        { NOT: { code: { startsWith: 'UTAH', mode: 'insensitive' } } },
+      ],
     },
     select: { id: true, code: true, description: true },
-    take: 3,
   })
+  const byNormDesc = new Map<string, CanonicalRow[]>()
+  for (const r of all) {
+    const key = normalize(r.description)
+    if (!key) continue
+    const bucket = byNormDesc.get(key) ?? []
+    bucket.push(r)
+    byNormDesc.set(key, bucket)
+  }
+  return { byNormDesc }
+}
+
+function findCanonical(utah: UtahRow, index: CanonicalIndex): { row: CanonicalRow | null; ambiguous: boolean } {
+  const canonDesc = strippedDescription(utah.description)
+  if (!canonDesc) return { row: null, ambiguous: false }
+  const key = normalize(canonDesc)
+  if (!key) return { row: null, ambiguous: false }
+  const candidates = index.byNormDesc.get(key) ?? []
   if (candidates.length === 0) return { row: null, ambiguous: false }
   if (candidates.length > 1) return { row: null, ambiguous: true }
   return { row: candidates[0], ambiguous: false }
@@ -103,6 +145,9 @@ async function main() {
     orderBy: { code: 'asc' },
   })
   console.log(`Found ${utah.length} Utah-prefixed InventoryItem rows`)
+
+  const index = await buildCanonicalIndex()
+  console.log(`Indexed ${index.byNormDesc.size} normalized canonical descriptions`)
   console.log()
 
   let reassigned = 0
@@ -114,7 +159,7 @@ async function main() {
   for (let i = 0; i < utah.length; i++) {
     const u = utah[i]
     const prefix = `[${i + 1}/${utah.length}]`
-    const { row: canon, ambiguous } = await findCanonical(u)
+    const { row: canon, ambiguous } = findCanonical(u, index)
 
     if (ambiguous) {
       skippedAmbiguous++
