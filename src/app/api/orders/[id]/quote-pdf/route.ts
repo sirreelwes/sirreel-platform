@@ -151,8 +151,13 @@ export async function POST(
 
 // Returns the current Quote PDF URL (and metadata) for an Order — for
 // link rendering on the Order detail page. Does not regenerate.
+//
+// When called with ?download=1, instead proxies the blob bytes back to
+// the caller with Content-Disposition: attachment so the browser
+// triggers a file download instead of rendering inline. The Vercel
+// Blob URL itself always serves inline.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession()
@@ -162,12 +167,40 @@ export async function GET(
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     select: {
+      orderNumber: true,
       quotePdfKey: true,
       quotePdfUrl: true,
       quotePdfGeneratedAt: true,
     },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+
+  const wantDownload = req.nextUrl.searchParams.get('download') === '1'
+  if (wantDownload) {
+    if (!order.quotePdfUrl) {
+      return NextResponse.json({ error: 'No quote PDF for this order' }, { status: 404 })
+    }
+    let upstream: Response
+    try {
+      upstream = await fetch(order.quotePdfUrl)
+    } catch (err) {
+      console.error('[quote-pdf] fetch error:', err)
+      return NextResponse.json({ error: 'Failed to fetch PDF blob' }, { status: 502 })
+    }
+    if (!upstream.ok) {
+      return NextResponse.json({ error: `Blob fetch ${upstream.status}` }, { status: 502 })
+    }
+    const bytes = await upstream.arrayBuffer()
+    return new NextResponse(bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="Quote-${order.orderNumber}.pdf"`,
+        'Cache-Control': 'private, no-store',
+      },
+    })
+  }
+
   return NextResponse.json({
     url: order.quotePdfUrl,
     key: order.quotePdfKey,

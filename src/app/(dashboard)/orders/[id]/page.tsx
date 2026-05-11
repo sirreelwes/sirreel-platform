@@ -38,6 +38,9 @@ type Order = {
   booking: { id: string; bookingNumber: string; jobName: string; productionName: string | null } | null;
   lineItems: LineItem[];
   invoices: { id: string; invoiceNumber: string; status: string; total: string }[];
+  quotePdfKey: string | null;
+  quotePdfUrl: string | null;
+  quotePdfGeneratedAt: string | null;
 };
 
 type AssetCat = { id: string; name: string; slug: string; dailyRate: string; weeklyRate: string | null };
@@ -94,6 +97,7 @@ export default function OrderDetailPage() {
   const [invSearch, setInvSearch] = useState("");
   const [invResults, setInvResults] = useState<InvItem[]>([]);
   const [showInvDropdown, setShowInvDropdown] = useState(false);
+  const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const fmt = (n: string | number) =>
@@ -153,6 +157,24 @@ export default function OrderDetailPage() {
     if (!confirm("Delete this draft order?")) return;
     await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
     router.push("/orders");
+  };
+
+  // Re-render the Quote PDF off the current Order state (line items,
+  // discount, totals). The endpoint replaces the prior blob and updates
+  // quotePdfKey/quotePdfUrl/quotePdfGeneratedAt on the Order.
+  const regeneratePdf = async () => {
+    setRegeneratingPdf(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/quote-pdf`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to regenerate PDF");
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setRegeneratingPdf(false);
+    }
   };
 
   const selectAssetCategory = (cat: AssetCat) => {
@@ -273,6 +295,62 @@ export default function OrderDetailPage() {
           <div><span className="text-zinc-500">Linked Booking</span><p className="text-white mt-0.5">
             {order.booking ? <a href={`/jobs/${order.booking.id}`} className="text-blue-400 hover:text-blue-300">{order.booking.bookingNumber}</a> : <span className="text-zinc-500">None</span>}
           </p></div>
+        </div>
+      </div>
+
+      {/* Quote PDF actions */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white">Quote PDF</div>
+          <div className="text-xs text-zinc-500 mt-0.5">
+            {order.quotePdfUrl
+              ? `Last generated ${order.quotePdfGeneratedAt ? new Date(order.quotePdfGeneratedAt).toLocaleString() : ""}`
+              : "Not generated yet"}
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {order.quotePdfUrl ? (
+            <>
+              <a
+                href={order.quotePdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Preview
+              </a>
+              <a
+                href={`/api/orders/${orderId}/quote-pdf?download=1`}
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Download
+              </a>
+              <button
+                onClick={regeneratePdf}
+                disabled={regeneratingPdf}
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+                title="Re-render the PDF off the current line items and totals"
+              >
+                {regeneratingPdf ? "Regenerating…" : "Regenerate"}
+              </button>
+              <button
+                disabled
+                className="px-3 py-1.5 bg-zinc-800 text-zinc-500 text-sm font-semibold rounded-lg cursor-not-allowed"
+                title="Coming soon — email the quote PDF to the client"
+              >
+                Send to Client
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={regeneratePdf}
+              disabled={regeneratingPdf || order.lineItems.length === 0}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:bg-zinc-700 text-white text-sm font-semibold rounded-lg"
+              title={order.lineItems.length === 0 ? "Add at least one line item first" : "Generate the client-facing Quote PDF"}
+            >
+              {regeneratingPdf ? "Generating…" : "Generate Quote PDF"}
+            </button>
+          )}
         </div>
       </div>
 

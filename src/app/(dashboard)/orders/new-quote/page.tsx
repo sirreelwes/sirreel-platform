@@ -427,7 +427,17 @@ function NewQuotePageInner() {
     ? !!attachJobId && items.length > 0
     : !!selectedClientId && items.length > 0;
 
-  const createQuote = async () => {
+  // Three end-of-flow actions share the same Order+lineItems+PDF write,
+  // then differ only in what happens after the PDF is generated:
+  //   draft    — go straight to the new Order's detail page
+  //   preview  — open the PDF in a new tab and then land on detail page
+  //   download — trigger a file download via ?download=1 and land on detail page
+  // All three persist as quoteStatus=DRAFT (schema default). The detail
+  // page is the canonical place to iterate; preview/download navigate
+  // there afterward so the agent never edits in two places.
+  type CreateAction = 'draft' | 'preview' | 'download';
+
+  const createQuote = async (action: CreateAction = 'draft') => {
     if (!canCreate) return;
     setCreating(true);
     try {
@@ -568,10 +578,29 @@ function NewQuotePageInner() {
       // arrives at the order detail page with the PDF already available.
       // Failure is non-fatal — the order is created either way; user can
       // regenerate from the detail page.
+      let pdfUrl: string | null = null;
       try {
-        await fetch(`/api/orders/${order.id}/quote-pdf`, { method: 'POST' });
+        const pdfRes = await fetch(`/api/orders/${order.id}/quote-pdf`, { method: 'POST' });
+        if (pdfRes.ok) {
+          const pdfData = await pdfRes.json().catch(() => ({}));
+          pdfUrl = pdfData?.url ?? null;
+        }
       } catch (err) {
         console.warn('[new-quote] quote PDF generation failed (non-fatal):', err);
+      }
+
+      // Fire the action-specific side effect, then navigate. window.open
+      // and the download anchor must happen before router.push to avoid
+      // browser pop-up blockers (popups need the user-gesture stack).
+      if (action === 'preview' && pdfUrl) {
+        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      } else if (action === 'download') {
+        const link = document.createElement('a');
+        link.href = `/api/orders/${order.id}/quote-pdf?download=1`;
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
 
       router.push(`/orders/${order.id}`);
@@ -821,7 +850,7 @@ function NewQuotePageInner() {
           <span className="text-zinc-500">Subtotal:</span>
           <span className="ml-2 font-mono text-white text-base">{fmtMoney(orderTotal)}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => { setParsed(null); setItems([]); }}
             className="px-4 py-2 text-sm text-zinc-400 hover:text-white"
@@ -829,11 +858,28 @@ function NewQuotePageInner() {
             Cancel
           </button>
           <button
-            onClick={createQuote}
+            onClick={() => createQuote('download')}
             disabled={!canCreate || creating}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-bold rounded-lg"
+            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            title="Save as draft and download the PDF"
           >
-            {creating ? 'Creating Quote…' : 'Create Quote'}
+            {creating ? 'Saving…' : 'Download PDF'}
+          </button>
+          <button
+            onClick={() => createQuote('preview')}
+            disabled={!canCreate || creating}
+            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            title="Save as draft and open the PDF in a new tab"
+          >
+            {creating ? 'Saving…' : 'Preview PDF'}
+          </button>
+          <button
+            onClick={() => createQuote('draft')}
+            disabled={!canCreate || creating}
+            className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 text-white text-sm font-bold rounded-lg"
+            title="Save as draft and open the order detail page"
+          >
+            {creating ? 'Saving Draft…' : 'Save Draft'}
           </button>
         </div>
       </div>
