@@ -155,6 +155,77 @@ function fmtMoney(n: number) {
   }).format(n);
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Draft state — survive the round-trip to /crm and back.
+// ─────────────────────────────────────────────────────────────────────────
+//
+// When the AI fails to extract a customer, the user clicks "Pick one in
+// CRM," which navigates away from this page. Without persistence, the
+// component remounts on return and Review Quote re-renders as the
+// pre-parse input page — all parsed line items, contacts, edits gone.
+//
+// Tactical fix: serialize the post-parse state to sessionStorage before
+// navigating, restore on mount when clientCompanyId is in the URL,
+// clear once the quote is saved. Keyed by inquiryId (or a sentinel)
+// so concurrent quote captures in different tabs don't collide.
+//
+// A future refactor (persist as DRAFT Order in the DB at parse time
+// and load by id) gives stable URLs and shareable drafts. Not in scope
+// for this fix.
+
+interface DraftState {
+  savedAt: number;
+  parsed: ParsedTop | null;
+  items: ResolvedItem[];
+  editing: ParsedTop;
+  selectedClientId: string;
+  contacts: ResolvedContact[];
+  emailText: string;
+  jobChoice: JobChoice;
+  candidateJobs: AttachableJob[];
+  discountAmount: string;
+  discountLabel: string;
+}
+
+const DRAFT_TTL_MS = 30 * 60_000; // entries older than 30 min are stale
+
+function draftKey(inquiryId: string | null): string {
+  return `newQuoteDraft:${inquiryId || '__none'}`;
+}
+
+function saveDraftState(inquiryId: string | null, state: Omit<DraftState, 'savedAt'>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const payload: DraftState = { ...state, savedAt: Date.now() };
+    sessionStorage.setItem(draftKey(inquiryId), JSON.stringify(payload));
+  } catch (err) {
+    console.warn('[new-quote] failed to save draft state:', err);
+  }
+}
+
+function readDraftState(inquiryId: string | null): DraftState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(draftKey(inquiryId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftState;
+    if (Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+      sessionStorage.removeItem(draftKey(inquiryId));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraftState(inquiryId: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(draftKey(inquiryId));
+  } catch {}
+}
+
 const RATE_TYPE_LABEL: Record<RateType, string> = {
   DAILY: 'Daily',
   WEEKLY: 'Weekly',
@@ -256,6 +327,30 @@ function NewQuotePageInner() {
       })
       .catch(() => setCandidateJobs([]));
   }, [parsed, selectedClientId, editing.startDate, editing.endDate]);
+
+  // Restore Review-Quote draft state when returning from /crm. The
+  // session-saved snapshot is only read when ?clientCompanyId is in
+  // the URL (the marker of a CRM-return), so fresh new-quote visits
+  // never pick up a stale draft. Runs once per mount; the
+  // clientCompanyId effect below overrides selectedClientId after.
+  useEffect(() => {
+    if (!clientCompanyIdFromUrl) return;
+    const draft = readDraftState(inquiryId);
+    if (!draft) return;
+    setParsed(draft.parsed);
+    setItems(draft.items);
+    setEditing(draft.editing);
+    setContacts(draft.contacts);
+    setEmailText(draft.emailText);
+    setJobChoice(draft.jobChoice);
+    setCandidateJobs(draft.candidateJobs);
+    setDiscountAmount(draft.discountAmount);
+    setDiscountLabel(draft.discountLabel);
+    // selectedClientId is intentionally NOT restored here — the next
+    // effect sets it to clientCompanyIdFromUrl, which is exactly what
+    // the user just picked. Restoring the old empty value first would
+    // race the company-fetch.
+  }, [clientCompanyIdFromUrl, inquiryId]);
 
   // Round-trip from /crm: when ?clientCompanyId is in the URL, fetch
   // the company by id, inject into the candidates dropdown, and
@@ -779,6 +874,11 @@ function NewQuotePageInner() {
         document.body.removeChild(link);
       }
 
+      // The capture is now persisted as an Order, so the CRM-return
+      // draft snapshot is no longer needed. Clearing prevents stale
+      // restoration on a future /orders/new-quote visit.
+      clearDraftState(inquiryId);
+
       router.push(`/orders/${order.id}`);
     } finally {
       setCreating(false);
@@ -906,16 +1006,35 @@ function NewQuotePageInner() {
             ) : (
               <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
                 No client extracted.{' '}
-                <a
-                  href={`/crm?selectForQuote=1${inquiry?.id ? `&inquiryId=${encodeURIComponent(inquiry.id)}` : ''}`}
-                  className="underline font-semibold"
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Snapshot the post-parse state to sessionStorage so
+                    // it's restored when the user returns from /crm.
+                    // Without this, the page remounts and Review Quote
+                    // re-renders as the pre-parse input page.
+                    saveDraftState(inquiry?.id ?? null, {
+                      parsed,
+                      items,
+                      editing,
+                      selectedClientId,
+                      contacts,
+                      emailText,
+                      jobChoice,
+                      candidateJobs,
+                      discountAmount,
+                      discountLabel,
+                    });
+                    const params = new URLSearchParams();
+                    params.set('selectForQuote', '1');
+                    if (inquiry?.id) params.set('inquiryId', inquiry.id);
+                    router.push(`/crm?${params.toString()}`);
+                  }}
+                  className="underline font-semibold text-amber-800 hover:text-amber-900"
                 >
                   Pick one in CRM
-                </a>
-                .{' '}
-                <span className="text-amber-600/80 text-[11px]">
-                  (Heads up: choosing from CRM resets your parsed line items — you&apos;ll re-paste the email afterward.)
-                </span>
+                </button>
+                .
               </div>
             )}
             {parsed?.clientName && (
