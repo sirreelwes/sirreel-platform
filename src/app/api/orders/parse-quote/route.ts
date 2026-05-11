@@ -73,8 +73,52 @@ If the input is plain text without those header lines, treat it as a single mess
       "returnDate": "YYYY-MM-DD",
       "billableDays": 1
     }
+  ],
+  "contacts": [
+    {
+      "name": "Full name",
+      "email": "email@domain.com",
+      "title": "Job title from signature, or null",
+      "phone": "phone from signature, or null",
+      "company": "Company from signature or domain, or null",
+      "suggested_role": "PRODUCER" | "PM" | "PC" | "TRANSPO" | "ACCOUNTING" | "OTHER" | null,
+      "source": "header" | "signature" | "body_mention",
+      "confidence": "high" | "medium" | "low"
+    }
   ]
 }
+
+CONTACTS EXTRACTION
+
+Extract every person who appears on the thread alongside their email. Three sources:
+  - HEADER: anyone in From / To / CC of any inbound message.
+    source: "header", confidence: "high".
+  - SIGNATURE: name + title + phone block at the bottom of a message body
+    (typical "—\n Jane Doe\n Producer\n Foo Films\n jane@foofilms.com\n
+    (310) 555-1212" pattern). source: "signature",
+    confidence: "high" for well-formed sig blocks, "medium" when ambiguous.
+  - BODY MENTION: "loop in Sarah, our PM" / "cc Marco on TC stuff" — when
+    the body references a person who isn't a header recipient yet. Only
+    extract if an email address is also present in the thread, or skip.
+    source: "body_mention", confidence: "low".
+
+ROLE INFERENCE (suggested_role)
+  Map from job title / context:
+    Producer / Exec Producer            → PRODUCER
+    Producer Manager / UPM / Line Prod  → PM
+    Production Coordinator / Coord.     → PC
+    Transportation Coordinator / TC     → TRANSPO
+    Accountant / Accounting / AP        → ACCOUNTING
+  If you can't infer, set null. Don't guess from ambiguous titles.
+
+FILTERS (apply yourself; the server also re-checks)
+  - Skip anyone with an @sirreel.com email — those are us, not contacts.
+  - Skip no-reply / notifications / mailer-daemon style addresses.
+  - One row per unique email across the whole thread; pick the most
+    complete record (most non-null fields).
+
+The contacts array is REQUIRED — return [] if no people are extractable,
+not omitted. Always include the inbound sender.
 
 CATALOG MATCHING (most important rule)
 
@@ -165,6 +209,25 @@ interface AiItem {
   pickupDate?: string | null
   returnDate?: string | null
   billableDays: number
+}
+
+// What the AI returns per contact (raw, pre-enrichment).
+interface AiContact {
+  name: string
+  email: string
+  title: string | null
+  phone: string | null
+  company: string | null
+  suggested_role: 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER' | null
+  source: 'header' | 'signature' | 'body_mention'
+  confidence: 'high' | 'medium' | 'low'
+}
+
+// What we return to the UI after dedup + Person table enrichment.
+export interface ResolvedContact extends AiContact {
+  match_status: 'existing' | 'new' | 'possible_match'
+  existing_person_id: string | null
+  candidate_person_id: string | null
 }
 
 interface ResolvedItem {
@@ -307,6 +370,100 @@ async function resolveItem(
   }
 }
 
+// Sirreel agent inboxes — anything @sirreel.com is us, not a client
+// contact. Defensive belt-and-suspenders to the AI prompt's own filter.
+const SIRREEL_DOMAIN = '@sirreel.com'
+const NOREPLY_RE = /(^|[^a-z])(no-?reply|notifications?|mailer-daemon|do-?not-?reply|postmaster|bounce[s]?)([^a-z]|$)/i
+
+function shouldDropContact(email: string): boolean {
+  const e = email.toLowerCase().trim()
+  if (!e || !e.includes('@')) return true
+  if (e.endsWith(SIRREEL_DOMAIN)) return true
+  if (NOREPLY_RE.test(e)) return true
+  return false
+}
+
+// Pick the "most complete" record when the AI returned more than one
+// row for the same email — count non-null fields, ties broken by
+// highest source confidence.
+function completenessScore(c: AiContact): number {
+  let s = 0
+  if (c.name) s++
+  if (c.title) s++
+  if (c.phone) s++
+  if (c.company) s++
+  if (c.suggested_role) s++
+  if (c.confidence === 'high') s += 2
+  else if (c.confidence === 'medium') s += 1
+  return s
+}
+
+function dedupContacts(raw: AiContact[]): AiContact[] {
+  const byEmail = new Map<string, AiContact>()
+  for (const c of raw) {
+    if (!c || typeof c.email !== 'string') continue
+    if (shouldDropContact(c.email)) continue
+    const key = c.email.toLowerCase().trim()
+    const existing = byEmail.get(key)
+    if (!existing || completenessScore(c) > completenessScore(existing)) {
+      byEmail.set(key, { ...c, email: key })
+    }
+  }
+  return Array.from(byEmail.values())
+}
+
+function splitName(full: string): { firstName: string; lastName: string } {
+  const parts = full.trim().split(/\s+/)
+  if (parts.length === 0) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+}
+
+// Server enrichment: for each contact, look up the Person table by
+// email. If we miss but find a same-name candidate, surface that for
+// human review as 'possible_match' instead of silently creating a
+// duplicate.
+async function enrichContacts(contacts: AiContact[]): Promise<ResolvedContact[]> {
+  if (contacts.length === 0) return []
+  const emails = contacts.map((c) => c.email)
+  const exact = await prisma.person.findMany({
+    where: { email: { in: emails, mode: 'insensitive' } },
+    select: { id: true, email: true, firstName: true, lastName: true },
+  })
+  const byEmail = new Map(exact.map((p) => [p.email.toLowerCase(), p]))
+
+  const out: ResolvedContact[] = []
+  for (const c of contacts) {
+    const match = byEmail.get(c.email)
+    if (match) {
+      out.push({ ...c, match_status: 'existing', existing_person_id: match.id, candidate_person_id: null })
+      continue
+    }
+    // Possible match — same first+last name, different email. pg_trgm
+    // isn't installed in this DB, so exact-name match is the floor.
+    const { firstName, lastName } = splitName(c.name)
+    let candidateId: string | null = null
+    if (firstName && lastName) {
+      const candidates = await prisma.person.findMany({
+        where: {
+          firstName: { equals: firstName, mode: 'insensitive' },
+          lastName: { equals: lastName, mode: 'insensitive' },
+        },
+        select: { id: true },
+        take: 2,
+      })
+      if (candidates.length === 1) candidateId = candidates[0].id
+    }
+    out.push({
+      ...c,
+      match_status: candidateId ? 'possible_match' : 'new',
+      existing_person_id: null,
+      candidate_person_id: candidateId,
+    })
+  }
+  return out
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -348,6 +505,7 @@ export async function POST(req: NextRequest) {
       dropoffLocation?: string
       notes?: string
       items?: AiItem[]
+      contacts?: AiContact[]
     }
     try {
       const cleaned = aiText.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
@@ -366,6 +524,13 @@ export async function POST(req: NextRequest) {
         resolveItem(it, { startDate: parsed.startDate, endDate: parsed.endDate })
       )
     )
+
+    // Contacts: dedupe + filter at the gateway, then enrich with Person
+    // table match status. The AI is asked to filter @sirreel/noreply too
+    // but we re-check on the server — never trust the model alone.
+    const rawContacts: AiContact[] = Array.isArray(parsed.contacts) ? parsed.contacts : []
+    const dedupedContacts = dedupContacts(rawContacts)
+    const contacts = await enrichContacts(dedupedContacts)
 
     // Client matching — same fuzzy strategy as before, just kept inline.
     let clientMatch: { id: string; name: string; tier: string; coiOnFile: boolean; defaultAgentId: string | null }[] = []
@@ -409,6 +574,7 @@ export async function POST(req: NextRequest) {
       parsed,
       items,
       clientMatch,
+      contacts,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)

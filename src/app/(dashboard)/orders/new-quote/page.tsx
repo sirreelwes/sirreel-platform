@@ -59,6 +59,35 @@ interface ClientCandidate {
   defaultAgentId: string | null;
 }
 
+// What we get back from /api/orders/parse-quote per contact. Mirrors
+// ResolvedContact in the route. Locally re-typed (don't cross-import
+// API types) plus a UI-only `include` flag — defaults are set by
+// confidence: high+medium pre-checked, low pre-unchecked so body
+// mentions don't silently land in the CRM.
+type ContactSource = 'header' | 'signature' | 'body_mention';
+type ContactConfidence = 'high' | 'medium' | 'low';
+type ContactMatchStatus = 'existing' | 'new' | 'possible_match';
+type SuggestedJobRole = 'PRODUCER' | 'PM' | 'PC' | 'TRANSPO' | 'ACCOUNTING' | 'OTHER';
+const JOB_ROLES: SuggestedJobRole[] = ['PRODUCER', 'PM', 'PC', 'TRANSPO', 'ACCOUNTING', 'OTHER'];
+
+interface ResolvedContact {
+  name: string;
+  email: string;
+  title: string | null;
+  phone: string | null;
+  company: string | null;
+  suggested_role: SuggestedJobRole | null;
+  source: ContactSource;
+  confidence: ContactConfidence;
+  match_status: ContactMatchStatus;
+  existing_person_id: string | null;
+  candidate_person_id: string | null;
+  // UI state (not from API)
+  include: boolean;
+  role: SuggestedJobRole; // role to associate against the job; defaults to suggested_role || OTHER
+  decision?: 'merge' | 'create_new'; // possible_match resolution
+}
+
 interface AttachableJob {
   id: string;
   jobCode: string;
@@ -154,6 +183,7 @@ function NewQuotePageInner() {
   const [editing, setEditing] = useState<ParsedTop>({});
   const [clientCandidates, setClientCandidates] = useState<ClientCandidate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [contacts, setContacts] = useState<ResolvedContact[]>([]);
 
   const [creating, setCreating] = useState(false);
   const [discountAmount, setDiscountAmount] = useState('');
@@ -210,6 +240,33 @@ function NewQuotePageInner() {
       .catch(() => {});
   }, [inquiryId, mode]);
 
+  // Map API contacts → UI rows. include defaults true for high/medium
+  // confidence (header + well-formed signature) and false for low
+  // confidence body mentions, so the agent has to opt in to creating
+  // CRM rows from passing references in the body text.
+  const hydrateContacts = (apiContacts: unknown): ResolvedContact[] => {
+    if (!Array.isArray(apiContacts)) return [];
+    return apiContacts.map((c) => {
+      const role: SuggestedJobRole = (c.suggested_role as SuggestedJobRole) || 'OTHER';
+      return {
+        name: String(c.name || ''),
+        email: String(c.email || ''),
+        title: c.title ?? null,
+        phone: c.phone ?? null,
+        company: c.company ?? null,
+        suggested_role: (c.suggested_role as SuggestedJobRole) || null,
+        source: c.source,
+        confidence: c.confidence,
+        match_status: c.match_status,
+        existing_person_id: c.existing_person_id ?? null,
+        candidate_person_id: c.candidate_person_id ?? null,
+        include: c.confidence !== 'low',
+        role,
+        decision: c.match_status === 'possible_match' ? 'create_new' : undefined,
+      };
+    });
+  };
+
   const parseEmail = async () => {
     if (!emailText.trim()) return;
     setParsing(true);
@@ -235,6 +292,7 @@ function NewQuotePageInner() {
       }));
       setItems(data.items || []);
       setClientCandidates(data.clientMatch || []);
+      setContacts(hydrateContacts(data.contacts));
       if (data.clientMatch?.length === 1 && !selectedClientId) {
         setSelectedClientId(data.clientMatch[0].id);
       }
@@ -270,6 +328,7 @@ function NewQuotePageInner() {
       setEditing((prev) => ({ ...prev, ...parseData.parsed }));
       setItems(parseData.items || []);
       setClientCandidates(parseData.clientMatch || []);
+      setContacts(hydrateContacts(parseData.contacts));
     } finally {
       setParsing(false);
     }
@@ -474,6 +533,54 @@ function NewQuotePageInner() {
           parsed?.productionName ||
           inquiry?.title ||
           `Quote — ${parsed?.clientName || 'Untitled'} — ${new Date().toLocaleDateString()}`;
+
+        // Materialize Person rows for any new/create_new contacts before
+        // creating the Job — POST /api/jobs accepts a contacts array of
+        // {personId, role} pairs and we need Person IDs in hand.
+        // Existing matches and "merge" decisions reuse the existing
+        // Person ID; their CRM records are never modified here.
+        const jobContacts: { personId: string; role: SuggestedJobRole; isPrimary: boolean }[] = [];
+        for (const c of contacts.filter((x) => x.include && x.email)) {
+          let personId: string | null = null;
+          if (c.match_status === 'existing') {
+            personId = c.existing_person_id;
+          } else if (c.match_status === 'possible_match' && c.decision === 'merge') {
+            personId = c.candidate_person_id;
+          }
+          if (!personId) {
+            // Create a new Person. The /api/crm/people POST needs
+            // firstName/lastName/email; we split the name on the client
+            // since the AI returned a single "name" string.
+            const trimmed = (c.name || c.email).trim();
+            const parts = trimmed.split(/\s+/);
+            const firstName = parts[0] || c.email.split('@')[0];
+            const lastName = parts.slice(1).join(' ') || '(unknown)';
+            try {
+              const personRes = await fetch('/api/crm/people', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  firstName,
+                  lastName,
+                  email: c.email,
+                  phone: c.phone || undefined,
+                }),
+              });
+              if (personRes.ok) {
+                const person = await personRes.json();
+                personId = person.id;
+              } else {
+                console.warn('[new-quote] failed to create person for', c.email);
+              }
+            } catch (err) {
+              console.warn('[new-quote] person create network error:', err);
+            }
+          }
+          if (personId) {
+            jobContacts.push({ personId, role: c.role, isPrimary: false });
+          }
+        }
+
         const jobRes = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -484,6 +591,7 @@ function NewQuotePageInner() {
             startDate: editing.startDate || null,
             endDate: editing.endDate || null,
             notes: inquiry ? `Created from Inquiry: ${inquiry.title}` : 'Auto-created from quote parser',
+            contacts: jobContacts.length > 0 ? jobContacts : undefined,
           }),
         });
         if (!jobRes.ok) {
@@ -788,6 +896,9 @@ function NewQuotePageInner() {
           </div>
         </div>
       )}
+
+      {/* People on this thread (AI-extracted contacts, human review) */}
+      <PeopleSection contacts={contacts} setContacts={setContacts} />
 
       {/* Line items grouped by department */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
@@ -1393,6 +1504,142 @@ function RowActionsMenu({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PEOPLE — AI-extracted contacts for human review (commit X)
+// ─────────────────────────────────────────────────────────────────────────
+
+const MATCH_BADGE: Record<ContactMatchStatus, { label: string; cls: string }> = {
+  existing:        { label: '✓ Existing',      cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-800' },
+  new:             { label: '✚ New',           cls: 'bg-sky-900/40 text-sky-300 border-sky-800' },
+  possible_match:  { label: '? Possible match', cls: 'bg-amber-900/40 text-amber-300 border-amber-800' },
+};
+
+const SOURCE_LABEL: Record<ContactSource, string> = {
+  header:        'from header',
+  signature:     'from signature',
+  body_mention:  'mentioned in body',
+};
+
+function PeopleSection({
+  contacts,
+  setContacts,
+}: {
+  contacts: ResolvedContact[];
+  setContacts: React.Dispatch<React.SetStateAction<ResolvedContact[]>>;
+}) {
+  if (contacts.length === 0) return null;
+
+  const updateContact = (idx: number, patch: Partial<ResolvedContact>) => {
+    setContacts((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+  };
+
+  const includedCount = contacts.filter((c) => c.include).length;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-white">
+          People on this thread ({includedCount} of {contacts.length} selected)
+        </h2>
+        <p className="text-[11px] text-zinc-500">Will associate with the new Job on save</p>
+      </div>
+      <div className="space-y-2">
+        {contacts.map((c, idx) => {
+          const badge = MATCH_BADGE[c.match_status];
+          return (
+            <div
+              key={`${c.email}-${idx}`}
+              className={`border rounded-lg p-3 space-y-2 ${
+                c.include ? 'bg-zinc-900/60 border-zinc-700' : 'bg-zinc-950/40 border-zinc-800 opacity-70'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={c.include}
+                  onChange={(e) => updateContact(idx, { include: e.target.checked })}
+                  className="mt-1 h-3.5 w-3.5 accent-amber-500"
+                  aria-label={`Include ${c.name || c.email}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badge.cls}`}>
+                      {badge.label}
+                    </span>
+                    <span className="text-[10px] text-zinc-500">· {SOURCE_LABEL[c.source]} ({c.confidence})</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <input
+                      type="text"
+                      value={c.name}
+                      onChange={(e) => updateContact(idx, { name: e.target.value })}
+                      placeholder="Name"
+                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                    />
+                    <input
+                      type="email"
+                      value={c.email}
+                      onChange={(e) => updateContact(idx, { email: e.target.value })}
+                      placeholder="Email"
+                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                    />
+                    <input
+                      type="text"
+                      value={c.title || ''}
+                      onChange={(e) => updateContact(idx, { title: e.target.value || null })}
+                      placeholder="Title"
+                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                    />
+                    <input
+                      type="tel"
+                      value={c.phone || ''}
+                      onChange={(e) => updateContact(idx, { phone: e.target.value || null })}
+                      placeholder="Phone"
+                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Role</label>
+                    <select
+                      value={c.role}
+                      onChange={(e) => updateContact(idx, { role: e.target.value as SuggestedJobRole })}
+                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                    >
+                      {JOB_ROLES.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                    {c.match_status === 'possible_match' && (
+                      <select
+                        value={c.decision || 'create_new'}
+                        onChange={(e) => updateContact(idx, { decision: e.target.value as 'merge' | 'create_new' })}
+                        className="px-2 py-1 bg-zinc-800 border border-amber-700 rounded text-[12px] text-amber-200"
+                        title="Same name found in CRM with a different email — decide what to do"
+                      >
+                        <option value="create_new">Create new person</option>
+                        <option value="merge">Use existing match</option>
+                      </select>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1.5">
+                    {c.match_status === 'existing'
+                      ? `Will associate existing CRM record as ${c.role}.`
+                      : c.match_status === 'possible_match'
+                        ? c.decision === 'merge'
+                          ? `Will associate the matched person as ${c.role} (existing fields unchanged).`
+                          : `Will add new CRM person + associate as ${c.role}.`
+                        : `Will add new CRM person + associate as ${c.role}.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
