@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavItems, getNavSections } from '@/lib/permissions';
+import { getPermissions, getNavItems, getNavSections, isSalesRole } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 
@@ -81,6 +81,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const perms = getPermissions(role);
   const navItems = getNavItems(role);
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || (pathname.startsWith('/jobs') ? 'bookings' : 'dashboard');
+
+  // Sales agents work primarily from /sales/pipeline — Dashboard isn't
+  // in their nav, and `/` redirects to /dashboard by default. Bounce
+  // them to the pipeline on any visit to /dashboard. Respects the
+  // admin view-as toggle so previewing as AGENT routes correctly.
+  if (typeof window !== 'undefined' && isSalesRole(role) && pathname === '/dashboard') {
+    router.replace('/sales/pipeline');
+  }
 
   const initials = user.name
     ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()

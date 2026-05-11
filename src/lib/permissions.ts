@@ -168,17 +168,38 @@ export function getNavItems(role: UserRole): NavItem[] {
   return sections.flatMap(s => s.items);
 }
 
+// Roles that work primarily from /sales/pipeline. Their sidebar nav is
+// reordered (Pipeline up top) and Dashboard is hidden; the layout also
+// auto-redirects /dashboard → /sales/pipeline for these roles.
+export function isSalesRole(role: UserRole): boolean {
+  return role === UserRole.AGENT;
+}
+
+export function defaultLandingPath(role: UserRole): string {
+  if (isSalesRole(role)) return '/sales/pipeline';
+  return '/dashboard';
+}
+
 export function getNavSections(role: UserRole): NavSection[] {
   const perms = getPermissions(role);
   const sections: NavSection[] = [];
+  const sales = isSalesRole(role);
 
-  // Main — daily operations
+  // Main — daily operations. Sales agents get Pipeline at the top and
+  // no Dashboard item; everyone else keeps the historical ordering.
   const main: NavItem[] = [];
-  main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
+  if (sales && perms.pipeline) {
+    main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
+  }
+  if (!sales) {
+    main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
+  }
   if (perms.calendar) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
   if (perms.gantt) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
   if (perms.bookings) main.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
-  if (perms.pipeline) main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
+  if (!sales && perms.pipeline) {
+    main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
+  }
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
