@@ -100,6 +100,17 @@ export default function ClientPortal() {
   const [redlineReview, setRedlineReview] = useState<any>(null);
   const [redlineSubmitting, setRedlineSubmitting] = useState(false);
 
+  // Dual-path signing (Path A / Path B) — new state-machine for SignedAgreement.
+  // Mounted alongside the legacy agreement UI; renders only when a SignedAgreement
+  // exists for the order behind this magic link.
+  const [agreementState, setAgreementState] = useState<{
+    status: string;
+    documentToSignUrl: string | null;
+    wordDocumentAvailable: boolean;
+    allowedActions: string[];
+    statusUpdatedAt: string;
+  } | null>(null);
+
   // CC
   const [ccRepFirst, setCcRepFirst] = useState('');
   const [ccRepLast, setCcRepLast] = useState('');
@@ -153,6 +164,27 @@ export default function ClientPortal() {
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false));
+  }, [token]);
+
+  // Fetch dual-path agreement state once on load. Silent on 401/404 — that just
+  // means the underlying order has no SignedAgreement yet, in which case the
+  // legacy agreement UI still works as before.
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/portal/${token}/agreement`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.status) {
+          setAgreementState({
+            status: data.status,
+            documentToSignUrl: data.documentToSignUrl ?? null,
+            wordDocumentAvailable: !!data.wordDocumentAvailable,
+            allowedActions: Array.isArray(data.allowedActions) ? data.allowedActions : [],
+            statusUpdatedAt: data.statusUpdatedAt || '',
+          });
+        }
+      })
+      .catch(() => {});
   }, [token]);
 
   const initCanvas = (canvas: HTMLCanvasElement | null, setDrawn: (v: boolean) => void) => {
@@ -342,6 +374,72 @@ export default function ClientPortal() {
           locked ? renderLockedCard('Rental Agreement') :
           done.agreement ? renderDoneCard('Rental Agreement Signed', `Signed by ${paperwork?.signerName || signerName}`) : (
             <div className="space-y-4">
+              {agreementState && (agreementState.status === 'PORTAL_GENERATED' || agreementState.status === 'DOWNLOAD_SENT') && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">New signing options</div>
+                    <h2 className="font-bold text-gray-900 mt-1">Choose how to sign this agreement</h2>
+                  </div>
+                  {agreementState.status === 'PORTAL_GENERATED' && (
+                    <>
+                      <p className="text-xs text-gray-500">
+                        Sign the standard agreement as-is, or download a Word copy for legal review and redline.
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          disabled
+                          title="Native signing flow ships in the next release. For now, use the existing signing form below."
+                          className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          ✍️ Sign and accept
+                        </button>
+                        <a
+                          href={`/api/portal/${token}/agreement/download`}
+                          className="flex-1 text-center py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
+                        >
+                          📝 Download for review
+                        </a>
+                      </div>
+                      <p className="text-[10px] text-gray-400">
+                        &ldquo;Sign and accept&rdquo; opens a guided signing flow in the next release. The signing form below
+                        still works in the meantime.
+                      </p>
+                    </>
+                  )}
+                  {agreementState.status === 'DOWNLOAD_SENT' && (
+                    <>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                        You downloaded the agreement on{' '}
+                        <span className="font-semibold">
+                          {agreementState.statusUpdatedAt
+                            ? new Date(agreementState.statusUpdatedAt).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : 'a previous visit'}
+                        </span>
+                        . Upload your redlined version below, or download a fresh copy if you need it.
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <a
+                          href={`/api/portal/${token}/agreement/download`}
+                          className="flex-1 text-center py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
+                        >
+                          📝 Download again
+                        </a>
+                        <button
+                          disabled
+                          title="Native signing flow ships in the next release."
+                          className="flex-1 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs font-semibold disabled:cursor-not-allowed"
+                        >
+                          Changed your mind? Sign the original
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-2">Rental Agreement</h2>
                 <p className="text-xs text-gray-500 mb-3">Download and review the agreement below. Upload your signed copy when ready — let us know if it contains any proposed changes.</p>

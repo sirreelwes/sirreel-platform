@@ -11,5 +11,6 @@ scripts/*
 # blanket scripts/ ignore.
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
+!scripts/generate-agreement-template.py
 .env.local.bak
 .gcp-service-account.json
