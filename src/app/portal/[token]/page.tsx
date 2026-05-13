@@ -112,6 +112,12 @@ export default function ClientPortal() {
     job?: { company?: string };
   } | null>(null);
 
+  // Path A redline upload (new dual-path flow — separate from the legacy
+  // /contract/redline upload that the older agreement tab uses).
+  const [pathARedlineFile, setPathARedlineFile] = useState<File | null>(null);
+  const [pathARedlineUploading, setPathARedlineUploading] = useState(false);
+  const [pathARedlineError, setPathARedlineError] = useState('');
+
   // Native signing flow (Path B). One state object so each step's progress is
   // explicit. step values: 'closed' | 'read' | 'ack' | 'identity' | 'sign' | 'confirm' | 'submitting' | 'done'
   const [pathBStep, setPathBStep] = useState<
@@ -500,6 +506,121 @@ export default function ClientPortal() {
                   )}
                 </div>
               )}
+              {agreementState && agreementState.status === 'DOWNLOAD_SENT' && pathBStep === 'closed' && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Upload your redline</div>
+                    <h2 className="font-bold text-gray-900 mt-1">Send your redlined draft back</h2>
+                    <p className="text-xs text-gray-500 mt-1">Drag your edited .docx or .pdf onto the box below (max 10 MB). Our team will review and respond with a counter.</p>
+                  </div>
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); }}
+                    onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setPathARedlineFile(f); }}
+                    onClick={() => document.getElementById('pathA-redline-file')?.click()}
+                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${pathARedlineFile ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'}`}
+                  >
+                    {pathARedlineFile ? (
+                      <div>
+                        <div className="text-xl mb-1">📄</div>
+                        <div className="text-xs font-semibold text-indigo-700">{pathARedlineFile.name}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{(pathARedlineFile.size / 1024).toFixed(0)} KB</div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-xl mb-1">📤</div>
+                        <div className="text-xs text-gray-500">Drop redline here or click to browse</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">PDF or Word (.docx)</div>
+                      </div>
+                    )}
+                    <input
+                      id="pathA-redline-file"
+                      type="file"
+                      accept=".pdf,.docx"
+                      className="hidden"
+                      onChange={(e) => setPathARedlineFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  {pathARedlineError && <div className="text-[11px] text-red-600">{pathARedlineError}</div>}
+                  <button
+                    onClick={async () => {
+                      if (!pathARedlineFile) return;
+                      setPathARedlineUploading(true);
+                      setPathARedlineError('');
+                      try {
+                        const fd = new FormData();
+                        fd.append('file', pathARedlineFile);
+                        const r = await fetch(`/api/portal/${token}/agreement/upload-redline`, { method: 'POST', body: fd });
+                        const data = await r.json().catch(() => ({}));
+                        if (!r.ok) {
+                          setPathARedlineError(data.error || 'Upload failed');
+                          return;
+                        }
+                        setPathARedlineFile(null);
+                        setAgreementState((prev) =>
+                          prev ? { ...prev, status: data.status || 'REDLINE_UPLOADED', statusUpdatedAt: new Date().toISOString() } : prev,
+                        );
+                      } finally {
+                        setPathARedlineUploading(false);
+                      }
+                    }}
+                    disabled={!pathARedlineFile || pathARedlineUploading}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 disabled:text-gray-400 text-white rounded-xl text-xs font-semibold disabled:cursor-not-allowed"
+                  >
+                    {pathARedlineUploading ? 'Uploading…' : 'Submit redline for review'}
+                  </button>
+                </div>
+              )}
+              {agreementState && (agreementState.status === 'REDLINE_UPLOADED' || agreementState.status === 'UNDER_REVIEW') && (
+                <div className="bg-white rounded-2xl border border-amber-200 p-5 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="text-2xl">📋</div>
+                    <div>
+                      <div className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Under review</div>
+                      <h2 className="font-bold text-gray-900 mt-1">Your redline is in review</h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Received {agreementState.statusUpdatedAt
+                          ? new Date(agreementState.statusUpdatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                          : '—'}.
+                        We&rsquo;ll email you when the negotiated version is ready to sign.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {agreementState && agreementState.status === 'NEGOTIATED_READY' && pathBStep === 'closed' && (
+                <div className="bg-white rounded-2xl border border-indigo-200 p-5 space-y-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">Negotiated version ready</div>
+                    <h2 className="font-bold text-gray-900 mt-1">Sign the negotiated agreement</h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Our team has incorporated your redline. Review the negotiated PDF and sign when ready.
+                    </p>
+                  </div>
+                  {agreementState.documentToSignUrl && (
+                    <a
+                      href={agreementState.documentToSignUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-center py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
+                    >
+                      📄 Preview negotiated PDF
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      setPathBError('');
+                      setPathBAcknowledged(false);
+                      setPathBSigDrawn(false);
+                      setPathBSignerName(signerName || booking?.person?.name || '');
+                      setPathBSignerEmail(signerEmail || booking?.person?.email || '');
+                      setPathBStep('read');
+                    }}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold"
+                  >
+                    ✍️ Sign negotiated version
+                  </button>
+                </div>
+              )}
               {agreementState && pathBStep !== 'closed' && pathBStep !== 'done' && (
                 <div className="bg-white rounded-2xl border border-indigo-200 p-5 space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -530,7 +651,11 @@ export default function ClientPortal() {
                         Review the agreement below. Scroll through and confirm you have read it before continuing.
                       </p>
                       <iframe
-                        src={`/api/portal/${token}/contract/download?format=pdf`}
+                        src={
+                          agreementState?.status === 'NEGOTIATED_READY' && agreementState.documentToSignUrl
+                            ? agreementState.documentToSignUrl
+                            : `/api/portal/${token}/contract/download?format=pdf`
+                        }
                         className="w-full h-[420px] rounded-xl border border-gray-200 bg-gray-50"
                         title="Rental Agreement"
                       />

@@ -40,6 +40,17 @@ export async function GET(
           decidedBy: { select: { id: true, name: true, email: true } },
         },
       },
+      signedAgreement: {
+        select: {
+          id: true,
+          status: true,
+          documentType: true,
+          orderId: true,
+          order: {
+            select: { id: true, orderNumber: true, company: { select: { name: true } } },
+          },
+        },
+      },
     },
   })
 

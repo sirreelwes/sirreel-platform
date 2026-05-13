@@ -45,6 +45,13 @@ interface ReviewRecord {
   counterPdfKey: string | null;
   counterGeneratedAt: string | null;
   counterGeneratedBy: { id: string; name: string; email: string } | null;
+  signedAgreement: {
+    id: string;
+    status: string;
+    documentType: string;
+    orderId: string;
+    order: { id: string; orderNumber: string; company: { name: string } | null } | null;
+  } | null;
 }
 
 function fmtDateTime(iso: string | null) {
@@ -97,6 +104,9 @@ export default function ContractReviewDetailPage() {
   const [generateError, setGenerateError] = useState('');
   const [pdfCacheKey, setPdfCacheKey] = useState<string>('');
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+
+  const [acceptingFinal, setAcceptingFinal] = useState(false);
+  const [acceptFinalError, setAcceptFinalError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -598,6 +608,81 @@ export default function ContractReviewDetailPage() {
           </div>
           {rerunError && (
             <div className="text-[11px] text-red-600 text-right">{rerunError}</div>
+          )}
+        </div>
+      )}
+
+      {/* Path A negotiated-agreement handoff */}
+      {record.signedAgreement && (
+        <div className="bg-white border border-indigo-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Linked client agreement</div>
+              <div className="text-[12px] text-gray-700 mt-1">
+                {record.signedAgreement.order
+                  ? `Order ${record.signedAgreement.order.orderNumber}${
+                      record.signedAgreement.order.company
+                        ? ` · ${record.signedAgreement.order.company.name}`
+                        : ''
+                    }`
+                  : 'Linked SignedAgreement'}
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-1 rounded bg-indigo-100 text-indigo-700">
+              {record.signedAgreement.status.replace(/_/g, ' ')}
+            </span>
+          </div>
+          {(record.signedAgreement.status === 'NEGOTIATED_READY' ||
+            record.signedAgreement.status === 'SIGNED_NEGOTIATED' ||
+            record.signedAgreement.status === 'SIGNED_BASELINE') ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-700">
+              {record.signedAgreement.status === 'NEGOTIATED_READY' &&
+                'Client has been emailed the negotiated version and the portal is unlocked for signing.'}
+              {record.signedAgreement.status === 'SIGNED_NEGOTIATED' &&
+                'Client signed the negotiated agreement. No further action required.'}
+              {record.signedAgreement.status === 'SIGNED_BASELINE' &&
+                'Client signed the baseline agreement before negotiation completed.'}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-[11px] text-gray-500 max-w-md">
+                When you&rsquo;re done with per-clause decisions and the counter-PDF is generated, accept it as the
+                final negotiated version to notify the client and unlock signing.
+              </div>
+              <button
+                onClick={async () => {
+                  if (!record.signedAgreement?.orderId) return;
+                  setAcceptingFinal(true);
+                  setAcceptFinalError('');
+                  try {
+                    const res = await fetch(
+                      `/api/orders/${record.signedAgreement.orderId}/contract-review/accept`,
+                      { method: 'POST' },
+                    );
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      setAcceptFinalError(data.error || 'Failed to accept');
+                      return;
+                    }
+                    await refreshRecord();
+                  } finally {
+                    setAcceptingFinal(false);
+                  }
+                }}
+                disabled={acceptingFinal || !record.counterPdfKey}
+                title={
+                  !record.counterPdfKey
+                    ? 'Generate the counter-PDF first'
+                    : 'Accept this as the final negotiated agreement'
+                }
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+              >
+                {acceptingFinal ? 'Accepting…' : 'Accept as Final'}
+              </button>
+            </div>
+          )}
+          {acceptFinalError && (
+            <div className="text-[11px] text-red-600 text-right">{acceptFinalError}</div>
           )}
         </div>
       )}
