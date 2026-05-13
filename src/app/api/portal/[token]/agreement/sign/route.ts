@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
-import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
+import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -89,9 +89,7 @@ async function sendSignedCopies(args: {
   documentType: 'BASELINE' | 'NEGOTIATED'
   pdfBuffer: Buffer
   attachmentName: string
-}) {
-  if (!process.env.RESEND_API_KEY) return
-  const resend = new Resend(process.env.RESEND_API_KEY)
+}): Promise<EmailResult> {
   const subjectLabel = args.documentType === 'NEGOTIATED' ? 'negotiated agreement' : 'rental agreement'
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -113,24 +111,14 @@ async function sendSignedCopies(args: {
     </div>
   </div>
 </body></html>`
-  const attachments = [
-    {
-      filename: args.attachmentName,
-      content: args.pdfBuffer,
-    },
-  ]
-  try {
-    await resend.emails.send({
-      from: 'SirReel HQ <notifications@sirreel.com>',
-      to: [args.signerEmail],
-      cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing],
-      subject: `Signed: ${args.companyName} · ${subjectLabel}`,
-      html,
-      attachments,
-    })
-  } catch (err) {
-    console.error('[portal/agreement/sign] email failed:', err)
-  }
+  return sendAgreementEmail({
+    label: 'portal/agreement/sign',
+    to: [args.signerEmail],
+    cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing],
+    subject: `Signed: ${args.companyName} · ${subjectLabel}`,
+    html,
+    attachments: [{ filename: args.attachmentName, content: args.pdfBuffer }],
+  })
 }
 
 export async function POST(
@@ -259,7 +247,7 @@ export async function POST(
     console.warn('[portal/agreement/sign] legacy paperwork sync failed:', err)
   }
 
-  await sendSignedCopies({
+  const emailResult = await sendSignedCopies({
     companyName: orderRow.company.name,
     jobName: orderRow.job?.name || '',
     signerName: body.signerName,
@@ -275,5 +263,6 @@ export async function POST(
     signedAt: signedAt.toISOString(),
     signerName: body.signerName,
     signedDocumentAvailable: !!blobUrl,
+    emailResult,
   })
 }

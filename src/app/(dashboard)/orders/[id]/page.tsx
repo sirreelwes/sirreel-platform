@@ -186,16 +186,13 @@ export default function OrderDetailPage() {
     try {
       const r = await fetch(`/api/orders/${orderId}/agreement/resend-link`, { method: "POST" });
       const data = await r.json().catch(() => ({}));
+      if (data.portalUrl) setPortalUrl(data.portalUrl);
       if (!r.ok) {
-        setAgreementMsg(data.error || "Resend failed");
+        const portalSuffix = data.portalUrl ? ` Portal URL: ${data.portalUrl}` : "";
+        setAgreementMsg((data.error || "Resend failed") + portalSuffix);
         return;
       }
-      if (data.portalUrl) setPortalUrl(data.portalUrl);
-      setAgreementMsg(
-        data.emailed
-          ? `Portal link emailed to ${data.recipient}.`
-          : data.note || `Portal URL: ${data.portalUrl}`,
-      );
+      setAgreementMsg(`Portal link emailed to ${data.recipient}.`);
     } finally {
       setAgreementBusy(false);
     }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
+import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,8 +121,8 @@ export async function POST(
   }
 
   const recipientEmail = order.jobContact?.email
-  if (recipientEmail && process.env.RESEND_API_KEY) {
-    const resend = new Resend(process.env.RESEND_API_KEY)
+  let emailResult: EmailResult | null = null
+  if (recipientEmail) {
     const portalUrl = portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null
     const firstName = order.jobContact?.firstName || 'there'
     const html = `<!DOCTYPE html>
@@ -152,16 +152,12 @@ export async function POST(
     </div>
   </div>
 </body></html>`
-    try {
-      await resend.emails.send({
-        from: 'SirReel HQ <notifications@sirreel.com>',
-        to: [recipientEmail],
-        subject: `Your negotiated agreement is ready to sign · ${order.company?.name || order.orderNumber}`,
-        html,
-      })
-    } catch (err) {
-      console.error('[orders/contract-review/accept] client email failed:', err)
-    }
+    emailResult = await sendAgreementEmail({
+      label: 'orders/contract-review/accept',
+      to: [recipientEmail],
+      subject: `Your negotiated agreement is ready to sign · ${order.company?.name || order.orderNumber}`,
+      html,
+    })
   }
 
   return NextResponse.json({
@@ -169,6 +165,7 @@ export async function POST(
     status: 'NEGOTIATED_READY',
     documentToSignUrl: agreement.contractReview.counterPdfUrl,
     portalUrl: portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null,
-    recipientEmailed: !!(recipientEmail && process.env.RESEND_API_KEY),
+    emailResult,
+    recipientEmail,
   })
 }

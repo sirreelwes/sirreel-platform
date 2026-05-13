@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { put } from '@vercel/blob'
-import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { runContractReviewAi } from '@/lib/contracts/runReview'
+import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -66,9 +66,7 @@ async function emailReviewers(args: {
   jobCode: string
   reviewId: string
   uploadedFilename: string
-}) {
-  if (!process.env.RESEND_API_KEY) return
-  const resend = new Resend(process.env.RESEND_API_KEY)
+}): Promise<EmailResult> {
   const reviewUrl = `https://hq.sirreel.com/tools/contract-review/${args.reviewId}`
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -93,16 +91,12 @@ async function emailReviewers(args: {
     </div>
   </div>
 </body></html>`
-  try {
-    await resend.emails.send({
-      from: 'SirReel HQ <notifications@sirreel.com>',
-      to: REVIEW_RECIPIENTS,
-      subject: `Redline received: ${args.companyName} · ${args.jobName || args.jobCode || ''}`,
-      html,
-    })
-  } catch (err) {
-    console.error('[portal/agreement/upload-redline] reviewer email failed:', err)
-  }
+  return sendAgreementEmail({
+    label: 'portal/agreement/upload-redline',
+    to: REVIEW_RECIPIENTS,
+    subject: `Redline received: ${args.companyName} · ${args.jobName || args.jobCode || ''}`,
+    html,
+  })
 }
 
 export async function POST(
@@ -247,7 +241,7 @@ export async function POST(
     },
   })
 
-  await emailReviewers({
+  const emailResult = await emailReviewers({
     companyName: orderRow.company?.name || '',
     jobName: orderRow.job?.name || '',
     jobCode: orderRow.job?.jobCode || orderRow.orderNumber,
@@ -260,5 +254,6 @@ export async function POST(
     status: 'REDLINE_UPLOADED',
     contractReviewId: review.id,
     aiReviewPerformed: isPdf,
+    emailResult,
   })
 }

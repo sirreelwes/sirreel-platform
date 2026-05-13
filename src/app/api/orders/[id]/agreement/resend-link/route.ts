@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
+import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,18 +74,6 @@ export async function POST(
   }
 
   const portalUrl = `https://hq.sirreel.com/portal/${paperwork.token}`
-
-  if (!process.env.RESEND_API_KEY) {
-    return NextResponse.json({
-      ok: true,
-      portalUrl,
-      recipient,
-      emailed: false,
-      note: 'RESEND_API_KEY not set — link not sent, but URL returned for manual copy.',
-    })
-  }
-
-  const resend = new Resend(process.env.RESEND_API_KEY)
   const firstName = order.jobContact?.firstName || 'there'
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -108,17 +96,26 @@ export async function POST(
   </div>
 </body></html>`
 
-  try {
-    await resend.emails.send({
-      from: 'SirReel HQ <notifications@sirreel.com>',
-      to: [recipient],
-      subject: `Paperwork portal link · ${order.company?.name || order.orderNumber}`,
-      html,
-    })
-  } catch (err) {
-    console.error('[orders/agreement/resend-link] email failed:', err)
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
+  const emailResult = await sendAgreementEmail({
+    label: 'orders/agreement/resend-link',
+    to: [recipient],
+    subject: `Paperwork portal link · ${order.company?.name || order.orderNumber}`,
+    html,
+  })
+
+  if (!emailResult.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        portalUrl,
+        recipient,
+        emailed: false,
+        emailResult,
+        error: `Email delivery failed: ${emailResult.reason}`,
+      },
+      { status: 502 },
+    )
   }
 
-  return NextResponse.json({ ok: true, portalUrl, recipient, emailed: true })
+  return NextResponse.json({ ok: true, portalUrl, recipient, emailed: true, emailResult })
 }

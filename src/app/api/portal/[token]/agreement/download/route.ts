@@ -4,10 +4,10 @@ import path from 'path'
 import { put } from '@vercel/blob'
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
-import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
+import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,9 +87,7 @@ async function sendSalesDownloadEmail(args: {
   jobName: string
   jobNumber: string
   orderId: string
-}) {
-  if (!process.env.RESEND_API_KEY) return
-  const resend = new Resend(process.env.RESEND_API_KEY)
+}): Promise<EmailResult> {
   const adminUrl = `https://hq.sirreel.com/orders/${args.orderId}`
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -114,16 +112,12 @@ async function sendSalesDownloadEmail(args: {
     </div>
   </div>
 </body></html>`
-  try {
-    await resend.emails.send({
-      from: 'SirReel HQ <notifications@sirreel.com>',
-      to: SALES_EMAILS,
-      subject: `${args.companyName} downloaded agreement for review`,
-      html,
-    })
-  } catch (err) {
-    console.error('[portal/agreement/download] sales email failed:', err)
-  }
+  return sendAgreementEmail({
+    label: 'portal/agreement/download',
+    to: SALES_EMAILS,
+    subject: `${args.companyName} downloaded agreement for review`,
+    html,
+  })
 }
 
 export async function GET(
@@ -282,8 +276,9 @@ export async function GET(
     },
   })
 
+  let salesEmailResult: EmailResult | null = null
   if (isFirstDownload) {
-    await sendSalesDownloadEmail({
+    salesEmailResult = await sendSalesDownloadEmail({
       companyName: orderRow.company.name,
       jobName: orderRow.job?.name || '',
       jobNumber: orderRow.job?.jobCode || orderRow.orderNumber,
@@ -296,6 +291,11 @@ export async function GET(
   headers.set('Content-Disposition', `attachment; filename="${filename}"`)
   headers.set('Content-Length', String(filledBuffer.length))
   headers.set('Cache-Control', 'no-store')
+  // Surface the sales-email result as a response header so function logs and
+  // any tooling watching the download can see whether the notification fired.
+  if (salesEmailResult) {
+    headers.set('X-Email-Sales', salesEmailResult.ok ? 'sent' : `failed: ${salesEmailResult.reason}`)
+  }
 
   return new NextResponse(new Uint8Array(filledBuffer), { status: 200, headers })
 }
