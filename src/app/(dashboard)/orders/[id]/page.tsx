@@ -100,6 +100,31 @@ export default function OrderDetailPage() {
   const [regeneratingPdf, setRegeneratingPdf] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
+  type AgreementSummary = {
+    id: string;
+    status: string;
+    documentType: string;
+    baselineVersion: string | null;
+    contractReviewId: string | null;
+    documentToSignUrl: string | null;
+    redlineUploadUrl: string | null;
+    signedDocumentUrl: string | null;
+    wordDocumentUrl: string | null;
+    signedAt: string | null;
+    signerName: string | null;
+    signerTitle: string | null;
+    signerEmail: string | null;
+    signerIpAddress: string | null;
+    signerUserAgent: string | null;
+    acknowledgmentText: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  const [agreement, setAgreement] = useState<AgreementSummary | null>(null);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [agreementBusy, setAgreementBusy] = useState(false);
+  const [agreementMsg, setAgreementMsg] = useState<string>("");
+
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
 
@@ -120,6 +145,61 @@ export default function OrderDetailPage() {
       setAssetCats(data.assetCategories || []);
     });
   }, [fetchOrder]);
+
+  const fetchAgreement = useCallback(async () => {
+    const res = await fetch(`/api/orders/${orderId}/agreement`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setAgreement(data.agreement || null);
+    setPortalUrl(data.portalUrl || null);
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchAgreement();
+  }, [fetchAgreement]);
+
+  const overrideAgreementStatus = async (next: string) => {
+    if (!confirm(`Override agreement status to ${next.replace(/_/g, " ")}?`)) return;
+    setAgreementBusy(true);
+    setAgreementMsg("");
+    try {
+      const r = await fetch(`/api/orders/${orderId}/agreement`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setAgreementMsg(data.error || "Override failed");
+        return;
+      }
+      await fetchAgreement();
+      setAgreementMsg(`Status set to ${data.status.replace(/_/g, " ")}.`);
+    } finally {
+      setAgreementBusy(false);
+    }
+  };
+
+  const resendPortalLink = async () => {
+    setAgreementBusy(true);
+    setAgreementMsg("");
+    try {
+      const r = await fetch(`/api/orders/${orderId}/agreement/resend-link`, { method: "POST" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setAgreementMsg(data.error || "Resend failed");
+        return;
+      }
+      if (data.portalUrl) setPortalUrl(data.portalUrl);
+      setAgreementMsg(
+        data.emailed
+          ? `Portal link emailed to ${data.recipient}.`
+          : data.note || `Portal URL: ${data.portalUrl}`,
+      );
+    } finally {
+      setAgreementBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (invSearch.length < 2) { setInvResults([]); return; }
@@ -353,6 +433,175 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Signed Agreement */}
+      {agreement && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Rental Agreement</h2>
+              <div className="text-xs text-zinc-500 mt-0.5">
+                {agreement.documentType === "NEGOTIATED" ? "Negotiated" : "Baseline"}
+                {agreement.baselineVersion ? ` · v${agreement.baselineVersion}` : ""}
+                {" · "}
+                Updated {new Date(agreement.updatedAt).toLocaleString()}
+              </div>
+            </div>
+            <span
+              className={`px-2.5 py-0.5 rounded text-xs font-medium ${
+                agreement.status === "SIGNED_BASELINE" || agreement.status === "SIGNED_NEGOTIATED"
+                  ? "bg-emerald-900/60 text-emerald-300"
+                  : agreement.status === "NEGOTIATED_READY"
+                  ? "bg-indigo-900/60 text-indigo-300"
+                  : agreement.status === "REDLINE_UPLOADED" || agreement.status === "UNDER_REVIEW"
+                  ? "bg-amber-900/60 text-amber-300"
+                  : agreement.status === "DOWNLOAD_SENT"
+                  ? "bg-blue-900/60 text-blue-300"
+                  : "bg-zinc-700 text-zinc-300"
+              }`}
+            >
+              {agreement.status.replace(/_/g, " ")}
+            </span>
+          </div>
+
+          {(agreement.signedAt || agreement.signerName) && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+              <div>
+                <div className="text-zinc-500 text-xs">Signed at</div>
+                <div className="text-white mt-0.5">
+                  {agreement.signedAt ? new Date(agreement.signedAt).toLocaleString() : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-zinc-500 text-xs">Signer</div>
+                <div className="text-white mt-0.5">{agreement.signerName || "—"}</div>
+              </div>
+              <div>
+                <div className="text-zinc-500 text-xs">Title</div>
+                <div className="text-white mt-0.5">{agreement.signerTitle || "—"}</div>
+              </div>
+              <div>
+                <div className="text-zinc-500 text-xs">Email</div>
+                <div className="text-white mt-0.5 break-all">{agreement.signerEmail || "—"}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-zinc-500 text-xs">IP address</div>
+                <div className="text-white mt-0.5">{agreement.signerIpAddress || "—"}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-zinc-500 text-xs">User agent</div>
+                <div className="text-white mt-0.5 text-xs break-all">{agreement.signerUserAgent || "—"}</div>
+              </div>
+              {agreement.acknowledgmentText && (
+                <div className="col-span-full">
+                  <div className="text-zinc-500 text-xs">Acknowledgment</div>
+                  <div className="text-zinc-300 mt-0.5 text-xs leading-relaxed italic">
+                    &ldquo;{agreement.acknowledgmentText}&rdquo;
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {portalUrl && (
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Open portal as client ↗
+              </a>
+            )}
+            {agreement.documentToSignUrl && (
+              <a
+                href={agreement.documentToSignUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Doc to sign
+              </a>
+            )}
+            {agreement.wordDocumentUrl && (
+              <a
+                href={agreement.wordDocumentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Last .docx download
+              </a>
+            )}
+            {agreement.redlineUploadUrl && (
+              <a
+                href={agreement.redlineUploadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Client redline
+              </a>
+            )}
+            {agreement.signedDocumentUrl && (
+              <a
+                href={agreement.signedDocumentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg"
+              >
+                Signed PDF
+              </a>
+            )}
+            {agreement.contractReviewId && (
+              <a
+                href={`/tools/contract-review/${agreement.contractReviewId}`}
+                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+              >
+                Open contract review
+              </a>
+            )}
+            <button
+              onClick={resendPortalLink}
+              disabled={agreementBusy}
+              className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            >
+              Resend portal link
+            </button>
+          </div>
+
+          {/* Manual override — recovery only. Signed states are intentionally absent. */}
+          <div className="border-t border-zinc-800 pt-4 space-y-2">
+            <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+              Manual override
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["PORTAL_GENERATED", "DOWNLOAD_SENT", "REDLINE_UPLOADED", "UNDER_REVIEW", "NEGOTIATED_READY"] as const)
+                .filter((s) => s !== agreement.status)
+                .map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => overrideAgreementStatus(s)}
+                    disabled={agreementBusy}
+                    className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 border border-zinc-700 text-zinc-300 text-xs font-semibold rounded"
+                  >
+                    → {s.replace(/_/g, " ")}
+                  </button>
+                ))}
+            </div>
+            <div className="text-[10px] text-zinc-600">
+              Recovery only — SIGNED_BASELINE / SIGNED_NEGOTIATED are never settable here (signing event required).
+            </div>
+          </div>
+
+          {agreementMsg && (
+            <div className="text-xs text-zinc-300 bg-zinc-950 border border-zinc-800 rounded-lg p-2">
+              {agreementMsg}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Line Items */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-6">

@@ -110,6 +110,7 @@ export default function ClientPortal() {
     allowedActions: string[];
     statusUpdatedAt: string;
     job?: { company?: string };
+    timeline?: { kind: string; label: string; at: string }[];
   } | null>(null);
 
   // Path A redline upload (new dual-path flow — separate from the legacy
@@ -202,6 +203,7 @@ export default function ClientPortal() {
             allowedActions: Array.isArray(data.allowedActions) ? data.allowedActions : [],
             statusUpdatedAt: data.statusUpdatedAt || '',
             job: data.job,
+            timeline: Array.isArray(data.timeline) ? data.timeline : [],
           });
         }
       })
@@ -402,6 +404,30 @@ export default function ClientPortal() {
           locked ? renderLockedCard('Rental Agreement') :
           done.agreement ? renderDoneCard('Rental Agreement Signed', `Signed by ${paperwork?.signerName || signerName}`) : (
             <div className="space-y-4">
+              {agreementState && (agreementState.timeline?.length || 0) > 1 && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Agreement timeline</div>
+                  <ol className="space-y-2">
+                    {agreementState.timeline!.map((t, idx) => {
+                      const isLast = idx === agreementState.timeline!.length - 1;
+                      return (
+                        <li key={`${t.kind}-${idx}`} className="flex items-start gap-3">
+                          <div className="flex flex-col items-center pt-0.5">
+                            <div className={`w-2.5 h-2.5 rounded-full ${isLast ? 'bg-indigo-600' : 'bg-gray-300'}`} />
+                            {!isLast && <div className="w-px flex-1 bg-gray-200 mt-1" />}
+                          </div>
+                          <div className="pb-2 flex-1">
+                            <div className="text-xs font-semibold text-gray-800">{t.label}</div>
+                            <div className="text-[10px] text-gray-400">
+                              {new Date(t.at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
               {agreementState && (agreementState.status === 'SIGNED_BASELINE' || agreementState.status === 'SIGNED_NEGOTIATED') && (
                 <div className="bg-white rounded-2xl border border-emerald-200 p-5 space-y-3">
                   <div className="flex items-start gap-3">

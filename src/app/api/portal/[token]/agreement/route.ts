@@ -60,14 +60,57 @@ export async function GET(
       documentType: true,
       documentToSignUrl: true,
       wordDocumentUrl: true,
+      redlineUploadUrl: true,
       signedDocumentUrl: true,
       signedAt: true,
       signerName: true,
+      createdAt: true,
       updatedAt: true,
     },
   })
   if (!agreement) {
     return NextResponse.json({ error: 'Agreement not available' }, { status: 500 })
+  }
+
+  // Synthesised timeline. We don't have a per-status history table, so we
+  // reconstruct milestones from the artifacts that exist + the latest
+  // updatedAt. Good enough for portal UX; switch to a real history table if
+  // we ever need per-transition timestamps.
+  type TimelineItem = { kind: string; label: string; at: string }
+  const timeline: TimelineItem[] = [
+    {
+      kind: 'portal_generated',
+      label: 'Portal generated',
+      at: agreement.createdAt.toISOString(),
+    },
+  ]
+  if (agreement.wordDocumentUrl) {
+    timeline.push({
+      kind: 'downloaded',
+      label: 'Downloaded for review',
+      at: agreement.updatedAt.toISOString(),
+    })
+  }
+  if (agreement.redlineUploadUrl) {
+    timeline.push({
+      kind: 'redline_uploaded',
+      label: 'Redline received',
+      at: agreement.updatedAt.toISOString(),
+    })
+  }
+  if (agreement.status === 'NEGOTIATED_READY' || agreement.status === 'SIGNED_NEGOTIATED') {
+    timeline.push({
+      kind: 'negotiated_ready',
+      label: 'Negotiated version ready to sign',
+      at: agreement.updatedAt.toISOString(),
+    })
+  }
+  if (agreement.signedAt) {
+    timeline.push({
+      kind: 'signed',
+      label: agreement.status === 'SIGNED_NEGOTIATED' ? 'Signed (negotiated)' : 'Signed (baseline)',
+      at: agreement.signedAt.toISOString(),
+    })
   }
 
   return NextResponse.json({
@@ -86,5 +129,6 @@ export async function GET(
     signedAt: agreement.signedAt ? agreement.signedAt.toISOString() : null,
     signerName: agreement.signerName,
     statusUpdatedAt: agreement.updatedAt.toISOString(),
+    timeline,
   })
 }
