@@ -109,7 +109,21 @@ export default function ClientPortal() {
     wordDocumentAvailable: boolean;
     allowedActions: string[];
     statusUpdatedAt: string;
+    job?: { company?: string };
   } | null>(null);
+
+  // Native signing flow (Path B). One state object so each step's progress is
+  // explicit. step values: 'closed' | 'read' | 'ack' | 'identity' | 'sign' | 'confirm' | 'submitting' | 'done'
+  const [pathBStep, setPathBStep] = useState<
+    'closed' | 'read' | 'ack' | 'identity' | 'sign' | 'confirm' | 'submitting' | 'done'
+  >('closed');
+  const [pathBAcknowledged, setPathBAcknowledged] = useState(false);
+  const [pathBSignerName, setPathBSignerName] = useState('');
+  const [pathBSignerTitle, setPathBSignerTitle] = useState('');
+  const [pathBSignerEmail, setPathBSignerEmail] = useState('');
+  const [pathBSigDrawn, setPathBSigDrawn] = useState(false);
+  const [pathBError, setPathBError] = useState('');
+  const pathBSigRef = useRef<HTMLCanvasElement>(null);
 
   // CC
   const [ccRepFirst, setCcRepFirst] = useState('');
@@ -181,11 +195,19 @@ export default function ClientPortal() {
             wordDocumentAvailable: !!data.wordDocumentAvailable,
             allowedActions: Array.isArray(data.allowedActions) ? data.allowedActions : [],
             statusUpdatedAt: data.statusUpdatedAt || '',
+            job: data.job,
           });
         }
       })
       .catch(() => {});
   }, [token]);
+
+  // Initialise the Path-B signature canvas when the user reaches the sign step.
+  useEffect(() => {
+    if (pathBStep === 'sign') {
+      setTimeout(() => initCanvas(pathBSigRef.current, setPathBSigDrawn), 100);
+    }
+  }, [pathBStep]);
 
   const initCanvas = (canvas: HTMLCanvasElement | null, setDrawn: (v: boolean) => void) => {
     if (!canvas) return;
@@ -374,10 +396,40 @@ export default function ClientPortal() {
           locked ? renderLockedCard('Rental Agreement') :
           done.agreement ? renderDoneCard('Rental Agreement Signed', `Signed by ${paperwork?.signerName || signerName}`) : (
             <div className="space-y-4">
-              {agreementState && (agreementState.status === 'PORTAL_GENERATED' || agreementState.status === 'DOWNLOAD_SENT') && (
+              {agreementState && (agreementState.status === 'SIGNED_BASELINE' || agreementState.status === 'SIGNED_NEGOTIATED') && (
+                <div className="bg-white rounded-2xl border border-emerald-200 p-5 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="text-2xl">✅</div>
+                    <div className="flex-1">
+                      <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Signed</div>
+                      <h2 className="font-bold text-gray-900 mt-1">Agreement signed</h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Signed on{' '}
+                        {agreementState.statusUpdatedAt
+                          ? new Date(agreementState.statusUpdatedAt).toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })
+                          : '—'}
+                        . A signed copy was emailed to you.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href={`/api/portal/${token}/agreement/signed-copy`}
+                    className="block text-center py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
+                  >
+                    Download signed copy
+                  </a>
+                </div>
+              )}
+              {agreementState && (agreementState.status === 'PORTAL_GENERATED' || agreementState.status === 'DOWNLOAD_SENT') && pathBStep === 'closed' && (
                 <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
                   <div>
-                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">New signing options</div>
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Signing options</div>
                     <h2 className="font-bold text-gray-900 mt-1">Choose how to sign this agreement</h2>
                   </div>
                   {agreementState.status === 'PORTAL_GENERATED' && (
@@ -387,9 +439,15 @@ export default function ClientPortal() {
                       </p>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
-                          disabled
-                          title="Native signing flow ships in the next release. For now, use the existing signing form below."
-                          className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          onClick={() => {
+                            setPathBError('');
+                            setPathBAcknowledged(false);
+                            setPathBSigDrawn(false);
+                            setPathBSignerName(signerName || booking?.person?.name || '');
+                            setPathBSignerEmail(signerEmail || booking?.person?.email || '');
+                            setPathBStep('read');
+                          }}
+                          className="flex-1 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
                         >
                           ✍️ Sign and accept
                         </button>
@@ -400,10 +458,6 @@ export default function ClientPortal() {
                           📝 Download for review
                         </a>
                       </div>
-                      <p className="text-[10px] text-gray-400">
-                        &ldquo;Sign and accept&rdquo; opens a guided signing flow in the next release. The signing form below
-                        still works in the meantime.
-                      </p>
                     </>
                   )}
                   {agreementState.status === 'DOWNLOAD_SENT' && (
@@ -419,7 +473,7 @@ export default function ClientPortal() {
                               })
                             : 'a previous visit'}
                         </span>
-                        . Upload your redlined version below, or download a fresh copy if you need it.
+                        . Upload your redlined version below, or sign the original now.
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <a
@@ -429,15 +483,234 @@ export default function ClientPortal() {
                           📝 Download again
                         </a>
                         <button
-                          disabled
-                          title="Native signing flow ships in the next release."
-                          className="flex-1 py-2 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs font-semibold disabled:cursor-not-allowed"
+                          onClick={() => {
+                            setPathBError('');
+                            setPathBAcknowledged(false);
+                            setPathBSigDrawn(false);
+                            setPathBSignerName(signerName || booking?.person?.name || '');
+                            setPathBSignerEmail(signerEmail || booking?.person?.email || '');
+                            setPathBStep('read');
+                          }}
+                          className="flex-1 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
                         >
-                          Changed your mind? Sign the original
+                          ✍️ Sign the original
                         </button>
                       </div>
                     </>
                   )}
+                </div>
+              )}
+              {agreementState && pathBStep !== 'closed' && pathBStep !== 'done' && (
+                <div className="bg-white rounded-2xl border border-indigo-200 p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Native signing flow</div>
+                      <h2 className="font-bold text-gray-900 mt-1">
+                        {pathBStep === 'read' && 'Step 1 · Read the agreement'}
+                        {pathBStep === 'ack' && 'Step 2 · Acknowledge'}
+                        {pathBStep === 'identity' && 'Step 3 · Your identity'}
+                        {pathBStep === 'sign' && 'Step 4 · Sign'}
+                        {(pathBStep === 'confirm' || pathBStep === 'submitting') && 'Step 5 · Final confirmation'}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (pathBStep === 'submitting') return;
+                        setPathBStep('closed');
+                      }}
+                      className="text-[11px] text-gray-500 hover:text-gray-900"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  {pathBStep === 'read' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">
+                        Review the agreement below. Scroll through and confirm you have read it before continuing.
+                      </p>
+                      <iframe
+                        src={`/api/portal/${token}/contract/download?format=pdf`}
+                        className="w-full h-[420px] rounded-xl border border-gray-200 bg-gray-50"
+                        title="Rental Agreement"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setPathBStep('ack')}
+                          className="py-2 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold"
+                        >
+                          Continue to acknowledgment →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pathBStep === 'ack' && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 leading-relaxed">
+                        I have read, understood, and agree to the terms and conditions of this Equipment and Vehicle Rental Agreement.
+                        I have authority to bind <span className="font-semibold">{agreementState.job?.company || booking?.company?.name || 'my company'}</span> to this Agreement.
+                      </div>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={pathBAcknowledged}
+                          onChange={(e) => setPathBAcknowledged(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 accent-gray-900"
+                        />
+                        <span className="text-sm text-gray-700 font-medium">I confirm the acknowledgment above.</span>
+                      </label>
+                      <div className="flex justify-between">
+                        <button onClick={() => setPathBStep('read')} className="text-xs text-gray-500 hover:text-gray-900">← Back</button>
+                        <button
+                          onClick={() => setPathBStep('identity')}
+                          disabled={!pathBAcknowledged}
+                          className="py-2 px-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
+                        >
+                          Continue →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pathBStep === 'identity' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">Confirm the signer name, title, and email for the audit trail.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Full Name *</label>
+                          <input value={pathBSignerName} onChange={(e) => setPathBSignerName(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Title *</label>
+                          <input value={pathBSignerTitle} onChange={(e) => setPathBSignerTitle(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Email *</label>
+                          <input type="email" value={pathBSignerEmail} onChange={(e) => setPathBSignerEmail(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <button onClick={() => setPathBStep('ack')} className="text-xs text-gray-500 hover:text-gray-900">← Back</button>
+                        <button
+                          onClick={() => setPathBStep('sign')}
+                          disabled={!pathBSignerName || !pathBSignerTitle || !pathBSignerEmail}
+                          className="py-2 px-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
+                        >
+                          Continue →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pathBStep === 'sign' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500">Draw your signature below using mouse, trackpad, or finger.</p>
+                      <SigCanvas
+                        canvasRef={pathBSigRef}
+                        drawn={pathBSigDrawn}
+                        onClear={() => clearSig(pathBSigRef, setPathBSigDrawn)}
+                      />
+                      <div className="flex justify-between">
+                        <button onClick={() => setPathBStep('identity')} className="text-xs text-gray-500 hover:text-gray-900">← Back</button>
+                        <button
+                          onClick={() => setPathBStep('confirm')}
+                          disabled={!pathBSigDrawn}
+                          className="py-2 px-4 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
+                        >
+                          Continue →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(pathBStep === 'confirm' || pathBStep === 'submitting') && (
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 leading-relaxed">
+                        By clicking &ldquo;Submit and Sign&rdquo;, you are creating a legally binding electronic signature on behalf of{' '}
+                        <span className="font-semibold">{agreementState.job?.company || booking?.company?.name || 'your company'}</span>.
+                        SirReel will record your IP address and the time of signing in the audit trail.
+                      </div>
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr><td className="py-1 text-gray-500 w-24">Signer</td><td className="py-1 font-semibold">{pathBSignerName}</td></tr>
+                          <tr><td className="py-1 text-gray-500">Title</td><td className="py-1 font-semibold">{pathBSignerTitle}</td></tr>
+                          <tr><td className="py-1 text-gray-500">Email</td><td className="py-1 font-semibold">{pathBSignerEmail}</td></tr>
+                        </tbody>
+                      </table>
+                      {pathBError && <div className="text-[11px] text-red-600">{pathBError}</div>}
+                      <div className="flex justify-between">
+                        <button
+                          onClick={() => setPathBStep('sign')}
+                          disabled={pathBStep === 'submitting'}
+                          className="text-xs text-gray-500 hover:text-gray-900 disabled:opacity-40"
+                        >
+                          ← Back
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setPathBError('');
+                            setPathBStep('submitting');
+                            try {
+                              const acknowledgmentText =
+                                `I have read, understood, and agree to the terms and conditions of this Equipment and Vehicle Rental Agreement. ` +
+                                `I have authority to bind ${agreementState.job?.company || booking?.company?.name || 'my company'} to this Agreement.`;
+                              const r = await fetch(`/api/portal/${token}/agreement/sign`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  signerName: pathBSignerName,
+                                  signerTitle: pathBSignerTitle,
+                                  signerEmail: pathBSignerEmail,
+                                  signatureImageData: sigData(pathBSigRef),
+                                  acknowledgmentText,
+                                  acknowledged: true,
+                                }),
+                              });
+                              const data = await r.json().catch(() => ({}));
+                              if (!r.ok || !data.ok) {
+                                setPathBError(data.error || 'Failed to sign');
+                                setPathBStep('confirm');
+                                return;
+                              }
+                              setPathBStep('done');
+                              setDone((d) => ({ ...d, agreement: true }));
+                              setAgreementState((prev) =>
+                                prev ? { ...prev, status: data.status || 'SIGNED_BASELINE', statusUpdatedAt: data.signedAt || new Date().toISOString() } : prev,
+                              );
+                            } catch (err: any) {
+                              setPathBError(err?.message || 'Failed to sign');
+                              setPathBStep('confirm');
+                            }
+                          }}
+                          disabled={pathBStep === 'submitting'}
+                          className="py-2 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold"
+                        >
+                          {pathBStep === 'submitting' ? 'Submitting…' : 'Submit and Sign'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {pathBStep === 'done' && (
+                <div className="bg-white rounded-2xl border border-emerald-200 p-5 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="text-2xl">🎉</div>
+                    <div className="flex-1">
+                      <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Signed</div>
+                      <h2 className="font-bold text-gray-900 mt-1">Agreement signed</h2>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Thanks, {pathBSignerName}. A signed copy has been emailed to {pathBSignerEmail}.
+                      </p>
+                    </div>
+                  </div>
+                  <a
+                    href={`/api/portal/${token}/agreement/signed-copy`}
+                    className="block text-center py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
+                  >
+                    Download signed copy
+                  </a>
                 </div>
               )}
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
