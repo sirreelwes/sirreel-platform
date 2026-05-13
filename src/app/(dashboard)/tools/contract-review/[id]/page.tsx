@@ -87,6 +87,11 @@ export default function ContractReviewDetailPage() {
   const [decisionsDirty, setDecisionsDirty] = useState(false);
   const [decisionsSavedAt, setDecisionsSavedAt] = useState<string | null>(null);
 
+  const [secondRoundClauses, setSecondRoundClauses] = useState<string[]>([]);
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunError, setRerunError] = useState('');
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false);
+
   const [tab, setTab] = useState<Tab>('original');
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
@@ -115,6 +120,12 @@ export default function ContractReviewDetailPage() {
           setDecisions(buildInitialDecisions(rec));
           setDecisionsDirty(false);
           setPdfCacheKey(rec.counterGeneratedAt || '');
+          const meta = rec.aiResponse?._meta;
+          if (meta && Array.isArray(meta.secondRoundClauses)) {
+            setSecondRoundClauses(meta.secondRoundClauses.map((s: unknown) => String(s)));
+          } else {
+            setSecondRoundClauses([]);
+          }
         }
       })
       .catch(() => setError('Failed to load review.'))
@@ -143,6 +154,57 @@ export default function ContractReviewDetailPage() {
   const handleDecisionChange = (changeIndex: number, next: DecisionState) => {
     setDecisions((prev) => ({ ...prev, [changeIndex]: next }));
     setDecisionsDirty(true);
+  };
+
+  const persistedSecondRound = useMemo(() => {
+    const meta = record?.aiResponse?._meta;
+    if (meta && Array.isArray(meta.secondRoundClauses)) {
+      return (meta.secondRoundClauses as unknown[]).map((s) => String(s)).sort();
+    }
+    return [] as string[];
+  }, [record]);
+
+  const secondRoundDirty = useMemo(() => {
+    const a = [...secondRoundClauses].sort();
+    const b = [...persistedSecondRound];
+    if (a.length !== b.length) return true;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
+    return false;
+  }, [secondRoundClauses, persistedSecondRound]);
+
+  const handleToggleSecondRound = (clauseRef: string, next: boolean) => {
+    setSecondRoundClauses((prev) => {
+      const set = new Set(prev);
+      if (next) set.add(clauseRef);
+      else set.delete(clauseRef);
+      return Array.from(set);
+    });
+  };
+
+  const runRerun = async () => {
+    if (!record) return;
+    setRerunning(true);
+    setRerunError('');
+    try {
+      const res = await fetch(`/api/tools/contract-review/${id}/rerun`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secondRoundClauses }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setRerunError(err.error || 'Failed to re-run AI review');
+        return;
+      }
+      await refreshRecord();
+    } finally {
+      setRerunning(false);
+      setShowRerunConfirm(false);
+    }
+  };
+
+  const handleRerunClick = () => {
+    setShowRerunConfirm(true);
   };
 
   const saveDecisions = async () => {
@@ -407,11 +469,30 @@ export default function ContractReviewDetailPage() {
         )}
       </div>
 
+      {/* Operator-review banner */}
+      {(() => {
+        const flaggedCount = (aiChanges || []).filter((c: any) => c?.needsOperatorReview === true).length;
+        if (flaggedCount === 0) return null;
+        return (
+          <div className="rounded-2xl border border-red-300 bg-red-50 p-4 flex items-start gap-3">
+            <div className="text-xl">⚠️</div>
+            <div className="text-[12px] text-red-700 leading-relaxed">
+              <div className="font-bold uppercase text-[10px] mb-1">Operator review required</div>
+              {flaggedCount === 1
+                ? 'One clause is flagged. Expand the change below to review the reason before generating the counter-PDF.'
+                : `${flaggedCount} clauses are flagged. Expand the changes below to review each reason before generating the counter-PDF.`}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* AI analysis with per-clause decisions */}
       <ReviewResultPanel
         review={ai}
         decisions={decisions}
         onDecisionChange={handleDecisionChange}
+        secondRoundClauses={secondRoundClauses}
+        onToggleSecondRound={handleToggleSecondRound}
       />
 
       {/* Per-clause decision summary + Generate button */}
@@ -477,6 +558,50 @@ export default function ContractReviewDetailPage() {
         </div>
       )}
 
+      {/* Second-round negotiation panel */}
+      {totalChanges > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Second-round negotiation</div>
+              <div className="text-[11px] text-gray-600 mt-1 leading-snug max-w-2xl">
+                Mark clauses as second-round (per-clause toggle in each expanded change above) to instruct the AI to source
+                counter language from the playbook&apos;s Acceptable Fallback. Then re-run to refresh the counter.
+              </div>
+            </div>
+            <div className="text-[11px] text-gray-600 font-semibold">
+              {secondRoundClauses.length === 0
+                ? 'No clauses flagged'
+                : `${secondRoundClauses.length} flagged: ${[...secondRoundClauses].sort().map((c) => `§${c}`).join(', ')}`}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[11px] text-gray-500">
+              {secondRoundDirty
+                ? 'Toggle changes are unsaved. Re-run to apply.'
+                : record?.aiResponse?._meta?.rerunAt
+                  ? `Last re-run ${fmtDateTime(record.aiResponse._meta.rerunAt)}.`
+                  : 'AI has not been re-run with second-round flags yet.'}
+            </div>
+            <button
+              onClick={handleRerunClick}
+              disabled={rerunning || (!secondRoundDirty && secondRoundClauses.length === 0)}
+              title={
+                !secondRoundDirty && secondRoundClauses.length === 0
+                  ? 'Flag at least one clause as second-round, or change the existing flags, before re-running'
+                  : 'Re-run AI review with current second-round flags'
+              }
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-[12px] font-bold rounded-xl"
+            >
+              {rerunning ? 'Re-running…' : 'Re-run AI with second-round flags'}
+            </button>
+          </div>
+          {rerunError && (
+            <div className="text-[11px] text-red-600 text-right">{rerunError}</div>
+          )}
+        </div>
+      )}
+
       {/* Audit footer */}
       <div className="text-[10px] text-gray-400 space-y-0.5 px-1">
         <div>
@@ -489,6 +614,45 @@ export default function ContractReviewDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Re-run confirmation modal */}
+      {showRerunConfirm && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !rerunning && setShowRerunConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-5 max-w-md w-full space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-gray-900">Re-run AI review?</h2>
+            <p className="text-[12px] text-gray-600">
+              This will overwrite the current AI analysis with a fresh review that uses Acceptable Fallback
+              language for {secondRoundClauses.length === 0
+                ? 'no clauses'
+                : `clause${secondRoundClauses.length === 1 ? '' : 's'} ${[...secondRoundClauses].sort().map((c) => `§${c}`).join(', ')}`}.
+              Your saved per-clause decisions will remain, but if the new analysis returns a different number of
+              changes you may need to re-decide some clauses. The counter-PDF (if any) is not affected until you regenerate it.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowRerunConfirm(false)}
+                disabled={rerunning}
+                className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-[12px] font-bold rounded-xl disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runRerun}
+                disabled={rerunning}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-[12px] font-bold rounded-xl"
+              >
+                {rerunning ? 'Re-running…' : 'Re-run AI review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Regenerate confirmation modal */}
       {showRegenerateConfirm && (

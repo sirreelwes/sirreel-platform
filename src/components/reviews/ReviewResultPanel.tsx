@@ -48,14 +48,25 @@ interface ReviewResultPanelProps {
   /** When provided, per-clause decision controls render. Keyed by changeIndex. */
   decisions?: Record<number, DecisionState>;
   onDecisionChange?: (changeIndex: number, next: DecisionState) => void;
+  /** Clause refs the operator has marked for second-round negotiation. Drives the per-clause toggle UI. */
+  secondRoundClauses?: string[];
+  onToggleSecondRound?: (clauseRef: string, next: boolean) => void;
 }
 
-export function ReviewResultPanel({ review, decisions, onDecisionChange }: ReviewResultPanelProps) {
+export function ReviewResultPanel({
+  review,
+  decisions,
+  onDecisionChange,
+  secondRoundClauses,
+  onToggleSecondRound,
+}: ReviewResultPanelProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [baselineOpen, setBaselineOpen] = useState<Record<number, boolean>>({});
 
   if (!review) return null;
   const interactive = !!decisions && !!onDecisionChange;
+  const secondRoundSet = new Set((secondRoundClauses || []).map((s) => s.trim()));
+  const secondRoundEditable = !!onToggleSecondRound;
 
   return (
     <div className="space-y-4">
@@ -92,6 +103,9 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
           const cfg = TYPE_CONFIG[change.type as keyof typeof TYPE_CONFIG] || TYPE_CONFIG.needs_review;
           const decision = decisions?.[i] ?? { decision: 'PENDING' as ClauseDecisionValue, counterLanguage: '', note: '' };
           const badge = DECISION_BADGE[decision.decision];
+          const clauseRef = String(change.clause || '').trim();
+          const isSecondRound = clauseRef ? secondRoundSet.has(clauseRef) : false;
+          const needsOperatorReview = change.needsOperatorReview === true;
           return (
             <div key={i} className={`rounded-xl border p-3 ${cfg.color}`}>
               <div className="flex items-start justify-between gap-2 cursor-pointer" onClick={() => setExpanded(expanded === i ? null : i)}>
@@ -101,6 +115,16 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
                     <div className="text-[12px] font-semibold flex items-center gap-1.5 flex-wrap">
                       {change.clause && <span className="opacity-50">§{change.clause}</span>}
                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${cfg.badge}`}>{cfg.label}</span>
+                      {needsOperatorReview && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-red-600 text-white">
+                          ⚠️ Needs operator review
+                        </span>
+                      )}
+                      {isSecondRound && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-indigo-100 text-indigo-700">
+                          Second-round
+                        </span>
+                      )}
                       {interactive && (
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${badge.cls}`}>{badge.label}</span>
                       )}
@@ -112,6 +136,35 @@ export function ReviewResultPanel({ review, decisions, onDecisionChange }: Revie
               </div>
               {expanded === i && (
                 <div className="mt-3 pt-3 border-t border-current border-opacity-20 space-y-2 text-[11px]">
+                  {needsOperatorReview && change.operatorReviewReason && (
+                    <div className="bg-red-50 border border-red-300 rounded-lg p-2.5">
+                      <div className="font-bold text-red-700 uppercase text-[9px] mb-1">⚠️ Operator review reason</div>
+                      <div className="text-red-700 leading-relaxed">{change.operatorReviewReason}</div>
+                    </div>
+                  )}
+                  {secondRoundEditable && clauseRef && (
+                    <div className="bg-white/50 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold opacity-60 uppercase text-[9px] mb-0.5">Second-round negotiation</div>
+                        <div className="text-[10px] opacity-70 leading-snug">
+                          When on, the AI sources this clause's counter from the playbook's Acceptable Fallback (not Preferred).
+                          Toggling won&apos;t change the current suggestion — click &quot;Re-run AI&quot; below to apply.
+                        </div>
+                      </div>
+                      <label
+                        className="flex items-center gap-2 cursor-pointer flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSecondRound}
+                          onChange={(e) => onToggleSecondRound!(clauseRef, e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-[11px] font-semibold">{isSecondRound ? 'On' : 'Off'}</span>
+                      </label>
+                    </div>
+                  )}
                   {change.description && (
                     <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Summary</div><div>{change.description}</div></div>
                   )}
