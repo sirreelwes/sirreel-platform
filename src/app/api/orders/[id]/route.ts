@@ -3,6 +3,7 @@ import type { OrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
+import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -74,6 +75,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if (taxRate !== undefined) {
       await recalcOrderTotals(id);
+    }
+
+    if ((data as { quoteStatus?: unknown }).quoteStatus === 'SENT') {
+      await ensureSignedAgreementForOrder(id);
     }
 
     return NextResponse.json(order);

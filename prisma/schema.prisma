@@ -1400,6 +1400,8 @@ model Order {
   job        Job     @relation(fields: [jobId], references: [id])
   jobContact Person? @relation("OrderJobContact", fields: [jobContactId], references: [id])
 
+  signedAgreement SignedAgreement?
+
   @@index([jobId])
   @@index([quoteStatus, sentAt])
   @@map("sr_orders")
@@ -1896,6 +1898,7 @@ model ContractReview {
   humanDecisionBy    User?    @relation("ContractReviewDecider", fields: [humanDecisionById], references: [id])
   counterGeneratedBy User?    @relation("CounterPdfGenerator", fields: [counterGeneratedById], references: [id])
   changeDecisions    ReviewChangeDecision[]
+  signedAgreement    SignedAgreement?
 
   @@index([jobId])
   @@index([companyId])
@@ -1930,6 +1933,56 @@ model ReviewChangeDecision {
   @@index([reviewId])
   @@index([decision])
   @@map("sr_review_change_decisions")
+}
+
+enum AgreementDocumentType {
+  BASELINE
+  NEGOTIATED
+}
+
+enum AgreementStatus {
+  PORTAL_GENERATED
+  DOWNLOAD_SENT
+  REDLINE_UPLOADED
+  UNDER_REVIEW
+  NEGOTIATED_READY
+  SIGNED_BASELINE
+  SIGNED_NEGOTIATED
+}
+
+model SignedAgreement {
+  id      String @id @default(uuid())
+  orderId String @unique @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  documentType     AgreementDocumentType @default(BASELINE) @map("document_type")
+  baselineVersion  String?               @map("baseline_version")
+  contractReviewId String?               @unique @map("contract_review_id")
+  contractReview   ContractReview?       @relation(fields: [contractReviewId], references: [id])
+
+  documentToSignUrl String? @map("document_to_sign_url")
+  redlineUploadUrl  String? @map("redline_upload_url")
+  signedDocumentUrl String? @map("signed_document_url")
+  wordDocumentUrl   String? @map("word_document_url")
+
+  signedAt           DateTime? @map("signed_at")
+  signerName         String?   @map("signer_name")
+  signerTitle        String?   @map("signer_title")
+  signerEmail        String?   @map("signer_email")
+  signatureImageData String?   @map("signature_image_data") @db.Text
+
+  acknowledgmentText String? @map("acknowledgment_text") @db.Text
+  signerIpAddress    String? @map("signer_ip_address")
+  signerUserAgent    String? @map("signer_user_agent") @db.Text
+
+  status AgreementStatus @default(PORTAL_GENERATED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([status])
+  @@map("sr_signed_agreements")
 }
 
 model CoiCheck {
