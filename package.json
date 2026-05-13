@@ -14,7 +14,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts"
+    "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
+    "check:template-drift": "tsx scripts/check-template-drift.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

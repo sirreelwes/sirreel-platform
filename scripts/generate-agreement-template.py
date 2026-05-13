@@ -81,8 +81,8 @@ def main() -> None:
         "TEMPLATE SCAFFOLD — Replace this body with the canonical rental "
         "agreement content (post-corrections per canonical-baseline-"
         "corrections.md) before shipping to clients. Preserve every "
-        "{{placeholder}} token in its canonical position so docxtemplater can "
-        "fill them at runtime."
+        "mustache token (double curly braces) in its canonical position so "
+        "docxtemplater can fill them at runtime."
     )
     note_run.italic = True
     note_run.font.size = Pt(9)

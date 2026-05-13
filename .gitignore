@@ -12,5 +12,6 @@ scripts/*
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
 !scripts/generate-agreement-template.py
+!scripts/check-template-drift.ts
 .env.local.bak
 .gcp-service-account.json
