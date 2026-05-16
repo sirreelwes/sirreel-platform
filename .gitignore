@@ -13,5 +13,6 @@ scripts/*
 !scripts/rw-catalog-triage.ts
 !scripts/generate-agreement-template.py
 !scripts/check-template-drift.ts
+!scripts/backfill-email-message-ids.ts
 .env.local.bak
 .gcp-service-account.json

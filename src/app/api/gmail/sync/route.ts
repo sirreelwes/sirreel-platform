@@ -109,8 +109,8 @@ export async function POST() {
             const existing = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id! } })
             if (existing) { skipped++; continue }
 
-            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "To", "Subject", "Date"] })
-            const get = (h: string) => full.data.payload?.headers?.find(x => x.name === h)?.value || ""
+            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID", "In-Reply-To"] })
+            const get = (h: string) => full.data.payload?.headers?.find(x => x.name?.toLowerCase() === h.toLowerCase())?.value || ""
 
             const fromAddress = get("From")
             const subject = get("Subject") || "(no subject)"
@@ -118,6 +118,17 @@ export async function POST() {
             const sentAt = new Date(parseInt(full.data.internalDate || "0"))
             const gmailThreadId = full.data.threadId || msg.id
             const labelIds = full.data.labelIds || []
+            const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
+            const inReplyTo = get("In-Reply-To") || null
+            let duplicateOfId: string | null = null
+            if (rfc822MessageId) {
+              const dupExisting = await prisma.emailMessage.findFirst({
+                where: { rfc822MessageId, duplicateOfId: null },
+                select: { id: true },
+                orderBy: { createdAt: "asc" },
+              }).catch(() => null)
+              if (dupExisting) duplicateOfId = dupExisting.id
+            }
 
             // Skip internal team emails
             const emailUser = email.split("@")[0]
@@ -162,6 +173,9 @@ export async function POST() {
                 emailAccountId: account.id,
                 threadId: thread.id,
                 gmailMessageId: msg.id!,
+                rfc822MessageId,
+                inReplyTo,
+                duplicateOfId,
                 fromAddress,
                 toAddresses: [email],
                 subject,

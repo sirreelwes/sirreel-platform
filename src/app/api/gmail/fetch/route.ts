@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
           userId: "me",
           id: msgId,
           format: "metadata",
-          metadataHeaders: ["From", "To", "Subject", "Date"],
+          metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID", "In-Reply-To"],
         })
 
         const headers = full.data.payload?.headers || []
@@ -77,6 +77,17 @@ export async function POST(req: NextRequest) {
         const labelIds = full.data.labelIds || []
         const direction = fromAddress.includes(email) ? "outbound" : "inbound"
         const { category, priority } = triageEmail(subject, snippet)
+        const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
+        const inReplyTo = get("In-Reply-To") || null
+        let duplicateOfId: string | null = null
+        if (rfc822MessageId) {
+          const existing = await prisma.emailMessage.findFirst({
+            where: { rfc822MessageId, duplicateOfId: null },
+            select: { id: true },
+            orderBy: { createdAt: "asc" },
+          }).catch(() => null)
+          if (existing) duplicateOfId = existing.id
+        }
 
         await prisma.emailThread.upsert({
           where: { gmailThreadId: threadId },
@@ -89,6 +100,9 @@ export async function POST(req: NextRequest) {
             emailAccountId: account.id,
             threadId,
             gmailMessageId: msgId,
+            rfc822MessageId,
+            inReplyTo,
+            duplicateOfId,
             fromAddress,
             toAddresses,
             subject,

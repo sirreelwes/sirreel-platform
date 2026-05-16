@@ -10,6 +10,16 @@ const PAGE_SIZE = 12;
 // "Considered" = either captured (Inquiry created from this email) or
 // dismissed (placeholder Inquiry with status=DISMISSED). Both record the
 // email's id under sourceMetadata.emailMessageId.
+//
+// The response is segmented into two arrays:
+//   - newInquiries: emails that look like a fresh thread start (no In-Reply-To
+//     header OR the local thread has only one message). These get full visual
+//     weight in the UI.
+//   - followUps: subsequent messages on existing threads (have In-Reply-To
+//     AND the thread already had multiple messages). Grouped by threadId,
+//     keeping only the most recent inbound per thread. The UI muting them in
+//     a collapsed block so the sales team isn't drowning in client replies
+//     that aren't actually new leads.
 export async function GET() {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000);
 
@@ -19,14 +29,19 @@ export async function GET() {
         direction: 'inbound',
         category: { in: ['BOOKING_INQUIRY', 'RENTAL_REQUEST'] },
         sentAt: { gte: since },
+        // Cross-inbox dedup (Phase E): only the canonical row survives in
+        // this query. Older inboxes that picked up the same Message-Id are
+        // skipped because their duplicateOfId points at the survivor.
+        duplicateOfId: null,
       },
       // Take more than PAGE_SIZE since we'll post-filter (responded threads,
-      // dedup by thread). 100 is safe headroom for a 12-row UI.
+      // dedup by thread). 200 is safe headroom for two 12-row UI sections.
       orderBy: { sentAt: 'desc' },
-      take: 100,
+      take: 200,
       select: {
         id: true,
         threadId: true,
+        inReplyTo: true,
         fromAddress: true,
         subject: true,
         snippet: true,
@@ -35,7 +50,12 @@ export async function GET() {
         company: { select: { id: true, name: true } },
         person: { select: { id: true, firstName: true, lastName: true, email: true } },
         thread: {
-          select: { id: true, lastDirection: true, lastOutboundAt: true },
+          select: {
+            id: true,
+            lastDirection: true,
+            lastOutboundAt: true,
+            messageCount: true,
+          },
         },
       },
     }),
@@ -62,11 +82,18 @@ export async function GET() {
   const respondedTo = (e: typeof emails[number]) =>
     e.thread?.lastDirection === 'OUTBOUND';
 
-  // Dedup by threadId — only keep the most recent inbound per thread (the
-  // emails query is already ordered by sentAt DESC, so first-seen wins).
-  // Messages without a thread bypass dedup.
+  // First in thread = no In-Reply-To header OR the thread has only one message.
+  const isFirstInThread = (e: typeof emails[number]) => {
+    const noInReplyTo = !e.inReplyTo || e.inReplyTo.trim() === '';
+    const singletonThread = (e.thread?.messageCount ?? 0) <= 1;
+    return noInReplyTo || singletonThread;
+  };
+
+  // Per-thread dedup: only keep the most recent inbound per thread. emails is
+  // already ordered DESC by sentAt, so first-seen-per-thread wins. Messages
+  // without a thread bypass dedup (one row per email).
   const seenThreads = new Set<string>();
-  const dedup = (e: typeof emails[number]) => {
+  const dedupByThread = (e: typeof emails[number]) => {
     if (!e.threadId) return true;
     if (seenThreads.has(e.threadId)) return false;
     seenThreads.add(e.threadId);
@@ -74,10 +101,10 @@ export async function GET() {
   };
 
   const candidates = emails.filter(
-    (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedup(e),
+    (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedupByThread(e),
   );
 
-  const suggestions = candidates.slice(0, PAGE_SIZE).map((e) => ({
+  const toRecord = (e: typeof emails[number]) => ({
     emailId: e.id,
     fromAddress: e.fromAddress,
     subject: e.subject,
@@ -86,10 +113,17 @@ export async function GET() {
     category: e.category,
     company: e.company,
     person: e.person,
-  }));
+    threadMessageCount: e.thread?.messageCount ?? 1,
+  });
+
+  const newInquiries = candidates.filter(isFirstInThread).slice(0, PAGE_SIZE).map(toRecord);
+  const followUps = candidates.filter((e) => !isFirstInThread(e)).slice(0, PAGE_SIZE).map(toRecord);
 
   return NextResponse.json({
-    suggestions,
+    // Legacy field — keeps any existing callers happy. Mirrors newInquiries.
+    suggestions: newInquiries,
+    newInquiries,
+    followUps,
     totalCandidates: emails.length,
     consideredCount: consideredMap.size,
   });

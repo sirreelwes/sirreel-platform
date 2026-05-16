@@ -942,6 +942,22 @@ model EmailMessage {
   threadId       String? @map("thread_id")
   gmailMessageId String  @unique @map("gmail_message_id")
 
+  // RFC 822 Message-ID + In-Reply-To headers. Unlike gmailMessageId (which is
+  // per-inbox), the RFC 822 Message-ID is set by the sending mail server and
+  // is the same across every inbox that receives the message — so it's the
+  // key we dedup on when info@/jose@/oliver@/ana@ all get the same email.
+  // `inReplyTo` drives "first message in thread" detection on the Inquiries
+  // panel (a message with no In-Reply-To is a fresh thread start).
+  rfc822MessageId String? @map("rfc822_message_id")
+  inReplyTo       String? @map("in_reply_to")
+
+  // Cross-inbox dedup: when two EmailMessages share the same Message-ID, the
+  // oldest createdAt wins and the rest point here. `duplicateOfId IS NULL`
+  // is the canonical "this is the surviving copy" filter for queries.
+  duplicateOfId String?       @map("duplicate_of_id")
+  duplicateOf   EmailMessage? @relation("EmailDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    EmailMessage[] @relation("EmailDuplicates")
+
   // Matched to CRM
   companyId String? @map("company_id")
   personId  String? @map("person_id")
@@ -979,6 +995,8 @@ model EmailMessage {
   company      Company?     @relation(fields: [companyId], references: [id])
   person       Person?      @relation(fields: [personId], references: [id])
 
+  @@index([rfc822MessageId])
+  @@index([duplicateOfId])
   @@map("email_messages")
 }
 

@@ -75,6 +75,26 @@ async function syncInbox(email: string) {
     const gmailThreadId = full.data.threadId || msg.id
     const labelIds = full.data.labelIds || []
     const body = extractBodyFromGmailPayload(full.data.payload as GmailMessagePart | undefined)
+    // RFC 822 Message-Id / In-Reply-To. Message-Id is set by the sending MTA
+    // and shared across every inbox that receives the email — it's how we
+    // dedup the same message landing in info@/jose@/oliver@/ana@.
+    const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
+    const inReplyTo = get("In-Reply-To") || null
+
+    // Cross-inbox dedup. Look up any older copy with this Message-ID; if one
+    // exists, this row becomes a pointer to it. If we are the oldest, we stay
+    // canonical and older inbox copies (if any later) will point at us.
+    let duplicateOfId: string | null = null
+    if (rfc822MessageId) {
+      const existingCanonical = await prisma.emailMessage.findFirst({
+        where: { rfc822MessageId, duplicateOfId: null },
+        select: { id: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }).catch(() => null)
+      if (existingCanonical) {
+        duplicateOfId = existingCanonical.id
+      }
+    }
 
     // Direction is now classified by the central helper. Outbound
     // messages (from any sirreel agent) ARE persisted so the thread's
@@ -125,6 +145,9 @@ async function syncInbox(email: string) {
         emailAccountId: account.id,
         threadId: thread.id,
         gmailMessageId: msg.id,
+        rfc822MessageId,
+        inReplyTo,
+        duplicateOfId,
         fromAddress,
         toAddresses: [email],
         subject,
