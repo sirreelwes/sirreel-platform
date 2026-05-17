@@ -51,6 +51,23 @@ interface PortalData {
   } | null;
   team: { id: string; firstName: string; lastName: string; email: string; lastAccessedAt: string | null }[];
   activity: { at: string; kind: string; label: string }[];
+  paperwork: {
+    quotePdfUrl: string | null;
+    quotePdfGeneratedAt: string | null;
+    agreement: { status: string; documentType: string; signedAt: string | null; signerName: string | null; signedDocumentUrl?: string | null } | null;
+    coi: {
+      id: string;
+      fileUrl: string;
+      originalFilename: string;
+      humanDecision: string;
+      aiRiskLevel: string | null;
+      policyExpiryDate: string | null;
+      coverageVerified: boolean;
+      additionalInsured: boolean;
+      uploadedAt: string;
+    } | null;
+    legacyPaperworkPortalUrl: string | null;
+  };
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -124,6 +141,9 @@ export default function JobPortalPage() {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [coiFile, setCoiFile] = useState<File | null>(null);
+  const [coiUploading, setCoiUploading] = useState(false);
+  const [coiError, setCoiError] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +185,30 @@ export default function JobPortalPage() {
     // changes, which it doesn't within a session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const uploadCoi = async () => {
+    if (!coiFile) return;
+    setCoiUploading(true);
+    setCoiError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', coiFile);
+      const r = await fetch('/api/portal/job/coi', { method: 'POST', body: fd });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setCoiError(body.error || 'Upload failed');
+        return;
+      }
+      // Refresh the portal data so the COI section now shows received state.
+      setCoiFile(null);
+      const res = await fetch('/api/portal/job/data');
+      if (res.ok) setData(await res.json());
+    } catch {
+      setCoiError('Upload failed');
+    } finally {
+      setCoiUploading(false);
+    }
+  };
 
   const currentStage = useMemo(() => {
     if (!data) return 0;
@@ -275,6 +319,134 @@ export default function JobPortalPage() {
           </div>
           <div className="border-t border-gray-100 pt-3 text-[11px] text-gray-500">
             SirReel Studio Rentals · 8500 Lankershim Blvd, Sun Valley, CA 91352
+          </div>
+        </section>
+
+        {/* ── Paperwork ───────────────────────────────────────────────────── */}
+        <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900">Paperwork</h2>
+
+          {/* Your paperwork */}
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your paperwork</div>
+
+            <div className="space-y-3">
+              {/* Rental Agreement */}
+              <PaperworkRow
+                label="Rental Agreement"
+                status={agreementStatusLabel(data.paperwork.agreement)}
+                statusKind={agreementStatusKind(data.paperwork.agreement)}
+              >
+                {data.paperwork.agreement?.signedAt ? (
+                  data.paperwork.agreement.signedDocumentUrl ? (
+                    <a
+                      href={data.paperwork.agreement.signedDocumentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                    >
+                      Download signed copy
+                    </a>
+                  ) : null
+                ) : data.paperwork.legacyPaperworkPortalUrl ? (
+                  <a
+                    href={data.paperwork.legacyPaperworkPortalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                  >
+                    Sign agreement →
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-500">Your SirReel rep will send the agreement shortly.</span>
+                )}
+              </PaperworkRow>
+
+              {/* COI */}
+              <PaperworkRow
+                label="Certificate of Insurance"
+                status={coiStatusLabel(data.paperwork.coi)}
+                statusKind={coiStatusKind(data.paperwork.coi)}
+              >
+                {data.paperwork.coi ? (
+                  <div className="text-xs text-gray-500">
+                    Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {data.paperwork.coi.policyExpiryDate && (
+                      <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="portal-coi-file"
+                      className={`block border-2 border-dashed rounded-xl p-4 text-center cursor-pointer ${
+                        coiFile ? 'border-amber-300 bg-amber-50' : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                      }`}
+                    >
+                      {coiFile ? (
+                        <>
+                          <div className="text-xl">📄</div>
+                          <div className="text-xs font-semibold text-amber-700">{coiFile.name}</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{(coiFile.size / 1024).toFixed(0)} KB</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xl">📤</div>
+                          <div className="text-xs text-gray-500">Click to upload your COI</div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">PDF, PNG, or JPG · max 10 MB</div>
+                        </>
+                      )}
+                      <input
+                        id="portal-coi-file"
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => setCoiFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                    {coiError && <div className="text-[11px] text-red-600">{coiError}</div>}
+                    <button
+                      onClick={uploadCoi}
+                      disabled={!coiFile || coiUploading}
+                      className="w-full py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-xl"
+                    >
+                      {coiUploading ? 'Uploading & reviewing…' : 'Submit COI'}
+                    </button>
+                  </div>
+                )}
+              </PaperworkRow>
+            </div>
+          </div>
+
+          {/* SirReel paperwork */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">SirReel paperwork</div>
+            <div className="space-y-3">
+              <PaperworkRow
+                label="Quote PDF"
+                status={data.paperwork.quotePdfUrl ? 'Available' : 'Pending'}
+                statusKind={data.paperwork.quotePdfUrl ? 'success' : 'pending'}
+              >
+                {data.paperwork.quotePdfUrl ? (
+                  <a
+                    href={data.paperwork.quotePdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                  >
+                    Download quote PDF
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-500">Your SirReel rep is finalizing the quote.</span>
+                )}
+              </PaperworkRow>
+              <PaperworkRow label="Order PDF" status="Coming soon" statusKind="pending">
+                <span className="text-xs text-gray-500">Available once your order is confirmed.</span>
+              </PaperworkRow>
+              <PaperworkRow label="Invoice" status="Coming soon" statusKind="pending">
+                <span className="text-xs text-gray-500">Issued 24–48 hours after equipment return.</span>
+              </PaperworkRow>
+            </div>
           </div>
         </section>
 
@@ -400,6 +572,66 @@ export default function JobPortalPage() {
       </main>
     </div>
   );
+}
+
+type PaperworkStatusKind = 'success' | 'pending' | 'warning' | 'failed';
+
+function PaperworkRow({
+  label,
+  status,
+  statusKind,
+  children,
+}: {
+  label: string;
+  status: string;
+  statusKind: PaperworkStatusKind;
+  children?: React.ReactNode;
+}) {
+  const pill: Record<PaperworkStatusKind, string> = {
+    success: 'bg-emerald-100 text-emerald-700',
+    pending: 'bg-gray-100 text-gray-600',
+    warning: 'bg-amber-100 text-amber-700',
+    failed: 'bg-red-100 text-red-700',
+  };
+  return (
+    <div className="rounded-xl border border-gray-100 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-gray-900">{label}</div>
+        <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${pill[statusKind]}`}>
+          {status}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function agreementStatusLabel(a: PortalData['paperwork']['agreement']): string {
+  if (!a) return 'Pending';
+  if (a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED') return 'Signed';
+  if (a.status === 'NEGOTIATED_READY') return 'Ready to sign';
+  if (a.status === 'REDLINE_UPLOADED' || a.status === 'UNDER_REVIEW') return 'Reviewing';
+  if (a.status === 'DOWNLOAD_SENT') return 'Downloaded';
+  return 'Sent';
+}
+function agreementStatusKind(a: PortalData['paperwork']['agreement']): PaperworkStatusKind {
+  if (!a) return 'pending';
+  if (a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED') return 'success';
+  if (a.status === 'NEGOTIATED_READY') return 'warning';
+  return 'pending';
+}
+function coiStatusLabel(c: PortalData['paperwork']['coi']): string {
+  if (!c) return 'Pending';
+  if (c.humanDecision === 'APPROVED') return 'Approved';
+  if (c.humanDecision === 'REJECTED') return 'Rejected';
+  if (c.coverageVerified) return 'Received';
+  return 'Reviewing';
+}
+function coiStatusKind(c: PortalData['paperwork']['coi']): PaperworkStatusKind {
+  if (!c) return 'pending';
+  if (c.humanDecision === 'APPROVED' || c.coverageVerified) return 'success';
+  if (c.humanDecision === 'REJECTED') return 'failed';
+  return 'warning';
 }
 
 function ContactRow({

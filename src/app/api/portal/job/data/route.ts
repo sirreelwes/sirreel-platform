@@ -55,6 +55,10 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         sentAt: true,
         total: true,
+        quotePdfUrl: true,
+        quotePdfGeneratedAt: true,
+        bookingId: true,
+        jobId: true,
         company: { select: { id: true, name: true } },
         job: { select: { id: true, name: true, jobCode: true, productionType: true } },
         agent: {
@@ -101,6 +105,37 @@ export async function GET(req: NextRequest) {
   if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
+
+  // Paperwork status — pulled in parallel where it doesn't depend on `order`.
+  // The legacy paperwork-portal magic link (per booking) is included so the
+  // page can deep-link the client to the existing rental-agreement signing
+  // flow from the May 2026 paperwork portal work.
+  const [latestCoi, paperworkPortal] = await Promise.all([
+    order.jobId
+      ? prisma.coiCheck.findFirst({
+          where: { jobId: order.jobId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            fileUrl: true,
+            originalFilename: true,
+            humanDecision: true,
+            aiRiskLevel: true,
+            policyExpiryDate: true,
+            coverageVerified: true,
+            additionalInsured: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve(null),
+    order.bookingId
+      ? prisma.paperworkRequest.findFirst({
+          where: { bookingId: order.bookingId },
+          orderBy: { sentAt: 'desc' },
+          select: { token: true },
+        })
+      : Promise.resolve(null),
+  ])
 
   // Activity feed — synthesised from order milestones + portal access events.
   // No dedicated history table yet; this is good enough for the brief's
@@ -167,6 +202,27 @@ export async function GET(req: NextRequest) {
       inventoryCode: li.inventoryItem?.code || null,
       categoryName: li.assetCategory?.name || null,
     })),
+    paperwork: {
+      quotePdfUrl: order.quotePdfUrl,
+      quotePdfGeneratedAt: order.quotePdfGeneratedAt,
+      agreement: order.signedAgreement,
+      coi: latestCoi
+        ? {
+            id: latestCoi.id,
+            fileUrl: latestCoi.fileUrl,
+            originalFilename: latestCoi.originalFilename,
+            humanDecision: latestCoi.humanDecision,
+            aiRiskLevel: latestCoi.aiRiskLevel,
+            policyExpiryDate: latestCoi.policyExpiryDate,
+            coverageVerified: latestCoi.coverageVerified,
+            additionalInsured: latestCoi.additionalInsured,
+            uploadedAt: latestCoi.createdAt,
+          }
+        : null,
+      legacyPaperworkPortalUrl: paperworkPortal
+        ? `https://hq.sirreel.com/portal/${paperworkPortal.token}`
+        : null,
+    },
     agreement: order.signedAgreement,
     team: otherAccesses
       .filter((a) => a.contactId !== resolved.contactId && a.contact)
