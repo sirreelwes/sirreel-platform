@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
+import { transitionCadenceState, rebaselineCadenceForOrder } from "@/lib/cadence/scheduler";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -79,6 +80,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if ((data as { quoteStatus?: unknown }).quoteStatus === 'SENT') {
       await ensureSignedAgreementForOrder(id);
+      // CRH Phase 2.2: kick off the SILENT cadence ladder when a quote goes
+      // out. transitionCadenceState is idempotent — clearing-and-rescheduling
+      // means repeated saves of the same SENT status don't duplicate events.
+      try {
+        await transitionCadenceState(id, 'QUOTE_SENT');
+      } catch (err) {
+        console.error('[orders/PUT] cadence schedule failed:', err);
+      }
+    }
+
+    // If pickup/return dates moved, re-baseline the cadence so all future
+    // unfired events use the new timing. Per CRH brief §13.
+    if (startDate !== undefined || endDate !== undefined) {
+      try {
+        await rebaselineCadenceForOrder(id);
+      } catch (err) {
+        console.error('[orders/PUT] cadence rebaseline failed:', err);
+      }
     }
 
     return NextResponse.json(order);

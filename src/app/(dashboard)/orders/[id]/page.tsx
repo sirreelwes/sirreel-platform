@@ -125,6 +125,13 @@ export default function OrderDetailPage() {
   const [agreementBusy, setAgreementBusy] = useState(false);
   const [agreementMsg, setAgreementMsg] = useState<string>("");
 
+  type CadenceSummary = {
+    order: { cadenceState: string; cadenceManualOverride: boolean; cadencePausedUntil: string | null };
+    events: { id: string; eventType: string; scheduledFor: string; executedAt: string | null; skipped: boolean; skipReason: string | null }[];
+  };
+  const [cadence, setCadence] = useState<CadenceSummary | null>(null);
+  const [cadenceBusy, setCadenceBusy] = useState(false);
+
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
 
@@ -157,6 +164,45 @@ export default function OrderDetailPage() {
   useEffect(() => {
     fetchAgreement();
   }, [fetchAgreement]);
+
+  const fetchCadence = useCallback(async () => {
+    const res = await fetch(`/api/orders/${orderId}/cadence`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setCadence(data);
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchCadence();
+  }, [fetchCadence]);
+
+  const toggleCadenceOverride = async (next: boolean) => {
+    setCadenceBusy(true);
+    try {
+      await fetch(`/api/orders/${orderId}/cadence`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manualOverride: next }),
+      });
+      await fetchCadence();
+    } finally {
+      setCadenceBusy(false);
+    }
+  };
+
+  const clearCadencePause = async () => {
+    setCadenceBusy(true);
+    try {
+      await fetch(`/api/orders/${orderId}/cadence`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cadencePausedUntil: null }),
+      });
+      await fetchCadence();
+    } finally {
+      setCadenceBusy(false);
+    }
+  };
 
   const overrideAgreementStatus = async (next: string) => {
     if (!confirm(`Override agreement status to ${next.replace(/_/g, " ")}?`)) return;
@@ -430,6 +476,77 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Cadence (CRH) */}
+      {cadence && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Email cadence</h2>
+              <div className="text-xs text-zinc-500 mt-0.5">
+                State: <span className="text-white font-mono">{cadence.order.cadenceState}</span>
+                {cadence.order.cadencePausedUntil && (
+                  <>
+                    {" · "}
+                    paused until {new Date(cadence.order.cadencePausedUntil).toLocaleString()}
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {cadence.order.cadencePausedUntil && (
+                <button
+                  onClick={clearCadencePause}
+                  disabled={cadenceBusy}
+                  className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+                >
+                  Clear pause
+                </button>
+              )}
+              <button
+                onClick={() => toggleCadenceOverride(!cadence.order.cadenceManualOverride)}
+                disabled={cadenceBusy}
+                className={`px-3 py-1.5 disabled:opacity-50 text-white text-sm font-semibold rounded-lg ${
+                  cadence.order.cadenceManualOverride
+                    ? 'bg-amber-600 hover:bg-amber-500'
+                    : 'bg-zinc-700 hover:bg-zinc-600'
+                }`}
+              >
+                {cadence.order.cadenceManualOverride ? 'Resume auto-cadence' : 'Pause auto-cadence'}
+              </button>
+            </div>
+          </div>
+          {cadence.events.length > 0 && (
+            <div className="border-t border-zinc-800 pt-3">
+              <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">
+                Scheduled events ({cadence.events.length})
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {cadence.events.map((e) => {
+                  const status = e.executedAt
+                    ? e.skipped
+                      ? `skipped${e.skipReason ? ` · ${e.skipReason}` : ''}`
+                      : 'sent'
+                    : 'pending';
+                  return (
+                    <div key={e.id} className="text-xs font-mono flex items-center justify-between gap-2 text-zinc-400">
+                      <span className="truncate">{e.eventType}</span>
+                      <span className="text-zinc-600">{new Date(e.scheduledFor).toLocaleString()}</span>
+                      <span
+                        className={`flex-shrink-0 ${
+                          status === 'sent' ? 'text-emerald-400' : status === 'pending' ? 'text-amber-400' : 'text-zinc-500'
+                        }`}
+                      >
+                        {status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Signed Agreement */}
       {agreement && (

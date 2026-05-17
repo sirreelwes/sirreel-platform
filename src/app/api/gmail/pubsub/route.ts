@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getMessageDirection } from "@/lib/email/direction"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { classifyReply } from "@/lib/email/replyClassifier"
+import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -186,13 +187,23 @@ async function syncInbox(email: string) {
           subject,
           bodyText: body.bodyText,
         })
-        await prisma.emailMessage.update({
+        const updated = await prisma.emailMessage.update({
           where: { id: createdMessage.id },
           data: {
             replyClassification: result.classification,
             replyClassificationConfidence: result.confidence,
           },
+          select: { companyId: true },
         })
+        // Bridge classification → cadence state transition on a single open
+        // quote order for this company. Multi-order companies skip auto-
+        // transition until thread→order linking is in place.
+        await applyReplyClassificationToCadence({
+          emailMessageId: createdMessage.id,
+          classification: result.classification,
+          effectiveClassification: result.effectiveClassification,
+          companyId: updated.companyId,
+        }).catch((err) => console.warn('[pubsub] applyReplyClassification failed:', err))
       } catch (err) {
         console.warn('[pubsub] reply classification failed:', err)
       }
