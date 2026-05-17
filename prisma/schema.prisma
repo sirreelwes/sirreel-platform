@@ -180,6 +180,40 @@ model Company {
   billingAddress String? @map("billing_address") @db.Text
   notes          String? @db.Text
 
+  // ── CRH: Company-level paperwork (institutional memory) ────────────────
+  // Annual MSA (Master Services Agreement). When `annualAgreementApprovedAt`
+  // is set AND `annualAgreementExpiresAt` is still in the future, new jobs
+  // for this company skip the per-job agreement signing flow.
+  annualAgreementUrl           String?   @map("annual_agreement_url")
+  annualAgreementEffectiveDate DateTime? @map("annual_agreement_effective_date")
+  annualAgreementExpiresAt     DateTime? @map("annual_agreement_expires_at")
+  annualAgreementSignedBy      String?   @map("annual_agreement_signed_by")
+  annualAgreementApprovedBy    String?   @map("annual_agreement_approved_by")
+  annualAgreementApprovedAt    DateTime? @map("annual_agreement_approved_at")
+
+  // Annual COI (Certificate of Insurance). Parallel structure to the MSA;
+  // additionally stores the coverage limits so the CRH job-creation flow
+  // can validate per-job requirements against the annual policy.
+  annualCoiUrl                 String?   @map("annual_coi_url")
+  annualCoiEffectiveDate       DateTime? @map("annual_coi_effective_date")
+  annualCoiExpiresAt           DateTime? @map("annual_coi_expires_at")
+  annualCoiCoverageGL          Decimal?  @map("annual_coi_coverage_gl") @db.Decimal(14, 2)
+  annualCoiCoverageAuto        Decimal?  @map("annual_coi_coverage_auto") @db.Decimal(14, 2)
+  annualCoiApprovedBy          String?   @map("annual_coi_approved_by")
+  annualCoiApprovedAt          DateTime? @map("annual_coi_approved_at")
+
+  // Negotiated terms. When set, future Quote/Job flows render a banner and
+  // use this PDF as the baseline (not the standard SirReel template). The
+  // `summary` is the plain-English diff future-Wes reads to remember WHAT
+  // was negotiated, not just THAT it was.
+  negotiatedTermsUrl           String?   @map("negotiated_terms_url")
+  negotiatedTermsSummary       String?   @map("negotiated_terms_summary") @db.Text
+  negotiatedTermsNegotiatedAt  DateTime? @map("negotiated_terms_negotiated_at")
+  negotiatedTermsApprovedBy    String?   @map("negotiated_terms_approved_by")
+  negotiatedTermsApprovedAt    DateTime? @map("negotiated_terms_approved_at")
+  negotiatedTermsActiveAsOf    DateTime? @map("negotiated_terms_active_as_of")
+  negotiatedTermsReviewDueDate DateTime? @map("negotiated_terms_review_due_date")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -254,6 +288,7 @@ model Person {
   jobContacts      JobContact[]
   orderContacts    Order[]        @relation("OrderJobContact")
   inquiries        Inquiry[]      @relation("InquiryContact")
+  portalAccesses   PortalAccess[] @relation("PortalAccessContact")
 
   @@map("people")
 }
@@ -958,6 +993,13 @@ model EmailMessage {
   duplicateOf   EmailMessage? @relation("EmailDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates    EmailMessage[] @relation("EmailDuplicates")
 
+  // CRH reply classification — output of the AI reply classifier (extends
+  // the existing inbound-email classifier). Drives cadence state transitions
+  // when a client replies to a quote. Confidence < 0.75 must NEVER trigger
+  // an auto-transition; the cadence runner pauses and notifies the rep.
+  replyClassification           ReplyClassification? @map("reply_classification")
+  replyClassificationConfidence Float?               @map("reply_classification_confidence")
+
   // Matched to CRM
   companyId String? @map("company_id")
   personId  String? @map("person_id")
@@ -1393,9 +1435,40 @@ model Order {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  // Free-text reason populated when an agent reclassifies a quote as LOST
-  // (e.g. "Other vendor", "Budget", "No response", "Timing").
-  lostReason String? @map("lost_reason")
+  // Locked enum reason populated when an Order transitions to LOST. The column
+  // was previously free-text but had zero rows in production at the time of
+  // the CRH cutover, so it was switched to a typed enum to drive lost-quote
+  // reporting and re-engagement cadence eligibility.
+  lostReason LostReason? @map("lost_reason")
+
+  // Client Relationship Hub (CRH) cadence state. `cadenceState` mirrors
+  // Order.status but at a finer grain — it tracks where the order sits in
+  // the email cadence ladder (quote silence, acknowledged, discussing,
+  // booked, in-progress, ...). The cron-driven CadenceEventRunner advances
+  // it and emits emails based on the state machine in the CRH brief.
+  cadenceState           CadenceState @default(QUOTE_DRAFT) @map("cadence_state")
+  cadencePausedUntil     DateTime?    @map("cadence_paused_until")
+  cadenceManualOverride  Boolean      @default(false) @map("cadence_manual_override")
+
+  // Captures the pickup date as it stood when the order was marked LOST.
+  // Useful for re-engagement reporting (how close to pickup did we lose them).
+  pickupDateAtLoss       DateTime?    @map("pickup_date_at_loss")
+
+  // Re-engagement (post-LOST) touchpoint tracking. Set by the
+  // LOST_REENGAGEMENT_2W cadence event when it fires; flipped to true when
+  // the client responds (any inbound reply detected by Gmail integration).
+  reengagementSentAt     DateTime?    @map("reengagement_sent_at")
+  reengagementResponded  Boolean      @default(false) @map("reengagement_responded")
+
+  // Client-facing portal URL slug. Declared nullable because `prisma db push`
+  // cannot add a non-null TEXT column to existing rows without a SQL default
+  // (Prisma's @default(uuid()) runs client-side). New rows always get a slug
+  // via the @default(uuid()); a one-time backfill populates pre-existing rows.
+  // Once every row has a value, the application layer can treat this as
+  // effectively non-null.
+  portalSlug             String?      @unique @default(uuid()) @map("portal_slug")
+  portalCreatedAt        DateTime     @default(now()) @map("portal_created_at")
+  portalSunsetAt         DateTime?    @map("portal_sunset_at")
 
   // Client-facing Quote PDF (mirrors the contract review counter-PDF
   // pattern: blob key + url + timestamp, replace-on-regenerate). PDF is
@@ -1419,9 +1492,12 @@ model Order {
   jobContact Person? @relation("OrderJobContact", fields: [jobContactId], references: [id])
 
   signedAgreement SignedAgreement?
+  cadenceEvents   CadenceEvent[]
+  portalAccesses  PortalAccess[]
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
+  @@index([cadenceState])
   @@map("sr_orders")
 }
 
@@ -2047,4 +2123,130 @@ model CoiCheck {
   @@index([humanDecision])
   @@index([policyExpiryDate])
   @@map("sr_coi_checks")
+}
+
+// ============================================================
+// CLIENT RELATIONSHIP HUB (CRH) — May 2026
+// Cadence engine, portal access, company-level paperwork, and AI
+// reply classification. See docs/specs/client-relationship-hub-brief.md
+// for the full spec.
+// ============================================================
+
+enum CadenceState {
+  QUOTE_DRAFT
+  QUOTE_SENT
+  QUOTE_ACKNOWLEDGED
+  QUOTE_DISCUSSING
+  BOOKED
+  PICKUP_CONFIRMED
+  IN_PROGRESS
+  RETURNED
+  INVOICED
+  PAID
+  WRAPPED
+  LOST
+  CANCELLED
+}
+
+enum LostReason {
+  NO_RESPONSE
+  ACKNOWLEDGED_NO_BOOK
+  EXPLICIT_REJECTION
+  MANUAL_CLOSE
+}
+
+enum ReplyClassification {
+  PURE_ACKNOWLEDGMENT
+  ACTIVE_DISCUSSION
+  BOOKING_SIGNAL
+  EXPLICIT_REJECTION
+  UNCLEAR
+}
+
+enum CadenceEventType {
+  // Unbooked cadence
+  QUOTE_NUDGE_24H
+  QUOTE_CHECKIN_T72
+  QUOTE_CLOSEDOWN_T24
+  QUOTE_LOST_MARK
+
+  // Acknowledged-state cadence
+  ACK_QUESTIONS_PROMPT_24H
+  ACK_SWEETEN_T72
+  ACK_CLOSEDOWN_T24
+
+  // Booked cadence
+  BOOKING_WELCOME
+  COI_RECEIVED_ACK
+  PRE_PICKUP_DETAILS_T48
+  FINAL_CONFIRM_T24
+  PICKUP_DAY_AM
+  MID_RENTAL_CHECKIN
+  RETURN_REMINDER_T24
+  RETURN_ACKNOWLEDGMENT
+  WRAP_THANKS_T24
+  INVOICE_DELIVERY
+  PAYMENT_REMINDER_T14
+  REPEAT_BUSINESS_T30
+
+  // Re-engagement
+  LOST_REENGAGEMENT_2W
+  LOST_SOFT_CHECKIN_90D
+
+  // Annual paperwork
+  ANNUAL_EXPIRY_60D
+  ANNUAL_EXPIRY_30D
+  ANNUAL_EXPIRY_7D
+
+  // Portal lifecycle
+  PORTAL_SUNSET_REMINDER_23M
+}
+
+/// Tracks every automated and manual touchpoint for reporting and debugging.
+/// Created by state-transition hooks; consumed by /api/cron/cadence which
+/// fires due events (scheduledFor <= now AND executedAt IS NULL).
+model CadenceEvent {
+  id           String           @id @default(uuid())
+  orderId      String           @map("order_id")
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType    CadenceEventType @map("event_type")
+  scheduledFor DateTime         @map("scheduled_for")
+  executedAt   DateTime?        @map("executed_at")
+  skipped      Boolean          @default(false)
+  skipReason   String?          @map("skip_reason")
+  // Pointer to the EmailMessage row that resulted from this event (when the
+  // event was an email send). Kept as a free String rather than a relation so
+  // the email row can be hard-deleted without cascading into cadence history.
+  emailId      String?          @map("email_id")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([scheduledFor, executedAt])
+  @@map("sr_cadence_events")
+}
+
+/// Per-contact portal access record. `contactId` references Person — there is
+/// no separate Contact model in this schema; the CRH brief's `Contact` maps
+/// 1:1 to `Person` for SirReel.
+model PortalAccess {
+  id                 String    @id @default(uuid())
+  orderId            String    @map("order_id")
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  contactId          String    @map("contact_id")
+  contact            Person    @relation("PortalAccessContact", fields: [contactId], references: [id])
+  magicLinkToken     String    @unique @map("magic_link_token")
+  magicLinkExpiresAt DateTime  @map("magic_link_expires_at")
+  // Optional password (hashed, never plain) for persistent login after magic
+  // link expires. Bcrypt/argon2 — see CRH brief §13 portal security.
+  passwordHash       String?   @map("password_hash")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  revokedAt          DateTime? @map("revoked_at")
+  revokedBy          String?   @map("revoked_by")
+  lastAccessedAt    DateTime?  @map("last_accessed_at")
+  accessCount        Int       @default(0) @map("access_count")
+
+  @@index([orderId])
+  @@index([contactId])
+  @@index([magicLinkToken])
+  @@map("sr_portal_accesses")
 }
