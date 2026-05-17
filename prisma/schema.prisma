@@ -104,7 +104,21 @@ model Asset {
   // Valuation (for insurance claims)
   purchasePrice      Decimal? @map("purchase_price") @db.Decimal(12, 2)
   currentValue       Decimal? @map("current_value") @db.Decimal(12, 2)
+  // CRH §6.2 — INTERNAL ONLY. Never surface in any client-facing endpoint.
+  // The portal data endpoint's Prisma select clause is the audit checkpoint;
+  // any new selector that touches `assets` must explicitly exclude these.
   insurancePolicyNum String?  @map("insurance_policy_num") @db.VarChar(50)
+  insuranceCardUrl   String?  @map("insurance_card_url")
+
+  // CRH DOT packet (client-facing). Registration + BIT certificate live on
+  // the Asset because that's our existing Vehicle equivalent in this
+  // schema. Each has an expiry the daily cron uses to alert fleet (Julian
+  // + Chris) at 30 days out, and a soft-block guard on job assignment when
+  // the rental return date falls after the doc expires.
+  registrationUrl         String?   @map("registration_url")
+  registrationExpiresAt   DateTime? @map("registration_expires_at") @db.Date
+  bitCertificateUrl       String?   @map("bit_certificate_url")
+  bitCertificateExpiresAt DateTime? @map("bit_certificate_expires_at") @db.Date
 
   // Integration IDs
   rentalworksAssetId String? @map("rentalworks_asset_id")

@@ -110,7 +110,13 @@ export async function GET(req: NextRequest) {
   // The legacy paperwork-portal magic link (per booking) is included so the
   // page can deep-link the client to the existing rental-agreement signing
   // flow from the May 2026 paperwork portal work.
-  const [latestCoi, paperworkPortal] = await Promise.all([
+  //
+  // Per-vehicle DOT paperwork comes off the order's booking via
+  // BookingAssignment → Asset. We deliberately ONLY select the four DOT
+  // fields + display fields here; insuranceCardUrl, insurancePolicyNum,
+  // and any other Asset internals are not in this select clause. This is
+  // the audit checkpoint for CRH brief §7 "What is NEVER surfaced".
+  const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
     order.jobId
       ? prisma.coiCheck.findFirst({
           where: { jobId: order.jobId, deletedAt: null },
@@ -135,6 +141,38 @@ export async function GET(req: NextRequest) {
           select: { token: true },
         })
       : Promise.resolve(null),
+    order.bookingId
+      ? prisma.bookingAssignment.findMany({
+          where: {
+            status: { in: ['ASSIGNED', 'CHECKED_OUT', 'RETURNED'] },
+            bookingItem: { bookingId: order.bookingId },
+            asset: { category: { slug: { contains: 'vehicle' } } },
+          },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            asset: {
+              // AUDIT CHECKPOINT — fields below are the entire client-visible
+              // surface for an Asset. Do NOT add insuranceCardUrl,
+              // insurancePolicyNum, mileage, currentValue, or anything from
+              // the internal-only set called out in CRH brief §7.
+              select: {
+                id: true,
+                unitName: true,
+                year: true,
+                make: true,
+                model: true,
+                licensePlate: true,
+                registrationUrl: true,
+                registrationExpiresAt: true,
+                bitCertificateUrl: true,
+                bitCertificateExpiresAt: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ])
 
   // Activity feed — synthesised from order milestones + portal access events.
@@ -222,6 +260,27 @@ export async function GET(req: NextRequest) {
       legacyPaperworkPortalUrl: paperworkPortal
         ? `https://hq.sirreel.com/portal/${paperworkPortal.token}`
         : null,
+      // Vehicles assigned to this order via the booking. Each entry carries
+      // make/model/plate + registration + BIT links/expiries. Internal-only
+      // fields are not in the source select.
+      vehicles: vehicleAssignments.map((va) => {
+        const titleParts = [va.asset.year ? String(va.asset.year) : '', va.asset.make || '', va.asset.model || '']
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+        return {
+          assetId: va.asset.id,
+          unitName: va.asset.unitName,
+          title: titleParts || va.asset.unitName,
+          licensePlate: va.asset.licensePlate,
+          assignmentStartDate: va.startDate,
+          assignmentEndDate: va.endDate,
+          registrationUrl: va.asset.registrationUrl,
+          registrationExpiresAt: va.asset.registrationExpiresAt,
+          bitCertificateUrl: va.asset.bitCertificateUrl,
+          bitCertificateExpiresAt: va.asset.bitCertificateExpiresAt,
+        }
+      }),
     },
     agreement: order.signedAgreement,
     team: otherAccesses

@@ -67,6 +67,16 @@ interface PortalData {
       uploadedAt: string;
     } | null;
     legacyPaperworkPortalUrl: string | null;
+    vehicles: {
+      assetId: string;
+      unitName: string;
+      title: string;
+      licensePlate: string | null;
+      registrationUrl: string | null;
+      registrationExpiresAt: string | null;
+      bitCertificateUrl: string | null;
+      bitCertificateExpiresAt: string | null;
+    }[];
   };
 }
 
@@ -448,6 +458,21 @@ export default function JobPortalPage() {
               </PaperworkRow>
             </div>
           </div>
+
+          {/* Vehicle DOT paperwork — per CRH brief §7. Insurance card is NEVER */}
+          {/* surfaced here; the data endpoint's select clause is the audit gate. */}
+          {data.paperwork.vehicles.length > 0 && (
+            <div className="border-t border-gray-100 pt-5">
+              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">
+                Vehicle paperwork (for the cab)
+              </div>
+              <div className="space-y-3">
+                {data.paperwork.vehicles.map((v) => (
+                  <VehiclePaperworkRow key={v.assetId} vehicle={v} />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ── Equipment ───────────────────────────────────────────────────── */}
@@ -632,6 +657,79 @@ function coiStatusKind(c: PortalData['paperwork']['coi']): PaperworkStatusKind {
   if (c.humanDecision === 'APPROVED' || c.coverageVerified) return 'success';
   if (c.humanDecision === 'REJECTED') return 'failed';
   return 'warning';
+}
+
+function VehiclePaperworkRow({ vehicle }: { vehicle: PortalData['paperwork']['vehicles'][number] }) {
+  const regExpiry = vehicle.registrationExpiresAt ? new Date(vehicle.registrationExpiresAt) : null;
+  const bitExpiry = vehicle.bitCertificateExpiresAt ? new Date(vehicle.bitCertificateExpiresAt) : null;
+  const now = Date.now();
+  const expiringSoon = (d: Date | null) => !!d && d.getTime() - now < 30 * 86_400_000 && d.getTime() > now;
+  const expired = (d: Date | null) => !!d && d.getTime() <= now;
+  return (
+    <div className="rounded-xl border border-gray-100 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-semibold text-gray-900">{vehicle.title}</div>
+        {vehicle.licensePlate && (
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+            {vehicle.licensePlate}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <DocLink
+          label="Registration"
+          url={vehicle.registrationUrl}
+          expiry={regExpiry}
+          expiringSoon={expiringSoon(regExpiry)}
+          expired={expired(regExpiry)}
+        />
+        <DocLink
+          label="BIT certificate"
+          url={vehicle.bitCertificateUrl}
+          expiry={bitExpiry}
+          expiringSoon={expiringSoon(bitExpiry)}
+          expired={expired(bitExpiry)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DocLink({
+  label,
+  url,
+  expiry,
+  expiringSoon,
+  expired,
+}: {
+  label: string;
+  url: string | null;
+  expiry: Date | null;
+  expiringSoon: boolean;
+  expired: boolean;
+}) {
+  return (
+    <div className="text-xs">
+      <div className="text-gray-500 uppercase tracking-wider text-[10px] font-semibold">{label}</div>
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" className="text-amber-700 hover:text-amber-900 font-semibold">
+          Download
+        </a>
+      ) : (
+        <span className="text-gray-400">Not yet on file</span>
+      )}
+      {expiry && (
+        <div
+          className={`text-[10px] mt-0.5 ${
+            expired ? 'text-red-600 font-semibold' : expiringSoon ? 'text-amber-700 font-semibold' : 'text-gray-400'
+          }`}
+        >
+          {expired ? 'Expired ' : 'Expires '}
+          {expiry.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ContactRow({
