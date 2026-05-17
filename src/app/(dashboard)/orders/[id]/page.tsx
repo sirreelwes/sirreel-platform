@@ -132,6 +132,30 @@ export default function OrderDetailPage() {
   const [cadence, setCadence] = useState<CadenceSummary | null>(null);
   const [cadenceBusy, setCadenceBusy] = useState(false);
 
+  type PortalAccessRow = {
+    id: string;
+    contact: { id: string; firstName: string; lastName: string; email: string } | null;
+    magicLinkExpiresAt: string;
+    revokedAt: string | null;
+    lastAccessedAt: string | null;
+    accessCount: number;
+    createdAt: string;
+  };
+  type DetectedContact = {
+    email: string;
+    displayName: string;
+    person: { id: string; firstName: string; lastName: string } | null;
+    mostRecentSubject: string;
+    mostRecentAt: string;
+  };
+  const [accesses, setAccesses] = useState<PortalAccessRow[] | null>(null);
+  const [detected, setDetected] = useState<DetectedContact[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFirst, setInviteFirst] = useState('');
+  const [inviteLast, setInviteLast] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<string>('');
+
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
 
@@ -175,6 +199,85 @@ export default function OrderDetailPage() {
   useEffect(() => {
     fetchCadence();
   }, [fetchCadence]);
+
+  const fetchPortalAccess = useCallback(async () => {
+    const [listRes, detRes] = await Promise.all([
+      fetch(`/api/orders/${orderId}/portal-access`),
+      fetch(`/api/orders/${orderId}/portal-access/detected`),
+    ]);
+    if (listRes.ok) {
+      const data = await listRes.json();
+      setAccesses(data.accesses || []);
+    } else {
+      setAccesses([]);
+    }
+    if (detRes.ok) {
+      const data = await detRes.json();
+      setDetected(data.detected || []);
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchPortalAccess();
+  }, [fetchPortalAccess]);
+
+  const directInvite = async (e?: { email: string; firstName?: string; lastName?: string }) => {
+    const email = e?.email ?? inviteEmail.trim();
+    if (!email) return;
+    setInviteBusy(true);
+    setInviteMsg('');
+    try {
+      const r = await fetch(`/api/orders/${orderId}/portal-access/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          firstName: (e?.firstName ?? inviteFirst.trim()) || undefined,
+          lastName: (e?.lastName ?? inviteLast.trim()) || undefined,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setInviteMsg(data.error || 'Invite failed');
+        return;
+      }
+      setInviteMsg(
+        data.emailResult?.ok
+          ? `Invite sent to ${email}.`
+          : `Invite created but email failed: ${data.emailResult?.reason || 'unknown'} · URL: ${data.portalUrl}`,
+      );
+      setInviteEmail('');
+      setInviteFirst('');
+      setInviteLast('');
+      await fetchPortalAccess();
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const revokeAccess = async (portalAccessId: string) => {
+    if (!confirm('Revoke this portal access?')) return;
+    await fetch(`/api/orders/${orderId}/portal-access`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalAccessId }),
+    });
+    await fetchPortalAccess();
+  };
+
+  const regenerateAccess = async (contactId: string) => {
+    const r = await fetch(`/api/orders/${orderId}/portal-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactId, regenerate: true }),
+    });
+    const data = await r.json();
+    await fetchPortalAccess();
+    if (data?.portalUrl) {
+      navigator.clipboard?.writeText(data.portalUrl).catch(() => {});
+      setInviteMsg(`Regenerated. Link copied to clipboard.`);
+    }
+  };
 
   const toggleCadenceOverride = async (next: boolean) => {
     setCadenceBusy(true);
@@ -716,6 +819,163 @@ export default function OrderDetailPage() {
           )}
         </div>
       )}
+
+      {/* Portal Access */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Job Page portal access</h2>
+            <div className="text-xs text-zinc-500 mt-0.5">Per-contact magic links · 7-day TTL · 30-day session</div>
+          </div>
+        </div>
+
+        {/* Active accesses */}
+        {accesses === null ? (
+          <div className="text-xs text-zinc-500">Loading…</div>
+        ) : accesses.length === 0 ? (
+          <div className="text-xs text-zinc-500">No portal access issued yet.</div>
+        ) : (
+          <div className="border border-zinc-800 rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-zinc-950 text-zinc-500">
+                <tr>
+                  <th className="text-left p-2 font-semibold">Contact</th>
+                  <th className="text-left p-2 font-semibold">Status</th>
+                  <th className="text-left p-2 font-semibold">Last accessed</th>
+                  <th className="text-right p-2 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {accesses.map((a) => {
+                  const expired = new Date(a.magicLinkExpiresAt).getTime() < Date.now();
+                  const status = a.revokedAt ? 'Revoked' : expired ? 'Expired' : a.accessCount > 0 ? 'Active' : 'Invited';
+                  const statusColor = a.revokedAt
+                    ? 'bg-zinc-700 text-zinc-400'
+                    : expired
+                    ? 'bg-amber-900/60 text-amber-300'
+                    : a.accessCount > 0
+                    ? 'bg-emerald-900/60 text-emerald-300'
+                    : 'bg-blue-900/60 text-blue-300';
+                  return (
+                    <tr key={a.id}>
+                      <td className="p-2">
+                        <div className="text-white">{a.contact ? `${a.contact.firstName} ${a.contact.lastName}` : '—'}</div>
+                        <div className="text-zinc-500 text-[10px]">{a.contact?.email || '—'}</div>
+                      </td>
+                      <td className="p-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${statusColor}`}>{status}</span>
+                      </td>
+                      <td className="p-2 text-zinc-500">
+                        {a.lastAccessedAt ? new Date(a.lastAccessedAt).toLocaleString() : '—'}
+                        {a.accessCount > 0 && <span className="text-zinc-600"> · {a.accessCount}x</span>}
+                      </td>
+                      <td className="p-2 text-right">
+                        <div className="inline-flex gap-2">
+                          {!a.revokedAt && (
+                            <>
+                              {a.contact && (
+                                <button
+                                  onClick={() => regenerateAccess(a.contact!.id)}
+                                  className="text-zinc-400 hover:text-white text-[11px]"
+                                >
+                                  Regenerate
+                                </button>
+                              )}
+                              <button
+                                onClick={() => revokeAccess(a.id)}
+                                className="text-red-400 hover:text-red-300 text-[11px]"
+                              >
+                                Revoke
+                              </button>
+                            </>
+                          )}
+                          {a.revokedAt && a.contact && (
+                            <button
+                              onClick={() => regenerateAccess(a.contact!.id)}
+                              className="text-emerald-400 hover:text-emerald-300 text-[11px]"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Detected contacts */}
+        {detected.length > 0 && (
+          <div className="border-t border-zinc-800 pt-4">
+            <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">
+              New contact{detected.length === 1 ? '' : 's'} detected on this company&rsquo;s email threads
+            </div>
+            <div className="space-y-2">
+              {detected.map((d) => (
+                <div key={d.email} className="flex items-center justify-between gap-3 bg-zinc-950 border border-zinc-800 rounded-lg p-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-white text-sm truncate">{d.displayName}</div>
+                    <div className="text-zinc-500 text-[10px] truncate">
+                      {d.email} · last seen {new Date(d.mostRecentAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() =>
+                      directInvite({
+                        email: d.email,
+                        firstName: d.person?.firstName,
+                        lastName: d.person?.lastName,
+                      })
+                    }
+                    disabled={inviteBusy}
+                    className="px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-[11px] font-semibold rounded"
+                  >
+                    Invite to portal
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Direct invite form */}
+        <div className="border-t border-zinc-800 pt-4">
+          <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">Invite a new contact</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="email@example.com"
+              className="sm:col-span-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            />
+            <input
+              value={inviteFirst}
+              onChange={(e) => setInviteFirst(e.target.value)}
+              placeholder="First name"
+              className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            />
+            <input
+              value={inviteLast}
+              onChange={(e) => setInviteLast(e.target.value)}
+              placeholder="Last name"
+              className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[11px] text-zinc-500">{inviteMsg}</div>
+            <button
+              onClick={() => directInvite()}
+              disabled={!inviteEmail.trim() || inviteBusy}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            >
+              {inviteBusy ? 'Inviting…' : 'Send invite'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Line Items */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-6">
