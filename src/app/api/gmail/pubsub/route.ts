@@ -3,6 +3,7 @@ import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import { getMessageDirection } from "@/lib/email/direction"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
+import { classifyReply } from "@/lib/email/replyClassifier"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -140,7 +141,7 @@ async function syncInbox(email: string) {
       })
     }
 
-    await prisma.emailMessage.create({
+    const createdMessage = await prisma.emailMessage.create({
       data: {
         emailAccountId: account.id,
         threadId: thread.id,
@@ -165,7 +166,37 @@ async function syncInbox(email: string) {
         triageAt: new Date(),
         assignedToId: null,
       },
-    }).catch(() => {})
+    }).catch(() => null)
+
+    // AI reply classification — fires on inbound messages on a thread that
+    // already had at least one prior message (i.e., this is a reply, not a
+    // first-touch). Duplicates and outbound messages skip. The classifier
+    // never throws past us (returns UNCLEAR + confidence 0 on failure), so
+    // any per-message error here doesn't take down the pubsub batch.
+    if (
+      createdMessage &&
+      direction === 'INBOUND' &&
+      !duplicateOfId &&
+      thread.messageCount > 1 &&
+      body.bodyText
+    ) {
+      try {
+        const result = await classifyReply({
+          jobName: subject,
+          subject,
+          bodyText: body.bodyText,
+        })
+        await prisma.emailMessage.update({
+          where: { id: createdMessage.id },
+          data: {
+            replyClassification: result.classification,
+            replyClassificationConfidence: result.confidence,
+          },
+        })
+      } catch (err) {
+        console.warn('[pubsub] reply classification failed:', err)
+      }
+    }
 
     processed++
   }
