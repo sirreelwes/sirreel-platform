@@ -47,6 +47,10 @@ const EVENT_PLAN: Partial<Record<CadenceState, EventTemplate[]>> = {
     { eventType: 'ACK_QUESTIONS_PROMPT_24H', anchor: 'now', offsetMs: 24 * HOUR },
     { eventType: 'ACK_SWEETEN_T72', anchor: 'pickup', offsetMs: -72 * HOUR },
     { eventType: 'ACK_CLOSEDOWN_T24', anchor: 'pickup', offsetMs: -24 * HOUR },
+    // Pickup day with no booking → LOST. handleQuoteLostMark inspects the
+    // current cadenceState and picks the right reason (ACKNOWLEDGED_NO_BOOK
+    // for orders that came through QUOTE_ACKNOWLEDGED).
+    { eventType: 'QUOTE_LOST_MARK', anchor: 'pickup', offsetMs: 0 },
   ],
   BOOKED: [
     { eventType: 'BOOKING_WELCOME', anchor: 'now', offsetMs: 0 },

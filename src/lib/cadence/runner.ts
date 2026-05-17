@@ -141,16 +141,25 @@ interface HandlerResult {
 async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
   switch (event.eventType) {
     case 'QUOTE_NUDGE_24H':
-      return handleQuoteSilentEmail(event, 'QUOTE_NUDGE_24H', { requirePickupHoursAhead: 48 })
+      return handleStateGatedEmail(event, 'QUOTE_NUDGE_24H', {
+        requiredState: 'QUOTE_SENT',
+        requirePickupHoursAhead: 48,
+      })
     case 'QUOTE_CHECKIN_T72':
-      return handleQuoteSilentEmail(event, 'QUOTE_CHECKIN_T72')
+      return handleStateGatedEmail(event, 'QUOTE_CHECKIN_T72', { requiredState: 'QUOTE_SENT' })
     case 'QUOTE_CLOSEDOWN_T24':
-      return handleQuoteSilentEmail(event, 'QUOTE_CLOSEDOWN_T24')
+      return handleStateGatedEmail(event, 'QUOTE_CLOSEDOWN_T24', { requiredState: 'QUOTE_SENT' })
     case 'QUOTE_LOST_MARK':
       return handleQuoteLostMark(event)
     case 'ACK_QUESTIONS_PROMPT_24H':
+      return handleStateGatedEmail(event, 'ACK_QUESTIONS_PROMPT_24H', {
+        requiredState: 'QUOTE_ACKNOWLEDGED',
+        requirePickupHoursAhead: 48,
+      })
     case 'ACK_SWEETEN_T72':
+      return handleStateGatedEmail(event, 'ACK_SWEETEN_T72', { requiredState: 'QUOTE_ACKNOWLEDGED' })
     case 'ACK_CLOSEDOWN_T24':
+      return handleStateGatedEmail(event, 'ACK_CLOSEDOWN_T24', { requiredState: 'QUOTE_ACKNOWLEDGED' })
     case 'BOOKING_WELCOME':
     case 'COI_RECEIVED_ACK':
     case 'PRE_PICKUP_DETAILS_T48':
@@ -182,23 +191,26 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
 }
 
 /**
- * Generic handler for the three SILENT-cadence emails (no state transition,
- * just an email). Returns `skipped` when:
+ * Generic state-gated email handler. Used by every cadence event that just
+ * sends an email and doesn't transition state. Returns `skipped` when:
  *   - context can't be loaded (order missing)
- *   - the order has advanced past QUOTE_SENT (already booked / acknowledged /
- *     lost / etc) — the event was scheduled but is no longer relevant
+ *   - the order has advanced past the required cadence state (event was
+ *     scheduled but is no longer relevant)
  *   - no job contact email on file
- *   - QUOTE_NUDGE_24H specifically: pickup is < 48h away (brief §10 makes
- *     this email contingent on "pickup >48h out")
+ *   - optional: pickup is closer than `requirePickupHoursAhead` (e.g.
+ *     QUOTE_NUDGE_24H and ACK_QUESTIONS_PROMPT_24H both want >48h)
  */
-async function handleQuoteSilentEmail(
+async function handleStateGatedEmail(
   event: EventWithOrder,
   eventType: CadenceEventType,
-  opts: { requirePickupHoursAhead?: number } = {},
+  opts: {
+    requiredState: import('@prisma/client').CadenceState
+    requirePickupHoursAhead?: number
+  },
 ): Promise<HandlerResult> {
   const ctx = await loadCadenceContextForOrder(event.orderId)
   if (!ctx) return { skipped: true, reason: 'order-missing' }
-  if (ctx.order.cadenceState !== 'QUOTE_SENT') {
+  if (ctx.order.cadenceState !== opts.requiredState) {
     return { skipped: true, reason: `cadence-state=${ctx.order.cadenceState}` }
   }
   if (!ctx.jobContact?.email) {
