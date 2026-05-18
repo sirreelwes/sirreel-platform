@@ -197,8 +197,22 @@ function coerceExtracted(raw: unknown): ExtractedMessage {
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Log the missing-key short-circuit exactly once per process so a
+// misconfigured ANTHROPIC_API_KEY (or an empty-string value in Vercel
+// env, which has happened in this codebase) is visible in function logs
+// instead of silently collapsing every extraction to FALLBACK.
+let warnedKeyMissing = false
+function warnKeyMissing() {
+  if (warnedKeyMissing) return
+  warnedKeyMissing = true
+  console.error('[message-extractor] ANTHROPIC_API_KEY is missing or empty — every extractMessageData call will return FALLBACK. Set the key in Vercel env (Production scope) to enable.')
+}
+
 export async function extractMessageData(input: ExtractMessageInput): Promise<ExtractedMessage> {
-  if (!process.env.ANTHROPIC_API_KEY) return FALLBACK
+  if (!process.env.ANTHROPIC_API_KEY) {
+    warnKeyMissing()
+    return FALLBACK
+  }
   // Don't burn an API call on completely empty bodies.
   if (!input.bodyText && !input.snippet && !input.bodyHtml) return FALLBACK
 
