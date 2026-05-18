@@ -1113,6 +1113,11 @@ model User {
   email     String    @unique
   name      String
   role      UserRole  @default(AGENT)
+  // Client-facing title (e.g. "COO", "Owner", "Sales Lead"). Separate from
+  // `role` which is access-control / permission scope. The portal Job Page
+  // shows displayTitle on the "Your SirReel Team" card; if null, the card
+  // falls back to a generic label.
+  displayTitle String? @map("display_title") @db.VarChar(60)
   phone     String?   @db.VarChar(30)
   avatarUrl String?   @map("avatar_url")
   location  Location? // Home base

@@ -9,9 +9,18 @@ import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 
 export const dynamic = 'force-dynamic'
 
+// INTENTIONALLY HARDCODED — this is a real shared after-hours line, not a
+// per-person number. Unlike rep/ops contact info (which now comes from
+// the User table), this string is the canonical operations contact and
+// doesn't belong on any single User row.
 const AFTER_HOURS_LINE = '(888) 477-7335'
-const OPS_CONTACT_NAME = 'Dani DeAngelis'
-const OPS_CONTACT_PHONE = '(818) 555-0143'
+
+// The senior-leadership card on the portal "Your SirReel Team" section
+// looks up this email in the User table at request time. The email itself
+// is a stable handle; everything client-visible (name, displayTitle, phone)
+// comes from the User row. Swap this string if leadership-visibility ever
+// rotates to another person.
+const LEADERSHIP_EMAIL = 'dani@sirreel.com'
 
 /**
  * GET /api/portal/job/data
@@ -62,7 +71,7 @@ export async function GET(req: NextRequest) {
         company: { select: { id: true, name: true } },
         job: { select: { id: true, name: true, jobCode: true, productionType: true } },
         agent: {
-          select: { id: true, name: true, email: true, phone: true, avatarUrl: true },
+          select: { id: true, name: true, email: true, phone: true, avatarUrl: true, displayTitle: true },
         },
         lineItems: {
           select: {
@@ -116,6 +125,11 @@ export async function GET(req: NextRequest) {
   // fields + display fields here; insuranceCardUrl, insurancePolicyNum,
   // and any other Asset internals are not in this select clause. This is
   // the audit checkpoint for CRH brief §7 "What is NEVER surfaced".
+  const leadership = await prisma.user.findUnique({
+    where: { email: LEADERSHIP_EMAIL },
+    select: { id: true, name: true, email: true, phone: true, displayTitle: true },
+  })
+
   const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
     order.jobId
       ? prisma.coiCheck.findFirst({
@@ -226,7 +240,15 @@ export async function GET(req: NextRequest) {
     countdown: portalCountdownMs != null ? { msUntilPickup: portalCountdownMs } : null,
     agent: order.agent,
     afterHoursLine: AFTER_HOURS_LINE,
-    opsContact: { name: OPS_CONTACT_NAME, phone: OPS_CONTACT_PHONE },
+    leadership: leadership
+      ? {
+          id: leadership.id,
+          name: leadership.name,
+          email: leadership.email,
+          phone: leadership.phone,
+          displayTitle: leadership.displayTitle,
+        }
+      : null,
     lineItems: order.lineItems.map((li) => ({
       id: li.id,
       type: li.type,

@@ -28,9 +28,9 @@ interface PortalData {
     total: string;
   };
   job: { id: string; name: string; jobCode: string; productionType: string } | null;
-  agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null };
+  agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null };
   afterHoursLine: string;
-  opsContact: { name: string; phone: string };
+  leadership: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
   countdown: { msUntilPickup: number } | null;
   lineItems: {
     id: string;
@@ -541,15 +541,17 @@ export default function JobPortalPage() {
                 <ContactRow
                   name={data.agent.name}
                   email={data.agent.email}
-                  badge="Rep"
-                  detail={data.agent.phone || ''}
+                  badge="REP"
+                  detail={data.agent.phone || undefined}
                 />
-                <ContactRow
-                  name={data.opsContact.name}
-                  email=""
-                  badge="Ops"
-                  detail={data.opsContact.phone}
-                />
+                {data.leadership && (
+                  <ContactRow
+                    name={data.leadership.name}
+                    email={data.leadership.email}
+                    badge={data.leadership.displayTitle || ''}
+                    detail={data.leadership.phone || undefined}
+                  />
+                )}
                 <ContactRow
                   name="After-hours line"
                   email=""
