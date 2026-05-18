@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { NewInquiryModal } from './NewInquiryModal';
 import { ThreadDrawer } from './ThreadDrawer';
+import { FormTypeBadge, type FormType } from './FormTypeBadge';
 
 // The Inquiries section is intentionally a "blank slate" between sessions.
 // It surfaces inbound emails that look like inquiry candidates (BOOKING_INQUIRY
@@ -18,6 +19,7 @@ interface SuggestionRecord {
   snippet: string | null;
   sentAt: string;
   category: 'BOOKING_INQUIRY' | 'RENTAL_REQUEST' | null;
+  inferredFormType: FormType | null;
   company: { id: string; name: string } | null;
   person: { id: string; firstName: string; lastName: string; email: string } | null;
   threadMessageCount?: number;
@@ -192,7 +194,8 @@ export function InquiriesSection() {
                     >
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-white truncate">{s.subject || '(no subject)'}</span>
-                        {s.category && (
+                        <FormTypeBadge type={s.inferredFormType} />
+                        {s.category && !s.inferredFormType && (
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${CATEGORY_BADGE[s.category]}`}>
                             {s.category.replace('_', ' ')}
                           </span>
@@ -266,6 +269,7 @@ export function InquiriesSection() {
                         >
                           <div className="flex items-center gap-2 flex-wrap text-[12px]">
                             <span className="text-zinc-300 truncate">↳ {s.subject || '(no subject)'}</span>
+                            <FormTypeBadge type={s.inferredFormType} size="xs" />
                             {s.threadMessageCount && s.threadMessageCount > 1 && (
                               <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500">
                                 {s.threadMessageCount} msgs

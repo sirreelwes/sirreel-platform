@@ -47,6 +47,7 @@ export async function GET() {
         snippet: true,
         sentAt: true,
         category: true,
+        inferredFormType: true,
         company: { select: { id: true, name: true } },
         person: { select: { id: true, firstName: true, lastName: true, email: true } },
         thread: {
@@ -111,6 +112,7 @@ export async function GET() {
     snippet: e.snippet,
     sentAt: e.sentAt,
     category: e.category,
+    inferredFormType: e.inferredFormType,
     company: e.company,
     person: e.person,
     threadMessageCount: e.thread?.messageCount ?? 1,

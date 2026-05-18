@@ -1023,6 +1023,14 @@ model EmailMessage {
   extractionRunAt       DateTime? @map("extraction_run_at")
   extractionConfidence  Float?    @map("extraction_confidence")
 
+  // Heuristic form-type detection from the Subject line. Cognito Forms
+  // submissions land with predictable prefixes ("NEW INQUIRY",
+  // "Annual Rental Agreement", etc.); this regex-based classification
+  // gives the pipeline slider a colored badge per type so the team can
+  // see at a glance what each item is. Routing isn't affected yet.
+  // See src/lib/email/inferFormType.ts.
+  inferredFormType InferredFormType? @map("inferred_form_type")
+
   // Matched to CRM
   companyId String? @map("company_id")
   personId  String? @map("person_id")
@@ -2184,6 +2192,14 @@ enum ReplyClassification {
   BOOKING_SIGNAL
   EXPLICIT_REJECTION
   UNCLEAR
+}
+
+enum InferredFormType {
+  BOOKING_INQUIRY
+  ANNUAL_AGREEMENT
+  JOB_AGREEMENT
+  DAMAGE_REPORT
+  COI
 }
 
 enum CadenceEventType {

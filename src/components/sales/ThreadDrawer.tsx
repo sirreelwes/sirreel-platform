@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FormTypeBadge, type FormType } from './FormTypeBadge';
 
 interface ExtractedMessage {
   contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
@@ -37,6 +38,7 @@ interface ThreadMessage {
   extractedData: ExtractedMessage | null;
   extractionConfidence: number | null;
   extractionRunAt: string | null;
+  inferredFormType: FormType | null;
 }
 
 // Display name for sirreel agent inboxes — Gmail's "From" header on
@@ -262,6 +264,11 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
   const threadSubject = data?.thread?.subject || data?.email?.subject || '(no subject)';
   const captured = data?.considered?.status === 'NEW' || data?.considered?.status === 'CONVERTED';
   const dismissed = data?.considered?.status === 'DISMISSED';
+  // Header form-type — first inbound message with a detected type wins.
+  // Reflects "what kind of thread is this?" prominently above the message list.
+  const headerFormType = messages.find((m) =>
+    (m.direction === 'inbound' || m.direction === 'INBOUND') && m.inferredFormType,
+  )?.inferredFormType ?? null;
 
   return (
     <>
@@ -279,8 +286,11 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
       >
         <div className="flex items-start justify-between p-5 border-b border-gray-100">
           <div className="min-w-0 flex-1 pr-3">
-            <div id="thread-drawer-title" className="text-[15px] font-extrabold text-gray-900 truncate">
-              {threadSubject}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div id="thread-drawer-title" className="text-[15px] font-extrabold text-gray-900 truncate">
+                {threadSubject}
+              </div>
+              <FormTypeBadge type={headerFormType} variant="long" />
             </div>
             <p className="text-[11px] text-gray-500 mt-0.5">
               {loading
@@ -342,6 +352,7 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
                         <span className="text-[12px] font-semibold text-gray-900 truncate">
                           {parseName(m.fromAddress)}
                         </span>
+                        {inbound && <FormTypeBadge type={m.inferredFormType} size="xs" />}
                       </div>
                       <span className="text-[10px] text-gray-400 flex-shrink-0">{fmtWhen(m.sentAt)}</span>
                     </div>

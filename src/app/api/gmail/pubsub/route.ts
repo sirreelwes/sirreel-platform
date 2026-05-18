@@ -6,6 +6,7 @@ import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
+import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -167,6 +168,7 @@ async function syncInbox(email: string) {
         priority,
         triageAt: new Date(),
         assignedToId: null,
+        inferredFormType: inferFormTypeFromSubject(subject),
       },
     }).catch(() => null)
 

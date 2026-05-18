@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     extractedData: unknown;
     extractionConfidence: number | null;
     extractionRunAt: Date | null;
+    inferredFormType: import('@prisma/client').InferredFormType | null;
   }> = [];
 
   const messageSelect = {
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
     extractedData: true,
     extractionConfidence: true,
     extractionRunAt: true,
+    inferredFormType: true,
   } as const;
 
   if (email.threadId) {

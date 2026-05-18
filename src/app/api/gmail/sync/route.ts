@@ -3,6 +3,7 @@ import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
+import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -189,6 +190,7 @@ export async function POST() {
                 priority,
                 triageAt: new Date(),
                 assignedToId: null,
+                inferredFormType: inferFormTypeFromSubject(subject),
               },
               select: { id: true },
             })
