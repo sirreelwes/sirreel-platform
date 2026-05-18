@@ -195,7 +195,16 @@ function coerceExtracted(raw: unknown): ExtractedMessage {
   }
 }
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Lazy client construction — do NOT capture process.env at module-load
+// time. In tsx-run scripts, ESM hoists imports above any env-loader code
+// the script runs at top level, so a module-level `new Anthropic({ apiKey:
+// process.env.ANTHROPIC_API_KEY })` would capture undefined and every call
+// would silently FALLBACK. The May 2026 backfill incident wrote 5,628
+// FALLBACK rows to production before this bug was caught. Constructing
+// per-call is cheap and eliminates the failure mode.
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+}
 
 // Log the missing-key short-circuit exactly once per process so a
 // misconfigured ANTHROPIC_API_KEY (or an empty-string value in Vercel
@@ -213,6 +222,7 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
     warnKeyMissing()
     return FALLBACK
   }
+  const client = getClient()
   // Don't burn an API call on completely empty bodies.
   if (!input.bodyText && !input.snippet && !input.bodyHtml) return FALLBACK
 

@@ -101,12 +101,17 @@ function fallback(reason: string): ClassifyReplyResult {
   }
 }
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Lazy client — same rationale as messageExtractor.ts (avoids the
+// module-load env-capture bug that bit tsx-run scripts).
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+}
 
 export async function classifyReply(input: ClassifyReplyInput): Promise<ClassifyReplyResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return fallback('ANTHROPIC_API_KEY not set')
   }
+  const client = getClient()
   let raw: string
   try {
     const res = await client.messages.create({

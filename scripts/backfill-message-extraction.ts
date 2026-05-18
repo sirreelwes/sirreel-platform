@@ -44,6 +44,34 @@ function parseFlags(argv: string[]) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * Startup probe — calls extractMessageData on a tiny synthetic input and
+ * aborts the run if confidence comes back 0 (the FALLBACK signature). This
+ * is the guardrail for the May 2026 incident where the script ran for 37
+ * min and wrote 5,628 FALLBACK rows because the local Anthropic client
+ * had been constructed before .env.local was loaded. Now: if the probe
+ * fails, the script exits without touching the DB.
+ */
+async function abortIfExtractorBroken() {
+  const probe = await extractMessageData({
+    subject: 'Quote request',
+    fromAddress: 'test@example.com',
+    bodyText: 'Hi, we need a cargo van for a one-day shoot in Burbank on June 1. Thanks, Sam',
+    snippet: null,
+  })
+  if (probe.confidence <= 0) {
+    console.error(
+      '[backfill-extract] STARTUP PROBE FAILED: extractMessageData returned confidence 0 (FALLBACK shape).',
+    )
+    console.error('[backfill-extract] This means the Anthropic client cannot reach the API.')
+    console.error('[backfill-extract] Common causes: missing ANTHROPIC_API_KEY in env at module-load time,')
+    console.error('[backfill-extract] malformed key value, model ID unavailable, network blocked.')
+    console.error('[backfill-extract] Aborting without writing any rows.')
+    process.exit(1)
+  }
+  console.log(`[backfill-extract] startup probe ok (confidence=${probe.confidence}, summary="${probe.summary.slice(0, 60)}")`)
+}
+
 async function main() {
   const flags = parseFlags(process.argv.slice(2))
   // Enforce the hard cap so a stray --days 9999 doesn't drain the wallet.
@@ -52,6 +80,10 @@ async function main() {
   console.log(
     `[backfill-extract] window=${days}d limit=${flags.limit === Infinity ? 'all' : flags.limit} dryRun=${flags.dryRun}`,
   )
+
+  if (!flags.dryRun) {
+    await abortIfExtractorBroken()
+  }
 
   const candidates = await prisma.emailMessage.findMany({
     where: {
