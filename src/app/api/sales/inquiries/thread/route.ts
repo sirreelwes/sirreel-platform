@@ -38,6 +38,9 @@ export async function GET(req: NextRequest) {
     attachmentCount: number;
     direction: string;
     sentAt: Date;
+    extractedData: unknown;
+    extractionConfidence: number | null;
+    extractionRunAt: Date | null;
   }> = [];
 
   const messageSelect = {
@@ -52,6 +55,9 @@ export async function GET(req: NextRequest) {
     attachmentCount: true,
     direction: true,
     sentAt: true,
+    extractedData: true,
+    extractionConfidence: true,
+    extractionRunAt: true,
   } as const;
 
   if (email.threadId) {

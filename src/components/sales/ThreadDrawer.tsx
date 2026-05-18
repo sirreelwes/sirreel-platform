@@ -3,6 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+interface ExtractedMessage {
+  contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
+  company: string | null;
+  jobIntent: {
+    vehicleType: string | null;
+    equipment: string[];
+    pickupDate: string | null;
+    returnDate: string | null;
+    duration: string | null;
+    location: string | null;
+    projectName: string | null;
+  };
+  urgency: 'asap' | 'normal' | 'future' | null;
+  rawNotes: string | null;
+  messageNature: string;
+  summary: string;
+  confidence: number;
+}
+
 interface ThreadMessage {
   id: string;
   fromAddress: string;
@@ -15,6 +34,9 @@ interface ThreadMessage {
   attachmentCount: number;
   direction: string;
   sentAt: string;
+  extractedData: ExtractedMessage | null;
+  extractionConfidence: number | null;
+  extractionRunAt: string | null;
 }
 
 // Display name for sirreel agent inboxes — Gmail's "From" header on
@@ -85,11 +107,80 @@ function parseName(fromHeader: string) {
   return fromHeader.trim();
 }
 
+const URGENCY_BADGE: Record<NonNullable<ExtractedMessage['urgency']>, string> = {
+  asap: 'bg-red-100 text-red-700',
+  normal: 'bg-gray-100 text-gray-600',
+  future: 'bg-blue-100 text-blue-700',
+};
+
+function QuickReadCard({ extracted }: { extracted: ExtractedMessage }) {
+  const c = extracted.contact;
+  const j = extracted.jobIntent;
+  const hasAnyField =
+    c.name || c.email || c.phone || c.title || extracted.company || j.vehicleType ||
+    j.pickupDate || j.returnDate || j.duration || j.location || j.projectName ||
+    (j.equipment && j.equipment.length > 0) || extracted.rawNotes;
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Quick read</div>
+        {extracted.urgency && (
+          <span className={`text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded ${URGENCY_BADGE[extracted.urgency]}`}>
+            {extracted.urgency}
+          </span>
+        )}
+      </div>
+      {extracted.summary && (
+        <p className="text-[12px] text-gray-800 leading-snug">{extracted.summary}</p>
+      )}
+      {hasAnyField && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 pt-1.5 border-t border-amber-200/60">
+          <QuickField label="Contact" value={c.name} sub={c.title} />
+          <QuickField label="Email" value={c.email} />
+          <QuickField label="Phone" value={c.phone} />
+          <QuickField label="Company" value={extracted.company} />
+          <QuickField label="Vehicle" value={j.vehicleType} />
+          <QuickField label="Project" value={j.projectName} />
+          <QuickField label="Pickup" value={j.pickupDate} />
+          <QuickField label="Return" value={j.returnDate || j.duration} />
+          {j.location && <QuickField label="Location" value={j.location} />}
+          {j.equipment && j.equipment.length > 0 && (
+            <div className="sm:col-span-2">
+              <div className="text-[9px] uppercase tracking-widest text-gray-400 font-semibold">Equipment</div>
+              <div className="text-[11px] text-gray-700">{j.equipment.join(', ')}</div>
+            </div>
+          )}
+          {extracted.rawNotes && (
+            <div className="sm:col-span-2">
+              <div className="text-[9px] uppercase tracking-widest text-gray-400 font-semibold">Notes</div>
+              <div className="text-[11px] text-gray-700 leading-snug">{extracted.rawNotes}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickField({ label, value, sub }: { label: string; value: string | null; sub?: string | null }) {
+  if (!value) return null;
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-widest text-gray-400 font-semibold">{label}</div>
+      <div className="text-[11px] text-gray-800 truncate">{value}</div>
+      {sub && <div className="text-[10px] text-gray-500 truncate">{sub}</div>}
+    </div>
+  );
+}
+
 export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: Props) {
   const router = useRouter();
   const [data, setData] = useState<ThreadResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Per-message "View raw email" toggle. Keyed by message id so each
+  // message in a multi-message thread can expand independently.
+  const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -226,6 +317,12 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
                 const inbound = m.direction === 'inbound' || m.direction === 'INBOUND';
                 const body = m.bodyText || m.snippet || null;
                 const onlySnippet = !m.bodyText && !!m.snippet;
+                const extracted = inbound ? m.extractedData : null;
+                const confidence = m.extractionConfidence ?? 0;
+                // Render the Quick Read card only when the extractor returned
+                // something useful. <0.5 confidence → fall back to raw body.
+                const showQuickRead = inbound && extracted && confidence >= 0.5;
+                const isRawOpen = !!rawOpen[m.id];
                 return (
                   <div
                     key={m.id}
@@ -253,11 +350,37 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
                         to {m.toAddresses.join(', ')}
                       </div>
                     )}
-                    {body ? (
+
+                    {showQuickRead ? (
+                      <>
+                        <QuickReadCard extracted={extracted!} />
+                        <button
+                          onClick={() => setRawOpen((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
+                          className="mt-2 text-[10px] font-semibold text-gray-500 hover:text-gray-900"
+                        >
+                          {isRawOpen ? '▾ Hide raw email' : '▸ View raw email'}
+                        </button>
+                        {isRawOpen && body && (
+                          <p className="mt-2 text-[11px] text-gray-600 whitespace-pre-wrap break-words border-t border-gray-100 pt-2">
+                            {body}
+                          </p>
+                        )}
+                      </>
+                    ) : inbound && m.extractionRunAt == null ? (
+                      <>
+                        <div className="text-[10px] text-gray-400 italic mb-1.5">Extracting…</div>
+                        {body ? (
+                          <p className="text-[12px] text-gray-700 whitespace-pre-wrap break-words">{body}</p>
+                        ) : (
+                          <p className="text-[12px] text-gray-400 italic">(no preview available)</p>
+                        )}
+                      </>
+                    ) : body ? (
                       <p className="text-[12px] text-gray-700 whitespace-pre-wrap break-words">{body}</p>
                     ) : (
                       <p className="text-[12px] text-gray-400 italic">(no preview available)</p>
                     )}
+
                     {(onlySnippet || m.attachmentCount > 0) && (
                       <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-400">
                         {onlySnippet && <span>snippet only — body not yet synced</span>}

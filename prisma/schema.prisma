@@ -1014,6 +1014,15 @@ model EmailMessage {
   replyClassification           ReplyClassification? @map("reply_classification")
   replyClassificationConfidence Float?               @map("reply_classification_confidence")
 
+  // Per-message AI extraction — structured fields (contact, company,
+  // jobIntent, urgency, summary) parsed out of the email body so the
+  // Pipeline slider can render a Quick Read card instead of raw text. See
+  // src/lib/ai/messageExtractor.ts for the JSON shape and prompt.
+  // Cached per-message; backfill script populates historical rows.
+  extractedData         Json?     @map("extracted_data")
+  extractionRunAt       DateTime? @map("extraction_run_at")
+  extractionConfidence  Float?    @map("extraction_confidence")
+
   // Matched to CRM
   companyId String? @map("company_id")
   personId  String? @map("person_id")

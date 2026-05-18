@@ -15,5 +15,6 @@ scripts/*
 !scripts/check-template-drift.ts
 !scripts/backfill-email-message-ids.ts
 !scripts/backfill-reply-classifications.ts
+!scripts/backfill-message-extraction.ts
 .env.local.bak
 .gcp-service-account.json

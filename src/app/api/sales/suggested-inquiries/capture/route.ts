@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
       threadId: true,
       companyId: true,
       personId: true,
+      extractedData: true,
+      extractionConfidence: true,
     },
   });
   if (!email) return NextResponse.json({ error: 'email not found' }, { status: 404 });
@@ -99,7 +101,17 @@ export async function POST(req: NextRequest) {
       companyId: email.companyId,
       personId: email.personId,
       assignedToId: userId,
-      sourceMetadata: { emailMessageId: email.id, fromAddress: email.fromAddress },
+      sourceMetadata: {
+        emailMessageId: email.id,
+        fromAddress: email.fromAddress,
+        // Pre-extracted Quick Read fields. /orders/new-quote can read these
+        // to pre-fill the quote builder and skip a duplicate AI call. Only
+        // attached when confidence ≥ 0.5 (same threshold the slider uses).
+        extractedData:
+          email.extractedData && (email.extractionConfidence ?? 0) >= 0.5
+            ? (email.extractedData as object)
+            : null,
+      },
     },
     select: { id: true },
   });
