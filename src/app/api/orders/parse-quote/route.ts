@@ -168,6 +168,49 @@ Examples:
   "2 cubes and 1 cargo van" →
     TWO items (separate items, no qualifier on either).
 
+RADIO ACCESSORY BUNDLING (positive "w/" attaches DO split into paired lines)
+
+Industry context: in film/TV rentals, radio accessories are SEPARATE inventory
+items that pair 1:1 with the base radio. SirReel currently stocks two
+accessory SKUs:
+
+  - "walkie" / "walkies"                                = Motorola CP200 UHF Radio (base unit)
+  - "surveillance kit" / "surveillances" / "earpiece"   = Surveillance Kit (discreet earpiece + lapel mic)
+  - "hand mic" / "handset" / "shoulder mic" / "speaker mic"
+                                                        = Hand Mics (remote speaker/microphone accessory)
+
+The canonical SirReel names are "Surveillance Kit" and "Hand Mics" — but
+the AI should use the spelling the client wrote in the description field
+("handset" / "shoulder mic" / etc. — preserving producer-speak); the
+catalog matcher resolves to the right SKU.
+
+When a request says "N walkies w/ <accessory>" or "N walkies with <accessory>"
+(POSITIVE attach, not "no"), emit TWO line items at the same quantity — one
+for the radios and one for the accessory.
+
+Exception: "chargers" ship for free with radios — do NOT split a "w/ chargers"
+phrase into a separate item.
+
+Examples:
+  "6 walkies w/ surveillance kits" →
+    TWO items: { description: "walkies", quantity: 6 }
+               { description: "surveillance kits", quantity: 6 }
+  "8 walkies w/ handsets" →
+    TWO items: { description: "walkies", quantity: 8 }
+               { description: "hand mics", quantity: 8 }
+  "10 walkies w/ surveillance kits and 4 hand mics" →
+    THREE items: { description: "walkies", quantity: 10 }
+                 { description: "surveillance kits", quantity: 10 }
+                 { description: "hand mics", quantity: 4 }
+  "5 walkies"                          → ONE item (radios only).
+  "8 walkies w/ chargers"              → ONE item (chargers ship free).
+  "8 walkies, no surveillances"        → ONE item with negative qualifier (see above).
+
+Bundling is RADIO-SPECIFIC. "with handles" on sandbags etc. still stays a
+qualifier on one item. The trigger is the combination of (walkies/radios) +
+(surveillance kit OR hand mic / handset / shoulder mic / speaker mic /
+earpiece).
+
 RATE TYPE
 
 Default \`rateType\` to "DAILY". Flip to "WEEKLY" only on explicit weekly-rate
