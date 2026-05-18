@@ -20,6 +20,12 @@ type LineItem = {
   assetCategory: { id: string; name: string } | null;
 };
 
+type JobContactRow = {
+  role: string;
+  isPrimary: boolean;
+  person: { id: string; firstName: string; lastName: string; email: string };
+};
+
 type Order = {
   id: string;
   orderNumber: string;
@@ -36,12 +42,66 @@ type Order = {
   company: { id: string; name: string };
   agent: { id: string; name: string };
   booking: { id: string; bookingNumber: string; jobName: string; productionName: string | null } | null;
+  jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
+  job: { id: string; jobCode: string; name: string; jobContacts: JobContactRow[] } | null;
   lineItems: LineItem[];
   invoices: { id: string; invoiceNumber: string; status: string; total: string }[];
   quotePdfKey: string | null;
   quotePdfUrl: string | null;
   quotePdfGeneratedAt: string | null;
 };
+
+interface RecipientChoice {
+  primary: { id: string; name: string; email: string; role: string | null } | null;
+  others: { id: string; name: string; email: string; role: string | null }[];
+}
+
+/**
+ * Determine the quote-recipient priority for an Order:
+ *   1. PRODUCER on the Job (CRH brief — most common quote recipient)
+ *   2. The Order's explicit jobContact override (if any)
+ *   3. PM on the Job
+ *   4. Any contact marked primary
+ *   5. First listed jobContact
+ * Returns { primary, others }. `primary` is null only when no contacts exist
+ * at all → the page disables the send buttons in that case.
+ */
+function computeRecipients(order: Order): RecipientChoice {
+  const all: { id: string; name: string; email: string; role: string | null }[] = [];
+  const seen = new Set<string>();
+  const push = (id: string, name: string, email: string, role: string | null) => {
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    all.push({ id, name, email, role });
+  };
+  for (const jc of order.job?.jobContacts || []) {
+    push(jc.person.id, `${jc.person.firstName} ${jc.person.lastName}`, jc.person.email, jc.role);
+  }
+  if (order.jobContact) {
+    push(
+      order.jobContact.id,
+      `${order.jobContact.firstName} ${order.jobContact.lastName}`,
+      order.jobContact.email,
+      null,
+    );
+  }
+
+  const rank = (role: string | null, isPrimary: boolean): number => {
+    if (role === 'PRODUCER') return 0;
+    if (isPrimary) return 1;
+    if (role === 'PM') return 2;
+    if (role === 'PC') return 3;
+    if (role) return 4;
+    return 5; // direct jobContact override with no role
+  };
+  const primaryMap = new Map<string, boolean>();
+  for (const jc of order.job?.jobContacts || []) {
+    primaryMap.set(jc.person.id, !!jc.isPrimary);
+  }
+  all.sort((a, b) => rank(a.role, primaryMap.get(a.id) || false) - rank(b.role, primaryMap.get(b.id) || false));
+
+  return { primary: all[0] || null, others: all.slice(1) };
+}
 
 type AssetCat = { id: string; name: string; slug: string; dailyRate: string; weeklyRate: string | null };
 type InvItem = { id: string; code: string; description: string; category: { id: string; name: string } };
@@ -480,6 +540,8 @@ export default function OrderDetailPage() {
 
   const actions = STATUS_ACTIONS[order.status] || [];
   const isEditable = ["DRAFT", "QUOTE_SENT"].includes(order.status);
+  const recipients = computeRecipients(order);
+  const noRecipient = !recipients.primary;
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto">
@@ -499,19 +561,30 @@ export default function OrderDetailPage() {
             </div>
             <p className="text-zinc-400">{order.description || "No description"}</p>
           </div>
-          <div className="flex gap-2">
-            {actions.map((action) => (
-              <button key={action.next} onClick={() => updateStatus(action.next)}
-                className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color}`}>
-                {action.label}
-              </button>
-            ))}
-            {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
-              <button onClick={cancelOrder} className="px-3 py-2 text-red-400 hover:text-red-300 text-sm">Cancel</button>
-            )}
-            {order.status === "DRAFT" && (
-              <button onClick={deleteOrder} className="px-3 py-2 text-zinc-500 hover:text-red-400 text-sm">Delete</button>
-            )}
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex gap-2">
+              {actions.map((action) => {
+                const isSendQuote = action.next === "QUOTE_SENT";
+                return (
+                  <button
+                    key={action.next}
+                    onClick={() => updateStatus(action.next)}
+                    disabled={isSendQuote && noRecipient}
+                    title={isSendQuote && noRecipient ? "Add a contact to the job before sending the quote." : undefined}
+                    className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {action.label}
+                  </button>
+                );
+              })}
+              {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
+                <button onClick={cancelOrder} className="px-3 py-2 text-red-400 hover:text-red-300 text-sm">Cancel</button>
+              )}
+              {order.status === "DRAFT" && (
+                <button onClick={deleteOrder} className="px-3 py-2 text-zinc-500 hover:text-red-400 text-sm">Delete</button>
+              )}
+            </div>
+            {order.status === "DRAFT" && <RecipientLine recipients={recipients} />}
           </div>
         </div>
         <div className="grid grid-cols-4 gap-6 text-sm">
@@ -559,13 +632,20 @@ export default function OrderDetailPage() {
               >
                 {regeneratingPdf ? "Regenerating…" : "Regenerate"}
               </button>
-              <button
-                disabled
-                className="px-3 py-1.5 bg-zinc-800 text-zinc-500 text-sm font-semibold rounded-lg cursor-not-allowed"
-                title="Coming soon — email the quote PDF to the client"
-              >
-                Send to Client
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  disabled
+                  className="px-3 py-1.5 bg-zinc-800 text-zinc-500 text-sm font-semibold rounded-lg cursor-not-allowed"
+                  title={
+                    noRecipient
+                      ? "Add a contact to the job before sending."
+                      : "Coming soon — email the quote PDF to the client"
+                  }
+                >
+                  Send to Client
+                </button>
+                <RecipientLine recipients={recipients} />
+              </div>
             </>
           ) : (
             <button
@@ -1178,6 +1258,37 @@ export default function OrderDetailPage() {
           Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
       </div>
+    </div>
+  );
+}
+
+function RecipientLine({ recipients }: { recipients: RecipientChoice }) {
+  if (!recipients.primary) {
+    return (
+      <div className="text-[11px] text-amber-400">
+        ⚠ No recipient — add a contact to send
+      </div>
+    );
+  }
+  const others = recipients.others;
+  const tooltip = others.length
+    ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}`).join('\n')
+    : undefined;
+  return (
+    <div className="text-[11px] text-zinc-500 leading-tight">
+      <span className="text-zinc-600">→ </span>
+      <a
+        href={`/crm/people/${recipients.primary.id}`}
+        className="text-zinc-300 hover:text-white underline decoration-dotted underline-offset-2"
+        title="Open contact"
+      >
+        {recipients.primary.email}
+      </a>
+      {others.length > 0 && (
+        <span className="text-zinc-500 cursor-help" title={tooltip}>
+          {' '}and {others.length} other{others.length === 1 ? '' : 's'}
+        </span>
+      )}
     </div>
   );
 }

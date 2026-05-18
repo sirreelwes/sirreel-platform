@@ -17,6 +17,25 @@ export async function GET(_req: NextRequest, { params }: Params) {
       company: true,
       agent: { select: { id: true, name: true, email: true } },
       booking: { select: { id: true, bookingNumber: true, jobName: true, productionName: true } },
+      jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
+      // Job's full contact roster — drives the "Will send to" recipient
+      // display + multi-recipient tooltip on the Order detail page.
+      job: {
+        select: {
+          id: true,
+          jobCode: true,
+          name: true,
+          jobContacts: {
+            select: {
+              role: true,
+              isPrimary: true,
+              person: {
+                select: { id: true, firstName: true, lastName: true, email: true },
+              },
+            },
+          },
+        },
+      },
       lineItems: {
         include: {
           inventoryItem: { select: { id: true, code: true, description: true } },
