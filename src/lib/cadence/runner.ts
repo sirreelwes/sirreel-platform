@@ -142,36 +142,76 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
   switch (event.eventType) {
     case 'QUOTE_NUDGE_24H':
       return handleStateGatedEmail(event, 'QUOTE_NUDGE_24H', {
-        requiredState: 'QUOTE_SENT',
+        requiredStates: ['QUOTE_SENT'],
         requirePickupHoursAhead: 48,
       })
     case 'QUOTE_CHECKIN_T72':
-      return handleStateGatedEmail(event, 'QUOTE_CHECKIN_T72', { requiredState: 'QUOTE_SENT' })
+      return handleStateGatedEmail(event, 'QUOTE_CHECKIN_T72', { requiredStates: ['QUOTE_SENT'] })
     case 'QUOTE_CLOSEDOWN_T24':
-      return handleStateGatedEmail(event, 'QUOTE_CLOSEDOWN_T24', { requiredState: 'QUOTE_SENT' })
+      return handleStateGatedEmail(event, 'QUOTE_CLOSEDOWN_T24', { requiredStates: ['QUOTE_SENT'] })
     case 'QUOTE_LOST_MARK':
       return handleQuoteLostMark(event)
     case 'ACK_QUESTIONS_PROMPT_24H':
       return handleStateGatedEmail(event, 'ACK_QUESTIONS_PROMPT_24H', {
-        requiredState: 'QUOTE_ACKNOWLEDGED',
+        requiredStates: ['QUOTE_ACKNOWLEDGED'],
         requirePickupHoursAhead: 48,
       })
     case 'ACK_SWEETEN_T72':
-      return handleStateGatedEmail(event, 'ACK_SWEETEN_T72', { requiredState: 'QUOTE_ACKNOWLEDGED' })
+      return handleStateGatedEmail(event, 'ACK_SWEETEN_T72', { requiredStates: ['QUOTE_ACKNOWLEDGED'] })
     case 'ACK_CLOSEDOWN_T24':
-      return handleStateGatedEmail(event, 'ACK_CLOSEDOWN_T24', { requiredState: 'QUOTE_ACKNOWLEDGED' })
+      return handleStateGatedEmail(event, 'ACK_CLOSEDOWN_T24', { requiredStates: ['QUOTE_ACKNOWLEDGED'] })
+
+    // ── Booked cadence (Phase 4.1) ──────────────────────────────────────
+    // Each handler accepts any state in the booked-through-returned arc so
+    // a slipped clock (event fired late, state already advanced) still
+    // sends instead of getting marked skipped.
     case 'BOOKING_WELCOME':
+      return handleStateGatedEmail(event, 'BOOKING_WELCOME', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS'],
+      })
     case 'COI_RECEIVED_ACK':
+      return handleStateGatedEmail(event, 'COI_RECEIVED_ACK', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS', 'RETURNED'],
+      })
     case 'PRE_PICKUP_DETAILS_T48':
+      return handleStateGatedEmail(event, 'PRE_PICKUP_DETAILS_T48', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED'],
+      })
     case 'FINAL_CONFIRM_T24':
+      return handleStateGatedEmail(event, 'FINAL_CONFIRM_T24', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED'],
+      })
     case 'PICKUP_DAY_AM':
-    case 'MID_RENTAL_CHECKIN':
+      return handleStateGatedEmail(event, 'PICKUP_DAY_AM', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED'],
+      })
     case 'RETURN_REMINDER_T24':
+      return handleStateGatedEmail(event, 'RETURN_REMINDER_T24', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS'],
+      })
     case 'RETURN_ACKNOWLEDGMENT':
+      return handleStateGatedEmail(event, 'RETURN_ACKNOWLEDGMENT', {
+        requiredStates: ['IN_PROGRESS', 'RETURNED'],
+      })
     case 'WRAP_THANKS_T24':
+      return handleStateGatedEmail(event, 'WRAP_THANKS_T24', {
+        requiredStates: ['RETURNED', 'INVOICED', 'PAID', 'WRAPPED'],
+      })
     case 'INVOICE_DELIVERY':
+      return handleStateGatedEmail(event, 'INVOICE_DELIVERY', {
+        requiredStates: ['RETURNED', 'INVOICED'],
+      })
     case 'PAYMENT_REMINDER_T14':
+      return handleStateGatedEmail(event, 'PAYMENT_REMINDER_T14', {
+        requiredStates: ['INVOICED'],
+      })
     case 'REPEAT_BUSINESS_T30':
+      return handleStateGatedEmail(event, 'REPEAT_BUSINESS_T30', {
+        requiredStates: ['PAID', 'WRAPPED'],
+      })
+
+    // Still stubs — scheduling triggers + template copy not yet locked.
+    case 'MID_RENTAL_CHECKIN':
     case 'LOST_REENGAGEMENT_2W':
     case 'LOST_SOFT_CHECKIN_90D':
     case 'ANNUAL_EXPIRY_60D':
@@ -194,8 +234,8 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
  * Generic state-gated email handler. Used by every cadence event that just
  * sends an email and doesn't transition state. Returns `skipped` when:
  *   - context can't be loaded (order missing)
- *   - the order has advanced past the required cadence state (event was
- *     scheduled but is no longer relevant)
+ *   - the order is not in one of `requiredStates` (event was scheduled
+ *     against a state that's since advanced — typical mid-cadence skip)
  *   - no job contact email on file
  *   - optional: pickup is closer than `requirePickupHoursAhead` (e.g.
  *     QUOTE_NUDGE_24H and ACK_QUESTIONS_PROMPT_24H both want >48h)
@@ -204,13 +244,13 @@ async function handleStateGatedEmail(
   event: EventWithOrder,
   eventType: CadenceEventType,
   opts: {
-    requiredState: import('@prisma/client').CadenceState
+    requiredStates: import('@prisma/client').CadenceState[]
     requirePickupHoursAhead?: number
   },
 ): Promise<HandlerResult> {
   const ctx = await loadCadenceContextForOrder(event.orderId)
   if (!ctx) return { skipped: true, reason: 'order-missing' }
-  if (ctx.order.cadenceState !== opts.requiredState) {
+  if (!opts.requiredStates.includes(ctx.order.cadenceState)) {
     return { skipped: true, reason: `cadence-state=${ctx.order.cadenceState}` }
   }
   if (!ctx.jobContact?.email) {

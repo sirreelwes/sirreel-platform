@@ -9,6 +9,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -162,6 +163,15 @@ export async function POST(req: NextRequest) {
       additionalInsured: true,
     },
   })
+
+  // CRH Phase 4.1: COI received → schedule COI_RECEIVED_ACK email. Fire
+  // immediately; the cadence runner will pick it up on next pass.
+  // Best-effort — a scheduling failure shouldn't block the COI accept.
+  try {
+    await scheduleOneShotCadenceEvent({ orderId: order.id, eventType: 'COI_RECEIVED_ACK' })
+  } catch (err) {
+    console.warn('[portal/job/coi] failed to schedule COI_RECEIVED_ACK:', err)
+  }
 
   return NextResponse.json({
     ok: true,

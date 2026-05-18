@@ -5,6 +5,7 @@ import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -231,6 +232,17 @@ export async function POST(
       signedDocumentUrl: blobUrl,
     },
   })
+
+  // CRH Phase 4.1: agreement signed → transition cadence into BOOKED so
+  // the booked-cadence events (BOOKING_WELCOME, PRE_PICKUP_DETAILS_T48,
+  // FINAL_CONFIRM_T24, PICKUP_DAY_AM, RETURN_REMINDER_T24) get scheduled.
+  // transitionCadenceState is idempotent — safe even if the order was
+  // already in BOOKED for some reason.
+  try {
+    await transitionCadenceState(orderRow.id, 'BOOKED')
+  } catch (err) {
+    console.error('[portal/agreement/sign] BOOKED transition failed:', err)
+  }
 
   // Keep the legacy paperwork checklist in sync — the existing portal page's
   // "Rental agreement done" badge is driven off these fields.

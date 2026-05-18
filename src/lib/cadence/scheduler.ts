@@ -193,6 +193,37 @@ export async function transitionCadenceState(
 }
 
 /**
+ * Schedule a one-shot CadenceEvent outside the EVENT_PLAN state machine.
+ * Used for trigger-driven events that aren't tied to entering a state —
+ * COI_RECEIVED_ACK (fires when a COI is uploaded), INVOICE_DELIVERY (fires
+ * when an invoice is generated), etc.
+ *
+ * Idempotency: if a row with the same (orderId, eventType, scheduledFor)
+ * already exists and isn't executed, no duplicate is created.
+ */
+export async function scheduleOneShotCadenceEvent(args: {
+  orderId: string
+  eventType: CadenceEventType
+  scheduledFor?: Date // defaults to now
+}): Promise<{ scheduled: boolean; reason?: string }> {
+  const scheduledFor = args.scheduledFor ?? new Date()
+  const existing = await prisma.cadenceEvent.findFirst({
+    where: {
+      orderId: args.orderId,
+      eventType: args.eventType,
+      executedAt: null,
+      skipped: false,
+    },
+    select: { id: true },
+  })
+  if (existing) return { scheduled: false, reason: 'already-pending' }
+  await prisma.cadenceEvent.create({
+    data: { orderId: args.orderId, eventType: args.eventType, scheduledFor },
+  })
+  return { scheduled: true }
+}
+
+/**
  * Re-baseline cadence after the Order's pickup date moved. Clears all unfired
  * future events and re-schedules the current state's plan against the new
  * dates. Per CRH brief §13: "Whenever an Order's pickupDate is updated, the
