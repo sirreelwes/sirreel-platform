@@ -5,7 +5,7 @@ import { getMessageDirection } from "@/lib/email/direction"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
-import { extractMessageData } from "@/lib/ai/messageExtractor"
+import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 
 const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -210,31 +210,16 @@ async function syncInbox(email: string) {
       }
     }
 
-    // Per-message AI extraction (Haiku) — turns Cognito-Forms blobs and
-    // free-form inquiries into structured Quick Read cards in the pipeline
-    // slider. Inbound only; duplicates skip (the canonical copy already
-    // carries the extraction). Failures fall back to FALLBACK in the
-    // extractor — never throws past us.
+    // Per-message AI extraction — fire-and-forget so we don't block the
+    // pubsub batch on a Haiku call. The /api/cron/run-message-extraction
+    // cron is the actual guarantee that every inbound row eventually gets
+    // extracted, so if Vercel terminates this background task before it
+    // finishes, the cron picks it up within 5 minutes.
     if (createdMessage && direction === 'INBOUND' && !duplicateOfId) {
-      try {
-        const extracted = await extractMessageData({
-          subject,
-          fromAddress,
-          bodyText: body.bodyText,
-          snippet,
-          bodyHtml: body.bodyHtml,
-        })
-        await prisma.emailMessage.update({
-          where: { id: createdMessage.id },
-          data: {
-            extractedData: extracted as unknown as object,
-            extractionRunAt: new Date(),
-            extractionConfidence: extracted.confidence,
-          },
-        })
-      } catch (err) {
-        console.warn('[pubsub] message extraction failed:', err)
-      }
+      const messageId = createdMessage.id
+      void runMessageExtractionForId(messageId).catch((err) => {
+        console.warn('[pubsub] message extraction failed:', messageId, err instanceof Error ? err.message : err)
+      })
     }
 
     processed++

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { prisma } from '@/lib/prisma'
 
 /**
  * Per-message AI extraction — pulls structured fields out of an inbound
@@ -223,4 +224,55 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
     return FALLBACK
   }
   return coerceExtracted(parsed)
+}
+
+/**
+ * Convenience wrapper used by the ingestion paths (pubsub/fetch/sync) and
+ * the catch-up cron. Loads the EmailMessage, runs extraction, persists the
+ * result + run timestamp + confidence. Returns true on persist success.
+ *
+ * Skip rules:
+ *   - outbound messages → skip
+ *   - duplicate copies (duplicateOfId set) → skip
+ *   - already-extracted (extractionRunAt set) → skip
+ *   - no body content at all → still mark extractionRunAt so the UI stops
+ *     showing "Extracting…" forever
+ */
+export async function runMessageExtractionForId(emailMessageId: string): Promise<boolean> {
+  const email = await prisma.emailMessage.findUnique({
+    where: { id: emailMessageId },
+    select: {
+      id: true,
+      subject: true,
+      fromAddress: true,
+      bodyText: true,
+      bodyHtml: true,
+      snippet: true,
+      direction: true,
+      duplicateOfId: true,
+      extractionRunAt: true,
+    },
+  })
+  if (!email) return false
+  if (email.direction !== 'inbound') return false
+  if (email.duplicateOfId) return false
+  if (email.extractionRunAt) return false
+
+  const extracted = await extractMessageData({
+    subject: email.subject,
+    fromAddress: email.fromAddress,
+    bodyText: email.bodyText,
+    bodyHtml: email.bodyHtml,
+    snippet: email.snippet,
+  })
+
+  await prisma.emailMessage.update({
+    where: { id: email.id },
+    data: {
+      extractedData: extracted as unknown as object,
+      extractionRunAt: new Date(),
+      extractionConfidence: extracted.confidence,
+    },
+  })
+  return true
 }

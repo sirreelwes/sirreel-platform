@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
+import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -168,7 +169,7 @@ export async function POST() {
               },
             })
 
-            await prisma.emailMessage.create({
+            const created = await prisma.emailMessage.create({
               data: {
                 emailAccountId: account.id,
                 threadId: thread.id,
@@ -189,7 +190,14 @@ export async function POST() {
                 triageAt: new Date(),
                 assignedToId: null,
               },
+              select: { id: true },
             })
+            // Fire-and-forget AI extraction; cron is the safety net.
+            if (!duplicateOfId) {
+              void runMessageExtractionForId(created.id).catch((err) =>
+                console.warn('[sync] message extraction failed:', created.id, err instanceof Error ? err.message : err),
+              )
+            }
             processed++
           } catch (e: any) {
             errors++

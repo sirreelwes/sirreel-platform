@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import { EmailCategory, EmailStatus } from "@prisma/client"
+import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 
 const WATCHED_INBOXES = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
           update: { lastMessageAt: sentAt, messageCount: { increment: 1 } },
         })
 
-        await prisma.emailMessage.create({
+        const created = await prisma.emailMessage.create({
           data: {
             emailAccountId: account.id,
             threadId,
@@ -115,7 +116,15 @@ export async function POST(req: NextRequest) {
             priority,
             triageAt: new Date(),
           },
+          select: { id: true },
         })
+        // Fire-and-forget per-message AI extraction. The /api/cron/run-
+        // message-extraction cron is the safety net if this gets terminated.
+        if (direction === 'inbound' && !duplicateOfId) {
+          void runMessageExtractionForId(created.id).catch((err) =>
+            console.warn('[fetch] message extraction failed:', created.id, err instanceof Error ? err.message : err),
+          )
+        }
         processed.push(msgId)
       }
     }
