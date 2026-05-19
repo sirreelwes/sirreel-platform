@@ -2,6 +2,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
+import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
+
+/**
+ * Visual restyle pass (May 2026) — see commit history for the version
+ * that swapped the white sticky header for the TSX dark hero. The tab
+ * navigation, conditional rendering, canvas refs, and CardPointe
+ * iframe init are all intentionally untouched. A separate follow-up
+ * branch will collapse tabs into single-scroll sections with full
+ * regression coverage on all six signing flows.
+ */
 
 const TERMS = [
   { n: 1, title: 'Indemnity', text: `Lessee/Renter ("You") agree to defend, indemnify, and hold SirReel Production Vehicles, Inc. dba SirReel Studio Rentals our agents, employees, assignees, suppliers, sub-lessors and sub-renters ("Us" or "We") harmless from any and all claims, damages, costs, and expenses arising from the Equipment, except as the result of our sole negligence or willful act, from the time the Equipment leaves our place of business until returned to us during normal business hours and we sign a written receipt for it.` },
@@ -318,38 +328,83 @@ export default function ClientPortal() {
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center"><span className="text-white text-xs font-bold">SR</span></div>
-            <div>
-              <div className="text-sm font-semibold text-gray-900">SirReel Studio Services</div>
-              <div className="text-[10px] text-gray-400">{booking.jobName} · {booking.bookingNumber}</div>
-            </div>
+      {/* TSX dark hero. Matches the welcome email's visual language —
+          white SirReel wordmark, gold "PRESENTS / TSX" lockup, serif
+          headline. The tab bar lives in its own sticky strip below;
+          functionality + tab-switching logic are unchanged. */}
+      <div className="w-full" style={{ backgroundColor: TSX.dark }}>
+        <div className="max-w-2xl mx-auto px-5 pt-7 pb-7 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sirreel-logo-white.png"
+            alt="SirReel Studio Services"
+            width={180}
+            style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
+          />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div className="mt-3 text-[10px] uppercase font-semibold" style={{ color: TSX.gold, letterSpacing: '2.5px' }}>
+            Presents
           </div>
-          <div className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${allDone ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+          <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
+          <h1
+            className="mt-4 text-white text-[24px] font-light italic leading-tight"
+            style={{ fontFamily: TSX_SERIF }}
+          >
+            {booking.person?.firstName
+              ? `Welcome, ${booking.person.firstName}.`
+              : 'Welcome to your portal.'}
+          </h1>
+          <p className="mt-2 text-white/60 text-[13px]">
+            {booking.jobName}
+            {booking.startDate && (
+              <>
+                {' · '}
+                {fmtShort(booking.startDate)}
+                {booking.endDate ? ` – ${fmtShort(booking.endDate)}` : ''}
+              </>
+            )}
+          </p>
+          <div
+            className={`inline-flex items-center gap-1.5 mt-4 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase`}
+            style={{
+              backgroundColor: allDone ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.08)',
+              color: allDone ? '#86efac' : 'rgba(255,255,255,0.7)',
+            }}
+          >
             {[done.agreement, done.lcdw, done.coi, done.cc].filter(Boolean).length}/4 complete
           </div>
         </div>
-        <div className="max-w-2xl mx-auto px-2 flex overflow-x-auto border-t border-gray-100">
+      </div>
+
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
+        <div className="max-w-2xl mx-auto px-2 flex overflow-x-auto">
           {TABS.map(tab => {
             const color = tabColor(tab.id);
             const isActive = activeTab === tab.id;
+            // Active-tab underline picks up TSX gold; status-derived
+            // colors (done/pending/fail/pending_admin) keep their
+            // semantic meaning so the rep / client can read the state
+            // of each step at a glance.
+            const baseClasses = 'flex-shrink-0 flex items-center gap-1.5 px-3 py-3 text-[11px] font-bold border-b-2 transition-all whitespace-nowrap uppercase tracking-wider';
+            const inactiveText =
+              color === 'done' ? 'border-transparent text-emerald-600'
+              : color === 'pending_admin' ? 'border-transparent text-amber-500'
+              : color === 'fail' ? 'border-transparent text-red-400'
+              : color === 'pending' ? 'border-transparent text-red-400'
+              : 'border-transparent text-gray-400';
+            const activeText =
+              color === 'done' ? 'border-emerald-500 text-emerald-700'
+              : color === 'pending_admin' ? 'border-amber-500 text-amber-700'
+              : color === 'fail' ? 'border-red-500 text-red-600'
+              : color === 'pending' ? 'border-red-500 text-red-600'
+              : ''; // default active styled via inline style below
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-bold border-b-2 transition-all whitespace-nowrap ${
-                  isActive
-                    ? color === 'done' ? 'border-emerald-500 text-emerald-700'
-                    : color === 'pending_admin' ? 'border-amber-500 text-amber-700'
-                    : color === 'fail' ? 'border-red-500 text-red-600'
-                    : color === 'pending' ? 'border-red-500 text-red-600'
-                    : 'border-gray-900 text-gray-900'
-                    : color === 'done' ? 'border-transparent text-emerald-600'
-                    : color === 'pending_admin' ? 'border-transparent text-amber-500'
-                    : color === 'fail' ? 'border-transparent text-red-400'
-                    : color === 'pending' ? 'border-transparent text-red-400'
-                    : 'border-transparent text-gray-400'
-                }`}>
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`${baseClasses} ${isActive ? activeText : inactiveText}`}
+                style={isActive && !activeText ? { borderBottomColor: TSX.gold, color: TSX.ink } : undefined}
+              >
                 <span className="text-sm">{color === 'done' ? '✓' : color === 'pending_admin' ? '⚠' : color === 'fail' ? '✗' : tab.icon}</span>
                 <span>{tab.label}</span>
               </button>
@@ -1338,8 +1393,30 @@ export default function ClientPortal() {
             </a>
           </div>
         )}
-        <p className="text-center text-[11px] text-gray-400 pb-4">SirReel Studio Services · (818) 515-2389</p>
       </div>
+
+      {/* TSX-branded footer — mirrors the muted footer band on the
+          booking-welcome email so the portal feels like part of the
+          same conversation. After-hours line lives here because
+          it's the surface a client reaches for when something
+          urgent happens on set. */}
+      <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
+        <div className="max-w-2xl mx-auto px-5 py-6 text-center">
+          <div
+            className="text-[18px]"
+            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
+          >
+            SirReel
+          </div>
+          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
+            SirReel Studio Services<br />
+            8500 Lankershim Blvd, Sun Valley, CA 91352
+          </p>
+          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
+            After-hours: <a href="tel:8884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
