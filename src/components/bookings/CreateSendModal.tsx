@@ -34,6 +34,10 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // Welcome-email send state — toast + button label. Lives on the
+  // success branch only; cleared when the modal closes.
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Rental categories — multi-select. The system derives the
   // (legacy-named) contractType from this set: any of gear/vehicles
@@ -497,13 +501,41 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                   >
                     {copied === 'portal' ? '✓ Copied' : 'Copy Link'}
                   </button>
-                  <a
-                    href={`mailto:${contact.email}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${contact.name.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
-                    className="flex-1 py-2.5 rounded-lg text-[12px] font-semibold text-center border border-white/20 text-white hover:bg-white/5"
+                  <button
+                    onClick={async () => {
+                      if (!result.bookingId) return;
+                      setEmailSending(true);
+                      setEmailStatus(null);
+                      try {
+                        const res = await fetch(`/api/bookings/${result.bookingId}/send-welcome`, { method: 'POST' });
+                        const data = await res.json();
+                        if (res.ok && data.ok) {
+                          setEmailStatus({ ok: true, message: `Sent to ${data.to}` });
+                        } else {
+                          setEmailStatus({ ok: false, message: data.error || `Send failed (HTTP ${res.status})` });
+                        }
+                      } catch (err) {
+                        setEmailStatus({ ok: false, message: err instanceof Error ? err.message : 'network error' });
+                      } finally {
+                        setEmailSending(false);
+                      }
+                    }}
+                    disabled={emailSending || emailStatus?.ok}
+                    className="flex-1 py-2.5 rounded-lg text-[12px] font-semibold text-center border border-white/20 text-white hover:bg-white/5 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Send Email
-                  </a>
+                    {emailSending ? 'Sending…' : emailStatus?.ok ? '✓ Email Sent' : 'Send Email'}
+                  </button>
                 </div>
+                {emailStatus && (
+                  <div
+                    className={`mt-3 text-[11px] rounded-md px-2.5 py-1.5 ${
+                      emailStatus.ok ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                    }`}
+                  >
+                    {emailStatus.ok ? '✓ ' : '✗ '}
+                    {emailStatus.message}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-xl p-5 border border-gray-200">
