@@ -460,6 +460,13 @@ model Booking {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   confirmedAt DateTime? @map("confirmed_at")
   returnedAt  DateTime? @map("returned_at")
+  /// Soft-archive marker set by POST /api/bookings/[id]/archive. The
+  /// /bookings page filters `archivedAt IS NULL` by default; restoring
+  /// clears the field. Related rows (PaperworkRequest, SignedAgreement
+  /// via Orders, PortalAccess, etc.) are left untouched — archive is a
+  /// visibility-only flag, not a cascade. A separate ADMIN-only purge
+  /// path will handle hard deletion later.
+  archivedAt  DateTime? @map("archived_at")
 
   // Relations
   company           Company            @relation(fields: [companyId], references: [id])

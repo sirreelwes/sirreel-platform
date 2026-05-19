@@ -27,6 +27,15 @@ type PaperworkSnapshot = {
   sentAt: string | null;
 };
 
+type RelatedCounts = {
+  paperworkRequests: number;
+  orders: number;
+  dispatchTasks: number;
+  insuranceClaims: number;
+  signedAgreements: number;
+  portalAccesses: number;
+};
+
 type BookingRow = {
   id: string;
   bookingNumber: string;
@@ -37,10 +46,12 @@ type BookingRow = {
   endDate: string | null;
   totalPrice: number | string | null;
   createdAt: string;
+  archivedAt: string | null;
   company: { name: string } | null;
   person: { firstName: string; lastName: string; email: string } | null;
   agent: { name: string } | null;
   paperworkRequests: PaperworkSnapshot[];
+  relatedCounts?: RelatedCounts;
 };
 
 interface StatusConfig {
@@ -94,14 +105,19 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [showArchived, setShowArchived] = useState(false);
   const [showCreateSend, setShowCreateSend] = useState(false);
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [drawerNumber, setDrawerNumber] = useState('');
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
+  // Archive confirmation modal — null = not open; the booking row is
+  // the subject and source of the linked-data warning.
+  const [archiveTarget, setArchiveTarget] = useState<BookingRow | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
-  const reload = () => {
+  const reload = (archived = showArchived) => {
     setLoading(true);
-    fetch('/api/bookings/list')
+    fetch(`/api/bookings/list${archived ? '?archived=1' : ''}`)
       .then((r) => r.json())
       .then((data) => setBookings(Array.isArray(data.bookings) ? data.bookings : []))
       .catch(() => setBookings([]))
@@ -109,8 +125,35 @@ export default function BookingsPage() {
   };
 
   useEffect(() => {
-    reload();
-  }, []);
+    reload(showArchived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
+
+  const archive = async () => {
+    if (!archiveTarget) return;
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/bookings/${archiveTarget.id}/archive`, { method: 'POST' });
+      if (res.ok) {
+        setArchiveTarget(null);
+        reload(showArchived);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Archive failed');
+      }
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const restore = async (id: string) => {
+    const res = await fetch(`/api/bookings/${id}/restore`, { method: 'POST' });
+    if (res.ok) reload(showArchived);
+    else {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || 'Restore failed');
+    }
+  };
 
   // Counts per status — used to label the chip filters.
   const counts = useMemo(() => {
@@ -195,6 +238,19 @@ export default function BookingsPage() {
             </button>
           );
         })}
+        {/* Archived toggle — sits at the end of the chip row so the
+            default "live" set stays the natural left-hand emphasis. */}
+        <span className="mx-1 text-gray-200">|</span>
+        <button
+          onClick={() => setShowArchived((v) => !v)}
+          className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+            showArchived
+              ? 'bg-zinc-900 text-white border-zinc-900'
+              : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400'
+          }`}
+        >
+          {showArchived ? '↩ Back to active' : '🗄 Show archived'}
+        </button>
       </div>
 
       {/* Search */}
@@ -237,9 +293,21 @@ export default function BookingsPage() {
                 setCopiedFor(b.id);
                 setTimeout(() => setCopiedFor(null), 1500);
               }}
+              onArchive={() => setArchiveTarget(b)}
+              onRestore={() => restore(b.id)}
             />
           ))}
         </div>
+      )}
+
+      {/* Archive confirmation modal */}
+      {archiveTarget && (
+        <ArchiveConfirmModal
+          booking={archiveTarget}
+          busy={archiving}
+          onCancel={() => setArchiveTarget(null)}
+          onConfirm={archive}
+        />
       )}
 
       {showCreateSend && (
@@ -266,17 +334,22 @@ function JobCard({
   onOpenDrawer,
   onCopyPortal,
   copied,
+  onArchive,
+  onRestore,
 }: {
   booking: BookingRow;
   onOpenDrawer: () => void;
   onCopyPortal: () => void;
   copied: boolean;
+  onArchive: () => void;
+  onRestore: () => void;
 }) {
   const cfg = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.ARCHIVED;
   const projectName = booking.productionName || booking.jobName || '(no project name)';
   const personFullName = booking.person ? `${booking.person.firstName} ${booking.person.lastName}` : null;
   const total = fmtMoney(booking.totalPrice ?? null);
   const pw = booking.paperworkRequests?.[0] ?? null;
+  const isArchived = !!booking.archivedAt;
 
   const portalToken = pw?.token ?? null;
   const portalUrl = portalToken ? `/portal/${portalToken}` : null;
@@ -284,9 +357,29 @@ function JobCard({
   return (
     <div
       onClick={onOpenDrawer}
-      className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer flex flex-col gap-2.5 active:scale-[0.995]"
+      className={`group relative bg-white rounded-xl border p-4 hover:shadow-md transition-all cursor-pointer flex flex-col gap-2.5 active:scale-[0.995] ${
+        isArchived ? 'border-gray-200 opacity-70 hover:opacity-95' : 'border-gray-200 hover:border-gray-300'
+      }`}
       style={{ borderLeftWidth: 3, borderLeftColor: cfg.bar }}
     >
+      {/* Archive / restore affordance — hover-revealed (still visible
+          on touch via the always-mounted action menu inside cards). */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          isArchived ? onRestore() : onArchive();
+        }}
+        title={isArchived ? 'Restore booking' : 'Archive booking'}
+        aria-label={isArchived ? 'Restore booking' : 'Archive booking'}
+        className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-semibold border transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100 ${
+          isArchived
+            ? 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'
+            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+        }`}
+      >
+        {isArchived ? 'Restore' : 'Archive'}
+      </button>
       {/* Header row — job name is the primary identifier; company sits
           below as context. Booking number moves out of the meta row
           (it's an internal id; the drawer surfaces it for ops). */}
@@ -336,7 +429,13 @@ function JobCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100 mt-1">
-        <div className="text-[11px] text-gray-400">created {fmtRelative(booking.createdAt)}</div>
+        <div className="text-[11px] text-gray-400">
+          {isArchived ? (
+            <span className="text-zinc-500">archived {fmtRelative(booking.archivedAt!)}</span>
+          ) : (
+            <>created {fmtRelative(booking.createdAt)}</>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {total && <span className="text-[12px] font-bold text-emerald-700">{total}</span>}
           {portalUrl && (
@@ -395,5 +494,74 @@ function PaperworkBadges({ pw }: { pw: PaperworkSnapshot }) {
         </span>
       ))}
     </div>
+  );
+}
+
+/**
+ * Confirmation modal for booking archive. Surfaces the linked-row
+ * counts so the rep knows what's about to be hidden — none of these
+ * rows get deleted, but the booking is the entry point, so this is
+ * what "hidden" means in practice. Restore zeroes archivedAt and
+ * everything reappears.
+ */
+function ArchiveConfirmModal({
+  booking,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  booking: BookingRow;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const projectName = booking.productionName || booking.jobName || `Booking ${booking.bookingNumber}`;
+  const c = booking.relatedCounts;
+  const warnings: string[] = [];
+  if (c) {
+    if (c.signedAgreements > 0) warnings.push(`${c.signedAgreements} signed agreement${c.signedAgreements === 1 ? '' : 's'}`);
+    if (c.portalAccesses > 0) warnings.push(`${c.portalAccesses} portal access${c.portalAccesses === 1 ? '' : 'es'}`);
+    if (c.paperworkRequests > 0) warnings.push(`${c.paperworkRequests} paperwork request${c.paperworkRequests === 1 ? '' : 's'}`);
+    if (c.dispatchTasks > 0) warnings.push(`${c.dispatchTasks} dispatch task${c.dispatchTasks === 1 ? '' : 's'}`);
+    if (c.insuranceClaims > 0) warnings.push(`${c.insuranceClaims} insurance claim${c.insuranceClaims === 1 ? '' : 's'}`);
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:w-[480px] z-50 bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <div className="text-base font-bold text-gray-900">Archive booking?</div>
+        </div>
+        <div className="px-5 py-4 space-y-3 text-[13px] text-gray-700 leading-relaxed">
+          <p>
+            Archive <span className="font-semibold text-gray-900">{projectName}</span>?
+            It will be hidden from the Jobs page. You can restore it any time
+            from the &ldquo;Show archived&rdquo; view.
+          </p>
+          {warnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-800">
+              This booking has {warnings.join(', ')}. They will be hidden along with the booking but stay readable via direct links and restore.
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="px-4 py-2 rounded-lg text-[12px] font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {busy ? 'Archiving…' : 'Archive'}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

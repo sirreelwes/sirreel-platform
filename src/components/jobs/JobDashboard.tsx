@@ -125,6 +125,32 @@ export default function JobDashboard({ orderId: bookingId, orderNumber: bookingN
   const stageContract = allSignedAgreements.find((a: any) => a.contractType === 'STAGE_CONTRACT') || null;
   const portalAccesses = orders.flatMap((o: any) => o.portalAccesses || []);
   const hasRwLink = !!booking?.rentalworksOrderId;
+  const isArchived = !!booking?.archivedAt;
+
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const archiveBooking = async () => {
+    if (!booking?.id) return;
+    if (!confirm(`Archive "${projectName}"? You can restore it later from the Show archived view.`)) return;
+    setArchiveBusy(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/archive`, { method: 'POST' });
+      if (res.ok) onClose();
+      else alert('Archive failed');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+  const restoreBooking = async () => {
+    if (!booking?.id) return;
+    setArchiveBusy(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/restore`, { method: 'POST' });
+      if (res.ok) onClose();
+      else alert('Restore failed');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
 
   return (
     <>
@@ -238,6 +264,25 @@ export default function JobDashboard({ orderId: bookingId, orderNumber: bookingN
             </a>
           ) : (
             <div className="flex-1 py-2.5 text-center text-[11px] text-gray-400">Native booking — no RentalWorks counterpart</div>
+          )}
+          {booking && (
+            isArchived ? (
+              <button
+                onClick={restoreBooking}
+                disabled={archiveBusy}
+                className="px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-[12px] font-semibold hover:bg-blue-100 transition-colors disabled:opacity-50"
+              >
+                Restore
+              </button>
+            ) : (
+              <button
+                onClick={archiveBooking}
+                disabled={archiveBusy}
+                className="px-3 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 text-[12px] font-semibold hover:bg-gray-50 hover:text-gray-800 transition-colors disabled:opacity-50"
+              >
+                {archiveBusy ? '…' : 'Archive'}
+              </button>
+            )
           )}
           <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200 transition-colors">
             Close
