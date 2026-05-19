@@ -25,6 +25,49 @@ interface SuggestionRecord {
   threadMessageCount?: number;
 }
 
+// Mirrors InquiryClassification in src/lib/email/classifyInquiryForPipeline.ts.
+type HiddenClassification =
+  | 'paperwork'
+  | 'damage_report'
+  | 'coi'
+  | 'rejection'
+  | 'confirmation'
+  | 'other';
+
+interface HiddenItem {
+  emailId: string;
+  fromAddress: string;
+  subject: string;
+  sentAt: string;
+  classification: HiddenClassification;
+  reason: string;
+}
+
+interface HiddenPayload {
+  counts: Record<HiddenClassification | 'inquiry', number>;
+  items: HiddenItem[];
+  totalHidden: number;
+}
+
+// Human labels for the hidden-counts summary line.
+const HIDDEN_LABELS: Record<HiddenClassification, { singular: string; plural: string }> = {
+  paperwork: { singular: 'paperwork', plural: 'paperwork' },
+  damage_report: { singular: 'damage report', plural: 'damage reports' },
+  coi: { singular: 'COI', plural: 'COIs' },
+  rejection: { singular: 'rejection', plural: 'rejections' },
+  confirmation: { singular: 'confirmation', plural: 'confirmations' },
+  other: { singular: 'other', plural: 'other' },
+};
+
+const HIDDEN_BADGE_COLOR: Record<HiddenClassification, string> = {
+  paperwork: 'bg-zinc-700 text-zinc-300',
+  damage_report: 'bg-red-900/40 text-red-300',
+  coi: 'bg-sky-900/40 text-sky-300',
+  rejection: 'bg-rose-900/40 text-rose-300',
+  confirmation: 'bg-amber-900/40 text-amber-300',
+  other: 'bg-zinc-800 text-zinc-400',
+};
+
 const CATEGORY_BADGE: Record<NonNullable<SuggestionRecord['category']>, string> = {
   BOOKING_INQUIRY: 'bg-emerald-900/40 text-emerald-300',
   RENTAL_REQUEST: 'bg-blue-900/40 text-blue-300',
@@ -45,7 +88,9 @@ export function InquiriesSection() {
   const searchParams = useSearchParams();
   const [newInquiries, setNewInquiries] = useState<SuggestionRecord[] | null>(null);
   const [followUps, setFollowUps] = useState<SuggestionRecord[]>([]);
+  const [hidden, setHidden] = useState<HiddenPayload | null>(null);
   const [showFollowUps, setShowFollowUps] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null);
@@ -56,10 +101,12 @@ export function InquiriesSection() {
       .then((d) => {
         setNewInquiries(d.newInquiries || d.suggestions || []);
         setFollowUps(d.followUps || []);
+        setHidden(d.hidden || null);
       })
       .catch(() => {
         setNewInquiries([]);
         setFollowUps([]);
+        setHidden(null);
       });
   }, []);
 
@@ -232,6 +279,14 @@ export function InquiriesSection() {
             </div>
           )}
 
+          {hidden && hidden.totalHidden > 0 && (
+            <HiddenThreadsPanel
+              hidden={hidden}
+              open={showHidden}
+              onToggle={() => setShowHidden((v) => !v)}
+            />
+          )}
+
           {followUps.length > 0 && (
             <div className="mt-3 border-t border-zinc-800 pt-3">
               <button
@@ -329,5 +384,76 @@ export function InquiriesSection() {
         busy={busyId !== null && busyId === drawerEmailId}
       />
     </section>
+  );
+}
+
+// Hidden-threads disclosure. Shows the per-category counts as a
+// single summary line; clicking expands a flat list with each
+// item's classification + reason so reps can spot false negatives
+// (a real lead the classifier accidentally hid). Limited to the
+// HIDDEN_LIST_LIMIT slice the API returns — older hidden items are
+// still counted in the totals but not enumerated.
+function HiddenThreadsPanel({
+  hidden,
+  open,
+  onToggle,
+}: {
+  hidden: HiddenPayload;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const summaryParts: string[] = [];
+  (Object.keys(HIDDEN_LABELS) as HiddenClassification[]).forEach((kind) => {
+    const n = hidden.counts[kind] || 0;
+    if (n === 0) return;
+    const label = n === 1 ? HIDDEN_LABELS[kind].singular : HIDDEN_LABELS[kind].plural;
+    summaryParts.push(`${n} ${label}`);
+  });
+
+  return (
+    <div className="mt-3 border-t border-zinc-800 pt-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-2 text-[11px] font-semibold text-zinc-500 hover:text-zinc-300"
+        aria-expanded={open}
+      >
+        <span className="text-[9px]">{open ? '▼' : '▶'}</span>
+        <span>Hidden: {summaryParts.join(' · ')}</span>
+        <span className="text-zinc-600 font-normal">
+          · paperwork, damage reports, COIs auto-classified out of Inquiries
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 divide-y divide-zinc-800/50">
+          {hidden.items.length === 0 ? (
+            <div className="py-3 text-xs text-zinc-600">No hidden items in the last 14 days.</div>
+          ) : (
+            hidden.items.map((h) => (
+              <div key={h.emailId} className="py-2 flex items-start justify-between gap-3 flex-wrap opacity-80">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap text-[12px]">
+                    <span className="text-zinc-300 truncate">{h.subject || '(no subject)'}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${HIDDEN_BADGE_COLOR[h.classification]}`}>
+                      {h.classification.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 flex-wrap">
+                    <span>{h.fromAddress}</span>
+                    <span>· {ageString(h.sentAt)} ago</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-600 mt-1 italic">{h.reason}</p>
+                </div>
+              </div>
+            ))
+          )}
+          {hidden.totalHidden > hidden.items.length && (
+            <div className="py-2 text-[10px] text-zinc-600">
+              … {hidden.totalHidden - hidden.items.length} more hidden item{hidden.totalHidden - hidden.items.length === 1 ? '' : 's'} not shown.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
