@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ContactPicker, EMPTY_CONTACT_PICKER_VALUE, type ContactPickerValue } from '@/components/shared/ContactPicker';
 import { formatPhone } from '@/lib/format/phone';
+import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 const VEHICLE_TYPES = [
   'Cube Truck', 'Cargo Van', 'Passenger Van', 'PopVan',
@@ -188,15 +189,31 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
     <>
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-x-4 top-[5%] bottom-[5%] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-[560px] z-50 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        {/* The small white header is only shown for the form state. The
-            success state replaces it with a full-bleed dark TSX hero. */}
+        {/* TSX-branded hero header — same visual language as the
+            portal invite + booking welcome emails. The success branch
+            renders its own full-bleed hero with the SirReel wordmark;
+            the form branch uses this slimmer "PRESENTS / TSX" version. */}
         {!result && (
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-            <div>
-              <div className="text-base font-bold text-gray-900">Create & Send Portal Link</div>
-              <div className="text-[11px] text-gray-400">Client will complete their details and paperwork</div>
+          <div className="flex-shrink-0 relative" style={{ backgroundColor: TSX.dark }}>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center text-sm transition-colors"
+            >
+              ×
+            </button>
+            <div className="px-6 pt-5 pb-5 text-center">
+              <div className="text-[9px] uppercase font-bold" style={{ color: TSX.gold, letterSpacing: '2.5px' }}>
+                Presents
+              </div>
+              <div className="mt-1 text-white text-[26px] font-light tracking-[5px]">TSX</div>
+              <h2 className="mt-3 text-white text-[22px] leading-tight font-light italic" style={{ fontFamily: TSX_SERIF }}>
+                Create &amp; Send Portal Link
+              </h2>
+              <p className="mt-1.5 text-white/55 text-[12px]">
+                Client will complete their details and paperwork
+              </p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 text-sm">✕</button>
           </div>
         )}
 
@@ -204,26 +221,40 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
           <>
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-              {/* Rental Categories — multi-select. At least one required. */}
+              {/* Rental Categories — multi-select. At least one required.
+                  TSX styling: dark cards, gold border + serif title when
+                  selected. No emoji. */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Rental Categories *</label>
+                <TsxLabel>Rental Categories *</TsxLabel>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { key: 'gear', label: '🔧 Gear', help: 'Grip, electric, comms, supplies' },
-                    { key: 'stage', label: '🎬 Stage', help: 'Standing Sets, LED Volume, soundstages' },
-                    { key: 'vehicles', label: '🚛 Vehicles', help: 'Trucks, vans, motorhomes' },
+                    { key: 'gear', label: 'Gear', help: 'Grip, electric, comms, supplies' },
+                    { key: 'stage', label: 'Stage', help: 'Standing Sets, LED Volume, soundstages' },
+                    { key: 'vehicles', label: 'Vehicles', help: 'Trucks, vans, motorhomes' },
                   ] as const).map((c) => {
                     const on = categories.has(c.key);
                     return (
                       <button
                         key={c.key}
                         onClick={() => toggleCategory(c.key)}
-                        className={`py-3 px-2 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center gap-0.5 ${
-                          on ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                        }`}
+                        className="py-3 px-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 text-center"
+                        style={{
+                          backgroundColor: TSX.dark,
+                          borderColor: on ? TSX.gold : 'rgba(255,255,255,0.10)',
+                        }}
                       >
-                        <span>{c.label}</span>
-                        <span className={`text-[9px] font-normal ${on ? 'text-gray-300' : 'text-gray-400'}`}>{c.help}</span>
+                        <span
+                          className="text-[15px] italic"
+                          style={{
+                            fontFamily: TSX_SERIF,
+                            color: on ? TSX.gold : 'rgba(255,255,255,0.85)',
+                          }}
+                        >
+                          {c.label}
+                        </span>
+                        <span className="text-[9px] font-normal leading-snug" style={{ color: on ? 'rgba(212,165,71,0.65)' : 'rgba(255,255,255,0.45)' }}>
+                          {c.help}
+                        </span>
                       </button>
                     );
                   })}
@@ -231,16 +262,16 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                 {categories.size > 0 && (
                   <div className="mt-2 text-[10px] text-gray-500">
                     Generates:{' '}
-                    {hasRentalSide && <span className="font-semibold text-gray-700">Rental Agreement</span>}
+                    {hasRentalSide && <span className="font-semibold" style={{ color: TSX.ink }}>Rental Agreement</span>}
                     {hasRentalSide && hasStage && <span> + </span>}
-                    {hasStage && <span className="font-semibold text-gray-700">Stage Contract</span>}
+                    {hasStage && <span className="font-semibold" style={{ color: TSX.ink }}>Stage Contract</span>}
                   </div>
                 )}
               </div>
 
               {/* Company */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Production Company *</label>
+                <TsxLabel>Production Company *</TsxLabel>
                 <div className="relative" ref={companyRef}>
                   <input value={companyQuery} onChange={e => { setCompanyQuery(e.target.value); setSelectedCompany(null); }}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400" placeholder="Type company name..." />
@@ -266,7 +297,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
 
               {/* Contact */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Primary Contact *</label>
+                <TsxLabel>Primary Contact *</TsxLabel>
                 <div className="text-[10px] text-gray-400 -mt-1 mb-2">
                   The client&rsquo;s representative — not a SirReel staff member.
                 </div>
@@ -314,7 +345,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
 
               {/* Job Details */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Job Details</label>
+                <TsxLabel>Job Details</TsxLabel>
                 <div className="space-y-2">
                   <input value={jobName} onChange={e => setJobName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400" placeholder="Production / Job name *" />
                   <div className="grid grid-cols-2 gap-2">
@@ -333,14 +364,25 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
               {/* Vehicle Section */}
               {showVehicles && (
                 <div>
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Vehicles / Equipment</label>
+                  <TsxLabel>Vehicles / Equipment</TsxLabel>
                   <div className="grid grid-cols-3 gap-2">
-                    {VEHICLE_TYPES.map(v => (
-                      <button key={v} onClick={() => toggleVehicle(v)}
-                        className={`px-3 py-2 rounded-xl border text-center text-[12px] font-semibold transition-all ${selectedVehicles.includes(v) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
-                        {v}
-                      </button>
-                    ))}
+                    {VEHICLE_TYPES.map(v => {
+                      const on = selectedVehicles.includes(v);
+                      return (
+                        <button
+                          key={v}
+                          onClick={() => toggleVehicle(v)}
+                          className="px-3 py-2 rounded-xl border-2 text-center text-[12px] font-semibold transition-all"
+                          style={{
+                            backgroundColor: on ? TSX.dark : '#ffffff',
+                            color: on ? TSX.gold : '#525252',
+                            borderColor: on ? TSX.gold : '#e5e7eb',
+                          }}
+                        >
+                          {v}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -348,7 +390,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
               {/* Stage Section */}
               {showStage && (
                 <div className="space-y-4 border border-gray-200 rounded-xl p-4 bg-gray-50">
-                  <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">🎬 Stage Details</div>
+                  <TsxLabel>Stage Details</TsxLabel>
 
                   {/* Sets */}
                   <div>
@@ -443,16 +485,20 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
 
               {/* Internal Notes */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Internal Notes</label>
+                <TsxLabel>Internal Notes</TsxLabel>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 resize-none" rows={2} placeholder="Any notes for the team..." />
               </div>
 
             </div>
 
             <div className="flex-shrink-0 p-5 border-t border-gray-100">
-              <button onClick={submit} disabled={!canSubmit || submitting}
-                className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-gray-800 disabled:opacity-40 transition-colors">
-                {submitting ? 'Creating...' : 'Create Booking & Generate Link →'}
+              <button
+                onClick={submit}
+                disabled={!canSubmit || submitting}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: TSX.gold, color: TSX.dark }}
+              >
+                {submitting ? 'Creating…' : 'Create Booking & Generate Link →'}
               </button>
               <p className="text-center text-[10px] text-gray-400 mt-2">Client will receive a link to complete their paperwork</p>
             </div>
@@ -587,5 +633,19 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
         )}
       </div>
     </>
+  );
+}
+
+/** Gold uppercase form-section label — the small caps kicker used
+ *  throughout the TSX UI (matches the same treatment in the portal
+ *  invite + booking welcome emails). */
+function TsxLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label
+      className="block mb-2 text-[10px] font-bold"
+      style={{ color: TSX.gold, letterSpacing: '2px', textTransform: 'uppercase' }}
+    >
+      {children}
+    </label>
   );
 }
