@@ -230,6 +230,63 @@ export default function OrderDetailPage() {
     setLoading(false);
   }, [orderId, router]);
 
+  // Inline "Add quote recipient" form state — opened from the
+  // RecipientLine warning, creates a JobContact + optional PortalAccess
+  // in a single POST.
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [addContactBusy, setAddContactBusy] = useState(false);
+  const [addContactErr, setAddContactErr] = useState<string>("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addFirst, setAddFirst] = useState("");
+  const [addLast, setAddLast] = useState("");
+  const [addRole, setAddRole] = useState<"PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER">("PRODUCER");
+  const [addGrantPortal, setAddGrantPortal] = useState(true);
+
+  const resetAddForm = () => {
+    setAddEmail("");
+    setAddFirst("");
+    setAddLast("");
+    setAddRole("PRODUCER");
+    setAddGrantPortal(true);
+    setAddContactErr("");
+  };
+
+  const submitAddContact = async (opts: { andSendQuote?: boolean } = {}) => {
+    if (!addEmail.trim()) {
+      setAddContactErr("Email is required");
+      return;
+    }
+    setAddContactBusy(true);
+    setAddContactErr("");
+    try {
+      const r = await fetch(`/api/orders/${orderId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: addEmail.trim(),
+          firstName: addFirst.trim() || undefined,
+          lastName: addLast.trim() || undefined,
+          role: addRole,
+          grantPortalAccess: addGrantPortal,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setAddContactErr(data.error || "Failed to add contact");
+        return;
+      }
+      // Refresh: order data (for the recipient line) + portal access list.
+      await Promise.all([fetchOrder(), fetchPortalAccess()]);
+      setAddContactOpen(false);
+      resetAddForm();
+      if (opts.andSendQuote && order && order.status === "DRAFT") {
+        await updateStatus("QUOTE_SENT");
+      }
+    } finally {
+      setAddContactBusy(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrder();
     fetch("/api/orders/lookups").then((r) => r.json()).then((data) => {
@@ -584,9 +641,38 @@ export default function OrderDetailPage() {
                 <button onClick={deleteOrder} className="px-3 py-2 text-zinc-500 hover:text-red-400 text-sm">Delete</button>
               )}
             </div>
-            {order.status === "DRAFT" && <RecipientLine recipients={recipients} />}
+            {order.status === "DRAFT" && (
+              <RecipientLine recipients={recipients} onAdd={() => setAddContactOpen(true)} />
+            )}
           </div>
         </div>
+
+        {addContactOpen && (
+          <div className="mt-4 border-t border-zinc-800 pt-4">
+            <AddContactForm
+              email={addEmail}
+              first={addFirst}
+              last={addLast}
+              role={addRole}
+              grantPortal={addGrantPortal}
+              busy={addContactBusy}
+              err={addContactErr}
+              hasQuotePdf={!!order.quotePdfUrl}
+              onChange={{
+                email: setAddEmail,
+                first: setAddFirst,
+                last: setAddLast,
+                role: setAddRole,
+                grantPortal: setAddGrantPortal,
+              }}
+              onSubmit={(andSendQuote) => submitAddContact({ andSendQuote })}
+              onCancel={() => {
+                setAddContactOpen(false);
+                resetAddForm();
+              }}
+            />
+          </div>
+        )}
         <div className="grid grid-cols-4 gap-6 text-sm">
           <div><span className="text-zinc-500">Company</span><p className="text-white mt-0.5">{order.company.name}</p></div>
           <div><span className="text-zinc-500">Agent</span><p className="text-white mt-0.5">{order.agent.name}</p></div>
@@ -644,7 +730,7 @@ export default function OrderDetailPage() {
                 >
                   Send to Client
                 </button>
-                <RecipientLine recipients={recipients} />
+                <RecipientLine recipients={recipients} onAdd={() => setAddContactOpen(true)} />
               </div>
             </>
           ) : (
@@ -904,8 +990,11 @@ export default function OrderDetailPage() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-lg font-semibold text-white">Job Page portal access</h2>
-            <div className="text-xs text-zinc-500 mt-0.5">Per-contact magic links · 7-day TTL · 30-day session</div>
+            <h2 className="text-lg font-semibold text-white">Portal access</h2>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Per-contact magic links · 7-day TTL · 30-day session.{' '}
+              <span className="text-zinc-600">Add new contacts via &ldquo;+ Add quote recipient&rdquo; above.</span>
+            </div>
           </div>
         </div>
 
@@ -1021,40 +1110,13 @@ export default function OrderDetailPage() {
           </div>
         )}
 
-        {/* Direct invite form */}
-        <div className="border-t border-zinc-800 pt-4">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">Invite a new contact</div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="email@example.com"
-              className="sm:col-span-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
-            />
-            <input
-              value={inviteFirst}
-              onChange={(e) => setInviteFirst(e.target.value)}
-              placeholder="First name"
-              className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
-            />
-            <input
-              value={inviteLast}
-              onChange={(e) => setInviteLast(e.target.value)}
-              placeholder="Last name"
-              className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-[11px] text-zinc-500">{inviteMsg}</div>
-            <button
-              onClick={() => directInvite()}
-              disabled={!inviteEmail.trim() || inviteBusy}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
-            >
-              {inviteBusy ? 'Inviting…' : 'Send invite'}
-            </button>
-          </div>
-        </div>
+        {/* The "Invite a new contact" form moved up to the header's
+            "+ Add quote recipient" affordance so a single action creates
+            both a JobContact and a PortalAccess. This section is now
+            management-only — list/revoke/regenerate live access. */}
+        {inviteMsg && (
+          <div className="border-t border-zinc-800 pt-3 text-[11px] text-zinc-400">{inviteMsg}</div>
+        )}
       </div>
 
       {/* Line Items */}
@@ -1262,8 +1324,25 @@ export default function OrderDetailPage() {
   );
 }
 
-function RecipientLine({ recipients }: { recipients: RecipientChoice }) {
+function RecipientLine({
+  recipients,
+  onAdd,
+}: {
+  recipients: RecipientChoice;
+  onAdd?: () => void;
+}) {
   if (!recipients.primary) {
+    if (onAdd) {
+      return (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted underline-offset-2"
+        >
+          + Add quote recipient
+        </button>
+      );
+    }
     return (
       <div className="text-[11px] text-amber-400">
         ⚠ No recipient — add a contact to send
@@ -1289,6 +1368,118 @@ function RecipientLine({ recipients }: { recipients: RecipientChoice }) {
           {' '}and {others.length} other{others.length === 1 ? '' : 's'}
         </span>
       )}
+    </div>
+  );
+}
+
+function AddContactForm({
+  email,
+  first,
+  last,
+  role,
+  grantPortal,
+  busy,
+  err,
+  hasQuotePdf,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  email: string;
+  first: string;
+  last: string;
+  role: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER";
+  grantPortal: boolean;
+  busy: boolean;
+  err: string;
+  hasQuotePdf: boolean;
+  onChange: {
+    email: (v: string) => void;
+    first: (v: string) => void;
+    last: (v: string) => void;
+    role: (v: "PRODUCER" | "PM" | "PC" | "ACCOUNTING" | "OTHER") => void;
+    grantPortal: (v: boolean) => void;
+  };
+  onSubmit: (andSendQuote: boolean) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 space-y-3">
+      <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Add quote recipient</div>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+        <input
+          value={email}
+          onChange={(e) => onChange.email(e.target.value)}
+          placeholder="email@example.com"
+          type="email"
+          autoFocus
+          className="sm:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+        />
+        <input
+          value={first}
+          onChange={(e) => onChange.first(e.target.value)}
+          placeholder="First name"
+          className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+        />
+        <input
+          value={last}
+          onChange={(e) => onChange.last(e.target.value)}
+          placeholder="Last name"
+          className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+        />
+      </div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <label className="flex items-center gap-2 text-xs text-zinc-400">
+          Role
+          <select
+            value={role}
+            onChange={(e) => onChange.role(e.target.value as typeof role)}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+          >
+            <option value="PRODUCER">Producer</option>
+            <option value="PM">PM</option>
+            <option value="PC">PC</option>
+            <option value="ACCOUNTING">Accounting</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={grantPortal}
+            onChange={(e) => onChange.grantPortal(e.target.checked)}
+            className="w-3.5 h-3.5"
+          />
+          Also grant portal access (sends magic link)
+        </label>
+      </div>
+      {err && <div className="text-[11px] text-red-400">{err}</div>}
+      <div className="flex items-center justify-end gap-2 flex-wrap">
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="text-zinc-400 hover:text-zinc-200 disabled:opacity-50 text-sm"
+        >
+          Cancel
+        </button>
+        {hasQuotePdf ? (
+          <button
+            onClick={() => onSubmit(true)}
+            disabled={busy || !email.trim()}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+          >
+            {busy ? "Adding…" : "Add and Send Quote"}
+          </button>
+        ) : (
+          <button
+            onClick={() => onSubmit(false)}
+            disabled={busy || !email.trim()}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+          >
+            {busy ? "Adding…" : "Add"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
