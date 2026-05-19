@@ -35,8 +35,31 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
   const [result, setResult] = useState<any>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Contract type
-  const [contractType, setContractType] = useState<'vehicles' | 'stage' | 'both'>('' as any);
+  // Rental categories — multi-select. The system derives the
+  // (legacy-named) contractType from this set: any of gear/vehicles
+  // requires a Rental Agreement; stage requires a Stage Contract; the
+  // intersection produces contractType='both' so the API generates
+  // both contracts. Replaces the old single-select 'vehicles'|'stage'|
+  // 'both' button group.
+  type Category = 'gear' | 'stage' | 'vehicles';
+  const [categories, setCategories] = useState<Set<Category>>(new Set());
+  const toggleCategory = (c: Category) => {
+    setCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  };
+  const hasStage = categories.has('stage');
+  const hasRentalSide = categories.has('gear') || categories.has('vehicles');
+  const contractType: 'vehicles' | 'stage' | 'both' | '' = hasStage && hasRentalSide
+    ? 'both'
+    : hasStage
+      ? 'stage'
+      : hasRentalSide
+        ? 'vehicles'
+        : '';
 
   // Vehicle fields
   const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
@@ -87,8 +110,8 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
   const togglePrelit = (id: string) => setStagePrelitSets(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const copy = (text: string, key: string) => { navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 2000); };
 
-  const showVehicles = contractType === 'vehicles' || contractType === 'both';
-  const showStage = contractType === 'stage' || contractType === 'both';
+  const showVehicles = hasRentalSide;
+  const showStage = hasStage;
 
   const submit = async () => {
     if (!jobName || !startDate || !contact.email || !contractType) return;
@@ -108,7 +131,11 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
           personName: contact.name,
           personPhone: contact.phone,
           agentId, jobName, startDate, endDate,
+          // contractType is derived client-side from `categories` so the
+          // legacy API contract stays unchanged. `categories` is also sent
+          // so the backend (or future analytics) has the raw selection.
           contractType,
+          categories: Array.from(categories),
           vehicleTypes: selectedVehicles,
           notes,
           stageDetails: showStage ? {
@@ -146,29 +173,54 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
     <>
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-x-4 top-[5%] bottom-[5%] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-[560px] z-50 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <div>
-            <div className="text-base font-bold text-gray-900">Create & Send Portal Link</div>
-            <div className="text-[11px] text-gray-400">Client will complete their details and paperwork</div>
+        {/* The small white header is only shown for the form state. The
+            success state replaces it with a full-bleed dark TSX hero. */}
+        {!result && (
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+            <div>
+              <div className="text-base font-bold text-gray-900">Create & Send Portal Link</div>
+              <div className="text-[11px] text-gray-400">Client will complete their details and paperwork</div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 text-sm">✕</button>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 text-sm">✕</button>
-        </div>
+        )}
 
         {!result ? (
           <>
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
-              {/* Contract Type */}
+              {/* Rental Categories — multi-select. At least one required. */}
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Contract Type *</label>
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Rental Categories *</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['vehicles', 'stage', 'both'] as const).map(type => (
-                    <button key={type} onClick={() => setContractType(type)}
-                      className={`py-3 rounded-xl border text-sm font-semibold transition-all ${contractType === type ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
-                      {type === 'vehicles' ? '🚛 Vehicles' : type === 'stage' ? '🎬 Stage' : '🚛🎬 Both'}
-                    </button>
-                  ))}
+                  {([
+                    { key: 'gear', label: '🔧 Gear', help: 'Grip, electric, comms, supplies' },
+                    { key: 'stage', label: '🎬 Stage', help: 'Standing Sets, LED Volume, soundstages' },
+                    { key: 'vehicles', label: '🚛 Vehicles', help: 'Trucks, vans, motorhomes' },
+                  ] as const).map((c) => {
+                    const on = categories.has(c.key);
+                    return (
+                      <button
+                        key={c.key}
+                        onClick={() => toggleCategory(c.key)}
+                        className={`py-3 px-2 rounded-xl border text-sm font-semibold transition-all flex flex-col items-center gap-0.5 ${
+                          on ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                        }`}
+                      >
+                        <span>{c.label}</span>
+                        <span className={`text-[9px] font-normal ${on ? 'text-gray-300' : 'text-gray-400'}`}>{c.help}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+                {categories.size > 0 && (
+                  <div className="mt-2 text-[10px] text-gray-500">
+                    Generates:{' '}
+                    {hasRentalSide && <span className="font-semibold text-gray-700">Rental Agreement</span>}
+                    {hasRentalSide && hasStage && <span> + </span>}
+                    {hasStage && <span className="font-semibold text-gray-700">Stage Contract</span>}
+                  </div>
+                )}
               </div>
 
               {/* Company */}
@@ -385,36 +437,103 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="text-4xl mb-4">🎉</div>
-            <div className="text-lg font-bold text-gray-900 mb-1">Booking Created!</div>
-            <div className="text-sm text-gray-500 mb-2">· {jobName}</div>
-            <div className="w-full space-y-3 mt-4">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">📋 Paperwork Portal Link</div>
-                <div className="text-[11px] text-gray-600 font-mono truncate mb-2">{result.portalUrl}</div>
+          /* TSX-branded success view. Visual language matches the portal
+             invite email template (src/lib/email/templates/portalInvite.ts):
+             same dark hero (#0a0a0a), white SirReel wordmark, gold accent
+             (#D4A547), serif headline, gold CTA buttons. */
+          <div className="flex-1 overflow-y-auto bg-white">
+            {/* Dark hero */}
+            <div className="bg-[#0a0a0a] px-6 py-8 text-center relative">
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/sirreel-logo-white.png"
+                alt="SirReel Studio Services"
+                width={180}
+                style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
+              />
+              <div className="mt-3 mx-auto" style={{ width: 48, height: 2, backgroundColor: '#D4A547' }} />
+              <div className="mt-3 text-[10px] tracking-[2.5px] uppercase font-semibold" style={{ color: '#D4A547' }}>
+                Presents
+              </div>
+              <div className="mt-1 text-3xl text-white font-light tracking-[6px]">TSX</div>
+            </div>
+
+            {/* Headline */}
+            <div className="px-6 pt-7 pb-2 text-center">
+              <h2
+                className="text-[22px] leading-tight text-[#1a1a1a]"
+                style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 400 }}
+              >
+                Booking Created
+              </h2>
+              <p className="mt-2 text-[13px] text-gray-600">
+                <span className="font-semibold text-gray-900">{jobName}</span> is ready. Your client&rsquo;s portal awaits.
+              </p>
+            </div>
+
+            {/* Action cards */}
+            <div className="px-6 py-5 space-y-3">
+              <div className="bg-[#0a0a0a] rounded-xl p-5">
+                <div className="text-[10px] font-bold uppercase tracking-[2px] mb-2" style={{ color: '#D4A547' }}>
+                  Paperwork Portal Link
+                </div>
+                <div className="text-[11px] text-white/60 font-mono truncate mb-3" title={result.portalUrl}>
+                  {result.portalUrl}
+                </div>
                 <div className="flex gap-2">
-                  <button onClick={() => copy(result.portalUrl, 'portal')}
-                    className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-colors ${copied === 'portal' ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
-                    {copied === 'portal' ? '✓ Copied!' : 'Copy Link'}
+                  <button
+                    onClick={() => copy(result.portalUrl, 'portal')}
+                    className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                      copied === 'portal' ? 'bg-emerald-500 text-[#0a0a0a]' : 'text-[#0a0a0a] hover:opacity-90'
+                    }`}
+                    style={copied === 'portal' ? undefined : { backgroundColor: '#D4A547' }}
+                  >
+                    {copied === 'portal' ? '✓ Copied' : 'Copy Link'}
                   </button>
-                  <a href={`mailto:${contact.email}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${contact.name.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
-                    className="flex-1 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700 text-center">
+                  <a
+                    href={`mailto:${contact.email}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${contact.name.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
+                    className="flex-1 py-2.5 rounded-lg text-[12px] font-semibold text-center border border-white/20 text-white hover:bg-white/5"
+                  >
                     Send Email
                   </a>
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">🏠 Client Dashboard Link</div>
-                <div className="text-[11px] text-gray-600 font-mono truncate mb-2">{result.clientUrl}</div>
-                <button onClick={() => copy(result.clientUrl, 'client')}
-                  className={`w-full py-2 rounded-lg text-[12px] font-semibold transition-colors ${copied === 'client' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-                  {copied === 'client' ? '✓ Copied!' : 'Copy Dashboard Link'}
+
+              <div className="bg-white rounded-xl p-5 border border-gray-200">
+                <div className="text-[10px] font-bold uppercase tracking-[2px] mb-2 text-gray-500">
+                  Client Dashboard Link
+                </div>
+                <div className="text-[11px] text-gray-500 font-mono truncate mb-3" title={result.clientUrl}>
+                  {result.clientUrl}
+                </div>
+                <button
+                  onClick={() => copy(result.clientUrl, 'client')}
+                  className={`w-full py-2.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                    copied === 'client' ? 'bg-emerald-500 text-white' : 'bg-[#0a0a0a] text-white hover:bg-[#1a1a1a]'
+                  }`}
+                >
+                  {copied === 'client' ? '✓ Copied' : 'Copy Dashboard Link'}
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400">Send the Portal Link to the client to complete paperwork.</p>
+
+              <p className="text-[11px] text-gray-400 text-center pt-1">
+                Send the Portal Link to the client to complete paperwork.
+              </p>
             </div>
-            <button onClick={onClose} className="mt-4 text-sm text-gray-500 hover:text-gray-700">Close</button>
+
+            {/* Footer */}
+            <div className="px-6 pb-6 pt-2 text-center border-t border-gray-100">
+              <button onClick={onClose} className="text-[12px] text-gray-500 hover:text-gray-800 pt-3">
+                Close
+              </button>
+            </div>
           </div>
         )}
       </div>
