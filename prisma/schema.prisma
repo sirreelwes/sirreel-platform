@@ -2294,3 +2294,21 @@ model PortalAccess {
   @@index([magicLinkToken])
   @@map("sr_portal_accesses")
 }
+
+/// One row per hourly health-check run. `services` holds the full per-service
+/// JSON payload returned by /api/admin/health so the /admin/health page can
+/// render a 24h history without re-probing. `alertedAt` is set when the cron
+/// posted to Slack for this run — used by the 4h alert-suppression window so
+/// a sustained outage doesn't spam the channel.
+model HealthCheckLog {
+  id          String    @id @default(uuid())
+  checkedAt   DateTime  @default(now()) @map("checked_at")
+  overall     String    // "healthy" | "degraded" | "down"
+  services    Json      // full per-service detail (see HealthReport type)
+  alertedAt   DateTime? @map("alerted_at")
+  alertDetail String?   @map("alert_detail")
+
+  @@index([checkedAt(sort: Desc)])
+  @@index([overall, checkedAt])
+  @@map("sr_health_check_logs")
+}
