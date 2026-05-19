@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 
 type LineItem = {
   id: string;
@@ -815,6 +816,14 @@ export default function OrderDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Stage Booking Terms — shown when the order has a stage line item
+          (category slug contains "stage") or the line-items contain anything
+          flagged as a stage rental. Sales fills in negotiated terms here,
+          then generates the pre-signed stage contract for client countersign. */}
+      {order.lineItems.some((li) => /stage/i.test(li.assetCategory?.name || "") || li.type === "STAGE") && (
+        <StageBookingTermsSection orderId={order.id} />
       )}
 
       {/* Signed Agreement */}

@@ -47,7 +47,9 @@ export async function POST(
       company: { select: { name: true } },
       job: { select: { name: true, jobCode: true } },
       jobContact: { select: { email: true, firstName: true, lastName: true } },
-      signedAgreement: {
+      signedAgreements: {
+        where: { contractType: 'RENTAL_AGREEMENT' },
+        take: 1,
         select: {
           id: true,
           status: true,
@@ -62,7 +64,7 @@ export async function POST(
   if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
-  const agreement = order.signedAgreement
+  const agreement = order.signedAgreements[0] ?? null
   if (!agreement) {
     return NextResponse.json(
       { error: 'Order has no SignedAgreement — nothing to accept' },

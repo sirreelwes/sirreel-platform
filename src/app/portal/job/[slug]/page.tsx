@@ -55,6 +55,7 @@ interface PortalData {
     quotePdfUrl: string | null;
     quotePdfGeneratedAt: string | null;
     agreement: { status: string; documentType: string; signedAt: string | null; signerName: string | null; signedDocumentUrl?: string | null } | null;
+    stageContract: { contractType: string; status: string; documentType: string; signedAt: string | null; signerName: string | null; documentToSignUrl?: string | null; signedDocumentUrl?: string | null } | null;
     coi: {
       id: string;
       fileUrl: string;
@@ -371,6 +372,49 @@ export default function JobPortalPage() {
                   <span className="text-xs text-gray-500">Your SirReel rep will send the agreement shortly.</span>
                 )}
               </PaperworkRow>
+
+              {/* Stage Contract — only renders when one has been generated.
+                  Independent signing status from the rental agreement; an
+                  order that needs both must complete both before pickup. */}
+              {data.paperwork.stageContract && (
+                <PaperworkRow
+                  label="Stage Contract"
+                  status={agreementStatusLabel(data.paperwork.stageContract)}
+                  statusKind={agreementStatusKind(data.paperwork.stageContract)}
+                >
+                  {data.paperwork.stageContract.signedAt ? (
+                    data.paperwork.stageContract.signedDocumentUrl ? (
+                      <a
+                        href={data.paperwork.stageContract.signedDocumentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                      >
+                        Download signed copy
+                      </a>
+                    ) : null
+                  ) : data.paperwork.stageContract.documentToSignUrl ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={data.paperwork.stageContract.documentToSignUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                      >
+                        View pre-signed PDF
+                      </a>
+                      <a
+                        href={`/portal/job/${slug}/sign/stage`}
+                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      >
+                        Sign stage contract →
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">Your SirReel rep will send the stage contract shortly.</span>
+                  )}
+                </PaperworkRow>
+              )}
 
               {/* COI */}
               <PaperworkRow

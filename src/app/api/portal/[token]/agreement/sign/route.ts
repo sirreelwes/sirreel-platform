@@ -136,7 +136,7 @@ export async function POST(
   }
 
   const agreement = await prisma.signedAgreement.findUnique({
-    where: { orderId: resolved.order.id },
+    where: { orderId_contractType: { orderId: resolved.order.id, contractType: 'RENTAL_AGREEMENT' } },
     select: { id: true, status: true, documentType: true },
   })
   if (!agreement) {

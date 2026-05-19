@@ -106,8 +106,12 @@ export async function GET(req: NextRequest) {
           },
           orderBy: { sortOrder: 'asc' },
         },
-        signedAgreement: {
+        // Pull both contract types in one round trip. Rental and stage are
+        // surfaced as separate cards on the portal paperwork section; the
+        // .find() helpers below partition this array by contractType.
+        signedAgreements: {
           select: {
+            contractType: true,
             status: true,
             documentType: true,
             signedAt: true,
@@ -216,11 +220,21 @@ export async function GET(req: NextRequest) {
   if (order.sentAt) {
     activity.push({ at: order.sentAt.toISOString(), kind: 'quote_sent', label: `Quote sent by ${order.agent?.name || 'SirReel'}` })
   }
-  if (order.signedAgreement?.signedAt && order.signedAgreement.signerName) {
+  // Partition signedAgreements by contractType — one entry can fire per type.
+  const rentalAgreement = order.signedAgreements.find((a) => a.contractType === 'RENTAL_AGREEMENT') ?? null
+  const stageContract = order.signedAgreements.find((a) => a.contractType === 'STAGE_CONTRACT') ?? null
+  if (rentalAgreement?.signedAt && rentalAgreement.signerName) {
     activity.push({
-      at: order.signedAgreement.signedAt.toISOString(),
+      at: rentalAgreement.signedAt.toISOString(),
       kind: 'agreement_signed',
-      label: `Rental agreement signed by ${order.signedAgreement.signerName}`,
+      label: `Rental agreement signed by ${rentalAgreement.signerName}`,
+    })
+  }
+  if (stageContract?.signedAt && stageContract.signerName) {
+    activity.push({
+      at: stageContract.signedAt.toISOString(),
+      kind: 'stage_contract_signed',
+      label: `Stage contract signed by ${stageContract.signerName}`,
     })
   }
   for (const a of otherAccesses) {
@@ -287,7 +301,8 @@ export async function GET(req: NextRequest) {
     paperwork: {
       quotePdfUrl: order.quotePdfUrl,
       quotePdfGeneratedAt: order.quotePdfGeneratedAt,
-      agreement: order.signedAgreement,
+      agreement: rentalAgreement,
+      stageContract,
       coi: latestCoi
         ? {
             id: latestCoi.id,
@@ -326,7 +341,7 @@ export async function GET(req: NextRequest) {
         }
       }),
     },
-    agreement: order.signedAgreement,
+    agreement: rentalAgreement,
     team: otherAccesses
       .filter((a) => a.contactId !== resolved.contactId && a.contact)
       .map((a) => ({

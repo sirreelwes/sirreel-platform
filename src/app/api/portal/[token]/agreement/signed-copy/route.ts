@@ -22,7 +22,7 @@ export async function GET(
   }
 
   const agreement = await prisma.signedAgreement.findUnique({
-    where: { orderId: resolved.order.id },
+    where: { orderId_contractType: { orderId: resolved.order.id, contractType: 'RENTAL_AGREEMENT' } },
     select: { status: true, signedDocumentUrl: true },
   })
   if (!agreement) {

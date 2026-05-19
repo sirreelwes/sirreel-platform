@@ -45,7 +45,7 @@ export async function GET(
   await ensureSignedAgreementForOrder(order.id)
 
   const agreement = await prisma.signedAgreement.findUnique({
-    where: { orderId: order.id },
+    where: { orderId_contractType: { orderId: order.id, contractType: 'RENTAL_AGREEMENT' } },
     select: {
       id: true,
       status: true,
@@ -121,7 +121,7 @@ export async function PATCH(
   await ensureSignedAgreementForOrder(order.id)
 
   const updated = await prisma.signedAgreement.update({
-    where: { orderId: order.id },
+    where: { orderId_contractType: { orderId: order.id, contractType: 'RENTAL_AGREEMENT' } },
     data: { status: target as AgreementStatus },
     select: { id: true, status: true },
   })

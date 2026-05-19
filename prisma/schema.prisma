@@ -1527,9 +1527,14 @@ model Order {
   job        Job     @relation(fields: [jobId], references: [id])
   jobContact Person? @relation("OrderJobContact", fields: [jobContactId], references: [id])
 
-  signedAgreement SignedAgreement?
-  cadenceEvents   CadenceEvent[]
-  portalAccesses  PortalAccess[]
+  // Was 1:1 before May 2026; now 1:many because an Order may need both a
+  // RENTAL_AGREEMENT and a STAGE_CONTRACT. Callers that historically read
+  // `order.signedAgreement` should switch to filtering on contractType, e.g.
+  // `signedAgreements.find(a => a.contractType === 'RENTAL_AGREEMENT')`.
+  signedAgreements   SignedAgreement[]
+  stageBookingTerms  StageBookingTerms?
+  cadenceEvents      CadenceEvent[]
+  portalAccesses     PortalAccess[]
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
@@ -2082,9 +2087,14 @@ enum AgreementStatus {
 
 model SignedAgreement {
   id      String @id @default(uuid())
-  orderId String @unique @map("order_id")
+  orderId String @map("order_id")
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  // RENTAL_AGREEMENT is the original (vehicles-and-gear) contract. STAGE_CONTRACT
+  // is the SirReel stages booking contract added May 2026 — an Order that rents
+  // BOTH vehicles and stages produces two SignedAgreement rows (one per type).
+  // Compound unique replaces the old `orderId @unique` so this is possible.
+  contractType     ContractType          @default(RENTAL_AGREEMENT) @map("contract_type")
   documentType     AgreementDocumentType @default(BASELINE) @map("document_type")
   baselineVersion  String?               @map("baseline_version")
   contractReviewId String?               @unique @map("contract_review_id")
@@ -2110,9 +2120,57 @@ model SignedAgreement {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([orderId, contractType])
   @@index([orderId])
+  @@index([contractType])
   @@index([status])
   @@map("sr_signed_agreements")
+}
+
+/// Contract type carried by SignedAgreement. RENTAL_AGREEMENT pre-dates this
+/// enum — all existing rows default to it. STAGE_CONTRACT is the SirReel
+/// stages booking contract (canonical baseline: public/contracts/
+/// sirreel-stage-contract.docx). An Order with contractType='both' produces
+/// one SignedAgreement of each enum value.
+enum ContractType {
+  RENTAL_AGREEMENT
+  STAGE_CONTRACT
+}
+
+/// Sales-negotiated terms for a SirReel stages booking. One row per
+/// orderId; created when a sales rep starts filling in stage terms,
+/// updated as negotiation progresses, then consumed by the stage-contract
+/// PDF generator. Per CRH brief (May 2026) the canonical fields are:
+/// rental dates (possibly non-contiguous), daily rate, production-office
+/// flag, the list of specific spaces being booked, security guard flag,
+/// and free-form sales notes for the rep's own context.
+model StageBookingTerms {
+  id      String @id @default(uuid())
+  orderId String @unique @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Array of ISO yyyy-MM-dd date strings. Stored as JSON so non-contiguous
+  /// bookings ("Mon, Wed-Fri") fit in one column without a child table.
+  rentalDates Json @map("rental_dates")
+  dailyRate   Decimal @map("daily_rate") @db.Decimal(10, 2)
+
+  productionOfficeRental Boolean @default(false) @map("production_office_rental")
+  /// Free-text labels: "Standing Sets", "LED Volume Stage", "Cyc Wall", etc.
+  /// Kept as a string array (not an enum) because the catalog of stage spaces
+  /// shifts faster than schema migrations want to track.
+  specificSpaces        String[] @default([])  @map("specific_spaces")
+  securityGuardRequired Boolean  @default(false) @map("security_guard_required")
+
+  /// Internal-only context about the negotiation (not rendered in the
+  /// generated PDF). Used by sales during follow-ups.
+  salesNotes String? @map("sales_notes") @db.Text
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("sr_stage_booking_terms")
 }
 
 model CoiCheck {

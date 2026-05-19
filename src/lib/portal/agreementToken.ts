@@ -59,7 +59,12 @@ export async function resolveAgreementToken(
       endDate: true,
       company: { select: { id: true, name: true } },
       job: { select: { id: true, jobCode: true, name: true } },
-      signedAgreement: {
+      // The paperwork-portal flow only cares about the rental agreement —
+      // stage contracts have a separate sign endpoint and aren't surfaced
+      // through this magic-link path.
+      signedAgreements: {
+        where: { contractType: 'RENTAL_AGREEMENT' },
+        take: 1,
         select: {
           id: true,
           status: true,
@@ -86,6 +91,6 @@ export async function resolveAgreementToken(
       company: order.company,
       job: order.job,
     },
-    agreement: order.signedAgreement,
+    agreement: order.signedAgreements[0] ?? null,
   }
 }
