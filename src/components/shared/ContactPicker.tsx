@@ -75,10 +75,13 @@ export function ContactPicker({
   const [searching, setSearching] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Keep local query in sync when parent resets value externally.
-  useEffect(() => {
-    if (value.mode === 'searching' && value.name === '' && query !== '') setQuery('')
-  }, [value.mode, value.name, query])
+  // No external→local sync effect here. The earlier version had one that
+  // wiped local `query` whenever parent's `value.name` was empty during
+  // searching mode — but the parent only learns the name after a pick or
+  // create, so the parent's value.name stays '' during typing and the
+  // effect fired on every keystroke, clearing the input. The picker now
+  // fully owns its query state during searching; pickExisting, startCreating,
+  // and reset() are the only paths that mutate it back to a known value.
 
   // Debounced typeahead against /api/persons?q=
   useEffect(() => {
