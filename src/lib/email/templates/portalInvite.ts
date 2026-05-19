@@ -21,7 +21,14 @@
  *     hints; the dark header reads identically in both.
  */
 
-const ABSOLUTE_LOGO_URL = 'https://hq.sirreel.com/sirreel-logo.png'
+// TODO(brand): no white/light SirReel logo currently exists in /public.
+// /public/sirreel-logo.png is the only PNG and is solid black, which is
+// invisible against the dark email header (DARK below). Until a white
+// version is exported and committed, the header uses a CSS typography
+// lockup — white serif "SirReel" + spaced "Studio Services" below.
+// When a white logo lands, restore <img> tags in the dark header and
+// footer; ABSOLUTE_LOGO_URL is still defined for that future use.
+const ABSOLUTE_LOGO_URL = 'https://hq.sirreel.com/sirreel-logo.png' // eslint-disable-line @typescript-eslint/no-unused-vars
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
 const GOLD = '#D4A547'
@@ -124,7 +131,9 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Dark header ────────────────────────────────────────── -->
           <tr>
             <td style="background-color:${DARK};padding:36px 24px 28px;text-align:center;">
-              <img src="${ABSOLUTE_LOGO_URL}" alt="SirReel" width="180" style="display:inline-block;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;" />
+              <!-- Logotype: CSS typography fallback. Replace with <img> when a white SirReel logo exists in /public. -->
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:40px;line-height:1;color:#ffffff;font-weight:400;letter-spacing:1px;">SirReel</div>
+              <div style="font-family:Helvetica,Arial,sans-serif;font-size:9px;letter-spacing:5px;color:#bdbdbd;margin-top:6px;text-transform:uppercase;">Studio Services</div>
               <!-- Gold accent line -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:18px auto 0;">
                 <tr>
@@ -213,14 +222,14 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                 Your portal for <strong>${projectName}</strong> is ready.
               </p>
               <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:220px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
                 <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;letter-spacing:1px;">ENTER YOUR PORTAL</center>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Portal to TSX</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
-              <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:1.5px;padding:14px 36px;border-radius:6px;text-transform:uppercase;">
-                Enter your portal
+              <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:6px;">
+                Portal to TSX
               </a>
               <!--<![endif]-->
               <p style="margin:18px 0 0;font-size:12px;color:#888888;">
@@ -244,7 +253,8 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Footer ───────────────────────────────────────────── -->
           <tr>
             <td style="background-color:#fafaf8;padding:20px 36px;text-align:center;border-top:1px solid #ececec;">
-              <img src="${ABSOLUTE_LOGO_URL}" alt="SirReel" width="80" style="display:inline-block;max-width:80px;height:auto;opacity:0.6;border:0;" />
+              <!-- Footer logotype: same CSS fallback as header, scaled and muted. -->
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1;color:#777777;letter-spacing:0.5px;">SirReel</div>
               <p style="margin:8px 0 0;font-size:10px;line-height:1.6;color:#888888;letter-spacing:0.3px;">
                 SirReel Studio Rentals<br />
                 ${FOOTER_ADDRESS} &middot; ${FOOTER_PHONE}
