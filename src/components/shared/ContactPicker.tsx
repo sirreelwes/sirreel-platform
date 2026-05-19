@@ -29,13 +29,18 @@ export interface ContactPickerValue {
   personId: string | null
   /** Free-text name. In creating_new mode, this is the new contact's name. */
   name: string
-  /** Pulled from CRM in selected_existing mode; editable elsewhere. */
+  /** Pulled from CRM in selected_existing mode; editable in all modes. */
   phone: string
   email: string
   /** What the parent should do on form submit. */
   mode: 'searching' | 'selected_existing' | 'creating_new'
   /** Optional company association from the matched Person row. */
   company?: { id: string; name: string } | null
+  /** Snapshot of phone as it came from CRM. Empty string when not from
+   *  CRM, or when CRM had no phone on file. The form compares against
+   *  this to decide whether the rep edited the value — if so, the
+   *  submit will update the Person row. */
+  originalPhone?: string
 }
 
 interface PersonHit {
@@ -62,6 +67,7 @@ const EMPTY: ContactPickerValue = {
   email: '',
   mode: 'searching',
   company: null,
+  originalPhone: '',
 }
 
 export function ContactPicker({
@@ -116,16 +122,20 @@ export function ContactPicker({
 
   const pickExisting = (p: PersonHit) => {
     // Phone is stored raw in DB (digits only) — format it before
-    // handing it up so the read-only Phone input in the parent form
-    // shows "(760) 672-5522" instead of "7606725522". formatPhone
-    // is idempotent so already-formatted values pass through clean.
+    // handing it up so the Phone input in the parent form shows
+    // "(760) 672-5522" instead of "7606725522". formatPhone is
+    // idempotent so already-formatted values pass through clean.
+    // originalPhone snapshots the same value so the parent can detect
+    // an edit and pass an update flag to /api/bookings/create-send.
+    const formattedPhone = p.phone ? formatPhone(p.phone) : ''
     onChange({
       personId: p.id,
       name: `${p.firstName} ${p.lastName}`.trim(),
-      phone: p.phone ? formatPhone(p.phone) : '',
+      phone: formattedPhone,
       email: p.email || '',
       mode: 'selected_existing',
       company: p.company,
+      originalPhone: formattedPhone,
     })
     setQuery(`${p.firstName} ${p.lastName}`.trim())
     setOpen(false)

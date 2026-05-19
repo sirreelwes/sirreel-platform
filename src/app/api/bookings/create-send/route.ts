@@ -28,9 +28,31 @@ export async function POST(req: NextRequest) {
     }
     if (!coId) return NextResponse.json({ error: 'Company required' }, { status: 400 });
 
-    // Get or create person
+    // Get or create person. When the picker passed an existing personId,
+    // we also accept an edited phone value — if the rep typed over the
+    // CRM-supplied number, the new value lands on Person.phone. We
+    // normalise to digits-only before comparing so a UI-formatted
+    // "(760) 672-5522" matches a stored "7606725522" without a write.
+    const normalizedPhone = (personPhone || '').replace(/\D/g, '');
     let pId = personId;
-    if (!pId) {
+    if (pId) {
+      const current = await prisma.person.findUnique({
+        where: { id: pId },
+        select: { phone: true, mobile: true },
+      });
+      if (current && normalizedPhone) {
+        const currentDigits = (current.phone || '').replace(/\D/g, '');
+        const mobileDigits = (current.mobile || '').replace(/\D/g, '');
+        // Only update if the typed value differs from BOTH stored fields —
+        // otherwise the rep just kept what CRM showed and nothing changed.
+        if (normalizedPhone !== currentDigits && normalizedPhone !== mobileDigits) {
+          await prisma.person.update({
+            where: { id: pId },
+            data: { phone: normalizedPhone },
+          });
+        }
+      }
+    } else {
       const existingPerson = await prisma.person.findFirst({ where: { email: personEmail } });
       if (existingPerson) {
         pId = existingPerson.id;
@@ -41,7 +63,7 @@ export async function POST(req: NextRequest) {
             firstName: nameParts[0] || personEmail,
             lastName: nameParts.slice(1).join(' ') || '',
             email: personEmail,
-            phone: personPhone || null,
+            phone: normalizedPhone || null,
           },
         });
         pId = person.id;

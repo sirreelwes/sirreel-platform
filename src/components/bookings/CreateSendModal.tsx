@@ -308,19 +308,30 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                     CRM (mode='selected_existing'), editable otherwise. The
                     "Change" button on the picker pill returns the form to
                     searching mode so the rep can re-pick or create new. */}
-                {contact.mode !== 'searching' && (
+                {contact.mode !== 'searching' && (() => {
+                  const phoneEdited =
+                    contact.mode === 'selected_existing' &&
+                    (contact.originalPhone ?? '') !== contact.phone;
+                  return (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] text-gray-400 mb-1 block">
-                        Phone {contact.mode === 'selected_existing' && <span className="text-emerald-600">· from CRM</span>}
+                        Phone{' '}
+                        {contact.mode === 'selected_existing' && !phoneEdited && (
+                          <span className="text-emerald-600">· from CRM</span>
+                        )}
+                        {phoneEdited && (
+                          <span style={{ color: TSX.gold }}>· will update CRM</span>
+                        )}
                       </label>
                       <input
                         value={contact.phone}
-                        readOnly={contact.mode === 'selected_existing'}
                         onChange={(e) => setContact({ ...contact, phone: formatPhone(e.target.value) })}
-                        className={`w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 ${
-                          contact.mode === 'selected_existing' ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
-                        }`}
+                        className="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none transition-colors"
+                        style={{
+                          borderColor: phoneEdited ? TSX.gold : '#e5e7eb',
+                          boxShadow: phoneEdited ? `inset 0 0 0 1px ${TSX.gold}` : undefined,
+                        }}
                         placeholder="(310) 555-1234"
                       />
                     </div>
@@ -340,7 +351,8 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                       />
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Job Details */}
