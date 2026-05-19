@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import type { JobRole } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -134,26 +135,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       portalAccessId = issued.portalAccessId
       portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
 
-      const jobLabel = order.job?.name || order.company?.name || ''
-      const repName = order.agent?.name || 'the SirReel team'
-      const repPhone = order.agent?.phone || ''
-      const html = `<!DOCTYPE html>
-<html><body style="font-family:Helvetica,Arial,sans-serif;background:#f9fafb;margin:0;padding:24px;color:#111827;">
-  <div style="max-width:560px;margin:0 auto;background:white;border-radius:8px;padding:24px;font-size:14px;line-height:1.55;">
-    <p>Hi ${person.firstName},</p>
-    <p>You&rsquo;ve been added to the project portal for <strong>${jobLabel}</strong>. You can see paperwork, the schedule, equipment, and pickup details all in one place.</p>
-    <p style="margin:20px 0;text-align:center;">
-      <a href="${portalUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;">Open your project portal &rarr;</a>
-    </p>
-    <p style="font-size:12px;color:#6b7280;">Link is good for 7 days. Reach out to ${repName} if anything looks off.</p>
-    <p>Best,<br>${repName}${repPhone ? `<br>${repPhone}` : ''}</p>
-  </div>
-</body></html>`
+      const tpl = buildPortalInviteEmail({
+        firstName: person.firstName,
+        projectName: order.job?.name || order.company?.name || '',
+        portalLink: portalUrl,
+        repName: order.agent?.name || 'the SirReel team',
+        repPhone: order.agent?.phone || null,
+        repEmail: order.agent?.email || null,
+      })
       emailResult = await sendAgreementEmail({
         label: 'orders/contacts/invite',
         to: [person.email],
-        subject: `Your SirReel portal for ${jobLabel}`,
-        html,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
       })
     }
   }

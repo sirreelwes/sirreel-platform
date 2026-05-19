@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyAuthorizeToken } from '@/lib/portal/authorizeToken'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,27 +86,22 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   }
 
   const jobLabel = order.job?.name || order.company?.name || ''
-  const repName = order.agent?.name || 'the SirReel team'
-  const repPhone = order.agent?.phone || ''
-  const inviteHtml = `<!DOCTYPE html>
-<html><body style="font-family:Helvetica,Arial,sans-serif;background:#f9fafb;margin:0;padding:24px;color:#111827;">
-  <div style="max-width:560px;margin:0 auto;background:white;border-radius:8px;padding:24px;font-size:14px;line-height:1.55;">
-    <p>Hi ${newPerson.firstName},</p>
-    <p>You&rsquo;ve been added to the project portal for <strong>${jobLabel}</strong>. You can see paperwork, the schedule, and equipment all in one place.</p>
-    <p style="margin:20px 0;text-align:center;">
-      <a href="${portalUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;">Open your project portal &rarr;</a>
-    </p>
-    <p style="font-size:12px;color:#6b7280;">Link is good for 7 days. If it expires, reach out to ${repName}.</p>
-    <p>Best,<br>${repName}${repPhone ? `<br>${repPhone}` : ''}</p>
-  </div>
-</body></html>`
+  const tpl = buildPortalInviteEmail({
+    firstName: newPerson.firstName,
+    projectName: jobLabel,
+    portalLink: portalUrl,
+    repName: order.agent?.name || 'the SirReel team',
+    repPhone: order.agent?.phone || null,
+    repEmail: order.agent?.email || null,
+  })
   // Send the invite — best effort; the rep sees this same URL on the order
   // page anyway, so a delivery failure isn't critical to the approve action.
   await sendAgreementEmail({
     label: 'portal/authorize-approved-invite',
     to: [newPerson.email],
-    subject: `Your SirReel portal for ${jobLabel}`,
-    html: inviteHtml,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
   })
 
   return htmlResponse({

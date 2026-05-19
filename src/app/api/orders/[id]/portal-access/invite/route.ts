@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,37 +83,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
   const portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
 
-  // Best-effort send. Mirrors sendAgreementEmail's failure-surfacing contract
-  // so the rep sees Resend errors rather than a silent no-op.
-  const fromRep = order.agent
-    ? `${order.agent.name} <${order.agent.email}>`
-    : 'SirReel HQ <notifications@sirreel.com>'
   const jobLabel = order.job?.name || order.company?.name || ''
-  const repName = order.agent?.name || 'the SirReel team'
-  const repPhone = order.agent?.phone || ''
-  const html = `<!DOCTYPE html>
-<html><body style="font-family:Helvetica,Arial,sans-serif;background:#f9fafb;margin:0;padding:24px;color:#111827;">
-  <div style="max-width:560px;margin:0 auto;background:white;border-radius:8px;padding:24px;font-size:14px;line-height:1.55;">
-    <p>Hi ${person.firstName},</p>
-    <p>Here&rsquo;s your portal access for <strong>${jobLabel}</strong>. You can see paperwork, the schedule, equipment, and the pickup details all in one place.</p>
-    <p style="margin:20px 0;text-align:center;">
-      <a href="${portalUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;">Open your project portal &rarr;</a>
-    </p>
-    <p style="font-size:12px;color:#6b7280;">Link is good for 7 days. If it expires, just reply to this email and I&rsquo;ll send a fresh one.</p>
-    <p>Best,<br>${repName}${repPhone ? `<br>${repPhone}` : ''}</p>
-  </div>
-</body></html>`
-
+  const tpl = buildPortalInviteEmail({
+    firstName: person.firstName,
+    projectName: jobLabel,
+    portalLink: portalUrl,
+    repName: order.agent?.name || 'the SirReel team',
+    repPhone: order.agent?.phone || null,
+    repEmail: order.agent?.email || null,
+  })
   const emailResult = await sendAgreementEmail({
     label: 'portal/invite',
     to: [person.email],
-    subject: `Your SirReel portal for ${jobLabel}`,
-    html,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
   })
-  // sendAgreementEmail hardcodes from=SirReel HQ — we use it because the
-  // rep's domain may not be DKIM-verified yet. When per-rep send is healthy,
-  // swap to a custom call that uses `fromRep`. (See CRH brief §10 "from per rep".)
-  void fromRep
 
   return NextResponse.json({
     ok: true,

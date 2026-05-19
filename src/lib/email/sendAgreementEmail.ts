@@ -9,6 +9,9 @@ export interface EmailPayload {
   cc?: string[]
   subject: string
   html: string
+  /** Plain-text alternative. Email clients with HTML disabled (and some
+   * filtering rules) show this instead. Improves deliverability. */
+  text?: string
   attachments?: { filename: string; content: Buffer }[]
   /** Logging tag — surfaces in console error lines so it's obvious which touchpoint failed. */
   label?: string
@@ -44,6 +47,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       cc: payload.cc,
       subject: payload.subject,
       html: payload.html,
+      text: payload.text,
       attachments: payload.attachments,
     })
     if ((result as any)?.error) {
