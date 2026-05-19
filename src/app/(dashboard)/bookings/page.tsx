@@ -287,11 +287,13 @@ function JobCard({
       className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer flex flex-col gap-2.5 active:scale-[0.995]"
       style={{ borderLeftWidth: 3, borderLeftColor: cfg.bar }}
     >
-      {/* Header row */}
+      {/* Header row — job name is the primary identifier; company sits
+          below as context. Booking number moves out of the meta row
+          (it's an internal id; the drawer surfaces it for ops). */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold text-gray-900 truncate">{booking.company?.name || 'Unknown company'}</div>
-          <div className="text-[12px] text-gray-700 truncate">{projectName}</div>
+          <div className="text-[14px] font-bold text-gray-900 truncate">{projectName}</div>
+          <div className="text-[11px] text-gray-500 truncate">{booking.company?.name || 'Unknown company'}</div>
         </div>
         <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${cfg.badge} flex-shrink-0`}>
           {cfg.label}
@@ -300,8 +302,6 @@ function JobCard({
 
       {/* Meta row */}
       <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
-        <span className="font-mono text-gray-400">{booking.bookingNumber}</span>
-        <span>·</span>
         <span>{fmtDateRange(booking.startDate, booking.endDate)}</span>
         {booking.agent?.name && (
           <>
