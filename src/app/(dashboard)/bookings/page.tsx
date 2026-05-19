@@ -1,578 +1,399 @@
 'use client';
+
+import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-
-import { useState, useMemo, useEffect } from 'react';
-import CreateSendModal from "@/components/bookings/CreateSendModal";
+import CreateSendModal from '@/components/bookings/CreateSendModal';
 import JobDashboard from '@/components/jobs/JobDashboard';
-import { formatPhone } from '@/lib/format/phone';
 
-function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
-function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
-function diffDays(a: string, b: string): number { return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000); }
-function fDate(ds: string): string { if (!ds) return ''; return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-const today = toDS(new Date());
+/**
+ * Jobs page (/bookings). Reads native Neon `Booking` rows — replaces the
+ * earlier RentalWorks-coupled view. Cards surface what a sales rep needs
+ * at a glance: company + project, dates, contact, status, paperwork
+ * progress, total value. Click a card → JobDashboard drawer for detail.
+ *
+ * Status chip palette tracks the BookingStatus enum in prisma/schema.prisma.
+ * If the enum gains values, extend STATUS_CONFIG below — unknown statuses
+ * fall back to a neutral grey badge.
+ */
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  ACTIVE:     { label: 'Active',     color: 'text-emerald-700', bg: 'bg-emerald-50',  border: '#34d399' },
-  CONFIRMED:  { label: 'Confirmed',  color: 'text-blue-700',    bg: 'bg-blue-50',     border: '#60a5fa' },
-  COMPLETE:   { label: 'Complete',   color: 'text-gray-500',    bg: 'bg-gray-50',     border: '#d1d5db' },
-  CANCELLED:  { label: 'Cancelled',  color: 'text-red-600',     bg: 'bg-red-50',      border: '#fca5a5' },
-  CLOSED:     { label: 'Closed',     color: 'text-gray-400',    bg: 'bg-gray-50',     border: '#e5e7eb' },
-  FLEET_HQ:   { label: 'SR HQ',       color: 'text-violet-700',  bg: 'bg-violet-50',   border: '#a78bfa' },
+type PaperworkSnapshot = {
+  token: string;
+  contractType: string | null;
+  rentalAgreement: boolean;
+  lcdwAccepted: boolean;
+  coiReceived: boolean;
+  creditCardAuth: boolean;
+  studioContractSigned: boolean;
+  sentAt: string | null;
 };
 
-const AGENTS = ['Jose', 'Oliver', 'Dani', 'Christian'];
-const VEHICLE_TYPE_TO_CAT: Record<string,string> = {
-  'Cube Truck': 'cube',
-  'Cargo Van w/ LG': 'cargo',
-  'Cargo Van w/o LG': 'cargoNoLG',
-  'Passenger Van': 'pass',
-  'PopVan': 'pop',
-  'Camera Cube': 'cam',
-  'DLUX': 'dlux',
-  'ProScout/VTR': 'scout',
-  'Studio': 'studio',
-  'Other': 'cube',
+type BookingRow = {
+  id: string;
+  bookingNumber: string;
+  status: string;
+  jobName: string | null;
+  productionName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  totalPrice: number | string | null;
+  createdAt: string;
+  company: { name: string } | null;
+  person: { firstName: string; lastName: string; email: string } | null;
+  agent: { name: string } | null;
+  paperworkRequests: PaperworkSnapshot[];
+};
+
+interface StatusConfig {
+  label: string;
+  badge: string;
+  bar: string;
 }
 
-const VEHICLE_TYPES = [
-  'Cube Truck', 'Cargo Van w/ LG', 'Cargo Van w/o LG', 'Passenger Van',
-  'PopVan', 'Camera Cube', 'DLUX', 'ProScout/VTR', 'Studio', 'Other'
-];
-const PAGE_SIZE = 25;
-
-type RWOrder = {
-  orderId: string; orderNumber: string; description: string; customer: string;
-  agent: string; status: string; total: number; startDate: string; endDate: string;
-  department: string; poNumber: string; dealType: string; marketType: string;
+const STATUS_CONFIG: Record<string, StatusConfig> = {
+  REQUEST:          { label: 'Requested',  badge: 'bg-amber-50 text-amber-700 border-amber-200',     bar: '#fbbf24' },
+  AI_REVIEW:        { label: 'AI Review',  badge: 'bg-violet-50 text-violet-700 border-violet-200',  bar: '#a78bfa' },
+  PENDING_APPROVAL: { label: 'Pending',    badge: 'bg-orange-50 text-orange-700 border-orange-200',  bar: '#fb923c' },
+  CONFIRMED:        { label: 'Confirmed',  badge: 'bg-blue-50 text-blue-700 border-blue-200',        bar: '#60a5fa' },
+  ACTIVE:           { label: 'Active',     badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: '#34d399' },
+  RETURNED:         { label: 'Returned',   badge: 'bg-zinc-100 text-zinc-700 border-zinc-200',       bar: '#a1a1aa' },
+  CANCELLED:        { label: 'Cancelled',  badge: 'bg-red-50 text-red-700 border-red-200',           bar: '#fca5a5' },
+  ARCHIVED:         { label: 'Archived',   badge: 'bg-zinc-50 text-zinc-500 border-zinc-200',        bar: '#d4d4d8' },
 };
+
+const STATUS_ORDER = ['REQUEST', 'AI_REVIEW', 'PENDING_APPROVAL', 'CONFIRMED', 'ACTIVE', 'RETURNED', 'CANCELLED', 'ARCHIVED'];
+
+function fmtDateRange(start: string | null, end: string | null): string {
+  if (!start) return 'Dates TBD';
+  const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!end || start === end) return fmt(start);
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
+function fmtRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(ms / 86_400_000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function fmtMoney(value: number | string | null): string | null {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(n as number) || (n as number) <= 0) return null;
+  return (n as number).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
 
 export default function BookingsPage() {
   const { data: session } = useSession();
-  const sessionUser = session?.user as any;
+  const sessionUser = session?.user as { name?: string; firstName?: string } | undefined;
   const agentName = sessionUser?.name || sessionUser?.firstName || '';
-  const [orders, setOrders] = useState<RWOrder[]>([]);
-  const [fleetBookings, setFleetBookings] = useState<RWOrder[]>([]);
-  const [linkingId, setLinkingId] = useState<string | null>(null);
-  const [linkRwNumber, setLinkRwNumber] = useState('');
-  const [linkSaving, setLinkSaving] = useState(false);
+
+  const [bookings, setBookings] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterAgent, setFilterAgent] = useState<string>('ALL');
-  const [showNew, setShowNew] = useState(false);
-  const [toast, setToast] = useState('');
-  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [showCreateSend, setShowCreateSend] = useState(false);
-  const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
-  const [drawerOrderNumber, setDrawerOrderNumber] = useState('');
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const [drawerNumber, setDrawerNumber] = useState('');
+  const [copiedFor, setCopiedFor] = useState<string | null>(null);
 
-  const [nContact, setNContact] = useState('');
-  const [nCompany, setNCompany] = useState('');
-  const [nPhone, setNPhone] = useState('');
-  const [nEmail, setNEmail] = useState('');
-  const [nJob, setNJob] = useState('');
-  const [nVehicle, setNVehicle] = useState('Cube Truck');
-  const [nQty, setNQty] = useState(1);
-  const [nStart, setNStart] = useState(addDays(today, 1));
-  const [nEnd, setNEnd] = useState(addDays(today, 3));
-  const [nAgent, setNAgent] = useState('Jose');
-  const [nNotes, setNNotes] = useState('');
-  const [nPoNumber, setNPoNumber] = useState('');
-  const [nAvailableUnits, setNAvailableUnits] = useState<any[]>([]);
-  const [nSelectedUnits, setNSelectedUnits] = useState<string[]>([]);
-  const [nCheckingAvail, setNCheckingAvail] = useState(false);
-  const [nStep, setNStep] = useState<'form'|'units'|'creating'|'done'>('form');
-  const [nCreatedIds, setNCreatedIds] = useState<string[]>([]);
+  const reload = () => {
+    setLoading(true);
+    fetch('/api/bookings/list')
+      .then((r) => r.json())
+      .then((data) => setBookings(Array.isArray(data.bookings) ? data.bookings : []))
+      .catch(() => setBookings([]))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    fetch('/api/rentalworks').then(r => r.json()).then(data => {
-      if (data?.orders?.Rows) {
-        const cols = data.orders.ColumnIndex;
-        const rows: RWOrder[] = data.orders.Rows.map((r: any[]) => ({
-          orderId:     r[cols.OrderId],
-          orderNumber: r[cols.OrderNumber],
-          description: r[cols.Description],
-          customer:    r[cols.Customer],
-          agent:       (r[cols.CustomerServiceRepresentative] || '').split(',').reverse().join(' ').trim(),
-          status:      r[cols.Status],
-          total:       Number(r[cols.Total]) || 0,
-          startDate:   r[cols.EstimatedStartDate] || '',
-          endDate:     r[cols.EstimatedStopDate] || '',
-          department:  r[cols.Department] || '',
-          poNumber:    r[cols.PoNumber] || '',
-          dealType:    r[cols.DealType] || '',
-          marketType:  r[cols.MarketType] || '',
-        }));
-        setOrders(rows);
-      }
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    reload();
   }, []);
 
-  useEffect(() => {
-    fetch('/api/bookings/list').then(r => r.json()).then(data => {
-      if (data.bookings) {
-        const mapped: RWOrder[] = data.bookings.map((b: any) => ({
-          orderId: b.id,
-          orderNumber: b.bookingNumber,
-          description: b.jobName,
-          customer: b.company?.name || 'Unknown',
-          agent: b.agent?.name || '',
-          status: 'FLEET_HQ',
-          total: Number(b.totalPrice) || 0,
-          startDate: b.startDate || '',
-          endDate: b.endDate || '',
-          department: 'SirReel HQ',
-          poNumber: '',
-          dealType: '',
-          marketType: '',
-          _fleetHQ: true,
-          _paperworkStatus: b.paperworkRequests?.[0],
-        }));
-        setFleetBookings(mapped);
-      }
-    }).catch(() => {});
-  }, []);
+  // Counts per status — used to label the chip filters.
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { ALL: bookings.length };
+    for (const b of bookings) c[b.status] = (c[b.status] || 0) + 1;
+    return c;
+  }, [bookings]);
 
   const filtered = useMemo(() => {
-    setPage(1);
-    const allOrders = [...orders, ...fleetBookings];
-    return allOrders.filter(o => {
-      if (filterStatus !== 'ALL' && o.status !== filterStatus) return false;
-      if (filterAgent !== 'ALL' && !o.agent.toLowerCase().includes(filterAgent.toLowerCase())) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return o.customer.toLowerCase().includes(q) ||
-          o.description.toLowerCase().includes(q) ||
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.poNumber.toLowerCase().includes(q);
-      }
-      return true;
+    const q = search.trim().toLowerCase();
+    return bookings.filter((b) => {
+      if (statusFilter !== 'ALL' && b.status !== statusFilter) return false;
+      if (!q) return true;
+      const project = b.productionName || b.jobName || '';
+      const personName = b.person ? `${b.person.firstName} ${b.person.lastName}` : '';
+      return (
+        b.company?.name?.toLowerCase().includes(q) ||
+        project.toLowerCase().includes(q) ||
+        personName.toLowerCase().includes(q) ||
+        b.person?.email?.toLowerCase().includes(q) ||
+        b.bookingNumber.toLowerCase().includes(q)
+      );
     });
-  }, [orders, filterStatus, filterAgent, search]);
+  }, [bookings, statusFilter, search]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { ALL: orders.length };
-    orders.forEach(o => { c[o.status] = (c[o.status] || 0) + 1; });
-    return c;
-  }, [orders]);
-
-  const totalValue = useMemo(() => filtered.reduce((s, o) => s + o.total, 0), [filtered]);
-
-  function resetForm() {
-    setNStep('form');
-    setNAvailableUnits([]);
-    setNSelectedUnits([]);
-    setNCreatedIds([]);
-    setNContact(''); setNCompany(''); setNPhone(''); setNEmail('');
-    setNJob(''); setNVehicle('Cube Truck'); setNQty(1);
-    setNStart(addDays(today, 1)); setNEnd(addDays(today, 3));
-    setNAgent('Jose'); setNNotes(''); setNPoNumber('');
-  }
-
-  async function checkAvailability() {
-    setNCheckingAvail(true)
-    setNStep('form')
-    try {
-      const cat = VEHICLE_TYPE_TO_CAT[nVehicle] || 'cube'
-      const res = await fetch(`/api/planyo/available-units?cat=${cat}&start=${nStart}&end=${nEnd}`)
-      const data = await res.json()
-      if (data.ok) {
-        setNAvailableUnits(data.units || [])
-        // Auto-select first nQty available units
-        const avail = (data.units || []).filter((u: any) => u.available).slice(0, nQty)
-        setNSelectedUnits(avail.map((u: any) => u.name))
-        setNStep('units')
-      }
-    } finally { setNCheckingAvail(false) }
-  }
-
-  async function createReservations() {
-    if (!nSelectedUnits.length) return
-    setNStep('creating')
-    const cat = VEHICLE_TYPE_TO_CAT[nVehicle] || 'cube'
-    const ids: string[] = []
-    for (const unit of nSelectedUnits) {
-      try {
-        const res = await fetch('/api/planyo/reserve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cat, unit,
-            startDate: nStart, endDate: nEnd,
-            status: 'hold',
-            companyName: nCompany,
-            jobName: nJob,
-            agentName: nAgent,
-            clientFirstName: nContact.split(' ')[0] || nContact,
-            clientLastName: nContact.split(' ').slice(1).join(' ') || '',
-            clientEmail: nEmail,
-          }),
-        })
-        const data = await res.json()
-        if (data.ok) ids.push(data.reservationId)
-      } catch {}
-    }
-    setNCreatedIds(ids)
-    setNStep('done')
-    setToast(`✓ ${ids.length} unit${ids.length !== 1 ? 's' : ''} reserved as Hold in Planyo for ${nCompany}`)
-    setTimeout(() => setToast(''), 5000)
-  }
-
-  function submitInquiry() {
-    const days = diffDays(nStart, nEnd) + 1;
-    setToast(`✓ Inquiry logged — ${nContact} · ${nQty}× ${nVehicle} · ${days}d · Create order in RentalWorks`);
-    setTimeout(() => setToast(''), 5000);
-    setShowNew(false);
-    resetForm();
-  }
-
-  function openDrawer(o: any) {
-    if (o._fleetHQ && o._paperworkStatus?.token) {
-      window.open(`/portal/${o._paperworkStatus.token}`, '_blank');
-      return;
-    }
-    setDrawerOrderId(o.orderId);
-    setDrawerOrderNumber(o.orderNumber);
-  }
-
-  const days = diffDays(nStart, nEnd) + 1;
+  // Only render chips for statuses that exist in the data, plus REQUEST (so
+  // the default state still shows a useful filter when the DB is empty).
+  const visibleChips = useMemo(() => {
+    const present = new Set<string>(['REQUEST']);
+    for (const b of bookings) present.add(b.status);
+    return STATUS_ORDER.filter((s) => present.has(s));
+  }, [bookings]);
 
   return (
     <div>
-      <JobDashboard
-        orderId={drawerOrderId}
-        orderNumber={drawerOrderNumber}
-        onClose={() => setDrawerOrderId(null)}
-      />
+      <JobDashboard orderId={drawerId} orderNumber={drawerNumber} onClose={() => setDrawerId(null)} />
 
-      <div className="flex items-center justify-between mb-4">
+      {/* Header */}
+      <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Jobs</h1>
-          <p className="text-[11px] text-gray-400">
-            {loading ? 'Loading from RentalWorks...' : `${orders.length} total orders · Live from RentalWorks`}
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            {loading
+              ? 'Loading…'
+              : bookings.length === 1
+                ? '1 job'
+                : `${bookings.length} jobs`}
           </p>
-    </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-emerald-600 font-semibold px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-200">
-            🔴 Live · RentalWorks
-          </span>
-          <button onClick={() => setShowCreateSend(true)} className="px-4 py-2 bg-gray-900 text-white rounded-xl text-[12px] font-bold hover:bg-gray-700 transition-colors">Create &amp; Send Portal</button>
-          <button onClick={() => setShowNew(true)}
-            className="px-4 py-2 rounded-lg bg-black text-white text-[12px] font-bold hover:bg-gray-800">
-            + New Inquiry
-          </button>
-    </div>
-    </div>
+        </div>
+        <button
+          onClick={() => setShowCreateSend(true)}
+          className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-[12px] font-bold transition-colors"
+        >
+          + Create &amp; Send Portal
+        </button>
+      </div>
 
-      <div className="grid grid-cols-5 gap-2 mb-4">
-        {['ACTIVE', 'CONFIRMED', 'COMPLETE', 'CANCELLED', 'CLOSED'].map(s => {
+      {/* Status chips */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <button
+          onClick={() => setStatusFilter('ALL')}
+          className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+            statusFilter === 'ALL'
+              ? 'bg-gray-900 text-white border-gray-900'
+              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+          }`}
+        >
+          All <span className="opacity-70 ml-1">{counts.ALL || 0}</span>
+        </button>
+        {visibleChips.map((s) => {
           const cfg = STATUS_CONFIG[s];
+          const active = statusFilter === s;
           return (
-            <button key={s} onClick={() => setFilterStatus(filterStatus === s ? 'ALL' : s)}
-              className={`p-3 rounded-xl border text-left transition-all ${filterStatus === s ? 'ring-2 ring-offset-1 ring-black' : ''} ${cfg.bg} border-gray-200`}>
-              <div className={`text-xl font-extrabold ${cfg.color}`}>{counts[s] || 0}</div>
-              <div className="text-[9px] font-bold text-gray-400 uppercase">{cfg.label}</div>
+            <button
+              key={s}
+              onClick={() => setStatusFilter(active ? 'ALL' : s)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                active ? 'bg-gray-900 text-white border-gray-900' : `${cfg.badge} hover:border-gray-400`
+              }`}
+            >
+              {cfg.label} <span className="opacity-70 ml-1">{counts[s] || 0}</span>
             </button>
           );
         })}
-    </div>
+      </div>
 
-      <div className="flex gap-2 mb-3">
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search client, order #, description, PO..."
-          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-        <select value={filterAgent} onChange={e => setFilterAgent(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none">
-          <option value="ALL">All Agents</option>
-          {AGENTS.map(a => <option key={a}>{a}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none">
-          <option value="ALL">All Statuses ({counts.ALL || 0})</option>
-          {Object.keys(STATUS_CONFIG).map(s => (
-            <option key={s} value={s}>{STATUS_CONFIG[s].label} ({counts[s] || 0})</option>
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search company, project, contact, or job #…"
+          className="w-full md:w-[420px] px-3 py-2 rounded-lg border border-gray-200 text-[13px] focus:outline-none focus:border-gray-400"
+        />
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <div className="text-center py-20 text-gray-400 text-[13px]">Loading jobs…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <div className="text-[13px]">
+            {bookings.length === 0
+              ? 'No jobs yet. Click + Create & Send Portal to start one.'
+              : 'No jobs match your filters.'}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filtered.map((b) => (
+            <JobCard
+              key={b.id}
+              booking={b}
+              onOpenDrawer={() => {
+                setDrawerNumber(b.bookingNumber);
+                setDrawerId(b.id);
+              }}
+              copied={copiedFor === b.id}
+              onCopyPortal={() => {
+                const token = b.paperworkRequests?.[0]?.token;
+                if (!token) return;
+                const url = `${window.location.origin}/portal/${token}`;
+                navigator.clipboard.writeText(url);
+                setCopiedFor(b.id);
+                setTimeout(() => setCopiedFor(null), 1500);
+              }}
+            />
           ))}
-        </select>
-    </div>
+        </div>
+      )}
 
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-[11px] text-gray-400">
-          {filtered.length} orders{totalPages > 1 ? ` · page ${page} of ${totalPages}` : ''}
+      {showCreateSend && (
+        <CreateSendModal
+          onClose={() => {
+            setShowCreateSend(false);
+            reload();
+          }}
+          agentId={undefined}
+          agentName={agentName}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Single job card. Stacks: header (company + status badge) → project →
+ * date range → contact → paperwork checks → footer (total + actions).
+ * Click anywhere outside the action buttons opens the JobDashboard drawer.
+ */
+function JobCard({
+  booking,
+  onOpenDrawer,
+  onCopyPortal,
+  copied,
+}: {
+  booking: BookingRow;
+  onOpenDrawer: () => void;
+  onCopyPortal: () => void;
+  copied: boolean;
+}) {
+  const cfg = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.ARCHIVED;
+  const projectName = booking.productionName || booking.jobName || '(no project name)';
+  const personFullName = booking.person ? `${booking.person.firstName} ${booking.person.lastName}` : null;
+  const total = fmtMoney(booking.totalPrice ?? null);
+  const pw = booking.paperworkRequests?.[0] ?? null;
+
+  const portalToken = pw?.token ?? null;
+  const portalUrl = portalToken ? `/portal/${portalToken}` : null;
+
+  return (
+    <div
+      onClick={onOpenDrawer}
+      className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer flex flex-col gap-2.5 active:scale-[0.995]"
+      style={{ borderLeftWidth: 3, borderLeftColor: cfg.bar }}
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold text-gray-900 truncate">{booking.company?.name || 'Unknown company'}</div>
+          <div className="text-[12px] text-gray-700 truncate">{projectName}</div>
+        </div>
+        <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${cfg.badge} flex-shrink-0`}>
+          {cfg.label}
         </span>
-        <span className="text-[11px] font-bold text-gray-700">Total: <span className="text-emerald-600">${totalValue.toLocaleString()}</span></span>
-    </div>
+      </div>
 
-      {loading && (
-        <div className="text-center py-16 text-gray-400">
-          <div className="text-3xl mb-2">⏳</div>
-          <div className="text-[13px]">Loading orders from RentalWorks...</div>
-    </div>
-      )}
+      {/* Meta row */}
+      <div className="flex items-center gap-2 text-[11px] text-gray-500 flex-wrap">
+        <span className="font-mono text-gray-400">{booking.bookingNumber}</span>
+        <span>·</span>
+        <span>{fmtDateRange(booking.startDate, booking.endDate)}</span>
+        {booking.agent?.name && (
+          <>
+            <span>·</span>
+            <span>{booking.agent.name}</span>
+          </>
+        )}
+      </div>
 
-      {!loading && filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <div className="text-3xl mb-2">📋</div>
-          <div className="text-[13px]">No orders match your filters</div>
-    </div>
-      )}
-
-      <div className="space-y-2">
-        {paginated.map(o => {
-          const cfg = STATUS_CONFIG[o.status] || STATUS_CONFIG.CLOSED;
-          const dur = o.startDate && o.endDate ? diffDays(o.startDate, o.endDate) + 1 : null;
-          return (
-            <div key={o.orderId}
-              onClick={() => window.location.href = `/jobs/${o.orderId}`}
-              className="p-3 rounded-xl border bg-white hover:shadow-md hover:border-gray-300 transition-all cursor-pointer active:scale-[0.99]"
-              style={{ borderLeftWidth: 3, borderLeftColor: cfg.border }}>
-              <div className="flex justify-between items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className="text-[13px] font-bold text-gray-900">{o.customer}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${cfg.color} ${cfg.bg}`}>{cfg.label}</span>
-                    {o.marketType && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-50 text-purple-600">{o.marketType}</span>
-                    )}
-    </div>
-                  <div className="text-[11px] text-gray-700 font-medium truncate">{o.description}</div>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[10px] text-gray-400">#{o.orderNumber}</span>
-                    {o.department && <span className="text-[10px] text-gray-400">· {o.department}</span>}
-                    {o.agent && <span className="text-[10px] text-gray-400">· {o.agent}</span>}
-                    {o.poNumber && <span className="text-[10px] text-blue-500">· PO: {o.poNumber}</span>}
-    </div>
-    </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-[15px] font-extrabold text-gray-900">${o.total.toLocaleString()}</div>
-                  {o.startDate && (
-                    <div className="text-[10px] text-gray-400">
-                      {fDate(o.startDate)}{o.endDate ? ` – ${fDate(o.endDate)}` : ''}
-                      {dur ? <span className="ml-1 text-gray-300">({dur}d)</span> : ''}
-    </div>
-                  )}
-                  <div className="text-[9px] text-gray-300 mt-0.5">tap to view →</div>
-                  {(o as any)._fleetHQ && (
-                    <div onClick={e => e.stopPropagation()} className="mt-1">
-                      {linkingId === o.orderId ? (
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            value={linkRwNumber}
-                            onChange={e => setLinkRwNumber(e.target.value)}
-                            placeholder="RW Order # (e.g. A000K7QF)"
-                            className="border border-gray-300 rounded-lg px-2 py-1 text-[10px] w-40 focus:outline-none focus:border-violet-400"
-                            autoFocus
-                          />
-                          <button onClick={async () => {
-                            if (!linkRwNumber.trim()) return;
-                            setLinkSaving(true);
-                            try {
-                              await fetch(`/api/bookings/${o.orderId}/link-rw`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ rentalworksOrderId: linkRwNumber.trim() })
-                              });
-                              setFleetBookings(prev => prev.filter(b => b.orderId !== o.orderId));
-                              setLinkingId(null);
-                              setLinkRwNumber('');
-                            } finally { setLinkSaving(false); }
-                          }} className="text-[10px] font-bold px-2 py-1 bg-violet-600 text-white rounded-lg">
-                            {linkSaving ? '...' : 'Link'}
-                          </button>
-                          <button onClick={() => { setLinkingId(null); setLinkRwNumber(''); }} className="text-[10px] text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => { setLinkingId(o.orderId); setLinkRwNumber(''); }}
-                          className="text-[10px] text-violet-500 hover:text-violet-700 font-semibold">
-                          + Link to RW Order
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {(o as any)._fleetHQ && (o as any)._paperworkStatus && (() => {
-                    const pw = (o as any)._paperworkStatus;
-                    const ct = pw.contractType || 'vehicles';
-                    const steps = [
-                      ct !== 'stage' && pw.rentalAgreement,
-                      ct !== 'stage' && pw.lcdwAccepted,
-                      ct !== 'vehicles' && pw.studioContractSigned,
-                      pw.coiReceived,
-                      pw.creditCardAuth,
-                    ].filter(s => s !== false);
-                    const total = steps.length;
-                    const done = steps.filter(Boolean).length;
-                    return (
-                      <div className={`text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full inline-block ${done === total ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>
-                        {done}/{total} paperwork
-                      </div>
-                    );
-                  })()}
-    </div>
-    </div>
-    </div>
-          );
-        })}
-    </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">
-            ← Previous
-          </button>
-          <span className="text-[11px] text-gray-400">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-          </span>
-          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">
-            Next →
-          </button>
-    </div>
-      )}
-
-      {showCreateSend && <CreateSendModal onClose={() => setShowCreateSend(false)} agentId={undefined} agentName={agentName} />}
-      {showNew && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => { setShowNew(false); resetForm(); }}>
-          <div className="bg-white rounded-2xl w-[480px] max-h-[90vh] overflow-y-auto shadow-2xl"
-            onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center">
-              <div>
-                <h2 className="text-[16px] font-bold text-gray-900">New Inquiry</h2>
-                <p className="text-[11px] text-gray-400">Log inquiry · create order in RentalWorks</p>
-    </div>
-              <button onClick={() => { setShowNew(false); resetForm(); }} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-    </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Contact</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={nContact} onChange={e => setNContact(e.target.value)} placeholder="Name *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <input value={nCompany} onChange={e => setNCompany(e.target.value)} placeholder="Company *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <input value={nPhone} onChange={e => setNPhone(formatPhone(e.target.value))} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <input value={nEmail} onChange={e => setNEmail(e.target.value)} placeholder="Email" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-    </div>
-    </div>
-              <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Job</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={nJob} onChange={e => setNJob(e.target.value)} placeholder="Job / Production name *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400 col-span-2" />
-                  <input value={nPoNumber} onChange={e => setNPoNumber(e.target.value)} placeholder="PO Number" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <select value={nAgent} onChange={e => setNAgent(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400">
-                    {AGENTS.map(a => <option key={a}>{a}</option>)}
-                  </select>
-    </div>
-    </div>
-              <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Vehicle Request</div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 mb-2">
-                  <select value={nVehicle} onChange={e => setNVehicle(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400">
-                    {VEHICLE_TYPES.map(v => <option key={v}>{v}</option>)}
-                  </select>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setNQty(Math.max(1, nQty - 1))} className="w-8 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold">-</button>
-                    <span className="w-8 text-center text-[13px] font-bold">{nQty}</span>
-                    <button onClick={() => setNQty(nQty + 1)} className="w-8 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold">+</button>
-    </div>
-    </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="text-[9px] text-gray-400 mb-0.5">Pickup Date</div>
-                    <input type="date" value={nStart} onChange={e => setNStart(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-    </div>
-                  <div>
-                    <div className="text-[9px] text-gray-400 mb-0.5">Return Date</div>
-                    <input type="date" value={nEnd} onChange={e => setNEnd(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-    </div>
-    </div>
-                {days > 0 && (
-                  <div className="mt-2 p-2 rounded-lg bg-gray-50 border border-gray-100 text-[11px] text-gray-500">
-                    {nQty}× {nVehicle} · {days} day{days !== 1 ? 's' : ''} · {fDate(nStart)} – {fDate(nEnd)}
-    </div>
-                )}
-    </div>
-              <div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Notes</div>
-                <textarea value={nNotes} onChange={e => setNNotes(e.target.value)} placeholder="Delivery instructions, special requests, add-ons needed..." rows={3} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400 resize-none" />
-    </div>
-
-    </div>
-            {/* Availability step */}
-            {nStep === 'units' && (
-              <div className="px-5 pb-4 space-y-2">
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">
-                  Select Units — {nAvailableUnits.filter((u:any)=>u.available).length} available for {fDate(nStart)}–{fDate(nEnd)}
-                </div>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {nAvailableUnits.map((u: any, i: number) => (
-                    <label key={i} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
-                      nSelectedUnits.includes(u.name)
-                        ? 'bg-blue-50 border-blue-300'
-                        : u.available ? 'bg-white border-gray-200 hover:bg-gray-50' : 'bg-gray-50 border-gray-100 opacity-50'
-                    }`}>
-                      <input type="checkbox"
-                        checked={nSelectedUnits.includes(u.name)}
-                        disabled={!u.available && !nSelectedUnits.includes(u.name)}
-                        onChange={e => {
-                          if (e.target.checked) setNSelectedUnits(prev => [...prev, u.name])
-                          else setNSelectedUnits(prev => prev.filter(n => n !== u.name))
-                        }}
-                        className="rounded" />
-                      <span className="text-[12px] font-medium text-gray-900 flex-1">{u.name}</span>
-                      {!u.available && <span className="text-[10px] text-red-500">{u.bookedBy || 'Booked'}</span>}
-                      {u.available && <span className="text-[10px] text-emerald-600">Available</span>}
-                    </label>
-                  ))}
-                </div>
-                <div className="text-[10px] text-gray-400">{nSelectedUnits.length} of {nQty} requested selected</div>
-              </div>
-            )}
-
-            {nStep === 'done' && (
-              <div className="px-5 pb-4 text-center">
-                <div className="text-3xl mb-2">✅</div>
-                <div className="text-[13px] font-bold text-gray-900">{nCreatedIds.length} unit{nCreatedIds.length !== 1 ? 's' : ''} reserved as Hold</div>
-                <div className="text-[11px] text-gray-500 mt-1">Reservations created in Planyo. Create the RW order to confirm billing.</div>
-              </div>
-            )}
-
-            <div className="p-5 border-t border-gray-100 flex gap-2">
-              <button onClick={() => { setShowNew(false); resetForm(); }} className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold hover:bg-gray-200">
-                {nStep === 'done' ? 'Close' : 'Cancel'}
-              </button>
-              {nStep === 'form' && (
-                <button onClick={checkAvailability}
-                  disabled={!nContact || !nCompany || !nJob || !nStart || !nEnd || nCheckingAvail}
-                  className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nContact && nCompany && nJob && nStart && nEnd ? 'bg-black text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                  {nCheckingAvail ? 'Checking...' : 'Check Availability →'}
-                </button>
+      {/* Contact + paperwork */}
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {personFullName ? (
+            <>
+              <div className="text-[11px] font-semibold text-gray-700 truncate">{personFullName}</div>
+              {booking.person?.email && (
+                <a
+                  href={`mailto:${booking.person.email}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[10px] text-gray-500 hover:text-gray-800 truncate block"
+                >
+                  {booking.person.email}
+                </a>
               )}
-              {nStep === 'units' && (
-                <button onClick={createReservations}
-                  disabled={!nSelectedUnits.length}
-                  className={`flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors ${nSelectedUnits.length ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                  Reserve {nSelectedUnits.length} Unit{nSelectedUnits.length !== 1 ? 's' : ''} as Hold →
-                </button>
-              )}
-              {nStep === 'creating' && (
-                <button disabled className="flex-2 px-6 py-2.5 rounded-lg text-[13px] font-bold bg-blue-100 text-blue-400">
-                  Creating reservations...
-                </button>
-              )}
-    </div>
-    </div>
-    </div>
-      )}
+            </>
+          ) : (
+            <div className="text-[10px] text-gray-400">No contact on file</div>
+          )}
+        </div>
+        {pw && <PaperworkBadges pw={pw} />}
+      </div>
 
-      {toast && (
-        <div className="fixed bottom-4 right-4 px-4 py-3 rounded-lg bg-emerald-500 text-white text-[12px] font-semibold shadow-lg z-50 max-w-sm">
-          {toast}
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100 mt-1">
+        <div className="text-[11px] text-gray-400">created {fmtRelative(booking.createdAt)}</div>
+        <div className="flex items-center gap-2">
+          {total && <span className="text-[12px] font-bold text-emerald-700">{total}</span>}
+          {portalUrl && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopyPortal();
+              }}
+              className="text-[10px] font-semibold text-gray-500 hover:text-gray-800 px-2 py-1 rounded border border-gray-200 hover:border-gray-400"
+            >
+              {copied ? '✓ Copied' : 'Copy Link'}
+            </button>
+          )}
+          {portalUrl && (
+            <a
+              href={portalUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-[10px] font-semibold text-gray-700 hover:text-gray-900 px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+            >
+              View Portal →
+            </a>
+          )}
+        </div>
+      </div>
     </div>
-      )}
+  );
+}
+
+/**
+ * Tiny check/dot badges representing paperwork completion. Only renders
+ * when a paperworkRequest snapshot exists on the booking. Contract type
+ * controls which checks are surfaced — stage bookings need the studio
+ * contract signed, vehicles need rental agreement + LCDW, both need COI.
+ */
+function PaperworkBadges({ pw }: { pw: PaperworkSnapshot }) {
+  const isStage = pw.contractType === 'stage' || pw.contractType === 'both';
+  const isVehicles = !pw.contractType || pw.contractType === 'vehicles' || pw.contractType === 'both';
+  const checks: { label: string; ok: boolean }[] = [];
+  if (isVehicles) checks.push({ label: 'RA', ok: pw.rentalAgreement });
+  if (isStage) checks.push({ label: 'Stage', ok: pw.studioContractSigned });
+  checks.push({ label: 'COI', ok: pw.coiReceived });
+
+  return (
+    <div className="flex items-center gap-1 flex-shrink-0" title="Paperwork progress">
+      {checks.map((c) => (
+        <span
+          key={c.label}
+          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+            c.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-500'
+          }`}
+        >
+          {c.ok ? '✓' : '○'} {c.label}
+        </span>
+      ))}
     </div>
   );
 }
