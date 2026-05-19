@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { ContactPicker, EMPTY_CONTACT_PICKER_VALUE, type ContactPickerValue } from '@/components/shared/ContactPicker';
+import { formatPhone } from '@/lib/format/phone';
 
 const VEHICLE_TYPES = [
   'Cube Truck', 'Cargo Van', 'Passenger Van', 'PopVan',
@@ -212,17 +213,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                       <input
                         value={contact.phone}
                         readOnly={contact.mode === 'selected_existing'}
-                        onChange={(e) =>
-                          setContact({
-                            ...contact,
-                            phone: e.target.value
-                              .replace(/\D/g, '')
-                              .replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')
-                              .replace(/(\d{3})(\d{1,3})$/, '($1) $2')
-                              .replace(/(\d{1,3})$/, '($1')
-                              .slice(0, 14),
-                          })
-                        }
+                        onChange={(e) => setContact({ ...contact, phone: formatPhone(e.target.value) })}
                         className={`w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 ${
                           contact.mode === 'selected_existing' ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
                         }`}

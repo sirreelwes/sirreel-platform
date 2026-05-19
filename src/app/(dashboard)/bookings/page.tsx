@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useState, useMemo, useEffect } from 'react';
 import CreateSendModal from "@/components/bookings/CreateSendModal";
 import JobDashboard from '@/components/jobs/JobDashboard';
+import { formatPhone } from '@/lib/format/phone';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -452,12 +453,7 @@ export default function BookingsPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <input value={nContact} onChange={e => setNContact(e.target.value)} placeholder="Name *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nCompany} onChange={e => setNCompany(e.target.value)} placeholder="Company *" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
-                  <input value={nPhone} onChange={e => setNPhone((() => {
-                    const d = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    if (d.length <= 3) return d;
-                    if (d.length <= 6) return `(${d.slice(0,3)}) ${d.slice(3)}`;
-                    return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
-                  })())} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
+                  <input value={nPhone} onChange={e => setNPhone(formatPhone(e.target.value))} placeholder="Phone" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
                   <input value={nEmail} onChange={e => setNEmail(e.target.value)} placeholder="Email" className="px-3 py-2 rounded-lg border border-gray-200 text-[12px] focus:outline-none focus:border-gray-400" />
     </div>
     </div>

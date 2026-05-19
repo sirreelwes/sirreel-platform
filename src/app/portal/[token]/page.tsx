@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import { formatPhone } from '@/lib/format/phone';
 
 const TERMS = [
   { n: 1, title: 'Indemnity', text: `Lessee/Renter ("You") agree to defend, indemnify, and hold SirReel Production Vehicles, Inc. dba SirReel Studio Rentals our agents, employees, assignees, suppliers, sub-lessors and sub-renters ("Us" or "We") harmless from any and all claims, damages, costs, and expenses arising from the Equipment, except as the result of our sole negligence or willful act, from the time the Equipment leaves our place of business until returned to us during normal business hours and we sign a written receipt for it.` },
@@ -1279,7 +1280,7 @@ export default function ClientPortal() {
                         <input value={ccZip} onChange={e => setCcZip(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="ZIP" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <input value={ccBillingPhone} onChange={e => setCcBillingPhone(e.target.value.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3').replace(/(\d{3})(\d{1,3})$/, '($1) $2').replace(/(\d{1,3})$/, '($1').slice(0, 14))} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Phone" />
+                        <input value={ccBillingPhone} onChange={e => setCcBillingPhone(formatPhone(e.target.value))} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Phone" />
                         <input type="email" value={ccBillingEmail} onChange={e => setCcBillingEmail(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="Email" />
                       </div>
                     </div>
