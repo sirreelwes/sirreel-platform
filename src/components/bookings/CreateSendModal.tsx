@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { ContactPicker, EMPTY_CONTACT_PICKER_VALUE, type ContactPickerValue } from '@/components/shared/ContactPicker';
 
 const VEHICLE_TYPES = [
   'Cube Truck', 'Cargo Van', 'Passenger Van', 'PopVan',
@@ -18,12 +19,13 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
   const [companyQuery, setCompanyQuery] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState<any[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
-  const [contactQuery, setContactQuery] = useState('');
-  const [contactSuggestions, setContactSuggestions] = useState<any[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState<any>(null);
-  const [personName, setPersonName] = useState('');
-  const [personEmail, setPersonEmail] = useState('');
-  const [personPhone, setPersonPhone] = useState('');
+  // Primary contact is managed by the shared ContactPicker. The picker
+  // tracks mode (searching / selected_existing / creating_new), the
+  // selected personId (if any), and the name/phone/email payload. When
+  // mode === 'selected_existing' the phone/email come from CRM and are
+  // shown read-only; in creating_new they're editable and a new Person
+  // row is created at /api/bookings/create-send submit time.
+  const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT_PICKER_VALUE);
   const [jobName, setJobName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -55,15 +57,16 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
 
   const companyRef = useRef<HTMLDivElement>(null);
 
+  // Contact-typeahead useEffect removed — ContactPicker owns its own
+  // debounced /api/persons search now. When the user picks an existing
+  // CRM contact, the picker also surfaces the linked company; the
+  // useEffect below auto-fills the company field with it.
   useEffect(() => {
-    if (contactQuery.length < 1) { setContactSuggestions([]); return; }
-    const t = setTimeout(async () => {
-      const res = await fetch(`/api/persons?q=${encodeURIComponent(contactQuery)}`);
-      const data = await res.json();
-      setContactSuggestions(data.persons || []);
-    }, 200);
-    return () => clearTimeout(t);
-  }, [contactQuery]);
+    if (contact.mode === 'selected_existing' && contact.company && !selectedCompany) {
+      setSelectedCompany(contact.company);
+      setCompanyQuery(contact.company.name);
+    }
+  }, [contact.mode, contact.company, selectedCompany]);
 
   useEffect(() => {
     if (companyQuery.length < 1) { setCompanySuggestions([]); return; }
@@ -87,7 +90,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
   const showStage = contractType === 'stage' || contractType === 'both';
 
   const submit = async () => {
-    if (!jobName || !startDate || !personEmail || !contractType) return;
+    if (!jobName || !startDate || !contact.email || !contractType) return;
     setSubmitting(true);
     try {
       const res = await fetch('/api/bookings/create-send', {
@@ -96,8 +99,13 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
         body: JSON.stringify({
           companyId: selectedCompany?.id,
           companyName: selectedCompany ? undefined : companyQuery,
-          personId: selectedPerson?.id,
-          personEmail, personName, personPhone,
+          // personId is set only when the user picked an existing CRM
+          // contact. When mode === 'creating_new', the API creates a new
+          // Person row from personName / personEmail / personPhone.
+          personId: contact.personId,
+          personEmail: contact.email,
+          personName: contact.name,
+          personPhone: contact.phone,
           agentId, jobName, startDate, endDate,
           contractType,
           vehicleTypes: selectedVehicles,
@@ -125,7 +133,13 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
     } finally { setSubmitting(false); }
   };
 
-  const canSubmit = jobName && startDate && personEmail && contractType && (selectedCompany || companyQuery.length > 1);
+  const contactReady =
+    contact.mode === 'selected_existing'
+      ? !!contact.email
+      : contact.mode === 'creating_new'
+        ? !!contact.name.trim() && !!contact.email.trim()
+        : false;
+  const canSubmit = jobName && startDate && contactReady && contractType && (selectedCompany || companyQuery.length > 1);
 
   return (
     <>
@@ -179,35 +193,59 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
               {/* Contact */}
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Primary Contact *</label>
-                <div className="relative mb-2">
-                  <input value={contactQuery} onChange={e => { setContactQuery(e.target.value); setSelectedPerson(null); setPersonName(e.target.value); }}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400" placeholder="Search by name or email..." />
-                  {contactSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
-                      {contactSuggestions.map(p => (
-                        <button key={p.id} onClick={() => {
-                          setSelectedPerson(p); setContactQuery(`${p.firstName} ${p.lastName}`);
-                          setPersonName(`${p.firstName} ${p.lastName}`); setPersonEmail(p.email || '');
-                          setPersonPhone(p.phone || ''); setContactSuggestions([]);
-                          if (!selectedCompany && p.company) { setSelectedCompany(p.company); setCompanyQuery(p.company.name); }
-                        }} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
-                          <div className="text-sm font-semibold text-gray-900">{p.firstName} {p.lastName}</div>
-                          <div className="text-[10px] text-gray-400">{p.email}{p.company ? ` · ${p.company.name}` : ''}</div>
-                        </button>
-                      ))}
+                <div className="text-[10px] text-gray-400 -mt-1 mb-2">
+                  The client&rsquo;s representative — not a SirReel staff member.
+                </div>
+                <div className="mb-2">
+                  <ContactPicker value={contact} onChange={setContact} />
+                </div>
+                {/* Phone + email — read-only when the contact was pulled from
+                    CRM (mode='selected_existing'), editable otherwise. The
+                    "Change" button on the picker pill returns the form to
+                    searching mode so the rep can re-pick or create new. */}
+                {contact.mode !== 'searching' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-gray-400 mb-1 block">
+                        Phone {contact.mode === 'selected_existing' && <span className="text-emerald-600">· from CRM</span>}
+                      </label>
+                      <input
+                        value={contact.phone}
+                        readOnly={contact.mode === 'selected_existing'}
+                        onChange={(e) =>
+                          setContact({
+                            ...contact,
+                            phone: e.target.value
+                              .replace(/\D/g, '')
+                              .replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')
+                              .replace(/(\d{3})(\d{1,3})$/, '($1) $2')
+                              .replace(/(\d{1,3})$/, '($1')
+                              .slice(0, 14),
+                          })
+                        }
+                        className={`w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 ${
+                          contact.mode === 'selected_existing' ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                        }`}
+                        placeholder="(310) 555-1234"
+                      />
                     </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-gray-400 mb-1 block">Phone</label>
-                    <input value={personPhone} onChange={e => setPersonPhone(e.target.value.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3').replace(/(\d{3})(\d{1,3})$/, '($1) $2').replace(/(\d{1,3})$/, '($1').slice(0, 14))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="(310) 555-1234" />
+                    <div>
+                      <label className="text-[10px] text-gray-400 mb-1 block">
+                        Email * (portal link) {contact.mode === 'selected_existing' && <span className="text-emerald-600">· from CRM</span>}
+                      </label>
+                      <input
+                        type="email"
+                        value={contact.email}
+                        readOnly={contact.mode === 'selected_existing'}
+                        onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                        className={`w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 ${
+                          contact.mode === 'selected_existing' ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                        }`}
+                        placeholder="client@company.com"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-gray-400 mb-1 block">Email * (portal link)</label>
-                    <input type="email" value={personEmail} onChange={e => setPersonEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" placeholder="client@company.com" />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Job Details */}
@@ -369,7 +407,7 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                     className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-colors ${copied === 'portal' ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
                     {copied === 'portal' ? '✓ Copied!' : 'Copy Link'}
                   </button>
-                  <a href={`mailto:${personEmail}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${personName.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
+                  <a href={`mailto:${contact.email}?subject=Let's Get Started — ${jobName} | SirReel Studio Services&body=Hi ${contact.name.split(' ')[0]},%0A%0AWe are excited to take care of your team on ${jobName}!%0A%0AYou'll find your rental details, schedule, and all required paperwork in one place — just click the link below to access your Job Portal:%0A%0A${result.clientUrl}%0A%0AYou can complete the paperwork at your own pace — your progress is saved automatically, so feel free to return to this link at any time.%0A%0AThe entire team will be ready to help, but I will be your point of contact from estimate, to shoot, to final invoice!%0A%0AIf you have any questions:%0A%0A📞 (888) 477-7335%0A✉️ rentals@sirreel.com%0A%0AI look forward to working with you!%0A%0AWarmly,%0A${agentName || 'Your SirReel Team'}%0ASirReel Studio Services`}
                     className="flex-1 py-2 rounded-lg text-[12px] font-semibold bg-blue-600 text-white hover:bg-blue-700 text-center">
                     Send Email
                   </a>
