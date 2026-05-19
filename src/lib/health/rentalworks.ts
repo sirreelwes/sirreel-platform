@@ -45,7 +45,7 @@ export async function checkRentalWorks(): Promise<RentalWorksHealth> {
         status: 'down',
         latencyMs,
         httpStatus,
-        error: `RentalWorks rejected token (${httpStatus}) — rotation required`,
+        error: `RentalWorks rejected token (${httpStatus}) — rotation required. See docs/runbooks/rentalworks-token-rotation.md`,
         lastChecked,
       }
     }

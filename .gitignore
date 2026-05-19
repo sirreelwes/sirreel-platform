@@ -17,5 +17,6 @@ scripts/*
 !scripts/backfill-reply-classifications.ts
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
+!scripts/verify-rw-token.ts
 .env.local.bak
 .gcp-service-account.json
