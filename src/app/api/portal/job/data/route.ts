@@ -22,6 +22,22 @@ const AFTER_HOURS_LINE = '(888) 477-7335'
 // rotates to another person.
 const LEADERSHIP_EMAIL = 'dani@sirreel.com'
 
+// Client-safe labels when User.displayTitle is null. Internal role names
+// ('ADMIN', 'AGENT') must never leak to the portal — these are the only
+// strings a client ever sees as a role badge fallback.
+function defaultDisplayTitleForRole(role: string): string {
+  switch (role) {
+    case 'ADMIN':
+      return 'Leadership'
+    case 'MANAGER':
+      return 'Manager'
+    case 'AGENT':
+      return 'Team Member'
+    default:
+      return 'Team Member'
+  }
+}
+
 /**
  * GET /api/portal/job/data
  *
@@ -127,7 +143,7 @@ export async function GET(req: NextRequest) {
   // the audit checkpoint for CRH brief §7 "What is NEVER surfaced".
   const leadership = await prisma.user.findUnique({
     where: { email: LEADERSHIP_EMAIL },
-    select: { id: true, name: true, email: true, phone: true, displayTitle: true },
+    select: { id: true, name: true, email: true, phone: true, displayTitle: true, role: true },
   })
 
   const [latestCoi, paperworkPortal, vehicleAssignments] = await Promise.all([
@@ -246,7 +262,13 @@ export async function GET(req: NextRequest) {
           name: leadership.name,
           email: leadership.email,
           phone: leadership.phone,
-          displayTitle: leadership.displayTitle,
+          // displayTitle is the canonical client-facing label. The role
+          // fallback is defense-in-depth — every @sirreel.com User has a
+          // displayTitle as of May 2026, but a new admin-created row with
+          // no displayTitle shouldn't blank out the badge in the portal.
+          // Internal role names ('ADMIN', 'AGENT') are never exposed —
+          // we map to client-safe labels here.
+          displayTitle: leadership.displayTitle || defaultDisplayTitleForRole(leadership.role),
         }
       : null,
     lineItems: order.lineItems.map((li) => ({
