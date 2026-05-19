@@ -98,13 +98,24 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
 
   useEffect(() => {
     if (companyQuery.length < 1) { setCompanySuggestions([]); return; }
+    // Suppress the typeahead refetch immediately after a suggestion is
+    // picked — selectCompany() sets companyQuery to the chosen name,
+    // which would otherwise re-fire this effect, re-fetch matches, and
+    // reopen the dropdown 200ms later. From the user's POV that looks
+    // like the click "glitched" (selection didn't register). The
+    // input's onChange clears selectedCompany on the next keystroke,
+    // which unlocks the typeahead so editing the name still works.
+    if (selectedCompany && selectedCompany.name === companyQuery) {
+      setCompanySuggestions([]);
+      return;
+    }
     const t = setTimeout(async () => {
       const res = await fetch(`/api/companies?q=${encodeURIComponent(companyQuery)}`);
       const data = await res.json();
       setCompanySuggestions(data.companies || []);
     }, 200);
     return () => clearTimeout(t);
-  }, [companyQuery]);
+  }, [companyQuery, selectedCompany]);
 
   const selectCompany = (company: any) => {
     setSelectedCompany(company); setCompanyQuery(company.name); setCompanySuggestions([]);
@@ -236,7 +247,13 @@ export default function CreateSendModal({ onClose, agentId, agentName }: Props) 
                   {companySuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
                       {companySuggestions.map(c => (
-                        <button key={c.id} onClick={() => selectCompany(c)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                        // onMouseDown + type="button" as defense-in-depth:
+                        // onMouseDown fires before any potential future input
+                        // onBlur and avoids the classic blur-before-click race
+                        // if a blur handler is ever added; type="button" stops
+                        // any future <form> wrapper from interpreting this as
+                        // a submit.
+                        <button key={c.id} type="button" onMouseDown={() => selectCompany(c)} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0">
                           <div className="text-sm font-semibold text-gray-900">{c.name}</div>
                         </button>
                       ))}
