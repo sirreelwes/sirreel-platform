@@ -203,7 +203,7 @@ export default function BookingsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search company, project, contact, or job #…"
-          className="w-full md:w-[420px] px-3 py-2 rounded-lg border border-gray-200 text-[13px] focus:outline-none focus:border-gray-400"
+          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[13px] focus:outline-none focus:border-gray-400"
         />
       </div>
 
