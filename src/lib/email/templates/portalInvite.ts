@@ -21,14 +21,13 @@
  *     hints; the dark header reads identically in both.
  */
 
-// TODO(brand): no white/light SirReel logo currently exists in /public.
-// /public/sirreel-logo.png is the only PNG and is solid black, which is
-// invisible against the dark email header (DARK below). Until a white
-// version is exported and committed, the header uses a CSS typography
-// lockup — white serif "SirReel" + spaced "Studio Services" below.
-// When a white logo lands, restore <img> tags in the dark header and
-// footer; ABSOLUTE_LOGO_URL is still defined for that future use.
-const ABSOLUTE_LOGO_URL = 'https://hq.sirreel.com/sirreel-logo.png' // eslint-disable-line @typescript-eslint/no-unused-vars
+// White wordmark (RGB-inverted from /public/sirreel-logo.png so the SirReel
+// logo reads cleanly against the DARK header background). The black
+// original is kept for any light-bg uses elsewhere; this email always uses
+// the white version. Both are served as static assets from /public via
+// Vercel's CDN, which is required for email image rendering — email
+// clients can't resolve relative paths or local files.
+const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
 const GOLD = '#D4A547'
@@ -131,9 +130,9 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Dark header ────────────────────────────────────────── -->
           <tr>
             <td style="background-color:${DARK};padding:36px 24px 28px;text-align:center;">
-              <!-- Logotype: CSS typography fallback. Replace with <img> when a white SirReel logo exists in /public. -->
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:40px;line-height:1;color:#ffffff;font-weight:400;letter-spacing:1px;">SirReel</div>
-              <div style="font-family:Helvetica,Arial,sans-serif;font-size:9px;letter-spacing:5px;color:#bdbdbd;margin-top:6px;text-transform:uppercase;">Studio Services</div>
+              <!-- White SirReel wordmark over the dark header. Alt text matches what shows
+                   when images are blocked (Gmail "Display images below", Outlook safe view). -->
+              <img src="${ABSOLUTE_LOGO_URL_WHITE}" alt="SirReel Studio Services" width="200" style="display:inline-block;max-width:200px;width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
               <!-- Gold accent line -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:18px auto 0;">
                 <tr>
