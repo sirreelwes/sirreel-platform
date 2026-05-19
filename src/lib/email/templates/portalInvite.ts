@@ -79,7 +79,7 @@ export function buildPortalInviteEmail(input: PortalInviteEmailInput): PortalInv
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
-    `SirReel presents TSX — your online portal to The SirReel Experience.`,
+    `SirReel presents TSX — your portal to your current and past projects.`,
     ``,
     `From this single portal you can:`,
     `  ✓ Sign your rental agreement and upload your COI`,
@@ -140,7 +140,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                 </tr>
               </table>
               <div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
-                SirReel presents
+                Presents
               </div>
               <div style="margin-top:6px;color:#ffffff;font-size:32px;letter-spacing:6px;font-weight:300;">
                 TSX
@@ -162,7 +162,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             <td style="padding:24px 36px 12px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
               <p style="margin:0 0 16px;">
-                We&rsquo;re glad to be working with you on <strong>${projectName}</strong>. SirReel presents <strong>TSX</strong> &mdash; your online portal to The SirReel Experience. One place for everything you&rsquo;ll need while you&rsquo;re with us.
+                We&rsquo;re glad to be working with you on <strong>${projectName}</strong>. SirReel presents <strong>TSX</strong> &mdash; your portal to your current and past projects. One place for everything you&rsquo;ll need while you&rsquo;re with us.
               </p>
             </td>
           </tr>
