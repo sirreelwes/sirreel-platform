@@ -56,6 +56,11 @@ export async function GET(req: NextRequest) {
       lastName: true,
       email: true,
       phone: true,
+      // Person has two columns for telephone: `phone` (rarely populated —
+      // only 29/4094 rows as of May 2026) and `mobile` (the actual canonical
+      // field — 2,819 rows). Surface both, and prefer mobile when phone is
+      // null so the picker shows something useful for most contacts.
+      mobile: true,
       affiliations: {
         select: { company: { select: { id: true, name: true } } },
         take: 1,
@@ -64,13 +69,14 @@ export async function GET(req: NextRequest) {
   })
 
   // Flatten the first affiliation onto `company` so the ContactPicker
-  // doesn't need to know about the join shape.
+  // doesn't need to know about the join shape. Coalesce phone || mobile
+  // so legacy `mobile`-only rows still surface a number.
   const shaped = persons.map((p) => ({
     id: p.id,
     firstName: p.firstName,
     lastName: p.lastName,
     email: p.email,
-    phone: p.phone,
+    phone: p.phone || p.mobile || null,
     company: p.affiliations[0]?.company || null,
   }))
 

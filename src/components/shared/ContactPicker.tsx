@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatPhone } from "@/lib/format/phone";
 
 /**
  * Reusable contact (Person) picker with typeahead + inline "add new" option.
@@ -114,10 +115,14 @@ export function ContactPicker({
   }, [])
 
   const pickExisting = (p: PersonHit) => {
+    // Phone is stored raw in DB (digits only) — format it before
+    // handing it up so the read-only Phone input in the parent form
+    // shows "(760) 672-5522" instead of "7606725522". formatPhone
+    // is idempotent so already-formatted values pass through clean.
     onChange({
       personId: p.id,
       name: `${p.firstName} ${p.lastName}`.trim(),
-      phone: p.phone || '',
+      phone: p.phone ? formatPhone(p.phone) : '',
       email: p.email || '',
       mode: 'selected_existing',
       company: p.company,
