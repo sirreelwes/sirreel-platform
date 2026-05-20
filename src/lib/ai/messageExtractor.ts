@@ -31,7 +31,7 @@ export const KNOWN_SUB_RENTAL_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
   'castexrentals.com',
 ])
 
-const PROMPT_PREAMBLE = `SirReel rents production vehicles to film/TV/commercial productions. Inbound emails are mixed — most are from clients renting FROM us, but some are from peer rental houses selling TO us, vendors quoting us for supplies, or cold sales/marketing outreach. Output strict JSON only — no markdown fences, no preamble.
+const PROMPT_PREAMBLE = `SirReel rents production vehicles to film/TV/commercial productions. Inbound emails are mostly from clients (production companies, producers, PMs) renting FROM us. Output strict JSON only — no markdown fences, no preamble.
 
 Extract:
 
@@ -54,29 +54,47 @@ Extract:
   },
   "urgency": "asap" | "normal" | "future" | null,
   "rawNotes": string | null,
-  "messageNature": "inquiry" | "reply" | "confirmation" | "question" | "rejection" | "vendor" | "solicitation" | "other",
+  "messageNature": "inquiry" | "reply" | "confirmation" | "question" | "rejection" | "solicitation" | "other",
   "summary": string,
   "confidence": number
 }
 
-Direction-of-trade test (this is the most important rule):
-- messageNature="inquiry" applies ONLY when the sender is a prospective or existing CLIENT seeking to RECEIVE goods or services FROM SirReel (rent a vehicle, place an order, request a quote for their production).
-- If the sender is trying to PROVIDE goods or services TO SirReel — a sub-rental quote from a peer rental house, a parts/supply vendor quote, a repair shop estimate, an invoice we owe — messageNature is "vendor". Never "inquiry".
-- If the sender is doing cold sales or marketing outreach pitching their company's services ("I represent X, we provide Y, would you have time to chat") — even if framed as a partnership — messageNature is "solicitation". Never "inquiry".
+Classification rules (in priority order):
+
+1) Default to "inquiry". A burred lead is a far worse outcome than including a non-inquiry; recall over precision. If the sender appears to be a person at a production company / agency / brand asking about renting anything, treat it as "inquiry" even if the wording is ambiguous, terse, or unusual.
+
+2) "solicitation" is ONLY for unambiguous COLD outbound sales pitches — the sender is pitching their own services to SirReel with no prior business relationship and no request for SirReel's services. Example signature: "I represent [Company], we provide [security / staffing / software / consulting / financing / SEO / cleaning], would you have 15 minutes to chat." If there is ANY hint the sender is asking SirReel for vehicles, gear, stages, or production services, it is "inquiry" — not "solicitation".
+
+3) Do NOT infer that the sender is a vendor or sub-rental house from rental jargon. Words and phrases like "quote", "PO", "purchase order", "sub-rent", "sub-rental", "RFP", "rental house", "production rental", "RR", "subrent van", "subrent cube" are used by BOTH clients and vendors. The same is true for company names containing "Rental", "Rentals", "Productions", "Studios", "Studio Rental". You do not have the data to tell vendor from client by name or vocabulary alone. When in doubt → "inquiry".
+
+4) Other natures:
+   - "reply": a response on an existing thread (subject starts with "Re:" or "Fwd:") that is not itself a fresh inquiry, confirmation, question, or rejection
+   - "confirmation": sender is confirming a deal / pickup / receipt / payment
+   - "question": sender is asking a follow-up question on a thread already in progress (NOT a first-touch inquiry — first-touch goes to "inquiry")
+   - "rejection": sender is declining / pulling out
+   - "other": automated notification emails (no-reply newsletters, system receipts, marketing blasts not pitching anything to SirReel)
 
 Few-shot examples:
 
-1) From: quotes@castexrentals.com  Subject: Re: Cargo van quote
-   Body: "Hi Wes — here's the quote for the cargo van you asked about for next week, $X/day. Let me know if you want to lock it in. — Castex Rentals"
-   → messageNature="vendor" (Castex is a peer rental house quoting SirReel for a sub-rental; goods flow TO SirReel)
-
-2) From: brad@goldenwestsecurity.com  Subject: Security services for SirReel productions
+A) From: brad@goldenwestsecurity.com  Subject: Security services for SirReel productions
    Body: "Hi, my name is Brad with Golden West Security Services. We provide armed and unarmed security officers for film productions and trucking operations. I'd love 15 minutes to introduce our services and see if there's a fit."
-   → messageNature="solicitation" (cold outbound sales pitch from a vendor; not responding to anything SirReel asked for)
+   → messageNature="solicitation" (clear cold sales pitch; nothing being asked of SirReel)
 
-3) From: producer@somefilm.com  Subject: Cargo van rental — June 5 shoot
+B) From: alexander.wood@myconversioncycle.com  Subject: Entertainment production managers x SirReel
+   Body: "Hi, I lead growth at Conversion Cycle and we help production-services companies grow recurring revenue. Could we book 20 minutes next week?"
+   → messageNature="solicitation" (cold sales)
+
+C) From: rental@chillstudioproduction.com  Subject: Quote Request: Super Cube: PU 5/18 RT 5/28 Chill Studio Production
+   Body: "Hi — we need a Super Cube for pickup 5/18, return 5/28. Can you send a quote? Thanks."
+   → messageNature="inquiry" (Chill Studio is a production company asking SirReel for a vehicle — "quote" / "rental" wording is NOT a vendor signal. Direction of trade is FROM SirReel.)
+
+D) From: producer@somefilm.com  Subject: Cargo van rental — June 5 shoot
    Body: "Hi, I'm looking to rent a cargo van with a liftgate for a one-day commercial shoot in Burbank on June 5. Can you send rates and availability?"
-   → messageNature="inquiry" (client wants to receive a vehicle FROM SirReel)
+   → messageNature="inquiry"
+
+E) From: gio@chaman.us  Subject: Stage Availability Inquiry — 2-Day Commercial Shoot
+   Body: "Hi, checking stage availability for a 2-day commercial shoot May 28–29."
+   → messageNature="inquiry" (ambiguous = default to inquiry)
 
 Other rules:
 - If a field isn't mentioned, set to null. Don't guess.
@@ -84,7 +102,7 @@ Other rules:
 - pickupDate / returnDate: use ISO YYYY-MM-DD when an explicit date is mentioned; otherwise null. Don't compute relative dates (e.g. "Tuesday morning" → null) — leave that for the rep.
 - equipment: short array of items mentioned (lights, dolly, generator, etc.). If only a vehicle is mentioned, leave empty.
 - urgency: "asap" if the client expresses urgency; "future" if the request is for a date >30d out; "normal" otherwise.
-- summary: ONE plain-English sentence describing the message ("Brandt Wille at Live Cinema Services needs a cargo van with liftgate for tomorrow morning").
+- summary: ONE plain-English sentence describing the message.
 - confidence: 0.0–1.0 reflecting how complete the extraction is (not just per-field accuracy).
 `
 
@@ -289,12 +307,20 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
   }
   const extracted = coerceExtracted(parsed)
 
-  // Deterministic vendor-domain override. The LLM is right most of the
-  // time, but for known sub-rental peers we hardcode the verdict so a
-  // single misread doesn't put their quote back into the Pipeline.
+  // Vendor is exclusively domain-driven. The LLM is dropped from this
+  // decision entirely because clients and vendors share rental vocabulary
+  // ("quote", "PO", "sub-rent", company names with "Rentals" / "Studio
+  // Rental", etc.) — we cannot tell them apart from content. Burying a
+  // real client lead is far worse than including a vendor that needs one
+  // Dismiss, so the cost asymmetry favors recall.
   const senderDomain = parseFromHeader(input.fromAddress).email.split('@')[1] ?? ''
   if (senderDomain && KNOWN_SUB_RENTAL_VENDOR_DOMAINS.has(senderDomain)) {
     return { ...extracted, messageNature: 'vendor' }
+  }
+  if (extracted.messageNature === 'vendor') {
+    // LLM hallucinated a vendor from vocabulary despite the prompt
+    // telling it not to. Recall bias: flip to 'inquiry'.
+    return { ...extracted, messageNature: 'inquiry' }
   }
   return extracted
 }

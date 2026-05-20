@@ -36,6 +36,7 @@ function parseFlags(argv: string[]) {
     concurrency: DEFAULT_CONCURRENCY,
     skipRecentMinutes: 0,
     allInbound: false,
+    includeRecentHours: 0,
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -44,6 +45,7 @@ function parseFlags(argv: string[]) {
     else if (a === '--concurrency') out.concurrency = parseInt(argv[++i] || '10', 10) || 10
     else if (a === '--skip-recent') out.skipRecentMinutes = parseInt(argv[++i] || '60', 10) || 60
     else if (a === '--all-inbound') out.allInbound = true
+    else if (a === '--include-recent') out.includeRecentHours = parseInt(argv[++i] || '3', 10) || 3
     else if (a === '--dry-run') out.dryRun = true
   }
   return out
@@ -75,21 +77,32 @@ async function main() {
 
   if (!flags.dryRun) await abortIfExtractorBroken()
 
+  const recentlyTouchedSince = flags.includeRecentHours > 0
+    ? new Date(Date.now() - flags.includeRecentHours * 3600 * 1000)
+    : null
+
+  // Default scope: only rows the Pipeline view actually surfaces. Pass
+  // --all-inbound to widen to every inbound row in the window. Pass
+  // --include-recent <hours> to also pick up rows touched by a previous
+  // re-extract run in that window — useful for iterating on prompt
+  // changes that may have mis-classified rows OUT of 'inquiry' too.
+  const scopeClauses: object[] = []
+  if (!flags.allInbound) {
+    scopeClauses.push({
+      extractedData: { path: ['messageNature'], equals: 'inquiry' },
+      extractionConfidence: { gt: 0 },
+    })
+    if (recentlyTouchedSince) {
+      scopeClauses.push({ extractionRunAt: { gte: recentlyTouchedSince } })
+    }
+  }
+
   const candidates = await prisma.emailMessage.findMany({
     where: {
       direction: 'inbound',
       duplicateOfId: null,
       sentAt: { gte: since },
-      // Default scope: only rows the Pipeline view actually surfaces.
-      // Those are the only ones that can hold a false-positive 'inquiry'
-      // tag, so re-extracting more is wasted API calls. Pass --all-inbound
-      // to widen to every inbound row in the window.
-      ...(flags.allInbound
-        ? {}
-        : {
-            extractedData: { path: ['messageNature'], equals: 'inquiry' },
-            extractionConfidence: { gt: 0 },
-          }),
+      ...(scopeClauses.length > 0 ? { OR: scopeClauses } : {}),
       AND: [
         { OR: [{ bodyText: { not: null } }, { snippet: { not: null } }] },
         ...(skipBefore
