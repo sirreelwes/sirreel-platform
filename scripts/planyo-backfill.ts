@@ -69,6 +69,23 @@ function normalize(s: string | null | undefined): string {
   return s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
+// Common business-entity suffixes + parenthetical / bracketed
+// annotations. Stripped to merge near-duplicate Company names like
+// "Fulu Films" vs "Fulu Films LLC" or "Gautam Sahi" vs
+// "Gautam Sahi [ Reserved ]" into a single canonical key.
+const COMPANY_SUFFIX_RE = /\b(llc|l\.l\.c|inc|inc\.|corp|corporation|co|co\.|ltd|ltd\.|limited|llp|pllc|pc|p\.c)\b/gi
+function companyKey(s: string | null | undefined): string {
+  if (!s) return ''
+  // Drop anything inside [...] or (...) annotations the team uses
+  // for Planyo bookkeeping ("[ Reserved ]", "(HF)", etc.) — these
+  // shouldn't count toward identity.
+  let stripped = s
+    .replace(/\[.*?\]/g, ' ')
+    .replace(/\(.*?\)/g, ' ')
+    .replace(COMPANY_SUFFIX_RE, ' ')
+  return normalize(stripped)
+}
+
 function splitName(full: string): { firstName: string; lastName: string } {
   const parts = full.trim().split(/\s+/)
   if (parts.length === 0) return { firstName: '', lastName: '' }
@@ -127,14 +144,24 @@ async function main() {
   }
 
   // Pre-fetch all Companies for name-match (small table — under ~few thousand rows).
+  // Two index keys per row: the plain-normalized name AND the
+  // suffix-stripped key. Lookups try both so a Planyo "Fulu Films LLC"
+  // hits an existing "Fulu Films" via the stripped key.
   const allCompanies = await prisma.company.findMany({
     select: { id: true, name: true },
   })
   const companyByNormName = new Map<string, { id: string; name: string }>()
+  const companyByKey = new Map<string, { id: string; name: string }>()
   for (const c of allCompanies) {
-    const k = normalize(c.name)
-    if (k && !companyByNormName.has(k)) companyByNormName.set(k, c)
+    const norm = normalize(c.name)
+    const key = companyKey(c.name)
+    if (norm && !companyByNormName.has(norm)) companyByNormName.set(norm, c)
+    if (key && !companyByKey.has(key)) companyByKey.set(key, c)
   }
+  // Within-batch dedupe: when two orphan carts both want to create
+  // "Echobend", the second one reuses the first's pending-create
+  // identity instead of queueing a literal duplicate.
+  const pendingCompanyByKey = new Map<string, string>() // key → display name
 
   // Pre-fetch all Persons with email — keyed by lowercased email
   // for O(1) lookup. Email is @unique so this is safe.
@@ -166,19 +193,27 @@ async function main() {
     const endTime = rows.reduce((mx, x) => (x.endTime > mx ? x.endTime : mx), rows[0].endTime)
 
     // ── Company resolution ────────────────────────────────────────
+    // Lookup chain: exact-normalized → suffix-stripped key against
+    // existing rows → within-batch pending-create dedupe. Only after
+    // all three miss do we queue a new Company.
     const coName = (rep.planyoCompany || '').trim()
     let companyId: string | null = null
     let companyDecision = ''
     if (coName) {
       const norm = normalize(coName)
-      const hit = companyByNormName.get(norm)
+      const key = companyKey(coName)
+      let hit = companyByNormName.get(norm) || (key ? companyByKey.get(key) : undefined)
       if (hit) {
         companyId = hit.id
         companyExisting += 1
         companyDecision = `exists: ${hit.name}`
+      } else if (key && pendingCompanyByKey.has(key)) {
+        companyExisting += 1
+        companyDecision = `pending dedupe: ${pendingCompanyByKey.get(key)} (this cart's ${coName})`
       } else {
         companyCreated += 1
         companyDecision = `create: ${coName}`
+        if (key) pendingCompanyByKey.set(key, coName)
       }
     } else {
       skipReasons.push(`cart=${key}: no Planyo company name`)
@@ -271,11 +306,117 @@ async function main() {
     }
 
     if (!dryRun) {
-      // Actual writes would happen here. Guarded by the early-exit
-      // above on dryRun==false; this branch is wired but never reached
-      // in this PR's intended invocation.
-      // ── Reserved for the second-pass commit that flips to live writes.
-      void { companyId, personId, agentId }
+      // 1) Company. companyId is null when the cart's company doesn't
+      //    yet exist in CRM OR when it was queued for creation by a
+      //    prior cart in this same run (the within-batch dedupe case).
+      //    Re-check the live maps before creating — cart A's create
+      //    updated companyByNormName/Key, so cart B finds it instead
+      //    of creating a duplicate.
+      if (!companyId) {
+        const norm = normalize(coName)
+        const key = companyKey(coName)
+        const hit = companyByNormName.get(norm) || (key ? companyByKey.get(key) : undefined)
+        if (hit) {
+          companyId = hit.id
+        } else {
+          const created = await prisma.company.create({
+            data: {
+              name: coName,
+              notes: PROVENANCE_TAG,
+            },
+            select: { id: true, name: true },
+          })
+          companyId = created.id
+          companyByNormName.set(norm, created)
+          if (key) companyByKey.set(key, created)
+        }
+      }
+
+      // 2) Person — create if needed. Email is @unique, so if two
+      //    carts hand the same email through the script before either
+      //    has committed, the second create races into a constraint
+      //    error — guard with a re-check via personByEmail map (which
+      //    we update on create below).
+      if (!personId) {
+        if (emailLower) {
+          const recheck = personByEmail.get(emailLower)
+          if (recheck) {
+            personId = recheck.id
+          } else {
+            const { firstName, lastName } = customerName ? splitName(customerName) : { firstName: emailLower, lastName: '' }
+            const createdPerson = await prisma.person.create({
+              data: {
+                firstName: firstName || emailLower,
+                lastName: lastName || '',
+                email: emailLower,
+                notes: PROVENANCE_TAG,
+              },
+              select: { id: true, firstName: true, lastName: true, email: true },
+            })
+            personId = createdPerson.id
+            personByEmail.set(emailLower, createdPerson)
+          }
+        } else {
+          // No-email path — Person.email is @unique but nullable check
+          // doesn't apply (it's NOT NULL in the schema). The schema
+          // requires an email. Build a synthetic email so the row can
+          // exist. Tagged in notes so it's filterable + fixable.
+          const { firstName, lastName } = splitName(customerName)
+          const synthEmail = `planyo-backfill+${rep.planyoReservationId || rep.id.slice(0, 8)}@sirreel.com`
+          const createdPerson = await prisma.person.create({
+            data: {
+              firstName: firstName || 'Unknown',
+              lastName: lastName || '',
+              email: synthEmail,
+              notes: `${PROVENANCE_TAG} · synthetic email (Planyo customer had no email on file)`,
+            },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+          personId = createdPerson.id
+          personByEmail.set(synthEmail, createdPerson)
+        }
+      }
+
+      // 3) Booking. SR-PB-YYYY-NNNN with retry on @unique collision.
+      const year = startTime.getUTCFullYear()
+      let bookingNumber = ''
+      let createdBooking: { id: string; bookingNumber: string } | null = null
+      for (let attempt = 0; attempt < 5 && !createdBooking; attempt++) {
+        bookingNumber = `SR-PB-${year}-${String(Math.floor(Math.random() * 9000) + 1000)}`
+        try {
+          createdBooking = await prisma.booking.create({
+            data: {
+              bookingNumber,
+              companyId,
+              personId,
+              agentId,
+              jobName: rep.planyoJobName || `Planyo cart ${rep.planyoCartId || rep.planyoReservationId || ''}`.trim(),
+              productionName: rep.planyoJobName || null,
+              startDate: startTime,
+              endDate: endTime,
+              status,
+              source: 'PLANYO_BACKFILL',
+              notes: `${PROVENANCE_TAG} · Planyo cart ${rep.planyoCartId || rep.planyoReservationId}`,
+            },
+            select: { id: true, bookingNumber: true },
+          })
+        } catch (err: unknown) {
+          // P2002 = Prisma unique-constraint violation. Retry on
+          // bookingNumber collision; surface anything else.
+          const code = (err as { code?: string })?.code
+          if (code !== 'P2002') throw err
+        }
+      }
+      if (!createdBooking) {
+        throw new Error(`Failed to generate unique bookingNumber for cart ${key} after 5 attempts`)
+      }
+
+      // 4) Stamp Reservation.bookingId on every reservation in the cart.
+      const stamped = await prisma.reservation.updateMany({
+        where: { id: { in: rows.map((r) => r.id) } },
+        data: { bookingId: createdBooking.id },
+      })
+      void stamped
     }
   }
 
