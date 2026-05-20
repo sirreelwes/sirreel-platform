@@ -78,6 +78,14 @@ interface PlanyoReservation {
   status?: string | number | null
   admin_notes?: string | null
   user_notes?: string | null
+  // Customer-side identifiers on the reservation root. These come
+  // straight from list_reservations(detail_level=3) and are the only
+  // recoverable contact data for Bookings backfilled from Planyo
+  // orphans.
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
+  phone?: string | null
   // Planyo custom rental properties — populated when the team
   // entered them on the reservation. Used by the Dispatch
   // auto-match heuristic.
@@ -194,6 +202,16 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
     const planyoJobName = r.properties?.Job_Name?.trim() || null
     const planyoAgent = r.properties?.SirReel_Agent?.trim() || null
 
+    // Customer fields. Planyo's empty-string convention for missing
+    // values would otherwise become non-null '' strings, which the
+    // backfill find-or-create logic would treat as legitimate values.
+    // Normalise to null on empty.
+    const first = (r.first_name || '').trim()
+    const last = (r.last_name || '').trim()
+    const customerName = [first, last].filter(Boolean).join(' ') || null
+    const customerEmail = (r.email || '').trim() || null
+    const customerPhone = (r.phone || '').trim() || null
+
     try {
       await prisma.reservation.upsert({
         where: { planyoReservationId: planyoId },
@@ -210,6 +228,9 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
           planyoCompany,
           planyoJobName,
           planyoAgent,
+          planyoCustomerName: customerName,
+          planyoCustomerEmail: customerEmail,
+          planyoCustomerPhone: customerPhone,
           notes: r.admin_notes || r.user_notes || null,
         },
         update: {
@@ -223,6 +244,9 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
           planyoCompany,
           planyoJobName,
           planyoAgent,
+          planyoCustomerName: customerName,
+          planyoCustomerEmail: customerEmail,
+          planyoCustomerPhone: customerPhone,
           notes: r.admin_notes || r.user_notes || null,
         },
       })

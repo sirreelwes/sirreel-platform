@@ -533,6 +533,13 @@ model Reservation {
   planyoCompany       String?           @map("planyo_company")
   planyoJobName       String?           @map("planyo_job_name")
   planyoAgent         String?           @map("planyo_agent")
+  // Customer-side identifiers from Planyo's list_reservations response
+  // (first_name / last_name / email on the reservation root). Captured
+  // here so the PLANYO_BACKFILL script in Chunk 5 can recover real
+  // Person rows for orphan jobs instead of placeholders.
+  planyoCustomerName  String?           @map("planyo_customer_name")
+  planyoCustomerEmail String?           @map("planyo_customer_email")
+  planyoCustomerPhone String?           @map("planyo_customer_phone")
   notes               String?           @db.Text
 
   createdAt           DateTime          @default(now()) @map("created_at")
