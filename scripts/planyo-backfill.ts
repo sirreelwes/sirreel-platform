@@ -222,12 +222,24 @@ async function main() {
     }
 
     // ── Agent resolution ──────────────────────────────────────────
+    // Try exact normalized match first (e.g. "Jose Pacheco" → "Jose
+    // Pacheco"), then first-token match (e.g. Planyo's SirReel_Agent
+    // value "Jose" → User.name "Jose Pacheco"). The first-token path
+    // is the common case in our data — every Planyo SirReel_Agent
+    // value is a first name only.
     const agentRaw = (rep.planyoAgent || '').trim()
     let agentId: string = defaultAgent.id
     let agentDecision = `fallback: ${defaultAgent.name}`
     if (agentRaw) {
       const norm = normalize(agentRaw)
-      const matchedUser = users.find((u) => normalize(u.name) === norm)
+      let matchedUser = users.find((u) => normalize(u.name) === norm)
+      if (!matchedUser) {
+        // First-token fallback. Only fires when the Planyo value
+        // unambiguously points at one User — if two SirReel staff
+        // share a first name we don't guess.
+        const firstTokenMatches = users.filter((u) => normalize(u.name).split(' ')[0] === norm)
+        if (firstTokenMatches.length === 1) matchedUser = firstTokenMatches[0]
+      }
       if (matchedUser) {
         agentId = matchedUser.id
         agentMatched += 1
