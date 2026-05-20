@@ -1,46 +1,34 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-const API_KEY = process.env.PLANYO_API_KEY || ''
-const SITE_ID = process.env.PLANYO_SITE_ID || '36171'
-const BASE = 'https://www.planyo.com/rest/'
 export const dynamic = 'force-dynamic'
 
-async function planyo(method: string, params: Record<string, string> = {}) {
-  const url = new URL(BASE)
-  url.searchParams.set('method', method)
-  url.searchParams.set('api_key', API_KEY)
-  url.searchParams.set('site_id', SITE_ID)
-  url.searchParams.set('format', 'json')
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  const res = await fetch(url.toString())
-  return res.json()
-}
+/**
+ * GET /api/timeline
+ *
+ * Reads the native `reservations` table — no live Planyo call. The
+ * every-15-min Planyo→Reservation cron (Chunk 2) keeps the table
+ * in lockstep with Planyo's own scheduling state.
+ *
+ * Response shape matches the previous live-Planyo implementation
+ * so the existing gantt page doesn't need rework. New fields are
+ * additive (bookingId, bookingNumber, portalLink, contactEmail,
+ * contactPhone, isOrphan) — the gantt UI can opt into them
+ * without breaking on the old payload.
+ *
+ * Grouping:
+ *   - By Asset (`units` array) — every row grouped by `unitName`
+ *   - By Job (`jobs` array)    — grouped by `bookingId` when linked,
+ *                                else by `planyoCartId` (so multi-
+ *                                unit orphan jobs cluster correctly
+ *                                until they're linked by Dispatch)
+ *
+ * CANCELLED reservations are filtered from the response — they
+ * stay in the DB for audit, but don't clutter the live timeline.
+ */
 
-// Map Planyo status codes to our status names
-// Status 11 = confirmed/reserved, 4 = confirmed, 1 = new/pending, 2 = cancelled, etc.
-function mapStatus(status: string): string {
-  const s = parseInt(status)
-  if (s === 11 || s === 4) return 'booked'
-  if (s === 1) return 'inquiry'
-  if (s === 8) return 'hold'
-  return 'booked'
-}
-
-// Map Planyo resource names to our category keys
-function mapCategory(resourceName: string): string {
-  const n = resourceName.toLowerCase()
-  if (n.includes('cube') || n.includes('5 ton')) return 'cube'
-  if (n.includes('cargo') || n.includes('super cargo')) return 'cargo'
-  if (n.includes('passenger') || n.includes('pass van')) return 'pass'
-  if (n.includes('popvan') || n.includes('pop van')) return 'pop'
-  if (n.includes('camera') || n.includes('cam')) return 'cam'
-  if (n.includes('dlux') || n.includes('de luxe')) return 'dlux'
-  if (n.includes('scout') || n.includes('vtr')) return 'scout'
-  if (n.includes('studio')) return 'studio'
-  if (n.includes('stakebed') || n.includes('stake')) return 'stakebed'
-  return 'general'
-}
-
+// Same color palette as the prior implementation so the gantt
+// legend continues to work without changes.
 const CAT_COLORS: Record<string, string> = {
   cube:     '#3b82f6',
   cargo:    '#8b5cf6',
@@ -54,125 +42,260 @@ const CAT_COLORS: Record<string, string> = {
   general:  '#9ca3af',
 }
 
+function mapResourceToCat(resourceName: string | null | undefined): string {
+  const n = (resourceName || '').toLowerCase()
+  if (n.includes('cube') || n.includes('5 ton')) return 'cube'
+  if (n.includes('cargo') || n.includes('super cargo')) return 'cargo'
+  if (n.includes('passenger') || n.includes('pass van')) return 'pass'
+  if (n.includes('popvan') || n.includes('pop van')) return 'pop'
+  if (n.includes('camera') || n.includes('cam')) return 'cam'
+  if (n.includes('dlux') || n.includes('de luxe')) return 'dlux'
+  if (n.includes('scout') || n.includes('vtr')) return 'scout'
+  if (n.includes('studio')) return 'studio'
+  if (n.includes('stakebed') || n.includes('stake')) return 'stakebed'
+  return 'general'
+}
+
+// Reservation.status enum → legacy gantt status string. The gantt's
+// STATUS_COLORS keys on these legacy strings, so we keep them.
+function mapReservationStatus(status: string): string {
+  if (status === 'CONFIRMED') return 'booked'
+  return 'hold' // HOLD
+}
+
+function iso(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
 export async function GET() {
   try {
-    if (!API_KEY) return NextResponse.json({ error: 'No Planyo API key' }, { status: 500 })
-
+    // Live window: today − 14d through today + 45d — matches the
+    // prior live-Planyo window so reporting / muscle memory is
+    // unchanged. (The sync cron's window is wider — last 7 / next 90
+    // — so the table has rows on either side of this view.)
     const today = new Date()
     const from = new Date(today); from.setDate(from.getDate() - 14)
     const to = new Date(today); to.setDate(to.getDate() + 45)
-    const fmt = (d: Date) => d.toISOString().slice(0, 10) + ' 00:00:00'
 
-    const data = await planyo('list_reservations', {
-      start_time: fmt(from),
-      end_time: fmt(to),
-      detail_level: '3',
-      results_per_page: '500',
+    // Overlap query: any reservation whose [startTime, endTime]
+    // intersects the [from, to] window. Two-sided range filter is
+    // the standard equivalent of !(endTime<from || startTime>to).
+    const rows = await prisma.reservation.findMany({
+      where: {
+        status: { not: 'CANCELLED' },
+        startTime: { lte: to },
+        endTime: { gte: from },
+      },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            bookingNumber: true,
+            jobName: true,
+            productionName: true,
+            status: true,
+            company: { select: { name: true } },
+            person: { select: { firstName: true, lastName: true, email: true, phone: true } },
+            agent: { select: { name: true } },
+            // Most recent paperwork-portal token for the portal link
+            // payload. Picking the freshest row keeps stale tokens
+            // out when a booking was re-sent.
+            paperworkRequests: {
+              orderBy: { sentAt: 'desc' },
+              take: 1,
+              select: { token: true },
+            },
+          },
+        },
+      },
+      orderBy: { startTime: 'asc' },
     })
 
-    if (data.response_code !== 0) {
-      return NextResponse.json({ error: data.response_message }, { status: 500 })
+    // ── Common per-row payload ────────────────────────────────────
+    interface BarPayload {
+      reservationId: string
+      planyoReservationId: string | null
+      planyoCartId: string | null
+      unit: string
+      resourceName: string
+      cat: string
+      qty: number
+      start: string
+      end: string
+      status: string
+      adminNotes: string | null
+
+      // Linkage / portal payload — null when the reservation is an
+      // orphan (no Booking linked). gantt detail modal falls back
+      // to Planyo-derived fields below.
+      isOrphan: boolean
+      bookingId: string | null
+      bookingNumber: string | null
+      company: string | null
+      jobName: string | null
+      productionName: string | null
+      agent: string | null
+      contactName: string | null
+      contactEmail: string | null
+      contactPhone: string | null
+      portalLink: string | null
     }
 
-    const reservations: any[] = data.data?.results || []
-
-    // Group by cart_id (same job = same cart)
-    const cartMap: Record<string, any[]> = {}
-    for (const r of reservations) {
-      const cartId = r.cart_id || r.reservation_id
-      if (!cartMap[cartId]) cartMap[cartId] = []
-      cartMap[cartId].push(r)
-    }
-
-    // Build jobs from cart groups
-    const jobs = Object.entries(cartMap).map(([cartId, items]) => {
-      const first = items[0]
-      const clientName = `${first.first_name || ''} ${first.last_name || ''}`.trim()
-      const status = mapStatus(first.status)
-
-      // Parse RW order number from user_notes (first line starting with #)
-      const rwOrderMatch = (first.user_notes || '').match(/#(\d+)/)
-      const rwOrderNumber = rwOrderMatch ? rwOrderMatch[1] : null
-      const companyName = first.properties?.Company_Name || `${first.first_name || ''} ${first.last_name || ''}`.trim()
-      const jobName = first.properties?.Job_Name || ''
-      const agentName = first.properties?.SirReel_Agent || ''
-
-      // Each item in the cart = one vehicle reservation
-      const jobItems = items.map(r => ({
-        cat: mapCategory(r.name || ''),
-        unit: r.unit_assignment || r.name || 'Unknown',
-        resourceName: r.name || '',
-        qty: parseInt(r.quantity) || 1,
-        start: (r.start_time || '').slice(0, 10),
-        end: (r.end_time || '').slice(0, 10),
-        reservationId: r.reservation_id,
-        adminNotes: r.admin_notes || '',
-      }))
-
-      const startDate = jobItems.reduce((min, i) => i.start < min ? i.start : min, jobItems[0].start)
-      const endDate   = jobItems.reduce((max, i) => i.end   > max ? i.end   : max, jobItems[0].end)
-      const cat = mapCategory(first.name || '')
+    const bars: BarPayload[] = rows.map((r) => {
+      const cat = mapResourceToCat(r.category || r.unitName)
+      const b = r.booking
+      const isOrphan = !b
+      const contact = b?.person
+      const contactName = contact ? `${contact.firstName} ${contact.lastName}`.trim() : null
+      const portalToken = b?.paperworkRequests?.[0]?.token || null
 
       return {
-        id: cartId,
-        cartId,
-        company: companyName,
-        jobName,
-        jobNum: rwOrderNumber ? `#${rwOrderNumber}` : `R${first.reservation_id}`,
-        rwOrderNumber,
-        contact: `${first.first_name || ''} ${first.last_name || ''}`.trim(),
-        agent: agentName,
-        status,
-        stage: status,
-        startDate,
-        endDate,
-        color: CAT_COLORS[cat] || '#9ca3af',
-        items: jobItems,
+        reservationId: r.id,
+        planyoReservationId: r.planyoReservationId,
+        planyoCartId: r.planyoCartId,
+        unit: r.unitName,
+        resourceName: r.category || r.unitName,
+        cat,
+        qty: 1, // Planyo `quantity` not preserved at sync; default 1
+        start: iso(r.startTime),
+        end: iso(r.endTime),
+        status: mapReservationStatus(r.status),
+        adminNotes: r.notes,
+
+        isOrphan,
+        bookingId: b?.id ?? null,
+        bookingNumber: b?.bookingNumber ?? null,
+        company: b?.company?.name ?? null,
+        jobName: b?.jobName ?? null,
+        productionName: b?.productionName ?? null,
+        agent: b?.agent?.name ?? null,
+        contactName,
+        contactEmail: contact?.email ?? null,
+        contactPhone: contact?.phone ?? null,
+        portalLink: portalToken ? `/portal/${portalToken}` : null,
       }
     })
 
-    // Also build asset-level view: unique units with their bookings
-    const unitMap: Record<string, any[]> = {}
-    for (const r of reservations) {
-      const unitName = r.unit_assignment || r.name || 'Unknown'
-      if (!unitMap[unitName]) unitMap[unitName] = []
-      unitMap[unitName].push({
-        reservationId: r.reservation_id,
-        cartId: r.cart_id,
-        clientName: r.properties?.Company_Name || `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-        jobName: r.properties?.Job_Name || '',
-        agent: r.properties?.SirReel_Agent || '',
-        rwOrderNumber: (r.user_notes || '').match(/#(\d+)/)?.[1] || null,
-        resourceName: r.name || '',
-        cat: mapCategory(r.name || ''),
-        status: mapStatus(r.status),
-        start: (r.start_time || '').slice(0, 10),
-        end: (r.end_time || '').slice(0, 10),
-        adminNotes: r.admin_notes || '',
-        qty: parseInt(r.quantity) || 1,
-      })
+    // ── By-Asset view: group by unitName ──────────────────────────
+    const unitMap = new Map<string, BarPayload[]>()
+    for (const bar of bars) {
+      const arr = unitMap.get(bar.unit) || []
+      arr.push(bar)
+      unitMap.set(bar.unit, arr)
     }
-
-    const units = Object.entries(unitMap)
-      .map(([unitName, bookings]) => ({
+    const units = [...unitMap.entries()]
+      .map(([unitName, list]) => ({
         unitName,
-        cat: bookings[0]?.cat || 'general',
-        resourceName: bookings[0]?.resourceName || '',
-        bookings: bookings.sort((a, b) => a.start.localeCompare(b.start)),
+        cat: list[0]?.cat || 'general',
+        resourceName: list[0]?.resourceName || '',
+        bookings: list
+          .slice()
+          .sort((a, b) => a.start.localeCompare(b.start))
+          // Field shape matches the prior /api/timeline asset payload
+          // so the gantt page reads it without changes. New fields
+          // (bookingId, bookingNumber, portalLink, etc.) are additive.
+          .map((bar) => ({
+            reservationId: bar.reservationId,
+            cartId: bar.planyoCartId,
+            clientName: bar.company || bar.unit,
+            jobName: bar.jobName || '',
+            productionName: bar.productionName,
+            agent: bar.agent || '',
+            rwOrderNumber: null,
+            resourceName: bar.resourceName,
+            cat: bar.cat,
+            status: bar.status,
+            start: bar.start,
+            end: bar.end,
+            adminNotes: bar.adminNotes,
+            qty: bar.qty,
+            isOrphan: bar.isOrphan,
+            bookingId: bar.bookingId,
+            bookingNumber: bar.bookingNumber,
+            company: bar.company,
+            contactName: bar.contactName,
+            contactEmail: bar.contactEmail,
+            contactPhone: bar.contactPhone,
+            portalLink: bar.portalLink,
+          })),
       }))
       .sort((a, b) => {
-        // Sort by category then unit name
         const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
-        const ca = catOrder.indexOf(a.cat), cb = catOrder.indexOf(b.cat)
+        const ca = catOrder.indexOf(a.cat)
+        const cb = catOrder.indexOf(b.cat)
         if (ca !== cb) return ca - cb
         return a.unitName.localeCompare(b.unitName, undefined, { numeric: true })
       })
 
+    // ── By-Job view: group by bookingId when set, else planyoCartId.
+    // Orphan jobs (no booking) still cluster correctly because their
+    // cart_id groups multi-unit orders the team booked together.
+    const jobMap = new Map<string, BarPayload[]>()
+    for (const bar of bars) {
+      const key = bar.bookingId
+        ? `b:${bar.bookingId}`
+        : bar.planyoCartId
+          ? `c:${bar.planyoCartId}`
+          : `r:${bar.reservationId}` // singleton orphan with no cart
+      const arr = jobMap.get(key) || []
+      arr.push(bar)
+      jobMap.set(key, arr)
+    }
+    const jobs = [...jobMap.entries()].map(([key, list]) => {
+      const first = list[0]
+      const startDate = list.reduce((min, x) => (x.start < min ? x.start : min), list[0].start)
+      const endDate = list.reduce((max, x) => (x.end > max ? x.end : max), list[0].end)
+      const cat = first.cat
+
+      return {
+        id: key,
+        cartId: first.planyoCartId,
+        bookingId: first.bookingId,
+        bookingNumber: first.bookingNumber,
+        company: first.company || first.unit,
+        jobName: first.jobName || first.unit,
+        productionName: first.productionName,
+        // Display label for the bar — booking number when linked,
+        // Planyo reservation id otherwise so orphans are visually
+        // distinguishable.
+        jobNum: first.bookingNumber || `R${first.planyoReservationId || first.reservationId.slice(0, 6)}`,
+        rwOrderNumber: null,
+        contact: first.contactName || first.company || '',
+        contactEmail: first.contactEmail,
+        contactPhone: first.contactPhone,
+        portalLink: first.portalLink,
+        agent: first.agent || '',
+        status: first.status,
+        stage: first.status,
+        startDate,
+        endDate,
+        color: CAT_COLORS[cat] || '#9ca3af',
+        isOrphan: !first.bookingId,
+        items: list.map((bar) => ({
+          cat: bar.cat,
+          unit: bar.unit,
+          resourceName: bar.resourceName,
+          qty: bar.qty,
+          start: bar.start,
+          end: bar.end,
+          reservationId: bar.reservationId,
+          planyoReservationId: bar.planyoReservationId,
+          adminNotes: bar.adminNotes,
+        })),
+      }
+    })
     jobs.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
-    return NextResponse.json({ ok: true, jobs, units, total: reservations.length })
-  } catch (err: any) {
-    console.error('[timeline]', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({
+      ok: true,
+      jobs,
+      units,
+      total: bars.length,
+      source: 'neon-reservation', // diagnostic — confirms native read
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[timeline] error', err)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

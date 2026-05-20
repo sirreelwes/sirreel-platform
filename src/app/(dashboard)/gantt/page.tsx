@@ -73,8 +73,8 @@ export default function GanttPage() {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">Timeline</h1>
-          {loading && <span className="text-[11px] text-gray-400">Loading from Planyo...</span>}
-          {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Live</span>}
+          {loading && <span className="text-[11px] text-gray-400">Loading…</span>}
+          {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Native</span>}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button onClick={() => setView('asset')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'asset' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Asset</button>
             <button onClick={() => setView('job')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'job' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Job</button>
@@ -235,8 +235,13 @@ export default function GanttPage() {
                     <div className="text-[13px] text-gray-500">{selected.clientName}</div>
                     {selected.jobName && <div className="text-[11px] text-gray-400 mt-0.5">{selected.jobName}</div>}
                     {selected.agent && <div className="text-[11px] text-gray-400">Agent: {selected.agent}</div>}
-                    {selected.rwOrderNumber && (
-                      <a href={`/jobs?rw=${selected.rwOrderNumber}`} className="text-[11px] text-blue-600 hover:underline">RW #{selected.rwOrderNumber} →</a>
+                    {selected.bookingNumber && (
+                      <a href={`/bookings`} className="text-[11px] text-blue-600 hover:underline">{selected.bookingNumber} →</a>
+                    )}
+                    {selected.isOrphan && (
+                      <div className="mt-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block">
+                        Unlinked · resolve in Dispatch
+                      </div>
                     )}
                   </>
                 ) : (
@@ -246,6 +251,25 @@ export default function GanttPage() {
                     {selected.jobName && <div className="text-[13px] text-gray-500">{selected.jobName}</div>}
                     {selected.agent && <div className="text-[11px] text-gray-400 mt-0.5">Agent: {selected.agent}</div>}
                     {selected.contact && selected.contact !== selected.company && <div className="text-[11px] text-gray-400">Contact: {selected.contact}</div>}
+                    {selected.contactEmail && (
+                      <a href={`mailto:${selected.contactEmail}`} className="text-[11px] text-blue-600 hover:underline block">{selected.contactEmail}</a>
+                    )}
+                    {selected.contactPhone && (
+                      <a href={`tel:${selected.contactPhone}`} className="text-[11px] text-gray-500 hover:underline block">{selected.contactPhone}</a>
+                    )}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {selected.bookingId && (
+                        <a href={`/bookings`} className="text-[11px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded">Open booking →</a>
+                      )}
+                      {selected.portalLink && (
+                        <a href={selected.portalLink} target="_blank" rel="noreferrer" className="text-[11px] px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded">Portal & paperwork →</a>
+                      )}
+                    </div>
+                    {selected.isOrphan && (
+                      <div className="mt-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block">
+                        Unlinked · resolve in Dispatch
+                      </div>
+                    )}
                   </>
                 )}
               </div>
