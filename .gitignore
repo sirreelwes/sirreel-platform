@@ -18,5 +18,6 @@ scripts/*
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
 !scripts/verify-rw-token.ts
+!scripts/planyo-backfill.ts
 .env.local.bak
 .gcp-service-account.json
