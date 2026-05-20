@@ -96,6 +96,8 @@ function readMessageNature(extractedData: unknown): ExtractedMessage['messageNat
     nature === 'confirmation' ||
     nature === 'question' ||
     nature === 'rejection' ||
+    nature === 'vendor' ||
+    nature === 'solicitation' ||
     nature === 'other'
   ) {
     return nature
@@ -143,6 +145,12 @@ export function classifyInquiryForPipeline(input: InquiryClassifyInput): Inquiry
       // Reply → classify by subject (which after stripping "Re:" is the
       // parent's subject — no separate parent lookup needed for Cognito).
       return classifyBySubject(stripped, input.inReplyTo, `AI says reply @ ${confidence.toFixed(2)}; `)
+    }
+    if (aiNature === 'vendor') {
+      return { include: false, classification: 'other', reason: `AI messageNature=vendor @ ${confidence.toFixed(2)}` }
+    }
+    if (aiNature === 'solicitation') {
+      return { include: false, classification: 'other', reason: `AI messageNature=solicitation @ ${confidence.toFixed(2)}` }
     }
     // 'other' falls through to subject heuristics.
   }

@@ -23,7 +23,15 @@ import { prisma } from '@/lib/prisma'
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_TOKENS = 1500
 
-const PROMPT_PREAMBLE = `Extract structured information from this inbound email. The email is from a potential or current client of a production vehicle rental company (SirReel). Output strict JSON only — no markdown fences, no preamble.
+// Editable list of sender domains we know operate as sub-rental vendors —
+// peer rental houses that quote/invoice SirReel for sub-rented gear. Any
+// inbound from one of these is forced to messageNature='vendor' regardless
+// of the LLM's verdict. Add domains here as we learn them.
+export const KNOWN_SUB_RENTAL_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
+  'castexrentals.com',
+])
+
+const PROMPT_PREAMBLE = `SirReel rents production vehicles to film/TV/commercial productions. Inbound emails are mixed — most are from clients renting FROM us, but some are from peer rental houses selling TO us, vendors quoting us for supplies, or cold sales/marketing outreach. Output strict JSON only — no markdown fences, no preamble.
 
 Extract:
 
@@ -46,12 +54,31 @@ Extract:
   },
   "urgency": "asap" | "normal" | "future" | null,
   "rawNotes": string | null,
-  "messageNature": "inquiry" | "reply" | "confirmation" | "question" | "rejection" | "other",
+  "messageNature": "inquiry" | "reply" | "confirmation" | "question" | "rejection" | "vendor" | "solicitation" | "other",
   "summary": string,
   "confidence": number
 }
 
-Rules:
+Direction-of-trade test (this is the most important rule):
+- messageNature="inquiry" applies ONLY when the sender is a prospective or existing CLIENT seeking to RECEIVE goods or services FROM SirReel (rent a vehicle, place an order, request a quote for their production).
+- If the sender is trying to PROVIDE goods or services TO SirReel — a sub-rental quote from a peer rental house, a parts/supply vendor quote, a repair shop estimate, an invoice we owe — messageNature is "vendor". Never "inquiry".
+- If the sender is doing cold sales or marketing outreach pitching their company's services ("I represent X, we provide Y, would you have time to chat") — even if framed as a partnership — messageNature is "solicitation". Never "inquiry".
+
+Few-shot examples:
+
+1) From: quotes@castexrentals.com  Subject: Re: Cargo van quote
+   Body: "Hi Wes — here's the quote for the cargo van you asked about for next week, $X/day. Let me know if you want to lock it in. — Castex Rentals"
+   → messageNature="vendor" (Castex is a peer rental house quoting SirReel for a sub-rental; goods flow TO SirReel)
+
+2) From: brad@goldenwestsecurity.com  Subject: Security services for SirReel productions
+   Body: "Hi, my name is Brad with Golden West Security Services. We provide armed and unarmed security officers for film productions and trucking operations. I'd love 15 minutes to introduce our services and see if there's a fit."
+   → messageNature="solicitation" (cold outbound sales pitch from a vendor; not responding to anything SirReel asked for)
+
+3) From: producer@somefilm.com  Subject: Cargo van rental — June 5 shoot
+   Body: "Hi, I'm looking to rent a cargo van with a liftgate for a one-day commercial shoot in Burbank on June 5. Can you send rates and availability?"
+   → messageNature="inquiry" (client wants to receive a vehicle FROM SirReel)
+
+Other rules:
 - If a field isn't mentioned, set to null. Don't guess.
 - For Cognito Forms submissions, the body will have labels glued to values (e.g., "NameBrandt WilleEmailbrandt@..."). Parse these by recognising common field labels: Name, Email, Phone, Company, Project, Dates, Services, Notes, Pickup, Return, Vehicle.
 - pickupDate / returnDate: use ISO YYYY-MM-DD when an explicit date is mentioned; otherwise null. Don't compute relative dates (e.g. "Tuesday morning" → null) — leave that for the rep.
@@ -84,6 +111,8 @@ export type ExtractedMessageNature =
   | 'confirmation'
   | 'question'
   | 'rejection'
+  | 'vendor'
+  | 'solicitation'
   | 'other'
 
 export interface ExtractedMessage {
@@ -162,7 +191,18 @@ function coerceExtracted(raw: unknown): ExtractedMessage {
   const validUrgency = (v: unknown): ExtractedMessage['urgency'] =>
     v === 'asap' || v === 'normal' || v === 'future' ? v : null
   const validNature = (v: unknown): ExtractedMessageNature => {
-    if (v === 'inquiry' || v === 'reply' || v === 'confirmation' || v === 'question' || v === 'rejection' || v === 'other') return v
+    if (
+      v === 'inquiry' ||
+      v === 'reply' ||
+      v === 'confirmation' ||
+      v === 'question' ||
+      v === 'rejection' ||
+      v === 'vendor' ||
+      v === 'solicitation' ||
+      v === 'other'
+    ) {
+      return v
+    }
     return 'other'
   }
   const confidence = typeof r.confidence === 'number' && Number.isFinite(r.confidence)
@@ -247,7 +287,16 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
     console.error('[message-extractor] JSON parse failed. Raw:', raw.slice(0, 500))
     return FALLBACK
   }
-  return coerceExtracted(parsed)
+  const extracted = coerceExtracted(parsed)
+
+  // Deterministic vendor-domain override. The LLM is right most of the
+  // time, but for known sub-rental peers we hardcode the verdict so a
+  // single misread doesn't put their quote back into the Pipeline.
+  const senderDomain = parseFromHeader(input.fromAddress).email.split('@')[1] ?? ''
+  if (senderDomain && KNOWN_SUB_RENTAL_VENDOR_DOMAINS.has(senderDomain)) {
+    return { ...extracted, messageNature: 'vendor' }
+  }
+  return extracted
 }
 
 /**
