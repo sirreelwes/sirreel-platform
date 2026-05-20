@@ -346,8 +346,24 @@ export default function ClientPortal() {
             Presents
           </div>
           <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
+          {/* Brand expansion — sits tight to the TSX mark as one lockup,
+              wider gap before the welcome row below. Gold for visual
+              contrast against the dark hero; smaller than TSX but
+              larger than the welcome line for hierarchy. */}
+          <div
+            className="mt-1 italic"
+            style={{
+              fontFamily: TSX_SERIF,
+              color: TSX.gold,
+              fontSize: 15,
+              letterSpacing: '0.5px',
+              fontWeight: 400,
+            }}
+          >
+            The SirReel Experience
+          </div>
           <h1
-            className="mt-4 text-white text-[24px] font-light italic leading-tight"
+            className="mt-5 text-white text-[24px] font-light italic leading-tight"
             style={{ fontFamily: TSX_SERIF }}
           >
             {booking.person?.firstName
