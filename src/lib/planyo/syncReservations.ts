@@ -78,6 +78,14 @@ interface PlanyoReservation {
   status?: string | number | null
   admin_notes?: string | null
   user_notes?: string | null
+  // Planyo custom rental properties — populated when the team
+  // entered them on the reservation. Used by the Dispatch
+  // auto-match heuristic.
+  properties?: {
+    Company_Name?: string | null
+    Job_Name?: string | null
+    SirReel_Agent?: string | null
+  } | null
 }
 
 async function planyoListReservations(start: string, end: string): Promise<PlanyoReservation[]> {
@@ -182,6 +190,10 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
     const unitName = (r.unit_assignment || r.name || 'Unknown').trim() || 'Unknown'
     const cartId = r.cart_id ? String(r.cart_id) : null
 
+    const planyoCompany = r.properties?.Company_Name?.trim() || null
+    const planyoJobName = r.properties?.Job_Name?.trim() || null
+    const planyoAgent = r.properties?.SirReel_Agent?.trim() || null
+
     try {
       await prisma.reservation.upsert({
         where: { planyoReservationId: planyoId },
@@ -195,6 +207,9 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
           status,
           source: 'PLANYO',
           bookingId,
+          planyoCompany,
+          planyoJobName,
+          planyoAgent,
           notes: r.admin_notes || r.user_notes || null,
         },
         update: {
@@ -205,6 +220,9 @@ export async function syncPlanyoToReservations(): Promise<SyncResult> {
           endTime,
           status,
           bookingId,
+          planyoCompany,
+          planyoJobName,
+          planyoAgent,
           notes: r.admin_notes || r.user_notes || null,
         },
       })

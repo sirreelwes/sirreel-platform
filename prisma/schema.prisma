@@ -524,6 +524,15 @@ model Reservation {
 
   planyoReservationId String?           @unique @map("planyo_reservation_id")
   planyoCartId        String?           @map("planyo_cart_id")
+  // Raw Planyo rental properties — captured at sync time so the
+  // Dispatch auto-match heuristic (Chunk 4) can score orphan
+  // reservations against Booking rows without re-hitting Planyo.
+  // These are the only Planyo-side identifiers that link a
+  // reservation back to the SirReel job it came from before
+  // bookingId is stamped.
+  planyoCompany       String?           @map("planyo_company")
+  planyoJobName       String?           @map("planyo_job_name")
+  planyoAgent         String?           @map("planyo_agent")
   notes               String?           @db.Text
 
   createdAt           DateTime          @default(now()) @map("created_at")
