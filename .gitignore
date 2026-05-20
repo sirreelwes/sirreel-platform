@@ -17,6 +17,7 @@ scripts/*
 !scripts/backfill-reply-classifications.ts
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
+!scripts/backfill-category-restamp.ts
 !scripts/verify-rw-token.ts
 !scripts/planyo-backfill.ts
 .env.local.bak
