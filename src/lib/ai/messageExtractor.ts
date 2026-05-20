@@ -290,12 +290,34 @@ export async function runMessageExtractionForId(emailMessageId: string): Promise
     snippet: email.snippet,
   })
 
+  // Post-extraction category re-stamp (strategy (a) from the May 2026
+  // pipeline retrain audit). When the AI extractor identifies a real
+  // inquiry with confidence ≥ 0.5, promote EmailMessage.category to
+  // BOOKING_INQUIRY — even if the sync-time keyword regex missed it.
+  //
+  // Why ≥ 0.5: matches the existing AI_CONFIDENCE_THRESHOLD in
+  // classifyInquiryForPipeline. The Pipeline view's primary gate uses
+  // confidence > 0 (FALLBACK floor), but the canonical `category`
+  // column is consumed by 5+ paths (dashboard widget, inbox category
+  // chips, InboxBell, SalesDashboard label, check-replies cadence
+  // trigger) — promoting it should require a confident verdict, not
+  // a guess.
+  //
+  // Asymmetric on purpose: AI=inquiry promotes the category, AI=other
+  // never demotes it. Demoting would risk hiding a genuine inquiry
+  // the AI mis-tagged from downstream consumers. Recall over precision
+  // on the category column; the Pipeline gate now handles precision
+  // on its own.
+  const shouldPromote =
+    extracted.messageNature === 'inquiry' && extracted.confidence >= 0.5
+
   await prisma.emailMessage.update({
     where: { id: email.id },
     data: {
       extractedData: extracted as unknown as object,
       extractionRunAt: new Date(),
       extractionConfidence: extracted.confidence,
+      ...(shouldPromote ? { category: 'BOOKING_INQUIRY' as const } : {}),
     },
   })
   return true
