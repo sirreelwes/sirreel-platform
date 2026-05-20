@@ -474,6 +474,7 @@ model Booking {
   referredBy        Person?            @relation("BookingReferrer", fields: [referredById], references: [id])
   agent             User               @relation("BookingAgent", fields: [agentId], references: [id])
   items             BookingItem[]
+  reservations      Reservation[]
   dispatchTasks     DispatchTask[]
   insuranceClaims   InsuranceClaim[]
   aiDecisions       AiDecision[]
@@ -482,6 +483,68 @@ model Booking {
   activities        Activity[]
 
   @@map("bookings")
+}
+
+// ═══════════════════════════════════════
+// 4.5  RESERVATIONS — Planyo unit-level scheduling truth
+// ═══════════════════════════════════════
+//
+// One row per unit per date range. Synced one-way from Planyo today
+// (Path A — Planyo stays the team's scheduling tool). The `source`
+// enum is the seam for Phase B, when SirReel HQ becomes the
+// scheduling system and native reservations land alongside Planyo
+// rows in the same table.
+//
+// `planyoReservationId` is the sync idempotency key — upserts in
+// the cron use it. `planyoCartId` groups multiple units booked
+// together (replaces the Planyo `cart_id` grouping the timeline
+// currently uses for "By Job" view).
+//
+// `bookingId` is nullable: a Planyo reservation can exist without
+// a linked Booking yet. Orphan reservations surface in Dispatch
+// (Chunk 4) for human-confirmed linking.
+//
+// Deliberately NO `assetId` on this model — reconciling Planyo's
+// string-named units ("Super Cargo #39 (A)") to real `Asset` rows
+// is a Phase B problem.
+
+model Reservation {
+  id                  String            @id @default(uuid())
+  bookingId           String?           @map("booking_id")
+  booking             Booking?          @relation(fields: [bookingId], references: [id])
+
+  unitName            String            @map("unit_name") // Planyo unit_assignment, e.g. "Super Cargo #39 (A)"
+  category            String?                              // Planyo resource / category name
+
+  startTime           DateTime          @map("start_time")
+  endTime             DateTime          @map("end_time")
+
+  status              ReservationStatus @default(HOLD)
+  source              ReservationSource @default(PLANYO)
+
+  planyoReservationId String?           @unique @map("planyo_reservation_id")
+  planyoCartId        String?           @map("planyo_cart_id")
+  notes               String?           @db.Text
+
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  @@index([bookingId])
+  @@index([unitName])
+  @@index([startTime, endTime])
+  @@index([planyoCartId])
+  @@map("reservations")
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  HOLD
+  CANCELLED
+}
+
+enum ReservationSource {
+  PLANYO
+  NATIVE
 }
 
 enum BookingItemStatus {
