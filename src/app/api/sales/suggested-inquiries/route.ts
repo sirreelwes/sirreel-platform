@@ -35,8 +35,20 @@ export async function GET() {
     prisma.emailMessage.findMany({
       where: {
         direction: 'inbound',
-        category: { in: ['BOOKING_INQUIRY', 'RENTAL_REQUEST'] },
         sentAt: { gte: since },
+        // Inquiry gate — trust the AI extractor's messageNature output
+        // (validated May 20: 9/9 'inquiry'-tagged rows in the labeling
+        // sample were genuine fresh leads, zero noise). Replaces the
+        // sync-time category=BOOKING_INQUIRY filter that was promoting
+        // newsletters / RW notifications / Cognito paperwork into the
+        // candidate pool via an over-broad keyword regex.
+        extractedData: { path: ['messageNature'], equals: 'inquiry' },
+        // Belt: extractionConfidence === 0 is the FALLBACK shape (AI
+        // call failed or never ran). Require any positive confidence
+        // so a key-missing outage doesn't silently empty the pipeline
+        // OR (worse) leak FALLBACK rows in if their messageNature was
+        // ever erroneously persisted as 'inquiry'.
+        extractionConfidence: { gt: 0 },
         // Cross-inbox dedup (Phase E): only the canonical row survives in
         // this query. Older inboxes that picked up the same Message-Id are
         // skipped because their duplicateOfId points at the survivor.
