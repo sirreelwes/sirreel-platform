@@ -406,6 +406,12 @@ enum BookingSource {
   EMAIL
   AGENT_DIRECT
   AI_AUTO
+  /// Rows created by the Planyo orphan backfill script (one-off, May
+  /// 2026). Filterable so reporting can exclude these from "real
+  /// new-booking" counts and the dispatch / CRM team can spot rows
+  /// that were retroactively created rather than booked through the
+  /// normal intake flow.
+  PLANYO_BACKFILL
 }
 
 enum UnionStatus {
