@@ -39,6 +39,12 @@ enum AssetStatus {
   STOLEN
 }
 
+enum AssetTier {
+  PREMIUM
+  STANDARD
+  ECONOMY
+}
+
 enum Region {
   LA
   NORCAL
@@ -92,6 +98,7 @@ model Asset {
   unitName   String      @map("unit_name") // "18", "Sprinter #2 (A)", "Lankershim Studio"
   status     AssetStatus @default(AVAILABLE)
   location   Location    @default(LANKERSHIM)
+  tier       AssetTier   @default(STANDARD)
 
   // Vehicle details
   vin          String? @db.VarChar(20)
@@ -406,6 +413,11 @@ enum BookingSource {
   EMAIL
   AGENT_DIRECT
   AI_AUTO
+  /// Rows created by the Planyo orphan backfill (one-off, May 2026,
+  /// run from the timeline-booking-truth branch before it merged).
+  /// Listed here so main's schema reflects the live DB; not used by
+  /// new code paths. 74 rows currently carry this source.
+  PLANYO_BACKFILL
 }
 
 enum UnionStatus {
@@ -480,8 +492,58 @@ model Booking {
   paperworkRequests PaperworkRequest[]
   orders            Order[]
   activities        Activity[]
+  reservations      Reservation[]
 
   @@map("bookings")
+}
+
+// Planyo-mirror rows from the timeline-booking-truth backfill. Kept in
+// schema so main matches the live DB; not consumed by current code
+// paths. The native scheduling engine does NOT use this model — it
+// reads from BookingItem + BookingAssignment.
+model Reservation {
+  id                  String            @id @default(uuid())
+  bookingId           String?           @map("booking_id")
+  booking             Booking?          @relation(fields: [bookingId], references: [id])
+
+  unitName            String            @map("unit_name")
+  category            String?
+
+  startTime           DateTime          @map("start_time")
+  endTime             DateTime          @map("end_time")
+
+  status              ReservationStatus @default(HOLD)
+  source              ReservationSource @default(PLANYO)
+
+  planyoReservationId String?           @unique @map("planyo_reservation_id")
+  planyoCartId        String?           @map("planyo_cart_id")
+  planyoCompany       String?           @map("planyo_company")
+  planyoJobName       String?           @map("planyo_job_name")
+  planyoAgent         String?           @map("planyo_agent")
+  planyoCustomerName  String?           @map("planyo_customer_name")
+  planyoCustomerEmail String?           @map("planyo_customer_email")
+  planyoCustomerPhone String?           @map("planyo_customer_phone")
+  notes               String?           @db.Text
+
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  @@index([bookingId])
+  @@index([unitName])
+  @@index([startTime, endTime])
+  @@index([planyoCartId])
+  @@map("reservations")
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  HOLD
+  CANCELLED
+}
+
+enum ReservationSource {
+  PLANYO
+  NATIVE
 }
 
 enum BookingItemStatus {
