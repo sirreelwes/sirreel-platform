@@ -18,6 +18,7 @@ scripts/*
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
 !scripts/reextract-pipeline-window.ts
+!scripts/scheduling-planyo-migration.ts
 !scripts/verify-rw-token.ts
 .env.local.bak
 .gcp-service-account.json
