@@ -195,10 +195,18 @@ export async function getCategoryAvailability(
   // rental window overlaps the requested window. These represent
   // *pending* category demand that hasn't been bound to a unit yet,
   // so subtract from capacity even though no asset is locked.
+  //
+  // Only rank-1 (primary) holds consume capacity. Backups (rank ≥ 2)
+  // are explicitly allowed to overlap an at-capacity category — they
+  // queue behind the primary and only become real when an agent
+  // promotes them. This keeps the conflict math identical to before
+  // backups existed; ranking is a queue layer on top, not a change
+  // to the availability calculation.
   const requestedAgg = await prisma.bookingItem.aggregate({
     where: {
       categoryId,
       status: 'REQUESTED',
+      holdRank: 1,
       booking: {
         startDate: { lte: endDate },
         endDate: { gte: startDate },

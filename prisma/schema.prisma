@@ -561,6 +561,12 @@ model BookingItem {
   dailyRate  Decimal           @map("daily_rate") @db.Decimal(10, 2)
   lineTotal  Decimal?          @map("line_total") @db.Decimal(10, 2)
   status     BookingItemStatus @default(REQUESTED)
+  /// Hold rank — 1 = primary, ≥2 = backup ("2nd hold" / "3rd hold").
+  /// Backups can overlap a category at capacity; they do NOT consume
+  /// availableToHold. Manual promotion only — when a primary
+  /// releases, an agent surfaces the next-rank backup explicitly.
+  /// Replaces the Planyo "X - 2ND HOLD" placeholder workaround.
+  holdRank   Int               @default(1) @map("hold_rank")
   notes      String?           @db.Text
 
   // Relations
