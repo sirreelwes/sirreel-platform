@@ -38,6 +38,74 @@ import path from 'path'
 import { PrismaClient, type BookingStatus } from '@prisma/client'
 import { normalizePlanyoUnitName } from '../src/lib/scheduling/planyoNameNormalizer'
 
+// ──────────────────────────────────────────────────────────────
+// Reconciliation maps — see scheduling-add-missing-assets.ts for
+// the canonical narrative of each entry.
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Post-normalization aliases: two distinct Planyo names that resolve
+ * to the SAME physical Asset. Map: normalized form → canonical
+ * Asset.unitName to look up.
+ *
+ * Every aliased hit is listed in the report so the operator can
+ * confirm the alias is correct before --write.
+ */
+const NAME_ALIASES: Record<string, string> = {
+  'Scout Van': 'Video Van',
+  'Cube 30 Wardrobe': 'Cube 30',
+}
+
+/**
+ * Category routing overrides: certain Planyo unit_assignment values
+ * should route to a different AssetCategory than the one
+ * Planyo's resource_id maps to. Used today for "Lankershim Studio"
+ * reservations — Planyo lumps them under the generic "Studios"
+ * resource, but they belong in the new "Lankershim Studios" category.
+ */
+interface CategoryRoute {
+  matches: (rawUnitName: string) => boolean
+  targetCategoryName: string
+  routeReason: string
+  /** True iff this routing should suppress the asset-match step
+   *  (forcing the BookingItem to stay REQUESTED for manual
+   *  per-room assignment). */
+  forceUnassigned?: boolean
+  /** Bucket label in the review-list section of the report. */
+  reviewBucket: 'lankershimRoomNeeded' | 'sprinterUnassigned'
+}
+
+const CATEGORY_ROUTES: CategoryRoute[] = [
+  {
+    matches: (raw) => /^lankershim\s+studio\b/i.test(raw),
+    targetCategoryName: 'Lankershim Studios',
+    routeReason:
+      'Planyo lumps Lankershim spaces under generic "Studios"; routed to new Lankershim Studios category. Specific room not in Planyo data — agent assigns post-import.',
+    forceUnassigned: true,
+    reviewBucket: 'lankershimRoomNeeded',
+  },
+]
+
+/**
+ * In-category unassigned overrides: keeps the resource-id category
+ * mapping but suppresses the asset match. Used for "Sprinter #N" —
+ * stays in Cargo Van w/ Liftgate but waits on fleet to provide the
+ * specific Cargo unit.
+ */
+interface UnassignedRule {
+  matches: (rawUnitName: string) => boolean
+  reason: string
+  reviewBucket: 'sprinterUnassigned' | 'lankershimRoomNeeded'
+}
+
+const FORCE_UNASSIGNED_IN_CATEGORY: UnassignedRule[] = [
+  {
+    matches: (raw) => /^Sprinter\s+#?\s*\d+/i.test(raw),
+    reason: 'Brand-name reference — fleet to provide specific Cargo-w-Liftgate unit mapping.',
+    reviewBucket: 'sprinterUnassigned',
+  },
+]
+
 const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
 for (const line of envFile.split('\n')) {
   const m = line.match(/^([A-Z_]+)="?(.*?)"?$/)
@@ -196,6 +264,15 @@ async function main() {
   console.log('')
 
   // ── Counters / report ──
+  interface ReviewListItem {
+    cartId: string
+    reservationId: string
+    planyoUnitName: string
+    targetCategory: string
+    startDate: string
+    endDate: string
+    note?: string
+  }
   const report = {
     cartsProcessed: 0,
     cartsSkippedFullyImported: 0,
@@ -211,6 +288,17 @@ async function main() {
     unmatchedResources: new Map<string, { count: number; sampleUnits: string[] }>(),
     unmatchedUnits: new Map<string, { count: number; resourceName: string; sampleCarts: string[] }>(),
     errors: [] as { cart: string; error: string }[],
+    // Per-bucket review lists for the Part-A/B reconciliation work.
+    sprinterUnassigned: [] as ReviewListItem[],
+    lankershimRoomNeeded: [] as ReviewListItem[],
+    backupHoldsNeedLinkage: [] as ReviewListItem[],
+    aliasedAssetLookups: [] as Array<{
+      cartId: string
+      reservationId: string
+      planyoUnitName: string
+      aliasedTo: string
+      categoryName: string
+    }>,
   }
 
   let bookingSeq = 0
@@ -332,11 +420,39 @@ async function main() {
       continue
     }
 
+    // Pre-resolve category lookup by name for CATEGORY_ROUTES.
+    const categoryByName = new Map<string, (typeof allCategories)[number]>()
+    for (const c of allCategories) categoryByName.set(c.name, c)
+
     // ── BookingItems + Assignments + Reservation journal ──
     for (const r of liveRows) {
       const resourceId = typeof r.resource_id === 'string' ? parseInt(r.resource_id, 10) : (r.resource_id ?? 0)
-      const category = categoryByPlanyoId.get(resourceId) ?? null
+      let category = categoryByPlanyoId.get(resourceId) ?? null
       const resourceName = (r.name ?? '').trim() || `resource:${resourceId}`
+      const rawUnit = (r.unit_assignment ?? '').trim()
+
+      // ── Apply CATEGORY_ROUTES override (e.g., Lankershim Studio
+      //    reservations → Lankershim Studios category regardless of
+      //    Planyo's "Studios" resource_id). ──
+      let routeOverride: CategoryRoute | null = null
+      for (const route of CATEGORY_ROUTES) {
+        if (route.matches(rawUnit)) {
+          const target = categoryByName.get(route.targetCategoryName)
+          if (target) {
+            category = target
+            routeOverride = route
+          } else {
+            // Target doesn't exist yet — fall through and let the
+            // unmatched-resource path log it, so the operator sees
+            // they need to run scheduling-add-missing-assets first.
+            report.errors.push({
+              cart: cartId,
+              error: `CATEGORY_ROUTES target "${route.targetCategoryName}" not found — run scheduling-add-missing-assets --write first`,
+            })
+          }
+          break
+        }
+      }
 
       if (!category) {
         const slot = report.unmatchedResources.get(resourceName) ?? { count: 0, sampleUnits: [] }
@@ -364,6 +480,11 @@ async function main() {
         continue
       }
 
+      // ── Determine if this reservation should be force-unassigned. ──
+      const inCategoryUnassigned = FORCE_UNASSIGNED_IN_CATEGORY.find((rule) => rule.matches(rawUnit)) ?? null
+      const forceUnassigned = Boolean(routeOverride?.forceUnassigned) || Boolean(inCategoryUnassigned)
+      const reviewBucket = routeOverride?.reviewBucket ?? inCategoryUnassigned?.reviewBucket ?? null
+
       let bookingItemId = ''
       try {
         if (!dryRun) {
@@ -380,34 +501,70 @@ async function main() {
       }
 
       // ── Asset match. Normalize the Planyo unit name through the
-      //    Pattern-A normalizer before exact-matching against
-      //    Asset.unitName. Empty result after normalization = a
-      //    placeholder Planyo row (e.g. "X - 2ND HOLD") that should
-      //    never produce an assignment. Backup-hold rows skip the
-      //    assignment but keep the BookingItem (REQUESTED) so the
-      //    held capacity is still represented. ──
-      const rawUnit = (r.unit_assignment ?? '').trim()
+      //    Pattern-A normalizer, then apply NAME_ALIASES, then exact-
+      //    match against Asset.unitName. forceUnassigned routes
+      //    (Sprinter, Lankershim Studio) skip this step entirely and
+      //    leave the BookingItem REQUESTED for manual assignment. ──
       const norm = normalizePlanyoUnitName(rawUnit, category.name)
-      const asset =
-        norm.normalized && !norm.isBackupHold
-          ? assetByCategoryAndName.get(`${category.id}|${norm.normalized}`) ?? null
-          : null
+      const startDateISO = startDate.toISOString().slice(0, 10)
+      const endDateISO = endDate.toISOString().slice(0, 10)
+
+      let asset: ReturnType<typeof assetByCategoryAndName.get> | null = null
+      let aliasedTo: string | null = null
+      if (!forceUnassigned && norm.normalized && !norm.isBackupHold) {
+        const lookupName = NAME_ALIASES[norm.normalized] ?? norm.normalized
+        if (lookupName !== norm.normalized) aliasedTo = lookupName
+        asset = assetByCategoryAndName.get(`${category.id}|${lookupName}`) ?? null
+      }
+
       if (!asset) {
-        // Distinguish three sub-cases in the report so the operator
-        // knows what to do: backup hold (no Asset needed), empty
-        // post-normalization (Planyo placeholder), or genuinely
-        // unmatched name (manual reconcile).
-        const reportKey = norm.isBackupHold
-          ? `${rawUnit}  [backup hold]`
-          : !norm.normalized
+        // Force-unassigned: add to its review bucket and skip the
+        // unmatched-units bookkeeping (it's a deliberate choice).
+        if (forceUnassigned && reviewBucket) {
+          const note = routeOverride?.routeReason ?? inCategoryUnassigned?.reason
+          report[reviewBucket].push({
+            cartId,
+            reservationId: String(r.reservation_id),
+            planyoUnitName: rawUnit,
+            targetCategory: category.name,
+            startDate: startDateISO,
+            endDate: endDateISO,
+            note,
+          })
+        } else if (norm.isBackupHold) {
+          // X - 2ND HOLD style entries → backup-hold review list
+          // (handled by Part B's holdRank promotion; for now we just
+          // surface them as "linkage needed").
+          report.backupHoldsNeedLinkage.push({
+            cartId,
+            reservationId: String(r.reservation_id),
+            planyoUnitName: rawUnit,
+            targetCategory: category.name,
+            startDate: startDateISO,
+            endDate: endDateISO,
+            note: 'Backup hold — primary linkage unknown (Planyo workaround did not record which booking this backs up).',
+          })
+        } else {
+          // Genuinely unmatched — should be near zero post-reconciliation.
+          const reportKey = !norm.normalized
             ? `${rawUnit}  [empty after normalization]`
             : `${rawUnit}  →  ${norm.normalized}`
-        const slot = report.unmatchedUnits.get(reportKey) ?? { count: 0, resourceName, sampleCarts: [] }
-        slot.count++
-        if (slot.sampleCarts.length < 3 && !slot.sampleCarts.includes(cartId)) slot.sampleCarts.push(cartId)
-        report.unmatchedUnits.set(reportKey, slot)
-        // BookingItem stays REQUESTED; journal still written below.
+          const slot = report.unmatchedUnits.get(reportKey) ?? { count: 0, resourceName, sampleCarts: [] }
+          slot.count++
+          if (slot.sampleCarts.length < 3 && !slot.sampleCarts.includes(cartId)) slot.sampleCarts.push(cartId)
+          report.unmatchedUnits.set(reportKey, slot)
+        }
+        // BookingItem stays REQUESTED in all the above branches; journal still written below.
       } else {
+        if (aliasedTo) {
+          report.aliasedAssetLookups.push({
+            cartId,
+            reservationId: String(r.reservation_id),
+            planyoUnitName: rawUnit,
+            aliasedTo,
+            categoryName: category.name,
+          })
+        }
         try {
           if (!dryRun) {
             await prisma.bookingAssignment.create({
@@ -457,6 +614,10 @@ async function main() {
     skippedReservationsCancelled: report.skippedReservationsCancelled,
     unmatchedResources: report.unmatchedResources.size,
     unmatchedUnits: report.unmatchedUnits.size,
+    sprinterUnassigned: report.sprinterUnassigned.length,
+    lankershimRoomNeeded: report.lankershimRoomNeeded.length,
+    backupHoldsNeedLinkage: report.backupHoldsNeedLinkage.length,
+    aliasedAssetLookups: report.aliasedAssetLookups.length,
     errors: report.errors.length,
   }, null, 2))
 
@@ -481,6 +642,12 @@ async function main() {
     },
     unmatchedResources: [...report.unmatchedResources.entries()].map(([name, info]) => ({ resourceName: name, ...info })),
     unmatchedUnits: [...report.unmatchedUnits.entries()].map(([name, info]) => ({ unitName: name, ...info })),
+    reviewLists: {
+      sprinterUnassigned: report.sprinterUnassigned,
+      lankershimRoomNeeded: report.lankershimRoomNeeded,
+      backupHoldsNeedLinkage: report.backupHoldsNeedLinkage,
+      aliasedAssetLookups: report.aliasedAssetLookups,
+    },
     errors: report.errors,
   }, null, 2))
   console.log('')
@@ -492,6 +659,22 @@ async function main() {
   if (report.unmatchedUnits.size > 0) {
     console.log(`\nUnmatched units (no Asset.unitName match within category):`)
     for (const [name, info] of report.unmatchedUnits) console.log(`  ${info.count}× "${name}"  (resource ${info.resourceName})  sample carts: ${info.sampleCarts.join(', ')}`)
+  }
+  if (report.sprinterUnassigned.length > 0) {
+    console.log(`\nSprinter unassigned holds (${report.sprinterUnassigned.length}) — fleet to assign specific Cargo-w-Liftgate units:`)
+    for (const it of report.sprinterUnassigned) console.log(`  cart ${it.cartId} · ${it.startDate}→${it.endDate} · "${it.planyoUnitName}" (category: ${it.targetCategory})`)
+  }
+  if (report.lankershimRoomNeeded.length > 0) {
+    console.log(`\nLankershim Studios — room assignment needed (${report.lankershimRoomNeeded.length}):`)
+    for (const it of report.lankershimRoomNeeded) console.log(`  cart ${it.cartId} · ${it.startDate}→${it.endDate} · "${it.planyoUnitName}" (category: ${it.targetCategory})`)
+  }
+  if (report.backupHoldsNeedLinkage.length > 0) {
+    console.log(`\nBackup holds needing manual primary-linkage (${report.backupHoldsNeedLinkage.length}):`)
+    for (const it of report.backupHoldsNeedLinkage) console.log(`  cart ${it.cartId} · ${it.startDate}→${it.endDate} · "${it.planyoUnitName}" (category: ${it.targetCategory})`)
+  }
+  if (report.aliasedAssetLookups.length > 0) {
+    console.log(`\nAliased Asset lookups (${report.aliasedAssetLookups.length}) — confirm these mappings:`)
+    for (const it of report.aliasedAssetLookups) console.log(`  "${it.planyoUnitName}"  →  Asset "${it.aliasedTo}"  (category ${it.categoryName})`)
   }
   if (report.errors.length > 0) {
     console.log(`\nErrors (${report.errors.length}):`)
