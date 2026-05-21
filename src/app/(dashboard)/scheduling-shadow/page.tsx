@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { NewHoldModal } from '@/components/scheduling/NewHoldModal'
 
 // Chunk 3 of native-scheduling-v1-brief.md — shadow mode. Surfaces the
 // native engine's per-unit availability alongside Planyo's answer for
@@ -83,6 +84,13 @@ export default function SchedulingShadowPage() {
   const [data, setData] = useState<ShadowDiff | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [holdModalOpen, setHoldModalOpen] = useState(false)
+  const [lastCreatedHold, setLastCreatedHold] = useState<{ bookingNumber: string; quantity: number; jobName: string } | null>(null)
+
+  const selectedCategoryName = useMemo(
+    () => categories.find((c) => c.id === categoryId)?.name ?? '',
+    [categories, categoryId],
+  )
 
   useEffect(() => {
     fetch('/api/scheduling/categories')
@@ -189,8 +197,47 @@ export default function SchedulingShadowPage() {
             {loading ? 'Comparing…' : 'Run comparison'}
           </button>
         </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-zinc-500">
+            + Hold creates a category-level Booking + BookingItem(REQUESTED). Server re-checks capacity before writing;
+            buffer-encroachment requires an explicit override.
+          </p>
+          <button
+            onClick={() => setHoldModalOpen(true)}
+            disabled={!categoryId || !start || !end}
+            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-sm font-medium px-3 py-1.5 rounded"
+          >
+            + Hold
+          </button>
+        </div>
         {error && <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>}
+        {lastCreatedHold && (
+          <div className="mt-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+            Created hold {lastCreatedHold.bookingNumber} — {lastCreatedHold.quantity}× for "{lastCreatedHold.jobName}".
+          </div>
+        )}
       </section>
+
+      {holdModalOpen && categoryId && (
+        <NewHoldModal
+          categoryId={categoryId}
+          categoryName={selectedCategoryName}
+          startDate={start}
+          endDate={end}
+          bufferDays={bufferDays}
+          onClose={() => setHoldModalOpen(false)}
+          onCreated={(hold) => {
+            setLastCreatedHold({
+              bookingNumber: hold.booking.bookingNumber,
+              quantity: hold.bookingItem.quantity,
+              jobName: hold.booking.jobName,
+            })
+            setHoldModalOpen(false)
+            // Refresh the diff to reflect the new hold's capacity drain.
+            void run()
+          }}
+        />
+      )}
 
       {data && (
         <>
