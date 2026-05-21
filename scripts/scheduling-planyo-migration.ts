@@ -36,6 +36,7 @@
 import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 import { PrismaClient, type BookingStatus } from '@prisma/client'
+import { normalizePlanyoUnitName } from '../src/lib/scheduling/planyoNameNormalizer'
 
 const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
 for (const line of envFile.split('\n')) {
@@ -378,14 +379,33 @@ async function main() {
         continue
       }
 
-      // ── Asset match ──
-      const unitName = (r.unit_assignment ?? '').trim()
-      const asset = unitName ? assetByCategoryAndName.get(`${category.id}|${unitName}`) ?? null : null
+      // ── Asset match. Normalize the Planyo unit name through the
+      //    Pattern-A normalizer before exact-matching against
+      //    Asset.unitName. Empty result after normalization = a
+      //    placeholder Planyo row (e.g. "X - 2ND HOLD") that should
+      //    never produce an assignment. Backup-hold rows skip the
+      //    assignment but keep the BookingItem (REQUESTED) so the
+      //    held capacity is still represented. ──
+      const rawUnit = (r.unit_assignment ?? '').trim()
+      const norm = normalizePlanyoUnitName(rawUnit, category.name)
+      const asset =
+        norm.normalized && !norm.isBackupHold
+          ? assetByCategoryAndName.get(`${category.id}|${norm.normalized}`) ?? null
+          : null
       if (!asset) {
-        const slot = report.unmatchedUnits.get(unitName || '(blank)') ?? { count: 0, resourceName, sampleCarts: [] }
+        // Distinguish three sub-cases in the report so the operator
+        // knows what to do: backup hold (no Asset needed), empty
+        // post-normalization (Planyo placeholder), or genuinely
+        // unmatched name (manual reconcile).
+        const reportKey = norm.isBackupHold
+          ? `${rawUnit}  [backup hold]`
+          : !norm.normalized
+            ? `${rawUnit}  [empty after normalization]`
+            : `${rawUnit}  →  ${norm.normalized}`
+        const slot = report.unmatchedUnits.get(reportKey) ?? { count: 0, resourceName, sampleCarts: [] }
         slot.count++
         if (slot.sampleCarts.length < 3 && !slot.sampleCarts.includes(cartId)) slot.sampleCarts.push(cartId)
-        report.unmatchedUnits.set(unitName || '(blank)', slot)
+        report.unmatchedUnits.set(reportKey, slot)
         // BookingItem stays REQUESTED; journal still written below.
       } else {
         try {
@@ -408,7 +428,7 @@ async function main() {
           where: { planyoReservationId: String(r.reservation_id) },
           create: {
             planyoReservationId: String(r.reservation_id), planyoCartId: String(cartId),
-            bookingId, unitName: unitName || '(blank)', category: resourceName,
+            bookingId, unitName: rawUnit || '(blank)', category: resourceName,
             startTime: new Date(Date.parse((r.start_time ?? '').replace(' ', 'T') + 'Z')),
             endTime: new Date(Date.parse((r.end_time ?? '').replace(' ', 'T') + 'Z')),
             status: 'CONFIRMED', source: 'PLANYO',

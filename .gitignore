@@ -19,6 +19,7 @@ scripts/*
 !scripts/backfill-inferred-form-type.ts
 !scripts/reextract-pipeline-window.ts
 !scripts/scheduling-planyo-migration.ts
+!scripts/scheduling-add-missing-assets.ts
 !scripts/verify-rw-token.ts
 .env.local.bak
 .gcp-service-account.json
