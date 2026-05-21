@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal'
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 
 // Chunk 3 of native-scheduling-v1-brief.md — shadow mode. Surfaces the
 // native engine's per-unit availability alongside Planyo's answer for
@@ -85,7 +86,8 @@ export default function SchedulingShadowPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [holdModalOpen, setHoldModalOpen] = useState(false)
-  const [lastCreatedHold, setLastCreatedHold] = useState<{ bookingNumber: string; quantity: number; jobName: string } | null>(null)
+  const [lastCreatedHold, setLastCreatedHold] = useState<{ bookingNumber: string; quantity: number; jobName: string; bookingItemId: string } | null>(null)
+  const [assignModalItemId, setAssignModalItemId] = useState<string | null>(null)
 
   const selectedCategoryName = useMemo(
     () => categories.find((c) => c.id === categoryId)?.name ?? '',
@@ -212,8 +214,16 @@ export default function SchedulingShadowPage() {
         </div>
         {error && <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>}
         {lastCreatedHold && (
-          <div className="mt-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
-            Created hold {lastCreatedHold.bookingNumber} — {lastCreatedHold.quantity}× for "{lastCreatedHold.jobName}".
+          <div className="mt-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 flex items-center justify-between">
+            <span>
+              Created hold {lastCreatedHold.bookingNumber} — {lastCreatedHold.quantity}× for "{lastCreatedHold.jobName}".
+            </span>
+            <button
+              onClick={() => setAssignModalItemId(lastCreatedHold.bookingItemId)}
+              className="text-xs font-medium text-emerald-900 underline underline-offset-2 hover:text-emerald-700"
+            >
+              Assign units →
+            </button>
           </div>
         )}
       </section>
@@ -231,9 +241,21 @@ export default function SchedulingShadowPage() {
               bookingNumber: hold.booking.bookingNumber,
               quantity: hold.bookingItem.quantity,
               jobName: hold.booking.jobName,
+              bookingItemId: hold.bookingItem.id,
             })
             setHoldModalOpen(false)
             // Refresh the diff to reflect the new hold's capacity drain.
+            void run()
+          }}
+        />
+      )}
+
+      {assignModalItemId && (
+        <AssignUnitsModal
+          bookingItemId={assignModalItemId}
+          bufferDays={bufferDays}
+          onClose={() => setAssignModalItemId(null)}
+          onChanged={() => {
             void run()
           }}
         />
