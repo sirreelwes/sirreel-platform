@@ -40,6 +40,9 @@ export default function GanttPage() {
   const [units, setUnits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  const [actionPending, setActionPending] = useState<null | 'book' | 'release'>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const source: TimelineSource = resolveTimelineSource(searchParams)
 
@@ -61,6 +64,103 @@ export default function GanttPage() {
   const dates = Array.from({ length: totalDays }, (_, i) => addDays(startDate, i))
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
   const todayOffset = diffDays(startDate, today)
+
+  // ── Refresh the timeline data after an action. Kept inline so the
+  //    fetch URL stays consistent with the initial load. ──
+  function refreshTimeline() {
+    setLoading(true)
+    fetch(timelineEndpoint(source))
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) {
+          setJobs(d.jobs || [])
+          setUnits(d.units || [])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+
+  function closeModal() {
+    setSelected(null)
+    setActionPending(null)
+    setActionError(null)
+    setActionSuccess(null)
+  }
+
+  // ── PART 4 actions. Book/Release on a bar click.
+  //    PRIMARY (holdRank=1):
+  //      Book    → POST /api/scheduling/bookings/[bookingId]/confirm
+  //      Release → POST /api/scheduling/booking-items/[id]/release
+  //    BACKUP (holdRank ≥ 2):
+  //      Book    → POST /api/scheduling/booking-items/[id]/promote
+  //                   THEN POST .../bookings/[bookingId]/confirm
+  //      Release → POST /api/scheduling/booking-items/[id]/release
+  //    Confirming a primary does NOT touch its backups. Releasing a
+  //    primary leaves backups in place — no auto-promote. ──
+  async function handleBook() {
+    if (!selected) return
+    const bookingId: string | undefined = selected.bookingId
+    const bookingItemId: string | undefined = selected.bookingItemId ?? selected.reservationId
+    const isBackup = selected.isBackup === true || (typeof selected.holdRank === 'number' && selected.holdRank >= 2)
+    if (!bookingId || (isBackup && !bookingItemId)) {
+      setActionError('Missing bookingId / bookingItemId on the selected bar — refresh and retry.')
+      return
+    }
+    setActionPending('book')
+    setActionError(null)
+    try {
+      if (isBackup && bookingItemId) {
+        const promoteRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/promote`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+        const promoteJson = await promoteRes.json()
+        if (!promoteRes.ok || !promoteJson.ok) {
+          throw new Error(promoteJson.reason || promoteJson.error || `promote failed (${promoteRes.status})`)
+        }
+      }
+      const confirmRes = await fetch(`/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
+      const confirmJson = await confirmRes.json()
+      if (!confirmRes.ok || !confirmJson.ok) {
+        throw new Error(confirmJson.reason || confirmJson.error || `confirm failed (${confirmRes.status})`)
+      }
+      setActionSuccess(isBackup ? 'Backup promoted to primary and booked.' : 'Booked.')
+      refreshTimeline()
+      // Close on a short delay so the success banner is visible.
+      setTimeout(() => closeModal(), 900)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  async function handleRelease() {
+    if (!selected) return
+    const bookingItemId: string | undefined = selected.bookingItemId ?? selected.reservationId
+    if (!bookingItemId) {
+      setActionError('Missing bookingItemId on the selected bar — refresh and retry.')
+      return
+    }
+    setActionPending('release')
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/release`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || !json.ok) {
+        throw new Error(json.reason || json.error || `release failed (${res.status})`)
+      }
+      setActionSuccess(selected.isBackup ? 'Backup hold released.' : 'Hold released.')
+      refreshTimeline()
+      setTimeout(() => closeModal(), 900)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActionPending(null)
+    }
+  }
 
   function getBar(start: string, end: string) {
     const s = Math.max(0, diffDays(startDate, start))
@@ -407,11 +507,16 @@ export default function GanttPage() {
                   </>
                 )}
               </div>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
 
             {selected.isUnit ? (
               <div className="space-y-1 text-[12px]">
+                {selected.isBackup && (
+                  <div className="px-3 py-2 mb-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[11px] font-semibold">
+                    {selected.holdRank === 2 ? '2nd hold' : selected.holdRank === 3 ? '3rd hold' : `${selected.holdRank}th hold`} — queued behind primary
+                  </div>
+                )}
                 <div className="flex justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-400">Dates</span>
                   <span className="font-semibold">{fMonth(selected.start)} – {fMonth(selected.end)}</span>
@@ -422,6 +527,41 @@ export default function GanttPage() {
                 </div>
                 {selected.adminNotes && (
                   <div className="py-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 mt-2">{selected.adminNotes}</div>
+                )}
+
+                {/* PART 4 — Book / Release actions.
+                    Only on native source; Planyo bookings don't carry
+                    bookingId / bookingItemId in the response shape. */}
+                {source === 'native' && (selected.bookingId || selected.bookingItemId) && (
+                  <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
+                    {actionSuccess && (
+                      <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">{actionSuccess}</div>
+                    )}
+                    {actionError && (
+                      <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded px-2.5 py-1.5">{actionError}</div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleBook}
+                        disabled={!!actionPending}
+                        className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+                      >
+                        {actionPending === 'book' ? 'Booking…' : selected.isBackup ? 'Promote & book' : 'Book'}
+                      </button>
+                      <button
+                        onClick={handleRelease}
+                        disabled={!!actionPending}
+                        className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                      >
+                        {actionPending === 'release' ? 'Releasing…' : selected.isBackup ? 'Release backup' : 'Release'}
+                      </button>
+                      <span className="text-[10px] text-gray-400 ml-auto">
+                        {selected.isBackup
+                          ? 'Promote runs the rank-renormalize; backups queued behind move up.'
+                          : 'Backups (if any) stay queued — no auto-promote.'}
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
