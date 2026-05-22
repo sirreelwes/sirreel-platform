@@ -396,6 +396,14 @@ async function main() {
     // ── Agent resolve — for now everyone defaults to the fallback agent ──
     const agentId = defaultAgent.id
 
+    // ── Parse the RentalWorks order number from user_notes (same
+    //    `#NNNNN` pattern the existing /api/timeline route extracts).
+    //    Stamped on Booking.rentalworksOrderId so the timeline-shadow
+    //    page can pair Planyo↔native rows on a stable key. ──
+    const userNotes = (head.user_notes ?? '').toString()
+    const rwOrderMatch = userNotes.match(/#(\d+)/)
+    const rentalworksOrderId = rwOrderMatch ? rwOrderMatch[1] : null
+
     // ── Booking ──
     bookingSeq++
     const bookingNumber = `SR-${yearPrefix}-${String(bookingSeq).padStart(4, '0')}`
@@ -408,6 +416,7 @@ async function main() {
             bookingNumber, companyId: company.id, personId: person.id, agentId,
             jobName, productionName, startDate, endDate,
             status: bookingStatus, source: 'PLANYO_BACKFILL',
+            rentalworksOrderId,
             notes: `Imported from Planyo cart ${cartId} on ${startedAt.toISOString().slice(0, 10)}`,
           },
           select: { id: true, bookingNumber: true },
