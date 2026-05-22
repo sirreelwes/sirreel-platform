@@ -1,20 +1,33 @@
 /**
  * POST /api/scheduling/booking-items/[id]/release
  *
- * Chunk 6 of native-scheduling-v1-brief.md. One-click manual release
- * of a stale hold. Flips BookingItem.status from REQUESTED to
- * UNFULFILLED. Idempotent for already-UNFULFILLED items; rejects
- * release attempts on items in any other terminal state (ASSIGNED,
- * SUBSTITUTED) so we don't accidentally tear down active assignments.
+ * Release a hold at any active state. Originally Chunk 6 of the
+ * brief — narrow stale-hold sweep (REQUESTED → UNFULFILLED).
+ * Widened (Change 2 of the PART 2 backend prep for Timeline
+ * backup sub-lanes) to also handle ASSIGNED items:
  *
- * Does NOT cascade to the parent Booking — a Booking can have a mix
- * of fulfilled and released items; the agent decides whether to
- * archive the Booking separately.
+ *   · REQUESTED  → UNFULFILLED. No assignments to touch.
+ *   · ASSIGNED   → UNFULFILLED, AND each active BookingAssignment
+ *                  is flipped to SWAPPED in the same transaction.
+ *                  SWAPPED is terminal-but-auditable; the rows stay
+ *                  so we can read history later. Backups (rank ≥ 2)
+ *                  on the same window are NOT touched — releasing
+ *                  a primary leaves the queue intact; promotion is
+ *                  always manual.
+ *   · UNFULFILLED → idempotent ok, alreadyReleased=true.
+ *   · SUBSTITUTED → 409 (an already-terminal state we don't manage
+ *                  through this route).
+ *
+ * Does NOT cascade to the parent Booking. A Booking can hold a
+ * mix of UNFULFILLED + ASSIGNED items; archiving the parent is a
+ * separate deliberate action.
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+
+const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const item = await prisma.bookingItem.findUnique({
@@ -23,6 +36,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       id: true,
       status: true,
       quantity: true,
+      holdRank: true,
       _count: { select: { assignments: true } },
       booking: { select: { id: true, bookingNumber: true } },
     },
@@ -32,28 +46,46 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (item.status === 'UNFULFILLED') {
     return NextResponse.json({ ok: true, alreadyReleased: true, bookingItemId: item.id })
   }
-
-  if (item.status !== 'REQUESTED') {
+  if (item.status === 'SUBSTITUTED') {
     return NextResponse.json(
       {
         error: 'cannot release',
-        reason: `BookingItem is in status=${item.status}; only REQUESTED items can be released. Detach assignments first if you need to roll back.`,
+        reason: `BookingItem is in terminal status=${item.status}; release does not manage SUBSTITUTED rows. Restore the item before releasing if that's the intent.`,
         bookingItemId: item.id,
-        assignmentsCount: item._count.assignments,
       },
       { status: 409 },
     )
   }
 
-  const updated = await prisma.bookingItem.update({
-    where: { id: item.id },
-    data: { status: 'UNFULFILLED' },
-    select: { id: true, status: true, quantity: true },
+  const result = await prisma.$transaction(async (tx) => {
+    let swappedAssignmentCount = 0
+    if (item.status === 'ASSIGNED') {
+      // Flip every active assignment on this item to SWAPPED.
+      // Backups (different BookingItem.holdRank values on different
+      // BookingItems) are untouched — we only modify the assignments
+      // belonging to THIS BookingItem.
+      const swapped = await tx.bookingAssignment.updateMany({
+        where: {
+          bookingItemId: item.id,
+          status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
+        },
+        data: { status: 'SWAPPED' },
+      })
+      swappedAssignmentCount = swapped.count
+    }
+    const updatedItem = await tx.bookingItem.update({
+      where: { id: item.id },
+      data: { status: 'UNFULFILLED' },
+      select: { id: true, status: true, quantity: true, holdRank: true },
+    })
+    return { updatedItem, swappedAssignmentCount }
   })
 
   return NextResponse.json({
     ok: true,
-    bookingItem: updated,
+    bookingItem: result.updatedItem,
     booking: item.booking,
+    swappedAssignmentCount: result.swappedAssignmentCount,
+    holdRank: item.holdRank,
   })
 }
