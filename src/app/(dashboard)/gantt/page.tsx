@@ -78,10 +78,29 @@ export default function GanttPage() {
   // API's category+unitName ordering is preserved (stable sort).
   // Recomputes only on filteredUnits / window changes — not every
   // horizontal-scroll frame.
-  type RowEntry = { type: 'unit'; unit: any } | { type: 'divider'; label: string }
+  // ── Each unit's bookings split into primary (holdRank=1 OR
+  //    legacy missing holdRank) vs backup (holdRank>=2). Backup
+  //    bookings render as a greyed sub-lane beneath the asset
+  //    row. ORPHANED backups (unit holding only a rank-2 after
+  //    a primary release-without-promote) still render — otherwise
+  //    the agent hits the backup-has-dibs 409 on a unit that looks
+  //    empty and can't tell why. ──
+  type RowEntry = { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[] } | { type: 'divider'; label: string }
   const { rowEntries } = useMemo(() => {
     const visibleStart = startDate
     const visibleEnd = addDays(startDate, totalDays - 1)
+    const splitBookings = (u: any): { primary: any[]; backup: any[] } => {
+      const bs: any[] = Array.isArray(u.bookings) ? u.bookings : []
+      const primary: any[] = []
+      const backup: any[] = []
+      for (const b of bs) {
+        if (!b) continue
+        const rank = typeof b.holdRank === 'number' ? b.holdRank : 1
+        if (rank >= 2) backup.push(b)
+        else primary.push(b)
+      }
+      return { primary, backup }
+    }
     const isBookedInWindow = (u: any) =>
       Array.isArray(u.bookings) && u.bookings.some((b: any) => b && b.start <= visibleEnd && b.end >= visibleStart)
     const sorted = [...filteredUnits].sort((a, b) => {
@@ -97,7 +116,8 @@ export default function GanttPage() {
       if (i === booked && booked > 0 && idle > 0) {
         entries.push({ type: 'divider', label: `${idle} idle in this window` })
       }
-      entries.push({ type: 'unit', unit: sorted[i] })
+      const split = splitBookings(sorted[i])
+      entries.push({ type: 'unit', unit: sorted[i], primaryBookings: split.primary, backupBookings: split.backup })
     }
     return { rowEntries: entries, bookedCount: booked, idleCount: idle }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,29 +188,40 @@ export default function GanttPage() {
             </div>
 
             {view === 'asset' ? (
-              rowEntries.map((entry, i) => (
-                entry.type === 'divider' ? (
-                  <div
-                    key={`d-${i}`}
-                    className="h-6 border-b border-gray-200 px-3 flex items-center bg-gray-100"
-                  >
-                    <span className="text-[9px] uppercase tracking-wide text-gray-500 font-semibold">
-                      {entry.label}
-                    </span>
-                  </div>
-                ) : (
-                  <div
-                    key={`u-${i}`}
-                    className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50"
-                  >
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[entry.unit.cat] || '#9ca3af' }} />
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
-                      <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
+              rowEntries.map((entry, i) => {
+                if (entry.type === 'divider') {
+                  return (
+                    <div
+                      key={`d-${i}`}
+                      className="h-6 border-b border-gray-200 px-3 flex items-center bg-gray-100"
+                    >
+                      <span className="text-[9px] uppercase tracking-wide text-gray-500 font-semibold">
+                        {entry.label}
+                      </span>
                     </div>
+                  )
+                }
+                const hasBackups = entry.backupBookings.length > 0
+                return (
+                  <div key={`u-${i}`}>
+                    <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[entry.unit.cat] || '#9ca3af' }} />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
+                        <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
+                      </div>
+                    </div>
+                    {hasBackups && (
+                      <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-100/70">
+                        <span className="text-[9px] text-gray-400">└</span>
+                        <div className="text-[10px] text-gray-500 italic truncate">
+                          {entry.backupBookings.length === 1 ? '2nd hold queue' : `${entry.backupBookings.length} backups queued`}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
-              ))
+              })
             ) : (
               jobs.map((job, i) => (
                 <div
@@ -238,42 +269,81 @@ export default function GanttPage() {
               )}
 
               {view === 'asset' ? (
-                rowEntries.map((entry, i) => (
-                  entry.type === 'divider' ? (
-                    <div key={`d-${i}`} className="h-6 border-b border-gray-200 bg-gray-100" />
-                  ) : (
-                    <div key={`u-${i}`} className="relative h-8 border-b border-gray-100">
-                      {/* Grid */}
-                      <div className="absolute inset-0 flex pointer-events-none">
-                        {dates.map(ds => (
-                          <div
-                            key={ds}
-                            style={{ width: dayWidth, minWidth: dayWidth }}
-                            className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
-                          />
-                        ))}
+                rowEntries.map((entry, i) => {
+                  if (entry.type === 'divider') {
+                    return <div key={`d-${i}`} className="h-6 border-b border-gray-200 bg-gray-100" />
+                  }
+                  const hasBackups = entry.backupBookings.length > 0
+                  return (
+                    <div key={`u-${i}`}>
+                      {/* Main row — primary bars only */}
+                      <div className="relative h-8 border-b border-gray-100">
+                        {/* Grid */}
+                        <div className="absolute inset-0 flex pointer-events-none">
+                          {dates.map(ds => (
+                            <div
+                              key={ds}
+                              style={{ width: dayWidth, minWidth: dayWidth }}
+                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                            />
+                          ))}
+                        </div>
+                        {/* Primary bars */}
+                        {entry.primaryBookings.map((b: any, j: number) => {
+                          const bar = getBar(b.start, b.end)
+                          if (!bar) return null
+                          const sc = STATUS_COLORS[b.status] || STATUS_COLORS.booked
+                          return (
+                            <div
+                              key={`p-${j}`}
+                              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
+                              style={{ left: bar.left, width: bar.width }}
+                              onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: 1 })}
+                            >
+                              <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                                {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
-                      {/* Booking bars */}
-                      {entry.unit.bookings.map((b: any, j: number) => {
-                        const bar = getBar(b.start, b.end)
-                        if (!bar) return null
-                        const sc = STATUS_COLORS[b.status] || STATUS_COLORS.booked
-                        return (
-                          <div
-                            key={j}
-                            className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
-                            style={{ left: bar.left, width: bar.width }}
-                            onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true })}
-                          >
-                            <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                              {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
-                            </span>
+                      {/* Backup sub-lane — greyed, rank-2+ bars stacked here */}
+                      {hasBackups && (
+                        <div className="relative h-8 border-b border-gray-100 bg-gray-100/70">
+                          {/* Grid (lighter on the sub-lane) */}
+                          <div className="absolute inset-0 flex pointer-events-none">
+                            {dates.map(ds => (
+                              <div
+                                key={ds}
+                                style={{ width: dayWidth, minWidth: dayWidth }}
+                                className={`flex-shrink-0 border-r border-gray-200/40 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/30' : ''}`}
+                              />
+                            ))}
                           </div>
-                        )
-                      })}
+                          {entry.backupBookings.map((b: any, j: number) => {
+                            const bar = getBar(b.start, b.end)
+                            if (!bar) return null
+                            const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
+                            const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
+                            return (
+                              <div
+                                key={`b-${j}`}
+                                className="absolute top-1 h-6 rounded-md bg-gray-300/70 border border-dashed border-gray-400 flex items-center px-1.5 cursor-pointer hover:bg-gray-300 transition-opacity overflow-hidden"
+                                style={{ left: bar.left, width: bar.width }}
+                                onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: rank, isBackup: true })}
+                                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
+                              >
+                                <span className="text-[9px] font-semibold text-gray-700 truncate whitespace-nowrap">
+                                  {rankLabel} · {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
-                ))
+                })
               ) : (
                 jobs.map((job, i) => (
                   <div key={i} className="relative h-8 border-b border-gray-100">
