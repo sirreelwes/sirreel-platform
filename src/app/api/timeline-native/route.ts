@@ -233,7 +233,9 @@ export async function GET() {
       bookings: [] as Array<Record<string, unknown>>,
     }
     slot.bookings.push({
-      reservationId: a.bookingItem.id,
+      reservationId: a.bookingItem.id, // BookingItem id (kept for /api/timeline parity)
+      bookingItemId: a.bookingItem.id, // explicit name; preferred for action calls
+      bookingId: a.bookingItem.booking.id, // for /confirm; previously omitted
       assignmentId: a.id,
       cartId: a.bookingItem.booking.bookingNumber,
       clientName: a.bookingItem.booking.company.name,
@@ -243,6 +245,7 @@ export async function GET() {
       resourceName: a.asset.category?.name ?? '',
       cat,
       status: mapStatus(a.bookingItem.booking.status),
+      bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
       start: ymd(a.startDate),
       end: ymd(a.endDate),
       adminNotes: '',

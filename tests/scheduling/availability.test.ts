@@ -519,8 +519,12 @@ async function main() {
     const orphanNewPrimaryItemId = await createBookingItemRaw(1, 'orphan-new')
     const orphanResult = await callAssign(orphanNewPrimaryItemId, fixtureAsset.id)
     check(
-      orphanResult.status === 409 && orphanResult.json.error === 'over-capacity',
-      `(c) orphan rank-2 + new rank-1 → 409 over-capacity (backup has dibs) — got ${orphanResult.status} ${JSON.stringify(orphanResult.json.error)}`,
+      orphanResult.status === 409 && orphanResult.json.error === 'backup-has-dibs',
+      `(c) orphan rank-2 + new rank-1 → 409 backup-has-dibs (clearer than generic over-capacity) — got ${orphanResult.status} ${JSON.stringify(orphanResult.json.error)}`,
+    )
+    check(
+      typeof orphanResult.json.backupCountOnUnit === 'number' && (orphanResult.json.backupCountOnUnit as number) >= 1,
+      `(c) response carries backupCountOnUnit (got ${orphanResult.json.backupCountOnUnit})`,
     )
     const orphanAssignmentCount = await prisma.bookingAssignment.count({ where: { bookingItemId: orphanNewPrimaryItemId } })
     check(orphanAssignmentCount === 0, `(c) no BookingAssignment persisted from the rejected new-rank-1 against an orphan-backup unit`)

@@ -77,19 +77,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const queryStart = new Date(windowStart.getTime() - lookaround * 86_400_000)
   const queryEnd = new Date(windowEnd.getTime() + lookaround * 86_400_000)
 
-  const assignments = await prisma.bookingAssignment.findMany({
+  // Pull active assignments WITH their BookingItem.holdRank so we
+  // can distinguish a true capacity block (rank-1 holds the unit)
+  // from a "backup has dibs" block (only rank-2+ holds it). The
+  // engine's overlap math doesn't care about rank; we just need
+  // the rank context to write a clearer rejection.
+  const assignmentsDetailed = await prisma.bookingAssignment.findMany({
     where: {
       assetId: body.assetId,
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       startDate: { lte: queryEnd },
       endDate: { gte: queryStart },
     },
-    select: { assetId: true, startDate: true, endDate: true },
+    select: {
+      assetId: true,
+      startDate: true,
+      endDate: true,
+      bookingItem: { select: { holdRank: true } },
+    },
   })
 
   const serviceable: ServiceableAsset[] = [{ id: asset.id, unitName: asset.unitName, tier: asset.tier }]
-  const stateRows = computeUnitStates(serviceable, assignments as AssignmentWindow[], windowStart, windowEnd, bufferDays)
+  const stateRows = computeUnitStates(
+    serviceable,
+    assignmentsDetailed.map((a) => ({ assetId: a.assetId, startDate: a.startDate, endDate: a.endDate })) as AssignmentWindow[],
+    windowStart,
+    windowEnd,
+    bufferDays,
+  )
   const state = stateRows[0]?.state ?? 'free'
+
+  // Classify the assignments overlapping the actual hold window
+  // (queryStart/End is buffer-padded; the rank check should look at
+  // the real conflict window).
+  const overlappingActive = assignmentsDetailed.filter(
+    (a) => a.startDate <= windowEnd && a.endDate >= windowStart,
+  )
+  const hasPrimaryHolder = overlappingActive.some((a) => a.bookingItem.holdRank === 1)
+  const backupCountOnUnit = overlappingActive.filter((a) => a.bookingItem.holdRank >= 2).length
 
   // Rank-aware overlap guard. Mirrors the rule the engine already
   // applies to category-level capacity (rank-1 holds consume,
@@ -108,12 +133,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const isPrimaryItem = itemRank === 1
 
   if (state === 'booked' && isPrimaryItem) {
+    // Distinguish "true capacity" from "backup has dibs" so the
+    // UI can render the right message. Both still 409 — but the
+    // operator's next step differs (release/swap unit vs. promote
+    // the waiting backup).
+    if (!hasPrimaryHolder && backupCountOnUnit > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'backup-has-dibs',
+          reason: `this unit has a ${backupCountOnUnit === 1 ? '2nd hold' : `${backupCountOnUnit} backup hold(s)`} waiting; promote or release ${backupCountOnUnit === 1 ? 'it' : 'one'} first`,
+          state,
+          backupCountOnUnit,
+        },
+        { status: 409 },
+      )
+    }
     return NextResponse.json(
       {
         ok: false,
         error: 'over-capacity',
         reason: 'asset has a hard overlap on this window; promote any existing backup instead of stacking a new primary',
         state,
+        backupCountOnUnit,
       },
       { status: 409 },
     )
