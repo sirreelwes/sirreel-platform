@@ -55,6 +55,7 @@ async function main() {
   const releaseRoute = await import('../../src/app/api/scheduling/booking-items/[id]/release/route')
   const promoteRoute = await import('../../src/app/api/scheduling/booking-items/[id]/promote/route')
   const stackedRoute = await import('../../src/app/api/scheduling/stacked-holds/route')
+  const assignRoute = await import('../../src/app/api/scheduling/booking-items/[id]/assign/route')
 
   // ═══════════════════════════════════════════════════════════════
   //                  PURE TESTS (Chunk 2 boundary set)
@@ -410,6 +411,119 @@ async function main() {
       nonOverlap.status === 201 && nonOverlap.json.ok === true,
       `rank-1 primary on a non-overlapping window for the same unit → created (got status ${nonOverlap.status})`,
     )
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. RANK-AWARE ASSIGN GUARD
+    // ─────────────────────────────────────────────────────────────
+    // Locks the must-be-correct overlap rule on the assign endpoint:
+    //   · rank-1 onto rank-1-held unit → BLOCKED  (double-book guard)
+    //   · rank-2 onto rank-1-held unit → ALLOWED  (backup queues; capacity unchanged)
+    //   · orphan rank-2 + new rank-1   → BLOCKED  ("backup has dibs" — promote, don't stack)
+    //
+    // We use a SEPARATE window (and a separate stage Asset implicitly
+    // by reusing fixtureAsset on a new date span) so this block doesn't
+    // collide with the holds-state set up in sections 1-5.
+
+    console.log('\n[capacity-1] 6. RANK-AWARE ASSIGN GUARD')
+    const GW_START = '2027-02-10'
+    const GW_END = '2027-02-12'
+    const GUARD_PREFIX = `${FIXTURE_JOB_PREFIX} guard`
+
+    // ── setup: place rank-1 primary + ASSIGN it to the stage Asset ──
+    // We bypass postHold's auto-cleanup naming, but the parent
+    // FIXTURE_JOB_PREFIX cleanup will still sweep these at end.
+    async function callAssign(itemId: string, assetId: string) {
+      const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/assign`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ assetId }),
+      })
+      const res = await assignRoute.POST(req as never, { params: { id: itemId } })
+      return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    }
+
+    async function createBookingItemRaw(rank: number, suffix: string) {
+      const booking = await prisma.booking.create({
+        data: {
+          bookingNumber: `SR-TEST-GUARD-${rank}-${suffix}-${Date.now()}`,
+          companyId: company!.id, personId: person!.id, agentId: agent!.id,
+          jobName: `${GUARD_PREFIX} ${rank}-${suffix}`,
+          startDate: d(GW_START), endDate: d(GW_END),
+          status: 'REQUEST', source: 'AGENT_DIRECT',
+        },
+        select: { id: true },
+      })
+      const item = await prisma.bookingItem.create({
+        data: { bookingId: booking.id, categoryId: fixtureCategory!.id, quantity: 1, dailyRate: 0, status: 'REQUESTED', holdRank: rank },
+        select: { id: true },
+      })
+      return item.id
+    }
+
+    // Place + assign the primary rank-1.
+    const guardPrimaryItemId = await createBookingItemRaw(1, 'primary')
+    const guardPrimaryAssign = await callAssign(guardPrimaryItemId, fixtureAsset.id)
+    check(
+      guardPrimaryAssign.status === 201 && guardPrimaryAssign.json.ok === true,
+      `setup: rank-1 primary assigned to ${fixtureAsset.unitName} for GW (got ${guardPrimaryAssign.status})`,
+    )
+
+    // ── 6a. rank-1 onto rank-1-held unit → BLOCKED ──
+    const dupePrimaryItemId = await createBookingItemRaw(1, 'dupe')
+    const dupeResult = await callAssign(dupePrimaryItemId, fixtureAsset.id)
+    check(
+      dupeResult.status === 409 && dupeResult.json.error === 'over-capacity',
+      `(a) rank-1 onto rank-1-held unit → 409 over-capacity (got ${dupeResult.status} ${JSON.stringify(dupeResult.json.error)})`,
+    )
+    const dupeAssignmentCount = await prisma.bookingAssignment.count({ where: { bookingItemId: dupePrimaryItemId } })
+    check(dupeAssignmentCount === 0, `(a) no BookingAssignment was persisted on the rejected dupe-primary`)
+
+    // ── 6b. rank-2 onto rank-1-held unit → ALLOWED, capacity unchanged ──
+    const preAvail = await getCategoryAvailability(fixtureCategory.id, d(GW_START), d(GW_END), 1)
+    const beforeAvailable = preAvail.availableToHold
+
+    const guardBackupItemId = await createBookingItemRaw(2, 'backup')
+    const backupResult = await callAssign(guardBackupItemId, fixtureAsset.id)
+    check(
+      backupResult.status === 201 && backupResult.json.ok === true,
+      `(b) rank-2 onto rank-1-held unit → 201 created (got ${backupResult.status})`,
+    )
+    const backupAssignment = await prisma.bookingAssignment.findFirst({
+      where: { bookingItemId: guardBackupItemId, assetId: fixtureAsset.id },
+      select: { id: true, status: true },
+    })
+    check(
+      backupAssignment !== null && backupAssignment.status === 'ASSIGNED',
+      `(b) rank-2 BookingAssignment persisted on ${fixtureAsset.unitName} with status=ASSIGNED`,
+    )
+
+    const postAvail = await getCategoryAvailability(fixtureCategory.id, d(GW_START), d(GW_END), 1)
+    check(
+      postAvail.availableToHold === beforeAvailable,
+      `(b) availableToHold UNCHANGED after rank-2 bind (got ${postAvail.availableToHold}, expected ${beforeAvailable}) — backup must not consume capacity`,
+    )
+
+    // ── 6c. Orphaned-backup case: only rank-2 on the unit, new rank-1 → BLOCKED ──
+    // Simulate "primary released without promoting backup" by
+    // directly mutating the primary's BookingAssignment to SWAPPED
+    // (the same terminal Change 2 will set). The release endpoint
+    // currently guards `status === 'REQUESTED'` so we can't call
+    // it from here yet — bypassing for the test setup is correct;
+    // we're testing the assign guard, not the release route.
+    await prisma.bookingAssignment.updateMany({
+      where: { bookingItemId: guardPrimaryItemId, status: 'ASSIGNED' },
+      data: { status: 'SWAPPED' },
+    })
+    await prisma.bookingItem.update({ where: { id: guardPrimaryItemId }, data: { status: 'UNFULFILLED' } })
+
+    const orphanNewPrimaryItemId = await createBookingItemRaw(1, 'orphan-new')
+    const orphanResult = await callAssign(orphanNewPrimaryItemId, fixtureAsset.id)
+    check(
+      orphanResult.status === 409 && orphanResult.json.error === 'over-capacity',
+      `(c) orphan rank-2 + new rank-1 → 409 over-capacity (backup has dibs) — got ${orphanResult.status} ${JSON.stringify(orphanResult.json.error)}`,
+    )
+    const orphanAssignmentCount = await prisma.bookingAssignment.count({ where: { bookingItemId: orphanNewPrimaryItemId } })
+    check(orphanAssignmentCount === 0, `(c) no BookingAssignment persisted from the rejected new-rank-1 against an orphan-backup unit`)
   } finally {
     // ── Hard cleanup: remove every BookingItem created by this run.
     //    Deleting the parent Booking cascades to BookingItem + Reservation

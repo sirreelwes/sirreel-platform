@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       categoryId: true,
       quantity: true,
       status: true,
+      holdRank: true,
       booking: { select: { id: true, startDate: true, endDate: true } },
       assignments: { select: { id: true, assetId: true } },
     },
@@ -90,13 +91,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const stateRows = computeUnitStates(serviceable, assignments as AssignmentWindow[], windowStart, windowEnd, bufferDays)
   const state = stateRows[0]?.state ?? 'free'
 
-  if (state === 'booked') {
+  // Rank-aware overlap guard. Mirrors the rule the engine already
+  // applies to category-level capacity (rank-1 holds consume,
+  // rank ≥ 2 backups don't): rank-1 cannot bind to a unit that's
+  // already held (double-book guard); rank-2+ may share the unit
+  // with whatever's already there, queueing behind. The buffer
+  // warning is also rank-gated — backups silent-skip it.
+  //
+  // Orphaned-backup case (a unit holding only a rank-2 after a
+  // primary release-without-promote): the unit's state is still
+  // 'booked' because the backup's BookingAssignment is active,
+  // so a new rank-1 hits this guard and is blocked. That's
+  // intentional — the policy is "promote the waiting backup
+  // rather than let a new primary jump the queue."
+  const itemRank = bookingItem.holdRank
+  const isPrimaryItem = itemRank === 1
+
+  if (state === 'booked' && isPrimaryItem) {
     return NextResponse.json(
-      { ok: false, error: 'over-capacity', reason: 'asset has a hard overlap on this window', state },
+      {
+        ok: false,
+        error: 'over-capacity',
+        reason: 'asset has a hard overlap on this window; promote any existing backup instead of stacking a new primary',
+        state,
+      },
       { status: 409 },
     )
   }
-  if (state === 'buffer' && !body.bufferOverride) {
+  if (state === 'buffer' && isPrimaryItem && !body.bufferOverride) {
     return NextResponse.json(
       {
         ok: false,
@@ -108,6 +130,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 },
     )
   }
+  // For rank ≥ 2, state==='booked' AND state==='buffer' both
+  // pass through. The BookingAssignment is created on the same
+  // asset and the engine continues to ignore rank-2+ for
+  // availableToHold (verified by the capacity-1 test suite).
 
   // Persist atomically and (if appropriate) flip status to ASSIGNED.
   const result = await prisma.$transaction(async (tx) => {
