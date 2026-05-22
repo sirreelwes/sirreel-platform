@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [adminOpen, setAdminOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
-      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/reporting'].some(a => p.startsWith(a));
+      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/reporting','/scheduling','/scheduling-shadow','/timeline-shadow','/stale-holds'].some(a => p.startsWith(a));
     }
     return false;
   });
