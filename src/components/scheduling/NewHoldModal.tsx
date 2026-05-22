@@ -34,6 +34,11 @@ interface CreatedHold {
   bufferOverrideUsed: boolean
   isBackup?: boolean
   holdRank?: number
+  /** Set iff the modal was opened with an `asset` prop AND the
+   *  follow-on assign call succeeded. NULL on category-only holds
+   *  or when the hold was created but the assign step failed
+   *  (BookingItem is left as REQUESTED for manual assignment). */
+  assignedAsset?: { id: string; unitName: string } | null
 }
 
 interface NewHoldModalProps {
@@ -46,6 +51,13 @@ interface NewHoldModalProps {
    *  capacity/buffer warning path — backup holds are explicitly
    *  allowed to overlap an at-capacity category. */
   asBackup?: boolean
+  /** Optional asset binding. When provided, the modal chains a
+   *  POST /api/scheduling/booking-items/[id]/assign call after a
+   *  successful /holds POST so the new BookingItem lands bound to
+   *  this specific unit (the gantt "click a free Cube row" gesture).
+   *  Omit for category-only holds ("+ New Hold" top-bar button —
+   *  agent assigns the unit later). */
+  asset?: { id: string; unitName: string }
   onClose: () => void
   onCreated: (hold: CreatedHold) => void
 }
@@ -67,6 +79,7 @@ export function NewHoldModal({
   endDate,
   bufferDays,
   asBackup = false,
+  asset,
   onClose,
   onCreated,
 }: NewHoldModalProps) {
@@ -114,7 +127,41 @@ export function NewHoldModal({
       })
       const json = await res.json()
       if (res.ok && json.ok) {
-        onCreated(json as CreatedHold)
+        // Hold created. If we were opened with a specific asset
+        // binding (gantt row-click), chain a /assign call so the
+        // BookingItem lands bound to that unit in one user action.
+        // Backups carry bufferOverride=true on assign — backups
+        // are explicitly allowed to overlap the buffer state too.
+        let assignedAsset: { id: string; unitName: string } | null = null
+        if (asset) {
+          try {
+            const bookingItemId = (json.bookingItem as { id: string }).id
+            const assignRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ assetId: asset.id, bufferDays, bufferOverride: asBackup }),
+            })
+            const assignJson = await assignRes.json()
+            if (assignRes.ok && assignJson.ok) {
+              assignedAsset = { id: asset.id, unitName: asset.unitName }
+            } else {
+              // BookingItem exists (REQUESTED) but the unit binding
+              // failed. Don't undo the hold — surface the assign
+              // error so the operator can pick a different unit
+              // via the AssignUnitsModal flow.
+              setHardError(
+                `Hold created (${(json.bookingItem as { id: string }).id.slice(0, 8)}…) but binding to ${asset.unitName} failed: ${assignJson.reason || assignJson.error || `HTTP ${assignRes.status}`}`,
+              )
+              return
+            }
+          } catch (e) {
+            setHardError(
+              `Hold created but binding to ${asset.unitName} failed: ${e instanceof Error ? e.message : String(e)}`,
+            )
+            return
+          }
+        }
+        onCreated({ ...(json as CreatedHold), assignedAsset })
         return
       }
       if (res.status === 409 && json.error === 'buffer-encroachment' && json.needsOverride) {
@@ -136,10 +183,12 @@ export function NewHoldModal({
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">
               {asBackup ? 'New backup hold' : 'New hold'}
+              {asset ? ` on ${asset.unitName}` : ''}
             </h2>
             <p className="text-sm text-zinc-600 mt-0.5">
               {categoryName} · {startDate} → {endDate} · bufferDays={bufferDays}
               {asBackup ? ' · queues behind existing holds (rank assigned by server)' : ''}
+              {asset ? ' · will bind to this specific unit on create' : ''}
             </p>
           </div>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>
@@ -147,14 +196,17 @@ export function NewHoldModal({
 
         <div className="px-6 py-4 space-y-4">
           <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-600">Quantity</span>
+            <span className="text-xs uppercase tracking-wide text-zinc-600">
+              Quantity{asset ? ' (locked to 1 — binding a specific unit)' : ''}
+            </span>
             <input
               type="number"
               min={1}
-              max={50}
-              value={quantity}
+              max={asset ? 1 : 50}
+              value={asset ? 1 : quantity}
               onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value || '1', 10) || 1))}
-              className="mt-1 block w-32 rounded border-zinc-300 text-sm px-2 py-1.5"
+              disabled={!!asset}
+              className="mt-1 block w-32 rounded border-zinc-300 text-sm px-2 py-1.5 disabled:bg-zinc-100 disabled:text-zinc-500"
             />
           </label>
 
