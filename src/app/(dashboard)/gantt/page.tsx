@@ -41,7 +41,7 @@ export default function GanttPage() {
   const [units, setUnits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
-  const [actionPending, setActionPending] = useState<null | 'book' | 'release'>(null)
+  const [actionPending, setActionPending] = useState<null | 'book' | 'release' | 'promote'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [holdModal, setHoldModal] = useState<null | {
@@ -153,40 +153,69 @@ export default function GanttPage() {
   //      Book    → POST /api/scheduling/booking-items/[id]/promote
   //                   THEN POST .../bookings/[bookingId]/confirm
   //      Release → POST /api/scheduling/booking-items/[id]/release
-  //    Confirming a primary does NOT touch its backups. Releasing a
-  //    primary leaves backups in place — no auto-promote. ──
+  //
+  //    PRIMARY actions on a primary bar; PROMOTE + Release on a
+  //    backup bar. Promote is its OWN action — it flips the
+  //    rank-2 to rank-1 but does NOT auto-confirm; the bar then
+  //    re-renders as a primary and the operator clicks Book if
+  //    they want to confirm.
+  //
+  //    Popup STAYS OPEN after each action; banners show the new
+  //    state. Release is the one exception — the row goes away
+  //    so we close the popup. ──
   async function handleBook() {
     if (!selected) return
     const bookingId: string | undefined = selected.bookingId
-    const bookingItemId: string | undefined = selected.bookingItemId ?? selected.reservationId
-    const isBackup = selected.isBackup === true || (typeof selected.holdRank === 'number' && selected.holdRank >= 2)
-    if (!bookingId || (isBackup && !bookingItemId)) {
-      setActionError('Missing bookingId / bookingItemId on the selected bar — refresh and retry.')
+    if (!bookingId) {
+      setActionError('Missing bookingId on the selected bar — refresh and retry.')
       return
     }
     setActionPending('book')
     setActionError(null)
+    setActionSuccess(null)
     try {
-      if (isBackup && bookingItemId) {
-        const promoteRes = await fetch(`/api/scheduling/booking-items/${bookingItemId}/promote`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({}),
-        })
-        const promoteJson = await promoteRes.json()
-        if (!promoteRes.ok || !promoteJson.ok) {
-          throw new Error(promoteJson.reason || promoteJson.error || `promote failed (${promoteRes.status})`)
-        }
+      const res = await fetch(`/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || !json.ok) {
+        throw new Error(json.reason || json.error || `confirm failed (${res.status})`)
       }
-      const confirmRes = await fetch(`/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
-      const confirmJson = await confirmRes.json()
-      if (!confirmRes.ok || !confirmJson.ok) {
-        throw new Error(confirmJson.reason || confirmJson.error || `confirm failed (${confirmRes.status})`)
-      }
-      setActionSuccess(isBackup ? 'Backup promoted to primary and booked.' : 'Booked.')
+      setActionSuccess(json.alreadyConfirmed ? 'Already confirmed.' : 'Booked.')
+      // Reflect the new state in the open popup so the Book button
+      // disappears / button copy updates without a re-click.
+      setSelected((prev: any) => prev ? { ...prev, bookingStatus: 'CONFIRMED', status: 'booked' } : prev)
       refreshTimeline()
-      // Close on a short delay so the success banner is visible.
-      setTimeout(() => closeModal(), 900)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  async function handlePromote() {
+    if (!selected) return
+    const bookingItemId: string | undefined = selected.bookingItemId ?? selected.reservationId
+    if (!bookingItemId) {
+      setActionError('Missing bookingItemId on the selected bar — refresh and retry.')
+      return
+    }
+    setActionPending('promote')
+    setActionError(null)
+    setActionSuccess(null)
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/promote`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) {
+        throw new Error(json.reason || json.error || `promote failed (${res.status})`)
+      }
+      setActionSuccess(json.alreadyPromoted ? 'Already primary.' : 'Promoted to primary.')
+      // Reflect the new state: this bar is now a rank-1 primary.
+      // The popup re-renders with Book + Release (no more Promote).
+      setSelected((prev: any) => prev ? { ...prev, holdRank: 1, isBackup: false } : prev)
+      refreshTimeline()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -203,18 +232,19 @@ export default function GanttPage() {
     }
     setActionPending('release')
     setActionError(null)
+    setActionSuccess(null)
     try {
       const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/release`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok || !json.ok) {
         throw new Error(json.reason || json.error || `release failed (${res.status})`)
       }
-      setActionSuccess(selected.isBackup ? 'Backup hold released.' : 'Hold released.')
+      // Release removes the bar from the timeline — close the popup
+      // since there's nothing left to show.
       refreshTimeline()
-      setTimeout(() => closeModal(), 900)
+      closeModal()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
-    } finally {
       setActionPending(null)
     }
   }
@@ -633,9 +663,12 @@ export default function GanttPage() {
                   <div className="py-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 mt-2">{selected.adminNotes}</div>
                 )}
 
-                {/* PART 4 — Book / Release actions.
-                    Only on native source; Planyo bookings don't carry
-                    bookingId / bookingItemId in the response shape. */}
+                {/* Hold lifecycle actions — native records only.
+                    PRIMARY (rank 1): Book + Release.
+                    BACKUP  (rank ≥2): Promote + Release.
+                    Planyo bars + "(2ND HOLD)" phantoms don't carry
+                    bookingId / bookingItemId — the gate naturally
+                    keeps the popup read-only there. */}
                 {source === 'native' && (selected.bookingId || selected.bookingItemId) && (
                   <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
                     {actionSuccess && (
@@ -645,25 +678,54 @@ export default function GanttPage() {
                       <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded px-2.5 py-1.5">{actionError}</div>
                     )}
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleBook}
-                        disabled={!!actionPending}
-                        className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
-                      >
-                        {actionPending === 'book' ? 'Booking…' : selected.isBackup ? 'Promote & book' : 'Book'}
-                      </button>
-                      <button
-                        onClick={handleRelease}
-                        disabled={!!actionPending}
-                        className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
-                      >
-                        {actionPending === 'release' ? 'Releasing…' : selected.isBackup ? 'Release backup' : 'Release'}
-                      </button>
-                      <span className="text-[10px] text-gray-400 ml-auto">
-                        {selected.isBackup
-                          ? 'Promote runs the rank-renormalize; backups queued behind move up.'
-                          : 'Backups (if any) stay queued — no auto-promote.'}
-                      </span>
+                      {selected.isBackup ? (
+                        <>
+                          <button
+                            onClick={handlePromote}
+                            disabled={!!actionPending}
+                            className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+                          >
+                            {actionPending === 'promote' ? 'Promoting…' : 'Promote'}
+                          </button>
+                          <button
+                            onClick={handleRelease}
+                            disabled={!!actionPending}
+                            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                          >
+                            {actionPending === 'release' ? 'Releasing…' : 'Release backup'}
+                          </button>
+                          <span className="text-[10px] text-gray-400 ml-auto">
+                            Promote re-ranks the queue; Book becomes available after.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {selected.bookingStatus !== 'CONFIRMED' && (
+                            <button
+                              onClick={handleBook}
+                              disabled={!!actionPending}
+                              className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+                            >
+                              {actionPending === 'book' ? 'Booking…' : 'Book'}
+                            </button>
+                          )}
+                          {selected.bookingStatus === 'CONFIRMED' && (
+                            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
+                              Confirmed
+                            </span>
+                          )}
+                          <button
+                            onClick={handleRelease}
+                            disabled={!!actionPending}
+                            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                          >
+                            {actionPending === 'release' ? 'Releasing…' : 'Release'}
+                          </button>
+                          <span className="text-[10px] text-gray-400 ml-auto">
+                            Backups (if any) stay queued — no auto-promote.
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

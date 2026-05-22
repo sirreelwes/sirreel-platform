@@ -53,23 +53,54 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
-  // Capacity sanity-check: if there's still a rank-1 primary on the
-  // same window, promoting would put two primaries on top of each
-  // other. Block unless force=true.
+  // Capacity sanity-check: count CURRENT rank-1 quantity demand on
+  // this category overlapping the window (REQUESTED + ASSIGNED
+  // BookingItems with holdRank=1). After promotion this item joins
+  // that pool — projected rank-1 demand = current + item.quantity.
+  // If projected exceeds the category's serviceable unit count, two
+  // primaries would compete for the same physical unit. Block
+  // unless force=true.
+  //
+  // Why this check, not availableToHold: availableToHold subtracts
+  // bookedCount which is computed per-UNIT (not per-assignment),
+  // so a unit holding both a rank-1 and a rank-2 BookingAssignment
+  // shows as bookedCount=1. That under-counts contention when
+  // promoting the rank-2. Comparing rank-1 quantity demand against
+  // serviceableCount is the right framing — rank-2's existing
+  // assignment is irrelevant; what matters is "would there be more
+  // primaries than units after this rank flip?"
   const availability = await getCategoryAvailability(item.categoryId, item.booking.startDate, item.booking.endDate, bufferDays)
-  if (!force && item.quantity > availability.availableToHold) {
+  const rank1DemandAgg = await prisma.bookingItem.aggregate({
+    where: {
+      categoryId: item.categoryId,
+      holdRank: 1,
+      status: { in: ['REQUESTED', 'ASSIGNED'] },
+      booking: {
+        startDate: { lte: item.booking.endDate },
+        endDate: { gte: item.booking.startDate },
+      },
+    },
+    _sum: { quantity: true },
+  })
+  const currentRank1Quantity = rank1DemandAgg._sum.quantity ?? 0
+  const projectedRank1Quantity = currentRank1Quantity + item.quantity
+
+  if (!force && projectedRank1Quantity > availability.serviceableCount) {
     return NextResponse.json(
       {
         ok: false,
         error: 'capacity-conflict',
-        reason: 'promoting would over-capacity — the primary on this window has not been released',
+        reason: 'promoting would over-capacity — another primary holds this window',
         availability: {
           freeCount: availability.freeCount,
           bufferCount: availability.bufferCount,
           bookedCount: availability.bookedCount,
           availableToHold: availability.availableToHold,
+          serviceableCount: availability.serviceableCount,
+          currentRank1Quantity,
+          projectedRank1Quantity,
         },
-        suggestion: 'release the primary first, or resubmit with force=true',
+        suggestion: 'release the other primary first, or resubmit with force=true',
       },
       { status: 409 },
     )
