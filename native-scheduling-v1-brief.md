@@ -100,7 +100,36 @@ If `availableToHold <= 0` → over capacity → hard block.
 5. **Assignment UI** — assign `Asset` → `BookingAssignment(status=ASSIGNED)`. Picker lists available units sorted by `tier` (nicest first). Re-run the conflict check at assign time: hard overlap blocks, buffer encroachment warns + allows override. Flip `BookingItem.status` REQUESTED→ASSIGNED.
 6. **Stale-holds view** — list `BookingItem(status=REQUESTED)` whose parent `Booking` is older than N days (default 14), with one-click release. No cron.
 7. **Migration** — one-time: pull Planyo forward book (`list_reservations`, `detail_level=3` — reuse branch code) → for each reservation create/find Company+Person from customer name, create `Booking`, map Planyo resource→`AssetCategory` via `planyoResourceId` for `BookingItem`, map unit name→`Asset` via `unitName` for `BookingAssignment`. **Log unmatched units/resources to a report rather than failing** — manual reconciliation list.
-8. **Cutover** — Timeline reads `BookingAssignment` only; turn off the Planyo sync/cron; retire `/api/planyo/available-units`. Only after Chunks 4–7 are proven and the migration report is clean.
+8. **Cutover — GATED.**
+
+   Note: there is NO Planyo sync/cron to disable. The audit (commit cda085c) confirmed all Planyo reads in this codebase are live API calls, not a synced mirror. The earlier "turn off the cron" line was hypothetical.
+
+   **Preconditions — ALL must be true before starting:**
+   - Julian's residuals resolved (Sprinter #1/#2/#4 mapped to specific Cargo-w-Liftgate units or confirmed distinct; "30 (A) Wardrobe" → Cube 30 confirmed)
+   - `scheduling-add-missing-assets.ts --write` run
+   - `scheduling-planyo-migration.ts --write` run (idempotency confirmed first)
+   - `/scheduling-shadow` shows native == Planyo across a couple of real weeks (convergence verified)
+
+   **PR1 — the flip (preserves a 24–48h escape hatch):**
+   - Flip the default in `src/lib/timeline/source.ts`:
+     ```
+     return params.get('source') === 'planyo' ? 'planyo' : 'native'
+     ```
+     (default native; `?source=planyo` still works as the manual fallback)
+   - Delete the four ZERO-CONSUMER Planyo routes ONLY:
+     - `src/app/api/planyo/route.ts`
+     - `src/app/api/planyo/available-units/route.ts`
+     - `src/app/api/planyo/reserve/route.ts`
+     - `src/app/api/planyo/job-reservations/route.ts`
+   - **KEEP** `src/app/api/timeline/route.ts` — it IS the `?source=planyo` escape hatch
+   - **KEEP** dispatch's `planyo/unlinked` + `planyo/link-order` (orphan reconciliation)
+   - **KEEP** `/api/scheduling/shadow-diff` + the shadow page (verification)
+
+   **PR2 — cleanup (after 24–48h of native running clean):**
+   - Delete `src/app/api/timeline/route.ts` (escape hatch retired)
+   - Retire `/api/scheduling/shadow-diff` + the `/scheduling-shadow` page
+   - Rework/retire dispatch's `planyo/unlinked` + `planyo/link-order` once orphans reconciled
+   - Update the comment at `alerts/seed/route.ts:79` to reference `BookingAssignment`, not Planyo
 
 ---
 

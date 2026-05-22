@@ -11,6 +11,7 @@
 export type TimelineSource = 'planyo' | 'native'
 
 export function resolveTimelineSource(params: URLSearchParams | { get(name: string): string | null }): TimelineSource {
+  // CUTOVER: default flips planyo→native at Chunk 8 (see native-scheduling-v1-brief.md); ?source=planyo is the temporary escape hatch.
   return params.get('source') === 'native' ? 'native' : 'planyo'
 }
 
