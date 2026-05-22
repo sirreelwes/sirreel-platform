@@ -466,6 +466,14 @@ model Booking {
   rentalworksInvoiceId String? @map("rentalworks_invoice_id")
   invoiceStatus        String? @map("invoice_status") // not_created, draft, sent, paid, overdue
 
+  /// Planyo cart_id this Booking was imported from. Cart-level
+  /// idempotency anchor for scheduling-planyo-migration.ts re-runs:
+  /// when Planyo gains a new reservation on an already-imported cart,
+  /// the script looks up the existing Booking via this @unique field
+  /// and APPENDS new BookingItems instead of creating a duplicate
+  /// Booking. NULL on Bookings created via the +Hold flow.
+  planyoCartId         String? @unique @map("planyo_cart_id")
+
   source BookingSource @default(PHONE)
 
   createdAt   DateTime  @default(now()) @map("created_at")

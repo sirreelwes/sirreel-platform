@@ -238,6 +238,87 @@ async function main() {
   const alreadyImported = new Set(importedReservations.map((r) => r.planyoReservationId!))
   console.log(`Already-imported Planyo reservation_ids (from Reservation journal): ${alreadyImported.size}`)
 
+  // ── One-shot Booking.planyoCartId backfill from Reservation journal. ──
+  //
+  // The schema field was added 2026-05-22 to make this script
+  // cart-level idempotent. Existing PLANYO_BACKFILL bookings created
+  // before that change don't carry a cart id directly — but their
+  // Reservation journal rows do. Stamp it back so future re-runs
+  // can find them via planyoCartId lookup and append to instead of
+  // duplicating them.
+  //
+  // Idempotent: WHERE bookings.planyo_cart_id IS NULL means each row
+  // is touched at most once across runs. Live-write only — dry-run
+  // skips so the report stays purely observational.
+  let backfilledCartIds = 0
+  if (!dryRun) {
+    const result = await prisma.$executeRaw`
+      UPDATE bookings
+      SET planyo_cart_id = sub.planyo_cart_id,
+          updated_at = NOW()
+      FROM (
+        SELECT DISTINCT ON (booking_id) booking_id, planyo_cart_id
+        FROM reservations
+        WHERE booking_id IS NOT NULL AND planyo_cart_id IS NOT NULL
+      ) sub
+      WHERE bookings.id = sub.booking_id
+        AND bookings.planyo_cart_id IS NULL
+    `
+    backfilledCartIds = Number(result)
+    if (backfilledCartIds > 0) {
+      console.log(`Backfilled planyo_cart_id on ${backfilledCartIds} existing Booking row(s) from Reservation journal.`)
+    }
+  }
+
+  // ── Build a planyoCartId → existing Booking map so cart-level
+  //    idempotency works for THIS run. Carts that already have a
+  //    Booking get NEW reservations appended as BookingItems on the
+  //    same Booking instead of spawning a duplicate. ──
+  //
+  // Dry-run note: the backfill UPDATE above is live-only, so in
+  // dry-run mode we ALSO consult the Reservation journal to
+  // synthesize the lookup map as if the backfill had run. Without
+  // this, dry-run would always report 0 cart-appends and the
+  // preview would be useless for verifying idempotency.
+  type BookingByCart = { id: string; planyoCartId: string | null; bookingNumber: string; startDate: Date; endDate: Date }
+  const bookingByCartId = new Map<string, BookingByCart>()
+
+  const directlyStamped = await prisma.booking.findMany({
+    where: { planyoCartId: { not: null } },
+    select: { id: true, planyoCartId: true, bookingNumber: true, startDate: true, endDate: true },
+  })
+  for (const b of directlyStamped) if (b.planyoCartId) bookingByCartId.set(b.planyoCartId, b)
+
+  if (dryRun) {
+    // Synthesize: any Booking whose Reservation journal carries a
+    // cart_id but the Booking itself doesn't (= what the backfill
+    // would stamp on a live run).
+    type JournalRow = { bookingId: string; planyoCartId: string; bookingNumber: string; startDate: Date; endDate: Date }
+    const rawRows = await prisma.$queryRaw<JournalRow[]>`
+      SELECT DISTINCT ON (b.id)
+        b.id AS "bookingId",
+        r.planyo_cart_id AS "planyoCartId",
+        b.booking_number AS "bookingNumber",
+        b.start_date AS "startDate",
+        b.end_date AS "endDate"
+      FROM bookings b
+      JOIN reservations r ON r.booking_id = b.id
+      WHERE b.planyo_cart_id IS NULL
+        AND r.planyo_cart_id IS NOT NULL
+    `
+    for (const r of rawRows) {
+      if (!bookingByCartId.has(r.planyoCartId)) {
+        bookingByCartId.set(r.planyoCartId, {
+          id: r.bookingId, planyoCartId: r.planyoCartId,
+          bookingNumber: r.bookingNumber, startDate: r.startDate, endDate: r.endDate,
+        })
+      }
+    }
+    console.log(`Existing Bookings with cartId (direct: ${directlyStamped.length} · journal-simulated: ${rawRows.length}): ${bookingByCartId.size} total`)
+  } else {
+    console.log(`Existing Bookings with planyoCartId stamped: ${bookingByCartId.size}`)
+  }
+
   // ── Pull Planyo forward book ──
   const from = new Date(); from.setUTCHours(0, 0, 0, 0)
   const to = new Date(from.getTime() + FORWARD_DAYS * 86_400_000)
@@ -277,6 +358,10 @@ async function main() {
     cartsProcessed: 0,
     cartsSkippedFullyImported: 0,
     cartsSkippedAllCancelled: 0,
+    /** Carts that had an existing Booking (matched by planyoCartId)
+     *  and got new reservations APPENDED rather than spawning a
+     *  duplicate Booking. Counts the new "drift" handling path. */
+    cartsAppendedToExisting: 0,
     bookingsCreated: 0,
     bookingItemsCreated: 0,
     bookingAssignmentsCreated: 0,
@@ -404,29 +489,50 @@ async function main() {
     const rwOrderMatch = userNotes.match(/#(\d+)/)
     const rentalworksOrderId = rwOrderMatch ? rwOrderMatch[1] : null
 
-    // ── Booking ──
-    bookingSeq++
-    const bookingNumber = `SR-${yearPrefix}-${String(bookingSeq).padStart(4, '0')}`
+    // ── Booking — CART-LEVEL UPSERT ──
+    //
+    // Look up any existing Booking already stamped with this Planyo
+    // cartId. If found, REUSE it (this is the new-reservation-on-
+    // existing-cart scenario — append BookingItems below, don't
+    // create a duplicate Booking). Otherwise create fresh and stamp
+    // planyoCartId on the new row for future re-runs.
+    const existingBookingForCart = bookingByCartId.get(String(cartId)) ?? null
     let bookingId = 'DRY-NEW-BOOKING'
+    let isAppendingToExisting = false
 
-    try {
-      if (!dryRun) {
-        const created = await prisma.booking.create({
-          data: {
-            bookingNumber, companyId: company.id, personId: person.id, agentId,
-            jobName, productionName, startDate, endDate,
-            status: bookingStatus, source: 'PLANYO_BACKFILL',
-            rentalworksOrderId,
-            notes: `Imported from Planyo cart ${cartId} on ${startedAt.toISOString().slice(0, 10)}`,
-          },
-          select: { id: true, bookingNumber: true },
-        })
-        bookingId = created.id
+    if (existingBookingForCart) {
+      bookingId = existingBookingForCart.id
+      isAppendingToExisting = true
+      report.cartsAppendedToExisting++
+    } else {
+      bookingSeq++
+      const bookingNumber = `SR-${yearPrefix}-${String(bookingSeq).padStart(4, '0')}`
+      try {
+        if (!dryRun) {
+          const created = await prisma.booking.create({
+            data: {
+              bookingNumber, companyId: company.id, personId: person.id, agentId,
+              jobName, productionName, startDate, endDate,
+              status: bookingStatus, source: 'PLANYO_BACKFILL',
+              rentalworksOrderId,
+              planyoCartId: String(cartId),
+              notes: `Imported from Planyo cart ${cartId} on ${startedAt.toISOString().slice(0, 10)}`,
+            },
+            select: { id: true, bookingNumber: true, planyoCartId: true, startDate: true, endDate: true },
+          })
+          bookingId = created.id
+          // Stamp the lookup map so any further cart-additions in the
+          // same run reuse this Booking.
+          bookingByCartId.set(String(cartId), {
+            id: created.id, planyoCartId: created.planyoCartId, bookingNumber: created.bookingNumber,
+            startDate: created.startDate, endDate: created.endDate,
+          })
+        }
+        report.bookingsCreated++
+      } catch (e) {
+        report.errors.push({ cart: cartId, error: `booking.create: ${(e as Error).message.slice(0, 120)}` })
+        continue
       }
-      report.bookingsCreated++
-    } catch (e) {
-      report.errors.push({ cart: cartId, error: `booking.create: ${(e as Error).message.slice(0, 120)}` })
-      continue
     }
 
     // Pre-resolve category lookup by name for CATEGORY_ROUTES.
@@ -619,6 +725,8 @@ async function main() {
     cartsProcessed: report.cartsProcessed,
     cartsSkippedFullyImported: report.cartsSkippedFullyImported,
     cartsSkippedAllCancelled: report.cartsSkippedAllCancelled,
+    cartsAppendedToExisting: report.cartsAppendedToExisting,
+    bookingsBackfilledWithCartId: backfilledCartIds,
     bookingsCreated: report.bookingsCreated,
     bookingItemsCreated: report.bookingItemsCreated,
     bookingAssignmentsCreated: report.bookingAssignmentsCreated,
