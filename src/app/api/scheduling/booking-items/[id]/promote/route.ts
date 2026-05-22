@@ -75,16 +75,53 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
-  const updated = await prisma.bookingItem.update({
-    where: { id: item.id },
-    data: { holdRank: 1 },
-    select: { id: true, holdRank: true, status: true, quantity: true },
+  // Promote the target AND renormalize the rest of the queue so the
+  // active stack is contiguous starting at rank 1. Without this, a
+  // promote of rank-2 leaves rank-3 still at rank 3 — a queue gap.
+  // The renormalize touches only OTHER active items in the same
+  // category whose Booking overlaps this item's window, and only
+  // those with holdRank > 1 (so a stuck primary in the force=true
+  // edge case isn't disturbed).
+  const renormalized = await prisma.$transaction(async (tx) => {
+    await tx.bookingItem.update({ where: { id: item.id }, data: { holdRank: 1 } })
+
+    const others = await tx.bookingItem.findMany({
+      where: {
+        id: { not: item.id },
+        categoryId: item.categoryId,
+        status: { in: ['REQUESTED', 'ASSIGNED'] },
+        holdRank: { gt: 1 },
+        booking: {
+          startDate: { lte: item.booking.endDate },
+          endDate: { gte: item.booking.startDate },
+        },
+      },
+      select: { id: true, holdRank: true },
+      orderBy: { holdRank: 'asc' },
+    })
+
+    let nextRank = 2
+    const renumbered: Array<{ id: string; from: number; to: number }> = []
+    for (const o of others) {
+      if (o.holdRank !== nextRank) {
+        await tx.bookingItem.update({ where: { id: o.id }, data: { holdRank: nextRank } })
+        renumbered.push({ id: o.id, from: o.holdRank, to: nextRank })
+      }
+      nextRank++
+    }
+
+    const final = await tx.bookingItem.findUnique({
+      where: { id: item.id },
+      select: { id: true, holdRank: true, status: true, quantity: true },
+    })
+    return { final, renumbered }
   })
 
   return NextResponse.json({
     ok: true,
-    bookingItem: updated,
+    bookingItem: renormalized.final,
     booking: item.booking,
     forced: force && item.quantity > availability.availableToHold,
+    renumbered: renormalized.renumbered,
   })
 }

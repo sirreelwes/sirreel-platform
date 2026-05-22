@@ -1,27 +1,28 @@
 /**
- * Boundary tests for the native-scheduling conflict engine.
+ * Scheduling test suite — Chunk 2 boundary tests for the pure
+ * conflict engine, plus a DB-backed capacity-1 conflict test for the
+ * holds/promote/release routes (added 2026-05-22 after the Part B
+ * smoke ran on a 22-unit category and never exercised the
+ * double-book guard).
  *
  *   npx tsx tests/scheduling/availability.test.ts
+ *   npm run test:scheduling
  *
- * Targets the pure `computeUnitStates` function — no DB. The
- * arithmetic that, wrong, double-books a stage is locked here.
- *
- * Coverage per native-scheduling-v1-brief.md §"CC notes":
- *   - exact-adjacent (return day = next start)   — same-day turnaround
- *   - 1-day gap with bufferDays=1                — preferred-buffer
- *   - full overlap                                — hard block
- *   - touching endpoints                          — single-day overlap
- *   - plus: assignment-after-window (symmetric buffer)
- *   - plus: zero-day-gap with bufferDays=0       — buffer disabled
- *   - plus: clearDaysBetween primitive
+ * Env is loaded synchronously up front, and the DB-touching imports
+ * are dynamic — so the global prisma singleton (`@/lib/prisma`)
+ * sees DATABASE_URL when it constructs, instead of trying to
+ * resolve it from a process.env that hasn't been populated yet.
  */
 
-import {
-  computeUnitStates,
-  clearDaysBetween,
-  type AssignmentWindow,
-  type ServiceableAsset,
-} from '../../src/lib/scheduling/availability'
+import { readFileSync } from 'fs'
+import path from 'path'
+
+// Env load — must run BEFORE any prisma-touching imports.
+const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
+for (const line of envFile.split('\n')) {
+  const m = line.match(/^([A-Z_]+)="?(.*?)"?$/)
+  if (m && !process.env[m[1]]) process.env[m[1]] = m[2]
+}
 
 const failures: string[] = []
 
@@ -35,241 +36,401 @@ function d(iso: string): Date {
   return new Date(`${iso}T00:00:00.000Z`)
 }
 
-const asset = (id: string, name = id): ServiceableAsset => ({ id, unitName: name, tier: 'STANDARD' })
+type Asset = { id: string; unitName: string; tier: 'PREMIUM' | 'STANDARD' | 'ECONOMY' }
+type AssignmentWindow = { assetId: string; startDate: Date; endDate: Date }
+const asset = (id: string, name = id): Asset => ({ id, unitName: name, tier: 'STANDARD' })
 const assign = (assetId: string, startISO: string, endISO: string): AssignmentWindow => ({
   assetId,
   startDate: d(startISO),
   endDate: d(endISO),
 })
 
-// ───────────────────────────────────────────────────────────────────
-console.log('clearDaysBetween primitive')
-// ───────────────────────────────────────────────────────────────────
-check(clearDaysBetween(d('2026-05-10'), d('2026-05-10')) === -1, 'same day → -1 (overlap)')
-check(clearDaysBetween(d('2026-05-10'), d('2026-05-11')) === 0, 'consecutive days → 0 (no clear day)')
-check(clearDaysBetween(d('2026-05-10'), d('2026-05-12')) === 1, '1 clear day between')
-check(clearDaysBetween(d('2026-05-10'), d('2026-05-15')) === 4, '4 clear days between')
+async function main() {
+  // ── Dynamic imports — load after env is set ────────────────────
+  const { computeUnitStates, clearDaysBetween, getCategoryAvailability } = await import(
+    '../../src/lib/scheduling/availability'
+  )
+  const { prisma } = await import('../../src/lib/prisma')
+  const holdsRoute = await import('../../src/app/api/scheduling/holds/route')
+  const releaseRoute = await import('../../src/app/api/scheduling/booking-items/[id]/release/route')
+  const promoteRoute = await import('../../src/app/api/scheduling/booking-items/[id]/promote/route')
+  const stackedRoute = await import('../../src/app/api/scheduling/stacked-holds/route')
 
-// ───────────────────────────────────────────────────────────────────
-console.log('\nexact-adjacent — return day = next start (same-day turnaround)')
-// ───────────────────────────────────────────────────────────────────
-// Assignment ends 5/10. New window starts 5/11. With bufferDays=1 the
-// gap of 0 clear days is below threshold → BUFFER (yellow, overridable).
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-05', '2026-05-10')],
-    d('2026-05-11'),
-    d('2026-05-13'),
-    1,
-  )
-  check(units[0].state === 'buffer', 'bufferDays=1 + 0 clear days before window → buffer')
-}
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-05', '2026-05-10')],
-    d('2026-05-11'),
-    d('2026-05-13'),
-    0,
-  )
-  check(units[0].state === 'free', 'bufferDays=0 + 0 clear days before window → free (no buffer required)')
+  // ═══════════════════════════════════════════════════════════════
+  //                  PURE TESTS (Chunk 2 boundary set)
+  // ═══════════════════════════════════════════════════════════════
+
+  console.log('clearDaysBetween primitive')
+  check(clearDaysBetween(d('2026-05-10'), d('2026-05-10')) === -1, 'same day → -1 (overlap)')
+  check(clearDaysBetween(d('2026-05-10'), d('2026-05-11')) === 0, 'consecutive days → 0 (no clear day)')
+  check(clearDaysBetween(d('2026-05-10'), d('2026-05-12')) === 1, '1 clear day between')
+  check(clearDaysBetween(d('2026-05-10'), d('2026-05-15')) === 4, '4 clear days between')
+
+  console.log('\nexact-adjacent — return day = next start (same-day turnaround)')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-05', '2026-05-10')], d('2026-05-11'), d('2026-05-13'), 1)
+    check(units[0].state === 'buffer', 'bufferDays=1 + 0 clear days before window → buffer')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-05', '2026-05-10')], d('2026-05-11'), d('2026-05-13'), 0)
+    check(units[0].state === 'free', 'bufferDays=0 + 0 clear days before window → free (no buffer required)')
+  }
+
+  console.log('\n1-day gap with bufferDays=1 (one full clean day in between)')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-05', '2026-05-10')], d('2026-05-12'), d('2026-05-14'), 1)
+    check(units[0].state === 'free', '1 clear day with bufferDays=1 → free')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-05', '2026-05-10')], d('2026-05-13'), d('2026-05-14'), 2)
+    check(units[0].state === 'free', '2 clear days with bufferDays=2 → free')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-05', '2026-05-10')], d('2026-05-12'), d('2026-05-14'), 2)
+    check(units[0].state === 'buffer', '1 clear day with bufferDays=2 → buffer (under threshold)')
+  }
+
+  console.log('\nfull overlap (assignment fully contains window)')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-08', '2026-05-14')], d('2026-05-10'), d('2026-05-12'), 1)
+    check(units[0].state === 'booked', 'assignment fully contains window → booked')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-10', '2026-05-12')], d('2026-05-08'), d('2026-05-14'), 1)
+    check(units[0].state === 'booked', 'window fully contains assignment → booked')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-09', '2026-05-13')], d('2026-05-10'), d('2026-05-12'), 1)
+    check(units[0].state === 'booked', 'partial overlap (assignment straddles window start) → booked')
+  }
+
+  console.log('\ntouching endpoints (single-day overlap)')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-01', '2026-05-10')], d('2026-05-10'), d('2026-05-12'), 1)
+    check(units[0].state === 'booked', 'assignment.end === window.start → booked (endpoints inclusive)')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-10', '2026-05-15')], d('2026-05-01'), d('2026-05-10'), 1)
+    check(units[0].state === 'booked', 'window.end === assignment.start → booked (endpoints inclusive)')
+  }
+
+  console.log('\nsymmetric buffer — assignment AFTER the window')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-15', '2026-05-18')], d('2026-05-10'), d('2026-05-14'), 1)
+    check(units[0].state === 'buffer', 'next assignment 1 day after window with bufferDays=1 → buffer')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-16', '2026-05-18')], d('2026-05-10'), d('2026-05-14'), 1)
+    check(units[0].state === 'free', 'next assignment 2 days after window with bufferDays=1 → free')
+  }
+
+  console.log('\nmulti-asset + multi-assignment classification')
+  {
+    const units = computeUnitStates(
+      [asset('A', 'Cube #1'), asset('B', 'Cube #2'), asset('C', 'Cube #3')],
+      [assign('A', '2026-05-09', '2026-05-13'), assign('B', '2026-05-05', '2026-05-10')],
+      d('2026-05-11'),
+      d('2026-05-14'),
+      1,
+    )
+    check(units.find((u) => u.assetId === 'A')!.state === 'booked', 'A overlaps → booked')
+    check(units.find((u) => u.assetId === 'B')!.state === 'buffer', 'B same-day turnaround → buffer')
+    check(units.find((u) => u.assetId === 'C')!.state === 'free', 'C no assignments → free')
+  }
+
+  console.log('\nhard overlap takes priority over adjacent-buffer assignments')
+  {
+    const units = computeUnitStates(
+      [asset('A')],
+      [assign('A', '2026-05-12', '2026-05-13'), assign('A', '2026-04-30', '2026-05-10')],
+      d('2026-05-11'),
+      d('2026-05-14'),
+      1,
+    )
+    check(units[0].state === 'booked', 'hard overlap dominates concurrent buffer-adjacent → booked')
+  }
+
+  console.log('\nsingle-day window')
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-10', '2026-05-10')], d('2026-05-10'), d('2026-05-10'), 1)
+    check(units[0].state === 'booked', 'single-day assignment on single-day window → booked')
+  }
+  {
+    const units = computeUnitStates([asset('A')], [assign('A', '2026-05-09', '2026-05-09')], d('2026-05-10'), d('2026-05-10'), 1)
+    check(units[0].state === 'buffer', 'single-day window, assignment ended day before → buffer')
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //   DB-BACKED: capacity-1 conflict + backup stack + promotion
+  // ═══════════════════════════════════════════════════════════════
+  // Exercises the real holds/promote/release/stacked-holds route
+  // handlers against a stage-like category with totalUnits=1 and
+  // exactly one serviceable Asset. This is the double-book guard
+  // the Part B smoke test never hit (it ran on a 22-unit category).
+  //
+  // Fixed dates, fixed prefix, hard cleanup at the end.
+
+  console.log('\n══ Capacity-1 conflict + backup stack + promote ══')
+
+  // Fixed test windows (UTC midnight).
+  const W_START = '2026-12-01' // primary + backups
+  const W_END = '2026-12-03'
+  const NON_OVERLAP_START = '2027-01-15' // control: non-overlapping
+  const NON_OVERLAP_END = '2027-01-17'
+  const FIXTURE_JOB_PREFIX = 'TEST-CAP1-FIXTURE'
+
+  // ── Setup the fixture (idempotent) ──
+  const CATEGORY_SLUG = 'test-cap1-stage'
+  const ASSET_UNIT_NAME = 'Test Stage A'
+
+  let fixtureCategory = await prisma.assetCategory.findUnique({ where: { slug: CATEGORY_SLUG } })
+  if (!fixtureCategory) {
+    fixtureCategory = await prisma.assetCategory.create({
+      data: {
+        name: 'TEST capacity-1 stage',
+        slug: CATEGORY_SLUG,
+        totalUnits: 1,
+        dailyRate: 0,
+        department: 'STAGES',
+        isPublished: false,
+        description: 'Test fixture — single-unit category for scheduling capacity-1 assertions.',
+      },
+    })
+  }
+  // Backfill totalUnits if a previous run created the category with a different value.
+  if (fixtureCategory.totalUnits !== 1) {
+    fixtureCategory = await prisma.assetCategory.update({ where: { id: fixtureCategory.id }, data: { totalUnits: 1 } })
+  }
+
+  let fixtureAsset = await prisma.asset.findFirst({
+    where: { categoryId: fixtureCategory.id, unitName: ASSET_UNIT_NAME },
+  })
+  if (!fixtureAsset) {
+    fixtureAsset = await prisma.asset.create({
+      data: {
+        categoryId: fixtureCategory.id,
+        unitName: ASSET_UNIT_NAME,
+        status: 'AVAILABLE',
+        location: 'LANKERSHIM',
+        tier: 'STANDARD',
+        isActive: true,
+        notes: 'Auto-created by tests/scheduling/availability.test.ts (capacity-1 fixture).',
+      },
+    })
+  }
+  // Force serviceable status in case a previous test mid-flight left it elsewhere.
+  if (fixtureAsset.status !== 'AVAILABLE' || !fixtureAsset.isActive) {
+    fixtureAsset = await prisma.asset.update({
+      where: { id: fixtureAsset.id },
+      data: { status: 'AVAILABLE', isActive: true },
+    })
+  }
+
+  // Pick FK references for Bookings.
+  const company = await prisma.company.findFirst({ select: { id: true } })
+  const person = await prisma.person.findFirst({ select: { id: true } })
+  const agent = await prisma.user.findFirst({ select: { id: true } })
+  if (!company || !person || !agent) {
+    failures.push('CAPACITY-1 SETUP: need at least one Company, Person, and User in the DB to run the DB-backed assertions')
+    return
+  }
+
+  // Defensive cleanup of any leftover fixture bookings before we start.
+  await prisma.booking.deleteMany({ where: { jobName: { startsWith: FIXTURE_JOB_PREFIX } } })
+
+  // ── HTTP-handler call helpers ──
+  async function postHold(jobSuffix: string, args: { startDate?: string; endDate?: string; isBackup?: boolean } = {}) {
+    const body = {
+      categoryId: fixtureCategory!.id,
+      startDate: args.startDate ?? W_START,
+      endDate: args.endDate ?? W_END,
+      quantity: 1,
+      companyId: company!.id,
+      personId: person!.id,
+      agentId: agent!.id,
+      jobName: `${FIXTURE_JOB_PREFIX} ${jobSuffix}`,
+      isBackup: args.isBackup ?? false,
+    }
+    const req = new Request('http://localhost/api/scheduling/holds', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const res = await holdsRoute.POST(req as never)
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+
+  async function postRelease(id: string) {
+    const req = new Request(`http://localhost/api/scheduling/booking-items/${id}/release`, { method: 'POST' })
+    const res = await releaseRoute.POST(req as never, { params: { id } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+
+  async function postPromote(id: string, body: Record<string, unknown> = {}) {
+    const req = new Request(`http://localhost/api/scheduling/booking-items/${id}/promote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const res = await promoteRoute.POST(req as never, { params: { id } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+
+  async function getStacked(start: string = W_START, end: string = W_END) {
+    const url = `http://localhost/api/scheduling/stacked-holds?categoryId=${fixtureCategory!.id}&start=${start}&end=${end}`
+    const req = new Request(url)
+    const res = await stackedRoute.GET(req as never)
+    return { status: res.status, json: (await res.json()) as { ok: boolean; counts: { primary: number; backups: number }; rows: Array<{ bookingItemId: string; holdRank: number; jobName: string }> } }
+  }
+
+  // Track created BookingItem IDs for assertions + cleanup.
+  let primaryItemId = ''
+  let backupItemId = ''
+  let thirdItemId = ''
+
+  try {
+    // ─────────────────────────────────────────────────────────────
+    // 1. PRIMARY AT CAPACITY IS BLOCKED
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-1] 1. PRIMARY AT CAPACITY IS BLOCKED')
+    const primary = await postHold('primary', {})
+    check(primary.status === 201 && primary.json.ok === true, 'first rank-1 primary on capacity-1 category → created (201, ok=true)')
+    if (primary.status === 201) {
+      const bi = primary.json.bookingItem as { id: string; holdRank: number }
+      primaryItemId = bi.id
+      check(bi.holdRank === 1, `first hold lands at rank 1 (got ${bi.holdRank})`)
+    }
+
+    const availAtCap = await getCategoryAvailability(fixtureCategory.id, d(W_START), d(W_END), 1)
+    check(availAtCap.availableToHold === 0, `availableToHold === 0 with primary holding the only unit (got ${availAtCap.availableToHold})`)
+
+    const dupePrimary = await postHold('dupe-primary', {})
+    check(dupePrimary.status === 409, `second rank-1 over overlapping window → 409 (got ${dupePrimary.status})`)
+    check(
+      dupePrimary.json.error === 'over-capacity',
+      `409 error code is "over-capacity" (got "${dupePrimary.json.error}")`,
+    )
+
+    // Double-check nothing got created behind the 409.
+    const stuckCheck = await prisma.bookingItem.findFirst({
+      where: { categoryId: fixtureCategory.id, holdRank: 1, booking: { jobName: `${FIXTURE_JOB_PREFIX} dupe-primary` } },
+    })
+    check(stuckCheck === null, 'no BookingItem was persisted for the rejected dupe-primary attempt')
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. BACKUP STACKS WHEN FULL
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-1] 2. BACKUP STACKS WHEN FULL')
+    const backup = await postHold('backup-2', { isBackup: true })
+    check(backup.status === 201 && backup.json.ok === true, 'rank-2 backup against at-capacity category → created (201)')
+    if (backup.status === 201) {
+      const bi = backup.json.bookingItem as { id: string; holdRank: number }
+      backupItemId = bi.id
+      check(bi.holdRank === 2, `backup lands at rank 2 (got ${bi.holdRank})`)
+    }
+
+    const availAfterBackup = await getCategoryAvailability(fixtureCategory.id, d(W_START), d(W_END), 1)
+    check(
+      availAfterBackup.availableToHold === 0,
+      `availableToHold STILL 0 after rank-2 backup (got ${availAfterBackup.availableToHold}) — backups must not consume capacity`,
+    )
+
+    const third = await postHold('backup-3', { isBackup: true })
+    check(third.status === 201 && third.json.ok === true, 'rank-3 backup → created (201)')
+    if (third.status === 201) {
+      const bi = third.json.bookingItem as { id: string; holdRank: number }
+      thirdItemId = bi.id
+      check(bi.holdRank === 3, `next backup lands at rank 3 (got ${bi.holdRank})`)
+    }
+
+    const availAfterThird = await getCategoryAvailability(fixtureCategory.id, d(W_START), d(W_END), 1)
+    check(availAfterThird.availableToHold === 0, `availableToHold STILL 0 after rank-3 backup (got ${availAfterThird.availableToHold})`)
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. RANK ORDERING
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-1] 3. RANK ORDERING')
+    const stacked = await getStacked()
+    check(stacked.json.ok === true, 'stacked-holds returns ok')
+    check(stacked.json.counts.primary === 1, `stacked counts.primary === 1 (got ${stacked.json.counts.primary})`)
+    check(stacked.json.counts.backups === 2, `stacked counts.backups === 2 (got ${stacked.json.counts.backups})`)
+    const ranks = stacked.json.rows.map((r) => r.holdRank)
+    check(JSON.stringify(ranks) === JSON.stringify([1, 2, 3]), `stacked rows in rank order 1→2→3 (got ${JSON.stringify(ranks)})`)
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. PROMOTION RE-RANKS CORRECTLY
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-1] 4. PROMOTION RE-RANKS CORRECTLY')
+    const release = await postRelease(primaryItemId)
+    check(release.status === 200 && release.json.ok === true, 'release primary → 200 ok')
+
+    const promote = await postPromote(backupItemId)
+    check(promote.status === 200 && promote.json.ok === true, `promote rank-2 backup → 200 ok (got status ${promote.status})`)
+    if (promote.status !== 200) {
+      console.error('    promote response:', JSON.stringify(promote.json))
+    }
+
+    // Reload all three items from the DB.
+    const postPromoteItems = await prisma.bookingItem.findMany({
+      where: { id: { in: [primaryItemId, backupItemId, thirdItemId] } },
+      select: { id: true, holdRank: true, status: true },
+    })
+    const byId = new Map(postPromoteItems.map((it) => [it.id, it]))
+    const promoted = byId.get(backupItemId)
+    const third3 = byId.get(thirdItemId)
+    const oldPrimary = byId.get(primaryItemId)
+    check(promoted?.holdRank === 1, `promoted backup is now rank 1 (got ${promoted?.holdRank})`)
+    check(third3?.holdRank === 2, `former rank-3 is now rank 2 (got ${third3?.holdRank}) — contiguous queue, no gap`)
+    check(oldPrimary?.status === 'UNFULFILLED', `released primary status === UNFULFILLED (got ${oldPrimary?.status})`)
+
+    // Invariant: no two ACTIVE items share rank 1 in this window.
+    const activeRank1 = await prisma.bookingItem.count({
+      where: {
+        categoryId: fixtureCategory.id,
+        holdRank: 1,
+        status: { in: ['REQUESTED', 'ASSIGNED'] },
+        booking: { startDate: { lte: d(W_END) }, endDate: { gte: d(W_START) } },
+      },
+    })
+    check(activeRank1 === 1, `exactly one ACTIVE rank-1 hold in the window after promotion (got ${activeRank1})`)
+
+    // Capacity check after promotion: new primary still holds the unit → still 0.
+    const availAfterPromote = await getCategoryAvailability(fixtureCategory.id, d(W_START), d(W_END), 1)
+    check(
+      availAfterPromote.availableToHold === 0,
+      `availableToHold === 0 after promotion — the new primary holds the unit (got ${availAfterPromote.availableToHold})`,
+    )
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. NON-OVERLAPPING IS FINE (control)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-1] 5. NON-OVERLAPPING IS FINE (control)')
+    const nonOverlap = await postHold('non-overlap', { startDate: NON_OVERLAP_START, endDate: NON_OVERLAP_END })
+    check(
+      nonOverlap.status === 201 && nonOverlap.json.ok === true,
+      `rank-1 primary on a non-overlapping window for the same unit → created (got status ${nonOverlap.status})`,
+    )
+  } finally {
+    // ── Hard cleanup: remove every BookingItem created by this run.
+    //    Deleting the parent Booking cascades to BookingItem + Reservation
+    //    journal rows (cascade is on bookingId), so this one delete is
+    //    enough to tidy the fixture.
+    await prisma.booking.deleteMany({ where: { jobName: { startsWith: FIXTURE_JOB_PREFIX } } })
+  }
+
+  // ── Final summary ──
+  console.log('')
+  if (failures.length === 0) {
+    console.log(`✓ all checks passed`)
+    process.exit(0)
+  } else {
+    console.error(`✗ ${failures.length} failure(s):`)
+    for (const f of failures) console.error(`  - ${f}`)
+    process.exit(1)
+  }
 }
 
-// ───────────────────────────────────────────────────────────────────
-console.log('\n1-day gap with bufferDays=1 (one full clean day in between)')
-// ───────────────────────────────────────────────────────────────────
-// Assignment ends 5/10. New window starts 5/12. 5/11 is clear. Should
-// be FREE — that's exactly the preferred buffer day.
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-05', '2026-05-10')],
-    d('2026-05-12'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units[0].state === 'free', '1 clear day with bufferDays=1 → free')
-}
-// 2 clear days with bufferDays=2 → free
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-05', '2026-05-10')],
-    d('2026-05-13'),
-    d('2026-05-14'),
-    2,
-  )
-  check(units[0].state === 'free', '2 clear days with bufferDays=2 → free')
-}
-// 1 clear day with bufferDays=2 → buffer
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-05', '2026-05-10')],
-    d('2026-05-12'),
-    d('2026-05-14'),
-    2,
-  )
-  check(units[0].state === 'buffer', '1 clear day with bufferDays=2 → buffer (under threshold)')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\nfull overlap (assignment fully contains window)')
-// ───────────────────────────────────────────────────────────────────
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-08', '2026-05-14')],
-    d('2026-05-10'),
-    d('2026-05-12'),
-    1,
-  )
-  check(units[0].state === 'booked', 'assignment fully contains window → booked')
-}
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-10', '2026-05-12')],
-    d('2026-05-08'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units[0].state === 'booked', 'window fully contains assignment → booked')
-}
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-09', '2026-05-13')],
-    d('2026-05-10'),
-    d('2026-05-12'),
-    1,
-  )
-  check(units[0].state === 'booked', 'partial overlap (assignment straddles window start) → booked')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\ntouching endpoints (single-day overlap)')
-// ───────────────────────────────────────────────────────────────────
-// Assignment 5/01-5/10. Window starts on 5/10. Endpoint touches → hard
-// overlap by the inclusive-inclusive rule.
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-01', '2026-05-10')],
-    d('2026-05-10'),
-    d('2026-05-12'),
-    1,
-  )
-  check(units[0].state === 'booked', 'assignment.end === window.start → booked (endpoints inclusive)')
-}
-// Window 5/01-5/10. Assignment starts on 5/10. Endpoint touches → hard.
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-10', '2026-05-15')],
-    d('2026-05-01'),
-    d('2026-05-10'),
-    1,
-  )
-  check(units[0].state === 'booked', 'window.end === assignment.start → booked (endpoints inclusive)')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\nsymmetric buffer — assignment AFTER the window')
-// ───────────────────────────────────────────────────────────────────
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-15', '2026-05-18')],
-    d('2026-05-10'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units[0].state === 'buffer', 'next assignment 1 day after window with bufferDays=1 → buffer')
-}
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-16', '2026-05-18')],
-    d('2026-05-10'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units[0].state === 'free', 'next assignment 2 days after window with bufferDays=1 → free')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\nmulti-asset + multi-assignment classification')
-// ───────────────────────────────────────────────────────────────────
-{
-  const units = computeUnitStates(
-    [asset('A', 'Cube #1'), asset('B', 'Cube #2'), asset('C', 'Cube #3')],
-    [
-      assign('A', '2026-05-09', '2026-05-13'), // overlaps window → booked
-      assign('B', '2026-05-05', '2026-05-10'), // ends 1 day before → buffer (bufferDays=1)
-      // C has no assignments → free
-    ],
-    d('2026-05-11'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units.find((u) => u.assetId === 'A')!.state === 'booked', 'A overlaps → booked')
-  check(units.find((u) => u.assetId === 'B')!.state === 'buffer', 'B same-day turnaround → buffer')
-  check(units.find((u) => u.assetId === 'C')!.state === 'free', 'C no assignments → free')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\nhard overlap takes priority over adjacent-buffer assignments')
-// ───────────────────────────────────────────────────────────────────
-// Same asset has a hard overlap AND an adjacent assignment. Hard wins.
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [
-      assign('A', '2026-05-12', '2026-05-13'), // hard overlap
-      assign('A', '2026-04-30', '2026-05-10'), // buffer-adjacent
-    ],
-    d('2026-05-11'),
-    d('2026-05-14'),
-    1,
-  )
-  check(units[0].state === 'booked', 'hard overlap dominates concurrent buffer-adjacent → booked')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('\nsingle-day window')
-// ───────────────────────────────────────────────────────────────────
-// Window where start === end. Assignment exactly on that day → booked.
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-10', '2026-05-10')],
-    d('2026-05-10'),
-    d('2026-05-10'),
-    1,
-  )
-  check(units[0].state === 'booked', 'single-day assignment on single-day window → booked')
-}
-// Single-day window, assignment day before → buffer at bufferDays=1
-{
-  const units = computeUnitStates(
-    [asset('A')],
-    [assign('A', '2026-05-09', '2026-05-09')],
-    d('2026-05-10'),
-    d('2026-05-10'),
-    1,
-  )
-  check(units[0].state === 'buffer', 'single-day window, assignment ended day before → buffer')
-}
-
-// ───────────────────────────────────────────────────────────────────
-console.log('')
-if (failures.length === 0) {
-  console.log(`✓ all checks passed`)
-  process.exit(0)
-} else {
-  console.error(`✗ ${failures.length} failure(s):`)
-  for (const f of failures) console.error(`  - ${f}`)
-  process.exit(1)
-}
+main().catch((e) => {
+  console.error('fatal:', e)
+  process.exit(2)
+})
