@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
+import { SourceBanner } from '@/components/timeline/SourceBanner';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -37,9 +40,11 @@ export default function GanttPage() {
   const [units, setUnits] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  const searchParams = useSearchParams()
+  const source: TimelineSource = resolveTimelineSource(searchParams)
 
   useEffect(() => {
-    fetch('/api/timeline')
+    fetch(timelineEndpoint(source))
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
@@ -49,7 +54,7 @@ export default function GanttPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [source])
 
   const startDate = addDays(today, -3)
   const totalDays = weeks * 7
@@ -73,8 +78,9 @@ export default function GanttPage() {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">Timeline</h1>
-          {loading && <span className="text-[11px] text-gray-400">Loading from Planyo...</span>}
+          {loading && <span className="text-[11px] text-gray-400">Loading from {source === 'native' ? 'native' : 'Planyo'}...</span>}
           {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Live</span>}
+          <SourceBanner source={source} />
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button onClick={() => setView('asset')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'asset' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Asset</button>
             <button onClick={() => setView('job')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'job' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Job</button>

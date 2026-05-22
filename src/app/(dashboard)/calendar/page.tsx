@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
+import { SourceBanner } from '@/components/timeline/SourceBanner';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -50,12 +52,14 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }>
 // ═══ Component ═══
 export default function CalendarPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const timelineSrc: TimelineSource = resolveTimelineSource(searchParams);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [JOBS, setJOBS] = useState<Job[]>([]);
 
   useEffect(() => {
-    fetch('/api/timeline')
+    fetch(timelineEndpoint(timelineSrc))
       .then(r => r.json())
       .then(d => {
         if (!d.ok) return
@@ -77,7 +81,7 @@ export default function CalendarPage() {
         setJOBS(jobs)
       })
       .catch(() => {})
-  }, [])
+  }, [timelineSrc])
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -126,6 +130,7 @@ export default function CalendarPage() {
             <button onClick={goToday} className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200">Today</button>
             <button onClick={nextMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">›</button>
           </div>
+          <SourceBanner source={timelineSrc} />
         </div>
         <div className="flex gap-3 text-[10px] text-gray-400">
           <span>🟢 Active</span>
