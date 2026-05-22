@@ -485,11 +485,26 @@ async function main() {
       const forceUnassigned = Boolean(routeOverride?.forceUnassigned) || Boolean(inCategoryUnassigned)
       const reviewBucket = routeOverride?.reviewBucket ?? inCategoryUnassigned?.reviewBucket ?? null
 
+      // ── Normalize the Planyo unit name up front — we need the
+      //    isBackupHold flag to decide BookingItem.holdRank at
+      //    create time, and the normalized form for the asset match
+      //    afterwards. ──
+      const norm = normalizePlanyoUnitName(rawUnit, category.name)
+      const startDateISO = startDate.toISOString().slice(0, 10)
+      const endDateISO = endDate.toISOString().slice(0, 10)
+      const itemHoldRank = norm.isBackupHold ? 2 : 1
+
       let bookingItemId = ''
       try {
         if (!dryRun) {
           const item = await prisma.bookingItem.create({
-            data: { bookingId, categoryId: category.id, quantity: 1, dailyRate: category.dailyRate, status: 'REQUESTED' },
+            data: {
+              bookingId, categoryId: category.id, quantity: 1, dailyRate: category.dailyRate,
+              status: 'REQUESTED', holdRank: itemHoldRank,
+              notes: norm.isBackupHold
+                ? 'Backup hold from Planyo "X - 2ND HOLD" workaround. Primary linkage unknown — review.'
+                : null,
+            },
             select: { id: true },
           })
           bookingItemId = item.id
@@ -499,15 +514,6 @@ async function main() {
         report.errors.push({ cart: cartId, error: `bookingItem.create: ${(e as Error).message.slice(0, 120)}` })
         continue
       }
-
-      // ── Asset match. Normalize the Planyo unit name through the
-      //    Pattern-A normalizer, then apply NAME_ALIASES, then exact-
-      //    match against Asset.unitName. forceUnassigned routes
-      //    (Sprinter, Lankershim Studio) skip this step entirely and
-      //    leave the BookingItem REQUESTED for manual assignment. ──
-      const norm = normalizePlanyoUnitName(rawUnit, category.name)
-      const startDateISO = startDate.toISOString().slice(0, 10)
-      const endDateISO = endDate.toISOString().slice(0, 10)
 
       let asset: ReturnType<typeof assetByCategoryAndName.get> | null = null
       let aliasedTo: string | null = null

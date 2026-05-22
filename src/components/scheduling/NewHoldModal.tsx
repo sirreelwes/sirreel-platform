@@ -30,8 +30,10 @@ interface AvailabilitySummary {
 
 interface CreatedHold {
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
-  bookingItem: { id: string; quantity: number; status: string }
+  bookingItem: { id: string; quantity: number; status: string; holdRank?: number }
   bufferOverrideUsed: boolean
+  isBackup?: boolean
+  holdRank?: number
 }
 
 interface NewHoldModalProps {
@@ -40,6 +42,10 @@ interface NewHoldModalProps {
   startDate: string // YYYY-MM-DD
   endDate: string   // YYYY-MM-DD
   bufferDays: number
+  /** When true, the modal posts isBackup=true and skips the
+   *  capacity/buffer warning path — backup holds are explicitly
+   *  allowed to overlap an at-capacity category. */
+  asBackup?: boolean
   onClose: () => void
   onCreated: (hold: CreatedHold) => void
 }
@@ -60,6 +66,7 @@ export function NewHoldModal({
   startDate,
   endDate,
   bufferDays,
+  asBackup = false,
   onClose,
   onCreated,
 }: NewHoldModalProps) {
@@ -102,6 +109,7 @@ export function NewHoldModal({
           notes: notes.trim() || null,
           bufferDays,
           bufferOverride,
+          isBackup: asBackup,
         }),
       })
       const json = await res.json()
@@ -126,9 +134,12 @@ export function NewHoldModal({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <header className="flex items-start justify-between px-6 py-4 border-b border-zinc-200">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-900">New hold</h2>
+            <h2 className="text-lg font-semibold text-zinc-900">
+              {asBackup ? 'New backup hold' : 'New hold'}
+            </h2>
             <p className="text-sm text-zinc-600 mt-0.5">
               {categoryName} · {startDate} → {endDate} · bufferDays={bufferDays}
+              {asBackup ? ' · queues behind existing holds (rank assigned by server)' : ''}
             </p>
           </div>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>

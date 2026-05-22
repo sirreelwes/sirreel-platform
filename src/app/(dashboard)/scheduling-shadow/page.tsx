@@ -49,6 +49,27 @@ type ShadowDiff = {
   rows: DiffRow[]
 }
 
+type StackedHoldRow = {
+  bookingItemId: string
+  bookingId: string
+  bookingNumber: string
+  jobName: string
+  company: { id: string; name: string } | null
+  quantity: number
+  assignedCount: number
+  status: string
+  holdRank: number
+  rentalStart: string
+  rentalEnd: string
+  createdAt: string
+}
+
+type StackedHoldsResponse = {
+  ok: boolean
+  counts: { primary: number; backups: number }
+  rows: StackedHoldRow[]
+}
+
 const AGREEMENT_LABEL: Record<Agreement, string> = {
   'agree-free': 'agree (free)',
   'agree-booked': 'agree (booked)',
@@ -85,9 +106,18 @@ export default function SchedulingShadowPage() {
   const [data, setData] = useState<ShadowDiff | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [holdModalOpen, setHoldModalOpen] = useState(false)
-  const [lastCreatedHold, setLastCreatedHold] = useState<{ bookingNumber: string; quantity: number; jobName: string; bookingItemId: string } | null>(null)
+  const [holdModalMode, setHoldModalMode] = useState<'closed' | 'primary' | 'backup'>('closed')
+  const [lastCreatedHold, setLastCreatedHold] = useState<{
+    bookingNumber: string
+    quantity: number
+    jobName: string
+    bookingItemId: string
+    isBackup: boolean
+    holdRank: number
+  } | null>(null)
   const [assignModalItemId, setAssignModalItemId] = useState<string | null>(null)
+  const [stackedHolds, setStackedHolds] = useState<StackedHoldsResponse | null>(null)
+  const [promoteFeedback, setPromoteFeedback] = useState<string | null>(null)
 
   const selectedCategoryName = useMemo(
     () => categories.find((c) => c.id === categoryId)?.name ?? '',
@@ -112,16 +142,37 @@ export default function SchedulingShadowPage() {
     setLoading(true)
     setError(null)
     try {
-      const url = `/api/scheduling/shadow-diff?categoryId=${categoryId}&start=${start}&end=${end}&bufferDays=${bufferDays}`
-      const res = await fetch(url)
-      const json = await res.json()
+      const [diffRes, stackedRes] = await Promise.all([
+        fetch(`/api/scheduling/shadow-diff?categoryId=${categoryId}&start=${start}&end=${end}&bufferDays=${bufferDays}`),
+        fetch(`/api/scheduling/stacked-holds?categoryId=${categoryId}&start=${start}&end=${end}`),
+      ])
+      const json = await diffRes.json()
       if (!json.ok) throw new Error(json.error || 'request failed')
       setData(json)
+      const stackedJson = await stackedRes.json()
+      if (stackedJson.ok) setStackedHolds(stackedJson)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setData(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function promote(bookingItemId: string) {
+    setPromoteFeedback(null)
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bufferDays }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `promote failed (${res.status})`)
+      setPromoteFeedback(`Promoted booking item ${bookingItemId.slice(0, 8)}… to primary.`)
+      void run()
+    } catch (e) {
+      setPromoteFeedback(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -199,52 +250,73 @@ export default function SchedulingShadowPage() {
             {loading ? 'Comparing…' : 'Run comparison'}
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-xs text-zinc-500">
-            + Hold creates a category-level Booking + BookingItem(REQUESTED). Server re-checks capacity before writing;
-            buffer-encroachment requires an explicit override.
+            + Hold creates a primary BookingItem (capacity-gated). + Backup hold queues behind existing holds at
+            rank ≥ 2 — no capacity gate, no buffer warning.
           </p>
-          <button
-            onClick={() => setHoldModalOpen(true)}
-            disabled={!categoryId || !start || !end}
-            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-sm font-medium px-3 py-1.5 rounded"
-          >
-            + Hold
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHoldModalMode('primary')}
+              disabled={!categoryId || !start || !end}
+              className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-sm font-medium px-3 py-1.5 rounded"
+            >
+              + Hold
+            </button>
+            <button
+              onClick={() => setHoldModalMode('backup')}
+              disabled={!categoryId || !start || !end}
+              className="border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-40 text-amber-900 text-sm font-medium px-3 py-1.5 rounded"
+            >
+              + Backup hold
+            </button>
+          </div>
         </div>
         {error && <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">{error}</div>}
         {lastCreatedHold && (
-          <div className="mt-3 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 flex items-center justify-between">
+          <div
+            className={`mt-3 text-sm border rounded px-3 py-2 flex items-center justify-between ${
+              lastCreatedHold.isBackup
+                ? 'text-amber-900 bg-amber-50 border-amber-200'
+                : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+            }`}
+          >
             <span>
-              Created hold {lastCreatedHold.bookingNumber} — {lastCreatedHold.quantity}× for "{lastCreatedHold.jobName}".
+              Created {lastCreatedHold.isBackup ? `backup hold (rank ${lastCreatedHold.holdRank})` : 'hold'}{' '}
+              {lastCreatedHold.bookingNumber} — {lastCreatedHold.quantity}× for "{lastCreatedHold.jobName}".
             </span>
             <button
               onClick={() => setAssignModalItemId(lastCreatedHold.bookingItemId)}
-              className="text-xs font-medium text-emerald-900 underline underline-offset-2 hover:text-emerald-700"
+              className="text-xs font-medium underline underline-offset-2"
             >
               Assign units →
             </button>
           </div>
         )}
+        {promoteFeedback && (
+          <div className="mt-3 text-sm text-zinc-800 bg-zinc-50 border border-zinc-200 rounded px-3 py-2">{promoteFeedback}</div>
+        )}
       </section>
 
-      {holdModalOpen && categoryId && (
+      {holdModalMode !== 'closed' && categoryId && (
         <NewHoldModal
           categoryId={categoryId}
           categoryName={selectedCategoryName}
           startDate={start}
           endDate={end}
           bufferDays={bufferDays}
-          onClose={() => setHoldModalOpen(false)}
+          asBackup={holdModalMode === 'backup'}
+          onClose={() => setHoldModalMode('closed')}
           onCreated={(hold) => {
             setLastCreatedHold({
               bookingNumber: hold.booking.bookingNumber,
               quantity: hold.bookingItem.quantity,
               jobName: hold.booking.jobName,
               bookingItemId: hold.bookingItem.id,
+              isBackup: Boolean(hold.isBackup),
+              holdRank: hold.holdRank ?? hold.bookingItem.holdRank ?? 1,
             })
-            setHoldModalOpen(false)
-            // Refresh the diff to reflect the new hold's capacity drain.
+            setHoldModalMode('closed')
             void run()
           }}
         />
@@ -296,6 +368,77 @@ export default function SchedulingShadowPage() {
             <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               Planyo side unavailable: {data.planyoError}
             </div>
+          )}
+
+          {stackedHolds && stackedHolds.rows.length > 0 && (
+            <section className="bg-white border border-zinc-200 rounded-lg overflow-hidden mb-4">
+              <header className="px-3 py-2 bg-zinc-50 border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-600 flex items-center justify-between">
+                <span>
+                  Hold stack — <span className="text-zinc-900 font-semibold">{stackedHolds.counts.primary}</span> primary
+                  {stackedHolds.counts.backups > 0 && (
+                    <> + <span className="text-amber-700 font-semibold">{stackedHolds.counts.backups}</span> backup{stackedHolds.counts.backups === 1 ? '' : 's'}</>
+                  )}
+                </span>
+              </header>
+              <table className="min-w-full text-sm">
+                <thead className="bg-white text-zinc-600 text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium">Rank</th>
+                    <th className="text-left px-3 py-2 font-medium">Booking</th>
+                    <th className="text-left px-3 py-2 font-medium">Job</th>
+                    <th className="text-left px-3 py-2 font-medium">Company</th>
+                    <th className="text-right px-3 py-2 font-medium">Qty / Assigned</th>
+                    <th className="text-left px-3 py-2 font-medium">Window</th>
+                    <th className="text-left px-3 py-2 font-medium">Status</th>
+                    <th className="text-right px-3 py-2 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {stackedHolds.rows.map((r) => (
+                    <tr key={r.bookingItemId} className="hover:bg-zinc-50 align-top">
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-block text-xs px-2 py-0.5 rounded border font-mono ${
+                            r.holdRank === 1
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          {r.holdRank === 1 ? 'primary' : `backup ${r.holdRank}`}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 font-mono text-zinc-900">{r.bookingNumber}</td>
+                      <td className="px-3 py-2 text-zinc-900">{r.jobName}</td>
+                      <td className="px-3 py-2 text-zinc-700">{r.company?.name ?? '—'}</td>
+                      <td className="px-3 py-2 text-right text-zinc-700">
+                        {r.assignedCount}<span className="text-zinc-400">/{r.quantity}</span>
+                      </td>
+                      <td className="px-3 py-2 text-zinc-700">
+                        {r.rentalStart.slice(0, 10)} → {r.rentalEnd.slice(0, 10)}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-600">{r.status}</td>
+                      <td className="px-3 py-2 text-right">
+                        {r.holdRank >= 2 ? (
+                          <button
+                            onClick={() => promote(r.bookingItemId)}
+                            className="border border-amber-300 hover:bg-amber-50 text-amber-900 text-xs font-medium px-2.5 py-1 rounded"
+                          >
+                            Promote to primary
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setAssignModalItemId(r.bookingItemId)}
+                            className="border border-zinc-300 hover:bg-zinc-50 text-zinc-800 text-xs font-medium px-2.5 py-1 rounded"
+                          >
+                            Assign units
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
           )}
 
           <section className="bg-white border border-zinc-200 rounded-lg overflow-hidden">

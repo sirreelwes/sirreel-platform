@@ -39,10 +39,16 @@ interface HoldBody {
   jobName?: string
   productionName?: string | null
   priority?: 'STANDARD' | 'HIGH' | 'LOW'
-  source?: 'WEBSITE' | 'PHONE' | 'EMAIL' | 'AGENT_DIRECT' | 'AI_AUTO'
+  source?: 'WEBSITE' | 'PHONE' | 'EMAIL' | 'AGENT_DIRECT' | 'AI_AUTO' | 'PLANYO_BACKFILL'
   notes?: string | null
   bufferDays?: number
   bufferOverride?: boolean
+  /** Hold rank — 1 = primary (default, capacity-gated); ≥2 = backup,
+   *  bypasses capacity and buffer checks. If isBackup=true and
+   *  holdRank is omitted the server picks rank = (max existing rank
+   *  in the window) + 1. */
+  holdRank?: number
+  isBackup?: boolean
 }
 
 function parseDate(s: string | undefined | null): Date | null {
@@ -94,17 +100,37 @@ export async function POST(req: NextRequest) {
   })
   if (!category) return NextResponse.json({ error: 'category not found' }, { status: 404 })
 
-  // Re-check availability server-side — this is the capacity gate. Even
-  // if the client thinks there's room, anything could have landed in
-  // the milliseconds since they looked.
+  // Determine effective rank. Default = 1 (primary). isBackup=true
+  // without an explicit holdRank → server picks next-available rank
+  // for the overlapping window.
+  const explicitRank = Number.isFinite(body.holdRank) ? Math.max(1, Math.floor(body.holdRank!)) : null
+  const wantsBackup = body.isBackup === true || (explicitRank !== null && explicitRank >= 2)
+  let effectiveRank = explicitRank ?? 1
+  if (wantsBackup && !explicitRank) {
+    const maxRankAgg = await prisma.bookingItem.aggregate({
+      where: {
+        categoryId: body.categoryId,
+        status: { in: ['REQUESTED', 'ASSIGNED'] },
+        booking: { startDate: { lte: end }, endDate: { gte: start } },
+      },
+      _max: { holdRank: true },
+    })
+    effectiveRank = Math.max(2, (maxRankAgg._max.holdRank ?? 1) + 1)
+  }
+  const isPrimary = effectiveRank === 1
+
+  // Re-check availability server-side — this is the capacity gate
+  // for PRIMARY holds. Backups (rank ≥ 2) skip it entirely: they're
+  // explicitly allowed to overlap at-capacity categories and queue.
   const availability = await getCategoryAvailability(body.categoryId, start, end, bufferDays)
 
-  if (qty > availability.availableToHold) {
+  if (isPrimary && qty > availability.availableToHold) {
     return NextResponse.json(
       {
         ok: false,
         error: 'over-capacity',
         reason: 'requested quantity exceeds availableToHold',
+        suggestion: 'place a backup hold (rank ≥ 2) — backups queue behind the primary and convert when the primary releases',
         availability: {
           serviceableCount: availability.serviceableCount,
           freeCount: availability.freeCount,
@@ -117,7 +143,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (qty > availability.freeCount && !body.bufferOverride) {
+  if (isPrimary && qty > availability.freeCount && !body.bufferOverride) {
     return NextResponse.json(
       {
         ok: false,
@@ -172,8 +198,9 @@ export async function POST(req: NextRequest) {
             quantity: qty,
             dailyRate: category.dailyRate,
             status: 'REQUESTED',
+            holdRank: effectiveRank,
           },
-          select: { id: true, quantity: true, status: true, dailyRate: true },
+          select: { id: true, quantity: true, status: true, dailyRate: true, holdRank: true },
         })
         return { booking, bookingItem }
       })
@@ -183,7 +210,9 @@ export async function POST(req: NextRequest) {
           ok: true,
           booking: result.booking,
           bookingItem: result.bookingItem,
-          bufferOverrideUsed: Boolean(body.bufferOverride && qty > availability.freeCount),
+          bufferOverrideUsed: Boolean(body.bufferOverride && qty > availability.freeCount && isPrimary),
+          isBackup: !isPrimary,
+          holdRank: effectiveRank,
         },
         { status: 201 },
       )
