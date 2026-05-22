@@ -418,6 +418,251 @@ async function main() {
     await prisma.booking.deleteMany({ where: { jobName: { startsWith: FIXTURE_JOB_PREFIX } } })
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //   DB-BACKED: buffer-encroachment + multi-qty + serviceable
+  // ═══════════════════════════════════════════════════════════════
+  // The capacity-1 block exercised the hard-block path. This block
+  // covers the SOFT path: buffer-encroachment 409 + override, plus
+  // multi-quantity over-capacity and the MAINTENANCE-status
+  // exclusion that's easy to silently break.
+  //
+  // Fixture shape:
+  //   · category "TEST capacity-2 stage", totalUnits=2
+  //   · 3 assets: Test-2 Unit A (AVAILABLE), Test-2 Unit B (AVAILABLE),
+  //               Test-2 Unit C (MAINTENANCE)  ← must NOT count as serviceable
+  //   · pre-existing Booking + BookingAssignment on Unit A for a
+  //     window ending the day before the test window — this is what
+  //     puts Unit A into buffer state for the test window with
+  //     bufferDays=1.
+
+  console.log('\n══ Buffer-encroachment + multi-qty + serviceable-status ══')
+
+  const ANCHOR_START = '2026-12-12' // anchor assignment on Unit A
+  const ANCHOR_END = '2026-12-14' // ends day before test window
+  const TW_START = '2026-12-15' // test window
+  const TW_END = '2026-12-17'
+  const CAP2_FIXTURE_PREFIX = 'TEST-CAP2-FIXTURE'
+
+  const CAT2_SLUG = 'test-cap2-stage'
+  let cap2Category = await prisma.assetCategory.findUnique({ where: { slug: CAT2_SLUG } })
+  if (!cap2Category) {
+    cap2Category = await prisma.assetCategory.create({
+      data: {
+        name: 'TEST capacity-2 stage',
+        slug: CAT2_SLUG,
+        totalUnits: 2,
+        dailyRate: 0,
+        department: 'STAGES',
+        isPublished: false,
+        description: 'Test fixture — two-unit category for buffer + multi-qty + serviceable-status assertions.',
+      },
+    })
+  }
+  if (cap2Category.totalUnits !== 2) {
+    cap2Category = await prisma.assetCategory.update({ where: { id: cap2Category.id }, data: { totalUnits: 2 } })
+  }
+
+  async function ensureAsset(unitName: string, status: 'AVAILABLE' | 'MAINTENANCE') {
+    let a = await prisma.asset.findFirst({ where: { categoryId: cap2Category!.id, unitName } })
+    if (!a) {
+      a = await prisma.asset.create({
+        data: {
+          categoryId: cap2Category!.id,
+          unitName,
+          status,
+          location: 'LANKERSHIM',
+          tier: 'STANDARD',
+          isActive: true,
+          notes: 'Auto-created by tests/scheduling/availability.test.ts (capacity-2 fixture).',
+        },
+      })
+    }
+    if (a.status !== status || !a.isActive) {
+      a = await prisma.asset.update({ where: { id: a.id }, data: { status, isActive: true } })
+    }
+    return a
+  }
+  const unitA = await ensureAsset('Test-2 Unit A', 'AVAILABLE')
+  await ensureAsset('Test-2 Unit B', 'AVAILABLE')
+  await ensureAsset('Test-2 Unit C', 'MAINTENANCE')
+
+  // Reuse the capacity-1 fixture's FK references (Company/Person/User
+  // — they were validated earlier in this run).
+  const company2 = await prisma.company.findFirst({ select: { id: true } })
+  const person2 = await prisma.person.findFirst({ select: { id: true } })
+  const agent2 = await prisma.user.findFirst({ select: { id: true } })
+  if (!company2 || !person2 || !agent2) {
+    failures.push('CAPACITY-2 SETUP: required Company/Person/User not present in DB')
+    return
+  }
+
+  // Defensive cleanup of any leftover fixture rows before we start.
+  await prisma.booking.deleteMany({
+    where: { jobName: { startsWith: CAP2_FIXTURE_PREFIX } },
+  })
+
+  // Create the anchor Booking + BookingItem + BookingAssignment that
+  // puts Unit A in buffer state for the test window.
+  let anchorBookingId = ''
+  try {
+    const anchorBooking = await prisma.booking.create({
+      data: {
+        bookingNumber: `SR-TEST-CAP2-ANCHOR-${Date.now()}`,
+        companyId: company2.id,
+        personId: person2.id,
+        agentId: agent2.id,
+        jobName: `${CAP2_FIXTURE_PREFIX} anchor`,
+        startDate: d(ANCHOR_START),
+        endDate: d(ANCHOR_END),
+        status: 'CONFIRMED',
+        source: 'AGENT_DIRECT',
+      },
+      select: { id: true },
+    })
+    anchorBookingId = anchorBooking.id
+    const anchorItem = await prisma.bookingItem.create({
+      data: {
+        bookingId: anchorBooking.id,
+        categoryId: cap2Category.id,
+        quantity: 1,
+        dailyRate: 0,
+        status: 'ASSIGNED',
+        holdRank: 1,
+      },
+      select: { id: true },
+    })
+    await prisma.bookingAssignment.create({
+      data: {
+        bookingItemId: anchorItem.id,
+        assetId: unitA.id,
+        startDate: d(ANCHOR_START),
+        endDate: d(ANCHOR_END),
+        status: 'ASSIGNED',
+      },
+    })
+
+    async function postHold2(jobSuffix: string, args: { quantity: number; isBackup?: boolean; bufferOverride?: boolean }) {
+      const body = {
+        categoryId: cap2Category!.id,
+        startDate: TW_START,
+        endDate: TW_END,
+        quantity: args.quantity,
+        companyId: company2!.id,
+        personId: person2!.id,
+        agentId: agent2!.id,
+        jobName: `${CAP2_FIXTURE_PREFIX} ${jobSuffix}`,
+        isBackup: args.isBackup ?? false,
+        bufferOverride: args.bufferOverride ?? false,
+        bufferDays: 1,
+      }
+      const req = new Request('http://localhost/api/scheduling/holds', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const res = await holdsRoute.POST(req as never)
+      return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // A. SERVICEABLE-STATUS EXCLUSION
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-2] A. SERVICEABLE-STATUS EXCLUSION')
+    const baseline = await getCategoryAvailability(cap2Category.id, d(TW_START), d(TW_END), 1)
+    check(
+      baseline.serviceableCount === 2,
+      `serviceableCount === 2 (excludes MAINTENANCE Unit C) — got ${baseline.serviceableCount}`,
+    )
+    check(
+      baseline.freeCount === 1 && baseline.bufferCount === 1,
+      `freeCount=1 / bufferCount=1 with Unit A's anchor ending 1 day before window (got free=${baseline.freeCount} buffer=${baseline.bufferCount})`,
+    )
+    check(
+      baseline.availableToHold === 2,
+      `availableToHold=2 (2 serviceable, 0 hard-booked in window, 0 REQUESTED rank=1 — got ${baseline.availableToHold})`,
+    )
+
+    // ─────────────────────────────────────────────────────────────
+    // B. MULTI-QUANTITY OVER CAPACITY
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-2] B. MULTI-QUANTITY OVER CAPACITY')
+    const oversize = await postHold2('oversize', { quantity: 3 })
+    check(oversize.status === 409, `qty=3 over capacity-2 → 409 (got ${oversize.status})`)
+    check(oversize.json.error === 'over-capacity', `error code === "over-capacity" (got "${oversize.json.error}")`)
+    const stuckOversize = await prisma.bookingItem.count({
+      where: { categoryId: cap2Category.id, booking: { jobName: `${CAP2_FIXTURE_PREFIX} oversize` } },
+    })
+    check(stuckOversize === 0, 'no BookingItem persisted from rejected oversize attempt')
+
+    // ─────────────────────────────────────────────────────────────
+    // C. BUFFER-ENCROACHMENT SOFT WARN (qty > freeCount, qty ≤ available)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-2] C. BUFFER-ENCROACHMENT SOFT WARN')
+    const bufferWarn = await postHold2('buffer-soft', { quantity: 2 })
+    check(bufferWarn.status === 409, `qty=2 with freeCount=1 + bufferCount=1 → 409 soft warn (got ${bufferWarn.status})`)
+    check(
+      bufferWarn.json.error === 'buffer-encroachment',
+      `error code === "buffer-encroachment" (got "${bufferWarn.json.error}")`,
+    )
+    check(bufferWarn.json.needsOverride === true, 'response includes needsOverride=true')
+
+    // ─────────────────────────────────────────────────────────────
+    // D. BUFFER OVERRIDE SUCCEEDS
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-2] D. BUFFER OVERRIDE SUCCEEDS')
+    const bufferForce = await postHold2('buffer-force', { quantity: 2, bufferOverride: true })
+    check(
+      bufferForce.status === 201 && bufferForce.json.ok === true,
+      `qty=2 with bufferOverride=true → 201 (got ${bufferForce.status})`,
+    )
+    if (bufferForce.status === 201) {
+      const bi = bufferForce.json.bookingItem as { id: string; holdRank: number; quantity: number }
+      check(bi.holdRank === 1, `forced hold lands at rank 1 (got ${bi.holdRank})`)
+      check(bi.quantity === 2, `forced hold quantity preserved (got ${bi.quantity})`)
+      check(
+        Boolean(bufferForce.json.bufferOverrideUsed),
+        `response flags bufferOverrideUsed=true (got ${bufferForce.json.bufferOverrideUsed})`,
+      )
+    }
+
+    // After the force: 2 units claimed by rank=1 → availableToHold == 0.
+    const postForce = await getCategoryAvailability(cap2Category.id, d(TW_START), d(TW_END), 1)
+    check(
+      postForce.availableToHold === 0,
+      `availableToHold === 0 after rank-1 qty=2 hold (got ${postForce.availableToHold})`,
+    )
+
+    // ─────────────────────────────────────────────────────────────
+    // E. BACKUP HOLD IGNORES BUFFER + CAPACITY
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[capacity-2] E. BACKUP HOLD IGNORES BUFFER + CAPACITY')
+    const backupAtCap = await postHold2('backup-bypass', { quantity: 1, isBackup: true })
+    check(
+      backupAtCap.status === 201 && backupAtCap.json.ok === true,
+      `rank-2 backup at availableToHold=0 → 201 (got ${backupAtCap.status})`,
+    )
+    if (backupAtCap.status === 201) {
+      const bi = backupAtCap.json.bookingItem as { id: string; holdRank: number }
+      check(bi.holdRank === 2, `backup lands at rank 2 (got ${bi.holdRank})`)
+    }
+    const postBackup = await getCategoryAvailability(cap2Category.id, d(TW_START), d(TW_END), 1)
+    check(
+      postBackup.availableToHold === 0,
+      `availableToHold STILL 0 after backup (got ${postBackup.availableToHold}) — backups must never consume capacity`,
+    )
+  } finally {
+    // Hard cleanup: delete every fixture booking (cascades through to
+    // BookingItem + BookingAssignment) AND the anchor.
+    await prisma.booking.deleteMany({
+      where: {
+        OR: [
+          { jobName: { startsWith: CAP2_FIXTURE_PREFIX } },
+          ...(anchorBookingId ? [{ id: anchorBookingId }] : []),
+        ],
+      },
+    })
+  }
+
   // ── Final summary ──
   console.log('')
   if (failures.length === 0) {
