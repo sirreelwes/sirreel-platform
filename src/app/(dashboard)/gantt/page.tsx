@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
 import { SourceBanner } from '@/components/timeline/SourceBanner';
@@ -72,6 +72,37 @@ export default function GanttPage() {
   const allCats = [...new Set(units.map(u => u.cat))].sort()
   const filteredUnits = catFilter === 'all' ? units : units.filter(u => u.cat === catFilter)
 
+  // ── Booked-in-window sort + divider rows ──
+  // Two-tier: any asset with a booking overlapping the CURRENTLY
+  // VISIBLE window floats above idle assets. Within each tier the
+  // API's category+unitName ordering is preserved (stable sort).
+  // Recomputes only on filteredUnits / window changes — not every
+  // horizontal-scroll frame.
+  type RowEntry = { type: 'unit'; unit: any } | { type: 'divider'; label: string }
+  const { rowEntries } = useMemo(() => {
+    const visibleStart = startDate
+    const visibleEnd = addDays(startDate, totalDays - 1)
+    const isBookedInWindow = (u: any) =>
+      Array.isArray(u.bookings) && u.bookings.some((b: any) => b && b.start <= visibleEnd && b.end >= visibleStart)
+    const sorted = [...filteredUnits].sort((a, b) => {
+      const av = isBookedInWindow(a) ? 0 : 1
+      const bv = isBookedInWindow(b) ? 0 : 1
+      return av - bv
+    })
+    let booked = 0
+    for (const u of sorted) if (isBookedInWindow(u)) booked++
+    const idle = sorted.length - booked
+    const entries: RowEntry[] = []
+    for (let i = 0; i < sorted.length; i++) {
+      if (i === booked && booked > 0 && idle > 0) {
+        entries.push({ type: 'divider', label: `${idle} idle in this window` })
+      }
+      entries.push({ type: 'unit', unit: sorted[i] })
+    }
+    return { rowEntries: entries, bookedCount: booked, idleCount: idle }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredUnits, weeks, startDate, totalDays])
+
   return (
     <div>
       {/* Header */}
@@ -116,114 +147,165 @@ export default function GanttPage() {
         ))}
       </div>
 
-      {/* Gantt */}
-      <div className="flex border border-gray-200 rounded-lg overflow-hidden bg-white" style={{ height: 'calc(100vh - 210px)' }}>
-        {/* Labels */}
-        <div className="w-48 flex-shrink-0 border-r border-gray-200 bg-gray-50 z-10 overflow-y-auto">
-          <div className="h-10 border-b border-gray-200 px-3 flex items-center text-[10px] font-bold text-gray-400 uppercase">
-            {view === 'asset' ? 'Unit' : 'Client'}
-          </div>
-
-          {view === 'asset' ? (
-            filteredUnits.map((unit, i) => (
-              <div key={i} className="h-8 border-b border-gray-100 px-3 flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[unit.cat] || '#9ca3af' }} />
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-gray-900 truncate">{unit.unitName}</div>
-                  <div className="text-[9px] text-gray-400 truncate">{unit.resourceName}</div>
-                </div>
-              </div>
-            ))
-          ) : (
-            jobs.map((job, i) => (
-              <div key={i} className="h-8 border-b border-gray-100 px-3 flex items-center cursor-pointer hover:bg-gray-100" onClick={() => setSelected(job)}>
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-gray-900 truncate">{job.company}</div>
-                  <div className="text-[9px] text-gray-400 truncate">{job.items?.length} unit{job.items?.length !== 1 ? 's' : ''} · {fMonth(job.startDate)}</div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Timeline */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto">
-          {/* Date header */}
-          <div className="flex h-10 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
-            {dates.map(ds => {
-              const isToday = ds === today
-              const isWeekend = [0,6].includes(new Date(ds + 'T12:00:00').getDay())
-              return (
-                <div key={ds} style={{ width: dayWidth, minWidth: dayWidth }}
-                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-100 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-100/50 text-gray-400' : 'text-gray-500'}`}>
-                  {fDay(ds)}
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="relative">
-            {/* Today line */}
-            {todayOffset >= 0 && todayOffset < totalDays && (
-              <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: todayOffset * dayWidth + dayWidth / 2, width: 2, background: '#3b82f6' }}>
-                <div className="absolute -top-0 -left-[3px] w-2 h-2 rounded-full bg-blue-500" />
-              </div>
-            )}
+      {/* Gantt — single scroll container.
+          - outer `overflow-auto` owns both vertical AND horizontal scroll
+          - labels column is `sticky left-0` (pins horizontally while dates scroll)
+          - date header row is `sticky top-0` (pins vertically while rows scroll)
+          - top-left corner cell is sticky on BOTH axes
+          Row heights match exactly between the two columns: h-8 unit rows,
+          h-6 divider rows, h-10 header — all with box-sizing border-box
+          (Tailwind default) so 1px borders are counted in the height. */}
+      <div
+        className="border border-gray-200 rounded-lg overflow-auto bg-white relative"
+        style={{ height: 'calc(100vh - 210px)' }}
+      >
+        <div className="flex" style={{ width: 192 + totalDays * dayWidth, minWidth: '100%' }}>
+          {/* ── LEFT: labels column (sticky left:0) ── */}
+          <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200">
+            {/* Top-left corner — sticky on both axes */}
+            <div className="h-10 border-b border-gray-200 px-3 flex items-center text-[10px] font-bold text-gray-400 uppercase bg-gray-50 sticky top-0 z-30">
+              {view === 'asset' ? 'Unit' : 'Client'}
+            </div>
 
             {view === 'asset' ? (
-              filteredUnits.map((unit, i) => (
-                <div key={i} className="relative h-8 border-b border-gray-100">
-                  {/* Grid */}
-                  <div className="absolute inset-0 flex pointer-events-none">
-                    {dates.map(ds => (
-                      <div key={ds} style={{ width: dayWidth, minWidth: dayWidth }}
-                        className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`} />
-                    ))}
+              rowEntries.map((entry, i) => (
+                entry.type === 'divider' ? (
+                  <div
+                    key={`d-${i}`}
+                    className="h-6 border-b border-gray-200 px-3 flex items-center bg-gray-100"
+                  >
+                    <span className="text-[9px] uppercase tracking-wide text-gray-500 font-semibold">
+                      {entry.label}
+                    </span>
                   </div>
-                  {/* Booking bars */}
-                  {unit.bookings.map((b: any, j: number) => {
-                    const bar = getBar(b.start, b.end)
-                    if (!bar) return null
-                    const sc = STATUS_COLORS[b.status] || STATUS_COLORS.booked
-                    return (
-                      <div key={j}
-                        className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
-                        style={{ left: bar.left, width: bar.width }}
-                        onClick={() => setSelected({ ...b, unitName: unit.unitName, isUnit: true })}>
-                        <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                          {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
+                ) : (
+                  <div
+                    key={`u-${i}`}
+                    className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50"
+                  >
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[entry.unit.cat] || '#9ca3af' }} />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
+                      <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
+                    </div>
+                  </div>
+                )
               ))
             ) : (
               jobs.map((job, i) => (
-                <div key={i} className="relative h-8 border-b border-gray-100">
-                  <div className="absolute inset-0 flex pointer-events-none">
-                    {dates.map(ds => (
-                      <div key={ds} style={{ width: dayWidth, minWidth: dayWidth }}
-                        className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`} />
-                    ))}
+                <div
+                  key={i}
+                  className="h-8 border-b border-gray-100 px-3 flex items-center cursor-pointer hover:bg-gray-100 bg-gray-50"
+                  onClick={() => setSelected(job)}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-gray-900 truncate">{job.company}</div>
+                    <div className="text-[9px] text-gray-400 truncate">{job.items?.length} unit{job.items?.length !== 1 ? 's' : ''} · {fMonth(job.startDate)}</div>
                   </div>
-                  {(() => {
-                    const bar = getBar(job.startDate, job.endDate)
-                    if (!bar) return null
-                    const sc = STATUS_COLORS[job.status] || STATUS_COLORS.booked
-                    return (
-                      <div className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}
-                        style={{ left: bar.left, width: bar.width }}
-                        onClick={() => setSelected(job)}>
-                        <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                          {job.company} · {job.items?.length} unit{job.items?.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    )
-                  })()}
                 </div>
               ))
             )}
+          </div>
+
+          {/* ── RIGHT: timeline column ── */}
+          <div className="flex-shrink-0" style={{ width: totalDays * dayWidth }}>
+            {/* Sticky date header */}
+            <div className="flex h-10 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+              {dates.map(ds => {
+                const isToday = ds === today
+                const isWeekend = [0,6].includes(new Date(ds + 'T12:00:00').getDay())
+                return (
+                  <div
+                    key={ds}
+                    style={{ width: dayWidth, minWidth: dayWidth }}
+                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-100 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-100/50 text-gray-400' : 'text-gray-500'}`}
+                  >
+                    {fDay(ds)}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Rows + today line */}
+            <div className="relative">
+              {todayOffset >= 0 && todayOffset < totalDays && (
+                <div
+                  className="absolute top-0 bottom-0 z-[15] pointer-events-none"
+                  style={{ left: todayOffset * dayWidth + dayWidth / 2, width: 2, background: '#3b82f6' }}
+                >
+                  <div className="absolute -top-0 -left-[3px] w-2 h-2 rounded-full bg-blue-500" />
+                </div>
+              )}
+
+              {view === 'asset' ? (
+                rowEntries.map((entry, i) => (
+                  entry.type === 'divider' ? (
+                    <div key={`d-${i}`} className="h-6 border-b border-gray-200 bg-gray-100" />
+                  ) : (
+                    <div key={`u-${i}`} className="relative h-8 border-b border-gray-100">
+                      {/* Grid */}
+                      <div className="absolute inset-0 flex pointer-events-none">
+                        {dates.map(ds => (
+                          <div
+                            key={ds}
+                            style={{ width: dayWidth, minWidth: dayWidth }}
+                            className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                          />
+                        ))}
+                      </div>
+                      {/* Booking bars */}
+                      {entry.unit.bookings.map((b: any, j: number) => {
+                        const bar = getBar(b.start, b.end)
+                        if (!bar) return null
+                        const sc = STATUS_COLORS[b.status] || STATUS_COLORS.booked
+                        return (
+                          <div
+                            key={j}
+                            className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
+                            style={{ left: bar.left, width: bar.width }}
+                            onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true })}
+                          >
+                            <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                              {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                ))
+              ) : (
+                jobs.map((job, i) => (
+                  <div key={i} className="relative h-8 border-b border-gray-100">
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {dates.map(ds => (
+                        <div
+                          key={ds}
+                          style={{ width: dayWidth, minWidth: dayWidth }}
+                          className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                        />
+                      ))}
+                    </div>
+                    {(() => {
+                      const bar = getBar(job.startDate, job.endDate)
+                      if (!bar) return null
+                      const sc = STATUS_COLORS[job.status] || STATUS_COLORS.booked
+                      return (
+                        <div
+                          className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}
+                          style={{ left: bar.left, width: bar.width }}
+                          onClick={() => setSelected(job)}
+                        >
+                          <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                            {job.company} · {job.items?.length} unit{job.items?.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
