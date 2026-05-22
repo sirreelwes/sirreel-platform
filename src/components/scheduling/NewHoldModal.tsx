@@ -89,9 +89,18 @@ export function NewHoldModal({
   const [jobName, setJobName] = useState('')
   const [productionName, setProductionName] = useState('')
   const [notes, setNotes] = useState('')
+  // Dates start at the parent's pre-fill; the agent can extend / adjust
+  // inside the modal (per the brief: "agent sets end + client/job in the modal").
+  const [startDateInput, setStartDateInput] = useState(startDate)
+  const [endDateInput, setEndDateInput] = useState(endDate)
   const [submitting, setSubmitting] = useState(false)
   const [hardError, setHardError] = useState<string | null>(null)
   const [bufferWarning, setBufferWarning] = useState<{ reason: string; availability: AvailabilitySummary } | null>(null)
+
+  const datesValid =
+    /^\d{4}-\d{2}-\d{2}$/.test(startDateInput) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(endDateInput) &&
+    endDateInput >= startDateInput
 
   const canSubmit =
     !!company &&
@@ -99,6 +108,7 @@ export function NewHoldModal({
     contact.personId &&
     jobName.trim().length > 0 &&
     quantity > 0 &&
+    datesValid &&
     !submitting
 
   async function submit(bufferOverride: boolean) {
@@ -112,8 +122,8 @@ export function NewHoldModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           categoryId,
-          startDate,
-          endDate,
+          startDate: startDateInput,
+          endDate: endDateInput,
           quantity,
           companyId: company.id,
           personId: contact.personId,
@@ -186,7 +196,7 @@ export function NewHoldModal({
               {asset ? ` on ${asset.unitName}` : ''}
             </h2>
             <p className="text-sm text-zinc-600 mt-0.5">
-              {categoryName} · {startDate} → {endDate} · bufferDays={bufferDays}
+              {categoryName} · bufferDays={bufferDays}
               {asBackup ? ' · queues behind existing holds (rank assigned by server)' : ''}
               {asset ? ' · will bind to this specific unit on create' : ''}
             </p>
@@ -195,6 +205,39 @@ export function NewHoldModal({
         </header>
 
         <div className="px-6 py-4 space-y-4">
+          {/* Date range — editable per the brief. Pre-filled by the
+              caller (gantt row click pre-fills the clicked date). */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-600">Start</span>
+              <input
+                type="date"
+                value={startDateInput}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setStartDateInput(next)
+                  // Keep end ≥ start: if the new start is past the
+                  // current end, drag end with it.
+                  if (next && endDateInput && endDateInput < next) setEndDateInput(next)
+                }}
+                className="mt-1 block w-full rounded border-zinc-300 text-sm px-2 py-1.5"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs uppercase tracking-wide text-zinc-600">End</span>
+              <input
+                type="date"
+                value={endDateInput}
+                min={startDateInput}
+                onChange={(e) => setEndDateInput(e.target.value)}
+                className="mt-1 block w-full rounded border-zinc-300 text-sm px-2 py-1.5"
+              />
+            </label>
+          </div>
+          {!datesValid && (
+            <div className="text-xs text-rose-700">End date must be on or after start date.</div>
+          )}
+
           <label className="block">
             <span className="text-xs uppercase tracking-wide text-zinc-600">
               Quantity{asset ? ' (locked to 1 — binding a specific unit)' : ''}

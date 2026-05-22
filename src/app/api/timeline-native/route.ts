@@ -222,12 +222,24 @@ export async function GET() {
     },
   })
 
-  const unitMap = new Map<string, { unitName: string; cat: string; resourceName: string; bookings: Array<Record<string, unknown>> }>()
+  const unitMap = new Map<
+    string,
+    {
+      unitName: string
+      assetId: string
+      categoryId: string
+      cat: string
+      resourceName: string
+      bookings: Array<Record<string, unknown>>
+    }
+  >()
   for (const a of assignments) {
     const unitName = a.asset.unitName
     const cat = mapCategoryName(a.asset.category?.name ?? '')
     const slot = unitMap.get(unitName) ?? {
       unitName,
+      assetId: a.asset.id, // needed by gantt row-click → +Hold flow (asset binding)
+      categoryId: a.asset.categoryId, // needed by gantt row-click → +Hold flow (modal category prop)
       cat,
       resourceName: a.asset.category?.name ?? '',
       bookings: [] as Array<Record<string, unknown>>,

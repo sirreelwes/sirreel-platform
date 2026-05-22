@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
 import { SourceBanner } from '@/components/timeline/SourceBanner';
+import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -43,6 +44,16 @@ export default function GanttPage() {
   const [actionPending, setActionPending] = useState<null | 'book' | 'release'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+  const [holdModal, setHoldModal] = useState<null | {
+    asset?: { id: string; unitName: string }
+    categoryId: string
+    categoryName: string
+    startDate: string
+    endDate: string
+    asBackup: boolean
+  }>(null)
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
+  const [showCategoryPickerForHold, setShowCategoryPickerForHold] = useState(false)
   const searchParams = useSearchParams()
   const source: TimelineSource = resolveTimelineSource(searchParams)
 
@@ -59,11 +70,57 @@ export default function GanttPage() {
       .finally(() => setLoading(false))
   }, [source])
 
+  // Categories — only loaded on native source, only when the "+ New
+  // Hold" picker is needed. Tiny endpoint; cheap to lazy-load.
+  useEffect(() => {
+    if (source !== 'native') return
+    if (categories.length > 0) return
+    fetch('/api/scheduling/categories')
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setCategories(d.categories || []) })
+      .catch(() => {})
+  }, [source, categories.length])
+
   const startDate = addDays(today, -3)
   const totalDays = weeks * 7
   const dates = Array.from({ length: totalDays }, (_, i) => addDays(startDate, i))
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
   const todayOffset = diffDays(startDate, today)
+
+  // ── Native-only +Hold entry points (Chunk 4 of the brief).
+  //    Row click on an asset → modal pre-filled with that asset +
+  //    clicked date. If the clicked date overlaps an existing
+  //    booking on that unit, the modal opens in BACKUP mode (per
+  //    "backup has dibs"); otherwise PRIMARY. The server still
+  //    enforces availability — this is just UX. ──
+  function openHoldOnAssetRow(unit: any, e: React.MouseEvent<HTMLDivElement>) {
+    if (source !== 'native') return
+    if (!unit?.assetId || !unit?.categoryId) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const dayIndex = Math.max(0, Math.min(totalDays - 1, Math.floor(x / dayWidth)))
+    const clickedDate = dates[dayIndex]
+    const overlap = Array.isArray(unit.bookings) && unit.bookings.some((b: any) => b && b.start <= clickedDate && b.end >= clickedDate)
+    setHoldModal({
+      asset: { id: unit.assetId, unitName: unit.unitName },
+      categoryId: unit.categoryId,
+      categoryName: unit.resourceName || unit.cat || 'Category',
+      startDate: clickedDate,
+      endDate: clickedDate,
+      asBackup: !!overlap,
+    })
+  }
+
+  function openCategoryHold(cat: { id: string; name: string }) {
+    setHoldModal({
+      categoryId: cat.id,
+      categoryName: cat.name,
+      startDate: today,
+      endDate: addDays(today, 1),
+      asBackup: false,
+    })
+    setShowCategoryPickerForHold(false)
+  }
 
   // ── Refresh the timeline data after an action. Kept inline so the
   //    fetch URL stays consistent with the initial load. ──
@@ -249,6 +306,35 @@ export default function GanttPage() {
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
             ))}
           </div>
+          {source === 'native' && (
+            <div className="relative">
+              <button
+                onClick={() => setShowCategoryPickerForHold(v => !v)}
+                className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+              >
+                + New Hold
+              </button>
+              {showCategoryPickerForHold && categories.length > 0 && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 max-h-80 overflow-auto"
+                  onMouseLeave={() => setShowCategoryPickerForHold(false)}
+                >
+                  <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                    Pick a category
+                  </div>
+                  {categories.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => openCategoryHold(c)}
+                      className="block w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50"
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -376,8 +462,14 @@ export default function GanttPage() {
                   const hasBackups = entry.backupBookings.length > 0
                   return (
                     <div key={`u-${i}`}>
-                      {/* Main row — primary bars only */}
-                      <div className="relative h-8 border-b border-gray-100">
+                      {/* Main row — primary bars only.
+                          Row-level onClick fires on empty-span clicks
+                          (bar onClicks stopPropagation). Native-only
+                          per the brief — gated inside openHoldOnAssetRow. */}
+                      <div
+                        className={`relative h-8 border-b border-gray-100 ${source === 'native' ? 'cursor-pointer hover:bg-blue-50/20' : ''}`}
+                        onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
+                      >
                         {/* Grid */}
                         <div className="absolute inset-0 flex pointer-events-none">
                           {dates.map(ds => (
@@ -398,7 +490,10 @@ export default function GanttPage() {
                               key={`p-${j}`}
                               className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
                               style={{ left: bar.left, width: bar.width }}
-                              onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: 1 })}
+                              onClick={(ev) => {
+                                ev.stopPropagation()
+                                setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: 1 })
+                              }}
                             >
                               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                                 {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
@@ -407,9 +502,15 @@ export default function GanttPage() {
                           )
                         })}
                       </div>
-                      {/* Backup sub-lane — greyed, rank-2+ bars stacked here */}
+                      {/* Backup sub-lane — greyed, rank-2+ bars stacked here.
+                          Empty-span clicks here delegate to the same
+                          asset-row handler; overlap detection will
+                          pick the right primary/backup mode. */}
                       {hasBackups && (
-                        <div className="relative h-8 border-b border-gray-100 bg-gray-100/70">
+                        <div
+                          className={`relative h-8 border-b border-gray-100 bg-gray-100/70 ${source === 'native' ? 'cursor-pointer hover:bg-gray-200/70' : ''}`}
+                          onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
+                        >
                           {/* Grid (lighter on the sub-lane) */}
                           <div className="absolute inset-0 flex pointer-events-none">
                             {dates.map(ds => (
@@ -430,7 +531,10 @@ export default function GanttPage() {
                                 key={`b-${j}`}
                                 className="absolute top-1 h-6 rounded-md bg-gray-300/70 border border-dashed border-gray-400 flex items-center px-1.5 cursor-pointer hover:bg-gray-300 transition-opacity overflow-hidden"
                                 style={{ left: bar.left, width: bar.width }}
-                                onClick={() => setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: rank, isBackup: true })}
+                                onClick={(ev) => {
+                                  ev.stopPropagation()
+                                  setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: rank, isBackup: true })
+                                }}
                                 title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
                               >
                                 <span className="text-[9px] font-semibold text-gray-700 truncate whitespace-nowrap">
@@ -585,6 +689,26 @@ export default function GanttPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* +Hold modal — native-source only.
+          Opens from an asset-row click (asset-bound) or the
+          "+ New Hold" header button (category-only). */}
+      {holdModal && (
+        <NewHoldModal
+          categoryId={holdModal.categoryId}
+          categoryName={holdModal.categoryName}
+          startDate={holdModal.startDate}
+          endDate={holdModal.endDate}
+          bufferDays={1}
+          asBackup={holdModal.asBackup}
+          asset={holdModal.asset}
+          onClose={() => setHoldModal(null)}
+          onCreated={() => {
+            setHoldModal(null)
+            refreshTimeline()
+          }}
+        />
       )}
     </div>
   )
