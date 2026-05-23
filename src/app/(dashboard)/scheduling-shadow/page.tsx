@@ -191,9 +191,9 @@ export default function SchedulingShadowPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold text-zinc-900">Scheduling shadow mode</h1>
         <p className="text-sm text-zinc-600 mt-1">
-          Side-by-side: Planyo's current answer vs. the native engine's answer for the same category and window. Read-only —
-          no holds or assignments are written here. Use this to verify the engine matches Planyo before native write paths
-          land.
+          Side-by-side: Planyo's current answer vs. the native engine's answer for the same category and window. Native is
+          the live operational source; this page is the per-category drift check. The diff table is read-only; the
+          +Hold / +Backup hold buttons below write to the native engine.
         </p>
       </header>
 

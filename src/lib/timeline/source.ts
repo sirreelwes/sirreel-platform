@@ -1,18 +1,19 @@
 /**
- * Tiny source-flag helper used by gantt / dashboard / calendar pages
- * to opt into the native Timeline endpoint via `?source=native` on
- * the URL. Defaults to `planyo` so today's behavior is unchanged.
+ * Source-flag helper used by gantt / dashboard / calendar pages.
+ * Native scheduling is the live operational source as of the
+ * Chunk 8 PR1 cutover (2026-05-23). Planyo remains as a read-only
+ * reference view, accessible via `?source=planyo`.
  *
- * When convergence is verified on /timeline-shadow, flip the default
- * here to 'native' (one-line change). Chunk 8 then retires the
- * Planyo endpoint entirely.
+ * PR2 (24–48h post-cutover, once native is stable) will retire
+ * /api/timeline and the reference path entirely.
  */
 
 export type TimelineSource = 'planyo' | 'native'
 
 export function resolveTimelineSource(params: URLSearchParams | { get(name: string): string | null }): TimelineSource {
-  // CUTOVER: default flips planyo→native at Chunk 8 (see native-scheduling-v1-brief.md); ?source=planyo is the temporary escape hatch.
-  return params.get('source') === 'native' ? 'native' : 'planyo'
+  // Native is the default operational source. `?source=planyo` keeps
+  // the legacy Planyo view available as reference until PR2 retires it.
+  return params.get('source') === 'planyo' ? 'planyo' : 'native'
 }
 
 export function timelineEndpoint(source: TimelineSource): string {

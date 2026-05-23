@@ -161,7 +161,7 @@ export default function TimelineShadowPage() {
         <p className="text-sm text-zinc-600 mt-1">
           Side-by-side: <code className="bg-zinc-100 px-1 rounded">/api/timeline</code> (Planyo-backed, today's prod source)
           vs. <code className="bg-zinc-100 px-1 rounded">/api/timeline-native</code> (native, reads BookingAssignment).
-          Use this to verify convergence before flipping the gantt / dashboard / calendar pages over to the native source.
+          Native is the live operational source now; this page remains as a reference / drift-check overlay until PR2 retires it.
           Pairs jobs by RW order number when present, falls back to job name + start date.
         </p>
       </header>

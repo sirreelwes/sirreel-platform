@@ -162,7 +162,7 @@ export default function SchedulingHubPage() {
           <DiagTile
             href="/timeline-shadow"
             title="Timeline shadow"
-            description="Planyo vs native, job-by-job. Pairs by RW order number when present; falls back to job name + start date. Use to verify convergence before flipping the Timeline default."
+            description="Planyo vs native, job-by-job. Pairs by RW order number when present; falls back to job name + start date. Reference / drift check now that native is the live book; retires with PR2."
           />
           <DiagTile
             href="/scheduling-shadow"
@@ -178,7 +178,7 @@ export default function SchedulingHubPage() {
           <DiagTile
             href="/gantt"
             title="Timeline (gantt)"
-            description="Production Timeline view. Default reads Planyo; append ?source=native to preview the native source."
+            description="Production Timeline view — live book. Reads native by default; append ?source=planyo to view the legacy reference."
           />
         </div>
       </section>
