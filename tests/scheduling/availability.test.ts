@@ -56,6 +56,7 @@ async function main() {
   const promoteRoute = await import('../../src/app/api/scheduling/booking-items/[id]/promote/route')
   const stackedRoute = await import('../../src/app/api/scheduling/stacked-holds/route')
   const assignRoute = await import('../../src/app/api/scheduling/booking-items/[id]/assign/route')
+  const confirmRoute = await import('../../src/app/api/scheduling/bookings/[id]/confirm/route')
 
   // ═══════════════════════════════════════════════════════════════
   //                  PURE TESTS (Chunk 2 boundary set)
@@ -779,6 +780,344 @@ async function main() {
         ],
       },
     })
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //   ACTION PATHS — promote / release / confirm + policy invariants
+  // ═══════════════════════════════════════════════════════════════
+  // Locks the route behaviors the gantt popup's Book / Promote /
+  // Release buttons depend on, plus the cross-route invariants
+  // ("backup has dibs", "1st booked → 2nd remains", no auto-promote)
+  // that are the easiest to silently drift.
+  //
+  // Uses the existing capacity-1 stage fixture (Test Stage A). Each
+  // sub-block uses its own non-overlapping window so state doesn't
+  // leak between assertions. Hard cleanup in the finally.
+
+  console.log('\n══ Action paths — promote / release / confirm ══')
+
+  const ACTION_PREFIX = 'TEST-ACTIONS-FIXTURE'
+
+  async function callPromote(itemId: string) {
+    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/promote`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),
+    })
+    const res = await promoteRoute.POST(req as never, { params: { id: itemId } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+  async function callRelease(itemId: string) {
+    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/release`, { method: 'POST' })
+    const res = await releaseRoute.POST(req as never, { params: { id: itemId } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+  async function callConfirm(bookingId: string) {
+    const req = new Request(`http://localhost/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
+    const res = await confirmRoute.POST(req as never, { params: { id: bookingId } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+  async function callAssignAction(itemId: string, assetId: string) {
+    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/assign`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ assetId }),
+    })
+    const res = await assignRoute.POST(req as never, { params: { id: itemId } })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+
+  /** Create Booking + BookingItem (status=ASSIGNED at given rank) + BookingAssignment on the fixture stage. */
+  async function makeAssignedHold(args: {
+    startISO: string
+    endISO: string
+    rank: number
+    suffix: string
+  }): Promise<{ bookingId: string; bookingItemId: string; assignmentId: string }> {
+    const booking = await prisma.booking.create({
+      data: {
+        bookingNumber: `SR-TEST-ACT-${args.suffix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        companyId: company!.id, personId: person!.id, agentId: agent!.id,
+        jobName: `${ACTION_PREFIX} ${args.suffix}`,
+        startDate: d(args.startISO), endDate: d(args.endISO),
+        status: 'REQUEST', source: 'AGENT_DIRECT',
+      },
+      select: { id: true },
+    })
+    const item = await prisma.bookingItem.create({
+      data: {
+        bookingId: booking.id, categoryId: fixtureCategory!.id,
+        quantity: 1, dailyRate: 0, status: 'ASSIGNED', holdRank: args.rank,
+      },
+      select: { id: true },
+    })
+    const ba = await prisma.bookingAssignment.create({
+      data: {
+        bookingItemId: item.id, assetId: fixtureAsset!.id,
+        startDate: d(args.startISO), endDate: d(args.endISO),
+        status: 'ASSIGNED',
+      },
+      select: { id: true },
+    })
+    return { bookingId: booking.id, bookingItemId: item.id, assignmentId: ba.id }
+  }
+
+  // Defensive cleanup of any leftover action-fixture rows.
+  await prisma.booking.deleteMany({ where: { jobName: { startsWith: ACTION_PREFIX } } })
+
+  try {
+    // ─────────────────────────────────────────────────────────────
+    // 1. PROMOTE WITH OWN-ASSIGNMENT, NO OTHER PRIMARY → ALLOWED
+    //    (locks this session's promote-capacity fix — the bug
+    //    where the backup's own BookingAssignment was being counted
+    //    against its own promotion)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 1. promote with own-assignment, no other primary → ALLOWED')
+    {
+      const W = { startISO: '2027-03-10', endISO: '2027-03-12' }
+      const backup = await makeAssignedHold({ ...W, rank: 2, suffix: '1-backup' })
+      const r = await callPromote(backup.bookingItemId)
+      check(r.status === 200 && r.json.ok === true, `promote ok (got ${r.status})`)
+      const item = await prisma.bookingItem.findUnique({ where: { id: backup.bookingItemId }, select: { holdRank: true } })
+      check(item?.holdRank === 1, `BookingItem.holdRank flipped 2→1 (got ${item?.holdRank})`)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. PROMOTE WHILE PRIMARY HOLDS → BLOCKED
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 2. promote while primary still active → BLOCKED')
+    {
+      const W = { startISO: '2027-03-20', endISO: '2027-03-22' }
+      const primary = await makeAssignedHold({ ...W, rank: 1, suffix: '2-primary' })
+      const backup = await makeAssignedHold({ ...W, rank: 2, suffix: '2-backup' })
+      const r = await callPromote(backup.bookingItemId)
+      check(r.status === 409 && r.json.error === 'capacity-conflict', `promote blocked 409 capacity-conflict (got ${r.status} ${JSON.stringify(r.json.error)})`)
+      const item = await prisma.bookingItem.findUnique({ where: { id: backup.bookingItemId }, select: { holdRank: true } })
+      check(item?.holdRank === 2, `backup rank unchanged (got ${item?.holdRank})`)
+      void primary // keep the variable used; primary is the conflict cause
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. RELEASE ON ASSIGNED → SWAPPED + UNFULFILLED (transactional)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 3. release ASSIGNED → SWAPPED + UNFULFILLED')
+    {
+      const W = { startISO: '2027-03-30', endISO: '2027-04-01' }
+      const primary = await makeAssignedHold({ ...W, rank: 1, suffix: '3-primary' })
+      const r = await callRelease(primary.bookingItemId)
+      check(r.status === 200 && r.json.ok === true, `release ok (got ${r.status})`)
+      check(r.json.swappedAssignmentCount === 1, `swappedAssignmentCount=1 in response (got ${r.json.swappedAssignmentCount})`)
+      const item = await prisma.bookingItem.findUnique({ where: { id: primary.bookingItemId }, select: { status: true } })
+      check(item?.status === 'UNFULFILLED', `BookingItem terminal status=UNFULFILLED (got ${item?.status})`)
+      const ba = await prisma.bookingAssignment.findUnique({ where: { id: primary.assignmentId }, select: { status: true } })
+      check(ba?.status === 'SWAPPED', `BookingAssignment flipped to SWAPPED (got ${ba?.status})`)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 4a. CONFIRM IDEMPOTENCY — already-CONFIRMED is a 200 no-op
+    // 4b. CONFIRM TERMINAL — CANCELLED Booking → 409
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 4a. confirm already-CONFIRMED → idempotent 200')
+    {
+      const W = { startISO: '2027-04-10', endISO: '2027-04-12' }
+      const b = await makeAssignedHold({ ...W, rank: 1, suffix: '4a' })
+      // First confirm — REQUEST → CONFIRMED
+      const r1 = await callConfirm(b.bookingId)
+      check(r1.status === 200 && r1.json.ok === true, `first confirm ok (got ${r1.status})`)
+      check((r1.json.booking as { status: string }).status === 'CONFIRMED', 'Booking.status=CONFIRMED post first call')
+      // Second confirm — already-CONFIRMED
+      const r2 = await callConfirm(b.bookingId)
+      check(r2.status === 200 && r2.json.ok === true, `second confirm idempotent 200 (got ${r2.status})`)
+      check(r2.json.alreadyConfirmed === true, `response carries alreadyConfirmed=true (got ${r2.json.alreadyConfirmed})`)
+    }
+
+    console.log('\n[actions] 4b. confirm CANCELLED → 409')
+    {
+      const W = { startISO: '2027-04-15', endISO: '2027-04-17' }
+      const b = await makeAssignedHold({ ...W, rank: 1, suffix: '4b' })
+      // Mutate Booking.status to CANCELLED directly (a state the
+      // route should reject)
+      await prisma.booking.update({ where: { id: b.bookingId }, data: { status: 'CANCELLED' } })
+      const r = await callConfirm(b.bookingId)
+      check(r.status === 409, `confirm on CANCELLED → 409 (got ${r.status})`)
+      check(r.json.error === 'cannot confirm', `error code === "cannot confirm" (got "${r.json.error}")`)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. POLICY: 3-DEEP PROMOTE RENORMALIZE
+    //    Stack ranks 1 / 2 / 3 → release the rank-1 → promote the
+    //    rank-2. The former rank-3 must SLIDE to rank-2 (contiguous
+    //    queue, no gap, no two holds at rank-1).
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 5. 3-deep promote renormalize — rank-3 slides to rank-2')
+    {
+      const W = { startISO: '2027-04-20', endISO: '2027-04-22' }
+      // Use direct prisma writes to force ranks 1/2/3 with bound
+      // BookingAssignments on Test Stage A. The holds POST route
+      // would auto-pick ranks via inference; we want explicit ranks
+      // for a clean test of the renormalize.
+      const r1 = await makeAssignedHold({ ...W, rank: 1, suffix: '5-rank1' })
+      const r2 = await makeAssignedHold({ ...W, rank: 2, suffix: '5-rank2' })
+      const r3 = await makeAssignedHold({ ...W, rank: 3, suffix: '5-rank3' })
+
+      // Release the rank-1 so promote can succeed
+      const rel = await callRelease(r1.bookingItemId)
+      check(rel.status === 200 && rel.json.ok === true, 'setup: release rank-1 ok')
+
+      // Promote the rank-2
+      const prom = await callPromote(r2.bookingItemId)
+      check(prom.status === 200 && prom.json.ok === true, `promote rank-2 ok (got ${prom.status})`)
+
+      // Reload all three
+      const items = await prisma.bookingItem.findMany({
+        where: { id: { in: [r1.bookingItemId, r2.bookingItemId, r3.bookingItemId] } },
+        select: { id: true, holdRank: true, status: true },
+      })
+      const byId = new Map(items.map((i) => [i.id, i]))
+      const oldR1 = byId.get(r1.bookingItemId)
+      const promoted = byId.get(r2.bookingItemId)
+      const oldR3 = byId.get(r3.bookingItemId)
+
+      check(promoted?.holdRank === 1, `former rank-2 is now rank-1 (got ${promoted?.holdRank})`)
+      check(oldR3?.holdRank === 2, `former rank-3 SLID to rank-2 — no gap (got ${oldR3?.holdRank})`)
+      check(oldR1?.status === 'UNFULFILLED', `released rank-1 is UNFULFILLED (got ${oldR1?.status})`)
+
+      // Invariant: exactly one ACTIVE rank-1 in this window
+      const activeR1Count = await prisma.bookingItem.count({
+        where: {
+          categoryId: fixtureCategory!.id,
+          holdRank: 1,
+          status: { in: ['REQUESTED', 'ASSIGNED'] },
+          booking: { startDate: { lte: d(W.endISO) }, endDate: { gte: d(W.startISO) } },
+        },
+      })
+      check(activeR1Count === 1, `exactly one ACTIVE rank-1 in window (got ${activeR1Count}) — no duplicates`)
+
+      // Invariant: ACTIVE ranks form a contiguous 1, 2, … sequence
+      const activeRanks = (
+        await prisma.bookingItem.findMany({
+          where: {
+            categoryId: fixtureCategory!.id,
+            status: { in: ['REQUESTED', 'ASSIGNED'] },
+            booking: { startDate: { lte: d(W.endISO) }, endDate: { gte: d(W.startISO) } },
+          },
+          select: { holdRank: true },
+          orderBy: { holdRank: 'asc' },
+        })
+      ).map((x) => x.holdRank)
+      check(
+        JSON.stringify(activeRanks) === JSON.stringify([1, 2]),
+        `active ranks form [1, 2] (got ${JSON.stringify(activeRanks)}) — no gap, no duplicates`,
+      )
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. POLICY: RELEASE PRIMARY WITH BACKUP → ORPHAN + DIBS GUARD
+    //    Locks "release ≠ auto-promote" and ties it to the
+    //    backup-has-dibs guard the assign endpoint enforces.
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 6. release primary with backup → orphan, no auto-promote, dibs guard fires')
+    {
+      const W = { startISO: '2027-04-30', endISO: '2027-05-02' }
+      const primary = await makeAssignedHold({ ...W, rank: 1, suffix: '6-primary' })
+      const backup = await makeAssignedHold({ ...W, rank: 2, suffix: '6-backup' })
+
+      const rel = await callRelease(primary.bookingItemId)
+      check(rel.status === 200 && rel.json.ok === true, 'release primary ok')
+
+      // The primary should be UNFULFILLED, its assignment SWAPPED
+      const releasedPrimary = await prisma.bookingItem.findUnique({
+        where: { id: primary.bookingItemId },
+        select: { status: true },
+      })
+      const releasedPrimaryBA = await prisma.bookingAssignment.findUnique({
+        where: { id: primary.assignmentId },
+        select: { status: true },
+      })
+      check(releasedPrimary?.status === 'UNFULFILLED', `primary status=UNFULFILLED (got ${releasedPrimary?.status})`)
+      check(releasedPrimaryBA?.status === 'SWAPPED', `primary BA status=SWAPPED (got ${releasedPrimaryBA?.status})`)
+
+      // The backup MUST be unchanged — no auto-promote
+      const backupItem = await prisma.bookingItem.findUnique({
+        where: { id: backup.bookingItemId },
+        select: { holdRank: true, status: true },
+      })
+      check(backupItem?.holdRank === 2, `backup STILL rank-2 — no auto-promote (got ${backupItem?.holdRank})`)
+      check(backupItem?.status === 'ASSIGNED', `backup status unchanged=ASSIGNED (got ${backupItem?.status})`)
+      const backupBA = await prisma.bookingAssignment.findUnique({
+        where: { id: backup.assignmentId },
+        select: { status: true },
+      })
+      check(backupBA?.status === 'ASSIGNED', `backup BA unchanged=ASSIGNED (got ${backupBA?.status})`)
+
+      // Try assigning a NEW rank-1 to the same unit/window. The
+      // unit's state is 'booked' (the backup's BA is active), so
+      // the rank-aware guard should fire backup-has-dibs.
+      const newBooking = await prisma.booking.create({
+        data: {
+          bookingNumber: `SR-TEST-ACT-6-newp-${Date.now()}`,
+          companyId: company!.id, personId: person!.id, agentId: agent!.id,
+          jobName: `${ACTION_PREFIX} 6-new-primary`,
+          startDate: d(W.startISO), endDate: d(W.endISO),
+          status: 'REQUEST', source: 'AGENT_DIRECT',
+        },
+        select: { id: true },
+      })
+      const newPrimaryItem = await prisma.bookingItem.create({
+        data: {
+          bookingId: newBooking.id, categoryId: fixtureCategory!.id,
+          quantity: 1, dailyRate: 0, status: 'REQUESTED', holdRank: 1,
+        },
+        select: { id: true },
+      })
+      const assignAttempt = await callAssignAction(newPrimaryItem.id, fixtureAsset!.id)
+      check(
+        assignAttempt.status === 409 && assignAttempt.json.error === 'backup-has-dibs',
+        `dibs guard fires — new rank-1 blocked with backup-has-dibs (got ${assignAttempt.status} ${JSON.stringify(assignAttempt.json.error)})`,
+      )
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 7. POLICY: CONFIRM PRIMARY WITH BACKUP → BACKUP UNCHANGED
+    //    "1st booked → 2nd remains."
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[actions] 7. confirm primary with backup → backup untouched')
+    {
+      const W = { startISO: '2027-05-10', endISO: '2027-05-12' }
+      const primary = await makeAssignedHold({ ...W, rank: 1, suffix: '7-primary' })
+      const backup = await makeAssignedHold({ ...W, rank: 2, suffix: '7-backup' })
+
+      const r = await callConfirm(primary.bookingId)
+      check(r.status === 200 && r.json.ok === true, `confirm ok (got ${r.status})`)
+
+      const primaryBooking = await prisma.booking.findUnique({
+        where: { id: primary.bookingId },
+        select: { status: true, confirmedAt: true },
+      })
+      check(primaryBooking?.status === 'CONFIRMED', `primary Booking.status=CONFIRMED (got ${primaryBooking?.status})`)
+      check(primaryBooking?.confirmedAt instanceof Date, `confirmedAt stamped (got ${primaryBooking?.confirmedAt})`)
+
+      // Backup BookingItem + Booking + BookingAssignment all unchanged
+      const backupItem = await prisma.bookingItem.findUnique({
+        where: { id: backup.bookingItemId },
+        select: { holdRank: true, status: true },
+      })
+      check(backupItem?.holdRank === 2, `backup BookingItem still rank=2 (got ${backupItem?.holdRank})`)
+      check(backupItem?.status === 'ASSIGNED', `backup BookingItem status unchanged (got ${backupItem?.status})`)
+      const backupBooking = await prisma.booking.findUnique({
+        where: { id: backup.bookingId },
+        select: { status: true, confirmedAt: true },
+      })
+      check(
+        backupBooking?.status === 'REQUEST',
+        `backup Booking.status untouched (still REQUEST, got ${backupBooking?.status})`,
+      )
+      check(backupBooking?.confirmedAt === null, `backup confirmedAt remains null (got ${backupBooking?.confirmedAt})`)
+      const backupBA = await prisma.bookingAssignment.findUnique({
+        where: { id: backup.assignmentId },
+        select: { status: true },
+      })
+      check(backupBA?.status === 'ASSIGNED', `backup BA status unchanged=ASSIGNED (got ${backupBA?.status})`)
+    }
+  } finally {
+    // Hard cleanup — fixture cascade-deletes via bookingId.
+    await prisma.booking.deleteMany({ where: { jobName: { startsWith: ACTION_PREFIX } } })
   }
 
   // ── Final summary ──
