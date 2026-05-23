@@ -141,6 +141,27 @@ const PROPOSED_ASSETS: ProposedAsset[] = [
     unitName: 'Black Box',
     reviewNote: '4 of 4 bookable spaces at the Lankershim location.',
   },
+  // ── Sprinters — fleet confirmed (2026-05-23) that these are three
+  //    distinct units within Cargo Van w/ Liftgate, not aliases. The
+  //    Planyo names are "Sprinter #1 (A)" / "Sprinter #2 (A)" /
+  //    "Sprinter #4"; the migration's name normalizer strips the
+  //    "#" + "(A)" → "Sprinter 1" / "Sprinter 2" / "Sprinter 4",
+  //    which is the unitName these rows expose.
+  {
+    categoryName: 'Cargo Van w/ Liftgate',
+    unitName: 'Sprinter 1',
+    reviewNote: 'Fleet-confirmed distinct unit in Cargo Van w/ Liftgate (Planyo: "Sprinter #1 (A)").',
+  },
+  {
+    categoryName: 'Cargo Van w/ Liftgate',
+    unitName: 'Sprinter 2',
+    reviewNote: 'Fleet-confirmed distinct unit in Cargo Van w/ Liftgate (Planyo: "Sprinter #2 (A)").',
+  },
+  {
+    categoryName: 'Cargo Van w/ Liftgate',
+    unitName: 'Sprinter 4',
+    reviewNote: 'Fleet-confirmed distinct unit in Cargo Van w/ Liftgate (Planyo: "Sprinter #4").',
+  },
 ]
 
 // ──────────────────────────────────────────────────────────────
@@ -155,13 +176,12 @@ const HOLD_FOR_DECISION = [
   },
   {
     planyoName: '30 (A) Wardrobe',
-    note: 'Aliased to existing "Cube 30" by NAME_ALIASES in the migration script. No dedicated wardrobe truck exists — Cube 30 with add-ons.',
+    note: 'Aliased to existing "Cube 30" by NAME_ALIASES in the migration script. Wardrobe is a config note on Cube 30, not a separate asset or category. A future "wardrobe add-on for any cube" is a different feature, out of scope here.',
   },
-  {
-    planyoName: 'Sprinter #1 (A) / Sprinter #2 (A)',
-    note:
-      'PENDING FLEET DECISION: brand-name aliases for existing Cargo-w-Liftgate units. Until fleet supplies the specific Cargo unit mapping, migration creates an unassigned Cargo-w-Liftgate BookingItem and lists it for manual assignment.',
-  },
+  // Sprinter #1/#2/#4 — RESOLVED 2026-05-23: now created as
+  // distinct Assets in Cargo Van w/ Liftgate (see PROPOSED_ASSETS
+  // above). The migration script's Sprinter unassigned-holds
+  // fallback has been removed.
   {
     planyoName: 'Lankershim Studio (generic) — no room specified',
     note:

@@ -87,10 +87,13 @@ const CATEGORY_ROUTES: CategoryRoute[] = [
 ]
 
 /**
- * In-category unassigned overrides: keeps the resource-id category
- * mapping but suppresses the asset match. Used for "Sprinter #N" —
- * stays in Cargo Van w/ Liftgate but waits on fleet to provide the
- * specific Cargo unit.
+ * In-category unassigned overrides: kept around for future use, but
+ * currently EMPTY. The previous Sprinter rule was removed on
+ * 2026-05-23 once fleet confirmed Sprinter #1/#2/#4 are three
+ * distinct Cargo-w-Liftgate units with their own Asset rows
+ * (created by scheduling-add-missing-assets.ts). The Planyo names
+ * "Sprinter #N (A)" now normalize to "Sprinter N" and bind to
+ * those assets directly.
  */
 interface UnassignedRule {
   matches: (rawUnitName: string) => boolean
@@ -98,13 +101,7 @@ interface UnassignedRule {
   reviewBucket: 'sprinterUnassigned' | 'lankershimRoomNeeded'
 }
 
-const FORCE_UNASSIGNED_IN_CATEGORY: UnassignedRule[] = [
-  {
-    matches: (raw) => /^Sprinter\s+#?\s*\d+/i.test(raw),
-    reason: 'Brand-name reference — fleet to provide specific Cargo-w-Liftgate unit mapping.',
-    reviewBucket: 'sprinterUnassigned',
-  },
-]
+const FORCE_UNASSIGNED_IN_CATEGORY: UnassignedRule[] = []
 
 const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
 for (const line of envFile.split('\n')) {
