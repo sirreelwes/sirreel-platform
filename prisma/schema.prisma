@@ -1513,6 +1513,12 @@ model InventoryItem {
   needsReview     Boolean             @default(false) @map("needs_review")
   rwLastSyncedAt  DateTime?           @map("rw_last_synced_at")
   rwId            String?             @map("rw_id")
+  // Whether the item appears in the client-facing supply ordering
+  // catalog. Defaults false so RW-imported rows stay out of the public
+  // surface until an operator (or the seed script) opts them in. The
+  // seed flips this for items reconciled against the Production
+  // Supplies PDF; everything else stays hidden.
+  publicVisible   Boolean             @default(false) @map("public_visible")
   isActive        Boolean             @default(true) @map("is_active")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
