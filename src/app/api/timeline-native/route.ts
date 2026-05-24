@@ -276,5 +276,82 @@ export async function GET() {
       return a.unitName.localeCompare(b.unitName, undefined, { numeric: true })
     })
 
-  return NextResponse.json({ ok: true, jobs, units, total: assignments.length, window: { from: ymd(from), to: ymd(to) } })
+  // ── unassignedHolds[] — category-level REQUESTED holds with zero
+  //    assignments overlapping the window. These don't appear in
+  //    units[] (which is asset-keyed) so the gantt's By-Asset view was
+  //    silently dropping them. The gantt renders them as bars in a
+  //    pinned "Needs assignment" lane at the top; click → existing
+  //    AssignUnitsModal. By-Job already shows them via jobs[] as
+  //    unit='(unassigned)', so we don't touch that path.
+  //
+  //    Strict filter: BookingItem.status='REQUESTED' AND assignments=[].
+  //    Partially-assigned items (some slots filled, some not) still
+  //    surface their bound assignments under units[] — the unfilled
+  //    slots remain invisible by design; that's a separate concern. ──
+  const unassignedItems = await prisma.bookingItem.findMany({
+    where: {
+      status: 'REQUESTED',
+      assignments: { none: {} },
+      booking: {
+        archivedAt: null,
+        startDate: { lte: to },
+        endDate: { gte: from },
+      },
+    },
+    select: {
+      id: true,
+      quantity: true,
+      status: true,
+      holdRank: true,
+      category: { select: { id: true, name: true, slug: true } },
+      booking: {
+        select: {
+          id: true,
+          bookingNumber: true,
+          jobName: true,
+          startDate: true,
+          endDate: true,
+          status: true,
+          rentalworksOrderId: true,
+          company: { select: { name: true } },
+          person: { select: { firstName: true, lastName: true } },
+          agent: { select: { name: true } },
+        },
+      },
+    },
+  })
+
+  const unassignedHolds = unassignedItems.map((it) => {
+    const cat = mapCategoryName(it.category?.name ?? '')
+    return {
+      bookingItemId: it.id,
+      bookingId: it.booking.id,
+      categoryId: it.category?.id ?? null,
+      categoryName: it.category?.name ?? '',
+      cat,
+      resourceName: it.category?.name ?? '',
+      quantity: it.quantity,
+      holdRank: it.holdRank,
+      itemStatus: it.status,
+      bookingNumber: it.booking.bookingNumber,
+      jobName: it.booking.jobName,
+      clientName: it.booking.company.name,
+      contact: nameOfPerson(it.booking.person),
+      agent: it.booking.agent.name ?? '',
+      rwOrderNumber: it.booking.rentalworksOrderId,
+      start: ymd(it.booking.startDate),
+      end: ymd(it.booking.endDate),
+      status: mapStatus(it.booking.status),
+      bookingStatus: it.booking.status,
+    }
+  })
+
+  return NextResponse.json({
+    ok: true,
+    jobs,
+    units,
+    unassignedHolds,
+    total: assignments.length,
+    window: { from: ymd(from), to: ymd(to) },
+  })
 }

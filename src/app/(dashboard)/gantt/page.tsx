@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
 import { SourceBanner } from '@/components/timeline/SourceBanner';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -39,6 +40,8 @@ export default function GanttPage() {
   const [catFilter, setCatFilter] = useState('all')
   const [jobs, setJobs] = useState<any[]>([])
   const [units, setUnits] = useState<any[]>([])
+  const [unassignedHolds, setUnassignedHolds] = useState<any[]>([])
+  const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
   const [actionPending, setActionPending] = useState<null | 'book' | 'release' | 'promote'>(null)
@@ -64,6 +67,7 @@ export default function GanttPage() {
         if (d.ok) {
           setJobs(d.jobs || [])
           setUnits(d.units || [])
+          setUnassignedHolds(d.unassignedHolds || [])
         }
       })
       .catch(() => {})
@@ -132,6 +136,7 @@ export default function GanttPage() {
         if (d.ok) {
           setJobs(d.jobs || [])
           setUnits(d.units || [])
+          setUnassignedHolds(d.unassignedHolds || [])
         }
       })
       .catch(() => {})
@@ -272,7 +277,13 @@ export default function GanttPage() {
   //    a primary release-without-promote) still render — otherwise
   //    the agent hits the backup-has-dibs 409 on a unit that looks
   //    empty and can't tell why. ──
-  type RowEntry = { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[] } | { type: 'divider'; label: string }
+  // RowEntry now carries a third type for category-level REQUESTED
+  // holds with zero assignments. Without it those holds drop out of
+  // By-Asset entirely (units[] is keyed by Asset, so no-asset → no row).
+  type RowEntry =
+    | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[] }
+    | { type: 'divider'; label: string; accent?: 'warn' | 'idle' }
+    | { type: 'needsAssign'; hold: any }
   const { rowEntries } = useMemo(() => {
     const visibleStart = startDate
     const visibleEnd = addDays(startDate, totalDays - 1)
@@ -299,16 +310,35 @@ export default function GanttPage() {
     for (const u of sorted) if (isBookedInWindow(u)) booked++
     const idle = sorted.length - booked
     const entries: RowEntry[] = []
+
+    // Top lane: unassigned holds. Filter to ones overlapping the
+    // visible window AND respecting the current catFilter (the user's
+    // category filter applies symmetrically to "needs assignment" so
+    // we don't leak Cargo holds into a Cube-filtered view).
+    const visibleUnassigned = unassignedHolds.filter((h) => {
+      const inWindow = h.start <= visibleEnd && h.end >= visibleStart
+      const matchesCatFilter = catFilter === 'all' || h.cat === catFilter
+      return inWindow && matchesCatFilter
+    })
+    if (visibleUnassigned.length > 0) {
+      entries.push({
+        type: 'divider',
+        label: `${visibleUnassigned.length} needs assignment`,
+        accent: 'warn',
+      })
+      for (const h of visibleUnassigned) entries.push({ type: 'needsAssign', hold: h })
+    }
+
     for (let i = 0; i < sorted.length; i++) {
       if (i === booked && booked > 0 && idle > 0) {
-        entries.push({ type: 'divider', label: `${idle} idle in this window` })
+        entries.push({ type: 'divider', label: `${idle} idle in this window`, accent: 'idle' })
       }
       const split = splitBookings(sorted[i])
       entries.push({ type: 'unit', unit: sorted[i], primaryBookings: split.primary, backupBookings: split.backup })
     }
     return { rowEntries: entries, bookedCount: booked, idleCount: idle }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredUnits, weeks, startDate, totalDays])
+  }, [filteredUnits, unassignedHolds, catFilter, weeks, startDate, totalDays])
 
   return (
     <div>
@@ -406,14 +436,34 @@ export default function GanttPage() {
             {view === 'asset' ? (
               rowEntries.map((entry, i) => {
                 if (entry.type === 'divider') {
+                  const accentClass =
+                    entry.accent === 'warn' ? 'bg-rose-50' : 'bg-gray-100'
+                  const textClass =
+                    entry.accent === 'warn' ? 'text-rose-700' : 'text-gray-500'
                   return (
                     <div
                       key={`d-${i}`}
-                      className="h-6 border-b border-gray-200 px-3 flex items-center bg-gray-100"
+                      className={`h-6 border-b border-gray-200 px-3 flex items-center ${accentClass}`}
                     >
-                      <span className="text-[9px] uppercase tracking-wide text-gray-500 font-semibold">
+                      <span className={`text-[9px] uppercase tracking-wide font-semibold ${textClass}`}>
                         {entry.label}
                       </span>
+                    </div>
+                  )
+                }
+                if (entry.type === 'needsAssign') {
+                  return (
+                    <div
+                      key={`na-${i}`}
+                      className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-rose-50/40"
+                    >
+                      <div className="w-2 h-2 rounded-full flex-shrink-0 bg-rose-400" />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-semibold text-gray-900 truncate">
+                          {entry.hold.categoryName || entry.hold.resourceName || '—'}
+                        </div>
+                        <div className="text-[9px] text-rose-600 truncate italic">unassigned</div>
+                      </div>
                     </div>
                   )
                 }
@@ -487,7 +537,38 @@ export default function GanttPage() {
               {view === 'asset' ? (
                 rowEntries.map((entry, i) => {
                   if (entry.type === 'divider') {
-                    return <div key={`d-${i}`} className="h-6 border-b border-gray-200 bg-gray-100" />
+                    const dividerBg = entry.accent === 'warn' ? 'bg-rose-50' : 'bg-gray-100'
+                    return <div key={`d-${i}`} className={`h-6 border-b border-gray-200 ${dividerBg}`} />
+                  }
+                  if (entry.type === 'needsAssign') {
+                    const h = entry.hold
+                    const bar = getBar(h.start, h.end)
+                    return (
+                      <div key={`na-${i}`} className="relative h-8 border-b border-gray-100 bg-rose-50/40">
+                        {/* Grid */}
+                        <div className="absolute inset-0 flex pointer-events-none">
+                          {dates.map(ds => (
+                            <div
+                              key={ds}
+                              style={{ width: dayWidth, minWidth: dayWidth }}
+                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                            />
+                          ))}
+                        </div>
+                        {bar && (
+                          <div
+                            className="absolute top-1 h-6 rounded-md bg-amber-200 border border-dashed border-amber-500 flex items-center px-1.5 cursor-pointer hover:bg-amber-300 transition-colors overflow-hidden"
+                            style={{ left: bar.left, width: bar.width }}
+                            onClick={(ev) => { ev.stopPropagation(); setAssignBookingItemId(h.bookingItemId) }}
+                            title={`Click to assign a unit — ${h.clientName}${h.jobName ? ` · ${h.jobName}` : ''}`}
+                          >
+                            <span className="text-[9px] font-bold text-amber-900 truncate whitespace-nowrap">
+                              ⚠ {h.clientName}{h.jobName ? ` · ${h.jobName}` : ''} · qty {h.quantity} · assign →
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
                   }
                   const hasBackups = entry.backupBookings.length > 0
                   return (
@@ -770,6 +851,18 @@ export default function GanttPage() {
             setHoldModal(null)
             refreshTimeline()
           }}
+        />
+      )}
+
+      {/* Assign-units modal — opens from a "needs assignment" lane
+          bar click. Reuses the existing per-BookingItem picker so
+          tier-sorted candidate + buffer-warn paths work uniformly. */}
+      {assignBookingItemId && (
+        <AssignUnitsModal
+          bookingItemId={assignBookingItemId}
+          bufferDays={1}
+          onClose={() => setAssignBookingItemId(null)}
+          onChanged={() => refreshTimeline()}
         />
       )}
     </div>
