@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
+import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 
 const PRODUCTION_TYPES: ProductionType[] = [
   'FILM', 'TV', 'COMMERCIAL', 'MUSIC_VIDEO', 'CORPORATE', 'EVENT_PLANNER', 'OTHER',
@@ -115,13 +116,11 @@ interface AttachableJob {
   orderTotal?: number;
 }
 
-// Post-parse Job decision. Replaces the older pre-parse "new vs attach"
-// toggle: instead of forcing the agent to decide before the AI has seen
-// anything, we wait until parse extracts a customer + dates and then
-// surface candidate Jobs that match. "Create new" is always available.
-type JobChoice =
-  | { type: 'new' }
-  | { type: 'existing'; jobId: string };
+// Post-parse Job decision uses the shared JobPicker (same component
+// as the +Hold modal): searching → selected_existing | creating_new.
+// Save is gated on a definite choice — no implicit "new" default,
+// which prevents accidental duplicate Jobs when matching candidates
+// are sitting right there.
 
 interface InquiryRecord {
   id: string;
@@ -194,7 +193,7 @@ interface DraftState {
   selectedClientId: string;
   contacts: ResolvedContact[];
   emailText: string;
-  jobChoice: JobChoice;
+  job: JobPickerValue;
   candidateJobs: AttachableJob[];
   discountAmount: string;
   discountLabel: string;
@@ -269,8 +268,10 @@ function NewQuotePageInner() {
   const clientCompanyIdFromUrl = search.get('clientCompanyId');
 
   // Job decision is deferred until AFTER AI parse — see candidateJobs
-  // fetch + JobChoicePicker render below. Default: create a new Job.
-  const [jobChoice, setJobChoice] = useState<JobChoice>({ type: 'new' });
+  // fetch + JobPicker render below. Default mode is `searching` so
+  // save stays blocked until the user explicitly picks an existing
+  // Job or commits to creating a new one.
+  const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE);
   const [candidateJobs, setCandidateJobs] = useState<AttachableJob[]>([]);
 
   const [inquiry, setInquiry] = useState<InquiryRecord | null>(null);
@@ -331,8 +332,10 @@ function NewQuotePageInner() {
         setCandidateJobs(filtered);
 
         // Strong-match auto-select: exactly one candidate with >50%
-        // date overlap with the AI-extracted range.
-        if (filtered.length === 1 && extractedStart != null && extractedEnd != null) {
+        // date overlap with the AI-extracted range. Only fires when
+        // the user hasn't already committed to a choice; otherwise we
+        // would clobber their explicit pick on every re-fetch.
+        if (filtered.length === 1 && extractedStart != null && extractedEnd != null && job.mode === 'searching') {
           const only = filtered[0];
           const start = only.startDate ? new Date(only.startDate).getTime() : null;
           const end = only.endDate ? new Date(only.endDate).getTime() : start;
@@ -342,12 +345,19 @@ function NewQuotePageInner() {
             const overlapDays = Math.max(0, (overlapEnd - overlapStart) / 86_400_000);
             const askedDays = Math.max(1, (extractedEnd - extractedStart) / 86_400_000);
             if (overlapDays / askedDays > 0.5) {
-              setJobChoice({ type: 'existing', jobId: only.id });
+              setJob({
+                jobId: only.id,
+                jobCode: only.jobCode,
+                name: only.name,
+                mode: 'selected_existing',
+                company: only.company,
+              });
             }
           }
         }
       })
       .catch(() => setCandidateJobs([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsed, selectedClientId, editing.startDate, editing.endDate]);
 
   // Restore Review-Quote draft state when returning from /crm. The
@@ -364,7 +374,7 @@ function NewQuotePageInner() {
     setEditing(draft.editing);
     setContacts(draft.contacts);
     setEmailText(draft.emailText);
-    setJobChoice(draft.jobChoice);
+    setJob(draft.job ?? EMPTY_JOB_PICKER_VALUE);
     setCandidateJobs(draft.candidateJobs);
     setDiscountAmount(draft.discountAmount);
     setDiscountLabel(draft.discountLabel);
@@ -666,19 +676,19 @@ function NewQuotePageInner() {
     return lineSum + discount;
   }, [items, discountAmount]);
 
-  // Save is allowed when there's at least one line item AND either
-  // (a) attaching to an existing Job, or (b) a company is chosen AND
-  // the new-Job form has a name + production type so we can create it.
-  const newJobName =
-    editing.productionName ||
-    parsed?.productionName ||
-    inquiry?.title ||
-    '';
+  // Save is allowed when there's at least one line item AND the user
+  // has made a definite Job choice:
+  //   selected_existing → use the picked Job
+  //   creating_new      → create a new Job (needs a company + name)
+  // `searching` (default) keeps the save button disabled — explicit
+  // choice required to prevent absent-minded duplicates.
   const canCreate =
     items.length > 0 &&
-    (jobChoice.type === 'existing'
-      ? true
-      : !!selectedClientId && !!newJobName.trim());
+    (job.mode === 'selected_existing'
+      ? !!job.jobId
+      : job.mode === 'creating_new'
+        ? !!selectedClientId && job.name.trim().length > 0
+        : false);
 
   // Three end-of-flow actions share the same Order+lineItems+PDF write,
   // then differ only in what happens after the PDF is generated:
@@ -705,11 +715,12 @@ function NewQuotePageInner() {
       } | null = null;
       let existingJobId: string | null = null;
 
-      if (jobChoice.type === 'existing') {
-        const picked = candidateJobs.find((j) => j.id === jobChoice.jobId);
-        if (!picked) { alert('Selected Job is no longer available.'); setCreating(false); return; }
-        existingJobId = picked.id;
-        companyId = picked.company.id;
+      if (job.mode === 'selected_existing' && job.jobId) {
+        existingJobId = job.jobId;
+        // company comes off the picked Job (which carries it). Falls
+        // back to the form's selectedClientId if for any reason the
+        // picker dropped it (shouldn't happen — every Job has a co).
+        companyId = job.company?.id ?? selectedClientId;
       } else {
         // Resolve / create company
         let finalClientId = selectedClientId;
@@ -773,7 +784,7 @@ function NewQuotePageInner() {
         }
 
         inlineJob = {
-          name: newJobName,
+          name: job.name.trim(),
           productionType: newJobProductionType,
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
@@ -857,7 +868,7 @@ function NewQuotePageInner() {
       // Mark inquiry CONVERTED if we came from one (and we created a
       // new Job — attaching to an existing Job means the Inquiry was
       // serving a different purpose, leave its status alone).
-      if (inquiry && jobChoice.type === 'new') {
+      if (inquiry && job.mode === 'creating_new') {
         try {
           await fetch(`/api/inquiries/${inquiry.id}`, {
             method: 'PATCH',
@@ -1044,7 +1055,7 @@ function NewQuotePageInner() {
                       selectedClientId,
                       contacts,
                       emailText,
-                      jobChoice,
+                      job,
                       candidateJobs,
                       discountAmount,
                       discountLabel,
@@ -1096,25 +1107,22 @@ function NewQuotePageInner() {
         </div>
       )}
 
-      {/* Job for this Quote — post-parse decision. Candidates come from
-          the customer + date-overlap query; "Create new Job" exposes
-          name + production type + notes, all prefilled but editable. */}
-      <JobChoicePicker
-        choice={jobChoice}
-        setChoice={setJobChoice}
+      {/* Job for this Quote — uses the shared <JobPicker> (same
+          component as the +Hold modal). The recommendations panel
+          above it surfaces this client's date-relevant Jobs without
+          requiring the user to type. Pick-existing stays prominent;
+          create-new path lives in the picker dropdown + the inline
+          details block that appears below when creating_new fires. */}
+      <JobQuoteSection
+        job={job}
+        setJob={setJob}
         candidates={candidateJobs}
-        newJobName={
-          editing.productionName ||
-          parsed?.productionName ||
-          inquiry?.title ||
-          ''
-        }
-        onNewJobNameChange={(name) => setEditing((prev) => ({ ...prev, productionName: name }))}
+        selectedClientId={selectedClientId}
         newJobProductionType={newJobProductionType}
-        onNewJobProductionTypeChange={setNewJobProductionType}
+        setNewJobProductionType={setNewJobProductionType}
         newJobNotes={newJobNotes}
-        onNewJobNotesChange={setNewJobNotes}
-        clientCompanyChosen={!!selectedClientId}
+        setNewJobNotes={setNewJobNotes}
+        seedName={editing.productionName || parsed?.productionName || inquiry?.title || ''}
       />
 
       {/* People on this thread (AI-extracted contacts, human review) */}
@@ -1222,39 +1230,49 @@ function NewQuotePageInner() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────
 
-function JobChoicePicker({
-  choice,
-  setChoice,
+// Wraps the shared <JobPicker> with a parent-specific top panel:
+// (1) a "Recommended candidates" list that surfaces this client's
+// date-relevant open Jobs without forcing the user to type, and
+// (2) an inline "New job details" block (productionType + notes)
+// that appears only when the picker enters `creating_new` mode.
+//
+// The picker is the canonical control — same component used by the
+// +Hold modal — so search-or-create semantics live there. This
+// component only adds the recommendation-discovery surface and the
+// new-Job extra fields that JobPicker intentionally doesn't carry.
+function JobQuoteSection({
+  job,
+  setJob,
   candidates,
-  newJobName,
-  onNewJobNameChange,
+  selectedClientId,
   newJobProductionType,
-  onNewJobProductionTypeChange,
+  setNewJobProductionType,
   newJobNotes,
-  onNewJobNotesChange,
-  clientCompanyChosen,
+  setNewJobNotes,
+  seedName,
 }: {
-  choice: JobChoice;
-  setChoice: (c: JobChoice) => void;
+  job: JobPickerValue;
+  setJob: (v: JobPickerValue) => void;
   candidates: AttachableJob[];
-  newJobName: string;
-  onNewJobNameChange: (name: string) => void;
+  selectedClientId: string;
   newJobProductionType: ProductionType;
-  onNewJobProductionTypeChange: (pt: ProductionType) => void;
+  setNewJobProductionType: (pt: ProductionType) => void;
   newJobNotes: string;
-  onNewJobNotesChange: (notes: string) => void;
-  clientCompanyChosen: boolean;
+  setNewJobNotes: (notes: string) => void;
+  seedName: string;
 }) {
-  // Sort candidates: most recent first. The most recent one carries a
-  // "Recommended" tag when there are existing candidates — pick-existing
-  // should be the obvious default path when the client has open jobs.
-  const sorted = [...candidates].sort((a, b) => {
+  // Sort candidates: most recent first; top one gets the Recommended badge.
+  const sortedCandidates = [...candidates].sort((a, b) => {
     const aT = a.startDate ? new Date(a.startDate).getTime() : 0;
     const bT = b.startDate ? new Date(b.startDate).getTime() : 0;
     return bT - aT;
   });
-  const hasCandidates = sorted.length > 0;
-  const recommendedId = hasCandidates ? sorted[0].id : null;
+  const hasCandidates = sortedCandidates.length > 0;
+  const recommendedId = hasCandidates ? sortedCandidates[0].id : null;
+  // The recommendations panel only shows when the user hasn't yet
+  // committed to a Job (either by picking one or starting a new one).
+  // After commit, the JobPicker pill is the source of truth.
+  const showRecommendations = hasCandidates && job.mode === 'searching';
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
@@ -1262,112 +1280,114 @@ function JobChoicePicker({
         <h2 className="text-sm font-bold text-white">Job for this Quote</h2>
         <p className="text-[11px] text-zinc-500">
           {hasCandidates
-            ? `${sorted.length} existing Job${sorted.length === 1 ? '' : 's'} for this client — attach to one, or create new below.`
-            : clientCompanyChosen
-              ? 'No matching Jobs found — fill in the new Job details below.'
+            ? `${sortedCandidates.length} existing Job${sortedCandidates.length === 1 ? '' : 's'} for this client — attach to one, or search/create below.`
+            : selectedClientId
+              ? 'No matching Jobs found — search below or start a new one.'
               : 'Pick a Client Company above to see matching Jobs.'}
         </p>
       </div>
 
-      <div className="space-y-2">
-        {sorted.map((j) => {
-          const active = choice.type === 'existing' && choice.jobId === j.id;
-          const orders = j._count?.orders ?? 0;
-          const recommended = j.id === recommendedId;
-          return (
-            <button
-              key={j.id}
-              type="button"
-              onClick={() => setChoice({ type: 'existing', jobId: j.id })}
-              className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-start gap-3 ${
-                active
-                  ? 'bg-amber-900/20 border-amber-700'
-                  : 'bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60'
-              }`}
-            >
-              <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border ${active ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="text-[13px] font-semibold text-white truncate">
-                    [{j.jobCode}] {j.name}
+      {showRecommendations && (
+        <div className="space-y-1.5">
+          {sortedCandidates.map((j) => {
+            const orders = j._count?.orders ?? 0;
+            const recommended = j.id === recommendedId;
+            return (
+              <button
+                key={j.id}
+                type="button"
+                onClick={() =>
+                  setJob({
+                    jobId: j.id,
+                    jobCode: j.jobCode,
+                    name: j.name,
+                    mode: 'selected_existing',
+                    company: j.company,
+                  })
+                }
+                className="w-full text-left rounded-lg border px-3 py-2 bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60 transition-colors flex items-start gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-[13px] font-semibold text-white truncate">
+                      [{j.jobCode}] {j.name}
+                    </div>
+                    {recommended && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-800">
+                        Recommended
+                      </span>
+                    )}
                   </div>
-                  {recommended && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-800">
-                      Recommended
-                    </span>
-                  )}
+                  <div className="text-[11px] text-zinc-500 mt-0.5">
+                    {j.startDate && (
+                      <>
+                        {new Date(j.startDate).toLocaleDateString()}
+                        {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
+                      </>
+                    )}
+                    {j.startDate && orders > 0 && ' · '}
+                    {orders > 0 && `${orders} existing order${orders === 1 ? '' : 's'}`}
+                    {(!j.startDate && orders === 0) && 'no dates / no orders yet'}
+                  </div>
                 </div>
-                <div className="text-[11px] text-zinc-500 mt-0.5">
-                  {j.startDate && (
-                    <>
-                      {new Date(j.startDate).toLocaleDateString()}
-                      {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
-                    </>
-                  )}
-                  {j.startDate && orders > 0 && ' · '}
-                  {orders > 0 && `${orders} existing order${orders === 1 ? '' : 's'}`}
-                  {(!j.startDate && orders === 0) && 'no dates / no orders yet'}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-
-        <div
-          className={`rounded-lg border px-3 py-2.5 transition-colors ${
-            choice.type === 'new'
-              ? 'bg-amber-900/20 border-amber-700'
-              : 'bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60'
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => setChoice({ type: 'new' })}
-            className="w-full text-left flex items-start gap-3"
-          >
-            <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border flex-shrink-0 ${choice.type === 'new' ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
-            <div className="text-[13px] font-semibold text-white">+ Create new Job</div>
-          </button>
-          {choice.type === 'new' && (
-            <div className="pl-6 mt-2.5 space-y-2">
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Job name</label>
-                <input
-                  value={newJobName}
-                  onChange={(e) => onNewJobNameChange(e.target.value)}
-                  placeholder="e.g. Stranger Things S5 — LA reshoots"
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
-                <select
-                  value={newJobProductionType}
-                  onChange={(e) => onNewJobProductionTypeChange(e.target.value as ProductionType)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
-                >
-                  {PRODUCTION_TYPES.map((pt) => (
-                    <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Notes (optional)</label>
-                <textarea
-                  value={newJobNotes}
-                  onChange={(e) => onNewJobNotesChange(e.target.value)}
-                  rows={2}
-                  placeholder="Context, client preferences, deal notes…"
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white resize-y"
-                />
-              </div>
-              <p className="text-[10px] text-zinc-500">
-                Job + Order are created together when you Save Draft — nothing is written until then.
-              </p>
-            </div>
-          )}
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {/* Always available — search across the client's open Jobs and
+          a fallback create-new path for unmatched names. The picker
+          ships in light-theme palette (it's also used outside this
+          dark surface); the surrounding card frames it. */}
+      <div>
+        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
+          {hasCandidates ? 'Or search / create new' : 'Search or create new'}
+        </div>
+        <JobPicker
+          value={job}
+          onChange={setJob}
+          companyId={selectedClientId || null}
+          placeholder={
+            seedName
+              ? `Type to search — try "${seedName.slice(0, 40)}${seedName.length > 40 ? '…' : ''}"`
+              : 'Search by job name or code, or type a new name…'
+          }
+        />
       </div>
+
+      {job.mode === 'creating_new' && (
+        <div className="rounded-lg border border-amber-700 bg-amber-900/20 p-3 space-y-2">
+          <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">
+            New job details
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
+            <select
+              value={newJobProductionType}
+              onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
+              className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+            >
+              {PRODUCTION_TYPES.map((pt) => (
+                <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Notes (optional)</label>
+            <textarea
+              value={newJobNotes}
+              onChange={(e) => setNewJobNotes(e.target.value)}
+              rows={2}
+              placeholder="Context, client preferences, deal notes…"
+              className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white resize-y"
+            />
+          </div>
+          <p className="text-[10px] text-zinc-500">
+            Job + Order are created together when you Save Draft — nothing is written until then.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
