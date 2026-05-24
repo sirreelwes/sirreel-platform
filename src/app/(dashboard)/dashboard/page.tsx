@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { UserRole } from '@prisma/client';
-import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
 import SalesDashboard from '@/components/dashboard/SalesDashboard';
 import ReviewsWidget from "@/components/dashboard/ReviewsWidget";
 import CollectionsDashboard from '@/components/dashboard/CollectionsDashboard';
@@ -131,15 +129,12 @@ function AdminDashboard({ userName }: { userName: string }) {
       .catch(() => {})
   }, [])
 
-  const searchParams = useSearchParams()
-  const timelineSrc: TimelineSource = resolveTimelineSource(searchParams)
-
   useEffect(() => {
-    fetch(timelineEndpoint(timelineSrc))
+    fetch('/api/timeline-native')
       .then(r => r.json())
       .then(d => { if (d.ok) setPlanyoUnits(d.units || []) })
       .catch(() => {})
-  }, [timelineSrc]);
+  }, []);
 
   useEffect(() => {
     fetch('/api/rentalworks').then(r => r.json()).then(data => {

@@ -1,9 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { resolveTimelineSource, timelineEndpoint, type TimelineSource } from '@/lib/timeline/source';
-import { SourceBanner } from '@/components/timeline/SourceBanner';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 
@@ -57,11 +54,9 @@ export default function GanttPage() {
   }>(null)
   const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
   const [showCategoryPickerForHold, setShowCategoryPickerForHold] = useState(false)
-  const searchParams = useSearchParams()
-  const source: TimelineSource = resolveTimelineSource(searchParams)
 
   useEffect(() => {
-    fetch(timelineEndpoint(source))
+    fetch('/api/timeline-native')
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
@@ -72,18 +67,15 @@ export default function GanttPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [source])
+  }, [])
 
-  // Categories — only loaded on native source, only when the "+ New
-  // Hold" picker is needed. Tiny endpoint; cheap to lazy-load.
   useEffect(() => {
-    if (source !== 'native') return
     if (categories.length > 0) return
     fetch('/api/scheduling/categories')
       .then((r) => r.json())
       .then((d) => { if (d.ok) setCategories(d.categories || []) })
       .catch(() => {})
-  }, [source, categories.length])
+  }, [categories.length])
 
   const startDate = addDays(today, -3)
   const totalDays = weeks * 7
@@ -91,14 +83,12 @@ export default function GanttPage() {
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
   const todayOffset = diffDays(startDate, today)
 
-  // ── Native-only +Hold entry points (Chunk 4 of the brief).
-  //    Row click on an asset → modal pre-filled with that asset +
-  //    clicked date. If the clicked date overlaps an existing
-  //    booking on that unit, the modal opens in BACKUP mode (per
-  //    "backup has dibs"); otherwise PRIMARY. The server still
+  // ── +Hold entry point: row click on an asset → modal pre-filled
+  //    with that asset + clicked date. If the clicked date overlaps
+  //    an existing booking on that unit, the modal opens in BACKUP
+  //    mode (per "backup has dibs"); otherwise PRIMARY. Server still
   //    enforces availability — this is just UX. ──
   function openHoldOnAssetRow(unit: any, e: React.MouseEvent<HTMLDivElement>) {
-    if (source !== 'native') return
     if (!unit?.assetId || !unit?.categoryId) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -130,7 +120,7 @@ export default function GanttPage() {
   //    fetch URL stays consistent with the initial load. ──
   function refreshTimeline() {
     setLoading(true)
-    fetch(timelineEndpoint(source))
+    fetch('/api/timeline-native')
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
@@ -346,9 +336,8 @@ export default function GanttPage() {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">Timeline</h1>
-          {loading && <span className="text-[11px] text-gray-400">Loading from {source === 'native' ? 'native' : 'Planyo'}...</span>}
+          {loading && <span className="text-[11px] text-gray-400">Loading...</span>}
           {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Live</span>}
-          <SourceBanner source={source} />
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button onClick={() => setView('asset')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'asset' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Asset</button>
             <button onClick={() => setView('job')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${view === 'job' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>By Job</button>
@@ -366,35 +355,33 @@ export default function GanttPage() {
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
             ))}
           </div>
-          {source === 'native' && (
-            <div className="relative">
-              <button
-                onClick={() => setShowCategoryPickerForHold(v => !v)}
-                className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+          <div className="relative">
+            <button
+              onClick={() => setShowCategoryPickerForHold(v => !v)}
+              className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+            >
+              + New Hold
+            </button>
+            {showCategoryPickerForHold && categories.length > 0 && (
+              <div
+                className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 max-h-80 overflow-auto"
+                onMouseLeave={() => setShowCategoryPickerForHold(false)}
               >
-                + New Hold
-              </button>
-              {showCategoryPickerForHold && categories.length > 0 && (
-                <div
-                  className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 max-h-80 overflow-auto"
-                  onMouseLeave={() => setShowCategoryPickerForHold(false)}
-                >
-                  <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                    Pick a category
-                  </div>
-                  {categories.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => openCategoryHold(c)}
-                      className="block w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50"
-                    >
-                      {c.name}
-                    </button>
-                  ))}
+                <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  Pick a category
                 </div>
-              )}
-            </div>
-          )}
+                {categories.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => openCategoryHold(c)}
+                    className="block w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -578,7 +565,7 @@ export default function GanttPage() {
                           (bar onClicks stopPropagation). Native-only
                           per the brief — gated inside openHoldOnAssetRow. */}
                       <div
-                        className={`relative h-8 border-b border-gray-100 ${source === 'native' ? 'cursor-pointer hover:bg-blue-50/20' : ''}`}
+                        className="relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20"
                         onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                       >
                         {/* Grid */}
@@ -619,7 +606,7 @@ export default function GanttPage() {
                           pick the right primary/backup mode. */}
                       {hasBackups && (
                         <div
-                          className={`relative h-8 border-b border-gray-100 bg-gray-100/70 ${source === 'native' ? 'cursor-pointer hover:bg-gray-200/70' : ''}`}
+                          className="relative h-8 border-b border-gray-100 bg-gray-100/70 cursor-pointer hover:bg-gray-200/70"
                           onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                         >
                           {/* Grid (lighter on the sub-lane) */}
@@ -744,13 +731,12 @@ export default function GanttPage() {
                   <div className="py-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 mt-2">{selected.adminNotes}</div>
                 )}
 
-                {/* Hold lifecycle actions — native records only.
+                {/* Hold lifecycle actions.
                     PRIMARY (rank 1): Book + Release.
                     BACKUP  (rank ≥2): Promote + Release.
-                    Planyo bars + "(2ND HOLD)" phantoms don't carry
-                    bookingId / bookingItemId — the gate naturally
-                    keeps the popup read-only there. */}
-                {source === 'native' && (selected.bookingId || selected.bookingItemId) && (
+                    Records without bookingId/bookingItemId render
+                    read-only. */}
+                {(selected.bookingId || selected.bookingItemId) && (
                   <div className="pt-3 mt-3 border-t border-gray-200 space-y-2">
                     {actionSuccess && (
                       <div className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">{actionSuccess}</div>

@@ -160,16 +160,6 @@ export default function SchedulingHubPage() {
         <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Diagnostic surfaces</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DiagTile
-            href="/timeline-shadow"
-            title="Timeline shadow"
-            description="Planyo vs native, job-by-job. Pairs by RW order number when present; falls back to job name + start date. Reference / drift check now that native is the live book; retires with PR2."
-          />
-          <DiagTile
-            href="/scheduling-shadow"
-            title="Per-category availability diff"
-            description="Pick a category + date range + bufferDays; see Planyo's per-unit answer next to the native engine's, with a per-row agreement badge. Place primary or backup holds inline."
-          />
-          <DiagTile
             href="/stale-holds"
             title="Stale holds"
             description={`Manual sweep of REQUESTED rank-1 holds older than ${data?.staleDays ?? 14} days. Release flips status to UNFULFILLED.`}
@@ -178,7 +168,7 @@ export default function SchedulingHubPage() {
           <DiagTile
             href="/gantt"
             title="Timeline (gantt)"
-            description="Production Timeline view — live book. Reads native by default; append ?source=planyo to view the legacy reference."
+            description="Production Timeline view — live book."
           />
         </div>
       </section>

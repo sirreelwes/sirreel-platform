@@ -76,7 +76,9 @@ export async function GET() {
     )
   }
 
-  // Check for jobs starting tomorrow with no linked Planyo reservation
+  // Check for jobs starting tomorrow — flag upcoming work so dispatch
+  // can confirm vehicles and drivers. Asset linkage lives on
+  // BookingAssignment in the native engine.
   const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1)
   const tomorrowStr = tomorrow.toISOString().slice(0, 10)
   const jobsStartingTomorrow = await prisma.$queryRaw<any[]>`
