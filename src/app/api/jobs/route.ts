@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import type { JobStatus, OrderStatus, OrderQuoteStatus, LineItemDepartment } from '@prisma/client'
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
+import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,14 +87,7 @@ export async function GET(req: NextRequest) {
         .filter((o) => o.status !== ('CANCELLED' as OrderStatus))
         .reduce((sum, o) => sum + Number(o.subtotal || 0), 0)
 
-      const primaryContact =
-        j.jobContacts.find((jc) => jc.role === 'PM' && jc.isPrimary) ||
-        j.jobContacts.find((jc) => jc.role === 'PM') ||
-        j.jobContacts.find((jc) => jc.role === 'PC' && jc.isPrimary) ||
-        j.jobContacts.find((jc) => jc.role === 'PC') ||
-        j.jobContacts.find((jc) => jc.isPrimary) ||
-        j.jobContacts[0] ||
-        null
+      const primaryContact = pickPrimaryContact(j.jobContacts)
 
       let pipelineColumn: PipelineColumn | null = null
       let quoteBreakdown:

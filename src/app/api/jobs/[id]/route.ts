@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,15 +39,7 @@ export async function GET(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    // Compute primary contact: PM > PC > first marked primary > first contact
-    const primaryContact =
-      job.jobContacts.find(jc => jc.role === 'PM' && jc.isPrimary) ||
-      job.jobContacts.find(jc => jc.role === 'PM') ||
-      job.jobContacts.find(jc => jc.role === 'PC' && jc.isPrimary) ||
-      job.jobContacts.find(jc => jc.role === 'PC') ||
-      job.jobContacts.find(jc => jc.isPrimary) ||
-      job.jobContacts[0] ||
-      null
+    const primaryContact = pickPrimaryContact(job.jobContacts)
 
     const orderTotal = job.orders
       .filter(o => o.status !== 'CANCELLED')
