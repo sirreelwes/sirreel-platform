@@ -20,6 +20,7 @@ scripts/*
 !scripts/reextract-pipeline-window.ts
 !scripts/scheduling-planyo-migration.ts
 !scripts/scheduling-add-missing-assets.ts
+!scripts/scheduling-cleanup-empty-categories.ts
 !scripts/verify-rw-token.ts
 .env.local.bak
 .gcp-service-account.json
