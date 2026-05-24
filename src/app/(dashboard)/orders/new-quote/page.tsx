@@ -3,7 +3,20 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import type { LineItemDepartment, RateType } from '@prisma/client';
+import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
+
+const PRODUCTION_TYPES: ProductionType[] = [
+  'FILM', 'TV', 'COMMERCIAL', 'MUSIC_VIDEO', 'CORPORATE', 'EVENT_PLANNER', 'OTHER',
+];
+const PRODUCTION_TYPE_LABEL: Record<ProductionType, string> = {
+  FILM: 'Film',
+  TV: 'TV',
+  COMMERCIAL: 'Commercial',
+  MUSIC_VIDEO: 'Music Video',
+  CORPORATE: 'Corporate',
+  EVENT_PLANNER: 'Event Planner',
+  OTHER: 'Other',
+};
 import { DEPARTMENT_LABEL, DEPARTMENT_SHORT } from '@/lib/sales/pipeline';
 import {
   availableRateTypes,
@@ -185,6 +198,8 @@ interface DraftState {
   candidateJobs: AttachableJob[];
   discountAmount: string;
   discountLabel: string;
+  newJobProductionType: ProductionType;
+  newJobNotes: string;
 }
 
 const DRAFT_TTL_MS = 30 * 60_000; // entries older than 30 min are stale
@@ -275,6 +290,13 @@ function NewQuotePageInner() {
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountLabel, setDiscountLabel] = useState('');
 
+  // Explicit "+ Create new Job" fields. The pre-Phase-5 flow inferred
+  // these silently — productionType defaulted to OTHER, notes were a
+  // canned "Auto-created from quote parser" string. Now exposed in
+  // the picker so the agent decides; prefilled but editable.
+  const [newJobProductionType, setNewJobProductionType] = useState<ProductionType>('OTHER');
+  const [newJobNotes, setNewJobNotes] = useState('');
+
   // Post-parse Job-candidate fetch. Fires when we have both a parse
   // result AND a confirmed customer. Pulls active/recent Jobs for that
   // customer, filters to ones within a 60-day createdAt window OR with
@@ -346,6 +368,8 @@ function NewQuotePageInner() {
     setCandidateJobs(draft.candidateJobs);
     setDiscountAmount(draft.discountAmount);
     setDiscountLabel(draft.discountLabel);
+    setNewJobProductionType(draft.newJobProductionType ?? 'OTHER');
+    setNewJobNotes(draft.newJobNotes ?? '');
     // selectedClientId is intentionally NOT restored here — the next
     // effect sets it to clientCompanyIdFromUrl, which is exactly what
     // the user just picked. Restoring the old empty value first would
@@ -452,6 +476,9 @@ function NewQuotePageInner() {
       setContacts(hydrateContacts(data.contacts));
       if (data.clientMatch?.length === 1 && !selectedClientId) {
         setSelectedClientId(data.clientMatch[0].id);
+      }
+      if (!newJobNotes && data.parsed?.notes) {
+        setNewJobNotes(data.parsed.notes);
       }
     } finally {
       setParsing(false);
@@ -640,11 +667,18 @@ function NewQuotePageInner() {
   }, [items, discountAmount]);
 
   // Save is allowed when there's at least one line item AND either
-  // (a) attaching to an existing Job, or (b) a company is chosen so
-  // we can auto-create a new Job under it.
+  // (a) attaching to an existing Job, or (b) a company is chosen AND
+  // the new-Job form has a name + production type so we can create it.
+  const newJobName =
+    editing.productionName ||
+    parsed?.productionName ||
+    inquiry?.title ||
+    '';
   const canCreate =
     items.length > 0 &&
-    (jobChoice.type === 'existing' || (jobChoice.type === 'new' && !!selectedClientId));
+    (jobChoice.type === 'existing'
+      ? true
+      : !!selectedClientId && !!newJobName.trim());
 
   // Three end-of-flow actions share the same Order+lineItems+PDF write,
   // then differ only in what happens after the PDF is generated:
@@ -660,13 +694,21 @@ function NewQuotePageInner() {
     if (!canCreate) return;
     setCreating(true);
     try {
-      let jobId: string;
       let companyId: string;
+      let inlineJob: {
+        name: string;
+        productionType: ProductionType;
+        startDate: string | null;
+        endDate: string | null;
+        notes: string | null;
+        contacts: { personId: string; role: SuggestedJobRole; isPrimary: boolean }[];
+      } | null = null;
+      let existingJobId: string | null = null;
 
       if (jobChoice.type === 'existing') {
         const picked = candidateJobs.find((j) => j.id === jobChoice.jobId);
         if (!picked) { alert('Selected Job is no longer available.'); setCreating(false); return; }
-        jobId = picked.id;
+        existingJobId = picked.id;
         companyId = picked.company.id;
       } else {
         // Resolve / create company
@@ -687,19 +729,10 @@ function NewQuotePageInner() {
         }
         companyId = finalClientId;
 
-        // Auto-create Job (existing fallback flow per CLAUDE.md). Phase 5
-        // will add a proper Job-selection UX for new quotes.
-        const jobName =
-          editing.productionName ||
-          parsed?.productionName ||
-          inquiry?.title ||
-          `Quote — ${parsed?.clientName || 'Untitled'} — ${new Date().toLocaleDateString()}`;
-
         // Materialize Person rows for any new/create_new contacts before
-        // creating the Job — POST /api/jobs accepts a contacts array of
-        // {personId, role} pairs and we need Person IDs in hand.
-        // Existing matches and "merge" decisions reuse the existing
-        // Person ID; their CRM records are never modified here.
+        // calling POST /api/orders (the inline job payload needs Person
+        // IDs). Existing matches and "merge" decisions reuse the
+        // existing Person ID; their CRM records are never modified.
         const jobContacts: { personId: string; role: SuggestedJobRole; isPrimary: boolean }[] = [];
         for (const c of contacts.filter((x) => x.include && x.email)) {
           let personId: string | null = null;
@@ -709,9 +742,6 @@ function NewQuotePageInner() {
             personId = c.candidate_person_id;
           }
           if (!personId) {
-            // Create a new Person. The /api/crm/people POST needs
-            // firstName/lastName/email; we split the name on the client
-            // since the AI returned a single "name" string.
             const trimmed = (c.name || c.email).trim();
             const parts = trimmed.split(/\s+/);
             const firstName = parts[0] || c.email.split('@')[0];
@@ -742,36 +772,27 @@ function NewQuotePageInner() {
           }
         }
 
-        const jobRes = await fetch('/api/jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: jobName,
-            companyId: finalClientId,
-            agentId: (session?.user as { id?: string })?.id,
-            startDate: editing.startDate || null,
-            endDate: editing.endDate || null,
-            notes: inquiry ? `Created from Inquiry: ${inquiry.title}` : 'Auto-created from quote parser',
-            contacts: jobContacts.length > 0 ? jobContacts : undefined,
-          }),
-        });
-        if (!jobRes.ok) {
-          const err = await jobRes.json();
-          alert('Failed to create job: ' + (err.error || 'unknown'));
-          setCreating(false);
-          return;
-        }
-        const jobData = await jobRes.json();
-        jobId = jobData.job.id;
+        inlineJob = {
+          name: newJobName,
+          productionType: newJobProductionType,
+          startDate: editing.startDate || null,
+          endDate: editing.endDate || null,
+          notes: newJobNotes.trim() || null,
+          contacts: jobContacts,
+        };
       }
 
-      // Create Order
+      // Single POST creates Order — and (when inlineJob is set) the Job
+      // too, inside one Prisma transaction. If anything fails between
+      // them, nothing persists. An abandoned quote that never clicks
+      // Save creates nothing at all (the prior flow created the Job
+      // eagerly before the Order).
       const orderRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyId,
-          jobId,
+          ...(existingJobId ? { jobId: existingJobId } : { job: inlineJob }),
           description: editing.productionName || editing.notes || 'Quote from AI extraction',
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
@@ -787,6 +808,9 @@ function NewQuotePageInner() {
         return;
       }
       const order = await orderRes.json();
+      // jobId for downstream inquiry-PATCH — comes from either the
+      // existing job we attached to or the newly-created one.
+      const jobId: string = existingJobId ?? order.createdJobId ?? order.jobId;
 
       // Add line items
       for (const it of items) {
@@ -1024,6 +1048,8 @@ function NewQuotePageInner() {
                       candidateJobs,
                       discountAmount,
                       discountLabel,
+                      newJobProductionType,
+                      newJobNotes,
                     });
                     const params = new URLSearchParams();
                     params.set('selectForQuote', '1');
@@ -1071,8 +1097,8 @@ function NewQuotePageInner() {
       )}
 
       {/* Job for this Quote — post-parse decision. Candidates come from
-          the customer + date-overlap query; "Create new Job" is always
-          available with an inline-editable name. */}
+          the customer + date-overlap query; "Create new Job" exposes
+          name + production type + notes, all prefilled but editable. */}
       <JobChoicePicker
         choice={jobChoice}
         setChoice={setJobChoice}
@@ -1081,9 +1107,13 @@ function NewQuotePageInner() {
           editing.productionName ||
           parsed?.productionName ||
           inquiry?.title ||
-          `Quote — ${parsed?.clientName || 'Untitled'} — ${new Date().toLocaleDateString()}`
+          ''
         }
         onNewJobNameChange={(name) => setEditing((prev) => ({ ...prev, productionName: name }))}
+        newJobProductionType={newJobProductionType}
+        onNewJobProductionTypeChange={setNewJobProductionType}
+        newJobNotes={newJobNotes}
+        onNewJobNotesChange={setNewJobNotes}
         clientCompanyChosen={!!selectedClientId}
       />
 
@@ -1198,6 +1228,10 @@ function JobChoicePicker({
   candidates,
   newJobName,
   onNewJobNameChange,
+  newJobProductionType,
+  onNewJobProductionTypeChange,
+  newJobNotes,
+  onNewJobNotesChange,
   clientCompanyChosen,
 }: {
   choice: JobChoice;
@@ -1205,24 +1239,32 @@ function JobChoicePicker({
   candidates: AttachableJob[];
   newJobName: string;
   onNewJobNameChange: (name: string) => void;
+  newJobProductionType: ProductionType;
+  onNewJobProductionTypeChange: (pt: ProductionType) => void;
+  newJobNotes: string;
+  onNewJobNotesChange: (notes: string) => void;
   clientCompanyChosen: boolean;
 }) {
-  // Sort candidates: most recent first.
+  // Sort candidates: most recent first. The most recent one carries a
+  // "Recommended" tag when there are existing candidates — pick-existing
+  // should be the obvious default path when the client has open jobs.
   const sorted = [...candidates].sort((a, b) => {
     const aT = a.startDate ? new Date(a.startDate).getTime() : 0;
     const bT = b.startDate ? new Date(b.startDate).getTime() : 0;
     return bT - aT;
   });
+  const hasCandidates = sorted.length > 0;
+  const recommendedId = hasCandidates ? sorted[0].id : null;
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <h2 className="text-sm font-bold text-white">Job for this Quote</h2>
         <p className="text-[11px] text-zinc-500">
-          {sorted.length > 0
-            ? `${sorted.length} existing Job${sorted.length === 1 ? '' : 's'} match this customer — attach or start fresh.`
+          {hasCandidates
+            ? `${sorted.length} existing Job${sorted.length === 1 ? '' : 's'} for this client — attach to one, or create new below.`
             : clientCompanyChosen
-              ? 'No matching Jobs found — a new one will be created.'
+              ? 'No matching Jobs found — fill in the new Job details below.'
               : 'Pick a Client Company above to see matching Jobs.'}
         </p>
       </div>
@@ -1231,6 +1273,7 @@ function JobChoicePicker({
         {sorted.map((j) => {
           const active = choice.type === 'existing' && choice.jobId === j.id;
           const orders = j._count?.orders ?? 0;
+          const recommended = j.id === recommendedId;
           return (
             <button
               key={j.id}
@@ -1244,8 +1287,15 @@ function JobChoicePicker({
             >
               <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border ${active ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-white truncate">
-                  [{j.jobCode}] {j.name}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-[13px] font-semibold text-white truncate">
+                    [{j.jobCode}] {j.name}
+                  </div>
+                  {recommended && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-800">
+                      Recommended
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-zinc-500 mt-0.5">
                   {j.startDate && (
@@ -1263,30 +1313,60 @@ function JobChoicePicker({
           );
         })}
 
-        <button
-          type="button"
-          onClick={() => setChoice({ type: 'new' })}
-          className={`w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-start gap-3 ${
+        <div
+          className={`rounded-lg border px-3 py-2.5 transition-colors ${
             choice.type === 'new'
               ? 'bg-amber-900/20 border-amber-700'
               : 'bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60'
           }`}
         >
-          <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border ${choice.type === 'new' ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
-          <div className="flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => setChoice({ type: 'new' })}
+            className="w-full text-left flex items-start gap-3"
+          >
+            <div className={`mt-0.5 h-3.5 w-3.5 rounded-full border flex-shrink-0 ${choice.type === 'new' ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'}`} />
             <div className="text-[13px] font-semibold text-white">+ Create new Job</div>
-            <div className="mt-1.5">
-              <input
-                value={newJobName}
-                onChange={(e) => onNewJobNameChange(e.target.value)}
-                onClick={(e) => { e.stopPropagation(); setChoice({ type: 'new' }); }}
-                onFocus={() => setChoice({ type: 'new' })}
-                placeholder="Job name"
-                className="w-full px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
-              />
+          </button>
+          {choice.type === 'new' && (
+            <div className="pl-6 mt-2.5 space-y-2">
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Job name</label>
+                <input
+                  value={newJobName}
+                  onChange={(e) => onNewJobNameChange(e.target.value)}
+                  placeholder="e.g. Stranger Things S5 — LA reshoots"
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
+                <select
+                  value={newJobProductionType}
+                  onChange={(e) => onNewJobProductionTypeChange(e.target.value as ProductionType)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                >
+                  {PRODUCTION_TYPES.map((pt) => (
+                    <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Notes (optional)</label>
+                <textarea
+                  value={newJobNotes}
+                  onChange={(e) => onNewJobNotesChange(e.target.value)}
+                  rows={2}
+                  placeholder="Context, client preferences, deal notes…"
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white resize-y"
+                />
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                Job + Order are created together when you Save Draft — nothing is written until then.
+              </p>
             </div>
-          </div>
-        </button>
+          )}
+        </div>
       </div>
     </div>
   );
