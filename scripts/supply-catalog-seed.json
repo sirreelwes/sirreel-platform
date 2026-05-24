@@ -1,0 +1,1696 @@
+{
+  "categories": [
+    {
+      "name": "Basecamp Basics",
+      "slug": "basecamp-basics"
+    },
+    {
+      "name": "Climate Controls",
+      "slug": "climate-controls"
+    },
+    {
+      "name": "Communications",
+      "slug": "communications"
+    },
+    {
+      "name": "Craft Services & Catering",
+      "slug": "craft-services-catering"
+    },
+    {
+      "name": "Dollies & Carts",
+      "slug": "dollies-carts"
+    },
+    {
+      "name": "Effects",
+      "slug": "effects"
+    },
+    {
+      "name": "Ladders",
+      "slug": "ladders"
+    },
+    {
+      "name": "Lights & Power",
+      "slug": "lights-power"
+    },
+    {
+      "name": "Safety & Traffic",
+      "slug": "safety-traffic"
+    },
+    {
+      "name": "Tables & Chairs",
+      "slug": "tables-chairs"
+    },
+    {
+      "name": "Tents & Accessories",
+      "slug": "tents-accessories"
+    },
+    {
+      "name": "Tools & Cleaning",
+      "slug": "tools-cleaning"
+    },
+    {
+      "name": "Vehicle Outfitting",
+      "slug": "vehicle-outfitting"
+    },
+    {
+      "name": "Wardrobe & Makeup",
+      "slug": "wardrobe-makeup"
+    },
+    {
+      "name": "Safe Sets Equipment",
+      "slug": "safe-sets-equipment"
+    },
+    {
+      "name": "Expendables",
+      "slug": "expendables"
+    },
+    {
+      "name": "PPE",
+      "slug": "ppe"
+    },
+    {
+      "name": "Health & Safety",
+      "slug": "health-safety"
+    }
+  ],
+  "items": [
+    {
+      "code": "BAS-TRASH-CANS-LARGE",
+      "description": "Trash Cans, Large",
+      "categorySlug": "basecamp-basics",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-RECYCLE-BINS-32-GAL",
+      "description": "Recycle Bins, 32 gal",
+      "categorySlug": "basecamp-basics",
+      "rate": 0,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-BUTT-CANS",
+      "description": "Butt Cans",
+      "categorySlug": "basecamp-basics",
+      "rate": 1.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-FURNITURE-PADS",
+      "description": "Furniture Pads",
+      "categorySlug": "basecamp-basics",
+      "rate": 1.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-RUBBER-MATS-3X5",
+      "description": "Rubber Mats, 3'x5'",
+      "categorySlug": "basecamp-basics",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-TARP-LARGE",
+      "description": "Tarp, Large",
+      "categorySlug": "basecamp-basics",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "BAS-TARP-MEDIUM",
+      "description": "Tarp, Medium",
+      "categorySlug": "basecamp-basics",
+      "rate": 1,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-HEATER-PROPANE",
+      "description": "Heater, Propane",
+      "categorySlug": "climate-controls",
+      "rate": 35,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-HEATER-DISH",
+      "description": "Heater, Dish",
+      "categorySlug": "climate-controls",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-PROPANE-TANK-EXTRA",
+      "description": "Propane Tank, extra",
+      "categorySlug": "climate-controls",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-AIR-CONDITIONER-1-5-TON",
+      "description": "Air Conditioner, 1.5-ton",
+      "categorySlug": "climate-controls",
+      "rate": 150,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-FAN-BOX",
+      "description": "Fan, \"Box\"",
+      "categorySlug": "climate-controls",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-FAN-UTILITY",
+      "description": "Fan, \"Utility\"",
+      "categorySlug": "climate-controls",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-UMBRELLA-GOLF",
+      "description": "Umbrella, Golf",
+      "categorySlug": "climate-controls",
+      "rate": 3.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-HOSE-50-GARDEN",
+      "description": "Hose, 50' garden",
+      "categorySlug": "climate-controls",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CLI-MISTERS-10-GALLON",
+      "description": "Misters, 10 gallon",
+      "categorySlug": "climate-controls",
+      "rate": 55,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-MOTOROLA-CP200-RADIO",
+      "description": "Motorola CP200 Radio",
+      "categorySlug": "communications",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-KONFTEL-EGO-CONF-CALL-SPKR",
+      "description": "Konftel \"Ego\" Conf. Call Spkr.",
+      "categorySlug": "communications",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-HEADSET-DRIVE-THRU",
+      "description": "Headset, \"Drive-Thru\"",
+      "categorySlug": "communications",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-HAND-MICS",
+      "description": "Hand Mics",
+      "categorySlug": "communications",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-SURVEILLANCE-KIT",
+      "description": "Surveillance Kit",
+      "categorySlug": "communications",
+      "rate": 7,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-MOBILE-INTERNET-MIFI",
+      "description": "Mobile Internet MiFi",
+      "categorySlug": "communications",
+      "rate": 99,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-CONFERENCE-PHONE-BLUETOOTH-SPEAKER",
+      "description": "Conference Phone Bluetooth Speaker",
+      "categorySlug": "communications",
+      "rate": 35,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-BOOM-BOX",
+      "description": "Boom Box",
+      "categorySlug": "communications",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-BULLHORN",
+      "description": "Bullhorn",
+      "categorySlug": "communications",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-K12-ANCHOR-SPEAKER",
+      "description": "K12 Anchor Speaker",
+      "categorySlug": "communications",
+      "rate": 80,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "COM-MICROPHONE-XLR",
+      "description": "Microphone, XLR",
+      "categorySlug": "communications",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COFFEE-MAKER-100-CUP",
+      "description": "Coffee Maker, 100 cup",
+      "categorySlug": "craft-services-catering",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-TEA-KETTLE-1-7-LITER-ELECTRIC",
+      "description": "Tea Kettle (1.7 liter) - Electric",
+      "categorySlug": "craft-services-catering",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COOLER-48-QT",
+      "description": "Cooler, 48 qt",
+      "categorySlug": "craft-services-catering",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COOLER-68-QT",
+      "description": "Cooler, 68 qt",
+      "categorySlug": "craft-services-catering",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COOLER-100-QT",
+      "description": "Cooler, 100 qt",
+      "categorySlug": "craft-services-catering",
+      "rate": 7,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COOLER-GATORADE",
+      "description": "Cooler, \"Gatorade\"",
+      "categorySlug": "craft-services-catering",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-WATER-DISPENSER",
+      "description": "Water Dispenser",
+      "categorySlug": "craft-services-catering",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-WATER-BOTTLE-5-GAL",
+      "description": "Water Bottle, 5-gal",
+      "categorySlug": "craft-services-catering",
+      "rate": 11,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "CRA-COFFEE-THERMOS-LARGE-2QT",
+      "description": "Coffee Thermos, Large (2qt)",
+      "categorySlug": "craft-services-catering",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-RUBBERMAID-CART",
+      "description": "Rubbermaid Cart",
+      "categorySlug": "dollies-carts",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-DOLLY-MAGLINER-JR",
+      "description": "Dolly, Magliner Jr.",
+      "categorySlug": "dollies-carts",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-DOLLY-MAGLINER-SR",
+      "description": "Dolly, Magliner Sr.",
+      "categorySlug": "dollies-carts",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-DOLLY-MAGLINER-SR-W-SHELF",
+      "description": "Dolly, Magliner Sr. w/Shelf",
+      "categorySlug": "dollies-carts",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-DOLLY-FURNITURE",
+      "description": "Dolly, Furniture",
+      "categorySlug": "dollies-carts",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-DOLLY-HANDTRUCK-2-WHEEL",
+      "description": "Dolly, Handtruck (2-Wheel)",
+      "categorySlug": "dollies-carts",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-PALLET-JACK",
+      "description": "Pallet Jack",
+      "categorySlug": "dollies-carts",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-STEEL-DECK-2X4",
+      "description": "Steel Deck, 2x4",
+      "categorySlug": "dollies-carts",
+      "rate": 30,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-STEEL-DECK-2X6",
+      "description": "Steel Deck, 2x6",
+      "categorySlug": "dollies-carts",
+      "rate": 35,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-STEEL-DECK-2X8",
+      "description": "Steel Deck, 2x8",
+      "categorySlug": "dollies-carts",
+      "rate": 35,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-STEEL-DECK-4X8",
+      "description": "Steel Deck, 4x8",
+      "categorySlug": "dollies-carts",
+      "rate": 35,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "DOL-STEEL-DECK-4X4",
+      "description": "Steel Deck, 4x4",
+      "categorySlug": "dollies-carts",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EFX-ROSCOE-FOGGER-1900",
+      "description": "Roscoe Fogger 1900",
+      "categorySlug": "effects",
+      "rate": 50,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EFX-ROSCOE-FLUID-BOTTLE",
+      "description": "Roscoe Fluid, Bottle",
+      "categorySlug": "effects",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EFX-ROSCOE-V-HAZER-WATER-BASED",
+      "description": "Roscoe V-Hazer (Water Based)",
+      "categorySlug": "effects",
+      "rate": 60,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EFX-DF50-HAZER",
+      "description": "DF50 Hazer",
+      "categorySlug": "effects",
+      "rate": 110,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EFX-FAN-RE-FAN-W-STAND",
+      "description": "Fan, \"RE Fan\" w/stand",
+      "categorySlug": "effects",
+      "rate": 65,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-STEP",
+      "description": "Ladder, Step",
+      "categorySlug": "ladders",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-6",
+      "description": "Ladder, 6'",
+      "categorySlug": "ladders",
+      "rate": 8,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-7",
+      "description": "Ladder, 7'",
+      "categorySlug": "ladders",
+      "rate": 9,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-8",
+      "description": "Ladder, 8'",
+      "categorySlug": "ladders",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-10",
+      "description": "Ladder, 10'",
+      "categorySlug": "ladders",
+      "rate": 14,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-12",
+      "description": "Ladder, 12'",
+      "categorySlug": "ladders",
+      "rate": 16,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "LAD-LADDER-14",
+      "description": "Ladder, 14'",
+      "categorySlug": "ladders",
+      "rate": 18,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-GENERATOR-2000W",
+      "description": "Generator, 2000W",
+      "categorySlug": "lights-power",
+      "rate": 60,
+      "unit": "day",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ]
+    },
+    {
+      "code": "POW-GENERATOR-3000W",
+      "description": "Generator, 3000W",
+      "categorySlug": "lights-power",
+      "rate": 80,
+      "unit": "day",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ]
+    },
+    {
+      "code": "POW-GENERATOR-6500W",
+      "description": "Generator, 6500W",
+      "categorySlug": "lights-power",
+      "rate": 200,
+      "unit": "day",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ]
+    },
+    {
+      "code": "POW-GENERATOR-7000W",
+      "description": "Generator, 7000W",
+      "categorySlug": "lights-power",
+      "rate": 225,
+      "unit": "day",
+      "aliases": [
+        "genny",
+        "gen",
+        "generator"
+      ]
+    },
+    {
+      "code": "POW-GAS-CAN-5-GAL",
+      "description": "Gas Can, 5-gal",
+      "categorySlug": "lights-power",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-EXT-CORD-25",
+      "description": "Ext. Cord, 25'",
+      "categorySlug": "lights-power",
+      "rate": 4,
+      "unit": "day",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ]
+    },
+    {
+      "code": "POW-EXT-CORD-50",
+      "description": "Ext. Cord, 50'",
+      "categorySlug": "lights-power",
+      "rate": 5,
+      "unit": "day",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ]
+    },
+    {
+      "code": "POW-EXT-CORD-100",
+      "description": "Ext. Cord, 100'",
+      "categorySlug": "lights-power",
+      "rate": 6,
+      "unit": "day",
+      "aliases": [
+        "stinger",
+        "extension cord"
+      ]
+    },
+    {
+      "code": "POW-POWER-STRIP",
+      "description": "Power Strip",
+      "categorySlug": "lights-power",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-POWER-INVERTER-250W",
+      "description": "Power Inverter 250w",
+      "categorySlug": "lights-power",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-WORK-LIGHT-W-STAND",
+      "description": "Work Light w/stand",
+      "categorySlug": "lights-power",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-BATTERY-PWR-WORKLIGHT",
+      "description": "Battery Pwr Worklight",
+      "categorySlug": "lights-power",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-CLAMP-LIGHT",
+      "description": "Clamp Light",
+      "categorySlug": "lights-power",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-FLASHLIGHT-MAG",
+      "description": "Flashlight, \"Mag\"",
+      "categorySlug": "lights-power",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "POW-CABLE-CROSSOVER",
+      "description": "Cable Crossover",
+      "categorySlug": "lights-power",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-TRAFFIC-CONES-18",
+      "description": "Traffic Cones, 18\"",
+      "categorySlug": "safety-traffic",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-TRAFFIC-CONES-28",
+      "description": "Traffic Cones, 28\"",
+      "categorySlug": "safety-traffic",
+      "rate": 2.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-DELINEATORS-36",
+      "description": "Delineators, 36\"",
+      "categorySlug": "safety-traffic",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-STOP-SLOW-SIGN",
+      "description": "Stop/Slow Sign",
+      "categorySlug": "safety-traffic",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-SAFETY-VEST",
+      "description": "Safety Vest",
+      "categorySlug": "safety-traffic",
+      "rate": 1.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-SIGN-MEN-WORKING",
+      "description": "Sign, \"Men Working\"",
+      "categorySlug": "safety-traffic",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-SIGN-PREPARE-TO-STOP",
+      "description": "Sign, \"Prepare to Stop\"",
+      "categorySlug": "safety-traffic",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-SIGN-WET-PAVEMENT",
+      "description": "Sign, \"Wet Pavement\"",
+      "categorySlug": "safety-traffic",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-SIGN-ROAD-WORK-AHEAD",
+      "description": "Sign, \"Road Work Ahead\"",
+      "categorySlug": "safety-traffic",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-BARRICADES-W-LIGHTS",
+      "description": "Barricades w/Lights",
+      "categorySlug": "safety-traffic",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-HARD-HAT",
+      "description": "Hard Hat",
+      "categorySlug": "safety-traffic",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-CAL-OSHA-BOARD",
+      "description": "Cal OSHA Board",
+      "categorySlug": "safety-traffic",
+      "rate": 12,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-1ST-AID-KIT-50-PERSON",
+      "description": "1st Aid Kit, 50 person",
+      "categorySlug": "safety-traffic",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-FIRE-EXTINGUISHER-18LB",
+      "description": "Fire Extinguisher (18LB)",
+      "categorySlug": "safety-traffic",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SAF-FIRE-EXTINGUISHER-8LB",
+      "description": "Fire Extinguisher (8LB)",
+      "categorySlug": "safety-traffic",
+      "rate": 8,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-TABLE-2-FOLDING-PERSONAL",
+      "description": "Table, 2' Folding (Personal)",
+      "categorySlug": "tables-chairs",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-TABLE-4-FOLDING",
+      "description": "Table, 4' Folding",
+      "categorySlug": "tables-chairs",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-TABLE-6-FOLDING",
+      "description": "Table, 6' Folding",
+      "categorySlug": "tables-chairs",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-TABLE-6-FOLDING-HALF-FOLD",
+      "description": "Table, 6' Folding (Half Fold)",
+      "categorySlug": "tables-chairs",
+      "rate": 6.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-TABLE-8-FOLDING",
+      "description": "Table, 8' Folding",
+      "categorySlug": "tables-chairs",
+      "rate": 7,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-6-TABLE-LINEN-BLACK",
+      "description": "6' Table Linen (Black)",
+      "categorySlug": "tables-chairs",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-6-TABLE-LINEN-WHITE",
+      "description": "6' Table Linen (White)",
+      "categorySlug": "tables-chairs",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-CHAIRS-FOLDING",
+      "description": "Chairs, Folding",
+      "categorySlug": "tables-chairs",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-DIRECTORS-CHAIRS-LOW",
+      "description": "Director's Chairs, Low",
+      "categorySlug": "tables-chairs",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-DIRECTORS-CHAIRS-TALL",
+      "description": "Director's Chairs, Tall",
+      "categorySlug": "tables-chairs",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-DIRECTORS-CHAIRS-MEDIUM-PADDED",
+      "description": "Director's Chairs, Medium (Padded)",
+      "categorySlug": "tables-chairs",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-CLIENT-LOUNGE-STANDARD",
+      "description": "Client Lounge, Standard",
+      "categorySlug": "tables-chairs",
+      "rate": 250,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TAB-CLIENT-LOUNGE-SOLO-LINE",
+      "description": "Client Lounge, SOLO Line",
+      "categorySlug": "tables-chairs",
+      "rate": 400,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TEN-CARAVAN-CANOPY-8X8",
+      "description": "Caravan Canopy, 8x8",
+      "categorySlug": "tents-accessories",
+      "rate": 25,
+      "unit": "day",
+      "aliases": [
+        "pop up",
+        "popup",
+        "ez up",
+        "ez-up",
+        "tent",
+        "canopy"
+      ]
+    },
+    {
+      "code": "TEN-CARAVAN-CANOPY-10X10",
+      "description": "Caravan Canopy, 10x10",
+      "categorySlug": "tents-accessories",
+      "rate": 30,
+      "unit": "day",
+      "aliases": [
+        "pop up",
+        "popup",
+        "ez up",
+        "ez-up",
+        "tent",
+        "canopy"
+      ]
+    },
+    {
+      "code": "TEN-CARAVAN-CANOPY-10X15",
+      "description": "Caravan Canopy, 10x15",
+      "categorySlug": "tents-accessories",
+      "rate": 40,
+      "unit": "day",
+      "aliases": [
+        "pop up",
+        "popup",
+        "ez up",
+        "ez-up",
+        "tent",
+        "canopy"
+      ]
+    },
+    {
+      "code": "TEN-CARAVAN-CANOPY-10X20",
+      "description": "Caravan Canopy, 10x20",
+      "categorySlug": "tents-accessories",
+      "rate": 55,
+      "unit": "day",
+      "aliases": [
+        "pop up",
+        "popup",
+        "ez up",
+        "ez-up",
+        "tent",
+        "canopy"
+      ]
+    },
+    {
+      "code": "TEN-SIDEWALLS-8X8",
+      "description": "Sidewalls, 8x8",
+      "categorySlug": "tents-accessories",
+      "rate": 6,
+      "unit": "day",
+      "aliases": [
+        "tent wall",
+        "tent sidewall"
+      ]
+    },
+    {
+      "code": "TEN-SIDEWALLS-10X10",
+      "description": "Sidewalls, 10x10",
+      "categorySlug": "tents-accessories",
+      "rate": 6,
+      "unit": "day",
+      "aliases": [
+        "tent wall",
+        "tent sidewall"
+      ]
+    },
+    {
+      "code": "TEN-SIDEWALLS-10X15",
+      "description": "Sidewalls, 10x15",
+      "categorySlug": "tents-accessories",
+      "rate": 6,
+      "unit": "day",
+      "aliases": [
+        "tent wall",
+        "tent sidewall"
+      ]
+    },
+    {
+      "code": "TEN-SAND-BAGS-25LBS",
+      "description": "Sand Bags, 25lbs",
+      "categorySlug": "tents-accessories",
+      "rate": 3,
+      "unit": "day",
+      "aliases": [
+        "sandbag"
+      ]
+    },
+    {
+      "code": "TEN-SAND-BAGS-35LBS",
+      "description": "Sand Bags, 35lbs",
+      "categorySlug": "tents-accessories",
+      "rate": 5,
+      "unit": "day",
+      "aliases": [
+        "sandbag"
+      ]
+    },
+    {
+      "code": "TOO-BROOM-CORN",
+      "description": "Broom, Corn",
+      "categorySlug": "tools-cleaning",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-BROOM-PUSH",
+      "description": "Broom, Push",
+      "categorySlug": "tools-cleaning",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-DUST-MOP",
+      "description": "Dust Mop",
+      "categorySlug": "tools-cleaning",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-DUST-PAN",
+      "description": "Dust Pan",
+      "categorySlug": "tools-cleaning",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-MOP-BUCKET",
+      "description": "Mop & Bucket",
+      "categorySlug": "tools-cleaning",
+      "rate": 8,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-PAIL-PLASTIC-5-GALLON",
+      "description": "Pail, Plastic 5 Gallon",
+      "categorySlug": "tools-cleaning",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-RAKE-LEAF",
+      "description": "Rake, Leaf",
+      "categorySlug": "tools-cleaning",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-RAKE-ROCK",
+      "description": "Rake, Rock",
+      "categorySlug": "tools-cleaning",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-RAKE-SAND",
+      "description": "Rake, Sand",
+      "categorySlug": "tools-cleaning",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-SHOVEL-FLAT",
+      "description": "Shovel, Flat",
+      "categorySlug": "tools-cleaning",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-SHOVEL-SPADE",
+      "description": "Shovel, Spade",
+      "categorySlug": "tools-cleaning",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-SHOVEL-SNOW",
+      "description": "Shovel, Snow",
+      "categorySlug": "tools-cleaning",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-SLEDGE-HAMMER",
+      "description": "Sledge Hammer",
+      "categorySlug": "tools-cleaning",
+      "rate": 6,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-BOLT-CUTTER",
+      "description": "Bolt Cutter",
+      "categorySlug": "tools-cleaning",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-PRUNE-CUTTER",
+      "description": "Prune Cutter",
+      "categorySlug": "tools-cleaning",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-SHOP-VACUUM",
+      "description": "Shop Vacuum",
+      "categorySlug": "tools-cleaning",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-LEAF-BLOWER-ELECTRIC",
+      "description": "Leaf Blower, Electric",
+      "categorySlug": "tools-cleaning",
+      "rate": 15,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-PRESSURE-WASHER",
+      "description": "Pressure Washer",
+      "categorySlug": "tools-cleaning",
+      "rate": 40,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-WEED-WACKER-ELECTRIC",
+      "description": "Weed Wacker, Electric",
+      "categorySlug": "tools-cleaning",
+      "rate": 30,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-HEDGE-TRIMMER-ELECTRIC",
+      "description": "Hedge Trimmer, Electric",
+      "categorySlug": "tools-cleaning",
+      "rate": 30,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "TOO-TRASH-GRABBER",
+      "description": "Trash Grabber",
+      "categorySlug": "tools-cleaning",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-4-WORK-SHELF",
+      "description": "4' Work Shelf",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 4,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-8-WORK-SHELF",
+      "description": "8' Work Shelf",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 8,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-4-WORK-BASKET",
+      "description": "4' Work Basket",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-MILK-CRATE",
+      "description": "Milk Crate",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-STRAPS-BUNGEE-OR-D-RING",
+      "description": "Straps, Bungee or D-Ring",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 1,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-STRAPS-RATCHET",
+      "description": "Straps, Ratchet",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-CHAIR-RACK-HANGING",
+      "description": "Chair Rack, Hanging",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 2,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-CHAIR-RACK-ROLLING",
+      "description": "Chair Rack, Rolling",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-DIRECTORS-CHAIR-RACK-ROLLING",
+      "description": "Director's Chair Rack, Rolling",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-DOLLY-TRACK-RACK-SINGLE",
+      "description": "Dolly Track Rack, Single",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 1.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-FIRE-EXTINGUISHER-RACK",
+      "description": "Fire Extinguisher Rack",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "VEH-TOOL-RACK",
+      "description": "Tool Rack",
+      "categorySlug": "vehicle-outfitting",
+      "rate": 3,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-MIRROR-ROLLING-M-U",
+      "description": "Mirror, Rolling M/U",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-MIRROR-HALF-W-LIGHTS",
+      "description": "Mirror, Half w/lights",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-MIRROR-6-WARDROBE",
+      "description": "Mirror, 6' Wardrobe",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 12.5,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-POP-UP-CHANGING-STALL",
+      "description": "Pop-Up Changing Stall",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 8,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-IRON",
+      "description": "Iron",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 7,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-IRONING-BOARD",
+      "description": "Ironing Board",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-JIFFY-STEAMER",
+      "description": "Jiffy Steamer",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 12,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "WAR-WARDROBE-RACK-ROLLING",
+      "description": "Wardrobe Rack, Rolling",
+      "categorySlug": "wardrobe-makeup",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-HAND-WASHING-STATION",
+      "description": "Hand Washing Station",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 95,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-STANDING-SANITIZING-STATION",
+      "description": "Standing Sanitizing Station",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 25,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-TABLETOP-SANITIZING-STATION",
+      "description": "Tabletop Sanitizing Station",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 20,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-AIR-SCRUBBER-750-CFM",
+      "description": "Air Scrubber (750 CFM)",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 100,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-AIR-SCRUBBER-550-CFM",
+      "description": "Air Scrubber (550 CFM)",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 75,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-DIRECTORS-SHIELD",
+      "description": "Director's Shield",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 10,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "SSE-TABLE-DIVIDER",
+      "description": "Table Divider",
+      "categorySlug": "safe-sets-equipment",
+      "rate": 7,
+      "unit": "day",
+      "aliases": []
+    },
+    {
+      "code": "EXP-HANGER-COMBO",
+      "description": "Hanger, Combo",
+      "categorySlug": "expendables",
+      "rate": 1.25,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-HANGER-PANTS",
+      "description": "Hanger, Pants",
+      "categorySlug": "expendables",
+      "rate": 0.95,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-HANGER-SHIRTS",
+      "description": "Hanger, Shirts",
+      "categorySlug": "expendables",
+      "rate": 0.8,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-TRASH-LINERS-ROLL",
+      "description": "Trash Liners, Roll",
+      "categorySlug": "expendables",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-TRASH-LINERS-2X-ROLL-BOX",
+      "description": "Trash Liners, 2x Roll Box",
+      "categorySlug": "expendables",
+      "rate": 25,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-LAYOUT-BOARD-NEW",
+      "description": "Layout Board, New",
+      "categorySlug": "expendables",
+      "rate": 7.5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-LAYOUT-BOARD-USED",
+      "description": "Layout Board, Used",
+      "categorySlug": "expendables",
+      "rate": 5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-RAM-BOARD-ROLL",
+      "description": "Ram Board, Roll",
+      "categorySlug": "expendables",
+      "rate": 65,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-CAUTION-TAPE-ROLL",
+      "description": "Caution Tape, Roll",
+      "categorySlug": "expendables",
+      "rate": 10,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-BOOTIES-PAIR",
+      "description": "Booties (pair)",
+      "categorySlug": "expendables",
+      "rate": 0.75,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "EXP-PAPER-TAPE-2-LAYOUT-ROLL",
+      "description": "Paper Tape, 2\" Layout (roll)",
+      "categorySlug": "expendables",
+      "rate": 10,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-BLACK-KN95-FACE-MASK-10PK",
+      "description": "Black KN95 Face Mask (10pk)",
+      "categorySlug": "ppe",
+      "rate": 10,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-DISPOSABLE-FACE-MASKS-50PK",
+      "description": "Disposable Face Masks (50pk)",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-WHITE-N95-FACE-MASK-20PK",
+      "description": "White N95 Face Mask (20pk)",
+      "categorySlug": "ppe",
+      "rate": 30,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-FACE-SHIELD-HEADBAND",
+      "description": "Face Shield - Headband",
+      "categorySlug": "ppe",
+      "rate": 2,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-FACE-SHIELD-GLASSES-10PK",
+      "description": "Face Shield - Glasses (10pk)",
+      "categorySlug": "ppe",
+      "rate": 20,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-SAFETY-GLASSES",
+      "description": "Safety Glasses",
+      "categorySlug": "ppe",
+      "rate": 2,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-LATEX-GLOVES-50-PAIRS",
+      "description": "Latex Gloves (50 pairs)",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-ISOLATION-GOWN",
+      "description": "Isolation Gown",
+      "categorySlug": "ppe",
+      "rate": 3,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-HAND-SANITIZER-17OZ",
+      "description": "Hand Sanitizer (17oz)",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-HAND-SANITIZER-33OZ",
+      "description": "Hand Sanitizer (33oz)",
+      "categorySlug": "ppe",
+      "rate": 20,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-HAND-SANITIZING-WIPES-100PK",
+      "description": "Hand Sanitizing Wipes (100pk)",
+      "categorySlug": "ppe",
+      "rate": 8,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-MINI-ALCOHOL-WIPES-100PK",
+      "description": "Mini Alcohol Wipes (100pk)",
+      "categorySlug": "ppe",
+      "rate": 6,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-DISINFECTANT-SPRAY",
+      "description": "Disinfectant Spray",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-DISINFECTANT-LIQUID",
+      "description": "Disinfectant Liquid",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-ANTISEPTIC-TOWELETTES-100PK",
+      "description": "Antiseptic Towelettes (100pk)",
+      "categorySlug": "ppe",
+      "rate": 15,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "PPE-70-ALCOHOL-WIPE",
+      "description": "70% Alcohol Wipe",
+      "categorySlug": "ppe",
+      "rate": 0.25,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-NON-CONTACT-THERMOMETER",
+      "description": "Non-Contact Thermometer",
+      "categorySlug": "health-safety",
+      "rate": 45,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-SAFE-SETS-SIGNAGE-PACK",
+      "description": "Safe Sets Signage Pack",
+      "categorySlug": "health-safety",
+      "rate": 75,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-PAPER-WRISTBANDS-10PK-BLUE",
+      "description": "Paper Wristbands (10pk) - Blue",
+      "categorySlug": "health-safety",
+      "rate": 0.5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-PAPER-WRISTBANDS-10PK-ORANGE",
+      "description": "Paper Wristbands (10pk) - Orange",
+      "categorySlug": "health-safety",
+      "rate": 0.5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-PAPER-WRISTBANDS-10PK-RED",
+      "description": "Paper Wristbands (10pk) - Red",
+      "categorySlug": "health-safety",
+      "rate": 0.5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-PAPER-WRISTBANDS-10PK-YELLOW",
+      "description": "Paper Wristbands (10pk) - Yellow",
+      "categorySlug": "health-safety",
+      "rate": 0.5,
+      "unit": "ea",
+      "aliases": []
+    },
+    {
+      "code": "HEA-PAPER-WRISTBANDS-10PK-PINK",
+      "description": "Paper Wristbands (10pk) - Pink",
+      "categorySlug": "health-safety",
+      "rate": 0.5,
+      "unit": "ea",
+      "aliases": []
+    }
+  ]
+}

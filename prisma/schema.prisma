@@ -1501,6 +1501,12 @@ model InventoryItem {
   // the line item's department is overridden from this field.
   aliases         String[]            @default([])
   department      LineItemDepartment
+  // Default LineItemType for this catalog item — inherited by
+  // OrderLineItem when the line is created from a catalog match
+  // (overridable per-line). EQUIPMENT for unit=day rentals,
+  // EXPENDABLE for unit=ea consumables. The new-quote createQuote
+  // path may still re-derive at create time for legacy callers.
+  type            LineItemType        @default(EQUIPMENT)
   // RentalWorks enrichment (May 2026 spike). The first four columns are
   // populated from RW Items grouped by InventoryId. needsReview flags
   // auto-created rows where Wes hasn't yet picked an InventoryCategory /
