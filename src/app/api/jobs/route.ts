@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 
 // GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&mine=1&search=foo
 //                &include=quoteStatus,departments  (Phase 1 sales pipeline)
+//                &orphans=1  (only QUOTED jobs with no sent/durable order)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
   let agentId = searchParams.get('agentId')
   const mine = searchParams.get('mine') === '1'
   const search = searchParams.get('search')
+  const orphans = searchParams.get('orphans') === '1'
   const includeParam = searchParams.get('include') || ''
   const includes = new Set(includeParam.split(',').map((s) => s.trim()).filter(Boolean))
   const includeQuoteStatus = includes.has('quoteStatus')
@@ -46,7 +48,20 @@ export async function GET(req: NextRequest) {
       where: {
         ...(companyId && { companyId }),
         ...(agentId && { agentId }),
-        ...(statuses && statuses.length > 0 ? { status: { in: statuses } } : status ? { status } : {}),
+        // `orphans=1` overrides the status filter — it's QUOTED + no
+        // sent/durable order. "Durable" = any order that has progressed
+        // past DRAFT (quoteStatus IN SENT/WON/LOST/EXPIRED). A job with
+        // zero orders or only DRAFT orders qualifies.
+        ...(orphans
+          ? {
+              status: 'QUOTED' as JobStatus,
+              orders: { none: { quoteStatus: { in: ['SENT', 'WON', 'LOST', 'EXPIRED'] } } },
+            }
+          : statuses && statuses.length > 0
+          ? { status: { in: statuses } }
+          : status
+          ? { status }
+          : {}),
         ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },

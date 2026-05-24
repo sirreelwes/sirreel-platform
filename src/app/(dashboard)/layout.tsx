@@ -80,7 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role: UserRole = (actualRole === 'ADMIN' && viewAsRole) ? viewAsRole : actualRole;
   const perms = getPermissions(role);
   const navItems = getNavItems(role);
-  const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || (pathname.startsWith('/jobs') ? 'bookings' : 'dashboard');
+  const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'dashboard';
 
   // Sales agents work primarily from /sales/pipeline — Dashboard isn't
   // in their nav, and `/` redirects to /dashboard by default. Bounce

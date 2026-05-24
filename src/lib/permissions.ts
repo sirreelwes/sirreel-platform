@@ -196,7 +196,8 @@ export function getNavSections(role: UserRole): NavSection[] {
   }
   if (perms.calendar) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
   if (perms.gantt) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
-  if (perms.bookings) main.push({ id: 'bookings', label: 'Jobs', icon: '', href: '/bookings' });
+  if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
+  if (perms.bookings) main.push({ id: 'bookings', label: 'Bookings', icon: '', href: '/bookings' });
   if (!sales && perms.pipeline) {
     main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
   }
