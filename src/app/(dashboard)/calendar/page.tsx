@@ -19,22 +19,10 @@ const CATS: Record<string, string> = { cube: 'Cube', cargo: 'Cargo', pass: 'Pass
 type JobItem = { cat: string; qty: number; start: string; end: string };
 type Job = {
   id: string; company: string; jobName: string; jobNum: string;
+  jobId: string | null; jobCode: string | null;
   contact: string; agent: string; stage: string;
   items: JobItem[];
 };
-
-const JOBS: Job[] = [
-  { id: 'j1', company: 'Cinepower & Light', jobName: 'Spring Auto Campaign', jobNum: 'CP-041', contact: 'Terry Meadows', agent: 'Jose', stage: 'active', items: [{ cat: 'cube', qty: 6, start: today, end: addDays(today, 3) }] },
-  { id: 'j2', company: 'Justin K Prod', jobName: 'Midnight Run 2', jobNum: 'JKP-018', contact: 'Justin Kappenstein', agent: 'Oliver', stage: 'booked', items: [{ cat: 'cube', qty: 4, start: addDays(today, 1), end: addDays(today, 6) }] },
-  { id: 'j3', company: 'Nathan Israel Prod', jobName: 'Lights Out S3', jobNum: 'NI-064', contact: 'Nathan Israel', agent: 'Jose', stage: 'active', items: [{ cat: 'cargo', qty: 5, start: today, end: addDays(today, 4) }] },
-  { id: 'j4', company: 'Elli Legerski Prod', jobName: 'Nike Branded', jobNum: 'EL-038', contact: 'Elli Legerski', agent: 'Jose', stage: 'active', items: [{ cat: 'pop', qty: 2, start: today, end: addDays(today, 5) }] },
-  { id: 'j5', company: 'Snow Story', jobName: 'Cold Front MV', jobNum: 'SS-005', contact: 'Jason Mayfield', agent: 'Jose', stage: 'booked', items: [{ cat: 'dlux', qty: 2, start: addDays(today, 1), end: addDays(today, 4) }, { cat: 'cube', qty: 3, start: addDays(today, 1), end: addDays(today, 4) }] },
-  { id: 'j6', company: 'Fabletics', jobName: 'Spring Campaign', jobNum: 'FAB-001', contact: 'Ella Swanstrom', agent: 'Jose', stage: 'booked', items: [{ cat: 'studio', qty: 2, start: addDays(today, 1), end: addDays(today, 3) }] },
-  { id: 'j7', company: 'Beth Schiffman Prod', jobName: 'Greystone Pilot', jobNum: 'BS-013', contact: 'Beth Schiffman', agent: 'Jose', stage: 'hold', items: [{ cat: 'cube', qty: 5, start: addDays(today, 3), end: addDays(today, 8) }, { cat: 'cargo', qty: 3, start: addDays(today, 3), end: addDays(today, 8) }] },
-  { id: 'j8', company: 'Paramount', jobName: 'Untitled Drama', jobNum: 'PAR-007', contact: 'Stephen Predisik', agent: 'Oliver', stage: 'hold', items: [{ cat: 'cargo', qty: 4, start: addDays(today, 2), end: addDays(today, 5) }] },
-  { id: 'j9', company: 'AJR Films', jobName: 'Megan Thee Stallion MV', jobNum: 'AJR-050', contact: 'Brandon McClover', agent: 'Jose', stage: 'inquiry', items: [{ cat: 'cube', qty: 8, start: addDays(today, 5), end: addDays(today, 12) }] },
-  { id: 'j10', company: 'Alyssa Benedetto Prod', jobName: 'Revolve Shoot', jobNum: 'AB-025', contact: 'Alyssa Benedetto', agent: 'Jose', stage: 'quoted', items: [{ cat: 'cube', qty: 3, start: addDays(today, 4), end: addDays(today, 7) }] },
-];
 
 type MaintRecord = { id: string; unit: string; issue: string; start: string; end: string };
 const MAINT: MaintRecord[] = [];
@@ -61,6 +49,8 @@ export default function CalendarPage() {
         if (!d.ok) return
         const jobs: Job[] = (d.jobs || []).map((j: any) => ({
           id: j.id || j.cartId,
+          jobId: j.jobId ?? null,
+          jobCode: j.jobCode ?? null,
           company: j.company || 'Unknown',
           jobName: j.jobName || '',
           jobNum: j.rwOrderNumber ? '#' + j.rwOrderNumber : j.jobNum || '',
@@ -205,20 +195,27 @@ export default function CalendarPage() {
           <div className="bg-white rounded-2xl w-[480px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-3">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).bg} ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).text}`}>
                     {selectedJob.stage}
                   </span>
                   <span className="text-[10px] text-gray-400">#{selectedJob.jobNum}</span>
+                  {selectedJob.jobCode && (
+                    <span className="text-[10px] font-mono text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                      {selectedJob.jobCode}
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-lg font-bold text-gray-900">{selectedJob.company}</h3>
                 <div className="text-[13px] text-gray-500">{selectedJob.jobName}</div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { router.push('/jobs/' + (selectedJob.id || '')); setSelectedJob(null); }}
-                  className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-[11px] font-semibold hover:bg-gray-800">
-                  Open Job →
-                </button>
+                {selectedJob.jobId && (
+                  <button onClick={() => { router.push('/jobs/' + selectedJob.jobId); setSelectedJob(null); }}
+                    className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-[11px] font-semibold hover:bg-gray-800">
+                    Open Job →
+                  </button>
+                )}
                 <button onClick={() => setSelectedJob(null)} className="text-gray-400 hover:text-gray-600">✕</button>
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 
@@ -695,9 +696,19 @@ export default function GanttPage() {
                     <div className="text-[13px] text-gray-500">{selected.clientName}</div>
                     {selected.jobName && <div className="text-[11px] text-gray-400 mt-0.5">{selected.jobName}</div>}
                     {selected.agent && <div className="text-[11px] text-gray-400">Agent: {selected.agent}</div>}
-                    {selected.rwOrderNumber && (
-                      <a href={`/jobs?rw=${selected.rwOrderNumber}`} className="text-[11px] text-blue-600 hover:underline">RW #{selected.rwOrderNumber} →</a>
-                    )}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {selected.jobId && (
+                        <Link
+                          href={`/jobs/${selected.jobId}`}
+                          className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                        >
+                          {selected.jobCode || 'Job'} →
+                        </Link>
+                      )}
+                      {selected.rwOrderNumber && (
+                        <a href={`/jobs?rw=${selected.rwOrderNumber}`} className="text-[10px] text-blue-600 hover:underline">RW #{selected.rwOrderNumber} →</a>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -706,6 +717,14 @@ export default function GanttPage() {
                     {selected.jobName && <div className="text-[13px] text-gray-500">{selected.jobName}</div>}
                     {selected.agent && <div className="text-[11px] text-gray-400 mt-0.5">Agent: {selected.agent}</div>}
                     {selected.contact && selected.contact !== selected.company && <div className="text-[11px] text-gray-400">Contact: {selected.contact}</div>}
+                    {selected.jobId && (
+                      <Link
+                        href={`/jobs/${selected.jobId}`}
+                        className="inline-block text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 mt-1"
+                      >
+                        {selected.jobCode || 'Job'} →
+                      </Link>
+                    )}
                   </>
                 )}
               </div>

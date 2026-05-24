@@ -107,6 +107,10 @@ export async function GET() {
       endDate: true,
       status: true,
       rentalworksOrderId: true,
+      // Native Job linkage (Booking.jobId FK, added in the JobPicker
+      // commit). NULL on legacy/Planyo-imported Bookings — the UI
+      // hides the "Open job →" affordance when jobId is null.
+      job: { select: { id: true, jobCode: true } },
       company: { select: { id: true, name: true } },
       person: { select: { id: true, firstName: true, lastName: true } },
       agent: { select: { id: true, name: true } },
@@ -171,6 +175,8 @@ export async function GET() {
       id: b.id,
       cartId: b.bookingNumber, // stable cross-source identifier
       bookingId: b.id, // explicit native id
+      jobId: b.job?.id ?? null,
+      jobCode: b.job?.jobCode ?? null,
       company: b.company.name,
       jobName: b.jobName,
       jobNum: b.bookingNumber,
@@ -213,6 +219,7 @@ export async function GET() {
               status: true,
               jobName: true,
               rentalworksOrderId: true,
+              job: { select: { id: true, jobCode: true } },
               company: { select: { name: true } },
               agent: { select: { name: true } },
             },
@@ -250,6 +257,8 @@ export async function GET() {
       bookingId: a.bookingItem.booking.id, // for /confirm; previously omitted
       assignmentId: a.id,
       cartId: a.bookingItem.booking.bookingNumber,
+      jobId: a.bookingItem.booking.job?.id ?? null,
+      jobCode: a.bookingItem.booking.job?.jobCode ?? null,
       clientName: a.bookingItem.booking.company.name,
       jobName: a.bookingItem.booking.jobName,
       agent: a.bookingItem.booking.agent.name ?? '',
@@ -313,6 +322,7 @@ export async function GET() {
           endDate: true,
           status: true,
           rentalworksOrderId: true,
+          job: { select: { id: true, jobCode: true } },
           company: { select: { name: true } },
           person: { select: { firstName: true, lastName: true } },
           agent: { select: { name: true } },
@@ -326,6 +336,8 @@ export async function GET() {
     return {
       bookingItemId: it.id,
       bookingId: it.booking.id,
+      jobId: it.booking.job?.id ?? null,
+      jobCode: it.booking.job?.jobCode ?? null,
       categoryId: it.category?.id ?? null,
       categoryName: it.category?.name ?? '',
       cat,
