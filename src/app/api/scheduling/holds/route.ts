@@ -36,6 +36,13 @@ interface HoldBody {
   companyId?: string
   personId?: string
   agentId?: string
+  /** Existing Job to attach this Booking to. Mutually exclusive with newJobName. */
+  jobId?: string
+  /** Name for a NEW Job to create as part of this hold. Mutually exclusive with jobId. */
+  newJobName?: string
+  /** Legacy display name — accepted for backward compat but normally
+   *  derived from the resolved Job. When neither jobId nor newJobName
+   *  is set, this is the only signal we have for Booking.jobName. */
   jobName?: string
   productionName?: string | null
   priority?: 'STANDARD' | 'HIGH' | 'LOW'
@@ -80,7 +87,20 @@ export async function POST(req: NextRequest) {
   if (qty <= 0) return NextResponse.json({ error: 'quantity must be >= 1' }, { status: 400 })
   if (!body.companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 })
   if (!body.personId) return NextResponse.json({ error: 'personId required' }, { status: 400 })
-  if (!body.jobName?.trim()) return NextResponse.json({ error: 'jobName required' }, { status: 400 })
+
+  // Job linkage. New holds must declare a Job — either an existing one
+  // (jobId) or a new one to create (newJobName). Legacy callers that
+  // only pass jobName (no FK) are still accepted but produce a Booking
+  // with no Job linkage (jobId NULL) — that path mirrors the pre-Job
+  // bookings already in the DB.
+  const wantsExisting = !!body.jobId
+  const wantsCreate = !!body.newJobName?.trim()
+  if (wantsExisting && wantsCreate) {
+    return NextResponse.json({ error: 'pass either jobId or newJobName, not both' }, { status: 400 })
+  }
+  if (!wantsExisting && !wantsCreate && !body.jobName?.trim()) {
+    return NextResponse.json({ error: 'jobId, newJobName, or jobName required' }, { status: 400 })
+  }
 
   // Resolve agentId — body, then session.
   let agentId = body.agentId
@@ -174,13 +194,59 @@ export async function POST(req: NextRequest) {
     const bookingNumber = await nextBookingNumber(year)
     try {
       const result = await prisma.$transaction(async (tx) => {
+        // Resolve Job. Existing → verify it belongs to companyId.
+        // Create → same jobCode bump pattern as POST /api/jobs;
+        // race-prone today but no worse than the existing path.
+        let resolvedJobId: string | null = null
+        let resolvedJobName: string = body.jobName?.trim() || ''
+        let createdJobId: string | null = null
+
+        if (wantsExisting) {
+          const existing = await tx.job.findUnique({
+            where: { id: body.jobId! },
+            select: { id: true, name: true, companyId: true },
+          })
+          if (!existing) throw new Error(`Job ${body.jobId} not found`)
+          if (existing.companyId !== body.companyId) {
+            throw new Error(`Job ${body.jobId} belongs to a different company`)
+          }
+          resolvedJobId = existing.id
+          resolvedJobName = existing.name
+        } else if (wantsCreate) {
+          const lastJob = await tx.job.findFirst({
+            orderBy: { createdAt: 'desc' },
+            select: { jobCode: true },
+          })
+          const nextNum = lastJob
+            ? parseInt(lastJob.jobCode.replace('SR-JOB-', ''), 10) + 1
+            : 1
+          const jobCode = `SR-JOB-${String(nextNum).padStart(4, '0')}`
+          const created = await tx.job.create({
+            data: {
+              jobCode,
+              name: body.newJobName!.trim(),
+              companyId: body.companyId!,
+              agentId: agentId!,
+              productionType: 'OTHER',
+              status: 'QUOTED',
+              startDate: start,
+              endDate: end,
+            },
+            select: { id: true, name: true },
+          })
+          resolvedJobId = created.id
+          resolvedJobName = created.name
+          createdJobId = created.id
+        }
+
         const booking = await tx.booking.create({
           data: {
             bookingNumber,
             companyId: body.companyId!,
             personId: body.personId!,
             agentId: agentId!,
-            jobName: body.jobName!.trim(),
+            jobId: resolvedJobId,
+            jobName: resolvedJobName,
             productionName: body.productionName?.trim() || null,
             startDate: start,
             endDate: end,
@@ -189,7 +255,7 @@ export async function POST(req: NextRequest) {
             source: body.source ?? 'AGENT_DIRECT',
             notes: body.notes?.trim() || null,
           },
-          select: { id: true, bookingNumber: true, jobName: true, startDate: true, endDate: true },
+          select: { id: true, bookingNumber: true, jobName: true, jobId: true, startDate: true, endDate: true },
         })
         const bookingItem = await tx.bookingItem.create({
           data: {
@@ -202,7 +268,7 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true, quantity: true, status: true, dailyRate: true, holdRank: true },
         })
-        return { booking, bookingItem }
+        return { booking, bookingItem, createdJobId }
       })
 
       return NextResponse.json(
@@ -210,6 +276,7 @@ export async function POST(req: NextRequest) {
           ok: true,
           booking: result.booking,
           bookingItem: result.bookingItem,
+          createdJobId: result.createdJobId,
           bufferOverrideUsed: Boolean(body.bufferOverride && qty > availability.freeCount && isPrimary),
           isBackup: !isPrimary,
           holdRank: effectiveRank,

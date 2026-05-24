@@ -433,7 +433,13 @@ model Booking {
   personId       String          @map("person_id") // Who called / requested (coordinator or UPM)
   referredById   String?         @map("referred_by_id") // The UPM, if a coordinator called on their behalf
   agentId        String          @map("agent_id")
-  productionName String?         @map("production_name") // "Stranger Things S5"
+  /// Optional FK back to the SirReel HQ-native Job (billing-side). New
+  /// holds created via +Hold pick or create a Job and stamp this. NULL
+  /// on legacy Bookings (Planyo-imported, pre-Job-linkage) — Order is
+  /// still the only required path from Booking → Job. The native
+  /// scheduling engine does NOT read this column.
+  jobId          String?         @map("job_id")
+  productionName String?         @map("production_name") // "Stranger Things S5" — legacy free-text; new holds skip it
   jobName        String          @map("job_name")
   startDate      DateTime        @map("start_date") @db.Date
   endDate        DateTime        @map("end_date") @db.Date
@@ -493,6 +499,7 @@ model Booking {
   person            Person             @relation("BookingContact", fields: [personId], references: [id])
   referredBy        Person?            @relation("BookingReferrer", fields: [referredById], references: [id])
   agent             User               @relation("BookingAgent", fields: [agentId], references: [id])
+  job               Job?               @relation(fields: [jobId], references: [id])
   items             BookingItem[]
   dispatchTasks     DispatchTask[]
   insuranceClaims   InsuranceClaim[]
@@ -502,6 +509,7 @@ model Booking {
   activities        Activity[]
   reservations      Reservation[]
 
+  @@index([jobId])
   @@map("bookings")
 }
 
@@ -1932,6 +1940,7 @@ model Job {
   company     Company      @relation(fields: [companyId], references: [id])
   agent       User         @relation("JobAgent", fields: [agentId], references: [id])
   orders      Order[]
+  bookings    Booking[]
   jobContacts JobContact[]
   contractReviews ContractReview[]
   coiChecks       CoiCheck[]

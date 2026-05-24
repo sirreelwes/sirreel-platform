@@ -19,6 +19,7 @@
 import { useState } from 'react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { ContactPicker, type ContactPickerValue } from '@/components/shared/ContactPicker'
+import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
 
 interface AvailabilitySummary {
   serviceableCount: number
@@ -86,8 +87,7 @@ export function NewHoldModal({
   const [quantity, setQuantity] = useState(1)
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null)
   const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT)
-  const [jobName, setJobName] = useState('')
-  const [productionName, setProductionName] = useState('')
+  const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE)
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
@@ -102,21 +102,36 @@ export function NewHoldModal({
     /^\d{4}-\d{2}-\d{2}$/.test(endDateInput) &&
     endDateInput >= startDateInput
 
+  const jobReady =
+    (job.mode === 'selected_existing' && !!job.jobId) ||
+    (job.mode === 'creating_new' && job.name.trim().length > 0)
+
   const canSubmit =
     !!company &&
     contact.mode === 'selected_existing' &&
     contact.personId &&
-    jobName.trim().length > 0 &&
+    jobReady &&
     quantity > 0 &&
     datesValid &&
     !submitting
 
   async function submit(bufferOverride: boolean) {
     if (!company || contact.mode !== 'selected_existing' || !contact.personId) return
+    if (!jobReady) return
     setSubmitting(true)
     setHardError(null)
     if (!bufferOverride) setBufferWarning(null)
     try {
+      // Server side picks ONE of these two paths:
+      //   jobId → attach Booking to existing Job (Booking.jobId = id)
+      //   newJobName → create Job in same tx, stamp Booking.jobId
+      // productionName intentionally omitted from new holds — it was
+      // redundant with jobName; the column stays for legacy rows.
+      const jobPayload =
+        job.mode === 'selected_existing' && job.jobId
+          ? { jobId: job.jobId, jobName: job.name }
+          : { newJobName: job.name.trim(), jobName: job.name.trim() }
+
       const res = await fetch('/api/scheduling/holds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,8 +142,7 @@ export function NewHoldModal({
           quantity,
           companyId: company.id,
           personId: contact.personId,
-          jobName: jobName.trim(),
-          productionName: productionName.trim() || null,
+          ...jobPayload,
           notes: notes.trim() || null,
           bufferDays,
           bufferOverride,
@@ -273,26 +287,19 @@ export function NewHoldModal({
             )}
           </div>
 
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-600">Job name</span>
-            <input
-              type="text"
-              value={jobName}
-              onChange={(e) => setJobName(e.target.value)}
-              placeholder="e.g. Stranger Things S5 — Atlanta unit"
-              className="mt-1 block w-full rounded border-zinc-300 text-sm px-2 py-1.5"
+          <div>
+            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Job</span>
+            <JobPicker
+              value={job}
+              onChange={setJob}
+              companyId={company?.id ?? null}
+              placeholder="Search jobs by name or code, or type a new name…"
             />
-          </label>
-
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-zinc-600">Production name (optional)</span>
-            <input
-              type="text"
-              value={productionName}
-              onChange={(e) => setProductionName(e.target.value)}
-              className="mt-1 block w-full rounded border-zinc-300 text-sm px-2 py-1.5"
-            />
-          </label>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Pick an existing job for this client, or type a new name and choose
+              &ldquo;Create new job&rdquo; to start fresh.
+            </p>
+          </div>
 
           <label className="block">
             <span className="text-xs uppercase tracking-wide text-zinc-600">Notes (optional)</span>
