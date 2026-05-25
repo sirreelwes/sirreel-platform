@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import type { InquiryStatus } from '@prisma/client'
 
@@ -35,6 +36,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (body.companyId !== undefined) data.companyId = body.companyId || null
     if (body.personId !== undefined) data.personId = body.personId || null
     if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId || null
+    // `assignToMe: true` — resolve the logged-in user server-side so
+    // the triage UI doesn't need to know its own user.id. Wins over
+    // assignedToId if both are passed.
+    if (body.assignToMe === true) {
+      const session = await getServerSession()
+      if (!session?.user?.email) {
+        return NextResponse.json({ error: 'not signed in' }, { status: 401 })
+      }
+      const me = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
+      if (!me) {
+        return NextResponse.json({ error: 'session user not found' }, { status: 401 })
+      }
+      data.assignedToId = me.id
+    }
     if (body.estimatedValue !== undefined) {
       data.estimatedValue =
         body.estimatedValue == null || body.estimatedValue === ''
