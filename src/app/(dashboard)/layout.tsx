@@ -8,6 +8,7 @@ import { UserRole } from '@prisma/client';
 import { getPermissions, getNavItems, getNavSections, isSalesRole } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
+import { QuickCreateMenu } from '@/components/shell/QuickCreateMenu';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:      'Admin',
@@ -241,7 +242,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <StatBadge label="Maint" value="9" />
             {perms.seePricing && <StatBadge label="Revenue" value="$46.9K" />}
           </div>
-          <div className="flex gap-2 items-center" />
+          <div className="flex gap-2 items-center">
+            <QuickCreateMenu />
+          </div>
         </header>
 
         {/* Content + AI */}

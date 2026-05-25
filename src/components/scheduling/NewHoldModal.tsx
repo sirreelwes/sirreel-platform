@@ -59,6 +59,15 @@ interface NewHoldModalProps {
    *  Omit for category-only holds ("+ New Hold" top-bar button —
    *  agent assigns the unit later). */
   asset?: { id: string; unitName: string }
+  /** Optional pre-seed company. Lets a parent that already knows the
+   *  client (saved Order/Job context) avoid forcing the agent to
+   *  re-pick. Existing internal state behavior preserved when unset. */
+  defaultCompany?: { id: string; name: string }
+  /** Optional pre-seed Job (existing). When set, the modal opens
+   *  with the JobPicker already in selected_existing mode bound to
+   *  this Job. Used by the top-bar QuickCreate flow when the agent
+   *  invokes "+ New Hold" from a saved Order/Job page. */
+  defaultJob?: { id: string; jobCode: string; name: string; companyId: string; companyName: string }
   onClose: () => void
   onCreated: (hold: CreatedHold) => void
 }
@@ -81,13 +90,27 @@ export function NewHoldModal({
   bufferDays,
   asBackup = false,
   asset,
+  defaultCompany,
+  defaultJob,
   onClose,
   onCreated,
 }: NewHoldModalProps) {
   const [quantity, setQuantity] = useState(1)
-  const [company, setCompany] = useState<{ id: string; name: string } | null>(null)
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(
+    defaultCompany ?? (defaultJob ? { id: defaultJob.companyId, name: defaultJob.companyName } : null),
+  )
   const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT)
-  const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE)
+  const [job, setJob] = useState<JobPickerValue>(
+    defaultJob
+      ? {
+          jobId: defaultJob.id,
+          jobCode: defaultJob.jobCode,
+          name: defaultJob.name,
+          mode: 'selected_existing',
+          company: { id: defaultJob.companyId, name: defaultJob.companyName },
+        }
+      : EMPTY_JOB_PICKER_VALUE,
+  )
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
