@@ -68,6 +68,11 @@ interface NewHoldModalProps {
    *  this Job. Used by the top-bar QuickCreate flow when the agent
    *  invokes "+ New Hold" from a saved Order/Job page. */
   defaultJob?: { id: string; jobCode: string; name: string; companyId: string; companyName: string }
+  /** Optional pre-seed quantity. Used by the QuickCreate flow when
+   *  the source order line item already specifies qty (e.g. an
+   *  order with `Cube Truck × 2` → modal opens with quantity=2).
+   *  Falls back to the existing default of 1 when unset. */
+  defaultQuantity?: number
   onClose: () => void
   onCreated: (hold: CreatedHold) => void
 }
@@ -92,10 +97,15 @@ export function NewHoldModal({
   asset,
   defaultCompany,
   defaultJob,
+  defaultQuantity,
   onClose,
   onCreated,
 }: NewHoldModalProps) {
-  const [quantity, setQuantity] = useState(1)
+  const [quantity, setQuantity] = useState(
+    defaultQuantity != null && Number.isFinite(defaultQuantity) && defaultQuantity >= 1
+      ? Math.floor(defaultQuantity)
+      : 1,
+  )
   const [company, setCompany] = useState<{ id: string; name: string } | null>(
     defaultCompany ?? (defaultJob ? { id: defaultJob.companyId, name: defaultJob.companyName } : null),
   )

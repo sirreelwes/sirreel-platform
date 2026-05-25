@@ -44,6 +44,20 @@ interface HoldContext {
   companyName: string | null
   startDate: string | null
   endDate: string | null
+  /** Order-derived shortlist of category+dates+qty combos. Populated
+   *  only when context is /orders/[id] and at least one line item has
+   *  an assetCategoryId. One row per distinct (category, dates, qty)
+   *  combo. The QuickCreate flow uses this to skip the full category
+   *  picker when the order already implies the categories to hold. */
+  orderShortlist: OrderShortlistItem[]
+}
+
+interface OrderShortlistItem {
+  categoryId: string
+  categoryName: string
+  pickupDate: string
+  returnDate: string
+  quantity: number
 }
 
 const EMPTY_CONTEXT: HoldContext = {
@@ -54,6 +68,7 @@ const EMPTY_CONTEXT: HoldContext = {
   companyName: null,
   startDate: null,
   endDate: null,
+  orderShortlist: [],
 }
 
 function toYMD(d: string | Date | null | undefined): string | null {
@@ -69,10 +84,11 @@ export function QuickCreateMenu() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
-  const [pickingCategory, setPickingCategory] = useState(false)
+  const [pickingCategory, setPickingCategory] = useState<false | 'full' | 'shortlist'>(false)
   const [holdModal, setHoldModal] = useState<null | {
     category: Category
     context: HoldContext
+    shortlistItem?: OrderShortlistItem
   }>(null)
   const [inquiryOpen, setInquiryOpen] = useState(false)
   const [context, setContext] = useState<HoldContext>(EMPTY_CONTEXT)
@@ -123,6 +139,37 @@ export function QuickCreateMenu() {
         .then((r) => r.json())
         .then((o) => {
           if (cancelled || !o?.id) return
+          // Derive the order's category shortlist from line items.
+          // Filter: type=VEHICLE OR assetCategoryId present (per brief
+          // — vehicles are the typical hold target; some EQUIPMENT
+          // line items also bind to AssetCategory via assetCategoryId
+          // and should be included). De-dupe by (categoryId, dates,
+          // qty) so two identical lines collapse to one shortlist row.
+          type RawLine = {
+            type: string
+            assetCategoryId: string | null
+            assetCategory: { id: string; name: string } | null
+            pickupDate: string | null
+            returnDate: string | null
+            quantity: number
+          }
+          const rawLines: RawLine[] = Array.isArray(o.lineItems) ? o.lineItems : []
+          const dedupe = new Map<string, OrderShortlistItem>()
+          for (const li of rawLines) {
+            if (!li.assetCategory || !li.assetCategoryId) continue
+            const pickup = toYMD(li.pickupDate) || toYMD(o.startDate) || ''
+            const ret = toYMD(li.returnDate) || toYMD(o.endDate) || pickup
+            if (!pickup) continue
+            const key = `${li.assetCategoryId}|${pickup}|${ret}|${li.quantity || 1}`
+            if (dedupe.has(key)) continue
+            dedupe.set(key, {
+              categoryId: li.assetCategoryId,
+              categoryName: li.assetCategory.name,
+              pickupDate: pickup,
+              returnDate: ret,
+              quantity: Math.max(1, Math.floor(li.quantity || 1)),
+            })
+          }
           setContext({
             jobId: o.jobId ?? null,
             jobCode: o.job?.jobCode ?? null,
@@ -131,6 +178,7 @@ export function QuickCreateMenu() {
             companyName: o.company?.name ?? null,
             startDate: toYMD(o.startDate),
             endDate: toYMD(o.endDate),
+            orderShortlist: [...dedupe.values()],
           })
         })
         .catch(() => {})
@@ -148,6 +196,7 @@ export function QuickCreateMenu() {
             companyName: j.company?.name ?? null,
             startDate: toYMD(j.startDate),
             endDate: toYMD(j.endDate),
+            orderShortlist: [],
           })
         })
         .catch(() => {})
@@ -159,13 +208,42 @@ export function QuickCreateMenu() {
 
   const onPickNewHold = useCallback(() => {
     setMenuOpen(false)
-    setPickingCategory(true)
-  }, [])
+    // Order-context shortcut: skip the category picker entirely when
+    // the order already implies exactly one hold candidate. Multiple
+    // candidates → scoped shortlist. Zero → full picker.
+    const shortlist = context.orderShortlist
+    if (shortlist.length === 1) {
+      const sl = shortlist[0]
+      setHoldModal({
+        category: { id: sl.categoryId, name: sl.categoryName, slug: '' },
+        context,
+        shortlistItem: sl,
+      })
+      return
+    }
+    if (shortlist.length > 1) {
+      setPickingCategory('shortlist')
+      return
+    }
+    setPickingCategory('full')
+  }, [context])
 
   const onPickCategory = useCallback(
     (cat: Category) => {
       setPickingCategory(false)
       setHoldModal({ category: cat, context })
+    },
+    [context],
+  )
+
+  const onPickShortlistItem = useCallback(
+    (sl: OrderShortlistItem) => {
+      setPickingCategory(false)
+      setHoldModal({
+        category: { id: sl.categoryId, name: sl.categoryName, slug: '' },
+        context,
+        shortlistItem: sl,
+      })
     },
     [context],
   )
@@ -180,10 +258,19 @@ export function QuickCreateMenu() {
     router.push('/orders/new-quote')
   }, [router])
 
-  // Default the hold window. If context has dates → use them. Else
-  // today → today (single-day hold, agent can extend in modal).
-  const holdStart = holdModal?.context.startDate || new Date().toISOString().slice(0, 10)
-  const holdEnd = holdModal?.context.endDate || holdStart
+  // Default the hold window. Priority:
+  //   1. The picked shortlist item's per-line dates (most specific).
+  //   2. The order/job context's overall window.
+  //   3. Today → today (single-day fallback).
+  const holdStart =
+    holdModal?.shortlistItem?.pickupDate ||
+    holdModal?.context.startDate ||
+    new Date().toISOString().slice(0, 10)
+  const holdEnd =
+    holdModal?.shortlistItem?.returnDate ||
+    holdModal?.context.endDate ||
+    holdStart
+  const holdDefaultQuantity = holdModal?.shortlistItem?.quantity
 
   const holdDefaultJob =
     holdModal?.context.jobId &&
@@ -252,7 +339,7 @@ export function QuickCreateMenu() {
         </div>
       )}
 
-      {pickingCategory && (
+      {pickingCategory === 'full' && (
         <div
           role="menu"
           className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-64 max-h-80 overflow-auto"
@@ -277,6 +364,39 @@ export function QuickCreateMenu() {
         </div>
       )}
 
+      {pickingCategory === 'shortlist' && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-72 max-h-80 overflow-auto"
+        >
+          <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100 flex items-center justify-between">
+            From this order
+            <button onClick={() => setPickingCategory(false)} className="text-gray-400 hover:text-gray-700 text-base leading-none">×</button>
+          </div>
+          {context.orderShortlist.map((sl, idx) => (
+            <button
+              key={`${sl.categoryId}-${sl.pickupDate}-${sl.returnDate}-${sl.quantity}-${idx}`}
+              onClick={() => onPickShortlistItem(sl)}
+              className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-50 last:border-0"
+            >
+              <div className="text-[12px] font-semibold text-gray-900">
+                {sl.categoryName}{' '}
+                <span className="font-normal text-gray-500">× {sl.quantity}</span>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-0.5">
+                {sl.pickupDate} → {sl.returnDate}
+              </div>
+            </button>
+          ))}
+          <button
+            onClick={() => setPickingCategory('full')}
+            className="w-full text-left px-3 py-1.5 text-[11px] text-gray-500 hover:bg-gray-50 border-t border-gray-100"
+          >
+            Or pick any category…
+          </button>
+        </div>
+      )}
+
       {holdModal && (
         <NewHoldModal
           categoryId={holdModal.category.id}
@@ -286,6 +406,7 @@ export function QuickCreateMenu() {
           bufferDays={1}
           defaultJob={holdDefaultJob}
           defaultCompany={holdDefaultCompany}
+          defaultQuantity={holdDefaultQuantity}
           onClose={() => setHoldModal(null)}
           onCreated={() => setHoldModal(null)}
         />
