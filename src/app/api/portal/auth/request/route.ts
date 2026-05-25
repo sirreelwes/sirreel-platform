@@ -79,6 +79,13 @@ export async function POST(req: NextRequest) {
   const baseUrl = portalBaseUrl(req)
   const link = `${baseUrl}/api/portal/auth/verify?token=${token}`
 
+  // Dev-only: also surface the magic link in the server console so a
+  // local Resend misconfig doesn't block testing. Never fires in
+  // production (where RESEND_API_KEY is expected to be valid).
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[DEV] portal sign-in link for ${person.email}: ${link}`)
+  }
+
   // Send the email. Failures are logged + returned as ok-neutral so
   // we don't enumerate accounts via send-failure timing either.
   const greeting = person.firstName ? `Hi ${person.firstName},` : 'Hi,'
