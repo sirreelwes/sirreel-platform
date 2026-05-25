@@ -346,8 +346,24 @@ export default function ClientPortal() {
             Presents
           </div>
           <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
+          {/* Brand expansion — sits tight to the TSX mark as one lockup,
+              wider gap before the welcome row below. Gold for visual
+              contrast against the dark hero; smaller than TSX but
+              larger than the welcome line for hierarchy. */}
+          <div
+            className="mt-1 italic"
+            style={{
+              fontFamily: TSX_SERIF,
+              color: TSX.gold,
+              fontSize: 15,
+              letterSpacing: '0.5px',
+              fontWeight: 400,
+            }}
+          >
+            The SirReel Experience
+          </div>
           <h1
-            className="mt-4 text-white text-[24px] font-light italic leading-tight"
+            className="mt-5 text-white text-[24px] font-light italic leading-tight"
             style={{ fontFamily: TSX_SERIF }}
           >
             {booking.person?.firstName
@@ -376,82 +392,104 @@ export default function ClientPortal() {
         </div>
       </div>
 
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-2 flex overflow-x-auto">
-          {TABS.map(tab => {
-            const color = tabColor(tab.id);
-            const isActive = activeTab === tab.id;
-            // Active-tab underline picks up TSX gold; status-derived
-            // colors (done/pending/fail/pending_admin) keep their
-            // semantic meaning so the rep / client can read the state
-            // of each step at a glance.
-            const baseClasses = 'flex-shrink-0 flex items-center gap-1.5 px-3 py-3 text-[11px] font-bold border-b-2 transition-all whitespace-nowrap uppercase tracking-wider';
-            const inactiveText =
-              color === 'done' ? 'border-transparent text-emerald-600'
-              : color === 'pending_admin' ? 'border-transparent text-amber-500'
-              : color === 'fail' ? 'border-transparent text-red-400'
-              : color === 'pending' ? 'border-transparent text-red-400'
-              : 'border-transparent text-gray-400';
-            const activeText =
-              color === 'done' ? 'border-emerald-500 text-emerald-700'
-              : color === 'pending_admin' ? 'border-amber-500 text-amber-700'
-              : color === 'fail' ? 'border-red-500 text-red-600'
-              : color === 'pending' ? 'border-red-500 text-red-600'
-              : ''; // default active styled via inline style below
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`${baseClasses} ${isActive ? activeText : inactiveText}`}
-                style={isActive && !activeText ? { borderBottomColor: TSX.gold, color: TSX.ink } : undefined}
-              >
-                <span className="text-sm">{color === 'done' ? '✓' : color === 'pending_admin' ? '⚠' : color === 'fail' ? '✗' : tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </header>
+      {/* Tab bar removed per tsx-brand-cohesion brief. The PAPERWORK
+          checklist below is now the navigation surface. setActiveTab
+          still drives which signing-flow body renders below the
+          checklist — full route extractions are the next commit on
+          this branch (each flow gets its own page.tsx with
+          mount-based canvas / iframe init). */}
 
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
-        {/* OVERVIEW */}
-        {activeTab === 'overview' && (
-          <div className="space-y-4">
-            <div className="bg-gray-900 rounded-2xl p-5 text-white relative overflow-hidden">
-              <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'repeating-linear-gradient(45deg,white 0,white 1px,transparent 0,transparent 50%)', backgroundSize: '8px 8px' }} />
-              <div className="relative">
-                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Production</div>
-                <h1 className="text-xl font-bold mb-3">{booking.jobName}</h1>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/10 rounded-xl p-2.5"><div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Company</div><div className="text-sm font-semibold">{booking.company?.name}</div></div>
-                  <div className="bg-white/10 rounded-xl p-2.5"><div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Dates</div><div className="text-sm font-semibold">{fmtShort(booking.startDate)} – {fmtShort(booking.endDate)}</div></div>
-                </div>
+        {/* Production summary card — lifted from the old Overview tab
+            so it's always visible (per brief: "Production summary card
+            (keep — already on-brand)"). Sits between the hero and the
+            paperwork checklist regardless of which signing flow is active. */}
+        <div className="bg-gray-900 rounded-2xl p-5 text-white relative overflow-hidden">
+          <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'repeating-linear-gradient(45deg,white 0,white 1px,transparent 0,transparent 50%)', backgroundSize: '8px 8px' }} />
+          <div className="relative">
+            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Production</div>
+            <h1 className="text-xl font-bold mb-3">{booking.jobName}</h1>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/10 rounded-xl p-2.5">
+                <div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Company</div>
+                <div className="text-sm font-semibold">{booking.company?.name}</div>
+              </div>
+              <div className="bg-white/10 rounded-xl p-2.5">
+                <div className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">Dates</div>
+                <div className="text-sm font-semibold">{fmtShort(booking.startDate)} – {fmtShort(booking.endDate)}</div>
               </div>
             </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Paperwork Required</div>
-              <p className="text-xs text-gray-400 mb-4">Tap any item to complete it — you can do them in any order.</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TABS.filter(t => t.id !== 'overview').map(tab => {
-                  const color = tabColor(tab.id);
-                  const isDone = color === 'done';
-                  const isAmber = color === 'pending_admin';
-                  const isFail = color === 'fail';
-                  return (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${isDone ? 'border-emerald-200 bg-emerald-50' : isAmber ? 'border-amber-200 bg-amber-50' : isFail ? 'border-red-200 bg-red-50' : 'border-red-200 bg-red-50/60 hover:border-red-300'}`}>
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 ${isDone ? 'bg-emerald-100' : isAmber ? 'bg-amber-100' : 'bg-red-100'}`}>{isDone ? '✓' : isAmber ? '⚠' : isFail ? '✗' : tab.icon}</div>
-                      <div>
-                        <div className={`text-[12px] font-semibold ${isDone ? 'text-emerald-700' : isAmber ? 'text-amber-700' : 'text-red-700'}`}>{tab.label}</div>
-                        <div className={`text-[10px] ${isDone ? 'text-emerald-500' : isAmber ? 'text-amber-500' : 'text-red-400'}`}>{isDone ? (tab.id === 'lcdw' ? (paperwork?.lcdwAccepted ? 'Accepted ✓' : 'Complete ✓') : 'Complete ✓') : isAmber ? 'Pending review' : 'Required'}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              {allDone && <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center text-sm text-emerald-700 font-semibold">🎉 All paperwork complete!</div>}
+          </div>
+        </div>
+
+        {/* PAPERWORK checklist — replaces the tab bar. No emoji, navy
+            text, gold "Required" / green "Complete" status, chevron at
+            right edge. Each row's onClick currently calls setActiveTab
+            (preserves all signing-flow logic). The next commit will
+            swap these for <Link href="/portal/[token]/<flow>"> after
+            each flow has its own extracted route. */}
+        <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-5 pt-5 pb-3">
+            <div className="text-[10px] font-bold uppercase tracking-[2px]" style={{ color: TSX.gold }}>
+              Paperwork
             </div>
+            <div
+              className="text-[13px] italic mt-0.5"
+              style={{ fontFamily: TSX_SERIF, color: '#1e3a5f' }}
+            >
+              Complete in any order
+            </div>
+          </div>
+          <ul className="divide-y divide-gray-100 border-t border-gray-100">
+            {TABS.filter(t => t.id !== 'overview').map(tab => {
+              const color = tabColor(tab.id);
+              const isDone = color === 'done';
+              const isPending = color === 'pending';
+              const isAmber = color === 'pending_admin';
+              const isFail = color === 'fail';
+              const isActive = activeTab === tab.id;
+              const statusLabel = isDone ? 'Complete' : isFail ? 'Action needed' : isAmber ? 'Pending review' : isPending ? 'Required' : 'Required';
+              const statusColor = isDone ? '#10b981' : isFail ? '#dc2626' : isAmber ? '#d97706' : TSX.gold;
+              return (
+                <li key={tab.id}>
+                  <button
+                    onClick={() => setActiveTab(tab.id)}
+                    className="w-full flex items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50"
+                    style={isActive ? { backgroundColor: 'rgba(30,58,95,0.05)' } : undefined}
+                  >
+                    <span
+                      className="flex-1 text-[15px] font-bold"
+                      style={{ color: '#1e3a5f' }}
+                    >
+                      {tab.label}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="text-[12px] font-semibold inline-flex items-center gap-1"
+                        style={{ color: statusColor }}
+                      >
+                        {isDone && <span aria-hidden>✓</span>}
+                        {statusLabel}
+                      </span>
+                      <span className="text-gray-300 text-lg leading-none">›</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {/* OVERVIEW tab body removed — production card lifted above
+            the tab content area (always visible), and the old
+            pastel "Paperwork Required" grid is replaced by the
+            navy/gold PAPERWORK checklist also above. When activeTab
+            is 'overview' nothing renders here — the always-visible
+            content above is the overview. */}
+        {activeTab === 'overview' && allDone && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-sm font-semibold text-emerald-700">
+            All paperwork complete — you&rsquo;re ready for pickup.
           </div>
         )}
 
@@ -1387,9 +1425,12 @@ export default function ClientPortal() {
 
         {activeTab === 'overview' && (
           <div className="pb-2 px-1">
-            <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0Ahttps://hq.sirreel.com/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
-              className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              📧 Email me this link for later
+            <a
+              href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0Ahttps://hq.sirreel.com/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
+              className="w-full flex items-center justify-center py-3 border border-gray-200 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+              style={{ color: '#1e3a5f' }}
+            >
+              Email me this link for later
             </a>
           </div>
         )}
