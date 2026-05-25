@@ -602,8 +602,23 @@ async function main() {
       //    create time, and the normalized form for the asset match
       //    afterwards. ──
       const norm = normalizePlanyoUnitName(rawUnit, category.name)
-      const startDateISO = startDate.toISOString().slice(0, 10)
-      const endDateISO = endDate.toISOString().slice(0, 10)
+      // Per-reservation dates (not the cart envelope). Earlier versions
+      // of this script used the cart-level MIN/MAX (startDate/endDate
+      // above) for BookingAssignment writes — that over-stretched
+      // assignments to the envelope, marking assets busy across days
+      // they weren't actually held. Each Planyo reservation carries
+      // its own start_time/end_time; use those for the assignment and
+      // for per-reservation report rows.
+      const resStartMs = Date.parse((r.start_time ?? '').replace(' ', 'T') + 'Z')
+      const resEndMs = Date.parse((r.end_time ?? '').replace(' ', 'T') + 'Z')
+      if (!Number.isFinite(resStartMs) || !Number.isFinite(resEndMs)) {
+        report.errors.push({ cart: cartId, error: `Unparseable reservation ${r.reservation_id} start/end_time` })
+        continue
+      }
+      const resStart = new Date(resStartMs); resStart.setUTCHours(0, 0, 0, 0)
+      const resEnd = new Date(resEndMs); resEnd.setUTCHours(0, 0, 0, 0)
+      const startDateISO = resStart.toISOString().slice(0, 10)
+      const endDateISO = resEnd.toISOString().slice(0, 10)
       const itemHoldRank = norm.isBackupHold ? 2 : 1
 
       let bookingItemId = ''
@@ -686,7 +701,16 @@ async function main() {
         try {
           if (!dryRun) {
             await prisma.bookingAssignment.create({
-              data: { bookingItemId, assetId: asset.id, startDate, endDate, status: 'ASSIGNED' },
+              data: {
+                bookingItemId,
+                assetId: asset.id,
+                // Per-reservation dates, NOT the cart envelope —
+                // see the note above where resStart/resEnd are
+                // derived from r.start_time/r.end_time.
+                startDate: resStart,
+                endDate: resEnd,
+                status: 'ASSIGNED',
+              },
             })
             // Flip BookingItem to ASSIGNED (qty=1, one assignment).
             await prisma.bookingItem.update({ where: { id: bookingItemId }, data: { status: 'ASSIGNED' } })
