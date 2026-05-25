@@ -310,6 +310,7 @@ model Person {
   orderContacts    Order[]        @relation("OrderJobContact")
   inquiries        Inquiry[]      @relation("InquiryContact")
   portalAccesses   PortalAccess[] @relation("PortalAccessContact")
+  personSessions   PersonSession[]
 
   @@map("people")
 }
@@ -2434,6 +2435,45 @@ model CadenceEvent {
 /// Per-contact portal access record. `contactId` references Person — there is
 /// no separate Contact model in this schema; the CRH brief's `Contact` maps
 /// 1:1 to `Person` for SirReel.
+/// Person-scoped passwordless portal session. Distinct from
+/// PortalAccess (which is order-scoped, requires non-null orderId) and
+/// from ClientSession (loose email-string key, no FK).
+///
+/// Lifecycle:
+///   1. POST /api/portal/auth/request → INSERT row with magicLinkToken
+///      + expiry. Email sent to the matching Person (response is
+///      neutral whether or not the email matched — no enumeration).
+///   2. GET /api/portal/auth/verify?token=X → look up by token, check
+///      magicLinkExpiresAt + magicLinkUsedAt + revokedAt. Stamp
+///      magicLinkUsedAt and issue an HMAC-signed cookie carrying this
+///      row's id (mirror of jobSession.ts).
+///   3. Subsequent /portal/... requests → cookie HMAC-verified, then
+///      this row is loaded; revokedAt is the kill switch.
+///
+/// Cookie exp (30 days) is in jobSession.ts territory; row revocation
+/// is via revokedAt.
+model PersonSession {
+  id        String   @id @default(uuid())
+  personId  String   @map("person_id")
+  person    Person   @relation(fields: [personId], references: [id])
+
+  // Magic-link state — populated on request, consumed on verify.
+  magicLinkToken     String    @unique @map("magic_link_token")
+  magicLinkExpiresAt DateTime  @map("magic_link_expires_at")
+  magicLinkUsedAt    DateTime? @map("magic_link_used_at")
+
+  // Audit
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent") @db.Text
+  lastAccessedAt DateTime? @map("last_accessed_at")
+  accessCount    Int       @default(0) @map("access_count")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  revokedAt      DateTime? @map("revoked_at")
+
+  @@index([personId])
+  @@map("person_sessions")
+}
+
 model PortalAccess {
   id                 String    @id @default(uuid())
   orderId            String    @map("order_id")
