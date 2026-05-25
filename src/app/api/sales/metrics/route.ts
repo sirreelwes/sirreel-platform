@@ -80,6 +80,13 @@ export async function GET(req: NextRequest) {
     prisma.order.findMany({
       where: {
         quoteStatus: 'SENT',
+        // Exclude orders on terminal-state Jobs. A WRAPPED or LOST job
+        // is never an "open deal" regardless of the order's quoteStatus
+        // — the order is a leftover artifact (e.g., quote sent then job
+        // closed by other means). Without this guard, /sales/pipeline's
+        // "Top Open Deals" leaks closed jobs like Fox Sports
+        // (SR-JOB-0002 WRAPPED with SR-ORD-0003 still QUOTE_SENT).
+        job: { status: { notIn: ['WRAPPED', 'LOST'] } },
         ...(mine ? { agentId: mine } : {}),
       },
       orderBy: { total: 'desc' },

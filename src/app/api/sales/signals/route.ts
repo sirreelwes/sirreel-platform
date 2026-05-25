@@ -26,6 +26,11 @@ export async function GET(req: NextRequest) {
       where: {
         quoteStatus: 'SENT',
         sentAt: { lt: staleCutoff },
+        // Same WRAPPED/LOST guard as topOpenDeals — a closed Job's
+        // stale quote isn't actionable anymore; the deal's already
+        // resolved on the Job side, the leftover SENT quote is
+        // residue.
+        job: { status: { notIn: ['WRAPPED', 'LOST'] } },
         ...(mine ? { agentId: mine } : {}),
       },
       orderBy: { sentAt: 'asc' },

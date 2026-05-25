@@ -26,6 +26,10 @@ export async function GET(req: NextRequest) {
     where: {
       quoteStatus: 'SENT',
       sentAt: { not: null, lte: earliestThreshold },
+      // Don't draft follow-ups for orders whose parent Job is
+      // already WRAPPED/LOST — those quotes are residue from a
+      // closed deal; chasing them with cadence emails is noise.
+      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
     },
     take: BATCH_SIZE,
     select: {
@@ -72,11 +76,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Expire PENDING follow-ups whose orders are no longer SENT.
+  // Expire PENDING follow-ups whose orders are no longer SENT, OR
+  // whose parent Job has reached a terminal state (WRAPPED/LOST).
+  // The second branch sweeps any existing follow-ups that were
+  // drafted before the Job closed but never got an Order.quoteStatus
+  // mutation to trip the first branch.
   const expired = await prisma.quoteFollowUp.updateMany({
     where: {
       status: 'PENDING',
-      order: { quoteStatus: { not: 'SENT' } },
+      OR: [
+        { order: { quoteStatus: { not: 'SENT' } } },
+        { order: { job: { status: { in: ['WRAPPED', 'LOST'] } } } },
+      ],
     },
     data: { status: 'EXPIRED' },
   });
