@@ -35,9 +35,22 @@ export async function GET(req: NextRequest) {
   })
 }
 
-// POST /api/inquiries
+// POST /api/inquiries — internal/agent only.
+// Public submission goes through the hardened endpoint:
+//   POST /api/public/supply-request   (rate-limited, honeypot,
+//                                       captcha-gated, no session)
+// This route now REQUIRES a session — historical behavior allowed
+// unauthenticated POSTs, which would let anyone seed a NEW inquiry
+// with arbitrary attribution. The NewInquiryModal in CRM already
+// posts here from inside the dashboard auth shell, so existing
+// callers keep working.
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession()
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+
     const body = await req.json()
     const {
       title,
@@ -56,16 +69,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'title and description are required' }, { status: 400 })
     }
 
-    // Default assignedTo to the logged-in user
+    // Default assignedTo to the logged-in user.
     if (!assignedToId) {
-      const session = await getServerSession()
-      if (session?.user?.email) {
-        const user = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true },
-        })
-        if (user) assignedToId = user.id
-      }
+      const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      })
+      if (user) assignedToId = user.id
     }
 
     const inquiry = await prisma.inquiry.create({
