@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SirReel · Production Supplies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0c0c0d;
+    --ink-2:#1a1a1c;
+    --paper:#f4f1ea;
+    --surface:#ffffff;
+    --line:#e4dfd4;
+    --line-strong:#cdc7b9;
+    --muted:#8b857a;
+    --muted-2:#a8a294;
+    --gold:#c39a3f;
+    --gold-deep:#a37f2c;
+    --green:#3f7d52;
+    --radius:14px;
+    --shadow-sm:0 1px 2px rgba(12,12,13,.06), 0 1px 1px rgba(12,12,13,.04);
+    --shadow-md:0 12px 34px rgba(12,12,13,.14);
+    --shadow-lg:0 30px 70px rgba(12,12,13,.28);
+    --display:'Archivo',sans-serif;
+    --body:'Hanken Grotesk',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--body);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.4;
+    overflow-x:hidden;
+  }
+  /* subtle paper grain */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(circle at 1px 1px, rgba(12,12,13,.025) 1px, transparent 0);
+    background-size:4px 4px;
+  }
+
+  /* ---------- HEADER ---------- */
+  header{
+    position:sticky;top:0;z-index:40;
+    background:var(--ink);color:#fff;
+    border-bottom:1px solid #000;
+  }
+  .head-inner{
+    max-width:1480px;margin:0 auto;padding:0 22px;
+    display:flex;align-items:center;justify-content:space-between;height:68px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;min-width:0;}
+  .hmark{height:27px;width:auto;color:#fff;display:block;flex:none;}
+  .hero-mark{position:absolute;right:-20px;top:50%;transform:translateY(-48%);height:clamp(230px,42vw,460px);width:auto;color:#fff;opacity:.055;pointer-events:none;}
+  .brand .logo{
+    font-family:var(--display);font-weight:900;font-size:24px;letter-spacing:-.03em;
+    line-height:1;color:#fff;white-space:nowrap;
+  }
+  .brand .logo span{color:var(--gold);}
+  .brand .div{width:1px;height:26px;background:#333;flex:none;}
+  .brand .ctx{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted-2);white-space:nowrap;}
+  .head-right{display:flex;align-items:center;gap:14px;}
+  .head-signin{display:flex;align-items:center;gap:7px;background:transparent;border:none;color:#cfc9bd;
+    cursor:pointer;font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.01em;padding:8px 4px;
+    transition:color .12s ease;}
+  .head-signin:hover{color:#fff;}
+  @media(max-width:560px){.head-signin span{display:none;}}
+  .head-cart{
+    display:flex;align-items:center;gap:10px;background:#fff;color:var(--ink);
+    border:none;border-radius:999px;padding:9px 16px;cursor:pointer;
+    font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.01em;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .head-cart:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.3);}
+  .head-cart .count{background:var(--gold);color:var(--ink);border-radius:999px;
+    min-width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;
+    font-size:11px;padding:0 5px;}
+  @media(max-width:560px){.brand .ctx{display:none;} .brand .div{display:none;}}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    background:var(--ink);color:#fff;position:relative;overflow:hidden;
+  }
+  .hero::after{
+    content:"";position:absolute;right:-120px;top:-80px;width:460px;height:460px;
+    background:radial-gradient(circle, rgba(195,154,63,.20), transparent 62%);pointer-events:none;
+  }
+  .hero-inner{max-width:1480px;margin:0 auto;padding:46px 22px 56px;position:relative;}
+  .hero .eyebrow{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+  .hero h1{font-family:var(--display);font-weight:900;letter-spacing:-.035em;line-height:.92;
+    font-size:clamp(40px,7vw,76px);max-width:14ch;}
+  .hero p{margin-top:18px;max-width:52ch;color:#cfc9bd;font-size:16px;line-height:1.55;}
+  .hero .steps{display:flex;gap:26px;margin-top:30px;flex-wrap:wrap;}
+  .hero .step{display:flex;align-items:center;gap:11px;color:#e8e3d7;font-size:14px;font-weight:500;}
+  .hero .step b{font-family:var(--display);font-weight:800;color:var(--ink);background:var(--gold);
+    width:26px;height:26px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
+    font-size:13px;flex:none;}
+
+  /* ---------- LAYOUT ---------- */
+  .wrap{max-width:1480px;margin:0 auto;padding:0 22px;position:relative;z-index:1;}
+  .shell{display:grid;grid-template-columns:1fr 374px;gap:34px;align-items:start;padding:30px 0 120px;}
+  @media(max-width:980px){.shell{grid-template-columns:1fr;}}
+
+  /* ---------- SEARCH + NAV ---------- */
+  .controls{position:sticky;top:68px;z-index:30;background:var(--paper);padding:18px 0 12px;}
+  .search{position:relative;}
+  .search input{
+    width:100%;border:1.5px solid var(--line-strong);background:var(--surface);
+    border-radius:12px;padding:15px 16px 15px 46px;font-family:var(--body);font-size:16px;color:var(--ink);
+    outline:none;transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .search input:focus{border-color:var(--ink);box-shadow:0 0 0 4px rgba(12,12,13,.06);}
+  .search svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--muted);}
+  .pills{display:flex;gap:8px;overflow-x:auto;padding:14px 0 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .pills::-webkit-scrollbar{display:none;}
+  .pill{
+    flex:none;border:1.5px solid var(--line-strong);background:transparent;color:var(--ink-2);
+    border-radius:999px;padding:8px 15px;font-family:var(--display);font-weight:600;font-size:12.5px;
+    letter-spacing:.01em;cursor:pointer;white-space:nowrap;transition:all .14s ease;
+  }
+  .pill:hover{border-color:var(--ink);}
+  .pill.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  /* ---------- CATALOG ---------- */
+  .cat-block{margin-top:34px;scroll-margin-top:200px;}
+  .cat-head{display:flex;align-items:baseline;gap:14px;margin-bottom:14px;}
+  .cat-head h2{font-family:var(--display);font-weight:800;letter-spacing:-.02em;font-size:23px;}
+  .cat-head .rule{flex:1;height:2px;background:var(--ink);opacity:.12;}
+  .cat-head .n{font-family:var(--display);font-weight:600;font-size:12px;color:var(--muted);letter-spacing:.06em;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(234px,1fr));gap:9px;}
+  .item{
+    background:var(--surface);border:1px solid var(--line);border-radius:11px;
+    padding:12px 12px 12px 14px;display:flex;align-items:center;gap:10px;
+    box-shadow:var(--shadow-sm);transition:border-color .14s ease, transform .14s ease;
+  }
+  .item.in-cart{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold), var(--shadow-sm);}
+  .item .meta{flex:1;min-width:0;}
+  .item .nm{font-weight:600;font-size:14.5px;line-height:1.22;color:var(--ink);overflow-wrap:break-word;}
+  .item .pr{font-family:var(--display);font-weight:600;font-size:12.5px;color:var(--muted);margin-top:3px;letter-spacing:.01em;}
+  .item .pr b{color:var(--ink);font-weight:800;font-size:14px;}
+  .item .pr .free{color:var(--green);font-weight:800;}
+  .add{
+    flex:none;border:1.5px solid var(--ink);background:var(--ink);color:#fff;
+    border-radius:10px;height:38px;min-width:62px;padding:0 12px;cursor:pointer;
+    font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.02em;
+    transition:transform .1s ease, opacity .12s ease;
+  }
+  .add:hover{transform:translateY(-1px);}
+  .stepper{flex:none;display:flex;align-items:center;gap:0;border:1.5px solid var(--gold);border-radius:10px;overflow:hidden;height:38px;}
+  .stepper button{width:34px;height:100%;border:none;background:#fff;color:var(--gold-deep);font-size:20px;
+    cursor:pointer;font-family:var(--display);font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s;}
+  .stepper button:hover{background:#fbf6ea;}
+  .stepper .q{min-width:34px;text-align:center;font-family:var(--display);font-weight:800;font-size:15px;color:var(--ink);}
+
+  .empty-search{padding:50px 10px;text-align:center;color:var(--muted);}
+  .empty-search b{display:block;font-family:var(--display);font-weight:800;font-size:18px;color:var(--ink-2);margin-bottom:6px;}
+
+  /* ---------- CART (desktop) ---------- */
+  .cart{position:sticky;top:96px;background:var(--ink);color:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-md);}
+  @media(max-width:980px){.cart.desktop{display:none;}}
+  .cart-top{padding:20px 20px 14px;border-bottom:1px solid #242427;}
+  .cart-top h3{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.01em;display:flex;align-items:center;justify-content:space-between;}
+  .cart-top h3 small{font-family:var(--body);font-weight:500;font-size:12px;color:var(--muted-2);}
+  .cart-lines{max-height:46vh;overflow-y:auto;padding:6px 8px;}
+  .cart-empty{padding:46px 24px;text-align:center;color:var(--muted-2);}
+  .cart-empty svg{margin-bottom:12px;opacity:.5;}
+  .cart-empty b{display:block;color:#e8e3d7;font-family:var(--display);font-weight:700;font-size:15px;margin-bottom:4px;}
+  .cl{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;transition:background .12s;}
+  .cl:hover{background:#191919;}
+  .cl .clmeta{flex:1;min-width:0;}
+  .cl .clnm{font-size:13.5px;font-weight:600;color:#fff;line-height:1.2;}
+  .cl .clsub{font-size:11.5px;color:var(--muted-2);margin-top:2px;font-family:var(--display);letter-spacing:.02em;}
+  .cl .clq{display:flex;align-items:center;gap:0;border:1px solid #2e2e30;border-radius:8px;overflow:hidden;height:30px;}
+  .cl .clq button{width:28px;height:100%;border:none;background:#171717;color:var(--gold);font-size:16px;cursor:pointer;font-family:var(--display);font-weight:700;}
+  .cl .clq button:hover{background:#222;}
+  .cl .clq span{min-width:26px;text-align:center;font-family:var(--display);font-weight:700;font-size:13px;color:#fff;}
+  .cl .clpr{font-family:var(--display);font-weight:700;font-size:13px;color:#fff;min-width:54px;text-align:right;}
+  .cart-foot{padding:16px 20px 20px;border-top:1px solid #242427;background:#0a0a0b;}
+  .cart-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:13px;color:var(--muted-2);}
+  .cart-row.total{margin-top:8px;margin-bottom:14px;}
+  .cart-row.total .lbl{font-family:var(--display);font-weight:700;font-size:14px;color:#fff;letter-spacing:.02em;text-transform:uppercase;}
+  .cart-row.total .val{font-family:var(--display);font-weight:900;font-size:26px;color:var(--gold);letter-spacing:-.02em;}
+  .est-note{font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:14px;}
+  .cta{
+    width:100%;border:none;border-radius:12px;padding:15px;cursor:pointer;
+    background:var(--gold);color:var(--ink);font-family:var(--display);font-weight:800;font-size:15px;
+    letter-spacing:.02em;transition:transform .12s ease, background .12s ease;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .cta:hover{transform:translateY(-1px);background:#d3aa4d;}
+  .cta:disabled{background:#2a2a2c;color:#5a5a5c;cursor:not-allowed;transform:none;}
+
+  /* ---------- MOBILE CART BAR ---------- */
+  .mcart{
+    position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--ink);color:#fff;
+    padding:13px 18px calc(13px + env(safe-area-inset-bottom));display:none;align-items:center;justify-content:space-between;
+    box-shadow:0 -10px 30px rgba(0,0,0,.25);transform:translateY(120%);transition:transform .26s cubic-bezier(.2,.8,.2,1);
+  }
+  .mcart.show{transform:translateY(0);}
+  @media(max-width:980px){.mcart{display:flex;}}
+  .mcart .minfo{display:flex;flex-direction:column;}
+  .mcart .minfo .mc1{font-family:var(--display);font-weight:800;font-size:18px;color:var(--gold);line-height:1;}
+  .mcart .minfo .mc2{font-size:12px;color:var(--muted-2);margin-top:3px;}
+  .mcart .mbtn{background:var(--gold);color:var(--ink);border:none;border-radius:10px;padding:13px 20px;
+    font-family:var(--display);font-weight:800;font-size:14px;cursor:pointer;}
+
+  /* ---------- OVERLAYS (sheet / details / confirm) ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(12,12,13,.55);backdrop-filter:blur(3px);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s ease;}
+  .scrim.show{opacity:1;pointer-events:auto;}
+  .panel{
+    position:fixed;z-index:70;background:var(--paper);
+    display:flex;flex-direction:column;transform:translateX(102%);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+    top:0;right:0;bottom:0;width:min(560px,100%);box-shadow:var(--shadow-lg);
+  }
+  .panel.show{transform:translateX(0);}
+  .panel-head{padding:22px 24px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:var(--surface);}
+  .panel-head h2{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.02em;}
+  .panel-head .sub{font-size:13px;color:var(--muted);margin-top:2px;}
+  .x{border:none;background:#efeada;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:20px;color:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .x:hover{background:#e6e0cf;}
+  .panel-body{flex:1;overflow-y:auto;padding:22px 24px;}
+  .panel-foot{padding:16px 24px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface);}
+
+  /* review (sheet) line items */
+  .rl{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line);}
+  .rl .rlmeta{flex:1;}
+  .rl .rlnm{font-weight:600;font-size:15px;}
+  .rl .rlsub{font-size:12.5px;color:var(--muted);margin-top:2px;font-family:var(--display);}
+  .rl .clq{display:flex;align-items:center;border:1.5px solid var(--line-strong);border-radius:9px;overflow:hidden;height:34px;}
+  .rl .clq button{width:30px;height:100%;border:none;background:#fff;color:var(--gold-deep);font-size:17px;cursor:pointer;font-family:var(--display);font-weight:700;}
+  .rl .clq span{min-width:28px;text-align:center;font-family:var(--display);font-weight:800;font-size:14px;}
+  .rl .rlpr{font-family:var(--display);font-weight:800;font-size:14px;min-width:58px;text-align:right;}
+  .rl .rm{border:none;background:none;color:var(--muted);cursor:pointer;font-size:12px;text-decoration:underline;padding:4px;}
+
+  /* form */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 14px;}
+  .fg{display:flex;flex-direction:column;gap:6px;}
+  .fg.full{grid-column:1/-1;}
+  .fg label{font-family:var(--display);font-weight:600;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+  .fg label .req{color:var(--gold-deep);}
+  .fg input,.fg textarea,.fg select{
+    border:1.5px solid var(--line-strong);background:var(--surface);border-radius:10px;padding:12px 13px;
+    font-family:var(--body);font-size:15px;color:var(--ink);outline:none;transition:border-color .14s, box-shadow .14s;
+  }
+  .fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--ink);box-shadow:0 0 0 4px rgba(12,12,13,.05);}
+  .fg textarea{resize:vertical;min-height:84px;}
+  .seg-title{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:26px 0 12px;display:flex;align-items:center;gap:10px;}
+  .seg-title::after{content:"";flex:1;height:1.5px;background:var(--line);}
+  .deliv{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:480px){.deliv,.form-grid{grid-template-columns:1fr;}}
+  .opt{border:1.5px solid var(--line-strong);background:var(--surface);border-radius:11px;padding:13px 14px;cursor:pointer;display:flex;align-items:center;gap:11px;transition:all .14s;}
+  .opt:hover{border-color:var(--ink-2);}
+  .opt.sel{border-color:var(--gold);background:#fcf8ee;box-shadow:0 0 0 1px var(--gold);}
+  .opt .dot{width:20px;height:20px;border-radius:999px;border:2px solid var(--line-strong);flex:none;display:flex;align-items:center;justify-content:center;}
+  .opt.sel .dot{border-color:var(--gold);}
+  .opt.sel .dot::after{content:"";width:10px;height:10px;border-radius:999px;background:var(--gold);}
+  .opt .ol{font-weight:600;font-size:14px;}
+  .opt .od{font-size:11.5px;color:var(--muted);margin-top:1px;}
+
+  /* confirmation */
+  .confirm{text-align:center;padding:30px 10px;}
+  .confirm .seal{width:78px;height:78px;border-radius:999px;background:var(--green);display:inline-flex;align-items:center;justify-content:center;margin-bottom:22px;box-shadow:0 12px 30px rgba(63,125,82,.35);}
+  .confirm h2{font-family:var(--display);font-weight:900;font-size:30px;letter-spacing:-.02em;margin-bottom:12px;}
+  .confirm p{color:var(--muted);max-width:40ch;margin:0 auto 8px;font-size:15px;line-height:1.55;}
+  .confirm .ref{display:inline-block;margin-top:18px;background:var(--ink);color:#fff;font-family:var(--display);font-weight:700;
+    padding:10px 18px;border-radius:999px;letter-spacing:.04em;font-size:14px;}
+  .confirm .ref b{color:var(--gold);}
+
+  .foot-note{text-align:center;color:var(--muted);font-size:12px;padding:20px;line-height:1.6;}
+  .badge-exp{display:inline-block;font-family:var(--display);font-weight:700;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--gold-deep);background:#f6efdc;border-radius:5px;padding:2px 6px;margin-left:7px;vertical-align:middle;}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true"><symbol id="s-mark" viewBox="0 0 813 596"><g transform="translate(0,596) scale(0.1,-0.1)" fill="currentColor" stroke="none"><path d="M3620 5639 c-105 -17 -215 -42 -273 -61 -301 -99 -538 -331 -601 -589 -22 -89 -22 -300 0 -388 48 -194 139 -294 373 -411 134 -67 377 -156 576 -210 276 -76 270 -74 735 -194 223 -57 519 -131 780 -196 472 -116 719 -211 1019 -392 393 -237 733 -613 883 -978 114 -276 165 -709 124 -1050 -15 -126 -51 -312 -66 -348 -6 -13 -7 -28 -4 -34 6 -10 81 100 161 237 61 104 213 412 213 431 0 3 7 22 16 42 40 91 85 219 118 332 66 229 94 369 138 685 16 120 17 638 0 770 -51 408 -120 685 -254 1020 -153 380 -386 764 -640 1050 -14 16 -35 41 -46 55 -33 40 -36 17 -8 -62 70 -199 112 -435 123 -685 l6 -153 -806 0 c-444 0 -807 3 -807 8 -5 191 -84 455 -185 618 -158 253 -470 429 -855 484 -47 6 -112 16 -146 21 -76 11 -500 10 -574 -2z"/><path d="M1114 5229 c-194 -249 -388 -570 -483 -799 -13 -30 -32 -75 -44 -100 -28 -62 -113 -309 -138 -400 -201 -731 -186 -1488 45 -2200 87 -270 232 -574 402 -844 72 -115 105 -154 91 -108 -51 162 -79 283 -102 447 -20 148 -35 423 -24 452 l9 23 797 -2 798 -3 7 -110 c43 -653 458 -1098 1150 -1236 120 -24 172 -30 348 -42 532 -37 999 56 1295 256 86 59 226 202 268 274 106 183 131 432 66 642 -63 203 -222 358 -516 505 -155 78 -177 87 -403 166 -104 37 -235 72 -610 166 -274 68 -417 105 -520 134 -19 5 -93 26 -165 45 -825 223 -1240 402 -1595 689 -324 263 -549 621 -631 999 -69 323 -63 677 18 1019 14 59 23 112 21 119 -2 6 -40 -36 -84 -92z"/></g></symbol></svg>
+
+<header>
+  <div class="head-inner">
+    <div class="brand">
+      <svg class="hmark" viewBox="0 0 813 596"><use href="#s-mark"/></svg>
+      <div class="logo">Sir<span>Reel</span></div>
+      <div class="div"></div>
+      <div class="ctx">Studio Services</div>
+    </div>
+    <div class="head-right">
+      <button class="head-signin" onclick="alert('Sign in — see your job & order history, reorder past supplies, and skip re-entering your details.\n\n(Client accounts: coming soon — your agent has your full history today.)')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Sign in</span>
+      </button>
+      <button class="head-cart" onclick="openSheet()">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span>Order</span>
+        <span class="count" id="headCount">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <svg class="hero-mark" viewBox="0 0 813 596" aria-hidden="true"><use href="#s-mark"/></svg>
+    <div class="eyebrow">Production Supplies</div>
+    <h1>Build your supply order.</h1>
+    <p>Everything from basecamp basics to grip, power, safety and expendables — add what your production needs and send it over. We'll confirm availability and come back with a quote.</p>
+    <div class="steps">
+      <div class="step"><b>1</b> Add supplies</div>
+      <div class="step"><b>2</b> Your details</div>
+      <div class="step"><b>3</b> We quote it</div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="shell">
+    <main>
+      <div class="controls">
+        <div class="search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="search" type="text" placeholder="Search supplies — generator, cooler, c-stand…" oninput="onSearch(this.value)">
+        </div>
+        <div class="pills" id="pills"></div>
+      </div>
+      <div id="catalog"></div>
+    </main>
+
+    <aside>
+      <div class="cart desktop">
+        <div class="cart-top">
+          <h3>Your Order <small id="cartItemCount">empty</small></h3>
+        </div>
+        <div class="cart-lines" id="cartLines"></div>
+        <div class="cart-foot">
+          <div class="cart-row"><span>Estimated subtotal</span><span id="subLabel">$0</span></div>
+          <div class="cart-row total"><span class="lbl">Est. / day</span><span class="val" id="totalLabel">$0</span></div>
+          <div class="est-note">Estimate at standard daily rates. Final pricing, taxes, delivery and multi-day discounts confirmed in your quote.</div>
+          <button class="cta" id="reviewBtn" onclick="openDetails()" disabled>Review &amp; send order →</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="foot-note">
+  SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · 888.477.7335 · info@sirreel.com<br>
+  <span style="opacity:.7">Mockup — interactive concept for the online supply order experience.</span>
+</div>
+
+<!-- mobile cart bar -->
+<div class="mcart" id="mcart">
+  <div class="minfo">
+    <div class="mc1" id="mc1">$0</div>
+    <div class="mc2" id="mc2">0 items · est. / day</div>
+  </div>
+  <button class="mbtn" onclick="openSheet()">View order →</button>
+</div>
+
+<!-- scrim -->
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+
+<!-- review sheet -->
+<div class="panel" id="sheet">
+  <div class="panel-head">
+    <div>
+      <h2>Your Order</h2>
+      <div class="sub" id="sheetSub">Review and adjust quantities</div>
+    </div>
+    <button class="x" onclick="closeAll()">✕</button>
+  </div>
+  <div class="panel-body" id="sheetBody"></div>
+  <div class="panel-foot">
+    <div class="cart-row total" style="color:var(--ink);margin-bottom:12px;">
+      <span class="lbl" style="color:var(--ink);">Est. / day</span>
+      <span class="val" style="color:var(--gold-deep);" id="sheetTotal">$0</span>
+    </div>
+    <button class="cta" id="sheetCta" onclick="openDetails()" disabled style="background:var(--ink);color:#fff;">Continue to details →</button>
+  </div>
+</div>
+
+<!-- details panel -->
+<div class="panel" id="details">
+  <div class="panel-head">
+    <div>
+      <h2>Order Details</h2>
+      <div class="sub">So we can prep your quote</div>
+    </div>
+    <button class="x" onclick="backToSheet()">✕</button>
+  </div>
+  <div class="panel-body">
+    <div class="form-grid">
+      <div class="fg"><label>Job / Production Name <span class="req">*</span></label><input id="f_job" placeholder="e.g. Juliet — Day 4"></div>
+      <div class="fg"><label>Company <span class="req">*</span></label><input id="f_co" placeholder="Production company"></div>
+      <div class="fg"><label>Contact Name <span class="req">*</span></label><input id="f_name" placeholder="Your name"></div>
+      <div class="fg"><label>Role / Position</label><input id="f_pos" placeholder="e.g. Production Coordinator"></div>
+      <div class="fg"><label>Email <span class="req">*</span></label><input id="f_email" type="email" placeholder="you@company.com"></div>
+      <div class="fg"><label>Phone</label><input id="f_phone" placeholder="(818) 000-0000"></div>
+      <div class="fg"><label>Pickup / Delivery Date <span class="req">*</span></label><input id="f_pick" type="date"></div>
+      <div class="fg"><label>Return Date</label><input id="f_ret" type="date"></div>
+      <div class="fg"><label>PO #</label><input id="f_po" placeholder="Optional"></div>
+      <div class="fg"><label>Job #</label><input id="f_jobno" placeholder="Optional"></div>
+    </div>
+
+    <div class="seg-title">How do you want it?</div>
+    <div class="deliv">
+      <div class="opt" data-d="will-call" onclick="pickDeliv(this)"><div class="dot"></div><div><div class="ol">Will Call Pickup</div><div class="od">You collect from SirReel</div></div></div>
+      <div class="opt" data-d="sirreel-vehicle" onclick="pickDeliv(this)"><div class="dot"></div><div><div class="ol">Load in SirReel Vehicle</div><div class="od">Loaded into your rental</div></div></div>
+      <div class="opt" data-d="stage" onclick="pickDeliv(this)"><div class="dot"></div><div><div class="ol">SirReel Stage Delivery</div><div class="od">Delivered to a SirReel stage</div></div></div>
+      <div class="opt" data-d="location" onclick="pickDeliv(this)"><div class="dot"></div><div><div class="ol">Location Delivery</div><div class="od">Delivered to your location</div></div></div>
+    </div>
+
+    <div class="form-grid" style="margin-top:14px;">
+      <div class="fg full" id="addrWrap" style="display:none;"><label>Delivery Address</label><input id="f_addr" placeholder="Street, city, ZIP"></div>
+      <div class="fg full"><label>Special Requests / Notes</label><textarea id="f_notes" placeholder="Anything we should know — timing, access, holding vehicle, substitutions…"></textarea></div>
+    </div>
+  </div>
+  <div class="panel-foot">
+    <button class="cta" onclick="submitOrder()">Submit order request</button>
+  </div>
+</div>
+
+<!-- confirm panel -->
+<div class="panel" id="confirm">
+  <div class="panel-head"><div><h2>Sent</h2></div><button class="x" onclick="resetAll()">✕</button></div>
+  <div class="panel-body">
+    <div class="confirm">
+      <div class="seal"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <h2>Your order request is in.</h2>
+      <p>Thanks <span id="cf_name">—</span>. Your rental agent will confirm availability and send a quote to <span id="cf_email" style="color:var(--ink);font-weight:600;">—</span> shortly.</p>
+      <p style="margin-top:14px;"><span id="cf_count">0</span> items requested for <span id="cf_job" style="color:var(--ink);font-weight:600;">your production</span>.</p>
+      <div class="ref">REQUEST <b id="cf_ref">SR-REQ-0000</b></div>
+    </div>
+  </div>
+  <div class="panel-foot">
+    <button class="cta" onclick="resetAll()" style="background:var(--ink);color:#fff;">Start another order</button>
+  </div>
+</div>
+
+<script>
+/* ---------- REAL SIRREEL CATALOG (from the Production Supplies PDF) ---------- */
+const CATALOG = [
+  {cat:"Basecamp Basics", unit:"day", items:[["Trash Cans, Large",3],["Recycle Bins, 32 gal",0],["Butt Cans",1.5],["Furniture Pads",1.5],["Rubber Mats, 3'x5'",3],["Tarp, Large",2],["Tarp, Medium",1]]},
+  {cat:"Climate Controls", unit:"day", items:[["Heater, Propane",35],["Heater, Dish",6],["Propane Tank, extra",5],["Air Conditioner, 1.5-ton",150],["Fan, \"Box\"",6],["Fan, \"Utility\"",10],["Umbrella, Golf",3.5],["Hose, 50' garden",4],["Misters, 10 gallon",55]]},
+  {cat:"Communications", unit:"day", items:[["Motorola CP200 Radio",10],["Konftel \"Ego\" Conf. Call Spkr.",25],["Headset, \"Drive-Thru\"",3],["Hand Mics",3],["Surveillance Kit",7],["Mobile Internet MiFi",99],["Conference Phone Bluetooth Speaker",35],["Boom Box",15],["Bullhorn",10],["K12 Anchor Speaker",80],["Microphone, XLR",5]]},
+  {cat:"Craft Services & Catering", unit:"day", items:[["Coffee Maker, 100 cup",15],["Tea Kettle (1.7 liter) - Electric",10],["Cooler, 48 qt",5],["Cooler, 68 qt",6],["Cooler, 100 qt",7],["Cooler, \"Gatorade\"",5],["Water Dispenser",15],["Water Bottle, 5-gal",11],["Coffee Thermos, Large (2qt)",5]]},
+  {cat:"Dollies & Carts", unit:"day", items:[["Rubbermaid Cart",20],["Dolly, Magliner Jr.",10],["Dolly, Magliner Sr.",15],["Dolly, Magliner Sr. w/Shelf",20],["Dolly, Furniture",5],["Dolly, Handtruck (2-Wheel)",5],["Pallet Jack",20],["Steel Deck, 2x4",30],["Steel Deck, 2x6",35],["Steel Deck, 2x8",35],["Steel Deck, 4x8",35],["Steel Deck, 4x4",25]]},
+  {cat:"Effects", unit:"day", items:[["Roscoe Fogger 1900",50],["Roscoe Fluid, Bottle",25],["Roscoe V-Hazer (Water Based)",60],["DF50 Hazer",110],["Fan, \"RE Fan\" w/stand",65]]},
+  {cat:"Ladders", unit:"day", items:[["Ladder, Step",6],["Ladder, 6'",8],["Ladder, 7'",9],["Ladder, 8'",10],["Ladder, 10'",14],["Ladder, 12'",16],["Ladder, 14'",18]]},
+  {cat:"Lights & Power", unit:"day", items:[["Generator, 2000W",60,["genny","gen","generator"]],["Generator, 3000W",80,["genny","gen","generator"]],["Generator, 6500W",200,["genny","gen","generator"]],["Generator, 7000W",225,["genny","gen","generator"]],["Gas Can, 5-gal",5],["Ext. Cord, 25'",4,["stinger","extension cord"]],["Ext. Cord, 50'",5,["stinger","extension cord"]],["Ext. Cord, 100'",6,["stinger","extension cord"]],["Power Strip",2],["Power Inverter 250w",10],["Work Light w/stand",15],["Battery Pwr Worklight",25],["Clamp Light",2],["Flashlight, \"Mag\"",4],["Cable Crossover",20]]},
+  {cat:"Safety & Traffic", unit:"day", items:[["Traffic Cones, 18\"",2],["Traffic Cones, 28\"",2.5],["Delineators, 36\"",2],["Stop/Slow Sign",2],["Safety Vest",1.5],["Sign, \"Men Working\"",10],["Sign, \"Prepare to Stop\"",10],["Sign, \"Wet Pavement\"",10],["Sign, \"Road Work Ahead\"",10],["Barricades w/Lights",5],["Hard Hat",2],["Cal OSHA Board",12],["1st Aid Kit, 50 person",25],["Fire Extinguisher (18LB)",10],["Fire Extinguisher (8LB)",8]]},
+  {cat:"Tables & Chairs", unit:"day", items:[["Table, 2' Folding (Personal)",4],["Table, 4' Folding",5],["Table, 6' Folding",6],["Table, 6' Folding (Half Fold)",6.5],["Table, 8' Folding",7],["6' Table Linen (Black)",5],["6' Table Linen (White)",5],["Chairs, Folding",2],["Director's Chairs, Low",3],["Director's Chairs, Tall",4],["Director's Chairs, Medium (Padded)",15],["Client Lounge, Standard",250],["Client Lounge, SOLO Line",400]]},
+  {cat:"Tents & Accessories", unit:"day", items:[["Caravan Canopy, 8x8",25,["pop up","popup","ez up","ez-up","tent","canopy"]],["Caravan Canopy, 10x10",30,["pop up","popup","ez up","ez-up","tent","canopy"]],["Caravan Canopy, 10x15",40,["pop up","popup","ez up","ez-up","tent","canopy"]],["Caravan Canopy, 10x20",55,["pop up","popup","ez up","ez-up","tent","canopy"]],["Sidewalls, 8x8",6,["tent wall","tent sidewall"]],["Sidewalls, 10x10",6,["tent wall","tent sidewall"]],["Sidewalls, 10x15",6,["tent wall","tent sidewall"]],["Sand Bags, 25lbs",3,["sandbag"]],["Sand Bags, 35lbs",5,["sandbag"]]]},
+  {cat:"Tools & Cleaning", unit:"day", items:[["Broom, Corn",2],["Broom, Push",4],["Dust Mop",2],["Dust Pan",2],["Mop & Bucket",8],["Pail, Plastic 5 Gallon",2],["Rake, Leaf",3],["Rake, Rock",3],["Rake, Sand",3],["Shovel, Flat",3],["Shovel, Spade",3],["Shovel, Snow",5],["Sledge Hammer",6],["Bolt Cutter",10],["Prune Cutter",10],["Shop Vacuum",15],["Leaf Blower, Electric",15],["Pressure Washer",40],["Weed Wacker, Electric",30],["Hedge Trimmer, Electric",30],["Trash Grabber",2]]},
+  {cat:"Vehicle Outfitting", unit:"day", items:[["4' Work Shelf",4],["8' Work Shelf",8],["4' Work Basket",10],["Milk Crate",2],["Straps, Bungee or D-Ring",1],["Straps, Ratchet",2],["Chair Rack, Hanging",2],["Chair Rack, Rolling",5],["Director's Chair Rack, Rolling",10],["Dolly Track Rack, Single",1.5],["Fire Extinguisher Rack",3],["Tool Rack",3]]},
+  {cat:"Wardrobe & Makeup", unit:"day", items:[["Mirror, Rolling M/U",20],["Mirror, Half w/lights",20],["Mirror, 6' Wardrobe",12.5],["Pop-Up Changing Stall",8],["Iron",7],["Ironing Board",10],["Jiffy Steamer",12],["Wardrobe Rack, Rolling",10]]},
+  {cat:"Safe Sets Equipment", unit:"day", items:[["Hand Washing Station",95],["Standing Sanitizing Station",25],["Tabletop Sanitizing Station",20],["Air Scrubber (750 CFM)",100],["Air Scrubber (550 CFM)",75],["Director's Shield",10],["Table Divider",7]]},
+  {cat:"Expendables", unit:"ea", items:[["Hanger, Combo",1.25],["Hanger, Pants",0.95],["Hanger, Shirts",0.8],["Trash Liners, Roll",15],["Trash Liners, 2x Roll Box",25],["Layout Board, New",7.5],["Layout Board, Used",5],["Ram Board, Roll",65],["Caution Tape, Roll",10],["Booties (pair)",0.75],["Paper Tape, 2\" Layout (roll)",10]]},
+  {cat:"PPE", unit:"ea", items:[["Black KN95 Face Mask (10pk)",10],["Disposable Face Masks (50pk)",15],["White N95 Face Mask (20pk)",30],["Face Shield - Headband",2],["Face Shield - Glasses (10pk)",20],["Safety Glasses",2],["Latex Gloves (50 pairs)",15],["Isolation Gown",3],["Hand Sanitizer (17oz)",15],["Hand Sanitizer (33oz)",20],["Hand Sanitizing Wipes (100pk)",8],["Mini Alcohol Wipes (100pk)",6],["Disinfectant Spray",15],["Disinfectant Liquid",15],["Antiseptic Towelettes (100pk)",15],["70% Alcohol Wipe",0.25]]},
+  {cat:"Health & Safety", unit:"ea", items:[["Non-Contact Thermometer",45],["Safe Sets Signage Pack",75],["Paper Wristbands (10pk) - Blue",0.5],["Paper Wristbands (10pk) - Orange",0.5],["Paper Wristbands (10pk) - Red",0.5],["Paper Wristbands (10pk) - Yellow",0.5],["Paper Wristbands (10pk) - Pink",0.5]]},
+];
+
+/* flatten with ids */
+let ID=0; const ITEMS={};
+CATALOG.forEach(c=>{c.items=c.items.map(([nm,pr,aliases])=>{const id="i"+(ID++);const o={id,nm,pr,unit:c.unit,cat:c.cat,aliases:aliases||[]};ITEMS[id]=o;return o;});});
+
+/* ---------- STATE ---------- */
+const cart={};            // id -> qty
+let activeCat="All";
+let query="";
+let deliv=null;
+
+const money=n=> n===0 ? "FREE" : "$"+(Number.isInteger(n)?n:n.toFixed(2));
+const fmt=n=> "$"+ n.toLocaleString("en-US",{maximumFractionDigits:2});
+
+/* ---------- RENDER PILLS ---------- */
+function renderPills(){
+  const el=document.getElementById("pills");
+  const cats=["All",...CATALOG.map(c=>c.cat)];
+  el.innerHTML=cats.map(c=>`<button class="pill ${c===activeCat&&!query?'active':''}" onclick="pickCat('${c.replace(/'/g,"\\'")}')">${c}</button>`).join("");
+}
+function pickCat(c){activeCat=c;query="";document.getElementById("search").value="";renderPills();renderCatalog();}
+
+/* ---------- RENDER CATALOG ---------- */
+function renderCatalog(){
+  const wrap=document.getElementById("catalog");
+  const q=query.trim().toLowerCase();
+  let blocks=CATALOG;
+  if(q){
+    blocks=CATALOG.map(c=>({...c,items:c.items.filter(it=>it.nm.toLowerCase().includes(q)||it.aliases.some(a=>a.toLowerCase().includes(q)))})).filter(c=>c.items.length);
+  } else if(activeCat!=="All"){
+    blocks=CATALOG.filter(c=>c.cat===activeCat);
+  }
+  if(!blocks.length){
+    wrap.innerHTML=`<div class="empty-search"><b>No supplies match “${query}”.</b>Try a broader term, or browse by category above.</div>`;
+    return;
+  }
+  wrap.innerHTML=blocks.map(c=>`
+    <section class="cat-block">
+      <div class="cat-head"><h2>${c.cat}</h2><span class="rule"></span><span class="n">${c.items.length}</span></div>
+      <div class="grid">
+        ${c.items.map(it=>itemRow(it)).join("")}
+      </div>
+    </section>`).join("");
+}
+function itemRow(it){
+  const q=cart[it.id]||0;
+  const unitTxt=it.unit==="day"?"/day":"each";
+  const exp=it.unit==="ea"?'<span class="badge-exp">Expendable</span>':"";
+  const priceHtml=it.pr===0?`<span class="free">FREE</span>`:`<b>${money(it.pr)}</b> ${unitTxt}`;
+  const ctrl=q>0
+    ? `<div class="stepper"><button onclick="setQty('${it.id}',${q-1})">−</button><span class="q">${q}</span><button onclick="setQty('${it.id}',${q+1})">+</button></div>`
+    : `<button class="add" onclick="setQty('${it.id}',1)">+ Add</button>`;
+  return `<div class="item ${q>0?'in-cart':''}">
+    <div class="meta"><div class="nm">${it.nm}${exp}</div><div class="pr">${priceHtml}</div></div>
+    ${ctrl}
+  </div>`;
+}
+
+/* ---------- CART OPS ---------- */
+function setQty(id,q){
+  if(q<=0){delete cart[id];}else{cart[id]=q;}
+  renderCatalog();renderCart();renderSheet();
+}
+function cartArr(){return Object.keys(cart).map(id=>({...ITEMS[id],qty:cart[id]}));}
+function cartCount(){return Object.values(cart).reduce((a,b)=>a+b,0);}
+function cartTotal(){return cartArr().reduce((s,it)=>s+it.pr*it.qty,0);}
+
+function renderCart(){
+  const arr=cartArr();
+  const count=cartCount();
+  const total=cartTotal();
+  document.getElementById("headCount").textContent=count;
+  const lines=document.getElementById("cartLines");
+  if(!arr.length){
+    lines.innerHTML=`<div class="cart-empty">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      <b>Nothing added yet</b>Browse the catalog and tap <em>Add</em>.</div>`;
+  } else {
+    lines.innerHTML=arr.map(it=>`
+      <div class="cl">
+        <div class="clmeta"><div class="clnm">${it.nm}</div><div class="clsub">${it.pr===0?'FREE':money(it.pr)+(it.unit==='day'?' /day':' ea')}</div></div>
+        <div class="clq"><button onclick="setQty('${it.id}',${it.qty-1})">−</button><span>${it.qty}</span><button onclick="setQty('${it.id}',${it.qty+1})">+</button></div>
+        <div class="clpr">${fmt(it.pr*it.qty)}</div>
+      </div>`).join("");
+  }
+  document.getElementById("cartItemCount").textContent=count?`${count} item${count>1?'s':''}`:"empty";
+  document.getElementById("subLabel").textContent=fmt(total);
+  document.getElementById("totalLabel").textContent=fmt(total);
+  document.getElementById("reviewBtn").disabled=!arr.length;
+
+  // mobile bar
+  const mc=document.getElementById("mcart");
+  if(count>0){mc.classList.add("show");}else{mc.classList.remove("show");}
+  document.getElementById("mc1").textContent=fmt(total);
+  document.getElementById("mc2").textContent=`${count} item${count>1?'s':''} · est. / day`;
+}
+
+/* ---------- REVIEW SHEET ---------- */
+function renderSheet(){
+  const arr=cartArr();
+  const body=document.getElementById("sheetBody");
+  if(!arr.length){
+    body.innerHTML=`<div class="cart-empty" style="color:var(--muted);padding:60px 10px;"><b style="color:var(--ink);font-family:var(--display);">Your order is empty</b>Add supplies to continue.</div>`;
+  } else {
+    body.innerHTML=arr.map(it=>`
+      <div class="rl">
+        <div class="rlmeta"><div class="rlnm">${it.nm}</div><div class="rlsub">${it.cat} · ${it.pr===0?'FREE':money(it.pr)+(it.unit==='day'?' /day':' ea')}</div></div>
+        <div class="clq"><button onclick="setQty('${it.id}',${it.qty-1})">−</button><span>${it.qty}</span><button onclick="setQty('${it.id}',${it.qty+1})">+</button></div>
+        <div class="rlpr">${fmt(it.pr*it.qty)}</div>
+        <button class="rm" onclick="setQty('${it.id}',0)">remove</button>
+      </div>`).join("");
+  }
+  const count=cartCount();
+  document.getElementById("sheetSub").textContent=count?`${count} item${count>1?'s':''} · adjust below`:"Add supplies to continue";
+  document.getElementById("sheetTotal").textContent=fmt(cartTotal());
+  document.getElementById("sheetCta").disabled=!arr.length;
+}
+
+/* ---------- SEARCH ---------- */
+function onSearch(v){query=v;renderPills();renderCatalog();}
+
+/* ---------- PANELS ---------- */
+const scrim=document.getElementById("scrim");
+function showPanel(id){scrim.classList.add("show");document.getElementById(id).classList.add("show");}
+function hidePanel(id){document.getElementById(id).classList.remove("show");}
+function openSheet(){renderSheet();showPanel("sheet");}
+function openDetails(){hidePanel("sheet");renderSheet();showPanel("details");}
+function backToSheet(){hidePanel("details");hidePanel("confirm");scrim.classList.remove("show");}
+function closeAll(){["sheet","details","confirm"].forEach(hidePanel);scrim.classList.remove("show");}
+
+/* delivery option */
+function pickDeliv(el){
+  document.querySelectorAll(".opt").forEach(o=>o.classList.remove("sel"));
+  el.classList.add("sel");deliv=el.dataset.d;
+  document.getElementById("addrWrap").style.display = (deliv==="location") ? "flex" : "none";
+}
+
+/* ---------- SUBMIT ---------- */
+function submitOrder(){
+  const name=document.getElementById("f_name").value.trim();
+  const email=document.getElementById("f_email").value.trim();
+  const job=document.getElementById("f_job").value.trim();
+  const co=document.getElementById("f_co").value.trim();
+  const pick=document.getElementById("f_pick").value;
+  if(!name||!email||!co||!pick){alert("Please fill in your name, company, email, and pickup/delivery date.");return;}
+  document.getElementById("cf_name").textContent=name.split(" ")[0];
+  document.getElementById("cf_email").textContent=email;
+  document.getElementById("cf_job").textContent=job||co||"your production";
+  document.getElementById("cf_count").textContent=cartCount();
+  document.getElementById("cf_ref").textContent="SR-REQ-"+String(1247+Math.floor(Math.random()*40)).padStart(4,"0");
+  hidePanel("details");showPanel("confirm");
+}
+function resetAll(){
+  for(const k in cart)delete cart[k];
+  deliv=null;
+  ["f_job","f_co","f_name","f_pos","f_email","f_phone","f_pick","f_ret","f_po","f_jobno","f_addr","f_notes"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  document.querySelectorAll(".opt").forEach(o=>o.classList.remove("sel"));
+  document.getElementById("addrWrap").style.display="none";
+  closeAll();activeCat="All";query="";document.getElementById("search").value="";
+  renderPills();renderCatalog();renderCart();
+}
+
+/* ---------- INIT ---------- */
+renderPills();renderCatalog();renderCart();
+</script>
+</body>
+</html>
