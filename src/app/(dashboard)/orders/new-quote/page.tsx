@@ -126,12 +126,40 @@ interface InquiryRecord {
   id: string;
   title: string;
   description: string;
+  source?: 'MANUAL' | 'GMAIL' | 'WEB_FORM';
   estimatedValue: number | null;
   preferredStartDate: string | null;
   preferredEndDate: string | null;
   company: { id: string; name: string } | null;
   person: { id: string; firstName: string; lastName: string; email: string } | null;
   status: 'NEW' | 'CONVERTED' | 'DISMISSED';
+  sourceMetadata?: SupplyOrderInquiryMetadata | null;
+}
+
+// Shape of sourceMetadata when the inquiry came from /order/supplies
+// (Phase 3 hardened public endpoint). When `kind === 'supply-order'`
+// we skip the email-parse step and seed items + contact straight
+// from the cart snapshot.
+interface SupplyOrderInquiryMetadata {
+  kind?: string;
+  reference?: string;
+  contact?: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null };
+  production?: { companyName?: string | null; jobName?: string | null; poNumber?: string | null; jobNumber?: string | null };
+  dates?: { start?: string | null; end?: string | null; rentalDays?: number | null };
+  delivery?: { method?: string | null; address?: string | null };
+  cart?: {
+    itemId: string;
+    code: string;
+    name: string;
+    type: string;
+    category: string;
+    unitPrice: number;
+    quantity: number;
+    days: number | null;
+    lineTotal: number;
+  }[];
+  totals?: { units?: number; amount?: number };
+  notes?: string | null;
 }
 
 interface CatalogSearchResult {
@@ -409,6 +437,15 @@ function NewQuotePageInner() {
   }, [clientCompanyIdFromUrl]);
 
   // Inquiry prefill — only when ?inquiryId is set.
+  // Two paths:
+  //   (a) Regular inquiry (MANUAL / GMAIL): seed emailText + dates so
+  //       the agent runs the AI parse against the description text.
+  //   (b) Supply-order inquiry (WEB_FORM with kind='supply-order'):
+  //       skip the parse step entirely. The cart snapshot in
+  //       sourceMetadata IS the line-item source of truth — map each
+  //       line to a ResolvedItem with catalogProductId bound to the
+  //       InventoryItem, and jump straight to the review/JobPicker
+  //       step.
   useEffect(() => {
     if (!inquiryId) return;
     fetch(`/api/inquiries/${inquiryId}`)
@@ -417,6 +454,100 @@ function NewQuotePageInner() {
         if (!d.inquiry) return;
         const inq: InquiryRecord = d.inquiry;
         setInquiry(inq);
+
+        const meta = inq.sourceMetadata ?? null;
+        const isSupplyOrder = meta?.kind === 'supply-order' && Array.isArray(meta.cart) && meta.cart.length > 0;
+
+        if (isSupplyOrder) {
+          // Build the post-parse state directly from the cart snapshot.
+          // No AI parse runs; the user lands on the review step.
+          const startISO = (meta!.dates?.start ?? inq.preferredStartDate ?? '').slice(0, 10);
+          const endISO = (meta!.dates?.end ?? inq.preferredEndDate ?? startISO).slice(0, 10);
+          const fallbackProductionName =
+            meta!.production?.jobName?.trim() ||
+            inq.title.replace(/^Supply request — /, '');
+
+          // Synthetic ParsedTop so the page flips out of the "step 1
+          // input" branch. The fields here also drive the
+          // candidate-job lookup downstream.
+          setParsed({
+            clientName: meta!.production?.companyName ?? undefined,
+            contactName: meta!.contact?.name ?? undefined,
+            contactEmail: meta!.contact?.email ?? undefined,
+            contactPhone: meta!.contact?.phone ?? undefined,
+            productionName: fallbackProductionName || undefined,
+            startDate: startISO || undefined,
+            endDate: endISO || undefined,
+            notes: meta!.notes ?? undefined,
+          });
+          setEditing((prev) => ({
+            ...prev,
+            productionName: prev.productionName || fallbackProductionName,
+            startDate: prev.startDate || startISO,
+            endDate: prev.endDate || endISO,
+            notes: meta!.notes ?? prev.notes,
+          }));
+
+          // Cart → ResolvedItem[]. Every cart line carries an
+          // InventoryItem id already (server-validated on submission),
+          // so we bind matchedProduct directly. rateType for
+          // EXPENDABLE lines is FLAT (consumable; qty × rate, no
+          // billable days); EQUIPMENT is DAILY and inherits the
+          // rental window. matchSource=null because no AI/alias
+          // matching ran — the catalog id is canonical.
+          const items: ResolvedItem[] = meta!.cart!.map((line) => {
+            const isExpendable = line.type === 'EXPENDABLE';
+            return {
+              description: line.name,
+              quantity: line.quantity,
+              catalogProductId: line.itemId,
+              catalogType: 'INVENTORY',
+              department: 'PRO_SUPPLIES',
+              qualifier: null,
+              rateType: isExpendable ? 'FLAT' : 'DAILY',
+              pickupDate: startISO || new Date().toISOString().slice(0, 10),
+              returnDate: endISO || startISO || new Date().toISOString().slice(0, 10),
+              billableDays: isExpendable ? 1 : line.days ?? 1,
+              rate: line.unitPrice,
+              matchedProduct: { id: line.itemId, type: 'INVENTORY', name: line.name },
+              matchSource: null,
+              warnings: [],
+            };
+          });
+          setItems(items);
+
+          // Single synthetic contact from the cart — the agent
+          // reviews it in PeopleSection. match_status='new' until
+          // the agent picks an existing Person or accepts the
+          // create-new path.
+          if (meta!.contact?.email) {
+            setContacts([
+              {
+                name: meta!.contact.name ?? '',
+                email: meta!.contact.email,
+                title: meta!.contact.role ?? null,
+                phone: meta!.contact.phone ?? null,
+                company: meta!.production?.companyName ?? null,
+                suggested_role: 'PC',
+                source: 'header',
+                confidence: 'high',
+                match_status: 'new',
+                existing_person_id: null,
+                candidate_person_id: null,
+                include: true,
+                role: 'PC',
+              },
+            ]);
+          }
+
+          if (inq.company) {
+            setSelectedClientId((cur) => cur || inq.company!.id);
+          }
+          return;
+        }
+
+        // Default path — non-supply-order inquiry. Seed emailText
+        // so the agent can hit "Parse" against the description.
         setEmailText(inq.description || '');
         setEditing((prev) => ({
           ...prev,
