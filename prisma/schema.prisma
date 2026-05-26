@@ -2012,8 +2012,17 @@ model Inquiry {
 
   sourceMetadata     Json?         @map("source_metadata")
 
+  // RFC822 Message-Id of the originating email when source=GMAIL.
+  // Used to dedupe cross-inbox copies of the same message (each Gmail
+  // inbox has its own EmailMessage row with a distinct id, but they
+  // share rfc822MessageId). The partial unique index `sr_inquiries_rfc822_gmail_uniq`
+  // (added via raw SQL — Prisma can't express filtered uniques) makes
+  // a concurrent double-capture impossible at the DB layer.
+  rfc822MessageId    String?       @map("rfc822_message_id")
+
   @@index([status, createdAt])
   @@index([assignedToId])
+  @@index([rfc822MessageId])
   @@map("sr_inquiries")
 }
 

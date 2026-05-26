@@ -39,15 +39,30 @@ export async function POST(req: NextRequest) {
       personId: true,
       extractedData: true,
       extractionConfidence: true,
+      rfc822MessageId: true,
     },
   });
   if (!email) return NextResponse.json({ error: 'email not found' }, { status: 404 });
 
-  // De-dupe: if we already have an Inquiry from this email, return it.
-  const existing = await prisma.inquiry.findMany({
-    select: { id: true, status: true, sourceMetadata: true },
+  // De-dupe on canonical message identity. Two failure modes we have to cover:
+  //   (a) two concurrent clicks on the same suggestion — same emailMessageId
+  //   (b) cross-inbox copies of the same RFC822 message — different
+  //       emailMessageIds but the same rfc822MessageId
+  // Check both. The DB-level partial unique index
+  // `sr_inquiries_rfc822_gmail_uniq` is the backstop for races that slip
+  // past this read (caught below as P2002).
+  if (email.rfc822MessageId) {
+    const byRfc = await prisma.inquiry.findFirst({
+      where: { source: 'GMAIL', rfc822MessageId: email.rfc822MessageId },
+      select: { id: true },
+    });
+    if (byRfc) return NextResponse.json({ inquiry: { id: byRfc.id }, deduped: true });
+  }
+  const byEmailId = await prisma.inquiry.findMany({
+    select: { id: true, sourceMetadata: true },
+    where: { source: 'GMAIL' },
   });
-  const dupe = existing.find((i) => {
+  const dupe = byEmailId.find((i) => {
     const meta = i.sourceMetadata as Record<string, unknown> | null;
     return meta?.emailMessageId === email.id;
   });
@@ -92,29 +107,45 @@ export async function POST(req: NextRequest) {
     description = (email.bodyText || email.snippet || email.subject || '').slice(0, 32_000);
   }
 
-  const inquiry = await prisma.inquiry.create({
-    data: {
-      title,
-      description,
-      source: 'GMAIL',
-      status: 'NEW',
-      companyId: email.companyId,
-      personId: email.personId,
-      assignedToId: userId,
-      sourceMetadata: {
-        emailMessageId: email.id,
-        fromAddress: email.fromAddress,
-        // Pre-extracted Quick Read fields. /orders/new-quote can read these
-        // to pre-fill the quote builder and skip a duplicate AI call. Only
-        // attached when confidence ≥ 0.5 (same threshold the slider uses).
-        extractedData:
-          email.extractedData && (email.extractionConfidence ?? 0) >= 0.5
-            ? (email.extractedData as object)
-            : null,
+  try {
+    const inquiry = await prisma.inquiry.create({
+      data: {
+        title,
+        description,
+        source: 'GMAIL',
+        status: 'NEW',
+        companyId: email.companyId,
+        personId: email.personId,
+        assignedToId: userId,
+        rfc822MessageId: email.rfc822MessageId,
+        sourceMetadata: {
+          emailMessageId: email.id,
+          rfc822MessageId: email.rfc822MessageId,
+          fromAddress: email.fromAddress,
+          // Pre-extracted Quick Read fields. /orders/new-quote can read these
+          // to pre-fill the quote builder and skip a duplicate AI call. Only
+          // attached when confidence ≥ 0.5 (same threshold the slider uses).
+          extractedData:
+            email.extractedData && (email.extractionConfidence ?? 0) >= 0.5
+              ? (email.extractedData as object)
+              : null,
+        },
       },
-    },
-    select: { id: true },
-  });
-
-  return NextResponse.json({ inquiry });
+      select: { id: true },
+    });
+    return NextResponse.json({ inquiry });
+  } catch (err) {
+    // Partial unique violation on sr_inquiries_rfc822_gmail_uniq — another
+    // request inserted the canonical row between our read and write. Treat
+    // it as a dedup hit and return that row.
+    const code = (err as { code?: string } | null)?.code;
+    if (code === 'P2002' && email.rfc822MessageId) {
+      const winner = await prisma.inquiry.findFirst({
+        where: { source: 'GMAIL', rfc822MessageId: email.rfc822MessageId },
+        select: { id: true },
+      });
+      if (winner) return NextResponse.json({ inquiry: { id: winner.id }, deduped: true });
+    }
+    throw err;
+  }
 }
