@@ -17,6 +17,11 @@ export interface Permissions {
   claims: boolean;
   reporting: boolean;
   ai: boolean;
+  // Exec/Coverage dashboard — approvals queue, sales-execution hygiene,
+  // (Phase 2) claims-$ + escalations. This is the single source of truth
+  // for both nav visibility AND server-side /api/exec/* access via the
+  // shared guard in src/lib/exec/requireCoverageAccess.ts.
+  coverage: boolean;
   tasks: boolean;       // Driver task list
   inspections: boolean; // Driver inspections
 
@@ -52,7 +57,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   ADMIN: {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: true,
-    reporting: true, ai: true, tasks: true, inspections: true,
+    reporting: true, ai: true, tasks: true, inspections: true, coverage: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: true, seeAllBookings: true, seeOtherAgents: true,
@@ -67,7 +72,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   MANAGER: {
     calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
-    reporting: false, ai: true, tasks: true, inspections: true,
+    reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -82,7 +87,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   AGENT: {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: false,
-    reporting: false, ai: true, tasks: false, inspections: false,
+    reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -97,7 +102,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   FLEET_TECH: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
-    reporting: false, ai: true, tasks: true, inspections: true,
+    reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -111,7 +116,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   DISPATCHER: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
-    reporting: false, ai: true, tasks: true, inspections: true,
+    reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -125,7 +130,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   DRIVER: {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
-    reporting: false, ai: false, tasks: true, inspections: true,
+    reporting: false, ai: false, tasks: true, inspections: true, coverage: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: false,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -139,7 +144,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   CLIENT: {
     calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
-    reporting: false, ai: false, tasks: false, inspections: false,
+    reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
