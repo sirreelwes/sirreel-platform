@@ -1647,9 +1647,17 @@ model Order {
 }
 
 enum FollowUpStage {
-  DAY_0 // EOD same day quote was sent
-  DAY_1 // ~24h after send
-  DAY_3 // ~72h after send
+  DAY_0 // legacy: EOD same day quote was sent (cron-generated, pipeline panel)
+  DAY_1 // legacy: ~24h after send
+  DAY_3 // legacy: ~72h after send
+
+  // Mode A cadence values (May 2026). Anchored to quoteSentAt + expiresAt,
+  // not a flat hour offset. See src/lib/sales/quoteCadence.ts for the
+  // STAGE_N due-time math and gating. Agent-driven send from the order
+  // detail panel — no cron auto-creation; rows are logged at send time.
+  STAGE_1 // ~2 days after sent — "did the quote land?"
+  STAGE_2 // ~halfway between sent and valid-until — "still planning these dates?"
+  STAGE_3 // ~1–2 days before valid-until — "want to lock it in?"
 }
 
 enum FollowUpStatus {
