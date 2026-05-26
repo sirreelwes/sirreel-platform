@@ -94,11 +94,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!session?.user?.email) return bad(401, 'unauthorized')
 
   const body = (await req.json().catch(() => ({}))) as SendBody
-  const stage = body.stage
-  if (typeof stage !== 'string' || !CADENCE_STAGES.includes(stage as CadenceStage)) {
-    return bad(400, 'stage must be STAGE_1, STAGE_2, or STAGE_3')
+  // `stage` is OPTIONAL. The legacy pipeline surfaces (FollowUpsDuePanel,
+  // OpenQuotesKanban) don't know a STAGE_N — they just want "send the
+  // appropriate next nudge". When omitted, we resolve server-side below
+  // after we've loaded the order + computed cadence state. The Mode A
+  // panel on the order detail page still passes an explicit stage.
+  const explicitStage = body.stage
+  if (
+    explicitStage != null &&
+    (typeof explicitStage !== 'string' ||
+      !CADENCE_STAGES.includes(explicitStage as CadenceStage))
+  ) {
+    return bad(400, 'stage must be STAGE_1, STAGE_2, or STAGE_3 (or omitted for auto-resolve)')
   }
-  const stageEnum = stage as CadenceStage
   const message =
     typeof body.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
@@ -170,6 +178,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     stagesSent,
     legacySentExists,
   })
+
+  // Resolve auto-stage when caller didn't specify one. Preference order:
+  //   1. currentDueStage  — the stage the cadence helper thinks is "due"
+  //   2. first unsent CADENCE_STAGE — for ad-hoc nudges where the
+  //      cadence isn't yet pointing at anything (e.g. STAGE_1 before
+  //      its 2-day timer). Agent override of the timer.
+  // If everything's already sent, the paused check below catches it
+  // (state.pauseReason = 'all_stages_sent').
+  const stageEnum: CadenceStage = (() => {
+    if (explicitStage) return explicitStage as CadenceStage
+    if (state.currentDueStage) return state.currentDueStage
+    const firstUnsent = CADENCE_STAGES.find((s) => !stagesSent.includes(s))
+    // Fallback to STAGE_1 when nothing resolves; the gating checks below
+    // will refuse if the order is paused/over.
+    return firstUnsent ?? CADENCE_STAGES[0]
+  })()
 
   // Block sends when paused (unless explicit resend on an already-SENT stage).
   if (state.paused && !(isResend && stagesSent.includes(stageEnum))) {

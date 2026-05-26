@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { NudgeModal } from './NudgeModal';
 
 type Scope = 'my' | 'team';
 
@@ -48,7 +47,8 @@ function daysSince(iso: string | null) {
 
 export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   const [items, setItems] = useState<FollowUp[] | null>(null);
-  const [active, setActive] = useState<FollowUp | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/sales/follow-ups?scope=${scope}`)
@@ -58,6 +58,37 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   }, [scope]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Repointed to the branded Resend endpoint. Server resolves the
+  // STAGE_N — caller doesn't need to map DAY_X → STAGE_N. State writes
+  // happen entirely on the server (creates a STAGE_N SENT row); the
+  // cross-system filter in /api/sales/follow-ups hides this order's
+  // legacy DAY_X row from the panel after refresh.
+  const sendFollowUp = useCallback(async (f: FollowUp) => {
+    setSendingId(f.id);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/orders/${f.order.id}/follow-ups/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) {
+        setFeedback({ kind: 'err', text: json?.error || 'Send failed' });
+      } else {
+        setFeedback({
+          kind: 'ok',
+          text: `Follow-up sent to ${json?.recipient?.email ?? 'client'}`,
+        });
+        load();
+      }
+    } catch (err) {
+      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Send failed' });
+    } finally {
+      setSendingId(null);
+    }
+  }, [load]);
 
   if (items === null) {
     return null; // silent first paint to avoid flicker
@@ -103,10 +134,12 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => setActive(f)}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold rounded"
+                  onClick={() => { void sendFollowUp(f); }}
+                  disabled={sendingId !== null}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold rounded"
+                  title="Send the branded follow-up email"
                 >
-                  Review & Send
+                  {sendingId === f.id ? 'Sending…' : 'Send follow-up'}
                 </button>
               </div>
             </li>
@@ -114,28 +147,17 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
         })}
       </ul>
 
-      <NudgeModal
-        job={
-          active
-            ? {
-                id: active.order.job.id,
-                jobCode: active.order.job.jobCode,
-                name: active.order.job.name,
-                company: active.order.company,
-                agent: active.order.agent,
-                daysInStage: daysSince(active.order.sentAt) ?? undefined,
-              }
-            : null
-        }
-        followUpId={active?.id ?? null}
-        initialTo={active?.order.jobContact?.email}
-        initialSubject={active?.draftSubject}
-        initialBody={active?.draftBody}
-        stageLabel={active ? STAGE_LABEL[active.stage] : undefined}
-        onClose={() => setActive(null)}
-        onSent={() => { setActive(null); load(); }}
-        onSkipped={() => { setActive(null); load(); }}
-      />
+      {feedback && (
+        <div
+          className={`mt-3 text-[11px] px-3 py-2 rounded ${
+            feedback.kind === 'ok'
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+              : 'bg-red-100 text-red-800 border border-red-200'
+          }`}
+        >
+          {feedback.text}
+        </div>
+      )}
     </section>
   );
 }

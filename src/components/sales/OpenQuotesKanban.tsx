@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { DEPARTMENT_SHORT, type PipelineColumn } from '@/lib/sales/pipeline';
 import type { LineItemDepartment } from '@prisma/client';
-import { NudgeModal } from './NudgeModal';
 import { MarkLostModal } from './MarkLostModal';
 
 interface QuoteJob {
@@ -56,8 +55,39 @@ function daysSince(iso: string) {
 }
 
 export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanProps) {
-  const [nudge, setNudge] = useState<QuoteJob | null>(null);
+  const [nudgingJobId, setNudgingJobId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [lost, setLost] = useState<QuoteJob | null>(null);
+
+  // Repointed to the branded Resend endpoint via the job-scoped wrapper,
+  // which resolves the Job's latest SENT order and forwards to the
+  // per-order endpoint. Server picks the STAGE_N (currentDueStage or
+  // first unsent) — Kanban doesn't track cadence per Job.
+  const nudgeJob = async (job: QuoteJob) => {
+    setNudgingJobId(job.id);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/follow-ups/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) {
+        setFeedback({ kind: 'err', text: json?.error || 'Send failed' });
+      } else {
+        setFeedback({
+          kind: 'ok',
+          text: `Follow-up sent for ${job.jobCode} to ${json?.recipient?.email ?? 'client'}`,
+        });
+        onChange?.();
+      }
+    } catch (err) {
+      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Send failed' });
+    } finally {
+      setNudgingJobId(null);
+    }
+  };
 
   const byColumn: Record<PipelineColumn, QuoteJob[]> = {
     DRAFT: [],
@@ -120,7 +150,9 @@ export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanPr
                     <QuoteCard
                       key={j.id}
                       job={j}
-                      onNudge={col.key === 'SENT' ? () => setNudge(j) : undefined}
+                      nudging={nudgingJobId === j.id}
+                      nudgeDisabled={nudgingJobId !== null}
+                      onNudge={col.key === 'SENT' ? () => { void nudgeJob(j); } : undefined}
                       onMarkLost={col.key === 'DRAFT' || col.key === 'SENT' ? () => setLost(j) : undefined}
                     />
                   ))
@@ -131,21 +163,17 @@ export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanPr
         })}
       </div>
 
-      <NudgeModal
-        job={
-          nudge
-            ? {
-                id: nudge.id,
-                jobCode: nudge.jobCode,
-                name: nudge.name,
-                company: nudge.company,
-                agent: nudge.agent,
-                daysInStage: daysSinceNumber(nudge.updatedAt),
-              }
-            : null
-        }
-        onClose={() => setNudge(null)}
-      />
+      {feedback && (
+        <div
+          className={`text-[11px] px-3 py-2 rounded ${
+            feedback.kind === 'ok'
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+              : 'bg-red-100 text-red-800 border border-red-200'
+          }`}
+        >
+          {feedback.text}
+        </div>
+      )}
 
       <MarkLostModal
         job={lost ? { id: lost.id, name: lost.name, jobCode: lost.jobCode, company: lost.company } : null}
@@ -156,11 +184,19 @@ export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanPr
   );
 }
 
-function daysSinceNumber(iso: string) {
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
-}
-
-function QuoteCard({ job, onNudge, onMarkLost }: { job: QuoteJob; onNudge?: () => void; onMarkLost?: () => void }) {
+function QuoteCard({
+  job,
+  onNudge,
+  onMarkLost,
+  nudging = false,
+  nudgeDisabled = false,
+}: {
+  job: QuoteJob;
+  onNudge?: () => void;
+  onMarkLost?: () => void;
+  nudging?: boolean;
+  nudgeDisabled?: boolean;
+}) {
   const deal =
     job.orderTotal > 0
       ? fmtMoney(job.orderTotal)
@@ -224,9 +260,11 @@ function QuoteCard({ job, onNudge, onMarkLost }: { job: QuoteJob; onNudge?: () =
           {onNudge && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNudge(); }}
-              className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-900/30 transition-colors"
+              disabled={nudgeDisabled}
+              title={nudging ? 'Sending…' : 'Send branded follow-up email'}
+              className="text-[10px] font-semibold text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed px-1.5 py-0.5 rounded hover:bg-blue-900/30 transition-colors"
             >
-              Nudge
+              {nudging ? 'Sending…' : 'Nudge'}
             </button>
           )}
           {onMarkLost && (
