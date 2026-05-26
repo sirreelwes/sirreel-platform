@@ -70,6 +70,12 @@ export interface ComposeQuoteEmailArgs {
    *  filename pre-known (it just builds Quote-{orderNumber}.pdf); the
    *  preview path uses the metadata. Default true. */
   includeAttachmentMeta?: boolean
+  /** Person.id to use as the primary recipient instead of the
+   *  canonical rank-0 pick. Backs the modal's "Change recipient"
+   *  affordance. Validated against the ranked candidates on this
+   *  order — rejected if not present (no arbitrary email injection
+   *  through the send endpoint). */
+  overrideContactId?: string | null
 }
 
 export async function composeQuoteEmail(
@@ -113,13 +119,30 @@ export async function composeQuoteEmail(
   }
 
   const ranked = rankRecipients(order.job, order.jobContact)
-  const to = ranked[0]
-  if (!to) {
+  if (ranked.length === 0) {
     return {
       ok: false,
       status: 400,
       error: 'No recipient — add a contact to the job first.',
     }
+  }
+
+  // Apply optional override. Must be one of the ranked candidates;
+  // anything else is rejected so this param can't be used to redirect
+  // a send to an arbitrary email address.
+  let to = ranked[0]
+  let alternatives = ranked.slice(1)
+  if (args.overrideContactId) {
+    const idx = ranked.findIndex((r) => r.id === args.overrideContactId)
+    if (idx < 0) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'override contact is not on this order',
+      }
+    }
+    to = ranked[idx]
+    alternatives = ranked.filter((_, i) => i !== idx)
   }
 
   const attachments: AttachmentMeta[] = []
@@ -152,7 +175,7 @@ export async function composeQuoteEmail(
   return {
     ok: true,
     to,
-    alternatives: ranked.slice(1),
+    alternatives,
     from: SEND_FROM,
     subject,
     html,

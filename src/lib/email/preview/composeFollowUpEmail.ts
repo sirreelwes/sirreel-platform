@@ -59,6 +59,9 @@ export interface ComposeFollowUpEmailArgs {
   /** Pass null for preview (omit portal button). Pass tokenized URL
    *  for send. */
   portalUrl: string | null
+  /** Person.id override. Same validation as composeQuoteEmail —
+   *  must be one of the ranked candidates on this order. */
+  overrideContactId?: string | null
 }
 
 export async function composeFollowUpEmail(
@@ -165,9 +168,19 @@ export async function composeFollowUpEmail(
   }
 
   const ranked = rankRecipients(order.job, order.jobContact)
-  const to = ranked[0]
-  if (!to) {
+  if (ranked.length === 0) {
     return { ok: false, status: 400, error: 'no recipient — add a contact to the job first' }
+  }
+  // Optional override — must be one of the ranked candidates.
+  let to = ranked[0]
+  let alternatives = ranked.slice(1)
+  if (args.overrideContactId) {
+    const idx = ranked.findIndex((r) => r.id === args.overrideContactId)
+    if (idx < 0) {
+      return { ok: false, status: 400, error: 'override contact is not on this order' }
+    }
+    to = ranked[idx]
+    alternatives = ranked.filter((_, i) => i !== idx)
   }
 
   const { subject, html, text } = buildFollowUpSendEmail({
@@ -185,7 +198,7 @@ export async function composeFollowUpEmail(
   return {
     ok: true,
     to,
-    alternatives: ranked.slice(1),
+    alternatives,
     from: SEND_FROM,
     subject,
     html,

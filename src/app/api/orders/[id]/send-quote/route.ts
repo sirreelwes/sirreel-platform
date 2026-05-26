@@ -47,6 +47,10 @@ interface SendQuoteBody {
    *  JobContacts on the order's job are CC'd. Pass an empty array to
    *  send to primary only. */
   cc?: unknown
+  /** Person.id picked by the agent in the EmailReviewModal's "Change
+   *  recipient" affordance. Must be one of the order's ranked
+   *  candidates or composer rejects with 400. */
+  overrideContactId?: unknown
 }
 
 function bad(status: number, error: string) {
@@ -65,6 +69,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const ccOverride = Array.isArray(body.cc)
     ? (body.cc.filter((v) => typeof v === 'string') as string[])
     : null
+  const overrideContactId =
+    typeof body.overrideContactId === 'string' ? body.overrideContactId : null
 
   // ── Mint/refresh portal token, then compose with tokenized URL ─
   // Two phases: (1) preview-compose with portalUrl=null to learn the
@@ -76,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const preliminary = await composeQuoteEmail({
     orderId: params.id,
     message,
+    overrideContactId,
     portalUrl: null,
     // Send route fetches the buffer separately; preview metadata not needed.
     includeAttachmentMeta: false,
@@ -162,6 +169,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const final = await composeQuoteEmail({
     orderId: params.id,
     message,
+    overrideContactId,
     portalUrl,
     includeAttachmentMeta: false,
   })

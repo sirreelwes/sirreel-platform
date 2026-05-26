@@ -32,6 +32,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const message = typeof body?.message === 'string' ? body.message : undefined
+  const overrideContactId =
+    typeof body?.overrideContactId === 'string' ? body.overrideContactId : undefined
   const dryRun = body?.dryRun === true
 
   const order = await resolveJobLatestSentOrder(params.id)
@@ -44,8 +46,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // we re-dispatch by reconstructing a Request and calling the
   // exported POST directly so cookies/session propagate naturally.
   const { POST: orderPost } = await import('@/app/api/orders/[id]/follow-ups/send/route')
-  const forwardPayload: { message?: string; dryRun?: boolean } = {}
+  const forwardPayload: {
+    message?: string
+    dryRun?: boolean
+    overrideContactId?: string
+  } = {}
   if (message) forwardPayload.message = message
+  if (overrideContactId) forwardPayload.overrideContactId = overrideContactId
   if (dryRun) forwardPayload.dryRun = true
   const forwarded = new NextRequest(
     new URL(`/api/orders/${order.id}/follow-ups/send`, req.url),

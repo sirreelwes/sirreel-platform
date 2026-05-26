@@ -34,6 +34,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body?.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
       : null
+  const overrideContactId =
+    typeof body?.overrideContactId === 'string' ? body.overrideContactId : null
 
   const order = await resolveJobLatestSentOrder(params.id)
   if (!order) {
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderId: order.id,
     stage: null,
     message,
+    overrideContactId,
     portalUrl: null,
   })
 

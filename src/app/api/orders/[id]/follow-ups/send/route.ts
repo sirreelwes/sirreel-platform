@@ -47,6 +47,9 @@ interface SendBody {
   stage?: unknown
   message?: unknown
   resend?: unknown
+  /** Person.id override from the EmailReviewModal "Change recipient"
+   *  picker. Composer validates membership in the ranked candidates. */
+  overrideContactId?: unknown
   /** Preview-only: skip mint/dispatch/write, return the composed
    *  payload (same shape the future /preview endpoint will use).
    *  Kept here through commit 4 so the existing FollowUpConfirmDialog
@@ -72,6 +75,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
       : null
+  const overrideContactId =
+    typeof body.overrideContactId === 'string' ? body.overrideContactId : null
   const isDryRun = body.dryRun === true
 
   // ── Phase 1: compose without portalUrl to learn recipient + stage,
@@ -80,6 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderId: params.id,
     stage,
     message,
+    overrideContactId,
     portalUrl: null,
   })
   if (!preliminary.ok) return bad(preliminary.status, preliminary.error)
@@ -129,6 +135,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderId: params.id,
     stage: preliminary.stage,
     message,
+    overrideContactId,
     portalUrl,
   })
   if (!final.ok) return bad(final.status, final.error)
