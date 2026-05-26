@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import type { FollowUpStage } from '@prisma/client';
 import { composeDraft, computeDueAt } from '@/lib/sales/followUpDraft';
 
 export const dynamic = 'force-dynamic';
 
-const STAGES: FollowUpStage[] = ['DAY_0', 'DAY_1', 'DAY_3'];
+// Legacy cron stages. STAGE_1/2/3 belong to the Mode A agent-driven
+// flow (src/lib/sales/quoteCadence.ts) and are NOT auto-created here.
+type LegacyStage = 'DAY_0' | 'DAY_1' | 'DAY_3';
+const STAGES: LegacyStage[] = ['DAY_0', 'DAY_1', 'DAY_3'];
 const BATCH_SIZE = 200;
 
 // Hourly cron — generates QuoteFollowUp draft rows for any SENT order that has
