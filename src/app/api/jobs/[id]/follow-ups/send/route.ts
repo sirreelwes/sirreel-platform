@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/prisma'
+import { resolveJobLatestSentOrder } from '@/lib/sales/resolveJobLatestSentOrder'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -34,26 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const message = typeof body?.message === 'string' ? body.message : undefined
   const dryRun = body?.dryRun === true
 
-  // Resolve the job's latest-sent SENT order. Excludes orders whose Job
-  // is WRAPPED/LOST as defensive guard, though we already filtered by
-  // job id; this also guards against multi-order edge cases where a
-  // later-created Order ended up in DRAFT — only currently-SENT orders
-  // are valid targets for a follow-up nudge.
-  const order = await prisma.order.findFirst({
-    where: {
-      jobId: params.id,
-      quoteStatus: 'SENT',
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
-    },
-    orderBy: [
-      // sentAt is the actual quote-sent timestamp; fall back to quoteSentAt
-      // for older rows that pre-date the sales-stage column split.
-      { sentAt: 'desc' },
-      { quoteSentAt: 'desc' },
-    ],
-    select: { id: true },
-  })
-
+  const order = await resolveJobLatestSentOrder(params.id)
   if (!order) {
     return bad(409, 'no SENT order on this job — nothing to follow up on')
   }
