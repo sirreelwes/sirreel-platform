@@ -157,6 +157,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .filter((f) => f.status === 'SENT' && CADENCE_STAGES.includes(f.stage as CadenceStage))
     .map((f) => f.stage as CadenceStage)
 
+  const legacySentExists = order.followUps.some(
+    (f) => f.status === 'SENT' && (f.stage === 'DAY_0' || f.stage === 'DAY_1' || f.stage === 'DAY_3'),
+  )
+
   const state = computeCadenceState({
     quoteSentAt: order.quoteSentAt,
     expiresAt: order.expiresAt,
@@ -164,6 +168,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     status: order.status,
     threadLastInboundAt,
     stagesSent,
+    legacySentExists,
   })
 
   // Block sends when paused (unless explicit resend on an already-SENT stage).

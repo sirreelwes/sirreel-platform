@@ -18,7 +18,19 @@ export async function GET(req: NextRequest) {
   const followUps = await prisma.quoteFollowUp.findMany({
     where: {
       status: 'PENDING',
-      ...(mine ? { order: { agentId: mine } } : {}),
+      // Cross-system gating: hide legacy PENDING rows for orders that
+      // already received a Mode A STAGE_X send. Mode A is the canonical
+      // surface for those orders — the agent acted there and shouldn't
+      // see a stale DAY_X prompt in the pipeline panel afterward.
+      order: {
+        ...(mine ? { agentId: mine } : {}),
+        followUps: {
+          none: {
+            status: 'SENT',
+            stage: { in: ['STAGE_1', 'STAGE_2', 'STAGE_3'] },
+          },
+        },
+      },
     },
     orderBy: [{ dueAt: 'asc' }],
     take: 50,

@@ -41,6 +41,9 @@ export type PauseReason =
   | 'status_advanced'   // order is past QUOTE_SENT (WON/LOST/etc.)
   | 'client_replied'    // thread had an inbound after sentAt
   | 'all_stages_sent'   // 3 of 3 already fired
+  | 'legacy_nudge_sent' // a legacy DAY_X follow-up was already SENT for this order —
+                        // Mode A defers to avoid double-nudging while the legacy
+                        // pipeline panel + cron coexist with Mode A.
 
 export interface CadenceInput {
   /** Order timing. quoteSentAt is the anchor; if null, no cadence runs. */
@@ -55,6 +58,10 @@ export interface CadenceInput {
   threadLastInboundAt: Date | null
   /** STAGE_N rows already SENT for this order (status=SENT, not PENDING). */
   stagesSent: CadenceStage[]
+  /** True when any legacy DAY_X follow-up has status=SENT for this order.
+   *  Causes Mode A to pause (pauseReason='legacy_nudge_sent') so the same
+   *  client doesn't get nudged by both systems while they coexist. */
+  legacySentExists?: boolean
   /** Optional override for "now" — defaults to new Date(). */
   now?: Date
 }
@@ -133,6 +140,9 @@ export function computeCadenceState(input: CadenceInput): CadenceState {
   }
   if (input.threadLastInboundAt && input.threadLastInboundAt.getTime() > sentAt.getTime()) {
     return pausedAt('client_replied', dueDates, effectiveExpiresAt, input.stagesSent)
+  }
+  if (input.legacySentExists) {
+    return pausedAt('legacy_nudge_sent', dueDates, effectiveExpiresAt, input.stagesSent)
   }
 
   const sentSet = new Set(input.stagesSent)

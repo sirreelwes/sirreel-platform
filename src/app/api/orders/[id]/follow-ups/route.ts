@@ -66,6 +66,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     .filter((f) => f.status === 'SENT' && CADENCE_STAGES.includes(f.stage as CadenceStage))
     .map((f) => f.stage as CadenceStage)
 
+  // Cross-system gating: if a legacy DAY_X has already been SENT for this
+  // order, Mode A defers. The pipeline panel's mailto-driven send counts
+  // as a real client touch, even though it goes out from the agent's
+  // mail client rather than Resend.
+  const legacySentExists = order.followUps.some(
+    (f) => f.status === 'SENT' && (f.stage === 'DAY_0' || f.stage === 'DAY_1' || f.stage === 'DAY_3'),
+  )
+
   const state = computeCadenceState({
     quoteSentAt: order.quoteSentAt,
     expiresAt: order.expiresAt,
@@ -73,6 +81,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     status: order.status,
     threadLastInboundAt,
     stagesSent,
+    legacySentExists,
   })
 
   return NextResponse.json({

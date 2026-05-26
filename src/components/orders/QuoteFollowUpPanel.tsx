@@ -18,7 +18,12 @@ import { useCallback, useEffect, useState } from 'react'
 
 type CadenceStage = 'STAGE_1' | 'STAGE_2' | 'STAGE_3'
 
-type PauseReason = 'never_sent' | 'status_advanced' | 'client_replied' | 'all_stages_sent'
+type PauseReason =
+  | 'never_sent'
+  | 'status_advanced'
+  | 'client_replied'
+  | 'all_stages_sent'
+  | 'legacy_nudge_sent'
 
 interface CadenceStateApi {
   currentDueStage: CadenceStage | null
@@ -126,6 +131,8 @@ export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
     if (paused && state.pauseReason === 'status_advanced') return 'Order advanced past QUOTE_SENT — paused'
     if (paused && state.pauseReason === 'all_stages_sent') return 'All 3 check-ins sent'
     if (paused && state.pauseReason === 'never_sent') return 'Quote not sent yet'
+    if (paused && state.pauseReason === 'legacy_nudge_sent')
+      return 'Legacy follow-up already sent — paused (clear from /sales/pipeline to resume)'
     if (dueStage) return `${STAGE_LABEL[dueStage]} due now`
     if (state.nextStage && state.nextStageAt) {
       return `Next: ${STAGE_LABEL[state.nextStage]} ${fmtRelative(new Date(state.nextStageAt), now)}`
