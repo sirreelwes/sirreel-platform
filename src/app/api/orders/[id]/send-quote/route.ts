@@ -185,6 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     jobName: order.job?.name ?? 'your production',
     agentName: order.agent.name || 'SirReel',
     agentEmail: order.agent.email,
+    portalSlug: order.portalSlug,
     customMessage: message,
   })
 

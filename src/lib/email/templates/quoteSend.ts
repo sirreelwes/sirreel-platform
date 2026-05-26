@@ -17,6 +17,7 @@
 const HOST = 'https://hq.sirreel.com'
 const ABSOLUTE_LOGO_URL_WHITE = `${HOST}/sirreel-logo-white.png`
 const ABSOLUTE_S_MARK_URL_WHITE = `${HOST}/s-logo-white.png`
+const SUPPLY_URL = `${HOST}/order/supplies`
 
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
@@ -35,6 +36,10 @@ export interface QuoteSendEmailInput {
   agentName: string
   /** Agent's email — clickable mailto in the sign-off. */
   agentEmail?: string | null
+  /** Order's portal magic-link slug. When set, renders the "Open Your
+   *  Portal" CTA so the client can review, sign, and pay without a
+   *  reply round-trip. */
+  portalSlug?: string | null
   /** Optional free-text note from the agent. Plain text; will be
    *  escaped + newline-converted before insertion. */
   customMessage?: string | null
@@ -65,6 +70,7 @@ export function buildQuoteSendEmail(input: QuoteSendEmailInput): QuoteSendEmail 
     ? `<p style="margin:0 0 16px;">${escapeHtml(input.customMessage).replace(/\n/g, '<br>')}</p>`
     : ''
   const customText = input.customMessage ? `${input.customMessage}\n\n` : ''
+  const portalUrl = input.portalSlug ? `${HOST}/portal/job/${input.portalSlug}` : null
 
   const subject = `Quote ${input.orderNumber} — ${input.jobName || 'your production'}`
 
@@ -77,13 +83,16 @@ export function buildQuoteSendEmail(input: QuoteSendEmailInput): QuoteSendEmail 
     customText,
     `Let us know if anything needs adjusting — we'll re-quote as needed.`,
     ``,
+    portalUrl ? `Portal: ${portalUrl}` : '',
+    `Need expendables for this shoot? ${SUPPLY_URL}`,
+    ``,
     `Thanks,`,
     `${input.agentName || 'the SirReel team'}`,
     input.agentEmail ? input.agentEmail : '',
     ``,
     `SirReel Studio Rentals · ${FOOTER_ADDRESS} · ${FOOTER_PHONE}`,
   ]
-    .filter((l) => l !== null && l !== undefined)
+    .filter((l) => l !== null && l !== undefined && l !== '')
     .join('\n')
 
   const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -150,6 +159,33 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <p style="margin:0;">
                 Let us know if anything needs adjusting &mdash; we&rsquo;ll re-quote as needed.
               </p>
+            </td>
+          </tr>
+
+          <!-- ── Standing CTAs (portal + supply) ───────────────────── -->
+          <!-- Portal button renders when the order has a portalSlug — gives
+               the client a one-tap path to review, sign, and pay without
+               a reply round-trip. Supply link is unconditional ("standing"
+               link) so every quote reply quietly carries the up-sell path
+               whether the agent thought to mention it or not. -->
+          <tr>
+            <td style="padding:20px 36px 8px;text-align:center;">
+              ${portalUrl ? `
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalUrl}" style="height:44px;v-text-anchor:middle;width:200px;" arcsize="14%" stroke="f" fillcolor="${GOLD}">
+                <w:anchorlock/>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">Open Your Portal</center>
+              </v:roundrect>
+              <![endif]-->
+              <!--[if !mso]><!-- -->
+              <a href="${portalUrl}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:12px 28px;border-radius:6px;margin:0 6px 8px;">
+                Open Your Portal
+              </a>
+              <!--<![endif]-->
+              ` : ''}
+              <a href="${SUPPLY_URL}" style="display:inline-block;background-color:transparent;color:${DARK};text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:6px;border:1.5px solid ${DARK};margin:0 6px 8px;">
+                Order Supplies
+              </a>
             </td>
           </tr>
 
