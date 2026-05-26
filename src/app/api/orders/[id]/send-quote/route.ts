@@ -29,6 +29,7 @@ import { getServerSession } from 'next-auth'
 import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { buildQuoteSendEmail } from '@/lib/email/templates/quoteSend'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 
 export const dynamic = 'force-dynamic'
@@ -175,32 +176,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Compose the email ────────────────────────────────────
-  const jobName = order.job?.name ?? 'your production'
-  const subject = `Quote ${order.orderNumber} — ${jobName}`
-  const greeting = `Hi ${primary.name.split(' ')[0] || 'there'},`
-  const agentName = order.agent.name || 'SirReel'
-  const customLine = message ? `<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>` : ''
-  const html = `
-    <p>${greeting}</p>
-    <p>Your quote for <strong>${escapeHtml(jobName)}</strong> is attached. Order number <strong>${order.orderNumber}</strong>.</p>
-    ${customLine}
-    <p>Let us know if anything needs adjusting — we'll re-quote as needed.</p>
-    <p style="margin-top:24px;">Thanks,<br>${escapeHtml(agentName)}<br>SirReel Studio Services</p>
-  `.trim()
-  const text = [
-    greeting,
-    '',
-    `Your quote for ${jobName} is attached. Order number ${order.orderNumber}.`,
-    '',
-    message ? `${message}\n` : '',
-    "Let us know if anything needs adjusting — we'll re-quote as needed.",
-    '',
-    `Thanks,`,
-    agentName,
-    'SirReel Studio Services',
-  ]
-    .filter((s) => s != null)
-    .join('\n')
+  // Branded template — dark header with the hosted white wordmark from
+  // /public/sirreel-logo-white.png and a compact S-mark footer from
+  // /public/s-logo-white.png. See quoteSend.ts.
+  const { subject, html, text } = buildQuoteSendEmail({
+    firstName: primary.name.split(' ')[0] || 'there',
+    orderNumber: order.orderNumber,
+    jobName: order.job?.name ?? 'your production',
+    agentName: order.agent.name || 'SirReel',
+    agentEmail: order.agent.email,
+    customMessage: message,
+  })
 
   const filename = `Quote-${order.orderNumber}.pdf`
   const emailResult = await sendAgreementEmail({
@@ -248,13 +234,4 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     recipient: { email: primary.email, name: primary.name },
     cc: others.map((o) => ({ email: o.email, name: o.name })),
   })
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
