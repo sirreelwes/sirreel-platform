@@ -50,37 +50,53 @@ export async function issueJobMagicLink(args: {
 }
 
 /**
- * Returns a live magic-link token for (orderId, contactId). If a non-
- * expired, non-revoked PortalAccess already exists for the pair, reuses
- * its token; otherwise mints a new one via issueJobMagicLink.
+ * Branded-send-flow portal link helper. Strict policy: ONE PortalAccess
+ * row per (orderId, contactId).
  *
- * Why reuse instead of always-mint: the branded send flows (quote +
- * Mode A follow-ups) call this on every send. If a client gets a quote
- * Monday and a Stage 1 follow-up Wednesday, fresh-mint-every-time
- * would mean two simultaneously-valid tokens for the same contact on
- * the same order. Reuse keeps the audit trail tighter (one row per
- * link-cycle, accessCount accumulates) and avoids the "old link still
- * works" surprise when an agent re-sends.
+ *   - If any non-revoked row exists (whether the token is still live or
+ *     already expired), keep that row's token and REFRESH its
+ *     magicLinkExpiresAt to (now + LINK_TTL_DAYS). The same token URL
+ *     keeps working — older emails that embedded it stay valid until
+ *     the new expiry — and the newest send always carries a fresh
+ *     7-day window.
+ *   - If no non-revoked row exists, mint one via issueJobMagicLink.
+ *
+ * Net effect of the refresh-rather-than-reissue policy:
+ *   - No audit-table bloat from repeated sends (quote + 3 follow-ups
+ *     = one row, not four).
+ *   - No "two valid tokens for the same contact" surprise.
+ *   - Older emails' embedded links keep working as long as the
+ *     contact is still active on the order — the URL is opaque to
+ *     the token's expiry timestamp.
+ *
+ * The other 4 issueJobMagicLink callers (manual invite, auto-on-
+ * contact-add, authorize-token flow) keep their explicit "always mint
+ * a new row" semantics — those are agent-driven actions where a new
+ * row is the intent.
  */
-export async function ensureLiveJobMagicLink(args: {
+export async function refreshOrIssueJobMagicLink(args: {
   orderId: string
   contactId: string
 }): Promise<{ token: string; expiresAt: Date; portalAccessId: string; reused: boolean }> {
-  const live = await prisma.portalAccess.findFirst({
+  const existing = await prisma.portalAccess.findFirst({
     where: {
       orderId: args.orderId,
       contactId: args.contactId,
       revokedAt: null,
-      magicLinkExpiresAt: { gt: new Date() },
     },
-    orderBy: { magicLinkExpiresAt: 'desc' },
-    select: { id: true, magicLinkToken: true, magicLinkExpiresAt: true },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, magicLinkToken: true },
   })
-  if (live) {
+  if (existing) {
+    const newExpiresAt = new Date(Date.now() + LINK_TTL_DAYS * 86_400_000)
+    await prisma.portalAccess.update({
+      where: { id: existing.id },
+      data: { magicLinkExpiresAt: newExpiresAt },
+    })
     return {
-      token: live.magicLinkToken,
-      expiresAt: live.magicLinkExpiresAt,
-      portalAccessId: live.id,
+      token: existing.magicLinkToken,
+      expiresAt: newExpiresAt,
+      portalAccessId: existing.id,
       reused: true,
     }
   }

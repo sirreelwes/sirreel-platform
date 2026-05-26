@@ -28,7 +28,7 @@ import {
   computeCadenceState,
   type CadenceStage,
 } from '@/lib/sales/quoteCadence'
-import { ensureLiveJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 
 const PORTAL_HOST = 'https://hq.sirreel.com'
 
@@ -241,13 +241,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
   }
 
-  // Mint / reuse the portal magic-link so the CTA self-bootstraps
-  // first-visit auth. Dry-run already exited above — this runs only on
-  // the real-send path so a "Send?" preview doesn't write a PortalAccess.
+  // Refresh-or-issue the portal magic-link so the CTA self-bootstraps
+  // first-visit auth. Strict one-row-per-(order, contact) policy — see
+  // refreshOrIssueJobMagicLink. Dry-run already exited above; this runs
+  // only on the real-send path so a "Send?" preview doesn't refresh
+  // an expiresAt or mint a row.
   let portalUrl: string | null = null
   if (order.portalSlug) {
     try {
-      const link = await ensureLiveJobMagicLink({ orderId: order.id, contactId: primary.id })
+      const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: primary.id })
       portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
     } catch (err) {
       console.warn('[follow-up send] portal-link mint failed:', err)

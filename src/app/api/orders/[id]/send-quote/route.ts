@@ -31,7 +31,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildQuoteSendEmail } from '@/lib/email/templates/quoteSend'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
-import { ensureLiveJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 
 const PORTAL_HOST = 'https://hq.sirreel.com'
 
@@ -178,16 +178,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return bad(500, 'failed to fetch quote PDF')
   }
 
-  // ── Mint / reuse portal magic-link token ─────────────────
-  // Self-bootstrap the portal CTA so the recipient never lands on the
-  // "session expired" dead-end. ensureLiveJobMagicLink reuses a live
-  // PortalAccess for this (order, primary) if one exists; otherwise
-  // mints a fresh 7-day token. The URL we hand to the composer is
-  // tokenized so first-visit auth works.
+  // ── Refresh or mint the portal magic-link token ──────────
+  // Strict one-row-per-(order, contact) policy: refreshOrIssueJobMagicLink
+  // keeps the existing token and rolls magicLinkExpiresAt forward to
+  // now+7d on every send, OR mints a fresh row if the canonical contact
+  // has never received a link on this order. Older emails embedding the
+  // same token keep working until the refreshed expiry; the URL we hand
+  // to the composer is always live.
   let portalUrl: string | null = null
   if (order.portalSlug) {
     try {
-      const link = await ensureLiveJobMagicLink({ orderId: order.id, contactId: primary.id })
+      const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: primary.id })
       portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
     } catch (err) {
       // A failure here shouldn't block the quote send — the email still
