@@ -28,6 +28,9 @@ import {
   computeCadenceState,
   type CadenceStage,
 } from '@/lib/sales/quoteCadence'
+import { ensureLiveJobMagicLink } from '@/lib/portal/jobMagicLink'
+
+const PORTAL_HOST = 'https://hq.sirreel.com'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -238,6 +241,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
   }
 
+  // Mint / reuse the portal magic-link so the CTA self-bootstraps
+  // first-visit auth. Dry-run already exited above — this runs only on
+  // the real-send path so a "Send?" preview doesn't write a PortalAccess.
+  let portalUrl: string | null = null
+  if (order.portalSlug) {
+    try {
+      const link = await ensureLiveJobMagicLink({ orderId: order.id, contactId: primary.id })
+      portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
+    } catch (err) {
+      console.warn('[follow-up send] portal-link mint failed:', err)
+    }
+  }
+
   const { subject, html, text } = buildFollowUpSendEmail({
     stage: stageEnum,
     firstName: primary.name.split(' ')[0] || 'there',
@@ -246,7 +262,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     agentName: order.agent.name || 'SirReel',
     agentEmail: order.agent.email,
     validUntil: state.effectiveExpiresAt,
-    portalSlug: order.portalSlug,
+    portalUrl,
     customMessage: message,
   })
 

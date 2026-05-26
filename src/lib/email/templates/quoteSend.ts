@@ -36,10 +36,13 @@ export interface QuoteSendEmailInput {
   agentName: string
   /** Agent's email — clickable mailto in the sign-off. */
   agentEmail?: string | null
-  /** Order's portal magic-link slug. When set, renders the "Open Your
-   *  Portal" CTA so the client can review, sign, and pay without a
-   *  reply round-trip. */
-  portalSlug?: string | null
+  /** Fully-built portal URL including ?token=… — when set, renders the
+   *  "Open Your Portal" CTA. The send route mints/reuses the magic-link
+   *  token (ensureLiveJobMagicLink) and builds the URL; the composer
+   *  only renders it. Pre-token bare-slug callers will break — that's
+   *  intentional: a tokenless portal link dead-ends at the "session
+   *  expired" page. */
+  portalUrl?: string | null
   /** Optional free-text note from the agent. Plain text; will be
    *  escaped + newline-converted before insertion. */
   customMessage?: string | null
@@ -70,7 +73,7 @@ export function buildQuoteSendEmail(input: QuoteSendEmailInput): QuoteSendEmail 
     ? `<p style="margin:0 0 16px;">${escapeHtml(input.customMessage).replace(/\n/g, '<br>')}</p>`
     : ''
   const customText = input.customMessage ? `${input.customMessage}\n\n` : ''
-  const portalUrl = input.portalSlug ? `${HOST}/portal/job/${input.portalSlug}` : null
+  const portalUrl = input.portalUrl ?? null
 
   const subject = `Quote ${input.orderNumber} — ${input.jobName || 'your production'}`
 

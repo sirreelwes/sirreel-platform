@@ -44,8 +44,11 @@ export interface FollowUpSendEmailInput {
   /** ISO date the quote is valid through — required for STAGE_3 copy
    *  and the eyebrow line on STAGE_2. Falls back to "soon" when omitted. */
   validUntil?: Date | null
-  /** Order's portal magic-link slug. When present, the Portal CTA renders. */
-  portalSlug?: string | null
+  /** Fully-built portal URL including ?token=… — when set, renders the
+   *  "Open Your Portal" CTA. The send route mints/reuses the magic-link
+   *  token (ensureLiveJobMagicLink) and builds the URL; the composer
+   *  only renders it. */
+  portalUrl?: string | null
   /** Optional free-text addition from the agent. */
   customMessage?: string | null
 }
@@ -124,7 +127,7 @@ export function buildFollowUpSendEmail(input: FollowUpSendEmailInput): FollowUpS
     : ''
   const customText = input.customMessage ? `${input.customMessage}\n\n` : ''
 
-  const portalUrl = input.portalSlug ? `${HOST}/portal/job/${input.portalSlug}` : null
+  const portalUrl = input.portalUrl ?? null
 
   const subject = `${input.jobName || 'Your quote'} (${input.orderNumber}) — ${stageCopy.subjectSuffix}`
 

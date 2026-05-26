@@ -49,6 +49,45 @@ export async function issueJobMagicLink(args: {
   return { token, expiresAt, portalAccessId: row.id }
 }
 
+/**
+ * Returns a live magic-link token for (orderId, contactId). If a non-
+ * expired, non-revoked PortalAccess already exists for the pair, reuses
+ * its token; otherwise mints a new one via issueJobMagicLink.
+ *
+ * Why reuse instead of always-mint: the branded send flows (quote +
+ * Mode A follow-ups) call this on every send. If a client gets a quote
+ * Monday and a Stage 1 follow-up Wednesday, fresh-mint-every-time
+ * would mean two simultaneously-valid tokens for the same contact on
+ * the same order. Reuse keeps the audit trail tighter (one row per
+ * link-cycle, accessCount accumulates) and avoids the "old link still
+ * works" surprise when an agent re-sends.
+ */
+export async function ensureLiveJobMagicLink(args: {
+  orderId: string
+  contactId: string
+}): Promise<{ token: string; expiresAt: Date; portalAccessId: string; reused: boolean }> {
+  const live = await prisma.portalAccess.findFirst({
+    where: {
+      orderId: args.orderId,
+      contactId: args.contactId,
+      revokedAt: null,
+      magicLinkExpiresAt: { gt: new Date() },
+    },
+    orderBy: { magicLinkExpiresAt: 'desc' },
+    select: { id: true, magicLinkToken: true, magicLinkExpiresAt: true },
+  })
+  if (live) {
+    return {
+      token: live.magicLinkToken,
+      expiresAt: live.magicLinkExpiresAt,
+      portalAccessId: live.id,
+      reused: true,
+    }
+  }
+  const issued = await issueJobMagicLink(args)
+  return { ...issued, reused: false }
+}
+
 export async function resolveJobMagicLink(args: {
   slug: string
   token: string

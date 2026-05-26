@@ -31,6 +31,9 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildQuoteSendEmail } from '@/lib/email/templates/quoteSend'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
+import { ensureLiveJobMagicLink } from '@/lib/portal/jobMagicLink'
+
+const PORTAL_HOST = 'https://hq.sirreel.com'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -175,6 +178,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return bad(500, 'failed to fetch quote PDF')
   }
 
+  // ── Mint / reuse portal magic-link token ─────────────────
+  // Self-bootstrap the portal CTA so the recipient never lands on the
+  // "session expired" dead-end. ensureLiveJobMagicLink reuses a live
+  // PortalAccess for this (order, primary) if one exists; otherwise
+  // mints a fresh 7-day token. The URL we hand to the composer is
+  // tokenized so first-visit auth works.
+  let portalUrl: string | null = null
+  if (order.portalSlug) {
+    try {
+      const link = await ensureLiveJobMagicLink({ orderId: order.id, contactId: primary.id })
+      portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
+    } catch (err) {
+      // A failure here shouldn't block the quote send — the email still
+      // goes out with PDF + supply CTA, just without the portal button.
+      console.warn('[send-quote] portal-link mint failed:', err)
+    }
+  }
+
   // ── Compose the email ────────────────────────────────────
   // Branded template — dark header with the hosted white wordmark from
   // /public/sirreel-logo-white.png and a compact S-mark footer from
@@ -185,7 +206,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     jobName: order.job?.name ?? 'your production',
     agentName: order.agent.name || 'SirReel',
     agentEmail: order.agent.email,
-    portalSlug: order.portalSlug,
+    portalUrl,
     customMessage: message,
   })
 

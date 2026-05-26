@@ -177,7 +177,15 @@ export default function JobPortalPage() {
         // Step 2: load the actual portal data.
         const res = await fetch('/api/portal/job/data');
         if (!res.ok) {
-          setError('Your session has expired. Click the magic link in your email again.');
+          // Distinguish "never had a token in the URL" from "exchanged a
+          // token earlier but the session has now expired" — both 401
+          // here, but the user-facing copy should match the actual cause
+          // so we don't tell first-visit clients to "click again".
+          setError(
+            tokenInUrl
+              ? 'Your session has expired. Click the magic link in your email again.'
+              : 'This portal link is missing its access token. Reply to your SirReel email or ask your rep to resend the link.',
+          );
           return;
         }
         const body = (await res.json()) as PortalData;
