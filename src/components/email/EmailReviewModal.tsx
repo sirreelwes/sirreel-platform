@@ -25,7 +25,7 @@
  * can happen.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * Small debounce hook — used to delay re-fetching the live preview
@@ -161,7 +161,16 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
   const [preview, setPreview] = useState<CompositionOk | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sending, setSending] = useState(false);
+  // Three send states:
+  //   'idle'      — Send button is live
+  //   'in-flight' — request in motion; button disabled + spinner label
+  //   'sent'      — request resolved; button disabled, modal about to
+  //                 close via onSent callback (next paint).
+  // The first transition (idle → in-flight) is latched synchronously
+  // via a ref so a fast double-click can't enqueue two sends before
+  // React re-renders the disabled state.
+  const [sendState, setSendState] = useState<'idle' | 'in-flight' | 'sent'>('idle');
+  const sendInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -219,6 +228,8 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
+    sendInFlightRef.current = false;
+    setSendState('idle');
   }, [target]);
 
   // Initial fetch when target changes.
@@ -239,7 +250,15 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
 
   const handleSend = async () => {
     if (!preview) return;
-    setSending(true);
+    // Synchronous ref latch — wins the race against a fast double-
+    // click. React's setState is async (setSendState below would
+    // re-render on the next tick), so without this guard two clicks
+    // in a single frame both pass the !preview check and both fire
+    // the fetch. Ref reads/writes are synchronous; second invocation
+    // sees the latch set and returns immediately.
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    setSendState('in-flight');
     setError(null);
     try {
       const res = await fetch(endpoints.send, {
@@ -250,8 +269,16 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) {
         setError(json?.error || 'Send failed');
+        // Failure: release the latch so the agent can retry.
+        sendInFlightRef.current = false;
+        setSendState('idle');
         return;
       }
+      // Success: stay latched. The component is about to unmount via
+      // onSent → caller's setTarget(null). Keep the button disabled
+      // until then so the "Send" label doesn't briefly flicker back
+      // to active right before the modal closes.
+      setSendState('sent');
       onSent({
         recipient: preview.to.email,
         orderNumber: preview.order.orderNumber,
@@ -259,12 +286,15 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Send failed');
-    } finally {
-      setSending(false);
+      sendInFlightRef.current = false;
+      setSendState('idle');
     }
   };
 
   const stageLabel = preview?.stage ? STAGE_LABEL[preview.stage] : null;
+  // Derived: any non-idle send state freezes the modal's interactive
+  // controls (close button, textarea, recipient picker, Send button).
+  const sendLocked = sendState !== 'idle';
 
   return (
     <div
@@ -295,7 +325,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
           </div>
           <button
             onClick={onClose}
-            disabled={sending}
+            disabled={sendLocked}
             className="text-zinc-500 hover:text-white text-xl leading-none disabled:opacity-50"
             aria-label="Close"
           >
@@ -401,7 +431,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                 <textarea
                   value={customNote}
                   onChange={(e) => setCustomNote(e.target.value)}
-                  disabled={sending}
+                  disabled={sendLocked}
                   rows={3}
                   maxLength={5000}
                   placeholder="Add a sentence or two above the standard close. Empty = templated-only."
@@ -456,17 +486,17 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
         <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-end gap-2 flex-shrink-0">
           <button
             onClick={onClose}
-            disabled={sending}
+            disabled={sendLocked}
             className="px-3 py-2 text-zinc-400 hover:text-white text-sm font-medium disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={() => { void handleSend(); }}
-            disabled={!preview || sending || loading}
+            disabled={!preview || sendLocked || loading}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
-            {sending ? 'Sending…' : 'Send'}
+            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : 'Send'}
           </button>
         </div>
       </div>
