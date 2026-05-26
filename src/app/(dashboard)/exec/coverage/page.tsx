@@ -30,6 +30,7 @@ import {
   SalesHygieneCard,
   type SalesHygieneData,
 } from '@/components/exec/SalesHygieneCard'
+import { TriageRollupCard } from '@/components/exec/TriageRollupCard'
 
 export default function CoveragePage() {
   const { data: session, status: authStatus } = useSession()
@@ -102,6 +103,7 @@ export default function CoveragePage() {
         </div>
       )}
 
+      <TriageRollupCard approvals={approvals} hygiene={hygiene} />
       <ApprovalsQueueCard data={approvals} />
       <SalesHygieneCard data={hygiene} />
     </div>
