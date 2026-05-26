@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
+import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
 
 type LineItem = {
   id: string;
@@ -804,6 +805,9 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Quote follow-up (Mode A) — only renders when a quote has been sent. */}
+      <QuoteFollowUpPanel orderId={orderId} isQuoteSent={order.status === "QUOTE_SENT"} />
 
       {/* Cadence (CRH) */}
       {cadence && (
