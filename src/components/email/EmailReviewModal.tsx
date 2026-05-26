@@ -27,6 +27,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+/**
+ * Small debounce hook — used to delay re-fetching the live preview
+ * while the agent is typing in the personal-note textarea. Stops the
+ * server from servicing one request per keystroke; gives the agent
+ * time to finish a thought before the body re-renders.
+ */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 interface RankedContact {
   id: string;
   name: string;
@@ -110,16 +125,29 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
   }
 }
 
-function buildPreviewBody(target: EmailReviewTarget, overrideContactId: string | null): unknown {
+function buildPreviewBody(
+  target: EmailReviewTarget,
+  overrideContactId: string | null,
+  customNote: string,
+): unknown {
   const base: Record<string, unknown> = {};
   if (overrideContactId) base.overrideContactId = overrideContactId;
-  if ('message' in target && target.message) base.message = target.message;
+  // Caller's pre-seeded message + the agent's modal-typed note. Agent's
+  // typed value wins when both are present (the modal IS the review
+  // surface — anything typed here is the final word). composers escape
+  // + newline-convert before injecting into the body.
+  const finalNote = customNote.trim() || (('message' in target && target.message) || '');
+  if (finalNote) base.message = finalNote;
   if (target.kind === 'followup-order' && target.stage) base.stage = target.stage;
   return base;
 }
 
-function buildSendBody(target: EmailReviewTarget, overrideContactId: string | null): unknown {
-  return buildPreviewBody(target, overrideContactId);
+function buildSendBody(
+  target: EmailReviewTarget,
+  overrideContactId: string | null,
+  customNote: string,
+): unknown {
+  return buildPreviewBody(target, overrideContactId, customNote);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -132,51 +160,80 @@ function formatSize(bytes: number | undefined): string | null {
 export function EmailReviewModal({ target, onClose, onSent }: Props) {
   const [preview, setPreview] = useState<CompositionOk | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  // Personal-note textarea state. Empty = templated-only (the
+  // composers omit the customMessage block). Debounced before it
+  // flows into the live preview re-fetch.
+  const [customNote, setCustomNote] = useState('');
+  const debouncedNote = useDebouncedValue(customNote, 350);
 
   const endpoints = useMemo(() => (target ? endpointsFor(target) : null), [target]);
 
   // Fetch the preview. Re-fires when the agent picks a different
-  // recipient (overrideContactId changes) — composer re-renders the
-  // body / re-applies any greeting personalization for the new contact.
-  const fetchPreview = useCallback(async () => {
-    if (!target || !endpoints) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(endpoints.preview, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPreviewBody(target, overrideContactId)),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json?.ok === false) {
-        setError(json?.error || `Preview failed (${res.status})`);
-        setPreview(null);
-      } else {
-        setPreview(json as CompositionOk);
+  // recipient, types in the personal-note textarea (debounced), or
+  // re-opens the modal for a new target.
+  //
+  // Loading vs refreshing: first fetch sets `loading` (skeleton).
+  // Subsequent fetches set `refreshing` and KEEP the prior preview
+  // visible so the iframe doesn't flicker / scroll-reset while the
+  // agent is typing a note.
+  const fetchPreview = useCallback(
+    async (isInitial: boolean) => {
+      if (!target || !endpoints) return;
+      if (isInitial) setLoading(true);
+      else setRefreshing(true);
+      setError(null);
+      try {
+        const res = await fetch(endpoints.preview, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote)),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json?.ok === false) {
+          setError(json?.error || `Preview failed (${res.status})`);
+          if (isInitial) setPreview(null);
+          // Refresh failure: keep the prior preview visible, just
+          // surface the error — better than wiping the modal.
+        } else {
+          setPreview(json as CompositionOk);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Preview failed');
+        if (isInitial) setPreview(null);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Preview failed');
-      setPreview(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [target, endpoints, overrideContactId]);
+    },
+    [target, endpoints, overrideContactId, debouncedNote],
+  );
 
   // Reset state when target changes (e.g. opening for a different order).
   useEffect(() => {
     if (!target) return;
     setOverrideContactId(null);
     setShowPicker(false);
+    setCustomNote('');
   }, [target]);
 
+  // Initial fetch when target changes.
   useEffect(() => {
-    if (target) void fetchPreview();
-  }, [target, fetchPreview]);
+    if (target) void fetchPreview(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, endpoints]);
+
+  // Refetch (non-initial) when recipient or debounced note changes —
+  // only after the first preview has landed.
+  useEffect(() => {
+    if (!target || preview === null) return;
+    void fetchPreview(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrideContactId, debouncedNote]);
 
   if (!target || !endpoints) return null;
 
@@ -188,7 +245,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
       const res = await fetch(endpoints.send, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildSendBody(target, overrideContactId)),
+        body: JSON.stringify(buildSendBody(target, overrideContactId, customNote)),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) {
@@ -324,6 +381,32 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">Subject</div>
                 <div className="text-white text-sm">{preview.subject}</div>
+              </div>
+
+              {/* Personal note — flows into the composer's customMessage
+                  slot in BOTH the live preview below and the real send.
+                  Optional; empty leaves the email purely templated. The
+                  locked brand shell (header, CTAs, footer) is unaffected. */}
+              <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    Personal note (optional)
+                  </label>
+                  {refreshing && (
+                    <span className="text-[10px] text-amber-300 animate-pulse">
+                      Updating preview…
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={customNote}
+                  onChange={(e) => setCustomNote(e.target.value)}
+                  disabled={sending}
+                  rows={3}
+                  maxLength={5000}
+                  placeholder="Add a sentence or two above the standard close. Empty = templated-only."
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
+                />
               </div>
 
               {/* Body iframe — sandbox="" (empty) = strict containment */}
