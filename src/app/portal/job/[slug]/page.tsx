@@ -50,13 +50,26 @@ interface PortalData {
     documentType: string;
     signedAt: string | null;
     signerName: string | null;
+    documentToSignUrl?: string | null;
+    signedDocumentUrl?: string | null;
   } | null;
   team: { id: string; firstName: string; lastName: string; email: string; lastAccessedAt: string | null }[];
   activity: { at: string; kind: string; label: string }[];
   paperwork: {
     quotePdfUrl: string | null;
     quotePdfGeneratedAt: string | null;
-    agreement: { status: string; documentType: string; signedAt: string | null; signerName: string | null; signedDocumentUrl?: string | null } | null;
+    agreement: {
+      status: string;
+      documentType: string;
+      signedAt: string | null;
+      signerName: string | null;
+      // Pre-signed PDF the client reviews / signs from inside the
+      // portal session. Present once the agreement is past
+      // PORTAL_GENERATED — commit 6 will key the in-portal Sign button
+      // off this URL (mirrors the stage-contract row pattern).
+      documentToSignUrl?: string | null;
+      signedDocumentUrl?: string | null;
+    } | null;
     stageContract: { contractType: string; status: string; documentType: string; signedAt: string | null; signerName: string | null; documentToSignUrl?: string | null; signedDocumentUrl?: string | null } | null;
     coi: {
       id: string;
