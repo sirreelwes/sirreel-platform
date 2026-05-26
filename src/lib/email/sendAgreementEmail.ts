@@ -1,5 +1,12 @@
 import { Resend } from 'resend'
 
+/**
+ * The From: address every client-facing send goes out as. Exported so
+ * the preview endpoints can show the agent the SAME string the send
+ * route will use — single source of truth.
+ */
+export const SEND_FROM = 'SirReel HQ <notifications@sirreel.com>'
+
 export type EmailResult =
   | { ok: true; id: string | null }
   | { ok: false; reason: string }
@@ -42,7 +49,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
   const resend = new Resend(process.env.RESEND_API_KEY)
   try {
     const result = await resend.emails.send({
-      from: 'SirReel HQ <notifications@sirreel.com>',
+      from: SEND_FROM,
       to: payload.to,
       cc: payload.cc,
       subject: payload.subject,

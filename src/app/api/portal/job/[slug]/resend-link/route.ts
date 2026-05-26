@@ -37,65 +37,11 @@ import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
+import { pickCanonicalRecipient } from '@/lib/email/recipients'
 
 export const dynamic = 'force-dynamic'
 
 const PORTAL_HOST = 'https://hq.sirreel.com'
-
-interface Recipient {
-  id: string
-  email: string
-  firstName: string
-  lastName: string
-  role: string | null
-  isPrimary: boolean
-}
-
-/**
- * Same canonical-recipient logic as send-quote / Mode A follow-up
- * send. PRODUCER > primary > PM > PC > any-with-role > jobContact
- * override. Returns null if no recipient is resolvable.
- */
-function rankAndPickRecipient(
-  jobContacts: {
-    role: string
-    isPrimary: boolean
-    person: { id: string; firstName: string; lastName: string; email: string }
-  }[],
-  jobContact: { id: string; firstName: string; lastName: string; email: string } | null,
-): Recipient | null {
-  const all: Recipient[] = []
-  const seen = new Set<string>()
-  const push = (
-    id: string,
-    firstName: string,
-    lastName: string,
-    email: string,
-    role: string | null,
-    isPrimary: boolean,
-  ) => {
-    if (!id || !email || seen.has(id)) return
-    seen.add(id)
-    all.push({ id, firstName, lastName, email, role, isPrimary })
-  }
-  for (const jc of jobContacts) {
-    push(jc.person.id, jc.person.firstName, jc.person.lastName, jc.person.email, jc.role, !!jc.isPrimary)
-  }
-  if (jobContact) {
-    push(jobContact.id, jobContact.firstName, jobContact.lastName, jobContact.email, null, false)
-  }
-  if (all.length === 0) return null
-  const rank = (r: Recipient): number => {
-    if (r.role === 'PRODUCER') return 0
-    if (r.isPrimary) return 1
-    if (r.role === 'PM') return 2
-    if (r.role === 'PC') return 3
-    if (r.role) return 4
-    return 5
-  }
-  all.sort((a, b) => rank(a) - rank(b))
-  return all[0]
-}
 
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   // Always respond OK; do all work inside try so failures don't leak.
@@ -160,21 +106,28 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     })
 
     let contactId: string | null = null
-    let recipient: { firstName: string; lastName: string; email: string } | null = null
+    let recipientEmail: string | null = null
+    let recipientFirstName: string | null = null
 
     if (existingAccess && existingAccess.contact) {
       contactId = existingAccess.contactId
-      recipient = existingAccess.contact
+      recipientEmail = existingAccess.contact.email
+      recipientFirstName = existingAccess.contact.firstName
     } else {
-      // Step 2 — fallback: canonical recipient from rankRecipients.
-      const picked = rankAndPickRecipient(order.job?.jobContacts ?? [], order.jobContact)
+      // Step 2 — fallback: canonical recipient via the shared ranker.
+      // Same logic that send-quote / Mode A follow-up send use.
+      const picked = pickCanonicalRecipient(order.job, order.jobContact)
       if (picked) {
         contactId = picked.id
-        recipient = { firstName: picked.firstName, lastName: picked.lastName, email: picked.email }
+        recipientEmail = picked.email
+        // RankedRecipient gives us the full name. Split for the
+        // portalInvite template's firstName arg — fallback to the
+        // full name when no space (handles single-name contacts).
+        recipientFirstName = picked.name.split(' ')[0] || picked.name
       }
     }
 
-    if (!contactId || !recipient) return ok()
+    if (!contactId || !recipientEmail) return ok()
 
     // Refresh-or-issue keeps the one-row policy: if a PortalAccess
     // existed in Step 1, this refreshes its expiresAt. If we fell
@@ -185,7 +138,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
 
     const projectName = order.job?.name || order.orderNumber
     const tpl = buildPortalInviteEmail({
-      firstName: recipient.firstName,
+      firstName: recipientFirstName ?? 'there',
       projectName,
       portalLink: portalUrl,
       repName: order.agent?.name || 'the SirReel team',
@@ -198,7 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     // attempt mapped to a real order.
     void sendAgreementEmail({
       label: `portal/resend-link:${order.orderNumber}`,
-      to: [recipient.email],
+      to: [recipientEmail],
       subject: tpl.subject,
       html: tpl.html,
       text: tpl.text,

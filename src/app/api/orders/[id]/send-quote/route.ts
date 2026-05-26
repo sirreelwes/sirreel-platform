@@ -5,19 +5,19 @@
  * flipped Order.status → QUOTE_SENT and never actually emailed the
  * client. This route:
  *
- *   1. Resolves the recipient (PRODUCER > primary > PM > PC > any),
- *      reusing the same priority the order detail page surfaces.
- *   2. Fetches the previously-generated Quote PDF from Vercel Blob.
- *      Refuses to send when no PDF exists (agent must generate via
- *      the existing "Regenerate PDF" button first — this prevents
- *      a stale/missing attachment from going out).
- *   3. Sends via the shared sendAgreementEmail wrapper (Resend),
- *      with optional CC to the other JobContacts and an optional
+ *   1. Composes the email via the shared composeQuoteEmail helper
+ *      (recipient ranking, PDF metadata, body render). Same helper
+ *      backs the /preview endpoint — no drift between what the agent
+ *      reviews and what actually sends.
+ *   2. Fetches the previously-generated Quote PDF buffer from Vercel
+ *      Blob. Refuses to send when no PDF exists (agent must generate
+ *      via the existing "Regenerate PDF" button first).
+ *   3. Mints/refreshes the portal magic-link, re-runs the composer
+ *      with the tokenized URL, and dispatches via sendAgreementEmail
+ *      (Resend). Optional CC to the other JobContacts and an optional
  *      custom note in the body.
  *   4. On email-send success, flips the order to QUOTE_SENT if it
- *      was DRAFT (computeQuoteStatusSync stamps quoteSentAt +
- *      derives quoteStatus=SENT automatically via the PUT route,
- *      so we just hit the same code path).
+ *      was DRAFT.
  *
  * Resends (status already QUOTE_SENT or beyond): email goes out
  * fresh; we do NOT re-flip status or re-stamp quoteSentAt — the
@@ -29,9 +29,10 @@ import { getServerSession } from 'next-auth'
 import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { buildQuoteSendEmail } from '@/lib/email/templates/quoteSend'
+import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { rankRecipients } from '@/lib/email/recipients'
 
 const PORTAL_HOST = 'https://hq.sirreel.com'
 
@@ -52,55 +53,6 @@ function bad(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status })
 }
 
-interface Recipient {
-  id: string
-  name: string
-  email: string
-  role: string | null
-  isPrimary: boolean
-}
-
-/**
- * Mirrors the order detail page's computeRecipients (orders/[id]/page.tsx).
- * Kept in sync by structure: PRODUCER > primary > PM > PC > any-with-role
- * > direct jobContact override. Returned list is rank-sorted so [0] is
- * the canonical recipient.
- */
-function rankRecipients(
-  job: { jobContacts: { person: { id: string; firstName: string; lastName: string; email: string }; role: string; isPrimary: boolean }[] } | null,
-  jobContact: { id: string; firstName: string; lastName: string; email: string } | null,
-): Recipient[] {
-  const all: Recipient[] = []
-  const seen = new Set<string>()
-  const push = (id: string, name: string, email: string, role: string | null, isPrimary: boolean) => {
-    if (!id || !email || seen.has(id)) return
-    seen.add(id)
-    all.push({ id, name, email, role, isPrimary })
-  }
-  for (const jc of job?.jobContacts ?? []) {
-    push(
-      jc.person.id,
-      `${jc.person.firstName} ${jc.person.lastName}`.trim(),
-      jc.person.email,
-      jc.role,
-      !!jc.isPrimary,
-    )
-  }
-  if (jobContact) {
-    push(jobContact.id, `${jobContact.firstName} ${jobContact.lastName}`.trim(), jobContact.email, null, false)
-  }
-  const rank = (r: Recipient): number => {
-    if (r.role === 'PRODUCER') return 0
-    if (r.isPrimary) return 1
-    if (r.role === 'PM') return 2
-    if (r.role === 'PC') return 3
-    if (r.role) return 4
-    return 5
-  }
-  all.sort((a, b) => rank(a) - rank(b))
-  return all
-}
-
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
   if (!session?.user?.email) return bad(401, 'unauthorized')
@@ -110,8 +62,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
       : null
-  const ccOverride = Array.isArray(body.cc) ? (body.cc.filter((v) => typeof v === 'string') as string[]) : null
+  const ccOverride = Array.isArray(body.cc)
+    ? (body.cc.filter((v) => typeof v === 'string') as string[])
+    : null
 
+  // ── Mint/refresh portal token, then compose with tokenized URL ─
+  // Two phases: (1) preview-compose with portalUrl=null to learn the
+  // canonical recipient + validate the order; (2) mint token bound to
+  // that recipient; (3) compose-again with the tokenized URL. Could
+  // be one call if we resolved the recipient inline here, but routing
+  // both phases through the shared composer is the whole point —
+  // single source of truth.
+  const preliminary = await composeQuoteEmail({
+    orderId: params.id,
+    message,
+    portalUrl: null,
+    // Send route fetches the buffer separately; preview metadata not needed.
+    includeAttachmentMeta: false,
+  })
+  if (!preliminary.ok) return bad(preliminary.status, preliminary.error)
+
+  // Load Order separately for portalSlug + state-write fields the
+  // composer doesn't surface. Keeps the composer focused on email
+  // shape; the send route owns the lifecycle columns.
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     select: {
@@ -124,15 +97,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       lostAt: true,
       quotePdfKey: true,
       quotePdfUrl: true,
-      taxRate: true,
-      total: true,
       portalSlug: true,
-      company: { select: { name: true } },
-      agent: { select: { name: true, email: true } },
       job: {
         select: {
-          jobCode: true,
-          name: true,
           jobContacts: {
             select: {
               role: true,
@@ -146,19 +113,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   })
   if (!order) return bad(404, 'order not found')
-
   if (!order.quotePdfKey || !order.quotePdfUrl) {
     return bad(400, 'No quote PDF — regenerate from the order detail page first.')
   }
 
+  const primary = preliminary.to
+  // CC list — same ranked-recipient pool the composer used. Optional
+  // override; default is all non-primary contacts.
   const ranked = rankRecipients(order.job, order.jobContact)
-  const primary = ranked[0]
-  if (!primary) return bad(400, 'No recipient — add a contact to the job first.')
   const others = ccOverride
-    ? ranked.filter((r) => r !== primary && ccOverride.includes(r.email))
+    ? ranked.filter((r) => r.email !== primary.email && ccOverride.includes(r.email))
     : ranked.slice(1)
 
-  // ── Fetch the PDF from Blob storage ──────────────────────
+  // ── Fetch the PDF buffer ─────────────────────────────────
   let pdfBuffer: Buffer
   try {
     const blob = await getBlob(order.quotePdfKey, { access: 'private' })
@@ -179,63 +146,46 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Refresh or mint the portal magic-link token ──────────
-  // Strict one-row-per-(order, contact) policy: refreshOrIssueJobMagicLink
-  // keeps the existing token and rolls magicLinkExpiresAt forward to
-  // now+7d on every send, OR mints a fresh row if the canonical contact
-  // has never received a link on this order. Older emails embedding the
-  // same token keep working until the refreshed expiry; the URL we hand
-  // to the composer is always live.
+  // One PortalAccess row per (orderId, contactId) — refresh expiresAt
+  // on every send so the embedded link stays live. See helper.
   let portalUrl: string | null = null
   if (order.portalSlug) {
     try {
       const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: primary.id })
       portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
     } catch (err) {
-      // A failure here shouldn't block the quote send — the email still
-      // goes out with PDF + supply CTA, just without the portal button.
       console.warn('[send-quote] portal-link mint failed:', err)
     }
   }
 
-  // ── Compose the email ────────────────────────────────────
-  // Branded template — dark header with the hosted white wordmark from
-  // /public/sirreel-logo-white.png and a compact S-mark footer from
-  // /public/s-logo-white.png. See quoteSend.ts.
-  const { subject, html, text } = buildQuoteSendEmail({
-    firstName: primary.name.split(' ')[0] || 'there',
-    orderNumber: order.orderNumber,
-    jobName: order.job?.name ?? 'your production',
-    agentName: order.agent.name || 'SirReel',
-    agentEmail: order.agent.email,
+  // ── Compose the final email with tokenized URL ───────────
+  const final = await composeQuoteEmail({
+    orderId: params.id,
+    message,
     portalUrl,
-    customMessage: message,
+    includeAttachmentMeta: false,
   })
+  if (!final.ok) return bad(final.status, final.error)
 
   const filename = `Quote-${order.orderNumber}.pdf`
   const emailResult = await sendAgreementEmail({
     to: [primary.email],
     cc: others.length > 0 ? others.map((o) => o.email) : undefined,
-    subject,
-    html,
-    text,
+    subject: final.subject,
+    html: final.html,
+    text: final.text,
     attachments: [{ filename, content: pdfBuffer }],
     label: `send-quote:${order.orderNumber}`,
   })
 
   if (!emailResult.ok) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: `Email send failed: ${emailResult.reason}`,
-        emailResult,
-      },
+      { ok: false, error: `Email send failed: ${emailResult.reason}`, emailResult },
       { status: 502 },
     )
   }
 
   // ── State transition (DRAFT → QUOTE_SENT) ────────────────
-  // Resends from QUOTE_SENT or beyond don't re-flip status or
-  // re-stamp quoteSentAt — the original timeline stays intact.
   if (order.status === 'DRAFT') {
     await prisma.order.update({
       where: { id: order.id },
