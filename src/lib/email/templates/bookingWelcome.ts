@@ -94,9 +94,14 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="color-scheme" content="light dark" />
-<meta name="supported-color-schemes" content="light dark" />
+<!-- Lock to LIGHT — see quoteSend.ts for the Apple Mail dark-mode
+     inversion bug this prevents. -->
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
 <title>Let&rsquo;s get started \u00b7 ${projectName}</title>
+<style type="text/css">
+  :root { color-scheme: light; supported-color-schemes: light; }
+</style>
 <!--[if mso]>
 <style type="text/css">
 table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !important; }

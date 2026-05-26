@@ -100,9 +100,18 @@ export function buildQuoteSendEmail(input: QuoteSendEmailInput): QuoteSendEmail 
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="color-scheme" content="light dark" />
-<meta name="supported-color-schemes" content="light dark" />
+<!-- Lock the rendering scheme to LIGHT. iOS / macOS Mail dark mode was
+     auto-inverting the white card bg (turning the body dark) while
+     leaving the inline #333 text alone — result: dark-on-dark, unread-
+     able. Declaring "light" + the matching :root CSS tells Mail and
+     other adaptive clients NOT to invert; the inline hex colors then
+     render exactly as authored. -->
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
 <title>Quote ${orderNumber} — ${jobName}</title>
+<style type="text/css">
+  :root { color-scheme: light; supported-color-schemes: light; }
+</style>
 <!--[if mso]>
 <style type="text/css">
 table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !important; }

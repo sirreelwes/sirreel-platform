@@ -17,8 +17,10 @@
  *   - Dark header band with gold accent for visual identity that
  *     survives Outlook's CSS stripping.
  *   - Single-column mobile layout (max-width 600px).
- *   - Light/dark mode: meta name="color-scheme" + supported-color-schemes
- *     hints; the dark header reads identically in both.
+ *   - Color scheme: locked to LIGHT via meta + :root CSS. Apple Mail
+ *     dark mode was inverting the white card bg while leaving inline
+ *     #333 text alone, producing dark-on-dark unreadable body copy.
+ *     The dark header band keeps its visual identity regardless.
  */
 
 // White wordmark (RGB-inverted from /public/sirreel-logo.png so the SirReel
@@ -107,9 +109,14 @@ export function buildPortalInviteEmail(input: PortalInviteEmailInput): PortalInv
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="color-scheme" content="light dark" />
-<meta name="supported-color-schemes" content="light dark" />
+<!-- Lock to LIGHT — see quoteSend.ts for the Apple Mail dark-mode
+     inversion bug this prevents. -->
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
 <title>Welcome to The SirReel Experience</title>
+<style type="text/css">
+  :root { color-scheme: light; supported-color-schemes: light; }
+</style>
 <!--[if mso]>
 <style type="text/css">
 table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !important; }
