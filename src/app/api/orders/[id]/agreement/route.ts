@@ -2,20 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
+import { RECOVERABLE_AGREEMENT_STATES } from '@/lib/portal/agreementStatus'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-// Admin-overridable target states only. The signed states cannot be set
-// manually from this endpoint — they require a real signing event so the
-// audit trail remains intact.
-const OVERRIDE_TARGETS: AgreementStatus[] = [
-  'PORTAL_GENERATED',
-  'DOWNLOAD_SENT',
-  'REDLINE_UPLOADED',
-  'UNDER_REVIEW',
-  'NEGOTIATED_READY',
-]
+// Admin-overridable target states. Imported from the canonical list in
+// src/lib/portal/agreementStatus.ts so the API allow-list can't drift
+// from the order-detail UI's manual-override button strip. SIGNED_*
+// states are intentionally absent — they require a real signing event
+// so the audit trail remains intact.
+const OVERRIDE_TARGETS: readonly AgreementStatus[] = RECOVERABLE_AGREEMENT_STATES
 
 /**
  * GET /api/orders/[id]/agreement

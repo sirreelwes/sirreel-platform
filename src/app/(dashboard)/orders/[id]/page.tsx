@@ -8,6 +8,8 @@ import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/Ema
 import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
+import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
+import type { AgreementStatus } from "@prisma/client";
 
 type LineItem = {
   id: string;
@@ -913,21 +915,17 @@ export default function OrderDetailPage() {
                 Updated {new Date(agreement.updatedAt).toLocaleString()}
               </div>
             </div>
-            <span
-              className={`px-2.5 py-0.5 rounded text-xs font-medium ${
-                agreement.status === "SIGNED_BASELINE" || agreement.status === "SIGNED_NEGOTIATED"
-                  ? "bg-emerald-900/60 text-emerald-300"
-                  : agreement.status === "NEGOTIATED_READY"
-                  ? "bg-indigo-900/60 text-indigo-300"
-                  : agreement.status === "REDLINE_UPLOADED" || agreement.status === "UNDER_REVIEW"
-                  ? "bg-amber-900/60 text-amber-300"
-                  : agreement.status === "DOWNLOAD_SENT"
-                  ? "bg-blue-900/60 text-blue-300"
-                  : "bg-zinc-700 text-zinc-300"
-              }`}
-            >
-              {agreement.status.replace(/_/g, " ")}
-            </span>
+            {(() => {
+              const desc = describeAgreementStatus(agreement.status as AgreementStatus);
+              return (
+                <span
+                  className={`px-2.5 py-0.5 rounded text-xs font-medium ${desc.adminBadge}`}
+                  title={desc.status}
+                >
+                  {desc.label}
+                </span>
+              );
+            })()}
           </div>
 
           {(agreement.signedAt || agreement.signerName) && (
@@ -1043,7 +1041,7 @@ export default function OrderDetailPage() {
               Manual override
             </div>
             <div className="flex flex-wrap gap-2">
-              {(["PORTAL_GENERATED", "DOWNLOAD_SENT", "REDLINE_UPLOADED", "UNDER_REVIEW", "NEGOTIATED_READY"] as const)
+              {RECOVERABLE_AGREEMENT_STATES
                 .filter((s) => s !== agreement.status)
                 .map((s) => (
                   <button
@@ -1052,7 +1050,7 @@ export default function OrderDetailPage() {
                     disabled={agreementBusy}
                     className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 border border-zinc-700 text-zinc-300 text-xs font-semibold rounded"
                   >
-                    → {s.replace(/_/g, " ")}
+                    → {describeAgreementStatus(s).label}
                   </button>
                 ))}
             </div>

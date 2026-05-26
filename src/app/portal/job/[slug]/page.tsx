@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import type { AgreementStatus } from '@prisma/client';
+import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -740,19 +742,17 @@ function PaperworkRow({
   );
 }
 
+// Agreement status display is now centralized in
+// src/lib/portal/agreementStatus.ts — both the portal row and the
+// order detail page badge read the same mapping. The old inline
+// helpers fell through to 'Sent' for PORTAL_GENERATED rows, which
+// was the dark-on-dark bug equivalent for badge copy: prepared isn't
+// delivered. The canonical mapping fixes it.
 function agreementStatusLabel(a: PortalData['paperwork']['agreement']): string {
-  if (!a) return 'Pending';
-  if (a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED') return 'Signed';
-  if (a.status === 'NEGOTIATED_READY') return 'Ready to sign';
-  if (a.status === 'REDLINE_UPLOADED' || a.status === 'UNDER_REVIEW') return 'Reviewing';
-  if (a.status === 'DOWNLOAD_SENT') return 'Downloaded';
-  return 'Sent';
+  return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).label;
 }
 function agreementStatusKind(a: PortalData['paperwork']['agreement']): PaperworkStatusKind {
-  if (!a) return 'pending';
-  if (a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED') return 'success';
-  if (a.status === 'NEGOTIATED_READY') return 'warning';
-  return 'pending';
+  return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).kind;
 }
 function coiStatusLabel(c: PortalData['paperwork']['coi']): string {
   if (!c) return 'Pending';
