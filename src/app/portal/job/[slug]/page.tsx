@@ -151,6 +151,12 @@ export default function JobPortalPage() {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  // Resend-link UI state. Lives on the error screen so the client can
+  // request a fresh magic link without leaving the page or contacting
+  // a rep. Three states: idle → requesting → sent (or rate-limited).
+  const [resendState, setResendState] = useState<'idle' | 'requesting' | 'sent' | 'limited'>(
+    'idle',
+  );
   const [activityOpen, setActivityOpen] = useState(false);
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiUploading, setCoiUploading] = useState(false);
@@ -241,12 +247,61 @@ export default function JobPortalPage() {
     );
   }
   if (error || !data) {
+    const requestFreshLink = async () => {
+      if (resendState !== 'idle') return;
+      setResendState('requesting');
+      try {
+        const res = await fetch(`/api/portal/job/${slug}/resend-link`, { method: 'POST' });
+        if (res.status === 429) {
+          setResendState('limited');
+          return;
+        }
+        // Endpoint always returns 200 ok regardless of mint outcome —
+        // opaque to prevent enumeration. UX is the same either way.
+        setResendState('sent');
+      } catch {
+        // Treat network errors the same as "ok" from the user's
+        // perspective — they can retry; we don't want to expose
+        // whether the server actually queued a send.
+        setResendState('sent');
+      }
+    };
+
+    const sentTitle = error || 'Access not available';
+
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
-        <div className="max-w-md text-center space-y-3">
+        <div className="max-w-md text-center space-y-4">
           <div className="text-5xl">🔒</div>
-          <h1 className="text-xl font-semibold text-gray-900">{error || 'Access not available'}</h1>
-          <p className="text-sm text-gray-500">Contact your SirReel rep if you need help.</p>
+          <h1 className="text-xl font-semibold text-gray-900">{sentTitle}</h1>
+
+          {resendState === 'sent' ? (
+            <p className="text-sm text-gray-600">
+              If this portal has a contact on file, a fresh secure link is on its way. Check
+              your inbox in the next minute or two.
+            </p>
+          ) : resendState === 'limited' ? (
+            <p className="text-sm text-amber-700">
+              Too many requests just now. Give it a few minutes and try again, or reach your
+              SirReel rep directly.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">
+                We can email you a fresh secure link to the contact on file for this portal.
+              </p>
+              <button
+                onClick={() => { void requestFreshLink(); }}
+                disabled={resendState === 'requesting'}
+                className="inline-flex items-center justify-center px-5 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
+              >
+                {resendState === 'requesting' ? 'Sending…' : 'Email me a secure link'}
+              </button>
+              <p className="text-xs text-gray-400">
+                Still stuck? Reach your SirReel rep for help.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );

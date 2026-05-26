@@ -37,7 +37,7 @@ export interface QuoteSendEmailInput {
   /** Agent's email — clickable mailto in the sign-off. */
   agentEmail?: string | null
   /** Fully-built portal URL including ?token=… — when set, renders the
-   *  "Open Your Portal" CTA. The send route mints/reuses the magic-link
+   *  "Open Your Customer Portal" CTA. The send route mints/reuses the magic-link
    *  token (ensureLiveJobMagicLink) and builds the URL; the composer
    *  only renders it. Pre-token bare-slug callers will break — that's
    *  intentional: a tokenless portal link dead-ends at the "session
@@ -186,12 +186,12 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalUrl}" style="height:44px;v-text-anchor:middle;width:200px;" arcsize="14%" stroke="f" fillcolor="${GOLD}">
                 <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">Open Your Portal</center>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">Open Your Customer Portal</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <a href="${portalUrl}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:12px 28px;border-radius:6px;margin:0 6px 8px;">
-                Open Your Portal
+                Open Your Customer Portal
               </a>
               <!--<![endif]-->
               ` : ''}
