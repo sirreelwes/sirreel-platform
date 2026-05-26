@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
+import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
+import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 
 const PRODUCTION_TYPES: ProductionType[] = [
   'FILM', 'TV', 'COMMERCIAL', 'MUSIC_VIDEO', 'CORPORATE', 'EVENT_PLANNER', 'OTHER',
@@ -310,6 +312,7 @@ function NewQuotePageInner() {
   const [parsing, setParsing] = useState(false);
   const [parsed, setParsed] = useState<ParsedTop | null>(null);
   const [items, setItems] = useState<ResolvedItem[]>([]);
+  const [undoToast, setUndoToast] = useState<LineItemUndoToastState | null>(null);
   const [editing, setEditing] = useState<ParsedTop>({});
   const [clientCandidates, setClientCandidates] = useState<ClientCandidate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -722,8 +725,27 @@ function NewQuotePageInner() {
     );
   };
 
+  // Frictionless remove + undo toast. We snapshot the item AND its
+  // index so the undo restores it exactly where it was (otherwise
+  // sorting / grouping would land it at the end of its department).
   const removeItem = (idx: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) => {
+      const removed = prev[idx];
+      if (!removed) return prev;
+      const next = prev.filter((_, i) => i !== idx);
+      setUndoToast({
+        label: removed.description || '(line item)',
+        onUndo: () => {
+          setItems((current) => {
+            const restored = [...current];
+            restored.splice(Math.min(idx, restored.length), 0, removed);
+            return restored;
+          });
+        },
+        onDismiss: () => setUndoToast(null),
+      });
+      return next;
+    });
   };
 
   // Department-group bulk update: apply a partial patch to every line item
@@ -1353,6 +1375,8 @@ function NewQuotePageInner() {
           </button>
         </div>
       </div>
+
+      <LineItemUndoToast toast={undoToast} />
     </div>
   );
 }
@@ -1895,7 +1919,13 @@ function LineItemRow({
           {fmtMoney(total)}
         </div>
 
-        {/* ACTIONS */}
+        {/* ACTIONS — new-quote keeps its bespoke kebab with the
+            inline department-edit select. /orders/[id] uses the shared
+            <LineItemRowActions> with just the standardized
+            "Remove line item" affordance. Same red destructive label
+            on both, same kebab glyph — only this surface adds the
+            inline dept-edit on top. Full extraction lands in a
+            follow-up commit. */}
         <div className="self-center">
           <RowActionsMenu
             currentDepartment={item.department}

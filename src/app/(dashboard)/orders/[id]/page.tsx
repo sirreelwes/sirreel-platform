@@ -6,6 +6,8 @@ import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsS
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
 import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/EmailReviewModal";
 import { shouldReview } from "@/lib/email/reviewGate";
+import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
+import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
 
 type LineItem = {
   id: string;
@@ -227,6 +229,7 @@ export default function OrderDetailPage() {
   // dispatches the real send only on the agent's confirm click.
   const [emailReviewTarget, setEmailReviewTarget] = useState<EmailReviewTarget | null>(null);
   const [sendQuoteFlash, setSendQuoteFlash] = useState<string | null>(null);
+  const [lineItemUndoToast, setLineItemUndoToast] = useState<LineItemUndoToastState | null>(null);
 
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
@@ -610,9 +613,42 @@ export default function OrderDetailPage() {
     fetchOrder();
   };
 
-  const deleteLineItem = async (lineId: string) => {
-    await fetch(`/api/orders/${orderId}/line-items/${lineId}`, { method: "DELETE" });
-    fetchOrder();
+  // Frictionless remove + undo toast. The line we're about to delete
+  // is snapshotted BEFORE the API call so the undo POST can recreate
+  // it with the same shape (description, rate, dates, etc.).
+  const deleteLineItem = async (li: LineItem) => {
+    const snapshot = li; // capture before fetchOrder() invalidates references
+    await fetch(`/api/orders/${orderId}/line-items/${li.id}`, { method: "DELETE" });
+    await fetchOrder();
+    setLineItemUndoToast({
+      label: snapshot.description || "(line item)",
+      onUndo: async () => {
+        // Re-POST with the captured shape. The endpoint at
+        // /api/orders/[id]/line-items accepts type/description/rate
+        // as required + a bunch of optionals; mirror the snapshot so
+        // the recreated row matches the original as closely as the
+        // API allows. Server assigns a new id + sortOrder.
+        await fetch(`/api/orders/${orderId}/line-items`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: snapshot.type,
+            description: snapshot.description,
+            inventoryItemId: snapshot.inventoryItem?.id ?? undefined,
+            assetCategoryId: snapshot.assetCategory?.id ?? undefined,
+            startDate: snapshot.startDate,
+            endDate: snapshot.endDate,
+            rateType: snapshot.rateType,
+            rate: Number(snapshot.rate),
+            quantity: snapshot.quantity,
+            billableDays: snapshot.days ?? undefined,
+            notes: snapshot.notes ?? undefined,
+          }),
+        });
+        await fetchOrder();
+      },
+      onDismiss: () => setLineItemUndoToast(null),
+    });
   };
 
   if (loading || !order) {
@@ -1276,12 +1312,18 @@ export default function OrderDetailPage() {
               <th className="px-4 py-2.5 font-medium text-center">Qty</th>
               <th className="px-4 py-2.5 font-medium text-center">Days</th>
               <th className="px-4 py-2.5 font-medium text-right">Total</th>
-              {isEditable && <th className="px-4 py-2.5 font-medium w-[40px]"></th>}
+              {/* Actions column always renders so the row-actions
+                  affordance is consistent across editable / locked
+                  states. When the order is locked the kebab self-
+                  renders as a lock glyph with a tooltip — agents see
+                  WHY editing is unavailable instead of a missing
+                  column. */}
+              <th className="px-4 py-2.5 font-medium w-[80px]"></th>
             </tr>
           </thead>
           <tbody>
             {order.lineItems.length === 0 ? (
-              <tr><td colSpan={isEditable ? 8 : 7} className="px-6 py-8 text-center text-zinc-500">
+              <tr><td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
                 No line items yet. Click \"+ Add Item\" to start building this order.
               </td></tr>
             ) : (
@@ -1329,12 +1371,26 @@ export default function OrderDetailPage() {
                       <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
                       <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
                       <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
-                      {isEditable && (
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <button onClick={() => startEditLine(li)} className="text-zinc-500 hover:text-blue-400 text-xs mr-2">Edit</button>
-                          <button onClick={() => deleteLineItem(li.id)} className="text-zinc-500 hover:text-red-400 transition-colors" title="Remove">&times;</button>
-                        </td>
-                      )}
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        {isEditable && (
+                          <button
+                            onClick={() => startEditLine(li)}
+                            className="text-zinc-500 hover:text-blue-400 text-xs mr-2"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <span className="inline-block align-middle">
+                          <LineItemRowActions
+                            onRemove={() => { void deleteLineItem(li); }}
+                            editability={{
+                              canEdit: isEditable,
+                              lockedReason:
+                                'Order is past QUOTE_SENT — line items can\u2019t be edited directly. Re-quote or void to make changes.',
+                            }}
+                          />
+                        </span>
+                      </td>
                     </>
                   )}
                 </tr>
@@ -1386,6 +1442,8 @@ export default function OrderDetailPage() {
           {sendQuoteFlash}
         </div>
       )}
+
+      <LineItemUndoToast toast={lineItemUndoToast} />
     </div>
   );
 }
