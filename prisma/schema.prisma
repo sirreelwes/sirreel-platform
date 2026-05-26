@@ -2198,8 +2198,9 @@ enum AgreementDocumentType {
 }
 
 enum AgreementStatus {
-  PORTAL_GENERATED
-  DOWNLOAD_SENT
+  PORTAL_GENERATED  // PDF rendered + persisted, NOT yet released to the client portal
+  PORTAL_RELEASED   // agent explicitly released → client sees the in-portal Sign link (June 2026 native-sign flow)
+  DOWNLOAD_SENT     // legacy: download link emailed via the /portal/[token] paperwork-portal flow
   REDLINE_UPLOADED
   UNDER_REVIEW
   NEGOTIATED_READY
