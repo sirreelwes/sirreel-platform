@@ -210,6 +210,7 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
+  if (perms.coverage) main.push({ id: 'coverage', label: 'Coverage', icon: '', href: '/exec/coverage' });
   sections.push({ label: null, items: main });
 
   // Admin — management & configuration
