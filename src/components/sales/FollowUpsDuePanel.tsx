@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { FollowUpConfirmDialog, type FollowUpTarget } from './FollowUpConfirmDialog';
 
 type Scope = 'my' | 'team';
 
@@ -47,7 +48,7 @@ function daysSince(iso: string | null) {
 
 export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   const [items, setItems] = useState<FollowUp[] | null>(null);
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [target, setTarget] = useState<FollowUpTarget | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(() => {
@@ -58,37 +59,6 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   }, [scope]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Repointed to the branded Resend endpoint. Server resolves the
-  // STAGE_N — caller doesn't need to map DAY_X → STAGE_N. State writes
-  // happen entirely on the server (creates a STAGE_N SENT row); the
-  // cross-system filter in /api/sales/follow-ups hides this order's
-  // legacy DAY_X row from the panel after refresh.
-  const sendFollowUp = useCallback(async (f: FollowUp) => {
-    setSendingId(f.id);
-    setFeedback(null);
-    try {
-      const res = await fetch(`/api/orders/${f.order.id}/follow-ups/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json?.ok === false) {
-        setFeedback({ kind: 'err', text: json?.error || 'Send failed' });
-      } else {
-        setFeedback({
-          kind: 'ok',
-          text: `Follow-up sent to ${json?.recipient?.email ?? 'client'}`,
-        });
-        load();
-      }
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Send failed' });
-    } finally {
-      setSendingId(null);
-    }
-  }, [load]);
 
   if (items === null) {
     return null; // silent first paint to avoid flicker
@@ -134,12 +104,12 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => { void sendFollowUp(f); }}
-                  disabled={sendingId !== null}
+                  onClick={() => setTarget({ kind: 'order', id: f.order.id })}
+                  disabled={target !== null}
                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold rounded"
-                  title="Send the branded follow-up email"
+                  title="Review recipient + stage, then send the branded follow-up"
                 >
-                  {sendingId === f.id ? 'Sending…' : 'Send follow-up'}
+                  Send follow-up
                 </button>
               </div>
             </li>
@@ -158,6 +128,19 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
           {feedback.text}
         </div>
       )}
+
+      <FollowUpConfirmDialog
+        target={target}
+        onClose={() => setTarget(null)}
+        onSent={(info) => {
+          setTarget(null);
+          setFeedback({
+            kind: 'ok',
+            text: `Follow-up sent to ${info.recipient} (${info.orderNumber})`,
+          });
+          load();
+        }}
+      />
     </section>
   );
 }

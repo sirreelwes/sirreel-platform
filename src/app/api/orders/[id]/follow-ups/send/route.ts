@@ -40,6 +40,11 @@ interface SendBody {
   stage?: unknown
   message?: unknown
   resend?: unknown
+  /** Preview-only: run resolution + all gating, but skip the actual
+   *  Resend call and the QuoteFollowUp write. Returns the would-be
+   *  recipient, stage, and order so the confirm dialog can render
+   *  who/what before the agent commits. */
+  dryRun?: unknown
 }
 
 interface Recipient {
@@ -112,6 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ? body.message.trim().slice(0, 5000)
       : null
   const isResend = body.resend === true
+  const isDryRun = body.dryRun === true
 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
@@ -212,6 +218,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const ranked = rankRecipients(order.job?.jobContacts ?? [], order.jobContact)
   const primary = ranked[0]
   if (!primary) return bad(400, 'no recipient — add a contact to the job first')
+
+  // Dry-run exits here. All resolution + gating ran (so callers see
+  // the same 4xx errors they'd see on a real send); we just skip the
+  // Resend dispatch and the QuoteFollowUp write.
+  if (isDryRun) {
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      stage: stageEnum,
+      recipient: { email: primary.email, name: primary.name, role: primary.role },
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        jobName: order.job?.name ?? null,
+        validUntil: state.effectiveExpiresAt,
+      },
+      isResend: stagesSent.includes(stageEnum),
+    })
+  }
 
   const { subject, html, text } = buildFollowUpSendEmail({
     stage: stageEnum,

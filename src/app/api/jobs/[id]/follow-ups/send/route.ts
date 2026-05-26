@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json().catch(() => ({}))
   const message = typeof body?.message === 'string' ? body.message : undefined
+  const dryRun = body?.dryRun === true
 
   // Resolve the job's latest-sent SENT order. Excludes orders whose Job
   // is WRAPPED/LOST as defensive guard, though we already filtered by
@@ -62,12 +63,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // we re-dispatch by reconstructing a Request and calling the
   // exported POST directly so cookies/session propagate naturally.
   const { POST: orderPost } = await import('@/app/api/orders/[id]/follow-ups/send/route')
+  const forwardPayload: { message?: string; dryRun?: boolean } = {}
+  if (message) forwardPayload.message = message
+  if (dryRun) forwardPayload.dryRun = true
   const forwarded = new NextRequest(
     new URL(`/api/orders/${order.id}/follow-ups/send`, req.url),
     {
       method: 'POST',
       headers: req.headers,
-      body: JSON.stringify(message ? { message } : {}),
+      body: JSON.stringify(forwardPayload),
     },
   )
   return orderPost(forwarded, { params: { id: order.id } })
