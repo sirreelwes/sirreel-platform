@@ -7,13 +7,12 @@
  * route layers in: magic-link mint, Resend dispatch, QuoteFollowUp row
  * write.
  *
- * Body: { stage?, message?, resend?, dryRun? }
+ * Body: { stage?, message?, resend?, overrideContactId? }
  *
- * dryRun is preserved during the migration window so the existing
- * FollowUpConfirmDialog (shipped abe05f4) keeps working until the
- * universal EmailReviewModal supersedes it in commit 4. dryRun semantics
- * are now implemented via composeFollowUpEmail() — the dry-run path
- * runs the composer and returns its output without mint/dispatch/write.
+ * For previewing the composed result without side effects, callers
+ * use the sibling /preview endpoint. The old `dryRun: true` flag was
+ * retired along with FollowUpConfirmDialog in commit 4 — there are
+ * no in-tree callers.
  *
  * Refuses when:
  *   - the order has no quoteSentAt (cadence not started)
@@ -50,11 +49,6 @@ interface SendBody {
   /** Person.id override from the EmailReviewModal "Change recipient"
    *  picker. Composer validates membership in the ranked candidates. */
   overrideContactId?: unknown
-  /** Preview-only: skip mint/dispatch/write, return the composed
-   *  payload (same shape the future /preview endpoint will use).
-   *  Kept here through commit 4 so the existing FollowUpConfirmDialog
-   *  doesn't break mid-migration. */
-  dryRun?: unknown
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -77,7 +71,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       : null
   const overrideContactId =
     typeof body.overrideContactId === 'string' ? body.overrideContactId : null
-  const isDryRun = body.dryRun === true
 
   // ── Phase 1: compose without portalUrl to learn recipient + stage,
   // and run all gating. Same call path the preview endpoint uses. ──
@@ -89,28 +82,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     portalUrl: null,
   })
   if (!preliminary.ok) return bad(preliminary.status, preliminary.error)
-
-  // Dry-run exits here. Returns the legacy shape the existing
-  // FollowUpConfirmDialog consumes; will be retired with the dialog.
-  if (isDryRun) {
-    return NextResponse.json({
-      ok: true,
-      dryRun: true,
-      stage: preliminary.stage,
-      recipient: {
-        email: preliminary.to.email,
-        name: preliminary.to.name,
-        role: preliminary.to.role,
-      },
-      order: {
-        id: preliminary.order.id,
-        orderNumber: preliminary.order.orderNumber,
-        jobName: preliminary.order.jobName,
-        validUntil: preliminary.order.validUntil,
-      },
-      isResend: preliminary.isResend,
-    })
-  }
 
   // ── Phase 2: mint/refresh token, re-compose with tokenized URL ──
   // Load only the slug here — composer already validated the order.

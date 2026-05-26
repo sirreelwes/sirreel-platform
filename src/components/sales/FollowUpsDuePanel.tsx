@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { FollowUpConfirmDialog, type FollowUpTarget } from './FollowUpConfirmDialog';
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
+import { shouldReview } from '@/lib/email/reviewGate';
 
 type Scope = 'my' | 'team';
 
@@ -48,7 +49,7 @@ function daysSince(iso: string | null) {
 
 export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   const [items, setItems] = useState<FollowUp[] | null>(null);
-  const [target, setTarget] = useState<FollowUpTarget | null>(null);
+  const [target, setTarget] = useState<EmailReviewTarget | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(() => {
@@ -104,7 +105,11 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => setTarget({ kind: 'order', id: f.order.id })}
+                  onClick={() => {
+                    if (shouldReview('followup-order')) {
+                      setTarget({ kind: 'followup-order', orderId: f.order.id });
+                    }
+                  }}
                   disabled={target !== null}
                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold rounded"
                   title="Review recipient + stage, then send the branded follow-up"
@@ -129,7 +134,7 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
         </div>
       )}
 
-      <FollowUpConfirmDialog
+      <EmailReviewModal
         target={target}
         onClose={() => setTarget(null)}
         onSent={(info) => {

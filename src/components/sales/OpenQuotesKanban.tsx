@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { DEPARTMENT_SHORT, type PipelineColumn } from '@/lib/sales/pipeline';
 import type { LineItemDepartment } from '@prisma/client';
 import { MarkLostModal } from './MarkLostModal';
-import { FollowUpConfirmDialog, type FollowUpTarget } from './FollowUpConfirmDialog';
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
+import { shouldReview } from '@/lib/email/reviewGate';
 
 interface QuoteJob {
   id: string;
@@ -56,7 +57,7 @@ function daysSince(iso: string) {
 }
 
 export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanProps) {
-  const [target, setTarget] = useState<FollowUpTarget | null>(null);
+  const [target, setTarget] = useState<EmailReviewTarget | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [lost, setLost] = useState<QuoteJob | null>(null);
 
@@ -122,7 +123,15 @@ export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanPr
                       key={j.id}
                       job={j}
                       nudgeDisabled={target !== null}
-                      onNudge={col.key === 'SENT' ? () => setTarget({ kind: 'job', id: j.id }) : undefined}
+                      onNudge={
+                        col.key === 'SENT'
+                          ? () => {
+                              if (shouldReview('followup-job')) {
+                                setTarget({ kind: 'followup-job', jobId: j.id });
+                              }
+                            }
+                          : undefined
+                      }
                       onMarkLost={col.key === 'DRAFT' || col.key === 'SENT' ? () => setLost(j) : undefined}
                     />
                   ))
@@ -145,7 +154,7 @@ export function OpenQuotesKanban({ jobs, loading, onChange }: OpenQuotesKanbanPr
         </div>
       )}
 
-      <FollowUpConfirmDialog
+      <EmailReviewModal
         target={target}
         onClose={() => setTarget(null)}
         onSent={(info) => {

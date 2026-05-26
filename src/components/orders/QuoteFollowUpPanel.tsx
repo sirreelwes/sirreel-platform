@@ -15,6 +15,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
+import { shouldReview } from '@/lib/email/reviewGate'
 
 type CadenceStage = 'STAGE_1' | 'STAGE_2' | 'STAGE_3'
 
@@ -86,9 +88,7 @@ interface Props {
 export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
   const [data, setData] = useState<FollowUpsApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState<null | 'resend' | CadenceStage>(null)
-  const [modalStage, setModalStage] = useState<CadenceStage | null>(null)
-  const [modalMessage, setModalMessage] = useState('')
+  const [reviewTarget, setReviewTarget] = useState<EmailReviewTarget | null>(null)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const load = useCallback(async () => {
@@ -147,60 +147,19 @@ export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
     return 'text-zinc-300'
   })()
 
-  const handleResend = async () => {
-    setBusy('resend')
+  // Both actions route through the universal EmailReviewModal — the
+  // agent reviews recipient + body before each send. shouldReview()
+  // is the lift surface; today all entries are true.
+  const openResendQuote = () => {
     setFeedback(null)
-    try {
-      const res = await fetch(`/api/orders/${orderId}/send-quote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || json?.ok === false) {
-        setFeedback({ kind: 'err', text: json?.error || 'Resend failed' })
-      } else {
-        setFeedback({ kind: 'ok', text: `Quote resent to ${json?.recipient?.email ?? 'client'}` })
-        void load()
-      }
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Resend failed' })
-    } finally {
-      setBusy(null)
+    if (shouldReview('quote')) {
+      setReviewTarget({ kind: 'quote', orderId })
     }
   }
-
-  const openSendModal = (stage: CadenceStage) => {
-    setModalStage(stage)
-    setModalMessage('')
+  const openSendFollowUp = (stage: CadenceStage) => {
     setFeedback(null)
-  }
-
-  const handleSendFollowUp = async () => {
-    if (!modalStage) return
-    setBusy(modalStage)
-    setFeedback(null)
-    try {
-      const res = await fetch(`/api/orders/${orderId}/follow-ups/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stage: modalStage,
-          message: modalMessage.trim().length > 0 ? modalMessage.trim() : undefined,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || json?.ok === false) {
-        setFeedback({ kind: 'err', text: json?.error || 'Send failed' })
-      } else {
-        setFeedback({ kind: 'ok', text: `${STAGE_LABEL[modalStage]} sent to ${json?.recipient?.email ?? 'client'}` })
-        setModalStage(null)
-        void load()
-      }
-    } catch (err) {
-      setFeedback({ kind: 'err', text: err instanceof Error ? err.message : 'Send failed' })
-    } finally {
-      setBusy(null)
+    if (shouldReview('followup-order')) {
+      setReviewTarget({ kind: 'followup-order', orderId, stage })
     }
   }
 
@@ -210,12 +169,12 @@ export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
     const isDue = dueStage === stage
     const isPending = !isSent && !isDue
     const due = state.dueDates[stage] ? new Date(state.dueDates[stage]) : null
-    const disabled = paused || isSent || busy !== null
+    const disabled = paused || isSent || reviewTarget !== null
 
     return (
       <button
         type="button"
-        onClick={() => openSendModal(stage)}
+        onClick={() => openSendFollowUp(stage)}
         disabled={disabled}
         title={
           isSent
@@ -264,12 +223,12 @@ export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
         </div>
         <button
           type="button"
-          onClick={handleResend}
-          disabled={busy !== null}
+          onClick={openResendQuote}
+          disabled={reviewTarget !== null}
           className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
-          title="Send the original quote email again (re-uses the branded composer)"
+          title="Review then resend the branded quote email"
         >
-          {busy === 'resend' ? 'Resending…' : 'Resend quote email'}
+          Resend quote email
         </button>
       </div>
 
@@ -321,56 +280,16 @@ export function QuoteFollowUpPanel({ orderId, isQuoteSent }: Props) {
         </div>
       )}
 
-      {/* Send modal */}
-      {modalStage && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">Send {STAGE_LABEL[modalStage]}</h3>
-              <button
-                type="button"
-                onClick={() => setModalStage(null)}
-                disabled={busy !== null}
-                className="text-zinc-500 hover:text-white text-2xl leading-none"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <p className="text-xs text-zinc-400 mb-4">{STAGE_BLURB[modalStage]}</p>
-            <p className="text-xs text-zinc-500 mb-3">
-              The branded follow-up email goes out from the agent on file. You can add an optional note below
-              — it gets inserted into the body above the standard close.
-            </p>
-            <textarea
-              value={modalMessage}
-              onChange={(e) => setModalMessage(e.target.value)}
-              placeholder="Optional message (e.g. 'Just spoke to Production — they're shifting dates to next week, here's the updated quote.')"
-              rows={4}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white resize-y"
-              disabled={busy !== null}
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                type="button"
-                onClick={() => setModalStage(null)}
-                disabled={busy !== null}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-semibold rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSendFollowUp}
-                disabled={busy !== null}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
-              >
-                {busy === modalStage ? 'Sending…' : `Send ${STAGE_LABEL[modalStage]}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EmailReviewModal
+        target={reviewTarget}
+        onClose={() => setReviewTarget(null)}
+        onSent={(info) => {
+          setReviewTarget(null)
+          const verb = info.stage ? `${info.stage} sent` : 'Quote resent'
+          setFeedback({ kind: 'ok', text: `${verb} to ${info.recipient}` })
+          void load()
+        }}
+      />
     </div>
   )
 }

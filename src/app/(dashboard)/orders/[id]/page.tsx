@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
+import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/EmailReviewModal";
+import { shouldReview } from "@/lib/email/reviewGate";
 
 type LineItem = {
   id: string;
@@ -218,17 +220,13 @@ export default function OrderDetailPage() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<string>('');
 
-  // Send Quote modal state — opens from the existing Send Quote
-  // action button. Replaces the prior bare-button which only flipped
-  // status to QUOTE_SENT without actually emailing the client.
-  const [sendQuoteOpen, setSendQuoteOpen] = useState(false);
-  const [sendQuoteMessage, setSendQuoteMessage] = useState('');
-  const [sendQuoteBusy, setSendQuoteBusy] = useState(false);
-  const [sendQuoteResult, setSendQuoteResult] = useState<
-    | { ok: true; emailId: string | null; recipient: { name: string; email: string }; cc: { email: string }[] }
-    | { ok: false; error: string }
-    | null
-  >(null);
+  // Email review modal — every agent-initiated client email (quote
+  // send + Mode A follow-up) routes through one component per the
+  // universal review-before-send gate. The modal hits a /preview
+  // endpoint, renders the composed body in a sandboxed iframe, and
+  // dispatches the real send only on the agent's confirm click.
+  const [emailReviewTarget, setEmailReviewTarget] = useState<EmailReviewTarget | null>(null);
+  const [sendQuoteFlash, setSendQuoteFlash] = useState<string | null>(null);
 
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
@@ -505,42 +503,20 @@ export default function OrderDetailPage() {
     fetchOrder();
   };
 
-  // Wraps POST /api/orders/[id]/send-quote — emails the client the
-  // quote PDF and (for DRAFT orders) flips status to QUOTE_SENT.
-  // Resends are safe: the endpoint sends but leaves quoteSentAt
-  // untouched when status was already QUOTE_SENT.
-  const sendQuote = async () => {
-    setSendQuoteBusy(true);
-    setSendQuoteResult(null);
-    try {
-      const res = await fetch(`/api/orders/${orderId}/send-quote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: sendQuoteMessage.trim() || undefined }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setSendQuoteResult({ ok: false, error: json.error || `HTTP ${res.status}` });
-        return;
-      }
-      setSendQuoteResult({
-        ok: true,
-        emailId: json.emailId ?? null,
-        recipient: json.recipient,
-        cc: json.cc ?? [],
-      });
-      await fetchOrder();
-    } catch (e) {
-      setSendQuoteResult({ ok: false, error: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setSendQuoteBusy(false);
+  // Opens the EmailReviewModal for quote send. The modal handles
+  // preview + dispatch + token mint; this component just refreshes
+  // the order on success so the post-send QUOTE_SENT status reflects.
+  const openSendQuoteReview = () => {
+    if (!orderId) return;
+    // shouldReview check is documentation of the gate — today it
+    // always returns true. To later auto-send a quote without the
+    // preview step, flip the entry in src/lib/email/reviewGate.ts
+    // and wire a direct-fetch path here.
+    if (!shouldReview('quote')) {
+      // Auto-send path not implemented; fall back to the modal so
+      // the gate is never accidentally bypassed by a stale flag.
     }
-  };
-
-  const closeSendQuote = () => {
-    setSendQuoteOpen(false);
-    setSendQuoteMessage("");
-    setSendQuoteResult(null);
+    setEmailReviewTarget({ kind: 'quote', orderId });
   };
 
   const cancelOrder = async () => {
@@ -685,7 +661,7 @@ export default function OrderDetailPage() {
                 return (
                   <button
                     key={action.next}
-                    onClick={() => (isSendQuote ? setSendQuoteOpen(true) : updateStatus(action.next))}
+                    onClick={() => (isSendQuote ? openSendQuoteReview() : updateStatus(action.next))}
                     disabled={disabled}
                     title={title}
                     className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60`}
@@ -1392,120 +1368,22 @@ export default function OrderDetailPage() {
         </p>
       </div>
 
-      {sendQuoteOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => !sendQuoteBusy && closeSendQuote()}
-        >
-          <div
-            className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-lg p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Send quote</h2>
-              <button
-                onClick={closeSendQuote}
-                disabled={sendQuoteBusy}
-                className="text-zinc-400 hover:text-white text-xl leading-none"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
+      <EmailReviewModal
+        target={emailReviewTarget}
+        onClose={() => setEmailReviewTarget(null)}
+        onSent={(info) => {
+          setEmailReviewTarget(null);
+          setSendQuoteFlash(
+            `Quote ${info.orderNumber} sent to ${info.recipient}.`
+          );
+          void fetchOrder();
+          window.setTimeout(() => setSendQuoteFlash(null), 6000);
+        }}
+      />
 
-            {sendQuoteResult?.ok ? (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-emerald-700 bg-emerald-900/30 text-emerald-100 text-sm px-3 py-2.5">
-                  Quote {order.orderNumber} emailed to{' '}
-                  <span className="font-semibold">{sendQuoteResult.recipient.name}</span> &lt;{sendQuoteResult.recipient.email}&gt;
-                  {sendQuoteResult.cc.length > 0 && (
-                    <> with CC to {sendQuoteResult.cc.map((c) => c.email).join(', ')}</>
-                  )}
-                  .
-                </div>
-                <button
-                  onClick={closeSendQuote}
-                  className="w-full px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-sm space-y-1.5 mb-4">
-                  <div className="text-[10px] uppercase tracking-wider text-zinc-500">To</div>
-                  {recipients.primary ? (
-                    <div className="text-zinc-100">
-                      {recipients.primary.name}{' '}
-                      <span className="text-zinc-500">&lt;{recipients.primary.email}&gt;</span>
-                      {recipients.primary.role && (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-500">
-                          {recipients.primary.role}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-rose-300">No recipient — add a contact to the job first.</div>
-                  )}
-                  {recipients.others.length > 0 && (
-                    <>
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mt-2">CC</div>
-                      {recipients.others.map((r) => (
-                        <div key={r.id} className="text-zinc-300 text-xs">
-                          {r.name}{' '}
-                          <span className="text-zinc-500">&lt;{r.email}&gt;</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-xs uppercase tracking-wider text-zinc-500 mb-1.5 font-semibold">
-                    Note (optional)
-                  </label>
-                  <textarea
-                    value={sendQuoteMessage}
-                    onChange={(e) => setSendQuoteMessage(e.target.value)}
-                    rows={4}
-                    maxLength={5000}
-                    placeholder="Anything you want to add above the standard quote-attached body…"
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
-                  />
-                </div>
-
-                <div className="text-xs text-zinc-500 mb-4">
-                  Quote PDF {order.orderNumber}.pdf attached.{' '}
-                  {order.status === 'DRAFT'
-                    ? 'After sending, the order will move to QUOTE_SENT.'
-                    : 'Resend — the order is already QUOTE_SENT; the original timestamp will not change.'}
-                </div>
-
-                {sendQuoteResult && !sendQuoteResult.ok && (
-                  <div className="rounded-lg border border-rose-700 bg-rose-900/30 text-rose-200 text-sm px-3 py-2 mb-4">
-                    {sendQuoteResult.error}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={closeSendQuote}
-                    disabled={sendQuoteBusy}
-                    className="px-3 py-2 text-zinc-400 hover:text-white text-sm disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={sendQuote}
-                    disabled={sendQuoteBusy || !recipients.primary || !order.quotePdfUrl}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
-                  >
-                    {sendQuoteBusy ? 'Sending…' : 'Send quote'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+      {sendQuoteFlash && (
+        <div className="fixed bottom-6 right-6 z-40 bg-emerald-900/90 border border-emerald-700 text-emerald-100 text-sm px-4 py-2.5 rounded-lg shadow-lg">
+          {sendQuoteFlash}
         </div>
       )}
     </div>

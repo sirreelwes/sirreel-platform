@@ -34,7 +34,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const message = typeof body?.message === 'string' ? body.message : undefined
   const overrideContactId =
     typeof body?.overrideContactId === 'string' ? body.overrideContactId : undefined
-  const dryRun = body?.dryRun === true
 
   const order = await resolveJobLatestSentOrder(params.id)
   if (!order) {
@@ -48,12 +47,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { POST: orderPost } = await import('@/app/api/orders/[id]/follow-ups/send/route')
   const forwardPayload: {
     message?: string
-    dryRun?: boolean
     overrideContactId?: string
   } = {}
   if (message) forwardPayload.message = message
   if (overrideContactId) forwardPayload.overrideContactId = overrideContactId
-  if (dryRun) forwardPayload.dryRun = true
   const forwarded = new NextRequest(
     new URL(`/api/orders/${order.id}/follow-ups/send`, req.url),
     {
