@@ -463,6 +463,30 @@ export default function OrderDetailPage() {
     }
   };
 
+  const releaseAgreementToPortal = async () => {
+    if (
+      !confirm(
+        'Release the rental agreement to the client portal? ' +
+          'They will see the in-portal Sign link on their next visit.',
+      )
+    )
+      return;
+    setAgreementBusy(true);
+    setAgreementMsg("");
+    try {
+      const r = await fetch(`/api/orders/${orderId}/agreement/release`, { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data.ok === false) {
+        setAgreementMsg(data.error || 'Release failed');
+        return;
+      }
+      await fetchAgreement();
+      setAgreementMsg('Released to portal — client can now sign.');
+    } finally {
+      setAgreementBusy(false);
+    }
+  };
+
   const resendPortalLink = async () => {
     setAgreementBusy(true);
     setAgreementMsg("");
@@ -927,6 +951,34 @@ export default function OrderDetailPage() {
               );
             })()}
           </div>
+
+          {/* Release-gate — visible only on PORTAL_GENERATED. Mid-
+              negotiation, signed, and other downstream states hide
+              this entirely (the manual-override strip below still
+              allows admin recovery flips if needed). */}
+          {agreement.status === "PORTAL_GENERATED" && (
+            <div className="border border-amber-900/40 bg-amber-950/30 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-amber-200/90">
+                <div className="font-semibold text-amber-100">Not yet visible to the client.</div>
+                <div className="mt-0.5">
+                  The PDF is ready; release it to the portal to let the client view + sign it
+                  in-session.
+                </div>
+              </div>
+              <button
+                onClick={releaseAgreementToPortal}
+                disabled={agreementBusy || !agreement.documentToSignUrl}
+                title={
+                  !agreement.documentToSignUrl
+                    ? "Regenerate the agreement before releasing — no PDF on file"
+                    : "Release to the client portal"
+                }
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg whitespace-nowrap"
+              >
+                Release to portal
+              </button>
+            </div>
+          )}
 
           {(agreement.signedAt || agreement.signerName) && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-zinc-950 border border-zinc-800 rounded-lg p-4">
