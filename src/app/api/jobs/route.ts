@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import type { JobStatus, OrderStatus, OrderQuoteStatus, LineItemDepartment } from '@prisma/client'
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
+import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,6 +169,7 @@ export async function POST(req: NextRequest) {
       name,
       companyId,
       productionType,
+      productionTypeProfileId,
       status,
       startDate,
       endDate,
@@ -217,6 +219,12 @@ export async function POST(req: NextRequest) {
         name,
         companyId,
         productionType: productionType || 'OTHER',
+        // Optional FK to the new ProductionTypeProfile lookup. Empty
+        // string → null so the form-default of '' doesn't FK-error.
+        productionTypeProfileId:
+          typeof productionTypeProfileId === 'string' && productionTypeProfileId
+            ? productionTypeProfileId
+            : null,
         status: status || 'QUOTED',
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
@@ -240,6 +248,19 @@ export async function POST(req: NextRequest) {
         jobContacts: { include: { person: true } },
       },
     })
+
+    // Refresh the Company's most-common-profile cache. Awaited (not
+    // fire-and-forget) so the Company row is consistent on the
+    // response — Vercel cuts off promises after the response is
+    // returned, so detached recompute would risk being killed mid-
+    // query. Negligible latency (one indexed findMany + one update).
+    try {
+      await recomputeMostCommonProductionTypeProfile(companyId)
+    } catch (err) {
+      // Don't block the Job-create response on a cache-refresh failure;
+      // the next Job-create or a manual backfill will reconcile.
+      console.warn('[jobs POST] recompute most-common profile failed:', err)
+    }
 
     return NextResponse.json(
       {

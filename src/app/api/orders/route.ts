@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { getServerSession } from "next-auth";
 import type { JobRole, ProductionType } from "@prisma/client";
+import { recomputeMostCommonProductionTypeProfile } from "@/lib/companies/recomputeMostCommonProductionTypeProfile";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest) {
 interface InlineJobInput {
   name: string;
   productionType?: ProductionType;
+  productionTypeProfileId?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   notes?: string | null;
@@ -133,6 +135,13 @@ export async function POST(req: NextRequest) {
             companyId,
             agentId,
             productionType: inlineJob.productionType || "OTHER",
+            // Optional FK to the new ProductionTypeProfile lookup;
+            // empty string → null defensive against form defaults.
+            productionTypeProfileId:
+              typeof inlineJob.productionTypeProfileId === "string" &&
+              inlineJob.productionTypeProfileId
+                ? inlineJob.productionTypeProfileId
+                : null,
             status: "QUOTED",
             startDate: inlineJob.startDate ? new Date(inlineJob.startDate) : null,
             endDate: inlineJob.endDate ? new Date(inlineJob.endDate) : null,
@@ -175,6 +184,18 @@ export async function POST(req: NextRequest) {
       });
       return { order: created, createdJobId: createdId };
     });
+
+    // If we created an inline Job, refresh the Company's most-common-
+    // profile cache OUTSIDE the tx so the new row is visible to the
+    // helper's findMany. Order-only creates (no inlineJob) skip — they
+    // don't change the company's profile distribution.
+    if (createdJobId) {
+      try {
+        await recomputeMostCommonProductionTypeProfile(companyId);
+      } catch (err) {
+        console.warn("[orders POST] recompute most-common profile failed:", err);
+      }
+    }
 
     return NextResponse.json({ ...order, createdJobId }, { status: 201 });
   } catch (error) {

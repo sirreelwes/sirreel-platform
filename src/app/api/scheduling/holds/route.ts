@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { getServerSession } from 'next-auth'
+import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,10 @@ interface HoldBody {
   priority?: 'STANDARD' | 'HIGH' | 'LOW'
   source?: 'WEBSITE' | 'PHONE' | 'EMAIL' | 'AGENT_DIRECT' | 'AI_AUTO' | 'PLANYO_BACKFILL'
   notes?: string | null
+  /** Optional FK to ProductionTypeProfile when newJobName creates an
+   *  inline Job. No UI surface yet; forward-compat for a future
+   *  quick-quote hold flow that picks a profile. */
+  productionTypeProfileId?: string | null
   bufferDays?: number
   bufferOverride?: boolean
   /** Hold rank — 1 = primary (default, capacity-gated); ≥2 = backup,
@@ -228,6 +233,14 @@ export async function POST(req: NextRequest) {
               companyId: body.companyId!,
               agentId: agentId!,
               productionType: 'OTHER',
+              // Hold flow doesn't surface a profile picker in the UI
+              // yet — accepted from the body for forward-compat with a
+              // future quick-quote UI; null otherwise. Empty string →
+              // null defensive against form defaults.
+              productionTypeProfileId:
+                typeof body.productionTypeProfileId === 'string' && body.productionTypeProfileId
+                  ? body.productionTypeProfileId
+                  : null,
               status: 'QUOTED',
               startDate: start,
               endDate: end,
@@ -270,6 +283,18 @@ export async function POST(req: NextRequest) {
         })
         return { booking, bookingItem, createdJobId }
       })
+
+      // Refresh the Company's most-common-profile cache when this hold
+      // created an inline Job. Outside the tx so the new row is visible
+      // to the helper's findMany. Holds that attached to an existing
+      // Job skip — they don't change the company's profile distribution.
+      if (result.createdJobId) {
+        try {
+          await recomputeMostCommonProductionTypeProfile(body.companyId!)
+        } catch (err) {
+          console.warn('[holds POST] recompute most-common profile failed:', err)
+        }
+      }
 
       return NextResponse.json(
         {
