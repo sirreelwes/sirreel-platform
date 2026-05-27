@@ -346,7 +346,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 <circle cx={20} cy={21} r={1} />
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
               </svg>
-              <span>Order</span>
+              <span>Reservation</span>
               <span className="bg-[#c39a3f] text-[#0c0c0d] rounded-full min-w-[20px] h-[20px] inline-flex items-center justify-center text-[11px] px-1.5">
                 {totalUnits}
               </span>
@@ -359,19 +359,19 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-14 relative">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Production Supplies
+            Production Reservation
           </div>
           <h1 className="font-black tracking-tight leading-[0.92] text-[40px] sm:text-[56px] md:text-[68px] lg:text-[76px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Build your supply order.
+            Reserve your production.
           </h1>
           <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
-            Everything from basecamp basics to grip, power, safety and expendables — add what your production needs and send it over. We&apos;ll confirm availability and come back with a quote.
+            Vehicles, basecamp basics, grip, power, safety, expendables — pick what your production needs and the dates you need it. We&apos;ll confirm availability and come back with a quote.
           </p>
           <div className="flex flex-wrap gap-7 mt-7">
             {[
-              ['1', 'Add supplies'],
+              ['1', 'Pick vehicles & supplies'],
               ['2', 'Your details'],
-              ['3', 'We quote it'],
+              ['3', 'We confirm & quote'],
             ].map(([n, label]) => (
               <div key={n} className="flex items-center gap-2.5 text-[#e8e3d7] text-sm font-medium">
                 <span className="font-extrabold text-[#0c0c0d] bg-[#c39a3f] w-[26px] h-[26px] rounded-full inline-flex items-center justify-center text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -402,7 +402,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     setQuery(e.target.value)
                     setActiveCat('All')
                   }}
-                  placeholder="Search supplies — generator, cooler, c-stand…"
+                  placeholder="Search vehicles, supplies — generator, cargo van, c-stand…"
                   autoFocus
                   className="w-full border-[1.5px] border-[#cdc7b9] bg-white rounded-xl px-4 py-3.5 pl-[46px] text-base text-[#0c0c0d] outline-none focus:border-[#0c0c0d] focus:shadow-[0_0_0_4px_rgba(12,12,13,0.06)]"
                 />
@@ -443,7 +443,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               {!loading && data && visibleCategories.length === 0 && (
                 <div className="py-12 text-center text-[#8b857a]">
                   <b className="block text-lg text-[#1a1a1c] mb-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                    No supplies match &ldquo;{debouncedQuery}&rdquo;.
+                    Nothing matches &ldquo;{debouncedQuery}&rdquo;.
                   </b>
                   Try a broader term, or browse by category above.
                 </div>
@@ -533,7 +533,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             className="bg-[#c39a3f] text-[#0c0c0d] rounded-lg px-5 py-3 text-sm font-extrabold"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
-            View order →
+            Review reservation →
           </button>
         </div>
       )}
@@ -542,14 +542,14 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       <Scrim show={panel !== 'none'} onClick={() => setPanel('none')} />
 
       <SlidePanel show={panel === 'sheet'}>
-        <PanelHead title="Your Order" sub={lines.length ? `${totalUnits} item${totalUnits === 1 ? '' : 's'} · adjust below` : 'Review and adjust quantities'} onClose={() => setPanel('none')} />
+        <PanelHead title="Your Reservation" sub={lines.length ? `${totalUnits} item${totalUnits === 1 ? '' : 's'} · adjust below` : 'Review and adjust quantities'} onClose={() => setPanel('none')} />
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {lines.length === 0 ? (
             <div className="py-16 text-center text-[#8b857a]">
               <b className="block text-[#0c0c0d] font-extrabold mb-1" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                Your order is empty
+                Your reservation is empty
               </b>
-              Add supplies to continue.
+              Add vehicles or supplies to continue.
             </div>
           ) : (
             lines.map((l) => <ReviewRow key={l.cartLineId} line={l} onSetQty={(q) => setQty(l.cartLineId, q)} />)
@@ -572,7 +572,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       </SlidePanel>
 
       <SlidePanel show={panel === 'details'}>
-        <PanelHead title="Order Details" sub="So we can prep your quote" onClose={() => setPanel('sheet')} />
+        <PanelHead title="Reservation Details" sub="So we can prep your quote" onClose={() => setPanel('sheet')} />
         <form onSubmit={submitOrder} className="flex-1 overflow-y-auto px-6 py-5">
           {/* Honeypot — visually hidden, kept tabindex-out-of-flow */}
           <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: 'auto', width: '1px', height: '1px', overflow: 'hidden' }}>
@@ -662,7 +662,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             className="w-full bg-[#c39a3f] text-[#0c0c0d] rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-all hover:-translate-y-0.5 hover:bg-[#d3aa4d]"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
-            {submitting ? 'Submitting…' : 'Submit order request'}
+            {submitting ? 'Submitting…' : 'Submit reservation request →'}
           </button>
         </div>
       </SlidePanel>
@@ -678,18 +678,18 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 </svg>
               </div>
               <h2 className="font-black text-3xl tracking-tight mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                Your order request is in.
+                Your reservation request is in.
               </h2>
               <p className="text-[#8b857a] max-w-[40ch] mx-auto leading-relaxed">
-                Thanks {confirmation.contactName.split(' ')[0]}. Your rental agent will confirm availability and send a quote to{' '}
+                Thanks {confirmation.contactName.split(' ')[0]}. Your SirReel agent will confirm availability for the dates you picked and send a quote to{' '}
                 <span className="text-[#0c0c0d] font-semibold">{confirmation.contactEmail}</span> shortly.
               </p>
               <p className="text-[#8b857a] max-w-[40ch] mx-auto mt-3.5">
-                <span>{confirmation.units}</span> items requested for{' '}
+                <span>{confirmation.units}</span> item(s) requested for{' '}
                 <span className="text-[#0c0c0d] font-semibold">{confirmation.jobName}</span>.
               </p>
               <div className="inline-block mt-5 bg-[#0c0c0d] text-white font-bold px-5 py-2.5 rounded-full tracking-wider text-sm" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                REQUEST <b className="text-[#c39a3f]">{confirmation.reference}</b>
+                RESERVATION <b className="text-[#c39a3f]">{confirmation.reference}</b>
               </div>
             </div>
           )}
@@ -700,7 +700,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             className="w-full bg-[#0c0c0d] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide hover:-translate-y-0.5 transition-transform"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
-            Start another order
+            Start another reservation
           </button>
         </div>
       </SlidePanel>
@@ -787,7 +787,7 @@ function CartSidebar({
     <div className="sticky top-[96px] bg-[#0c0c0d] text-white rounded-[18px] overflow-hidden shadow-[0_12px_34px_rgba(12,12,13,0.14)]">
       <div className="px-5 py-4 border-b border-[#242427]">
         <h3 className="font-extrabold text-[17px] tracking-tight flex items-center justify-between" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          Your Order
+          Your Reservation
           <small className="font-medium text-xs text-[#a8a294]" style={{ fontFamily: '"Hanken Grotesk", sans-serif' }}>
             {totalUnits > 0 ? `${totalUnits} item${totalUnits === 1 ? '' : 's'}` : 'empty'}
           </small>
@@ -845,7 +845,7 @@ function CartSidebar({
           className="w-full bg-[#c39a3f] text-[#0c0c0d] rounded-xl py-4 text-sm font-extrabold tracking-wide hover:-translate-y-0.5 hover:bg-[#d3aa4d] disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-all"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
-          Review &amp; send order →
+          Review &amp; submit →
         </button>
       </div>
     </div>
