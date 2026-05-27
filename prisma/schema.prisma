@@ -171,6 +171,29 @@ enum ProductionType {
   OTHER
 }
 
+// Lookup table for production-type metadata that drives the
+// future fleet-assignment optimizer (commit 1 of the production-
+// type tiering work, May 2026). Distinct from the legacy
+// ProductionType enum above — that enum is a free-form category
+// label on Job / Company; this table carries the structured tier +
+// sales-mode + price-sensitivity profile used by routing logic.
+// The two coexist; later commits will migrate writers across.
+model ProductionTypeProfile {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  slug             String   @unique
+  tier             Int      // 1–5; 5 = newest-gear pool, 1 = oldest
+  upsellPropensity Int      @map("upsell_propensity") // 1–5; 1 = none, 5 = high
+  priceSensitivity Int      @map("price_sensitivity") // 1–5; 1 = premium-tolerant, 5 = very sensitive
+  salesMode        String   @map("sales_mode")        // WHITE_GLOVE | HIGHER_TOUCH | SEMI_AUTO | LIGHT_TOUCH | FULL_AUTO
+  sortOrder        Int      @default(0) @map("sort_order")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("production_type_profiles")
+}
+
 model Company {
   id            String         @id @default(uuid())
   name          String
