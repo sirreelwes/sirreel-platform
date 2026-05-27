@@ -71,6 +71,20 @@ interface CatalogResponse {
   totals: { categories: number; items: number }
 }
 
+interface VehicleCategoryItem {
+  id: string
+  name: string
+  slug: string
+  subtitle: string | null
+  photoUrl: string | null
+  dailyRate: number | null
+  sortOrder: number
+}
+interface VehicleCategoriesResponse {
+  categories: VehicleCategoryItem[]
+  totals: { categories: number }
+}
+
 type DeliveryMethod = 'will-call' | 'sirreel-vehicle' | 'stage' | 'location'
 
 interface DetailsForm {
@@ -169,6 +183,37 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   useEffect(() => {
     void fetchCatalog(debouncedQuery)
   }, [debouncedQuery, fetchCatalog])
+
+  // ── Vehicle catalog ───────────────────────────────────────────
+  // Loaded once on mount. Vehicles aren't search-filtered against the
+  // text query (the public set is small — ~13 categories — and the
+  // search box is supply-shaped); they always render in the Featured
+  // section. If the agent has typed a non-empty query, the vehicle
+  // section is hidden so the search experience stays focused.
+  const [vehicles, setVehicles] = useState<VehicleCategoryItem[] | null>(null)
+  const [vehiclesError, setVehiclesError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/public/vehicle-categories', { cache: 'no-store' })
+      .then(async (r) => {
+        const json = (await r.json().catch(() => null)) as VehicleCategoriesResponse | null
+        if (cancelled) return
+        if (!r.ok || !json) {
+          setVehiclesError(`HTTP ${r.status}`)
+          setVehicles([])
+        } else {
+          setVehicles(json.categories)
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setVehiclesError(err instanceof Error ? err.message : 'fetch failed')
+        setVehicles([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // ── Cart ──────────────────────────────────────────────────────
   const { lines, totalUnits, totalPerDay, hasEquipment, addToCart, setQty, resetCart } = useSupplyCart()
@@ -452,6 +497,63 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Try a broader term, or browse by category above.
                 </div>
               )}
+
+              {/* ── FEATURED RESERVE VEHICLES ─────────────────────
+                  Hidden while the agent is searching the supply
+                  catalog (text query non-empty) so the search results
+                  stay focused. Vehicles are price-on-quote by default
+                  (dailyRate null) — the tile labels them as such. */}
+              {!debouncedQuery && vehicles && vehicles.length > 0 && (
+                <section className="mt-2 scroll-mt-[200px]">
+                  <div className="flex items-baseline gap-3.5 mb-3.5">
+                    <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                      Reserve Vehicles
+                    </h2>
+                    <span className="flex-1 h-[2px] bg-[#c39a3f] opacity-40" />
+                    <span className="font-semibold text-[12px] text-[#8b857a] tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                      {vehicles.length}
+                    </span>
+                  </div>
+                  <p className="text-[13.5px] text-[#5b554b] -mt-1 mb-3.5 max-w-[68ch]">
+                    Pick a vehicle class and the window you need it. Reservation requests confirm availability for those dates and come back with a firm quote.
+                  </p>
+                  <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+                    {vehicles.map((v) => {
+                      const slot = cartByItemId.get(v.id)
+                      const firstLineId = slot?.lines[0]?.cartLineId ?? null
+                      return (
+                        <VehicleCard
+                          key={v.id}
+                          vehicle={v}
+                          inCartQty={slot?.totalQty ?? 0}
+                          formDefaults={defaultDatesForAdd(form)}
+                          onAdd={(pickupDate, returnDate) => {
+                            addToCart({
+                              itemKind: 'VEHICLE',
+                              itemId: v.id,
+                              name: v.name + (v.subtitle ? ` (${v.subtitle})` : ''),
+                              price: v.dailyRate ?? 0,
+                              type: 'VEHICLE',
+                              category: 'Vehicle',
+                              pickupDate,
+                              returnDate,
+                            })
+                          }}
+                          onSetQty={(q) => {
+                            if (firstLineId) setQty(firstLineId, q)
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                  {vehiclesError && (
+                    <div className="mt-2 text-[11px] text-rose-700">
+                      Couldn&rsquo;t load vehicles: {vehiclesError}
+                    </div>
+                  )}
+                </section>
+              )}
+
               {visibleCategories.map((cat) => (
                 <section key={cat.id} className="mt-8 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
@@ -770,6 +872,124 @@ function ItemCard({
           + Add
         </button>
       )}
+    </div>
+  )
+}
+
+// VehicleCard — Featured section tile. Each vehicle carries its own
+// pickup/return date inputs so the agent can add the same vehicle
+// across multiple windows (the cart line key includes dates, so each
+// add with a different window becomes a separate line). Defaults seed
+// from the form-level pickup/return when present, else the
+// defaultDatesForAdd fallback (today / today+7).
+function VehicleCard({
+  vehicle,
+  inCartQty,
+  formDefaults,
+  onAdd,
+  onSetQty,
+}: {
+  vehicle: VehicleCategoryItem
+  inCartQty: number
+  formDefaults: { pickupDate: string; returnDate: string }
+  onAdd: (pickupDate: string, returnDate: string) => void
+  onSetQty: (q: number) => void
+}) {
+  const [pickup, setPickup] = useState(formDefaults.pickupDate)
+  const [returnD, setReturnD] = useState(formDefaults.returnDate)
+  const inCart = inCartQty > 0
+  const priceOnQuote = vehicle.dailyRate == null || vehicle.dailyRate === 0
+  const datesValid = pickup && returnD && returnD >= pickup
+  return (
+    <div
+      className={`bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
+        inCart ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
+      }`}
+    >
+      {vehicle.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={vehicle.photoUrl}
+          alt={vehicle.name}
+          className="w-full h-[120px] object-cover bg-[#f0eadb]"
+          loading="lazy"
+        />
+      ) : (
+        <div className="w-full h-[120px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
+          <svg width={42} height={42} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+            <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
+          </svg>
+        </div>
+      )}
+      <div className="p-3 flex flex-col gap-2.5 flex-1">
+        <div className="min-w-0">
+          <div className="font-extrabold text-[15px] leading-[1.2] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            {vehicle.name}
+          </div>
+          {vehicle.subtitle && (
+            <div className="text-[12px] text-[#8b857a] mt-0.5 truncate">{vehicle.subtitle}</div>
+          )}
+          <div className="font-semibold text-[12.5px] text-[#8b857a] mt-1" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            {priceOnQuote ? (
+              <span className="text-[#a37f2c] font-extrabold">PRICE ON QUOTE</span>
+            ) : (
+              <>
+                <b className="text-[#0c0c0d] font-extrabold text-[14px]">{fmtMoney(vehicle.dailyRate!)}</b> /day
+              </>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <label className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup</span>
+            <input
+              type="date"
+              value={pickup}
+              onChange={(e) => setPickup(e.target.value)}
+              className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+            />
+          </label>
+          <label className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Return</span>
+            <input
+              type="date"
+              value={returnD}
+              onChange={(e) => setReturnD(e.target.value)}
+              min={pickup || undefined}
+              className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+            />
+          </label>
+        </div>
+        <div className="flex items-center gap-2 mt-auto">
+          {inCart ? (
+            <>
+              <div className="flex items-center border-[1.5px] border-[#c39a3f] rounded-[10px] overflow-hidden h-[36px] flex-none">
+                <button onClick={() => onSetQty(inCartQty - 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-lg font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
+                <span className="min-w-[28px] text-center font-extrabold text-[14px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{inCartQty}</span>
+                <button onClick={() => onSetQty(inCartQty + 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-lg font-bold hover:bg-[#fbf6ea]" aria-label="Increase">+</button>
+              </div>
+              <button
+                onClick={() => datesValid && onAdd(pickup, returnD)}
+                disabled={!datesValid}
+                className="flex-1 border-[1.5px] border-[#cdc7b9] bg-white text-[#1a1a1c] rounded-[10px] h-[36px] px-2 font-bold text-[11.5px] tracking-wide hover:border-[#0c0c0d] disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ fontFamily: 'Archivo, sans-serif' }}
+                title="Reserve another window of this vehicle"
+              >
+                + Add window
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => datesValid && onAdd(pickup, returnD)}
+              disabled={!datesValid}
+              className="w-full border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[36px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform disabled:opacity-40 disabled:bg-[#5a5a5c] disabled:translate-y-0 disabled:cursor-not-allowed"
+              style={{ fontFamily: 'Archivo, sans-serif' }}
+            >
+              + Reserve
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
