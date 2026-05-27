@@ -204,6 +204,33 @@ model ProductionTypeProfile {
   @@map("production_type_profiles")
 }
 
+// Customer-facing vehicle catalog tile lookup for the unified
+// production-order shop (/order/supplies). Distinct from
+// AssetCategory (the internal fleet-bucket grouping that
+// schedules and assigns specific Assets) — VehicleCategory rows
+// are the cards a client sees and picks from, with marketing copy
+// and a "from $X/day" price hint. The internal Asset.categoryId
+// linkage stays separate; a fleet ops handoff later maps a
+// VehicleCategory pick to a specific AssetCategory pool.
+//
+// dailyRate is the customer-facing "from" rate; null = price-on-
+// quote (don't render a price hint). photoUrl is admin-managed;
+// null renders a graceful placeholder.
+model VehicleCategory {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  slug       String   @unique
+  subtitle   String?
+  photoUrl   String?  @map("photo_url")
+  dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
+  sortOrder  Int      @default(0) @map("sort_order")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("vehicle_categories")
+}
+
 model Company {
   id            String         @id @default(uuid())
   name          String
