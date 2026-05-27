@@ -191,6 +191,8 @@ model ProductionTypeProfile {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
+  jobs Job[] @relation("JobProductionTypeProfile")
+
   @@map("production_type_profiles")
 }
 
@@ -1971,6 +1973,13 @@ model Job {
   name           String
   companyId      String         @map("company_id")
   productionType ProductionType @default(OTHER) @map("production_type")
+  // FK to the new ProductionTypeProfile lookup table — the structured
+  // tier + sales-mode + price-sensitivity metadata that will drive the
+  // fleet-assignment optimizer. Nullable so existing rows are
+  // unaffected (no backfill required at this commit). Lives alongside
+  // the legacy productionType enum above; a future migration will cut
+  // over writers and deprecate the enum.
+  productionTypeProfileId String?       @map("production_type_profile_id")
   status         JobStatus      @default(QUOTED)
   startDate      DateTime?      @map("start_date") @db.Date
   endDate        DateTime?      @map("end_date") @db.Date
@@ -1981,8 +1990,9 @@ model Job {
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  company     Company      @relation(fields: [companyId], references: [id])
-  agent       User         @relation("JobAgent", fields: [agentId], references: [id])
+  company               Company                @relation(fields: [companyId], references: [id])
+  agent                 User                   @relation("JobAgent", fields: [agentId], references: [id])
+  productionTypeProfile ProductionTypeProfile? @relation("JobProductionTypeProfile", fields: [productionTypeProfileId], references: [id])
   orders      Order[]
   bookings    Booking[]
   jobContacts JobContact[]
@@ -1993,6 +2003,7 @@ model Job {
   @@index([companyId])
   @@index([status])
   @@index([agentId])
+  @@index([productionTypeProfileId])
   @@map("sr_jobs")
 }
 
