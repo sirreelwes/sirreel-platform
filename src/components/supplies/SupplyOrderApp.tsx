@@ -32,7 +32,32 @@ import {
   type FormEvent,
 } from 'react'
 import Link from 'next/link'
-import { useSupplyCart, type CartLine, type CatalogItem } from '@/hooks/useSupplyCart'
+import { useSupplyCart, type CartLine } from '@/hooks/useSupplyCart'
+
+interface CatalogItem {
+  id: string
+  name: string
+  price: number
+  type: string
+  category: string
+}
+
+// Default per-line dates when the agent hits Add. Reads from the
+// form-level pickupDate/returnDate when those are filled (legacy
+// step-2 inputs — to be removed in a later commit, kept as the
+// per-add default for now); otherwise today / today+7. Always
+// returns a YYYY-MM-DD string pair.
+function defaultDatesForAdd(form: { pickupDate: string; returnDate: string }): {
+  pickupDate: string
+  returnDate: string
+} {
+  const today = new Date()
+  const inAWeek = new Date(today.getTime() + 7 * 86_400_000)
+  const ymd = (d: Date) => d.toISOString().slice(0, 10)
+  const pickup = form.pickupDate || ymd(today)
+  const returnD = form.returnDate || (form.pickupDate ? form.pickupDate : ymd(inAWeek))
+  return { pickupDate: pickup, returnDate: returnD }
+}
 
 interface CatalogCategory {
   id: string
@@ -147,9 +172,19 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
 
   // ── Cart ──────────────────────────────────────────────────────
   const { lines, totalUnits, totalPerDay, hasEquipment, addToCart, setQty, resetCart } = useSupplyCart()
-  const cartById = useMemo(() => {
-    const m = new Map<string, CartLine>()
-    for (const l of lines) m.set(l.id, l)
+  // Index of current cart lines by source itemId — used by the
+  // catalog tile to show the "in cart: N" badge + qty stepper.
+  // Sums qty across all lines that reference the same itemId
+  // (post-commit-2 the same item can appear on multiple lines with
+  // different dates).
+  const cartByItemId = useMemo(() => {
+    const m = new Map<string, { totalQty: number; lines: CartLine[] }>()
+    for (const l of lines) {
+      const cur = m.get(l.itemId) ?? { totalQty: 0, lines: [] }
+      cur.totalQty += l.qty
+      cur.lines.push(l)
+      m.set(l.itemId, cur)
+    }
     return m
   }, [lines])
 
@@ -226,7 +261,18 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             method: form.deliveryMethod,
             address: form.deliveryMethod === 'location' ? form.deliveryAddress.trim() || null : null,
           },
-          cart: lines.map((l) => ({ itemId: l.id, quantity: l.quantity })),
+          // Per-line dates carried in the cart shape now — inquiry-
+          // level dates are derived server-side as min(pickup) /
+          // max(return) across lines. Form-level pickup/return
+          // inputs stay on the page for now (removed in a later
+          // commit) but no longer feed the submission.
+          cart: lines.map((l) => ({
+            itemKind: l.itemKind,
+            itemId: l.itemId,
+            qty: l.qty,
+            pickupDate: l.pickupDate,
+            returnDate: l.returnDate,
+          })),
           notes: form.notes.trim() || null,
           // Honeypot — server also enforces empty.
           website: form.website,
@@ -414,15 +460,40 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     </span>
                   </div>
                   <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(234px, 1fr))' }}>
-                    {cat.items.map((it) => (
-                      <ItemCard
-                        key={it.id}
-                        item={it}
-                        qty={cartById.get(it.id)?.quantity ?? 0}
-                        onAdd={() => addToCart(it)}
-                        onSetQty={(q) => setQty(it.id, q)}
-                      />
-                    ))}
+                    {cat.items.map((it) => {
+                      // Across the cart, a single item can appear on
+                      // multiple lines with different dates (post-
+                      // commit-2). The catalog tile shows the summed
+                      // qty for the "in cart" badge; the stepper +/-
+                      // targets the first line (insertion order). UI
+                      // for multi-line per-item edits lives in the
+                      // cart panel rework (commit 5).
+                      const slot = cartByItemId.get(it.id)
+                      const firstLineId = slot?.lines[0]?.cartLineId ?? null
+                      return (
+                        <ItemCard
+                          key={it.id}
+                          item={it}
+                          qty={slot?.totalQty ?? 0}
+                          onAdd={() => {
+                            const dates = defaultDatesForAdd(form)
+                            addToCart({
+                              itemKind: 'SUPPLY',
+                              itemId: it.id,
+                              name: it.name,
+                              price: it.price,
+                              type: it.type,
+                              category: it.category,
+                              pickupDate: dates.pickupDate,
+                              returnDate: dates.returnDate,
+                            })
+                          }}
+                          onSetQty={(q) => {
+                            if (firstLineId) setQty(firstLineId, q)
+                          }}
+                        />
+                      )
+                    })}
                   </div>
                 </section>
               ))}
@@ -481,7 +552,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               Add supplies to continue.
             </div>
           ) : (
-            lines.map((l) => <ReviewRow key={l.id} line={l} onSetQty={(q) => setQty(l.id, q)} />)
+            lines.map((l) => <ReviewRow key={l.cartLineId} line={l} onSetQty={(q) => setQty(l.cartLineId, q)} />)
           )}
         </div>
         <div className="px-6 py-4 border-t border-[#e4dfd4] bg-white" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
@@ -737,20 +808,20 @@ function CartSidebar({
           </div>
         ) : (
           lines.map((l) => (
-            <div key={l.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
+            <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
               <div className="flex-1 min-w-0">
                 <div className="text-[13.5px] font-semibold leading-tight truncate">{l.name}</div>
                 <div className="text-[11.5px] text-[#a8a294] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                  {l.price === 0 ? 'FREE' : `${fmtMoney(l.price)}${l.type === 'EQUIPMENT' ? ' /day' : ' ea'}`}
+                  {l.price === 0 ? 'PRICE ON QUOTE' : `${fmtMoney(l.price)}${l.type === 'EQUIPMENT' ? ' /day' : ' ea'}`}
                 </div>
               </div>
               <div className="flex items-center border border-[#2e2e30] rounded-lg overflow-hidden h-[30px]">
-                <button onClick={() => onSetQty(l.id, l.quantity - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
-                <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.quantity}</span>
-                <button onClick={() => onSetQty(l.id, l.quantity + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
+                <button onClick={() => onSetQty(l.cartLineId, l.qty - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
+                <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.qty}</span>
+                <button onClick={() => onSetQty(l.cartLineId, l.qty + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
               </div>
               <div className="font-bold text-[13px] min-w-[54px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                {fmtTotal(l.price * l.quantity)}
+                {fmtTotal(l.price * l.qty)}
               </div>
             </div>
           ))
@@ -791,12 +862,12 @@ function ReviewRow({ line, onSetQty }: { line: CartLine; onSetQty: (q: number) =
         </div>
       </div>
       <div className="flex items-center border-[1.5px] border-[#cdc7b9] rounded-lg overflow-hidden h-[34px]">
-        <button onClick={() => onSetQty(line.quantity - 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">−</button>
-        <span className="min-w-[28px] text-center font-extrabold text-sm" style={{ fontFamily: 'Archivo, sans-serif' }}>{line.quantity}</span>
-        <button onClick={() => onSetQty(line.quantity + 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">+</button>
+        <button onClick={() => onSetQty(line.qty - 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">−</button>
+        <span className="min-w-[28px] text-center font-extrabold text-sm" style={{ fontFamily: 'Archivo, sans-serif' }}>{line.qty}</span>
+        <button onClick={() => onSetQty(line.qty + 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">+</button>
       </div>
       <div className="font-extrabold text-sm min-w-[58px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
-        {fmtTotal(line.price * line.quantity)}
+        {fmtTotal(line.price * line.qty)}
       </div>
       <button
         type="button"

@@ -1,11 +1,18 @@
 /**
  * POST /api/public/supply-request — hardened public submission.
  *
- * Phase 3 chunk 3 of the supply-ordering brief. Unauthenticated by
- * design. Receives a cart + contact + production + delivery payload
- * from /order/supplies and writes a single Inquiry(WEB_FORM, NEW)
- * for the operator triage queue. No Job or Order is created here —
- * conversion goes through /orders/new-quote.
+ * Receives a unified cart (supplies + vehicles) + contact + production
+ * + delivery payload from the public production-order page and writes
+ * a single Inquiry(WEB_FORM, NEW) for the operator triage queue. No
+ * Job or Order is created here — conversion goes through /orders/new-quote.
+ *
+ * Unified cart shape (each line carries its own dates):
+ *   { itemKind: 'SUPPLY' | 'VEHICLE', itemId, qty, pickupDate, returnDate }
+ *
+ * SUPPLY lines resolve against publicVisible=true InventoryItem rows;
+ * VEHICLE lines resolve against active=true VehicleCategory rows.
+ * Inquiry-level preferredStartDate / preferredEndDate are derived
+ * server-side as min(pickupDate) / max(returnDate) across all lines.
  *
  * Hardening:
  *   - Per-IP sliding-window rate limit (5 / 10 min default).
@@ -13,20 +20,17 @@
  *     fake reference, no DB write.
  *   - Strict typed validation: required contact name + email, valid
  *     email format, plausible date strings, max cart size, qty caps.
- *   - Every itemId resolved against publicVisible=true InventoryItem
- *     rows server-side (rejects legacy/RW/unreviewed items).
+ *   - Every itemId resolved against the appropriate public catalog
+ *     server-side (rejects legacy/RW/unreviewed items).
  *   - Server-snapshots every line's price + name + type — stale
  *     client carts can't fake totals.
- *   - Captcha env-gated (TURNSTILE_SECRET_KEY). If unset, skipped —
- *     so dev/local testing isn't blocked. Verify before launch by
- *     populating the env var.
+ *   - Captcha env-gated (TURNSTILE_SECRET_KEY).
  *   - **No getServerSession()** here — public endpoint must never
  *     accidentally attach an authenticated user as assignedTo.
  *
  * Reference: SR-REQ-NNNN where N is (count of WEB_FORM inquiries + 1)
  * zero-padded. Race-tolerant — two concurrent submissions might end
- * up sharing a reference; the inquiry IDs are still distinct and
- * the reference is for client/agent eyeballs, not a unique key.
+ * up sharing a reference; the inquiry IDs are still distinct.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -39,9 +43,14 @@ const CART_MAX_ITEMS = 50
 const QTY_MAX = 1000
 const NOTES_MAX = 5000
 
+type ItemKind = 'SUPPLY' | 'VEHICLE'
+
 interface CartLineIn {
+  itemKind?: unknown
   itemId?: unknown
-  quantity?: unknown
+  qty?: unknown
+  pickupDate?: unknown
+  returnDate?: unknown
 }
 interface SubmitBody {
   contact?: { name?: unknown; email?: unknown; phone?: unknown; role?: unknown }
@@ -51,6 +60,9 @@ interface SubmitBody {
     poNumber?: unknown
     jobNumber?: unknown
   }
+  /** Legacy form-level window. Ignored when cart lines carry dates —
+   *  inquiry dates are derived from min/max across lines. Kept here
+   *  for tolerance until the form-level inputs are removed. */
   dates?: { start?: unknown; end?: unknown }
   delivery?: { method?: unknown; address?: unknown }
   cart?: CartLineIn[]
@@ -82,20 +94,22 @@ function asString(v: unknown, max = 200): string | null {
   if (!t) return null
   return t.length > max ? t.slice(0, max) : t
 }
+function asItemKind(v: unknown): ItemKind | null {
+  return v === 'SUPPLY' || v === 'VEHICLE' ? v : null
+}
 
 function bad(status: number, error: string, extra?: Record<string, unknown>) {
   return NextResponse.json({ ok: false, error, ...extra }, { status })
 }
 
 function fakeReference(): string {
-  // Honeypot path — bots get a plausible-looking response.
   const n = Math.floor(Math.random() * 9000) + 1000
   return `SR-REQ-${n}`
 }
 
 async function verifyTurnstile(token: string | null, ip: string): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY
-  if (!secret) return true // env-gated off in dev/local
+  if (!secret) return true
   if (!token) return false
   try {
     const body = new URLSearchParams({ secret, response: token, remoteip: ip })
@@ -110,7 +124,7 @@ async function verifyTurnstile(token: string | null, ip: string): Promise<boolea
   }
 }
 
-function deriveDaysFromWindow(start: string, end: string): number {
+function rentalDaysBetween(start: string, end: string): number {
   const s = new Date(`${start}T00:00:00Z`).getTime()
   const e = new Date(`${end}T00:00:00Z`).getTime()
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
@@ -120,7 +134,6 @@ function deriveDaysFromWindow(start: string, end: string): number {
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
 
-  // ── Rate limit (per IP, sliding window) ────────────────────
   const rl = checkRateLimit(`supply-request:${ip}`)
   if (!rl.ok) {
     return bad(429, 'Too many requests. Try again shortly.', { retryAfterSeconds: rl.retryAfterSeconds })
@@ -129,10 +142,6 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as SubmitBody | null
   if (!body) return bad(400, 'invalid JSON body')
 
-  // ── Honeypot ───────────────────────────────────────────────
-  // Bots that auto-fill every visible field tend to populate the
-  // hidden `website` slot. Pretend success — no DB write — so the
-  // bot can't tell its submission was rejected.
   if (typeof body.website === 'string' && body.website.trim().length > 0) {
     return NextResponse.json({
       ok: true,
@@ -141,7 +150,6 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // ── Captcha (env-gated) ────────────────────────────────────
   const captchaOk = await verifyTurnstile(
     typeof body.captchaToken === 'string' ? body.captchaToken : null,
     ip,
@@ -165,12 +173,6 @@ export async function POST(req: NextRequest) {
   const poNumber = asString(body.production?.poNumber, 60)
   const jobNumber = asString(body.production?.jobNumber, 60)
 
-  // ── Dates ─────────────────────────────────────────────────
-  const startStr = isYmd(body.dates?.start) ? (body.dates!.start as string) : null
-  if (!startStr) return bad(400, 'dates.start required (YYYY-MM-DD)')
-  const endStr = isYmd(body.dates?.end) ? (body.dates!.end as string) : startStr
-  if (endStr < startStr) return bad(400, 'dates.end must be on or after dates.start')
-
   // ── Delivery ──────────────────────────────────────────────
   const deliveryMethod = body.delivery?.method
   if (typeof deliveryMethod !== 'string' || !DELIVERY_METHODS.includes(deliveryMethod as DeliveryMethod)) {
@@ -184,39 +186,79 @@ export async function POST(req: NextRequest) {
     return bad(400, 'delivery.address required when method=location')
   }
 
-  // ── Cart ──────────────────────────────────────────────────
+  // ── Cart (unified) ────────────────────────────────────────
   if (!Array.isArray(body.cart) || body.cart.length === 0) return bad(400, 'cart cannot be empty')
   if (body.cart.length > CART_MAX_ITEMS) return bad(400, `cart exceeds max ${CART_MAX_ITEMS} items`)
 
-  type Line = { itemId: string; quantity: number }
-  const lines: Line[] = []
+  type ParsedLine = {
+    itemKind: ItemKind
+    itemId: string
+    qty: number
+    pickupDate: string
+    returnDate: string
+  }
+  const lines: ParsedLine[] = []
   for (const raw of body.cart) {
+    const itemKind = asItemKind(raw.itemKind)
+    if (!itemKind) return bad(400, 'each cart line needs itemKind (SUPPLY|VEHICLE)')
     const itemId = asString(raw.itemId)
-    const quantity = asInt(raw.quantity, QTY_MAX)
     if (!itemId) return bad(400, 'each cart line needs an itemId')
-    if (!quantity) return bad(400, `quantity must be 1..${QTY_MAX}`)
-    lines.push({ itemId, quantity })
+    const qty = asInt(raw.qty, QTY_MAX)
+    if (!qty) return bad(400, `qty must be 1..${QTY_MAX}`)
+    const pickupDate = isYmd(raw.pickupDate) ? (raw.pickupDate as string) : null
+    if (!pickupDate) return bad(400, 'each cart line needs pickupDate (YYYY-MM-DD)')
+    const returnDate = isYmd(raw.returnDate) ? (raw.returnDate as string) : pickupDate
+    if (returnDate < pickupDate) return bad(400, 'returnDate must be on or after pickupDate')
+    lines.push({ itemKind, itemId, qty, pickupDate, returnDate })
   }
 
-  const itemRows = await prisma.inventoryItem.findMany({
-    where: {
-      id: { in: lines.map((l) => l.itemId) },
-      publicVisible: true,
-      isActive: true,
-      categoryId: { not: null },
-    },
-    select: {
-      id: true,
-      code: true,
-      description: true,
-      dailyRate: true,
-      type: true,
-      category: { select: { name: true, slug: true } },
-    },
-  })
-  const itemById = new Map(itemRows.map((r) => [r.id, r]))
+  // ── Resolve catalog rows per kind ─────────────────────────
+  const supplyIds = lines.filter((l) => l.itemKind === 'SUPPLY').map((l) => l.itemId)
+  const vehicleIds = lines.filter((l) => l.itemKind === 'VEHICLE').map((l) => l.itemId)
+
+  const [supplyRows, vehicleRows] = await Promise.all([
+    supplyIds.length
+      ? prisma.inventoryItem.findMany({
+          where: {
+            id: { in: supplyIds },
+            publicVisible: true,
+            isActive: true,
+            categoryId: { not: null },
+          },
+          select: {
+            id: true,
+            code: true,
+            description: true,
+            dailyRate: true,
+            type: true,
+            category: { select: { name: true, slug: true } },
+          },
+        })
+      : Promise.resolve([]),
+    vehicleIds.length
+      ? prisma.vehicleCategory.findMany({
+          where: { id: { in: vehicleIds }, active: true },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            subtitle: true,
+            dailyRate: true,
+          },
+        })
+      : Promise.resolve([]),
+  ])
+
+  const supplyById = new Map(supplyRows.map((r) => [r.id, r]))
+  const vehicleById = new Map(vehicleRows.map((r) => [r.id, r]))
+
   for (const l of lines) {
-    if (!itemById.has(l.itemId)) return bad(400, `unknown or unavailable item: ${l.itemId}`)
+    if (l.itemKind === 'SUPPLY' && !supplyById.has(l.itemId)) {
+      return bad(400, `unknown or unavailable supply item: ${l.itemId}`)
+    }
+    if (l.itemKind === 'VEHICLE' && !vehicleById.has(l.itemId)) {
+      return bad(400, `unknown or unavailable vehicle category: ${l.itemId}`)
+    }
   }
 
   // ── Notes ─────────────────────────────────────────────────
@@ -227,40 +269,71 @@ export async function POST(req: NextRequest) {
     return t.length > NOTES_MAX ? t.slice(0, NOTES_MAX) : t
   })()
 
-  // ── Snapshot lines + totals (server-computed) ─────────────
-  const rentalDays = deriveDaysFromWindow(startStr, endStr)
+  // ── Per-line snapshot + totals (server-computed) ──────────
+  // Vehicles are always treated as rentals (days = pickup→return).
+  // Supplies: EQUIPMENT type is a rental, anything else (CONSUMABLE,
+  // etc) is a flat per-unit charge with days=null.
   const snapshot = lines.map((l) => {
-    const row = itemById.get(l.itemId)!
+    const days = rentalDaysBetween(l.pickupDate, l.returnDate)
+    if (l.itemKind === 'VEHICLE') {
+      const row = vehicleById.get(l.itemId)!
+      const unitPrice = row.dailyRate == null ? 0 : Number(row.dailyRate)
+      const lineTotal = unitPrice * l.qty * days
+      return {
+        itemKind: 'VEHICLE' as const,
+        itemId: row.id,
+        code: row.slug,
+        name: row.name + (row.subtitle ? ` (${row.subtitle})` : ''),
+        type: 'VEHICLE',
+        category: 'Vehicle',
+        unitPrice,
+        qty: l.qty,
+        pickupDate: l.pickupDate,
+        returnDate: l.returnDate,
+        days,
+        lineTotal,
+        priceOnQuote: unitPrice === 0,
+      }
+    }
+    const row = supplyById.get(l.itemId)!
     const unitPrice = Number(row.dailyRate)
     const isRental = row.type === 'EQUIPMENT'
-    const days = isRental ? rentalDays : 1
-    const lineTotal = unitPrice * l.quantity * (isRental ? days : 1)
+    const effDays = isRental ? days : 1
+    const lineTotal = unitPrice * l.qty * effDays
     return {
+      itemKind: 'SUPPLY' as const,
       itemId: row.id,
       code: row.code,
       name: row.description ?? row.code,
       type: row.type,
       category: row.category?.name ?? '',
       unitPrice,
-      quantity: l.quantity,
+      qty: l.qty,
+      pickupDate: l.pickupDate,
+      returnDate: l.returnDate,
       days: isRental ? days : null,
       lineTotal,
+      priceOnQuote: false,
     }
   })
+
   const grandTotal = snapshot.reduce((s, l) => s + l.lineTotal, 0)
-  const totalUnits = snapshot.reduce((s, l) => s + l.quantity, 0)
+  const totalUnits = snapshot.reduce((s, l) => s + l.qty, 0)
+  const hasPriceOnQuote = snapshot.some((l) => l.priceOnQuote)
+
+  // Inquiry-level date window = min(pickup) / max(return) across lines.
+  const windowStart = snapshot.reduce((acc, l) => (l.pickupDate < acc ? l.pickupDate : acc), snapshot[0].pickupDate)
+  const windowEnd = snapshot.reduce((acc, l) => (l.returnDate > acc ? l.returnDate : acc), snapshot[0].returnDate)
+  const windowDays = rentalDaysBetween(windowStart, windowEnd)
 
   // ── Reference SR-REQ-NNNN ─────────────────────────────────
-  // Count existing WEB_FORM inquiries + 1, zero-padded. Race-tolerant
-  // (worst case is duplicate references on simultaneous submissions;
-  // the inquiry ids are still unique, the ref is just for eyeballs).
   const seq = (await prisma.inquiry.count({ where: { source: 'WEB_FORM' } })) + 1
   const reference = `SR-REQ-${String(seq).padStart(4, '0')}`
 
   // ── Inquiry write ─────────────────────────────────────────
   const titleClient = companyName
   const titleProd = jobName ? ` · ${jobName}` : ''
-  const title = `Supply request — ${titleClient}${titleProd}`
+  const title = `Production request — ${titleClient}${titleProd}`
 
   const description = [
     `${reference} · From ${contactName} <${contactEmail}>${contactPhone ? ` · ${contactPhone}` : ''}`,
@@ -269,18 +342,21 @@ export async function POST(req: NextRequest) {
     contactRole ? `Role: ${contactRole}` : null,
     poNumber ? `PO #: ${poNumber}` : null,
     jobNumber ? `Job #: ${jobNumber}` : null,
-    `Dates: ${startStr} → ${endStr} (${rentalDays}d rental window)`,
+    `Window: ${windowStart} → ${windowEnd} (${windowDays}d span across lines)`,
     `Delivery: ${deliveryMethod}${deliveryAddress ? ` — ${deliveryAddress}` : ''}`,
-    `${totalUnits} unit(s), estimated $${grandTotal.toFixed(2)}`,
+    `${totalUnits} unit(s), estimated $${grandTotal.toFixed(2)}${hasPriceOnQuote ? ' (some lines price-on-quote)' : ''}`,
     '',
     'Cart:',
-    ...snapshot.map(
-      (l) =>
-        `  - ${l.quantity}× ${l.name}` +
-        (l.type === 'EQUIPMENT' && l.days ? ` × ${l.days}d` : '') +
-        ` @ $${l.unitPrice}${l.type === 'EQUIPMENT' ? '/day' : '/ea'}` +
-        ` = $${l.lineTotal.toFixed(2)}`,
-    ),
+    ...snapshot.map((l) => {
+      const dateChunk =
+        l.pickupDate === l.returnDate ? l.pickupDate : `${l.pickupDate}→${l.returnDate}`
+      const priceChunk = l.priceOnQuote
+        ? 'PRICE ON QUOTE'
+        : `@ $${l.unitPrice}${l.itemKind === 'VEHICLE' || l.type === 'EQUIPMENT' ? '/day' : '/ea'}` +
+          (l.days ? ` × ${l.days}d` : '') +
+          ` = $${l.lineTotal.toFixed(2)}`
+      return `  - [${l.itemKind}] ${l.qty}× ${l.name} (${dateChunk}) ${priceChunk}`
+    }),
     notes ? `\nNotes:\n${notes}` : '',
   ]
     .filter((s) => s != null)
@@ -293,17 +369,17 @@ export async function POST(req: NextRequest) {
       source: 'WEB_FORM',
       status: 'NEW',
       estimatedValue: grandTotal,
-      preferredStartDate: new Date(startStr),
-      preferredEndDate: new Date(endStr),
+      preferredStartDate: new Date(windowStart),
+      preferredEndDate: new Date(windowEnd),
       sourceMetadata: {
-        kind: 'supply-order',
+        kind: 'production-order',
         reference,
         contact: { name: contactName, email: contactEmail, phone: contactPhone, role: contactRole },
         production: { companyName, jobName, poNumber, jobNumber },
-        dates: { start: startStr, end: endStr, rentalDays },
+        window: { start: windowStart, end: windowEnd, days: windowDays },
         delivery: { method: deliveryMethod, address: deliveryAddress },
         cart: snapshot,
-        totals: { units: totalUnits, amount: grandTotal },
+        totals: { units: totalUnits, amount: grandTotal, hasPriceOnQuote },
         notes,
         submittedAt: new Date().toISOString(),
         ipAddress: ip === 'unknown' ? null : ip,
