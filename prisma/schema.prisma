@@ -198,7 +198,8 @@ model ProductionTypeProfile {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  jobs Job[] @relation("JobProductionTypeProfile")
+  jobs                Job[]     @relation("JobProductionTypeProfile")
+  mostCommonForCompanies Company[] @relation("CompanyMostCommonProductionTypeProfile")
 
   @@map("production_type_profiles")
 }
@@ -211,6 +212,14 @@ model Company {
   tier          ClientTier     @default(NEW)
   totalSpend    Decimal        @default(0) @map("total_spend") @db.Decimal(12, 2)
   totalBookings Int            @default(0) @map("total_bookings")
+
+  // Cached mode of productionTypeProfileId across this company's Jobs.
+  // Recomputed by lib/companies/recomputeMostCommonProductionTypeProfile.
+  // Nullable — companies with zero jobs (or no profile-tagged jobs) get
+  // null. Not maintained by the booking flow yet; the recompute helper
+  // is called manually from a backfill script in this commit. Wiring
+  // into the Job create/update path lands in a later commit.
+  mostCommonProductionTypeProfileId String? @map("most_common_production_type_profile_id")
 
   // Default agent
   defaultAgentId String? @map("default_agent_id")
@@ -272,6 +281,7 @@ model Company {
 
   // Relations
   defaultAgent    User?            @relation("DefaultAgent", fields: [defaultAgentId], references: [id])
+  mostCommonProductionTypeProfile ProductionTypeProfile? @relation("CompanyMostCommonProductionTypeProfile", fields: [mostCommonProductionTypeProfileId], references: [id])
   affiliations    Affiliation[]
   bookings        Booking[]
   drivers         Driver[]
@@ -282,6 +292,7 @@ model Company {
   coiChecks       CoiCheck[]
   inquiries       Inquiry[]
 
+  @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
 }
 
