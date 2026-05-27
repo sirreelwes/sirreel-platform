@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
+import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,7 +72,17 @@ export async function PATCH(
 ) {
   try {
     const body = await req.json()
-    const { name, status, startDate, endDate, productionType, agentId, notes, estimatedValue } = body
+    const {
+      name,
+      status,
+      startDate,
+      endDate,
+      productionType,
+      productionTypeProfileId,
+      agentId,
+      notes,
+      estimatedValue,
+    } = body
 
     const job = await prisma.job.update({
       where: { id: params.id },
@@ -79,6 +90,15 @@ export async function PATCH(
         ...(name !== undefined && { name }),
         ...(status !== undefined && { status }),
         ...(productionType !== undefined && { productionType }),
+        // Accept null or empty string to explicitly clear; otherwise
+        // treat as the new FK value. Empty-string-to-null matches the
+        // create-flow defensive normalization.
+        ...(productionTypeProfileId !== undefined && {
+          productionTypeProfileId:
+            typeof productionTypeProfileId === 'string' && productionTypeProfileId
+              ? productionTypeProfileId
+              : null,
+        }),
         ...(agentId !== undefined && { agentId }),
         ...(notes !== undefined && { notes }),
         ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
@@ -89,6 +109,22 @@ export async function PATCH(
         }),
       },
     })
+
+    // Refresh the Company's most-common-profile cache when the FK was
+    // in the body — whether it changed value or not. The helper is
+    // one indexed findMany + one update; cheap enough to always run
+    // rather than case-analysing "did it actually change?" Skipped
+    // when productionTypeProfileId wasn't in the body at all — name/
+    // notes/dates edits don't change the company's profile
+    // distribution. companyId comes off the updated row (prisma
+    // update returns all scalars by default).
+    if (productionTypeProfileId !== undefined) {
+      try {
+        await recomputeMostCommonProductionTypeProfile(job.companyId)
+      } catch (err) {
+        console.warn('[jobs PATCH] recompute most-common profile failed:', err)
+      }
+    }
 
     return NextResponse.json({
       job: {
