@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -67,6 +68,7 @@ interface JobDetail {
   name: string;
   status: JobStatus;
   productionType: string;
+  productionTypeProfileId: string | null;
   startDate: string | null;
   endDate: string | null;
   estimatedValue: number | null;
@@ -93,6 +95,7 @@ export default function JobDetailPage() {
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -150,6 +153,26 @@ export default function JobDetailPage() {
       alert(e instanceof Error ? e.message : 'Failed to save notes');
     } finally {
       setNotesSaving(false);
+    }
+  };
+
+  // PATCH the Job's productionTypeProfileId. Server fires the
+  // Company most-common-profile cache-refresh after the update.
+  const saveProfile = async (nextId: string | null) => {
+    if (!job) return;
+    setProfileSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productionTypeProfileId: nextId }),
+      });
+      if (!res.ok) throw new Error('Failed to save profile');
+      setJob({ ...job, productionTypeProfileId: nextId });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save profile');
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -232,6 +255,26 @@ export default function JobDetailPage() {
           <Meta label="Orders" value={String(job.orders.length)} />
           <Meta label="Created" value={fmtDate(job.createdAt)} />
           <Meta label="Updated" value={fmtDate(job.updatedAt)} />
+        </div>
+
+        {/* Production type profile — drives the fleet-assignment
+            optimizer. Editable in place; saving triggers the Company
+            most-common-profile cache refresh on the server. The legacy
+            productionType enum stays in the Meta grid above as static
+            display until the writers cut over. */}
+        <div className="mt-5 flex items-center gap-3 flex-wrap">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+            Production type profile
+          </div>
+          <div className="w-64">
+            <ProductionTypeProfilePicker
+              value={job.productionTypeProfileId}
+              onChange={(id) => { void saveProfile(id); }}
+              disabled={profileSaving}
+              size="compact"
+            />
+          </div>
+          {profileSaving && <span className="text-[10px] text-zinc-500">Saving…</span>}
         </div>
       </div>
 

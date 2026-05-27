@@ -7,6 +7,7 @@ import type { LineItemDepartment, ProductionType, RateType } from '@prisma/clien
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
+import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 
 const PRODUCTION_TYPES: ProductionType[] = [
   'FILM', 'TV', 'COMMERCIAL', 'MUSIC_VIDEO', 'CORPORATE', 'EVENT_PLANNER', 'OTHER',
@@ -228,6 +229,7 @@ interface DraftState {
   discountAmount: string;
   discountLabel: string;
   newJobProductionType: ProductionType;
+  newJobProductionTypeProfileId: string | null;
   newJobNotes: string;
 }
 
@@ -328,6 +330,12 @@ function NewQuotePageInner() {
   // the picker so the agent decides; prefilled but editable.
   const [newJobProductionType, setNewJobProductionType] = useState<ProductionType>('OTHER');
   const [newJobNotes, setNewJobNotes] = useState('');
+  // Picker for the new ProductionTypeProfile lookup (drives the
+  // fleet-assignment optimizer later). Coexists with the legacy
+  // productionType enum above; both fields submit independently on
+  // the new-Job create body.
+  const [newJobProductionTypeProfileId, setNewJobProductionTypeProfileId] =
+    useState<string | null>(null);
 
   // Post-parse Job-candidate fetch. Fires when we have both a parse
   // result AND a confirmed customer. Pulls active/recent Jobs for that
@@ -410,6 +418,7 @@ function NewQuotePageInner() {
     setDiscountAmount(draft.discountAmount);
     setDiscountLabel(draft.discountLabel);
     setNewJobProductionType(draft.newJobProductionType ?? 'OTHER');
+    setNewJobProductionTypeProfileId(draft.newJobProductionTypeProfileId ?? null);
     setNewJobNotes(draft.newJobNotes ?? '');
     // selectedClientId is intentionally NOT restored here — the next
     // effect sets it to clientCompanyIdFromUrl, which is exactly what
@@ -861,6 +870,7 @@ function NewQuotePageInner() {
       let inlineJob: {
         name: string;
         productionType: ProductionType;
+        productionTypeProfileId: string | null;
         startDate: string | null;
         endDate: string | null;
         notes: string | null;
@@ -939,6 +949,7 @@ function NewQuotePageInner() {
         inlineJob = {
           name: job.name.trim(),
           productionType: newJobProductionType,
+          productionTypeProfileId: newJobProductionTypeProfileId,
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
           notes: newJobNotes.trim() || null,
@@ -1213,6 +1224,7 @@ function NewQuotePageInner() {
                       discountAmount,
                       discountLabel,
                       newJobProductionType,
+                      newJobProductionTypeProfileId,
                       newJobNotes,
                     });
                     const params = new URLSearchParams();
@@ -1273,6 +1285,8 @@ function NewQuotePageInner() {
         selectedClientId={selectedClientId}
         newJobProductionType={newJobProductionType}
         setNewJobProductionType={setNewJobProductionType}
+        newJobProductionTypeProfileId={newJobProductionTypeProfileId}
+        setNewJobProductionTypeProfileId={setNewJobProductionTypeProfileId}
         newJobNotes={newJobNotes}
         setNewJobNotes={setNewJobNotes}
         seedName={editing.productionName || parsed?.productionName || inquiry?.title || ''}
@@ -1402,6 +1416,8 @@ function JobQuoteSection({
   selectedClientId,
   newJobProductionType,
   setNewJobProductionType,
+  newJobProductionTypeProfileId,
+  setNewJobProductionTypeProfileId,
   newJobNotes,
   setNewJobNotes,
   seedName,
@@ -1412,6 +1428,8 @@ function JobQuoteSection({
   selectedClientId: string;
   newJobProductionType: ProductionType;
   setNewJobProductionType: (pt: ProductionType) => void;
+  newJobProductionTypeProfileId: string | null;
+  setNewJobProductionTypeProfileId: (id: string | null) => void;
   newJobNotes: string;
   setNewJobNotes: (notes: string) => void;
   seedName: string;
@@ -1516,17 +1534,29 @@ function JobQuoteSection({
           <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">
             New job details
           </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
-            <select
-              value={newJobProductionType}
-              onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
-              className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
-            >
-              {PRODUCTION_TYPES.map((pt) => (
-                <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
+              <select
+                value={newJobProductionType}
+                onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
+                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+              >
+                {PRODUCTION_TYPES.map((pt) => (
+                  <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
+                Profile <span className="text-zinc-600">(routing)</span>
+              </label>
+              <ProductionTypeProfilePicker
+                value={newJobProductionTypeProfileId}
+                onChange={setNewJobProductionTypeProfileId}
+                size="compact"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Notes (optional)</label>
