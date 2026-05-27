@@ -99,6 +99,13 @@ model Asset {
   status     AssetStatus @default(AVAILABLE)
   location   Location    @default(LANKERSHIM)
   tier       AssetTier   @default(STANDARD)
+  // 1–5 age/condition class for the fleet-assignment optimizer.
+  // Distinct from the legacy `tier` field above (3-bucket marketing
+  // tier: PREMIUM/STANDARD/ECONOMY). equipmentTier matches
+  // ProductionTypeProfile.tier pools: tier=5 routes to newest-gear
+  // pool, tier=1 to oldest. Nullable until the fleet team backfills
+  // the 5-bucket classification across the inventory.
+  equipmentTier Int? @map("equipment_tier")
 
   // Vehicle details
   vin          String? @db.VarChar(20)
