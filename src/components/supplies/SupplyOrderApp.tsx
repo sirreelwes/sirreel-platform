@@ -309,7 +309,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-[#0c0c0d]" style={{ fontFamily: '"Hanken Grotesk", Inter, system-ui, sans-serif' }}>
+    <div className="min-h-screen overflow-x-hidden bg-[#f4f1ea] text-[#0c0c0d]" style={{ fontFamily: '"Hanken Grotesk", Inter, system-ui, sans-serif' }}>
       {/* ── HEADER ────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black">
         <div className="max-w-[1480px] mx-auto px-5 h-[68px] flex items-center justify-between">
@@ -388,7 +388,11 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       <div className="max-w-[1480px] mx-auto px-5 relative">
         <div className="grid gap-8 pt-7 pb-[120px] lg:grid-cols-[1fr_374px] items-start">
           {/* LEFT: search + pills + catalog */}
-          <main>
+          {/* min-w-0 lets <main> shrink inside the lg grid track instead
+              of forcing its 1fr column wider than the viewport. Without
+              it, long item names + the auto-fill catalog grid push the
+              page horizontally and clip the chip strip. */}
+          <main className="min-w-0">
             <div className="sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3">
               <div className="relative">
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b857a" strokeWidth={2.2} strokeLinecap="round" className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -408,7 +412,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 />
               </div>
               {data && (
-                <div className="flex gap-2 overflow-x-auto pt-3.5 pb-1 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+                <div className="flex flex-wrap gap-2 pt-3.5 pb-1">
                   {['All', ...data.categories.map((c) => c.name)].map((c) => {
                     const isActive = c === activeCat && !debouncedQuery
                     return (
