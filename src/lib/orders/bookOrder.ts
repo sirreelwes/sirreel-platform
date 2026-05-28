@@ -80,6 +80,9 @@ export type BookOrderResult =
       bookedAt: Date
       bookedTotal: string
       laneCounts: Record<FulfillmentLane, number>
+      /** Set when the order has ≥1 WAREHOUSE line. UI uses this to jump
+       *  the operator into the picking floor view after a successful book. */
+      pickListId: string | null
     }
   | { ok: false; status: number; error: string; currentStatus?: string }
 
@@ -97,6 +100,7 @@ export async function bookOrder(args: {
         bookedAt: Date
         bookedTotal: Prisma.Decimal
         laneCounts: Record<FulfillmentLane, number>
+        pickListId: string | null
       }
     | { abort: true; status: number; error: string; currentStatus?: string }
 
@@ -163,6 +167,7 @@ export async function bookOrder(args: {
         WAREHOUSE: 0,
         STAGE: 0,
       }
+      const warehouseLineIds: string[] = []
       for (const li of order.lineItems) {
         const routing = routeDepartment(li.department)
         laneCounts[routing.lane] += 1
@@ -172,6 +177,34 @@ export async function bookOrder(args: {
             fulfillmentLane: routing.lane,
             pickStatus: routing.pickStatus,
           },
+        })
+        if (routing.lane === 'WAREHOUSE') {
+          warehouseLineIds.push(li.id)
+        }
+      }
+
+      // Phase 2 warehouse lane: spin up a PickList (DRAFT) with one
+      // PickListItem per WAREHOUSE-routed line. Skip when the order has
+      // zero warehouse lines (vehicles-and-stage-only orders).
+      //
+      // PARKING LOT (Phase 2.x): post-book line-item edits (add or
+      // remove during ON_JOB) do NOT currently propagate into the
+      // PickList. A new line added after this point won't appear in the
+      // picking floor view, and a removed line will orphan its
+      // PickListItem. Sync needs to happen at the OrderLineItem POST/
+      // DELETE endpoints — see src/app/api/orders/[id]/line-items.
+      let pickListId: string | null = null
+      if (warehouseLineIds.length > 0) {
+        const pickList = await tx.pickList.create({
+          data: { orderId, status: 'DRAFT' },
+          select: { id: true },
+        })
+        pickListId = pickList.id
+        await tx.pickListItem.createMany({
+          data: warehouseLineIds.map((orderLineItemId) => ({
+            pickListId: pickList.id,
+            orderLineItemId,
+          })),
         })
       }
 
@@ -197,6 +230,7 @@ export async function bookOrder(args: {
             bookedTotal: order.total.toString(),
             bookedAt: bookedAt.toISOString(),
             laneCounts,
+            pickListId,
           },
         },
       })
@@ -205,6 +239,7 @@ export async function bookOrder(args: {
         bookedAt,
         bookedTotal: order.total,
         laneCounts,
+        pickListId,
       }
     })
   } catch (err) {
@@ -244,5 +279,6 @@ export async function bookOrder(args: {
     bookedAt: txResult.bookedAt,
     bookedTotal: txResult.bookedTotal.toString(),
     laneCounts: txResult.laneCounts,
+    pickListId: txResult.pickListId,
   }
 }

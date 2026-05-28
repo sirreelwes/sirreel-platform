@@ -1324,6 +1324,10 @@ model User {
   followUpsSent    QuoteFollowUp[] @relation("FollowUpSentBy")
   followUpsSkipped QuoteFollowUp[] @relation("FollowUpSkippedBy")
 
+  // Phase 2 warehouse lane.
+  pickListsAssigned   PickList[]     @relation("PickListAssignedTo")
+  pickListItemsPicked PickListItem[] @relation("PickListItemPickedBy")
+
   @@map("users")
 }
 
@@ -1762,6 +1766,9 @@ model Order {
   stageBookingTerms  StageBookingTerms?
   cadenceEvents      CadenceEvent[]
   portalAccesses     PortalAccess[]
+  // Phase 2 warehouse lane: zero-or-one PickList per Order, created at
+  // book time iff the order has ≥1 WAREHOUSE-lane line item.
+  pickList           PickList?
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
@@ -1861,8 +1868,83 @@ model OrderLineItem {
   order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   assetCategory AssetCategory? @relation(fields: [assetCategoryId], references: [id])
+  // Phase 2 warehouse lane: zero-or-one PickListItem per OrderLineItem.
+  // Only WAREHOUSE-lane lines get a PickListItem at book time. FLEET
+  // and STAGE lines stay null.
+  pickListItem  PickListItem?
 
   @@map("sr_order_line_items")
+}
+
+// ════════════════════════════════════════════════════════════════
+// PHASE 2 — WAREHOUSE PICKING
+// One PickList per Order with at least one WAREHOUSE-lane line item.
+// Auto-created at book time in src/lib/orders/bookOrder.ts.
+//
+// Authoritative line-level status lives on OrderLineItem.pickStatus —
+// Phase 3's LOADED_READY rollup scans order line items directly.
+// PickListItem is the join row + per-line capture metadata (who
+// scanned what, when). Keep this separation when adding fields.
+//
+// PARKING LOT (Phase 2.x): post-book line-item edits during ON_JOB
+// don't currently sync into the PickList. If a new line item gets
+// added to an order after the PickList is created, it won't appear
+// in the picking floor view. Tracked as a known follow-up — see the
+// TODO in bookOrder.ts and the line-item PATCH endpoints.
+// ════════════════════════════════════════════════════════════════
+
+enum PickListStatus {
+  DRAFT            // created at book time; no picker assigned yet
+  PICKING          // a warehouse user has started the pick session
+  READY_TO_STAGE   // all items picked; awaiting move to staging area
+  STAGED           // physically staged for loadout
+  LOADED           // loaded onto outbound transport — warehouse lane terminal
+  CANCELLED        // order cancelled or list voided
+}
+
+model PickList {
+  id           String         @id @default(uuid())
+  // One PickList per Order — enforced by @unique. Aggregating multiple
+  // orders into a single "today's pulls" view is a Phase 2.1 parking-lot
+  // item that would layer over this without changing the model.
+  orderId      String         @unique @map("order_id")
+  status       PickListStatus @default(DRAFT)
+  // The picker who's actively working this list. Stamped on the
+  // DRAFT → PICKING transition. Stays populated through subsequent
+  // states for audit even after the session ends.
+  assignedToId String?        @map("assigned_to_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  startedAt    DateTime?      @map("started_at")
+  completedAt  DateTime?      @map("completed_at")
+
+  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assignedTo User?          @relation("PickListAssignedTo", fields: [assignedToId], references: [id])
+  items      PickListItem[]
+
+  @@index([status])
+  @@map("pick_lists")
+}
+
+model PickListItem {
+  id              String    @id @default(uuid())
+  pickListId      String    @map("pick_list_id")
+  // Each OrderLineItem is in at most one PickList. The line's
+  // authoritative pick state lives on OrderLineItem.pickStatus; this
+  // row only carries the picker metadata.
+  orderLineItemId String    @unique @map("order_line_item_id")
+  // The code the picker scanned to mark this item PICKED. Typically
+  // matches OrderLineItem.inventoryItem.code; null on manual-override
+  // picks (items without a scannable SKU, or fallback path).
+  scannedCode     String?   @map("scanned_code")
+  pickedById      String?   @map("picked_by_id")
+  pickedAt        DateTime? @map("picked_at")
+
+  pickList      PickList      @relation(fields: [pickListId], references: [id], onDelete: Cascade)
+  orderLineItem OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  pickedBy      User?         @relation("PickListItemPickedBy", fields: [pickedById], references: [id])
+
+  @@index([pickListId])
+  @@map("pick_list_items")
 }
 
 model Invoice {

@@ -4,6 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 
+// PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
+// added/removed AFTER the order has been BOOKED (allowed during
+// ON_JOB), this endpoint does NOT currently update the PickList.
+// Adding a WAREHOUSE-department line needs a matching PickListItem
+// (and a pickList row if none exists yet); removing a WAREHOUSE line
+// needs the corresponding PickListItem cascade-deleted. Today the
+// PickList is a book-time snapshot only. Tracked alongside bookOrder.ts.
+
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
