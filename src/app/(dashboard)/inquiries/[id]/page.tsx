@@ -242,6 +242,12 @@ export default function InquiryDetailPage() {
           </div>
         </div>
 
+        {!isClosed && (
+          <div className="mt-2 text-[11px] text-zinc-500 text-right">
+            Converting creates a Job in the sales pipeline and moves this inquiry to Converted.
+          </div>
+        )}
+
         {actionError && (
           <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2.5 py-1.5">
             {actionError}

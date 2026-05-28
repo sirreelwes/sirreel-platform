@@ -1103,9 +1103,17 @@ function NewQuotePageInner() {
         </div>
 
         {inquiry && (
-          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-[12px]">
-            Prefilled from Inquiry: <span className="font-semibold text-emerald-900">{inquiry.title}</span>
-            {inquiry.company && <> · <span className="font-semibold text-emerald-900">{inquiry.company.name}</span></>}
+          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-[12px] flex items-center justify-between gap-3">
+            <span>
+              Created from Inquiry: <span className="font-semibold text-emerald-900">{inquiry.title}</span>
+              {inquiry.company && <> · <span className="font-semibold text-emerald-900">{inquiry.company.name}</span></>}
+            </span>
+            <a
+              href={`/inquiries/${inquiry.id}`}
+              className="font-semibold text-emerald-800 hover:text-emerald-900 hover:underline whitespace-nowrap"
+            >
+              View original →
+            </a>
           </div>
         )}
 
@@ -1172,6 +1180,15 @@ function NewQuotePageInner() {
       <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-gray-500 hover:text-gray-900">
         &larr; Start Over
       </button>
+      {inquiry && (
+        <div className="text-[11.5px] text-zinc-500">
+          Created from Inquiry: <span className="text-zinc-700 font-medium">{inquiry.title}</span>
+          {' · '}
+          <a href={`/inquiries/${inquiry.id}`} className="text-zinc-600 hover:text-zinc-900 hover:underline">
+            View original →
+          </a>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Review Quote</h1>
         <p className="text-sm text-gray-600 mt-1">
