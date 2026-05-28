@@ -1688,6 +1688,12 @@ model Order {
   bookedTaxAmount Decimal?         @map("booked_tax_amount") @db.Decimal(12, 2)
   bookedTotal     Decimal?         @map("booked_total") @db.Decimal(12, 2)
   bookedAt        DateTime?        @map("booked_at")
+  // Phase 3 lifecycle: stamped when the fleet lane is physically
+  // ready (manually via /api/orders/[id]/fleet-ready for now; will be
+  // stamped automatically when the digital fleet checkout flow lands).
+  // The LOADED_READY rollup treats fleetReadyAt non-null as fleet-side
+  // terminal. Null = fleet side still pending OR no fleet lines.
+  fleetReadyAt    DateTime?        @map("fleet_ready_at")
   quoteSentAt     DateTime?        @map("quote_sent_at")
   quoteAcceptedAt DateTime?        @map("quote_accepted_at")
   quoteExpDays    Int              @default(7) @map("quote_exp_days")
@@ -2633,6 +2639,12 @@ enum CadenceEventType {
   INVOICE_DELIVERY
   PAYMENT_REMINDER_T14
   REPEAT_BUSINESS_T30
+  // Phase 3 lifecycle: emitted by the LOADED_READY rollup when both
+  // warehouse + fleet lanes hit terminal. One of the two required
+  // client notifications per the lifecycle spec (Phase 0 addendum);
+  // the other (CHECKOUT_SIGN_OFF) lands with the future fleet
+  // checkout flow.
+  LOADED_AND_READY
 
   // Re-engagement
   LOST_REENGAGEMENT_2W

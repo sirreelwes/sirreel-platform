@@ -199,6 +199,30 @@ Return is set for {{returnTime}} tomorrow at {{pickupAddress}}. A few quick note
 Best,
 {{repName}}`,
   },
+  // Phase 3 lifecycle — fired by the LOADED_READY rollup when both
+  // warehouse + fleet lanes hit terminal. Confirms to the client that
+  // their order is physically prepped and ready for pickup. Visual
+  // shape mirrors BOOKING_WELCOME.
+  LOADED_AND_READY: {
+    subject: 'Your order is loaded and ready for pickup — {{jobName}}',
+    body: `Hi {{firstName}},
+
+Quick heads up — everything for {{jobName}} is loaded and ready on our end. You're good to pick up on {{pickupDate}} at {{pickupTime}}.
+
+A few things you can do anytime through your portal:
+• Review the pickup info and final equipment list
+• Confirm your driver / who's coming to pick up
+• Reach us if anything changes before pickup
+
+[View your job portal]({{portalLink}})
+
+If you need anything between now and pickup, I'm at {{repPhone}}. After-hours line is {{afterHoursLine}}.
+
+See you {{pickupDayOfWeek}}.
+
+Best,
+{{repName}}`,
+  },
   RETURN_ACKNOWLEDGMENT: {
     subject: 'Equipment back — thanks for {{jobName}}',
     body: `Hi {{firstName}},

@@ -169,6 +169,16 @@ async function dispatch(event: EventWithOrder): Promise<HandlerResult> {
       return handleStateGatedEmail(event, 'BOOKING_WELCOME', {
         requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS'],
       })
+    // Phase 3 lifecycle — emitted by the LOADED_READY rollup. The
+    // OrderStatus is LOADED_READY by then but CadenceState has no
+    // LOADED_READY peer (see Phase 1 projection table), so cadence
+    // sits at BOOKED through this event. Allow PICKUP_CONFIRMED and
+    // IN_PROGRESS too for slipped-clock cases (event fires late and
+    // cadence has already advanced).
+    case 'LOADED_AND_READY':
+      return handleStateGatedEmail(event, 'LOADED_AND_READY', {
+        requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS'],
+      })
     case 'COI_RECEIVED_ACK':
       return handleStateGatedEmail(event, 'COI_RECEIVED_ACK', {
         requiredStates: ['BOOKED', 'PICKUP_CONFIRMED', 'IN_PROGRESS', 'RETURNED'],
