@@ -22,6 +22,11 @@ export interface Permissions {
   // for both nav visibility AND server-side /api/exec/* access via the
   // shared guard in src/lib/exec/requireCoverageAccess.ts.
   coverage: boolean;
+  // Phase 2 warehouse picking floor. Gated to ADMIN/MANAGER for now —
+  // a future WAREHOUSE role lands when a dedicated picker user is
+  // provisioned. Drives both the /warehouse nav section visibility
+  // and the server-side gate in src/lib/warehouse/requirePickerRole.ts.
+  warehouse: boolean;
   tasks: boolean;       // Driver task list
   inspections: boolean; // Driver inspections
 
@@ -58,6 +63,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: true,
     reporting: true, ai: true, tasks: true, inspections: true, coverage: true,
+    warehouse: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: true, seeAllBookings: true, seeOtherAgents: true,
@@ -73,6 +79,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
+    warehouse: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -88,6 +95,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
+    warehouse: false,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -103,6 +111,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
+    warehouse: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -117,6 +126,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
+    warehouse: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -131,6 +141,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: true, inspections: true, coverage: false,
+    warehouse: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: false,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -145,6 +156,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
+    warehouse: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -212,6 +224,12 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
   if (perms.coverage) main.push({ id: 'coverage', label: 'Coverage', icon: '', href: '/exec/coverage' });
   sections.push({ label: null, items: main });
+
+  // Warehouse — picking floor. Phase 2 ships /warehouse/pick; future
+  // surfaces (receiving, cycle counts) join the same section.
+  const warehouse: NavItem[] = [];
+  if (perms.warehouse) warehouse.push({ id: 'warehouse-pick', label: 'Pick', icon: '', href: '/warehouse/pick' });
+  if (warehouse.length > 0) sections.push({ label: 'Warehouse', items: warehouse });
 
   // Admin — management & configuration
   const admin: NavItem[] = [];
