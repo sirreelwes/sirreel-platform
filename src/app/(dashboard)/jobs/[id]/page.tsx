@@ -80,7 +80,32 @@ interface JobDetail {
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
   orders: JobOrder[];
+  fromInquiry: {
+    id: string;
+    source: 'MANUAL' | 'GMAIL' | 'WEB_FORM';
+    createdAt: string;
+    title: string;
+  } | null;
 }
+
+// Compact relative-time formatter for the provenance line. "today" for
+// <24h, "Nd ago" up to 30 days, "Nw ago" up to ~3mo, then absolute month.
+function relativeAge(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const ms = Date.now() - then;
+  const days = Math.floor(ms / 86_400_000);
+  if (days < 1) return 'today';
+  if (days < 30) return `${days}d ago`;
+  if (days < 90) return `${Math.floor(days / 7)}w ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+const INQUIRY_SOURCE_BADGE: Record<'MANUAL' | 'GMAIL' | 'WEB_FORM', string> = {
+  MANUAL:   'bg-zinc-800 text-zinc-400 border-zinc-700',
+  GMAIL:    'bg-rose-950/40 text-rose-300 border-rose-900',
+  WEB_FORM: 'bg-sky-950/40 text-sky-300 border-sky-900',
+};
 
 export default function JobDetailPage() {
   const params = useParams();
@@ -228,6 +253,25 @@ export default function JobDetailPage() {
             >
               {job.company.name}
             </Link>
+            {job.fromInquiry && (
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
+                <span>Originated from</span>
+                <Link
+                  href={`/inquiries/${job.fromInquiry.id}`}
+                  className="text-zinc-400 hover:text-amber-500 underline-offset-2 hover:underline"
+                >
+                  Inquiry
+                </Link>
+                <span className="text-zinc-700">·</span>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${INQUIRY_SOURCE_BADGE[job.fromInquiry.source]}`}
+                >
+                  {job.fromInquiry.source.replace('_', ' ')}
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span>captured {relativeAge(job.fromInquiry.createdAt)}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-2 flex-shrink-0">

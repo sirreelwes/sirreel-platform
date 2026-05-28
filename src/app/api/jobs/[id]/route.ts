@@ -33,6 +33,13 @@ export async function GET(
             createdAt: true,
           },
         },
+        // Phase 1.5: surface the originating Inquiry on the Job detail
+        // page header when one exists. Back-relation on the existing
+        // "ConvertedFromInquiry" named relation; no extra column. Six
+        // existing Jobs currently resolve here (May 2026 count).
+        fromInquiry: {
+          select: { id: true, source: true, createdAt: true, title: true },
+        },
       },
     })
 
