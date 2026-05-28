@@ -1,24 +1,24 @@
 import type { OrderStatus, OrderQuoteStatus } from '@prisma/client'
 
 /**
- * Phase 1 sales pipeline rework: `Order.status` (full lifecycle) and
- * `Order.quoteStatus` (sales-stage view) live in parallel. The two fields
- * stay in sync via this helper — every code path that mutates `status`
- * must also write the derived `quoteStatus` (and stamp the relevant
- * sales-stage timestamp the first time it transitions).
+ * `Order.status` (full lifecycle) and `Order.quoteStatus` (sales-stage view)
+ * live in parallel. The two fields stay in sync via this helper — every code
+ * path that mutates `status` must also write the derived `quoteStatus` (and
+ * stamp the relevant sales-stage timestamp the first time it transitions).
  *
- * Mapping (per Wes 2026-05-08):
- *   DRAFT       → DRAFT
- *   QUOTE_SENT  → SENT
- *   CONFIRMED   → WON     (client signed; lifecycle continues on `status`)
- *   ACTIVE      → WON
- *   RETURNED    → WON
- *   CLOSED      → WON
- *   CANCELLED   → LOST
+ * Mapping (Phase 1 lifecycle spine — supersedes the original 2026-05-08
+ * table after CONFIRMED→APPROVED and ACTIVE→ON_JOB renames):
+ *   DRAFT                                              → DRAFT
+ *   QUOTE_SENT                                         → SENT
+ *   APPROVED, BOOKED, LOADED_READY, ON_JOB, RETURNED,
+ *   LD_CHECK, INVOICED, CLOSED                         → WON
+ *   CANCELLED                                          → LOST
+ *
+ * Everything past APPROVED is "won" from the sales pipeline's POV — the
+ * client said yes and we're executing.
  *
  * EXPIRED has no `status`-side counterpart — it is set later by an auto-
- * expiry mechanism (out of Phase 1 scope) and does NOT round-trip back
- * through this helper.
+ * expiry mechanism and does NOT round-trip back through this helper.
  */
 export function deriveQuoteStatus(status: OrderStatus): OrderQuoteStatus {
   switch (status) {
@@ -26,9 +26,13 @@ export function deriveQuoteStatus(status: OrderStatus): OrderQuoteStatus {
       return 'DRAFT'
     case 'QUOTE_SENT':
       return 'SENT'
-    case 'CONFIRMED':
-    case 'ACTIVE':
+    case 'APPROVED':
+    case 'BOOKED':
+    case 'LOADED_READY':
+    case 'ON_JOB':
     case 'RETURNED':
+    case 'LD_CHECK':
+    case 'INVOICED':
     case 'CLOSED':
       return 'WON'
     case 'CANCELLED':

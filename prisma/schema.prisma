@@ -1464,12 +1464,24 @@ model DailyCollections {
 // BILLING MODULE
 // =============================================
 
+// Full lifecycle status — canonical state machine per order-lifecycle-spec
+// (Phase 1: Book-it spine). Old CONFIRMED/ACTIVE renamed in-place to
+// APPROVED/ON_JOB via `ALTER TYPE … RENAME VALUE` (preserves rows). New
+// states added additively. Forward flow:
+//   DRAFT → QUOTE_SENT → APPROVED → BOOKED → LOADED_READY → ON_JOB
+//        → RETURNED → LD_CHECK → INVOICED → CLOSED
+// CANCELLED is the off-ramp; LOADED_READY is rolled up from parallel
+// fleet + warehouse lanes (Phase 3, not yet wired).
 enum OrderStatus {
   DRAFT
   QUOTE_SENT
-  CONFIRMED
-  ACTIVE
+  APPROVED
+  BOOKED
+  LOADED_READY
+  ON_JOB
   RETURNED
+  LD_CHECK
+  INVOICED
   CLOSED
   CANCELLED
 }
