@@ -32,7 +32,7 @@ import {
   type FormEvent,
 } from 'react'
 import Link from 'next/link'
-import { useSupplyCart, type CartLine } from '@/hooks/useSupplyCart'
+import { useSupplyCart, type CartLine, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
 
 interface CatalogItem {
   id: string
@@ -216,7 +216,80 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   }, [])
 
   // ── Cart ──────────────────────────────────────────────────────
-  const { lines, totalUnits, totalPerDay, hasEquipment, addToCart, setQty, resetCart } = useSupplyCart()
+  const {
+    lines,
+    totalUnits,
+    totalEstimate,
+    hasEquipment,
+    hasPriceOnQuote,
+    addToCart,
+    setQty,
+    setDates,
+    removeLine,
+    resetCart,
+  } = useSupplyCart()
+
+  // touchedLineIds — line ids the agent has manually changed dates on.
+  // Used by category-level date cascade in the Review panel:
+  // category-level pickup/return changes propagate to every line in
+  // the category EXCEPT those in this set. Pruned whenever lines
+  // change so stale ids don't accumulate across removes / re-keys.
+  const [touchedLineIds, setTouchedLineIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    setTouchedLineIds((prev) => {
+      if (prev.size === 0) return prev
+      const live = new Set(lines.map((l) => l.cartLineId))
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (live.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [lines])
+
+  function setLineDatesTouched(cartLineId: string, pickup: string, returnD: string) {
+    setDates(cartLineId, pickup, returnD)
+    // setDates re-keys the line — the new key is cartLineKey(kind,id,pickup,returnD).
+    // Reconstruct it from the current line so we mark the post-rekey id as touched.
+    const line = lines.find((l) => l.cartLineId === cartLineId)
+    if (!line) return
+    const newKey = `${line.itemKind}:${line.itemId}:${pickup}:${returnD}`
+    setTouchedLineIds((prev) => {
+      const next = new Set(prev)
+      next.delete(cartLineId)
+      next.add(newKey)
+      return next
+    })
+  }
+
+  function cascadeCategoryDates(categoryLines: CartLine[], pickup: string, returnD: string) {
+    for (const l of categoryLines) {
+      if (touchedLineIds.has(l.cartLineId)) continue
+      if (l.pickupDate === pickup && l.returnDate === returnD) continue
+      setDates(l.cartLineId, pickup, returnD)
+    }
+  }
+
+  // Lines grouped by category for the Review panel. Vehicles ordered
+  // first (most prominent reservation element); then categories in
+  // first-line-add order so the panel reads in the order the agent
+  // built it.
+  const linesByCategory = useMemo(() => {
+    const groups = new Map<string, CartLine[]>()
+    for (const l of lines) {
+      const key = l.itemKind === 'VEHICLE' ? 'Vehicles' : (l.category || 'Other')
+      const slot = groups.get(key) ?? []
+      slot.push(l)
+      groups.set(key, slot)
+    }
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === 'Vehicles') return -1
+      if (b[0] === 'Vehicles') return 1
+      return 0
+    })
+  }, [lines])
   // Index of current cart lines by source itemId — used by the
   // catalog tile to show the "in cart: N" badge + qty stepper.
   // Sums qty across all lines that reference the same itemId
@@ -630,7 +703,8 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             <CartSidebar
               lines={lines}
               totalUnits={totalUnits}
-              totalPerDay={totalPerDay}
+              totalEstimate={totalEstimate}
+              hasPriceOnQuote={hasPriceOnQuote}
               onSetQty={setQty}
               onReview={() => setPanel('sheet')}
             />
@@ -647,10 +721,10 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
         <div className="lg:hidden fixed left-0 right-0 bottom-0 z-40 bg-[#0c0c0d] text-white px-5 py-3.5 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.25)]" style={{ paddingBottom: 'calc(13px + env(safe-area-inset-bottom))' }}>
           <div className="flex flex-col">
             <div className="font-extrabold text-lg text-[#c39a3f] leading-none" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              {fmtTotal(totalPerDay)}
+              {fmtTotal(totalEstimate)}
             </div>
             <div className="text-xs text-[#a8a294] mt-1">
-              {totalUnits} item{totalUnits === 1 ? '' : 's'} · est. / day
+              {totalUnits} item{totalUnits === 1 ? '' : 's'} · est. total
             </div>
           </div>
           <button
@@ -667,7 +741,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       <Scrim show={panel !== 'none'} onClick={() => setPanel('none')} />
 
       <SlidePanel show={panel === 'sheet'}>
-        <PanelHead title="Your Reservation" sub={lines.length ? `${totalUnits} item${totalUnits === 1 ? '' : 's'} · adjust below` : 'Review and adjust quantities'} onClose={() => setPanel('none')} />
+        <PanelHead title="Your Reservation" sub={lines.length ? `${totalUnits} item${totalUnits === 1 ? '' : 's'} · ${linesByCategory.length} categor${linesByCategory.length === 1 ? 'y' : 'ies'}` : 'Review and adjust quantities'} onClose={() => setPanel('none')} />
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {lines.length === 0 ? (
             <div className="py-16 text-center text-[#8b857a]">
@@ -677,18 +751,34 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               Add vehicles or supplies to continue.
             </div>
           ) : (
-            lines.map((l) => <ReviewRow key={l.cartLineId} line={l} onSetQty={(q) => setQty(l.cartLineId, q)} />)
+            linesByCategory.map(([category, categoryLines]) => (
+              <CategorySection
+                key={category}
+                category={category}
+                lines={categoryLines}
+                touchedLineIds={touchedLineIds}
+                onSetQty={setQty}
+                onRemove={removeLine}
+                onSetLineDates={setLineDatesTouched}
+                onCascadeCategoryDates={(p, r) => cascadeCategoryDates(categoryLines, p, r)}
+              />
+            ))
           )}
         </div>
         <div className="px-6 py-4 border-t border-[#e4dfd4] bg-white" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
-          <div className="flex justify-between items-baseline mb-3">
-            <span className="font-bold text-sm uppercase tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>Est. / day</span>
-            <span className="font-black text-2xl text-[#a37f2c] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalPerDay)}</span>
+          <div className="flex justify-between items-baseline mb-1">
+            <span className="font-bold text-sm uppercase tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>Est. total</span>
+            <span className="font-black text-2xl text-[#a37f2c] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalEstimate)}</span>
           </div>
+          {hasPriceOnQuote && (
+            <div className="text-[11.5px] text-[#8b857a] mb-2.5">
+              Some lines are priced on quote — not included in this estimate.
+            </div>
+          )}
           <button
             onClick={() => setPanel('details')}
             disabled={lines.length === 0}
-            className="w-full bg-[#0c0c0d] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-transform hover:-translate-y-0.5"
+            className="w-full bg-[#0c0c0d] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-transform hover:-translate-y-0.5 mt-2"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             Continue to details →
@@ -1016,13 +1106,15 @@ function VehicleCard({
 function CartSidebar({
   lines,
   totalUnits,
-  totalPerDay,
+  totalEstimate,
+  hasPriceOnQuote,
   onSetQty,
   onReview,
 }: {
   lines: CartLine[]
   totalUnits: number
-  totalPerDay: number
+  totalEstimate: number
+  hasPriceOnQuote: boolean
   onSetQty: (id: string, q: number) => void
   onReview: () => void
 }) {
@@ -1050,37 +1142,40 @@ function CartSidebar({
             Browse the catalog and tap <em>Add</em>.
           </div>
         ) : (
-          lines.map((l) => (
-            <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-semibold leading-tight truncate">{l.name}</div>
-                <div className="text-[11.5px] text-[#a8a294] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                  {l.price === 0 ? 'PRICE ON QUOTE' : `${fmtMoney(l.price)}${l.type === 'EQUIPMENT' ? ' /day' : ' ea'}`}
+          lines.map((l) => {
+            const isRental = l.itemKind === 'VEHICLE' || l.type === 'EQUIPMENT'
+            const days = isRental ? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
+            return (
+              <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13.5px] font-semibold leading-tight truncate">{l.name}</div>
+                  <div className="text-[11.5px] text-[#a8a294] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                    {l.price === 0
+                      ? 'PRICE ON QUOTE'
+                      : `${fmtMoney(l.price)}${isRental ? `/d × ${days}d` : ' ea'}`}
+                  </div>
+                </div>
+                <div className="flex items-center border border-[#2e2e30] rounded-lg overflow-hidden h-[30px]">
+                  <button onClick={() => onSetQty(l.cartLineId, l.qty - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
+                  <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.qty}</span>
+                  <button onClick={() => onSetQty(l.cartLineId, l.qty + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
+                </div>
+                <div className="font-bold text-[13px] min-w-[54px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  {fmtTotal(lineEstimate(l))}
                 </div>
               </div>
-              <div className="flex items-center border border-[#2e2e30] rounded-lg overflow-hidden h-[30px]">
-                <button onClick={() => onSetQty(l.cartLineId, l.qty - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
-                <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.qty}</span>
-                <button onClick={() => onSetQty(l.cartLineId, l.qty + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
-              </div>
-              <div className="font-bold text-[13px] min-w-[54px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                {fmtTotal(l.price * l.qty)}
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
       <div className="px-5 py-5 border-t border-[#242427] bg-[#0a0a0b]">
-        <div className="flex justify-between items-baseline mb-1.5 text-sm text-[#a8a294]">
-          <span>Estimated subtotal</span>
-          <span>{fmtTotal(totalPerDay)}</span>
-        </div>
-        <div className="flex justify-between items-baseline mt-2 mb-3.5">
-          <span className="font-bold text-sm tracking-wider uppercase" style={{ fontFamily: 'Archivo, sans-serif' }}>Est. / day</span>
-          <span className="font-black text-2xl text-[#c39a3f] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalPerDay)}</span>
+        <div className="flex justify-between items-baseline mt-2 mb-2">
+          <span className="font-bold text-sm tracking-wider uppercase" style={{ fontFamily: 'Archivo, sans-serif' }}>Est. total</span>
+          <span className="font-black text-2xl text-[#c39a3f] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalEstimate)}</span>
         </div>
         <div className="text-[11px] text-[#8b857a] leading-relaxed mb-3.5">
-          Estimate at standard daily rates. Final pricing, taxes, delivery and multi-day discounts confirmed in your quote.
+          {hasPriceOnQuote ? 'Some lines priced on quote and not included. ' : ''}
+          Estimate at standard rates across your selected windows. Final pricing, taxes, delivery and multi-day discounts confirmed in your quote.
         </div>
         <button
           onClick={onReview}
@@ -1095,30 +1190,179 @@ function CartSidebar({
   )
 }
 
-function ReviewRow({ line, onSetQty }: { line: CartLine; onSetQty: (q: number) => void }) {
+// CategorySection — one block per cart category in the Review panel.
+// Header shows category name + a "Window" pair of inputs that bulk-set
+// pickup/return on every line in the category that hasn't been
+// individually touched. The header inputs lazy-display the most common
+// (pickup,return) tuple among current lines (or the first line's
+// window if mixed). The "x of y manually edited" tag tells the agent
+// how many lines will skip the next cascade.
+function CategorySection({
+  category,
+  lines,
+  touchedLineIds,
+  onSetQty,
+  onRemove,
+  onSetLineDates,
+  onCascadeCategoryDates,
+}: {
+  category: string
+  lines: CartLine[]
+  touchedLineIds: Set<string>
+  onSetQty: (cartLineId: string, q: number) => void
+  onRemove: (cartLineId: string) => void
+  onSetLineDates: (cartLineId: string, pickup: string, returnD: string) => void
+  onCascadeCategoryDates: (pickup: string, returnD: string) => void
+}) {
+  // Default = most common (pickup,return) tuple in the category, else
+  // first line's window.
+  const counts = new Map<string, { p: string; r: string; n: number }>()
+  for (const l of lines) {
+    const k = `${l.pickupDate}__${l.returnDate}`
+    const cur = counts.get(k) ?? { p: l.pickupDate, r: l.returnDate, n: 0 }
+    cur.n += 1
+    counts.set(k, cur)
+  }
+  const top = [...counts.values()].sort((a, b) => b.n - a.n)[0]
+  const defaultPickup = top?.p ?? lines[0]?.pickupDate ?? ''
+  const defaultReturn = top?.r ?? lines[0]?.returnDate ?? ''
+  const mixed = counts.size > 1
+  const touchedInCategory = lines.filter((l) => touchedLineIds.has(l.cartLineId)).length
+
   return (
-    <div className="flex items-center gap-3 py-3.5 border-b border-[#e4dfd4]">
-      <div className="flex-1">
-        <div className="font-semibold text-[15px]">{line.name}</div>
-        <div className="text-[12.5px] text-[#8b857a] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          {line.category} · {line.price === 0 ? 'FREE' : `${fmtMoney(line.price)}${line.type === 'EQUIPMENT' ? ' /day' : ' ea'}`}
+    <section className="mb-6">
+      <div className="bg-[#fbf6ea] border border-[#e4dfd4] rounded-lg px-3.5 py-3 mb-2.5">
+        <div className="flex items-baseline justify-between gap-2 mb-2">
+          <div className="font-extrabold text-[15px] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            {category}
+            <span className="ml-2 text-[11px] font-semibold text-[#8b857a] tracking-wider uppercase">
+              {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+            </span>
+          </div>
+          {touchedInCategory > 0 && (
+            <div className="text-[10.5px] text-[#8b857a]">
+              {touchedInCategory} manually edited
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Pickup {mixed && <em className="not-italic text-[#a37f2c]">(varies)</em>}
+            </span>
+            <input
+              type="date"
+              defaultValue={defaultPickup}
+              onChange={(e) => {
+                const newPickup = e.target.value
+                if (!newPickup) return
+                onCascadeCategoryDates(newPickup, defaultReturn)
+              }}
+              className="border-[1.5px] border-[#cdc7b9] bg-white rounded-md px-2 py-1.5 text-[12.5px] outline-none focus:border-[#0c0c0d] min-w-0"
+            />
+          </label>
+          <label className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Return {mixed && <em className="not-italic text-[#a37f2c]">(varies)</em>}
+            </span>
+            <input
+              type="date"
+              defaultValue={defaultReturn}
+              min={defaultPickup || undefined}
+              onChange={(e) => {
+                const newReturn = e.target.value
+                if (!newReturn) return
+                onCascadeCategoryDates(defaultPickup, newReturn)
+              }}
+              className="border-[1.5px] border-[#cdc7b9] bg-white rounded-md px-2 py-1.5 text-[12.5px] outline-none focus:border-[#0c0c0d] min-w-0"
+            />
+          </label>
+        </div>
+        <div className="text-[10.5px] text-[#8b857a] mt-1.5 leading-snug">
+          Cascades to lines below. Lines you&rsquo;ve edited individually keep their own dates.
         </div>
       </div>
-      <div className="flex items-center border-[1.5px] border-[#cdc7b9] rounded-lg overflow-hidden h-[34px]">
-        <button onClick={() => onSetQty(line.qty - 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">−</button>
-        <span className="min-w-[28px] text-center font-extrabold text-sm" style={{ fontFamily: 'Archivo, sans-serif' }}>{line.qty}</span>
-        <button onClick={() => onSetQty(line.qty + 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-[17px] font-bold">+</button>
+      {lines.map((l) => (
+        <ReviewRow
+          key={l.cartLineId}
+          line={l}
+          touched={touchedLineIds.has(l.cartLineId)}
+          onSetQty={(q) => onSetQty(l.cartLineId, q)}
+          onSetDates={(p, r) => onSetLineDates(l.cartLineId, p, r)}
+          onRemove={() => onRemove(l.cartLineId)}
+        />
+      ))}
+    </section>
+  )
+}
+
+function ReviewRow({
+  line,
+  touched,
+  onSetQty,
+  onSetDates,
+  onRemove,
+}: {
+  line: CartLine
+  touched: boolean
+  onSetQty: (q: number) => void
+  onSetDates: (pickup: string, returnD: string) => void
+  onRemove: () => void
+}) {
+  const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
+  const days = isRental ? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
+  return (
+    <div className="py-3 border-b border-[#e4dfd4]">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-[15px] flex items-center gap-1.5">
+            <span className="truncate">{line.name}</span>
+            {touched && (
+              <span className="flex-none text-[9.5px] font-bold uppercase tracking-[0.08em] text-[#a37f2c] bg-[#f6efdc] rounded px-1.5 py-px" title="Manually edited — won't cascade with category">
+                Custom
+              </span>
+            )}
+          </div>
+          <div className="text-[12px] text-[#8b857a] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            {line.price === 0
+              ? 'PRICE ON QUOTE'
+              : `${fmtMoney(line.price)}${isRental ? `/d × ${days}d` : ' ea'}`}
+          </div>
+        </div>
+        <div className="flex items-center border-[1.5px] border-[#cdc7b9] rounded-lg overflow-hidden h-[32px] flex-none">
+          <button onClick={() => onSetQty(line.qty - 1)} className="w-[28px] h-full bg-white text-[#a37f2c] text-[16px] font-bold">−</button>
+          <span className="min-w-[24px] text-center font-extrabold text-sm" style={{ fontFamily: 'Archivo, sans-serif' }}>{line.qty}</span>
+          <button onClick={() => onSetQty(line.qty + 1)} className="w-[28px] h-full bg-white text-[#a37f2c] text-[16px] font-bold">+</button>
+        </div>
+        <div className="font-extrabold text-sm min-w-[58px] text-right flex-none" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          {fmtTotal(lineEstimate(line))}
+        </div>
       </div>
-      <div className="font-extrabold text-sm min-w-[58px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
-        {fmtTotal(line.price * line.qty)}
+      <div className="flex items-center gap-2 mt-2 pl-0.5">
+        <input
+          type="date"
+          value={line.pickupDate}
+          onChange={(e) => e.target.value && onSetDates(e.target.value, line.returnDate)}
+          className="border-[1.5px] border-[#cdc7b9] bg-white rounded-md px-1.5 py-1 text-[11.5px] outline-none focus:border-[#0c0c0d] min-w-0 flex-1"
+          aria-label="Pickup date"
+        />
+        <span className="text-[#8b857a] text-[11px]">→</span>
+        <input
+          type="date"
+          value={line.returnDate}
+          min={line.pickupDate}
+          onChange={(e) => e.target.value && onSetDates(line.pickupDate, e.target.value)}
+          className="border-[1.5px] border-[#cdc7b9] bg-white rounded-md px-1.5 py-1 text-[11.5px] outline-none focus:border-[#0c0c0d] min-w-0 flex-1"
+          aria-label="Return date"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-[11px] text-[#8b857a] underline px-1 hover:text-[#0c0c0d] flex-none"
+        >
+          remove
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => onSetQty(0)}
-        className="text-xs text-[#8b857a] underline px-1 hover:text-[#0c0c0d]"
-      >
-        remove
-      </button>
     </div>
   )
 }

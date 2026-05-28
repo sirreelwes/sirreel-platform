@@ -194,21 +194,51 @@ export function useSupplyCart() {
   // Per-day estimate — vehicles with price=0 contribute nothing
   // (price-on-quote). Final pricing is confirmed in the quote.
   const totalPerDay = useMemo(() => lines.reduce((s, l) => s + l.price * l.qty, 0), [lines])
+  // Full-window estimate — multiplies by days for rentals (VEHICLE or
+  // EQUIPMENT supplies); flat for EXPENDABLE etc. price=0 lines are
+  // price-on-quote and contribute zero. Used by the cart-panel EST.
+  // TOTAL replacing the older EST. /DAY summary.
+  const totalEstimate = useMemo(
+    () => lines.reduce((s, l) => s + lineEstimate(l), 0),
+    [lines],
+  )
   const hasEquipment = useMemo(
     () => lines.some((l) => l.type === 'EQUIPMENT' || l.type === 'VEHICLE'),
     [lines],
   )
+  const hasPriceOnQuote = useMemo(() => lines.some((l) => l.price === 0), [lines])
 
   return {
     cart,
     lines,
     totalUnits,
     totalPerDay,
+    totalEstimate,
     hasEquipment,
+    hasPriceOnQuote,
     addToCart,
     setQty,
     setDates,
     removeLine,
     resetCart,
   }
+}
+
+/** Days inclusive between pickup and return (min 1). */
+export function rentalDaysBetween(pickup: string, returnD: string): number {
+  const s = new Date(`${pickup}T00:00:00Z`).getTime()
+  const e = new Date(`${returnD}T00:00:00Z`).getTime()
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
+  return Math.max(1, Math.round((e - s) / 86_400_000) + 1)
+}
+
+/** Per-line $ estimate — matches the server snapshot math in
+ *  /api/public/supply-request. Vehicles and EQUIPMENT supplies are
+ *  rentals (× days); everything else is a flat per-unit charge.
+ *  price=0 → price-on-quote, returns 0. */
+export function lineEstimate(line: CartLine): number {
+  if (line.price === 0) return 0
+  const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
+  const days = isRental ? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
+  return line.price * line.qty * days
 }
