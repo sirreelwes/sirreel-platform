@@ -401,30 +401,49 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       </header>
 
       {/* ── HERO ─────────────────────────────────────────────── */}
+      {/* Two-column on md+: left = eyebrow/title/subhead/steps,
+          right = THE FULL FLEET reminder copy. Stacks below md so
+          the reminder always renders inside the dark band — it's
+          editorial, not decorative, so it's never hidden. The right
+          column's md:pt-7 pushes its eyebrow down ~28px to align
+          with the left title's first baseline (eyebrow text 12px +
+          mb-3.5 ≈ 28px). */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-14 relative">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Production Reservation
-          </div>
-          <h1 className="font-black tracking-tight leading-[0.92] text-[40px] sm:text-[56px] md:text-[68px] lg:text-[76px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Reserve your production.
-          </h1>
-          <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
-            Vehicles, basecamp basics, grip, power, safety, expendables — pick what your production needs and the dates you need it. We&apos;ll confirm availability and come back with a quote.
-          </p>
-          <div className="flex flex-wrap gap-7 mt-7">
-            {[
-              ['1', 'Pick vehicles & supplies'],
-              ['2', 'Your details'],
-              ['3', 'We confirm & quote'],
-            ].map(([n, label]) => (
-              <div key={n} className="flex items-center gap-2.5 text-[#e8e3d7] text-sm font-medium">
-                <span className="font-extrabold text-[#0c0c0d] bg-[#c39a3f] w-[26px] h-[26px] rounded-full inline-flex items-center justify-center text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                  {n}
-                </span>
-                {label}
+          <div className="grid gap-10 md:grid-cols-[1fr_minmax(0,420px)] md:gap-12 items-start">
+            <div>
+              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Production Reservation
               </div>
-            ))}
+              <h1 className="font-black tracking-tight leading-[0.92] text-[40px] sm:text-[56px] md:text-[68px] lg:text-[76px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Let&rsquo;s get your gear and vehicles lined up
+              </h1>
+              <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
+                Vehicles, basecamp basics, grip, power, safety, expendables — pick what your production needs and the dates you need it. We&apos;ll confirm availability and come back with a quote.
+              </p>
+              <div className="flex flex-wrap gap-7 mt-7">
+                {[
+                  ['1', 'Pick vehicles & supplies'],
+                  ['2', 'Your details'],
+                  ['3', 'We confirm & quote'],
+                ].map(([n, label]) => (
+                  <div key={n} className="flex items-center gap-2.5 text-[#e8e3d7] text-sm font-medium">
+                    <span className="font-extrabold text-[#0c0c0d] bg-[#c39a3f] w-[26px] h-[26px] rounded-full inline-flex items-center justify-center text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                      {n}
+                    </span>
+                    {label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="md:pt-7">
+              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                The Full Fleet
+              </div>
+              <p className="text-[#cfc9bd] text-[15px] leading-relaxed max-w-[44ch]">
+                Cargo vans, supercubes, passenger vans, talent trailers, honeywagons. Add them to the same reservation as your gear.
+              </p>
+            </div>
           </div>
         </div>
       </section>
