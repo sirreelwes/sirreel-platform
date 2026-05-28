@@ -6,6 +6,7 @@ import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
+import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -242,6 +243,33 @@ export async function POST(
     await transitionCadenceState(orderRow.id, 'BOOKED')
   } catch (err) {
     console.error('[portal/agreement/sign] BOOKED transition failed:', err)
+  }
+
+  // Lifecycle Phase 1: also advance Order.status to APPROVED so the
+  // operator-facing "Book it" action becomes available on the order
+  // detail page. Sign is the client's commitment; APPROVED is the
+  // order-side reflection of that commitment. The actual fulfillment
+  // workflow doesn't kick off until an operator clicks Book it
+  // (POST /api/orders/[id]/book) — keeping the client signal (sign)
+  // separate from the ops signal (book) prevents fulfillment from
+  // accidentally firing while an operator is mid-review.
+  //
+  // Only advance from QUOTE_SENT or DRAFT — never regress an order
+  // that's already past APPROVED (BOOKED / ON_JOB / RETURNED / etc).
+  try {
+    const cur = await prisma.order.findUnique({
+      where: { id: orderRow.id },
+      select: { status: true, sentAt: true, wonAt: true, lostAt: true },
+    })
+    if (cur && (cur.status === 'QUOTE_SENT' || cur.status === 'DRAFT')) {
+      const sync = computeQuoteStatusSync('APPROVED', cur)
+      await prisma.order.update({
+        where: { id: orderRow.id },
+        data: { status: 'APPROVED', ...sync },
+      })
+    }
+  } catch (err) {
+    console.error('[portal/agreement/sign] APPROVED transition failed:', err)
   }
 
   // Keep the legacy paperwork checklist in sync — the existing portal page's

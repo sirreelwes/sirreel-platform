@@ -117,23 +117,48 @@ type InvItem = { id: string; code: string; description: string; category: { id: 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-zinc-700 text-zinc-300",
   QUOTE_SENT: "bg-amber-900/60 text-amber-300",
-  CONFIRMED: "bg-blue-900/60 text-blue-300",
-  ACTIVE: "bg-emerald-900/60 text-emerald-300",
+  APPROVED: "bg-blue-900/60 text-blue-300",
+  BOOKED: "bg-indigo-900/60 text-indigo-300",
+  LOADED_READY: "bg-teal-900/60 text-teal-300",
+  ON_JOB: "bg-emerald-900/60 text-emerald-300",
   RETURNED: "bg-purple-900/60 text-purple-300",
+  LD_CHECK: "bg-orange-900/60 text-orange-300",
+  INVOICED: "bg-cyan-900/60 text-cyan-300",
   CLOSED: "bg-zinc-800 text-zinc-400",
   CANCELLED: "bg-red-900/60 text-red-300",
 };
 
 const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE", "DISCOUNT"] as const;
 
-const STATUS_ACTIONS: Record<string, { label: string; next: string; color: string }[]> = {
+// Status transitions exposed as buttons on the order detail page.
+// Buttons whose `endpoint` is set POST to that path (the book action
+// is the first non-PUT lifecycle transition). Buttons without
+// `endpoint` fall back to PUT /api/orders/[id] with `{ status: next }`.
+//
+// LOADED_READY, ON_JOB, LD_CHECK, INVOICED are intentionally NOT
+// surfaced as manual buttons — they are derived/automatic transitions
+// landing in Phase 3 (lane rollup) and Phase 4 (native invoicing).
+type StatusAction = {
+  label: string
+  next: string
+  color: string
+  endpoint?: string
+}
+
+const STATUS_ACTIONS: Record<string, StatusAction[]> = {
   DRAFT: [{ label: "Send Quote", next: "QUOTE_SENT", color: "bg-amber-600 hover:bg-amber-500" }],
   QUOTE_SENT: [
-    { label: "Confirm Order", next: "CONFIRMED", color: "bg-blue-600 hover:bg-blue-500" },
+    { label: "Mark Approved", next: "APPROVED", color: "bg-blue-600 hover:bg-blue-500" },
     { label: "Back to Draft", next: "DRAFT", color: "bg-zinc-600 hover:bg-zinc-500" },
   ],
-  CONFIRMED: [{ label: "Mark Active", next: "ACTIVE", color: "bg-emerald-600 hover:bg-emerald-500" }],
-  ACTIVE: [{ label: "Mark Returned", next: "RETURNED", color: "bg-purple-600 hover:bg-purple-500" }],
+  APPROVED: [
+    { label: "Book it", next: "BOOKED", color: "bg-indigo-600 hover:bg-indigo-500", endpoint: "book" },
+  ],
+  // Post-book lifecycle stays operator-driven from the legacy flow for
+  // now (ON_JOB → RETURNED → CLOSED). LOADED_READY between BOOKED and
+  // ON_JOB is rollup-derived, not exposed as a button.
+  BOOKED: [{ label: "Mark On Job", next: "ON_JOB", color: "bg-emerald-600 hover:bg-emerald-500" }],
+  ON_JOB: [{ label: "Mark Returned", next: "RETURNED", color: "bg-purple-600 hover:bg-purple-500" }],
   RETURNED: [{ label: "Close Order", next: "CLOSED", color: "bg-zinc-600 hover:bg-zinc-500" }],
 };
 
@@ -532,6 +557,32 @@ export default function OrderDetailPage() {
     fetchOrder();
   };
 
+  // "Book it" — APPROVED → BOOKED. POSTs to the dedicated lifecycle
+  // endpoint (atomic snapshot + lane routing + audit log + cadence
+  // projection). On 409 the order is no longer APPROVED (someone else
+  // booked, or status got rolled back); we surface the server's error.
+  const [bookErr, setBookErr] = useState<string | null>(null);
+  const [booking, setBooking] = useState(false);
+  const bookIt = async () => {
+    if (booking) return;
+    setBooking(true);
+    setBookErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setBookErr(data.error || `HTTP ${r.status}`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setBooking(false);
+    }
+  };
+
   // Opens the EmailReviewModal for quote send. The modal handles
   // preview + dispatch + token mint; this component just refreshes
   // the order on success so the post-send QUOTE_SENT status reflects.
@@ -712,7 +763,10 @@ export default function OrderDetailPage() {
             <div className="flex gap-2">
               {actions.map((action) => {
                 const isSendQuote = action.next === "QUOTE_SENT";
-                const disabled = isSendQuote && (noRecipient || !order.quotePdfUrl);
+                const isBook = action.endpoint === "book";
+                const disabled =
+                  (isSendQuote && (noRecipient || !order.quotePdfUrl)) ||
+                  (isBook && booking);
                 const title = isSendQuote
                   ? noRecipient
                     ? "Add a contact to the job before sending the quote."
@@ -720,15 +774,20 @@ export default function OrderDetailPage() {
                       ? "Generate the quote PDF first."
                       : undefined
                   : undefined;
+                const onClick = isSendQuote
+                  ? openSendQuoteReview
+                  : isBook
+                    ? bookIt
+                    : () => updateStatus(action.next);
                 return (
                   <button
                     key={action.next}
-                    onClick={() => (isSendQuote ? openSendQuoteReview() : updateStatus(action.next))}
+                    onClick={onClick}
                     disabled={disabled}
                     title={title}
                     className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
-                    {action.label}
+                    {isBook && booking ? "Booking…" : action.label}
                   </button>
                 );
               })}
@@ -741,6 +800,11 @@ export default function OrderDetailPage() {
             </div>
             {order.status === "DRAFT" && (
               <RecipientLine recipients={recipients} onAdd={() => setAddContactOpen(true)} />
+            )}
+            {bookErr && (
+              <div className="text-xs text-red-400 mt-1.5 max-w-xs text-right">
+                Book it failed: {bookErr}
+              </div>
             )}
           </div>
         </div>

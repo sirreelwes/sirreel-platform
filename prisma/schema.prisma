@@ -1518,6 +1518,37 @@ enum LineItemDepartment {
   ART
 }
 
+// Phase 1 lifecycle / book-time line routing. Set on each OrderLineItem
+// atomically inside POST /api/orders/[id]/book based on the line's
+// department:
+//   VEHICLES                → FLEET     (no pickStatus; fleet team
+//                                         assigns specific assets via
+//                                         the existing /scheduling/
+//                                         booking-items/[id]/assign path)
+//   STAGES                  → STAGE     (no pickStatus; stage logistics
+//                                         live on StageBookingTerms)
+//   COMMUNICATIONS,
+//   PRO_SUPPLIES,
+//   EXPENDABLES, GE, ART    → WAREHOUSE (pickStatus = PENDING_PICK;
+//                                         consumed by Phase 2 PickList
+//                                         and picking workflow)
+enum FulfillmentLane {
+  FLEET
+  WAREHOUSE
+  STAGE
+}
+
+// Warehouse-lane progression for a single OrderLineItem. Nullable on
+// non-warehouse lines. The PickList model + picking UX (Phase 2) reads
+// this to drive the pick floor; LOADED feeds the rollup that fires
+// LOADED_READY on the order (Phase 3).
+enum LineItemPickStatus {
+  PENDING_PICK
+  PICKED
+  STAGED
+  LOADED
+}
+
 enum RateType {
   DAILY
   WEEKLY
@@ -1795,6 +1826,12 @@ model OrderLineItem {
   // departmental quote breakdown. Backfilled to PRO_SUPPLIES on existing
   // rows — note the historical-reporting caveat in the commit message.
   department      LineItemDepartment @default(PRO_SUPPLIES)
+  // Phase 1 lifecycle spine: set at book time from `department`. Null
+  // until the order transitions APPROVED → BOOKED.
+  fulfillmentLane FulfillmentLane?    @map("fulfillment_lane")
+  // Warehouse-lane only: PENDING_PICK at book time, advanced by the
+  // Phase 2 picking workflow. Null on FLEET and STAGE lanes.
+  pickStatus      LineItemPickStatus? @map("pick_status")
   description     String
   inventoryItemId String?            @map("inventory_item_id")
   assetCategoryId String?            @map("asset_category_id")
