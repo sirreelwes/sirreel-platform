@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
+import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     select: {
       id: true,
       status: true,
+      orderId: true,
       items: {
         select: { orderLineItem: { select: { id: true, pickStatus: true } } },
       },
@@ -95,10 +97,24 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     })
   })
 
+  // Phase 3 — warehouse lane just hit terminal. Trigger the rollup;
+  // if fleet is also done (or zero fleet lines), this is where the
+  // order advances to LOADED_READY and LOADED_AND_READY fires. The
+  // rollup is idempotent and safe regardless of fleet state.
+  let rollup: Awaited<ReturnType<typeof recomputeAndMaybeAdvanceLoadReady>> | null = null
+  try {
+    rollup = await recomputeAndMaybeAdvanceLoadReady(picklist.orderId)
+  } catch (err) {
+    console.error('[picklists/load] LOADED_READY rollup failed:', err)
+    // Non-fatal — pick list is LOADED. Rollup can be retried via the
+    // fleet-ready endpoint or any subsequent trigger.
+  }
+
   return NextResponse.json({
     ok: true,
     picklistId: picklist.id,
     completedAt,
     itemsLoaded: lineIds.length,
+    rollup,
   })
 }

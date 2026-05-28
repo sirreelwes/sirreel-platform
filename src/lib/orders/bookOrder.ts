@@ -45,6 +45,7 @@ import type {
 import { prisma } from '@/lib/prisma'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { projectCadenceFromOrderStatus } from '@/lib/orders/cadenceProjection'
+import { recomputeAndMaybeAdvanceLoadReady } from '@/lib/orders/loadReadyRollup'
 
 export interface LaneRouting {
   lane: FulfillmentLane
@@ -271,6 +272,20 @@ export async function bookOrder(args: {
     console.error('[bookOrder] cadence projection failed:', err)
     // Non-fatal — the order is BOOKED. Cadence drift can be reconciled
     // separately; we don't want to roll back a successful book.
+  }
+
+  // ── Phase 3: LOADED_READY rollup (post-tx) ─────────────────────
+  // For all-trivial-lane orders (STAGE-only, or orders with zero
+  // warehouse + zero fleet lines), this fires the auto-advance at
+  // book time. For any order with real warehouse or fleet lines,
+  // it's a no-op — those lanes haven't terminated yet. Always safe
+  // to call; idempotent.
+  try {
+    await recomputeAndMaybeAdvanceLoadReady(orderId)
+  } catch (err) {
+    console.error('[bookOrder] LOADED_READY rollup failed:', err)
+    // Non-fatal — order is BOOKED. Rollup can be retried by any
+    // subsequent lane-terminal trigger.
   }
 
   return {
