@@ -1643,6 +1643,16 @@ model Order {
   taxRate         Decimal          @default(0) @map("tax_rate") @db.Decimal(5, 4)
   taxAmount       Decimal          @default(0) @map("tax_amount") @db.Decimal(12, 2)
   total           Decimal          @default(0) @db.Decimal(12, 2)
+  // Booked-value snapshot — captured atomically when the order is BOOKED
+  // (Phase 1 / commit 3). These are the second of the three canonical
+  // money numbers per order-lifecycle-spec (quote estimate → booked
+  // value → final invoice). They are write-once: never overwritten by
+  // post-booking edits to subtotal/total, and never collapsed into the
+  // Invoice columns. Null until the order has been booked.
+  bookedSubtotal  Decimal?         @map("booked_subtotal") @db.Decimal(12, 2)
+  bookedTaxAmount Decimal?         @map("booked_tax_amount") @db.Decimal(12, 2)
+  bookedTotal     Decimal?         @map("booked_total") @db.Decimal(12, 2)
+  bookedAt        DateTime?        @map("booked_at")
   quoteSentAt     DateTime?        @map("quote_sent_at")
   quoteAcceptedAt DateTime?        @map("quote_accepted_at")
   quoteExpDays    Int              @default(7) @map("quote_exp_days")
