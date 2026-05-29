@@ -9,12 +9,27 @@ export async function nextOrderNumber(): Promise<string> {
   return `SR-ORD-${String(num).padStart(4, "0")}`;
 }
 
-export async function nextInvoiceNumber(): Promise<string> {
-  const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
-    SELECT nextval('sr_invoice_number_seq')
-  `;
-  const num = Number(result[0].nextval);
-  return `SR-INV-${String(num).padStart(4, "0")}`;
+/**
+ * Phase 5: parameterized by InvoiceType. Two parallel sequences — easier
+ * to audit and grep than a single sequence with a type-baked prefix.
+ *
+ *   RENTAL → SR-INV-NNNN  (existing sr_invoice_number_seq)
+ *   LD     → SR-LDI-NNNN  (sr_ld_invoice_number_seq — created in Commit 4
+ *                          alongside the LD invoice generator)
+ *
+ * Commit 1 only handles RENTAL. LD throws so an accidental Commit-1
+ * caller fails loudly rather than minting a confusingly-numbered row.
+ */
+export async function nextInvoiceNumber(type: 'RENTAL' | 'LD' = 'RENTAL'): Promise<string> {
+  if (type === 'RENTAL') {
+    const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
+      SELECT nextval('sr_invoice_number_seq')
+    `;
+    const num = Number(result[0].nextval);
+    return `SR-INV-${String(num).padStart(4, "0")}`;
+  }
+  // LD path — TODO: Phase 5 Commit 4 creates sr_ld_invoice_number_seq.
+  throw new Error('nextInvoiceNumber(LD) not yet implemented — lands in Phase 5 commit 4')
 }
 
 export function computeWeeklyRate(

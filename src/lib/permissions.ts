@@ -27,6 +27,12 @@ export interface Permissions {
   // provisioned. Drives both the /warehouse nav section visibility
   // and the server-side gate in src/lib/warehouse/requirePickerRole.ts.
   warehouse: boolean;
+  // Phase 5 native invoicing. Gates the /billing nav surface AND the
+  // order-detail invoice-generation block. True for ADMIN and AGENT
+  // (Ana's role) — keeps fleet/dispatch staff out of money. Tighter
+  // per-action perms (canVoidInvoice, canRecordPayment, etc) land in
+  // their own commits.
+  billing: boolean;
   tasks: boolean;       // Driver task list
   inspections: boolean; // Driver inspections
 
@@ -63,7 +69,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: true,
     reporting: true, ai: true, tasks: true, inspections: true, coverage: true,
-    warehouse: true,
+    warehouse: true, billing: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: true, seeAllBookings: true, seeOtherAgents: true,
@@ -79,7 +85,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: true,
+    warehouse: true, billing: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -95,7 +101,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
-    warehouse: false,
+    warehouse: false, billing: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -111,7 +117,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: false,
+    warehouse: false, billing: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -126,7 +132,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: false,
+    warehouse: false, billing: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -141,7 +147,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: true, inspections: true, coverage: false,
-    warehouse: false,
+    warehouse: false, billing: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: false,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -156,7 +162,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
-    warehouse: false,
+    warehouse: false, billing: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,

@@ -64,6 +64,30 @@ type Order = {
   // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
   // progress panel + "Mark Fleet Ready" / undo buttons.
   fleetReadyAt: string | null;
+  // Phase 5 commit 1 — booked snapshot anchor. The Generate invoice
+  // button is gated on bookedTotal being non-null.
+  bookedTotal: string | null;
+};
+
+// Phase 5 commit 1 — separately-fetched invoice list. Richer than the
+// embedded `Order.invoices` since the dedicated /invoices endpoint
+// also returns blob refs + due/sent/paid timestamps.
+type InvoiceRow = {
+  id: string;
+  invoiceNumber: string;
+  type: 'RENTAL' | 'LD';
+  status: 'DRAFT' | 'SENT' | 'PAID' | 'PARTIAL' | 'VOID';
+  subtotal: string;
+  taxAmount: string;
+  total: string;
+  amountPaid: string;
+  balanceDue: string;
+  dueDate: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  pdfUrl: string | null;
+  pdfGeneratedAt: string | null;
+  createdAt: string;
 };
 
 interface RecipientChoice {
@@ -373,6 +397,44 @@ export default function OrderDetailPage() {
   useEffect(() => {
     fetchCadence();
   }, [fetchCadence]);
+
+  // Phase 5 commit 1 — invoices block. Fetched separately so the order
+  // detail GET doesn't have to know about invoice listing semantics.
+  const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
+  const [invoiceErr, setInvoiceErr] = useState<string | null>(null);
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const fetchInvoices = useCallback(async () => {
+    const res = await fetch(`/api/orders/${orderId}/invoices`);
+    if (!res.ok) {
+      setInvoices([]);
+      return;
+    }
+    const data = await res.json();
+    setInvoices(data.invoices || []);
+  }, [orderId]);
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+  const generateRentalInvoice = async () => {
+    if (generatingInvoice) return;
+    setGeneratingInvoice(true);
+    setInvoiceErr(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setInvoiceErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      await fetchInvoices();
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
 
   const fetchPortalAccess = useCallback(async () => {
     const [listRes, detRes] = await Promise.all([
@@ -1328,6 +1390,98 @@ export default function OrderDetailPage() {
           )}
         </div>
       )}
+
+      {/* Phase 5 commit 1 — Invoices block. RW billing off-ramp:
+          generate a native RENTAL invoice from the booked snapshot. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Invoices</h2>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Native SirReel billing. Rental invoice anchors to the booked value snapshot.
+            </div>
+          </div>
+          {(() => {
+            const hasActiveRental = (invoices || []).some(
+              (i) => i.type === 'RENTAL' && i.status !== 'VOID',
+            );
+            const canGenerate = !hasActiveRental && order.bookedTotal != null;
+            const title = order.bookedTotal == null
+              ? 'Book the order before invoicing.'
+              : hasActiveRental
+                ? 'A RENTAL invoice already exists. Void it before regenerating.'
+                : undefined;
+            return (
+              <button
+                onClick={generateRentalInvoice}
+                disabled={!canGenerate || generatingInvoice}
+                title={title}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
+              >
+                {generatingInvoice ? 'Generating…' : 'Generate rental invoice'}
+              </button>
+            );
+          })()}
+        </div>
+
+        {invoiceErr && (
+          <div className="mb-3 rounded-lg border border-rose-800 bg-rose-950/50 text-rose-200 text-xs px-3 py-2">
+            {invoiceErr}
+          </div>
+        )}
+
+        {invoices === null ? (
+          <div className="text-xs text-zinc-500">Loading invoices…</div>
+        ) : invoices.length === 0 ? (
+          <div className="text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-3 py-4 text-center">
+            No invoices yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {invoices.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex items-center gap-3 flex-wrap border border-zinc-800 bg-zinc-950 rounded-lg px-3 py-2.5"
+              >
+                <span className="font-mono text-[11px] text-zinc-400">{inv.invoiceNumber}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                  {inv.type}
+                </span>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                    inv.status === 'PAID'    ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' :
+                    inv.status === 'SENT'    ? 'bg-blue-900/40 text-blue-300 border-blue-800' :
+                    inv.status === 'PARTIAL' ? 'bg-amber-900/40 text-amber-300 border-amber-800' :
+                    inv.status === 'VOID'    ? 'bg-red-900/40 text-red-300 border-red-800' :
+                                               'bg-zinc-800 text-zinc-300 border-zinc-700'
+                  }`}
+                >
+                  {inv.status}
+                </span>
+                <span className="text-sm text-white font-semibold ml-auto">
+                  ${Number(inv.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+                <div className="text-[10px] text-zinc-500 w-full md:w-auto md:ml-3">
+                  Issued {new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {inv.dueDate && (
+                    <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                  )}
+                </div>
+                {inv.pdfUrl && (
+                  <a
+                    href={`/api/invoices/${inv.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                  >
+                    View PDF →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Portal Access */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">

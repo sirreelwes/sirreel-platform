@@ -1953,13 +1953,28 @@ model PickListItem {
   @@map("pick_list_items")
 }
 
+// Invoice — 1:many off Order (orderId NOT @unique). Phase 5 adds the
+// `type` discriminator + PDF blob refs + line snapshot so a single
+// order can carry both a primary RENTAL invoice (drives the order's
+// close) and a satellite LD invoice (carries disputed high-dollar
+// damage; non-blocking on the lifecycle). `Invoice.total` IS the third
+// canonical money number (quote estimate → booked value → invoice
+// total); never overwrite the Order.booked* snapshot from here.
 model Invoice {
   id            String        @id @default(uuid())
   invoiceNumber String        @unique @map("invoice_number")
   orderId       String        @map("order_id")
+  // Phase 5: RENTAL (primary) drives the close; LD (satellite, Phase 5
+  // commit 4) is non-blocking. Default RENTAL for forward-compat with
+  // existing zero-row table. Enum is extensible.
+  type          InvoiceType   @default(RENTAL)
   status        InvoiceStatus @default(DRAFT)
   subtotal      Decimal       @db.Decimal(12, 2)
   taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  // The final number. Sum of the lineSnapshot is guaranteed to equal
+  // this — when the live order's line items differ from the booked
+  // snapshot, the generator emits an ADJUSTMENT line so the math
+  // balances and `total` always equals the booked total at issue.
   total         Decimal       @db.Decimal(12, 2)
   amountPaid    Decimal       @default(0) @map("amount_paid") @db.Decimal(12, 2)
   balanceDue    Decimal       @default(0) @map("balance_due") @db.Decimal(12, 2)
@@ -1967,13 +1982,33 @@ model Invoice {
   sentAt        DateTime?     @map("sent_at")
   paidAt        DateTime?     @map("paid_at")
   notes         String?       @db.Text
-  pdfUrl        String?       @map("pdf_url")
+  // PDF storage — mirrors the SignedAgreement / quote-pdf pattern.
+  // pdfBlobKey is the Vercel Blob key (private bucket); pdfUrl is the
+  // signed URL returned by put(); pdfGeneratedAt is the issuance
+  // timestamp. Replace-on-regenerate: when an invoice's PDF is
+  // re-rendered, the previous blob is deleted.
+  pdfBlobKey       String?    @map("pdf_blob_key")
+  pdfUrl           String?    @map("pdf_url")
+  pdfGeneratedAt   DateTime?  @map("pdf_generated_at")
+  // Structured line-item snapshot at issue time. Array of
+  //   { description, category, qty, unitPrice, amount,
+  //     kind: 'RENTAL_LINE' | 'ADJUSTMENT' | 'DAMAGE' }
+  // Stays queryable for departmental revenue reporting (PostgreSQL
+  // jsonb_path), and the shape is promotable to a relational
+  // InvoiceLineItem model later without breaking callers.
+  lineSnapshot     Json?      @map("line_snapshot")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
   order Order @relation(fields: [orderId], references: [id])
 
+  @@index([orderId, type])
   @@map("sr_invoices")
+}
+
+enum InvoiceType {
+  RENTAL
+  LD
 }
 
 model Vendor {
