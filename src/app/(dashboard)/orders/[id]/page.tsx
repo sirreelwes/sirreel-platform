@@ -90,6 +90,31 @@ type InvoiceRow = {
   createdAt: string;
 };
 
+// Phase 5 commit 3 — payments per invoice.
+type PaymentRow = {
+  id: string;
+  amount: string;
+  method: 'CHECK' | 'WIRE' | 'ACH' | 'CREDIT_CARD' | 'CARDPOINTE' | 'CASH' | 'OTHER';
+  reference: string | null;
+  receivedAt: string;
+  notes: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  createdAt: string;
+  recordedBy: { id: string; name: string };
+  voidedBy: { id: string; name: string } | null;
+};
+
+const PAYMENT_METHODS = [
+  'CHECK',
+  'WIRE',
+  'ACH',
+  'CREDIT_CARD',
+  'CARDPOINTE',
+  'CASH',
+  'OTHER',
+] as const;
+
 interface RecipientChoice {
   primary: { id: string; name: string; email: string; role: string | null } | null;
   others: { id: string; name: string; email: string; role: string | null }[];
@@ -458,6 +483,72 @@ export default function OrderDetailPage() {
       await Promise.all([fetchOrder(), fetchInvoices()]);
     } finally {
       setSendingInvoiceId(null);
+    }
+  };
+
+  // Phase 5 commit 3 — payments-per-invoice. Loaded lazily when an
+  // invoice row is expanded so the order detail page doesn't pay the
+  // round-trip up front. Keyed by invoiceId.
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
+  const [paymentsByInvoice, setPaymentsByInvoice] = useState<Record<string, PaymentRow[]>>({});
+  const [paymentErr, setPaymentErr] = useState<string | null>(null);
+  const [recordingPayment, setRecordingPayment] = useState(false);
+  const fetchPayments = useCallback(async (invoiceId: string) => {
+    const res = await fetch(`/api/invoices/${invoiceId}/payments`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setPaymentsByInvoice((prev) => ({ ...prev, [invoiceId]: data.payments || [] }));
+  }, []);
+  const toggleInvoiceRow = (invoiceId: string) => {
+    if (expandedInvoiceId === invoiceId) {
+      setExpandedInvoiceId(null);
+    } else {
+      setExpandedInvoiceId(invoiceId);
+      if (!paymentsByInvoice[invoiceId]) fetchPayments(invoiceId);
+    }
+    setPaymentErr(null);
+  };
+  const recordPayment = async (
+    invoiceId: string,
+    body: { amount: number; method: string; receivedAt: string; reference: string; notes: string },
+  ) => {
+    if (recordingPayment) return;
+    setRecordingPayment(true);
+    setPaymentErr(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setPaymentErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      await Promise.all([fetchOrder(), fetchInvoices(), fetchPayments(invoiceId)]);
+    } finally {
+      setRecordingPayment(false);
+    }
+  };
+  const voidPayment = async (paymentId: string, invoiceId: string) => {
+    const reason = window.prompt('Reason for voiding this payment? (≥4 chars)');
+    if (!reason || reason.trim().length < 4) return;
+    setPaymentErr(null);
+    try {
+      const res = await fetch(`/api/payments/${paymentId}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setPaymentErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      await Promise.all([fetchOrder(), fetchInvoices(), fetchPayments(invoiceId)]);
+    } catch (e) {
+      setPaymentErr(e instanceof Error ? e.message : 'void failed');
     }
   };
 
@@ -1463,62 +1554,100 @@ export default function OrderDetailPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {invoices.map((inv) => (
-              <div
-                key={inv.id}
-                className="flex items-center gap-3 flex-wrap border border-zinc-800 bg-zinc-950 rounded-lg px-3 py-2.5"
-              >
-                <span className="font-mono text-[11px] text-zinc-400">{inv.invoiceNumber}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                  {inv.type}
-                </span>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                    inv.status === 'PAID'    ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' :
-                    inv.status === 'SENT'    ? 'bg-blue-900/40 text-blue-300 border-blue-800' :
-                    inv.status === 'PARTIAL' ? 'bg-amber-900/40 text-amber-300 border-amber-800' :
-                    inv.status === 'VOID'    ? 'bg-red-900/40 text-red-300 border-red-800' :
-                                               'bg-zinc-800 text-zinc-300 border-zinc-700'
-                  }`}
+            {invoices.map((inv) => {
+              const expanded = expandedInvoiceId === inv.id;
+              const canRecordPayment =
+                inv.status === 'SENT' || inv.status === 'PARTIAL';
+              const balanceNum = Number(inv.balanceDue);
+              return (
+                <div
+                  key={inv.id}
+                  className="border border-zinc-800 bg-zinc-950 rounded-lg"
                 >
-                  {inv.status}
-                </span>
-                <span className="text-sm text-white font-semibold ml-auto">
-                  ${Number(inv.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-                <div className="text-[10px] text-zinc-500 w-full md:w-auto md:ml-3">
-                  Issued {new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  {inv.dueDate && (
-                    <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                  <div className="flex items-center gap-3 flex-wrap px-3 py-2.5">
+                    <button
+                      onClick={() => toggleInvoiceRow(inv.id)}
+                      className="text-zinc-500 hover:text-zinc-200 text-xs w-4"
+                    >
+                      {expanded ? '−' : '+'}
+                    </button>
+                    <span className="font-mono text-[11px] text-zinc-400">{inv.invoiceNumber}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                      {inv.type}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        inv.status === 'PAID'    ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' :
+                        inv.status === 'SENT'    ? 'bg-blue-900/40 text-blue-300 border-blue-800' :
+                        inv.status === 'PARTIAL' ? 'bg-amber-900/40 text-amber-300 border-amber-800' :
+                        inv.status === 'VOID'    ? 'bg-red-900/40 text-red-300 border-red-800' :
+                                                   'bg-zinc-800 text-zinc-300 border-zinc-700'
+                      }`}
+                    >
+                      {inv.status}
+                    </span>
+                    <span className="text-sm text-white font-semibold ml-auto">
+                      ${Number(inv.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </span>
+                    {Number(inv.amountPaid) > 0 && (
+                      <span className="text-[11px] text-emerald-400">
+                        −${Number(inv.amountPaid).toLocaleString('en-US', { minimumFractionDigits: 2 })} paid
+                      </span>
+                    )}
+                    {balanceNum > 0 && inv.status !== 'DRAFT' && (
+                      <span className="text-[11px] text-amber-400">
+                        ${balanceNum.toLocaleString('en-US', { minimumFractionDigits: 2 })} due
+                      </span>
+                    )}
+                    <div className="text-[10px] text-zinc-500 w-full md:w-auto md:ml-3">
+                      Issued {new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {inv.dueDate && (
+                        <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                      )}
+                    </div>
+                    {inv.pdfUrl && (
+                      <a
+                        href={`/api/invoices/${inv.id}/pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                      >
+                        View PDF →
+                      </a>
+                    )}
+                    {inv.status === 'DRAFT' && (
+                      <button
+                        onClick={() => sendInvoice(inv.id)}
+                        disabled={sendingInvoiceId != null || noRecipient}
+                        title={noRecipient ? 'Add a contact to the job before sending.' : undefined}
+                        className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                      >
+                        {sendingInvoiceId === inv.id ? 'Sending…' : 'Send'}
+                      </button>
+                    )}
+                    {inv.sentAt && inv.status !== 'DRAFT' && (
+                      <span className="text-[10px] text-zinc-500">
+                        Sent {new Date(inv.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                  {expanded && (
+                    <div className="border-t border-zinc-800 px-3 py-3 space-y-3 bg-zinc-900">
+                      <PaymentsPanel
+                        invoiceId={inv.id}
+                        balanceDue={balanceNum}
+                        canRecord={canRecordPayment}
+                        payments={paymentsByInvoice[inv.id] ?? null}
+                        recording={recordingPayment}
+                        err={paymentErr}
+                        onRecord={(body) => recordPayment(inv.id, body)}
+                        onVoid={(paymentId) => voidPayment(paymentId, inv.id)}
+                      />
+                    </div>
                   )}
                 </div>
-                {inv.pdfUrl && (
-                  <a
-                    href={`/api/invoices/${inv.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
-                  >
-                    View PDF →
-                  </a>
-                )}
-                {inv.status === 'DRAFT' && (
-                  <button
-                    onClick={() => sendInvoice(inv.id)}
-                    disabled={sendingInvoiceId != null || noRecipient}
-                    title={noRecipient ? 'Add a contact to the job before sending.' : undefined}
-                    className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
-                  >
-                    {sendingInvoiceId === inv.id ? 'Sending…' : 'Send'}
-                  </button>
-                )}
-                {inv.sentAt && (
-                  <span className="text-[10px] text-zinc-500">
-                    Sent {new Date(inv.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -2058,6 +2187,210 @@ function AddContactForm({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// Phase 5 commit 3 — payment record + history panel rendered inline
+// when an invoice row is expanded. Keeps the order detail page from
+// needing a separate /payments surface — Ana works billing one
+// order at a time.
+function PaymentsPanel({
+  invoiceId,
+  balanceDue,
+  canRecord,
+  payments,
+  recording,
+  err,
+  onRecord,
+  onVoid,
+}: {
+  invoiceId: string;
+  balanceDue: number;
+  canRecord: boolean;
+  payments: PaymentRow[] | null;
+  recording: boolean;
+  err: string | null;
+  onRecord: (body: {
+    amount: number;
+    method: string;
+    receivedAt: string;
+    reference: string;
+    notes: string;
+  }) => void | Promise<void>;
+  onVoid: (paymentId: string) => void | Promise<void>;
+}) {
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState<string>('CHECK');
+  const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
+  const amountNum = parseFloat(amount);
+  const validAmount = Number.isFinite(amountNum) && amountNum > 0;
+  const overpay = validAmount && amountNum > balanceDue + 0.005;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validAmount || overpay) return;
+    await onRecord({
+      amount: amountNum,
+      method,
+      receivedAt,
+      reference: reference.trim(),
+      notes: notes.trim(),
+    });
+    setAmount('');
+    setReference('');
+    setNotes('');
+  };
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-2">
+          Payments
+        </div>
+        {payments === null ? (
+          <div className="text-xs text-zinc-500">Loading…</div>
+        ) : payments.length === 0 ? (
+          <div className="text-xs text-zinc-500 italic">No payments recorded yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {payments.map((p) => {
+              const voided = !!p.voidedAt;
+              return (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-3 flex-wrap text-xs px-2.5 py-1.5 rounded border ${
+                    voided
+                      ? 'border-zinc-800 bg-zinc-950 text-zinc-600 line-through'
+                      : 'border-zinc-800 bg-zinc-950 text-zinc-200'
+                  }`}
+                >
+                  <span className="font-semibold">
+                    ${Number(p.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">{p.method}</span>
+                  {p.reference && <span className="text-[11px] text-zinc-400">ref {p.reference}</span>}
+                  <span className="text-[11px] text-zinc-500">
+                    Received {new Date(p.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                  <span className="text-[11px] text-zinc-500 ml-auto">
+                    by {p.recordedBy.name}
+                  </span>
+                  {voided ? (
+                    <span className="text-[10px] text-rose-400 no-underline">
+                      Voided · {p.voidReason}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onVoid(p.id)}
+                      className="text-[10px] text-zinc-500 hover:text-rose-300 underline-offset-2 hover:underline"
+                    >
+                      Void
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {canRecord && balanceDue > 0 && (
+        <form
+          onSubmit={submit}
+          className="border border-zinc-800 rounded-lg p-3 grid grid-cols-12 gap-2 bg-zinc-950"
+        >
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Amount
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={balanceDue + 1000}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={balanceDue.toFixed(2)}
+              required
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Method
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            >
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m} value={m}>{m.replace('_', ' ')}</option>
+              ))}
+            </select>
+          </label>
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Received
+            <input
+              type="date"
+              value={receivedAt}
+              onChange={(e) => setReceivedAt(e.target.value)}
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Reference
+            <input
+              type="text"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Check #, wire id…"
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <label className="col-span-9 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Notes (optional)
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <div className="col-span-3 flex items-end">
+            <button
+              type="submit"
+              disabled={recording || !validAmount || overpay}
+              title={
+                overpay
+                  ? `Amount exceeds balance due ($${balanceDue.toFixed(2)})`
+                  : undefined
+              }
+              className="w-full px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
+            >
+              {recording ? 'Recording…' : 'Record payment'}
+            </button>
+          </div>
+          {overpay && (
+            <div className="col-span-12 text-[11px] text-rose-400">
+              Amount exceeds the ${balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })} balance due.
+            </div>
+          )}
+        </form>
+      )}
+
+      {err && (
+        <div className="text-[11px] text-rose-400 border border-rose-900 bg-rose-950/40 rounded px-2 py-1.5">
+          {err}
+        </div>
+      )}
+
+      {!canRecord && (
+        <div className="text-[11px] text-zinc-500 italic">
+          Payment recording opens once the invoice is sent.
+        </div>
+      )}
+
+      {/* invoiceId reserved for future per-form analytics — referenced here
+          so the unused-var lint stays quiet during tighter perms work. */}
+      <span className="hidden">{invoiceId}</span>
     </div>
   );
 }

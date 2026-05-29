@@ -1328,6 +1328,10 @@ model User {
   pickListsAssigned   PickList[]     @relation("PickListAssignedTo")
   pickListItemsPicked PickListItem[] @relation("PickListItemPickedBy")
 
+  // Phase 5 commit 3 — native payment recording.
+  paymentsRecorded Payment[] @relation("PaymentRecorder")
+  paymentsVoided   Payment[] @relation("PaymentVoider")
+
   @@map("users")
 }
 
@@ -2000,7 +2004,8 @@ model Invoice {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  order Order @relation(fields: [orderId], references: [id])
+  order    Order     @relation(fields: [orderId], references: [id])
+  payments Payment[]
 
   @@index([orderId, type])
   @@map("sr_invoices")
@@ -2009,6 +2014,53 @@ model Invoice {
 enum InvoiceType {
   RENTAL
   LD
+}
+
+// Phase 5 commit 3 — native payment recording. PaymentLog (free-text,
+// RW-shaped) stays for legacy RW invoices; new SirReel invoices use
+// this typed model. Recording a Payment auto-updates the parent
+// Invoice's amountPaid / balanceDue / status and (for a fully-paid
+// RENTAL invoice) advances Order INVOICED → CLOSED. Voiding a
+// Payment regresses those same fields. The booked snapshot is never
+// written here.
+enum PaymentMethod {
+  CHECK
+  WIRE
+  ACH
+  CREDIT_CARD
+  CARDPOINTE
+  CASH
+  OTHER
+}
+
+model Payment {
+  id            String         @id @default(uuid())
+  invoiceId     String         @map("invoice_id")
+  // The amount applied to this invoice. Always > 0 — voids are tracked
+  // via voidedAt, never by negative amounts (keeps SUM() math correct
+  // when filtered to non-voided rows).
+  amount        Decimal        @db.Decimal(12, 2)
+  method        PaymentMethod
+  // Operator-supplied reference: check #, wire confirmation, CardPointe
+  // transaction id, etc. Free-text by design — CardPointe FK lives
+  // under PaymentLog for legacy continuity.
+  reference     String?
+  receivedAt    DateTime       @map("received_at")
+  notes         String?        @db.Text
+  recordedById  String         @map("recorded_by_id")
+  voidedAt      DateTime?      @map("voided_at")
+  voidedById    String?        @map("voided_by_id")
+  voidReason    String?        @map("void_reason") @db.Text
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("PaymentRecorder", fields: [recordedById], references: [id])
+  voidedBy   User?   @relation("PaymentVoider", fields: [voidedById], references: [id])
+
+  @@index([invoiceId])
+  @@index([receivedAt])
+  @@index([invoiceId, voidedAt])
+  @@map("sr_payments")
 }
 
 model Vendor {
