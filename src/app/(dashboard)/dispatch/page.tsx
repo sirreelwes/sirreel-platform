@@ -115,18 +115,22 @@ function fmtDate(ymd: string): string {
 
 const REFRESH_MS = 60_000
 
+type Horizon = 'soon' | 'fortnight'
+const HORIZON_DAYS: Record<Horizon, number> = { soon: 2, fortnight: 14 }
+
 export default function DispatchPage() {
   const [data, setData] = useState<DispatchPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null)
+  const [horizon, setHorizon] = useState<Horizon>('soon')
   const isMobile = useIsMobile()
 
   const fetchData = useCallback(async () => {
     setRefreshing(true)
     setError(null)
     try {
-      const r = await fetch('/api/dispatch?days=2', { cache: 'no-store' })
+      const r = await fetch(`/api/dispatch?days=${HORIZON_DAYS[horizon]}`, { cache: 'no-store' })
       const json = await r.json().catch(() => ({}))
       if (!r.ok) {
         setError(json?.error || `HTTP ${r.status}`)
@@ -139,7 +143,7 @@ export default function DispatchPage() {
     } finally {
       setRefreshing(false)
     }
-  }, [])
+  }, [horizon])
 
   useEffect(() => {
     fetchData()
@@ -185,7 +189,8 @@ export default function DispatchPage() {
             As of {fmtDate(data.asOfDate)} · horizon {data.horizonDays} day{data.horizonDays === 1 ? '' : 's'}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap justify-end">
+          <HorizonToggle horizon={horizon} onChange={setHorizon} />
           {lastFetchedAt && (
             <span>refreshed {lastFetchedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
           )}
@@ -201,7 +206,31 @@ export default function DispatchPage() {
 
       <OverdueBand overdue={data.overdue} />
 
-      <DaysGrid days={data.days} />
+      {horizon === 'soon' ? (
+        <DaysGrid days={data.days} />
+      ) : (
+        <LookAheadGrid days={data.days} />
+      )}
+    </div>
+  )
+}
+
+function HorizonToggle({ horizon, onChange }: { horizon: Horizon; onChange: (h: Horizon) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-zinc-700 overflow-hidden">
+      {(['soon', 'fortnight'] as Horizon[]).map((h) => (
+        <button
+          key={h}
+          onClick={() => onChange(h)}
+          className={`px-2.5 py-1 text-xs font-medium ${
+            horizon === h
+              ? 'bg-zinc-700 text-white'
+              : 'bg-transparent text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          {h === 'soon' ? 'Today / Tomorrow' : 'Next 14 days'}
+        </button>
+      ))}
     </div>
   )
 }
@@ -311,6 +340,106 @@ function SubSection({
       ) : (
         <div className="grid gap-1.5">{children}</div>
       )}
+    </div>
+  )
+}
+
+// ─── Look-ahead grid ─────────────────────────────────────────────
+function LookAheadGrid({ days }: { days: DispatchDay[] }) {
+  // Heat accent: compute max per-day total across the horizon so the
+  // visual emphasis is relative ("heavy days vs light days for *this*
+  // horizon"), not absolute.
+  const maxTotal = Math.max(
+    1,
+    ...days.map((d) => d.outboundFleet.length + d.outboundWarehouse.length + d.inbound.length),
+  )
+  return (
+    <section className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-zinc-800">
+        <h2 className="font-semibold text-white">Daily load · {days.length} days</h2>
+        <div className="text-[11px] text-zinc-500 mt-0.5">
+          Tap a row to expand. Heat accent scales to the heaviest day in view.
+        </div>
+      </div>
+      <div className="divide-y divide-zinc-800">
+        {days.map((d) => (
+          <LookAheadRow key={d.date} day={d} maxTotal={maxTotal} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const outFleet = day.outboundFleet.length
+  const outWh = day.outboundWarehouse.length
+  const inboundN = day.inbound.length
+  const total = outFleet + outWh + inboundN
+  const heat = Math.min(1, total / maxTotal)
+  // Heat → alpha amber accent on the bar
+  return (
+    <div className="bg-zinc-950">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-zinc-900/60 transition-colors"
+      >
+        {/* Heat bar */}
+        <div className="flex-none w-1.5 h-10 rounded overflow-hidden bg-zinc-900">
+          <div className="w-full bg-amber-500" style={{ height: `${Math.round(heat * 100)}%`, marginTop: `${Math.round((1 - heat) * 100)}%` }} />
+        </div>
+        {/* Date */}
+        <div className="flex-none min-w-[88px]">
+          <div className="text-sm font-semibold text-white">{day.label}</div>
+          <div className="text-[11px] text-zinc-500">{fmtDate(day.date)}</div>
+        </div>
+        {/* Counts strip */}
+        <div className="flex-1 grid grid-cols-3 gap-2 text-center text-xs">
+          <LoadStat label="Out FLEET" n={outFleet} color="zinc" />
+          <LoadStat label="Out WHS"   n={outWh}    color="amber" />
+          <LoadStat label="In"        n={inboundN} color="emerald" />
+        </div>
+        <div className="flex-none text-[11px] text-zinc-500">{expanded ? '−' : '+'}</div>
+      </button>
+      {expanded && total > 0 && (
+        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-zinc-800/60">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mt-2 mb-2">Outbound</div>
+            {outFleet + outWh === 0 ? (
+              <div className="text-xs text-zinc-600">None.</div>
+            ) : (
+              <div className="grid gap-1.5">
+                {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} />)}
+                {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} />)}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mt-2 mb-2">Inbound</div>
+            {inboundN === 0 ? (
+              <div className="text-xs text-zinc-600">None.</div>
+            ) : (
+              <div className="grid gap-1.5">
+                {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} /> : <WarehouseCardView key={c.cardId} c={c} />))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LoadStat({ label, n, color }: { label: string; n: number; color: 'zinc' | 'amber' | 'emerald' }) {
+  const palettes = {
+    zinc:    { text: n > 0 ? 'text-zinc-200'    : 'text-zinc-600' },
+    amber:   { text: n > 0 ? 'text-amber-300'   : 'text-zinc-600' },
+    emerald: { text: n > 0 ? 'text-emerald-300' : 'text-zinc-600' },
+  }
+  return (
+    <div className="rounded border border-zinc-800 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold">{label}</div>
+      <div className={`text-base font-bold ${palettes[color].text}`}>{n}</div>
     </div>
   )
 }
