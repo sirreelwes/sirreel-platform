@@ -14,11 +14,9 @@ export async function nextOrderNumber(): Promise<string> {
  * to audit and grep than a single sequence with a type-baked prefix.
  *
  *   RENTAL → SR-INV-NNNN  (existing sr_invoice_number_seq)
- *   LD     → SR-LDI-NNNN  (sr_ld_invoice_number_seq — created in Commit 4
- *                          alongside the LD invoice generator)
- *
- * Commit 1 only handles RENTAL. LD throws so an accidental Commit-1
- * caller fails loudly rather than minting a confusingly-numbered row.
+ *   LD     → SR-LDI-NNNN  (sr_ld_invoice_number_seq, created in
+ *                          Phase 5 commit 4 via raw SQL alongside
+ *                          this branch)
  */
 export async function nextInvoiceNumber(type: 'RENTAL' | 'LD' = 'RENTAL'): Promise<string> {
   if (type === 'RENTAL') {
@@ -28,8 +26,28 @@ export async function nextInvoiceNumber(type: 'RENTAL' | 'LD' = 'RENTAL'): Promi
     const num = Number(result[0].nextval);
     return `SR-INV-${String(num).padStart(4, "0")}`;
   }
-  // LD path — TODO: Phase 5 Commit 4 creates sr_ld_invoice_number_seq.
-  throw new Error('nextInvoiceNumber(LD) not yet implemented — lands in Phase 5 commit 4')
+  // LD path
+  const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
+    SELECT nextval('sr_ld_invoice_number_seq')
+  `;
+  const num = Number(result[0].nextval);
+  return `SR-LDI-${String(num).padStart(4, "0")}`;
+}
+
+/**
+ * Phase 5 commit 4 — claim number sequence. Format: SR-CLM-NNNN.
+ * Differs from the original schema-comment placeholder
+ * "SRC-2026-NNNN" — picking a single sequence with no year embed
+ * matches the SR-INV / SR-ORD numbering convention already in use.
+ * Legacy SRC-2026-style numbers are accepted by the @unique column
+ * for any RentalWorks-era data that may land via future migration.
+ */
+export async function nextClaimNumber(): Promise<string> {
+  const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
+    SELECT nextval('sr_claim_number_seq')
+  `;
+  const num = Number(result[0].nextval);
+  return `SR-CLM-${String(num).padStart(4, "0")}`;
 }
 
 export function computeWeeklyRate(

@@ -155,10 +155,64 @@ export async function generateRentalInvoice(args: {
     })
   }
 
+  // ── Phase 5 commit 4: pull in BILL_NOW damage items ─────────────
+  // Any DamageItem whose return Inspection belongs to one of this
+  // order's BookingAssignments AND whose disposition is BILL_NOW AND
+  // which hasn't already been billed elsewhere lands on this invoice
+  // as a DAMAGE line. Pushes the invoice total above bookedTotal,
+  // honoring the doctrine that minor/accepted damage rides the
+  // rental invoice.
+  const billNowDamages = order.bookedTotal == null
+    ? []
+    : await prisma.damageItem.findMany({
+        where: {
+          disposition: 'BILL_NOW',
+          invoiceId: null,
+          inspection: {
+            bookingAssignment: {
+              bookingItem: { bookingId: order.bookingId ?? '__none__' },
+            },
+          },
+        },
+        select: {
+          id: true,
+          locationOnVehicle: true,
+          damageType: true,
+          severity: true,
+          estimatedRepairCost: true,
+          inspection: {
+            select: { asset: { select: { unitName: true } } },
+          },
+        },
+      })
+  const billNowTotal = billNowDamages.reduce(
+    (s, d) => s + (d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost)),
+    0,
+  )
+  for (const d of billNowDamages) {
+    const amount = d.estimatedRepairCost == null ? 0 : Number(d.estimatedRepairCost)
+    snapshot.push({
+      description: `Damage — ${d.damageType.toLowerCase()} (${d.severity.toLowerCase()}) at ${d.locationOnVehicle}`,
+      category: d.inspection.asset?.unitName ?? null,
+      qty: 1,
+      unitPrice: amount,
+      amount,
+      kind: 'DAMAGE' as const,
+    })
+  }
+  const billNowDamageIds = billNowDamages.map((d) => d.id)
+
   const issuedAt = new Date()
   const dueDate =
     dueDateOverride ?? new Date(issuedAt.getTime() + 30 * 86_400_000)
   const invoiceNumber = await nextInvoiceNumber('RENTAL')
+  // Invoice math: subtotal = booked + accepted damages. Tax still
+  // anchored to the booked tax amount (damages are pass-through repair
+  // costs; not a new tax computation here). Total = subtotal + tax.
+  // Document the deviation from "Invoice.total == bookedTotal" when
+  // damage was added so future readers see what changed.
+  const invoiceSubtotal = bookedSubtotal + billNowTotal
+  const invoiceTotal = bookedTotal + billNowTotal
 
   // ── Render PDF ──────────────────────────────────────────────────
   let pdfBytes: Buffer
@@ -169,11 +223,11 @@ export async function generateRentalInvoice(args: {
       orderNumber: order.orderNumber,
       issuedAt,
       dueDate,
-      subtotal: bookedSubtotal,
+      subtotal: invoiceSubtotal,
       taxAmount: bookedTaxAmount,
-      total: bookedTotal,
+      total: invoiceTotal,
       amountPaid: 0,
-      balanceDue: bookedTotal,
+      balanceDue: invoiceTotal,
       lines: snapshot,
       company: {
         name: order.company.name,
@@ -209,28 +263,38 @@ export async function generateRentalInvoice(args: {
     return { ok: false, status: 500, error: 'failed to upload invoice PDF' }
   }
 
-  // ── Persist the Invoice row ─────────────────────────────────────
-  const invoice = await prisma.invoice.create({
-    data: {
-      invoiceNumber,
-      orderId,
-      type: 'RENTAL',
-      status: 'DRAFT',
-      subtotal: bookedSubtotal,
-      taxAmount: bookedTaxAmount,
-      total: bookedTotal,
-      amountPaid: 0,
-      balanceDue: bookedTotal,
-      dueDate,
-      notes,
-      pdfBlobKey: blobKey,
-      pdfUrl: blob.url,
-      pdfGeneratedAt: issuedAt,
-      // Cast for Prisma Json input — runtime is an array of structured
-      // entries, but Prisma's JsonValue type is unioned wide.
-      lineSnapshot: snapshot as unknown as object,
-    },
-    select: { id: true },
+  // ── Persist the Invoice row + tag billed damages ───────────────
+  const invoice = await prisma.$transaction(async (tx) => {
+    const inv = await tx.invoice.create({
+      data: {
+        invoiceNumber,
+        orderId,
+        type: 'RENTAL',
+        status: 'DRAFT',
+        subtotal: invoiceSubtotal,
+        taxAmount: bookedTaxAmount,
+        total: invoiceTotal,
+        amountPaid: 0,
+        balanceDue: invoiceTotal,
+        dueDate,
+        notes,
+        pdfBlobKey: blobKey,
+        pdfUrl: blob.url,
+        pdfGeneratedAt: issuedAt,
+        // Cast for Prisma Json input — runtime is an array of
+        // structured entries, but Prisma's JsonValue type is unioned
+        // wide.
+        lineSnapshot: snapshot as unknown as object,
+      },
+      select: { id: true },
+    })
+    if (billNowDamageIds.length > 0) {
+      await tx.damageItem.updateMany({
+        where: { id: { in: billNowDamageIds } },
+        data: { invoiceId: inv.id },
+      })
+    }
+    return inv
   })
 
   return {
@@ -239,7 +303,7 @@ export async function generateRentalInvoice(args: {
     invoiceNumber,
     pdfUrl: blob.url,
     pdfBlobKey: blobKey,
-    total: bookedTotal.toFixed(2),
+    total: invoiceTotal.toFixed(2),
   }
 }
 

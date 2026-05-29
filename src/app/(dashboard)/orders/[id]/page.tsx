@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
+import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
 import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/EmailReviewModal";
 import { shouldReview } from "@/lib/email/reviewGate";
@@ -1507,6 +1508,13 @@ export default function OrderDetailPage() {
         </div>
       )}
 
+      {/* Phase 5 commit 4 — L&D disposition. Visible from RETURNED on
+          (CLOSED retained — closed-with-open-LD is reachable per the
+          non-blocking doctrine). */}
+      {['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(order.status) && (
+        <LdDispositionPanel orderId={orderId} onChanged={() => Promise.all([fetchOrder(), fetchInvoices()])} />
+      )}
+
       {/* Phase 5 commit 1 — Invoices block. RW billing off-ramp:
           generate a native RENTAL invoice from the booked snapshot. */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
@@ -1643,6 +1651,9 @@ export default function OrderDetailPage() {
                         onRecord={(body) => recordPayment(inv.id, body)}
                         onVoid={(paymentId) => voidPayment(paymentId, inv.id)}
                       />
+                      {inv.type === 'LD' && (
+                        <ClaimPanel invoiceId={inv.id} />
+                      )}
                     </div>
                   )}
                 </div>
@@ -2391,6 +2402,170 @@ function PaymentsPanel({
       {/* invoiceId reserved for future per-form analytics — referenced here
           so the unused-var lint stays quiet during tighter perms work. */}
       <span className="hidden">{invoiceId}</span>
+    </div>
+  );
+}
+
+// Phase 5 commit 4 — claim panel inside the expanded LD invoice row.
+// Loads the existing claim if any; lets operator open one if none.
+// Once opened, the full claim pipeline lives on the existing /claims
+// surface — this panel just shows status + a link.
+function ClaimPanel({ invoiceId }: { invoiceId: string }) {
+  const [claim, setClaim] = useState<{
+    id: string;
+    claimNumber: string;
+    status: string;
+    filedAgainst: string;
+    incidentDate: string;
+    totalDemand: string | null;
+    amountSettled: string | null;
+    assignedToUser: { id: string; name: string } | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [filedAgainst, setFiledAgainst] = useState("");
+  const [incidentDate, setIncidentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [incidentDescription, setIncidentDescription] = useState("");
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const r = await fetch(`/api/invoices/${invoiceId}/claim`);
+    if (r.ok) {
+      const d = await r.json();
+      setClaim(d.claim || null);
+    } else {
+      setErr(`HTTP ${r.status}`);
+    }
+    setLoading(false);
+  }, [invoiceId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (posting) return;
+    if (!filedAgainst.trim() || incidentDescription.trim().length < 10) return;
+    setPosting(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/invoices/${invoiceId}/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filedAgainst: filedAgainst.trim(),
+          incidentDate,
+          incidentDescription: incidentDescription.trim(),
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setErr(data.error || `HTTP ${r.status}`);
+        return;
+      }
+      setShowForm(false);
+      setFiledAgainst("");
+      setIncidentDescription("");
+      await refresh();
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  if (loading) return <div className="text-xs text-zinc-500">Loading claim…</div>;
+
+  return (
+    <div className="border-t border-zinc-800 pt-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">
+        Insurance claim
+      </div>
+      {err && (
+        <div className="text-[11px] text-rose-400 border border-rose-900 bg-rose-950/40 rounded px-2 py-1.5">
+          {err}
+        </div>
+      )}
+      {claim ? (
+        <div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap text-xs">
+          <span className="font-mono text-[11px] text-zinc-400">{claim.claimNumber}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-900/40 text-orange-300 border border-orange-800">
+            {claim.status}
+          </span>
+          <span className="text-zinc-300">filed against <span className="font-semibold">{claim.filedAgainst}</span></span>
+          {claim.totalDemand && (
+            <span className="text-zinc-400">demand ${Number(claim.totalDemand).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          )}
+          {claim.amountSettled && (
+            <span className="text-emerald-400">settled ${Number(claim.amountSettled).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          )}
+          {claim.assignedToUser && (
+            <span className="text-zinc-500 ml-auto">assigned {claim.assignedToUser.name}</span>
+          )}
+          <a
+            href={`/claims/${claim.id}`}
+            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+          >
+            Open in claims →
+          </a>
+        </div>
+      ) : showForm ? (
+        <form onSubmit={submit} className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 grid grid-cols-12 gap-2">
+          <label className="col-span-5 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Filed against
+            <input
+              type="text"
+              value={filedAgainst}
+              onChange={(e) => setFiledAgainst(e.target.value)}
+              placeholder="Insurance company name"
+              required
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Incident date
+            <input
+              type="date"
+              value={incidentDate}
+              onChange={(e) => setIncidentDate(e.target.value)}
+              required
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <label className="col-span-12 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+            Description (≥10 chars)
+            <textarea
+              value={incidentDescription}
+              onChange={(e) => setIncidentDescription(e.target.value)}
+              rows={3}
+              required
+              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+            />
+          </label>
+          <div className="col-span-12 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="text-xs font-semibold border border-zinc-700 text-zinc-300 hover:border-zinc-500 px-3 py-1.5 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={posting || incidentDescription.trim().length < 10 || !filedAgainst.trim()}
+              className="text-xs font-semibold bg-orange-600 hover:bg-orange-500 disabled:bg-zinc-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg"
+            >
+              {posting ? "Opening…" : "Open claim"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShowForm(true)}
+          className="text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg"
+        >
+          Open claim against carrier
+        </button>
+      )}
     </div>
   );
 }

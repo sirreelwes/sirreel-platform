@@ -899,6 +899,18 @@ enum DamageSeverity {
   MAJOR
 }
 
+// Phase 5 commit 4 — return-disposition triage decision per damage
+// item. PENDING is the just-captured default. BILL_NOW goes onto the
+// next-generated RENTAL invoice as a DAMAGE line. SEND_TO_LD is
+// collected by the LD invoice generator. WAIVED is operator's
+// "goodwill / pre-existing / not billable" call.
+enum DamageDisposition {
+  PENDING
+  BILL_NOW
+  SEND_TO_LD
+  WAIVED
+}
+
 model DamageItem {
   id                  String         @id @default(uuid())
   inspectionId        String         @map("inspection_id")
@@ -910,13 +922,23 @@ model DamageItem {
   isPreExisting       Boolean        @default(false) @map("is_pre_existing")
   notes               String?        @db.Text
 
+  // Phase 5 commit 4 — triage decision + which invoice it landed on.
+  disposition DamageDisposition @default(PENDING)
+  // Set when the damage gets included in an Invoice's lineSnapshot.
+  // For BILL_NOW: the rental invoice that generated next. For
+  // SEND_TO_LD: the LD invoice that opened the claim.
+  invoiceId   String?           @map("invoice_id")
+
   // Link to claim
   claimId String? @map("claim_id")
 
   // Relations
   inspection Inspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   claim      InsuranceClaim? @relation(fields: [claimId], references: [id])
+  invoice    Invoice?        @relation(fields: [invoiceId], references: [id])
 
+  @@index([disposition])
+  @@index([invoiceId])
   @@map("damage_items")
 }
 
@@ -938,12 +960,27 @@ enum ClaimStatus {
 
 model InsuranceClaim {
   id                   String      @id @default(uuid())
-  claimNumber          String      @unique @map("claim_number") // SRC-2026-0001
+  // Phase 5 commit 4: new claims use SR-CLM-NNNN (sr_claim_number_seq).
+  // Legacy SRC-2026-NNNN-style numbers are accepted for any rows the
+  // RentalWorks-era data migration may bring in later.
+  claimNumber          String      @unique @map("claim_number")
   bookingId            String      @map("booking_id")
   assetId              String      @map("asset_id")
   companyId            String      @map("company_id")
-  checkoutInspectionId String      @map("checkout_inspection_id")
-  returnInspectionId   String      @map("return_inspection_id")
+  // Phase 5 commit 4 — high-dollar disputes (theft / total loss /
+  // major mechanical) may lack a clean inspection pair, and a hard
+  // NOT NULL would block exactly the claims this phase handles. The
+  // LD disposition still creates a RETURN Inspection by default
+  // when a return occurs — these are null only for genuine no-return
+  // cases.
+  checkoutInspectionId String?     @map("checkout_inspection_id")
+  returnInspectionId   String?     @map("return_inspection_id")
+  // Phase 5 commit 4 — links to the LD invoice + COI on file. The
+  // ClaimDocument linker still covers arbitrary supporting docs; these
+  // FKs are the direct canonical pointers used by the order-detail
+  // pipeline surface.
+  invoiceId            String?     @map("invoice_id")
+  coiCheckId           String?     @map("coi_check_id")
   status               ClaimStatus @default(DRAFT)
 
   // Insurance details
@@ -985,14 +1022,18 @@ model InsuranceClaim {
   booking            Booking             @relation(fields: [bookingId], references: [id])
   asset              Asset               @relation(fields: [assetId], references: [id])
   company            Company             @relation(fields: [companyId], references: [id])
-  checkoutInspection Inspection          @relation("CheckoutInspection", fields: [checkoutInspectionId], references: [id])
-  returnInspection   Inspection          @relation("ReturnInspection", fields: [returnInspectionId], references: [id])
+  checkoutInspection Inspection?         @relation("CheckoutInspection", fields: [checkoutInspectionId], references: [id])
+  returnInspection   Inspection?         @relation("ReturnInspection", fields: [returnInspectionId], references: [id])
+  invoice            Invoice?            @relation(fields: [invoiceId], references: [id])
+  coiCheck           CoiCheck?           @relation(fields: [coiCheckId], references: [id])
   assignedToUser     User?               @relation("ClaimAssignee", fields: [assignedTo], references: [id])
   documents          ClaimDocument[]
   timeline           ClaimTimeline[]
   damageItems        DamageItem[]
   maintenanceRecords MaintenanceRecord[]
 
+  @@index([invoiceId])
+  @@index([coiCheckId])
   @@map("insurance_claims")
 }
 
@@ -2004,8 +2045,14 @@ model Invoice {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  order    Order     @relation(fields: [orderId], references: [id])
-  payments Payment[]
+  order       Order            @relation(fields: [orderId], references: [id])
+  payments    Payment[]
+  // Phase 5 commit 4 — DamageItems and InsuranceClaims tagged with
+  // this invoice. For RENTAL: BILL_NOW damages billed here. For LD:
+  // the damages that drove the LD invoice + any claims opened
+  // against it.
+  damageItems     DamageItem[]
+  insuranceClaims InsuranceClaim[]
 
   @@index([orderId, type])
   @@map("sr_invoices")
@@ -2644,6 +2691,9 @@ model CoiCheck {
   company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   uploadedBy      User     @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
   humanDecisionBy User?    @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
+  // Phase 5 commit 4 — claims that reference this COI as the policy
+  // they were filed against.
+  insuranceClaims InsuranceClaim[]
 
   @@index([jobId])
   @@index([companyId])
