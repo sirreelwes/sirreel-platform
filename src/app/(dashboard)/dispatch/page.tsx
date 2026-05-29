@@ -1,220 +1,409 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+/**
+ * /dispatch — the staff dispatch board (Phase 4 commit 2).
+ *
+ * Read-only projection of the order lifecycle. Two-sided overdue band
+ * (LATE TO SHIP / LATE TO RETURN) pinned full-width at the top, then
+ * Today + Tomorrow columns each showing Outbound (FLEET cards above
+ * WAREHOUSE cards) and Inbound.
+ *
+ * Wall-mounted display: large type, dense info per card, 60s auto-
+ * refresh. Phone: stacks columns vertically, refreshes on load + on
+ * window focus, no auto-refresh. Both use the same card components.
+ *
+ * Dark visual language mirrors /warehouse/pick exactly — same
+ * bg-zinc-900 / border-zinc-800 cards, same status badge palette.
+ *
+ * Data source: GET /api/dispatch?asOf=today&days=2. Look-ahead toggle
+ * (Commit 3) re-fetches with days=14.
+ */
 
-function fmt(d: string) {
-  if (!d) return '—'
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+
+type ListStatus = 'BOOKED' | 'LOADED_READY' | 'ON_JOB'
+type PickListStatus =
+  | 'DRAFT'
+  | 'PICKING'
+  | 'READY_TO_STAGE'
+  | 'STAGED'
+  | 'LOADED'
+  | 'CANCELLED'
+type Priority = 'URGENT' | 'HIGH' | 'STANDARD' | 'LOW'
+
+interface FleetCard {
+  kind: 'FLEET'
+  cardId: string
+  lineId: string
+  orderId: string
+  orderNumber: string
+  status: ListStatus
+  companyName: string
+  jobName: string | null
+  jobCode: string | null
+  assetUnitName: string | null
+  categoryName: string | null
+  effectivePickupDate: string
+  effectiveReturnDate: string
+  priority: Priority | null
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  confirmed: 'bg-blue-100 text-blue-700',
-  hold: 'bg-amber-100 text-amber-700',
-  inquiry: 'bg-sky-100 text-sky-700',
-  booked: 'bg-emerald-100 text-emerald-700',
+interface WarehouseCard {
+  kind: 'WAREHOUSE'
+  cardId: string
+  orderId: string
+  orderNumber: string
+  status: ListStatus
+  companyName: string
+  jobName: string | null
+  jobCode: string | null
+  lineCount: number
+  effectivePickupDate: string
+  effectiveReturnDate: string
+  pickListStatus: PickListStatus | null
+  priority: Priority | null
 }
+
+type DispatchCard = FleetCard | WarehouseCard
+
+interface DispatchDay {
+  date: string
+  label: string
+  outboundFleet: FleetCard[]
+  outboundWarehouse: WarehouseCard[]
+  inbound: DispatchCard[]
+}
+
+interface DispatchPayload {
+  asOfDate: string
+  horizonDays: number
+  overdue: { lateToShip: DispatchCard[]; lateToReturn: DispatchCard[] }
+  days: DispatchDay[]
+}
+
+const STATUS_COLOR: Record<ListStatus, string> = {
+  BOOKED:       'bg-indigo-900/40 text-indigo-300 border-indigo-800',
+  LOADED_READY: 'bg-teal-900/40 text-teal-300 border-teal-800',
+  ON_JOB:       'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+}
+
+const PICKLIST_COLOR: Record<PickListStatus, string> = {
+  DRAFT:          'bg-zinc-800 text-zinc-300',
+  PICKING:        'bg-amber-900/40 text-amber-300',
+  READY_TO_STAGE: 'bg-blue-900/40 text-blue-300',
+  STAGED:         'bg-indigo-900/40 text-indigo-300',
+  LOADED:         'bg-emerald-900/40 text-emerald-300',
+  CANCELLED:      'bg-red-900/40 text-red-300',
+}
+
+const PRIORITY_COLOR: Record<Priority, string> = {
+  URGENT:   'bg-red-900/40 text-red-200 border-red-800',
+  HIGH:     'bg-orange-900/40 text-orange-300 border-orange-800',
+  STANDARD: 'bg-zinc-800 text-zinc-400 border-zinc-700',
+  LOW:      'bg-zinc-800 text-zinc-500 border-zinc-700',
+}
+
+function fmtDate(ymd: string): string {
+  // Display-only. Card already has the day label in its column; this
+  // is the per-card "return Tue 6/3" detail. Use UTC components since
+  // server already normalized to YYYY-MM-DD.
+  const d = new Date(`${ymd}T12:00:00Z`)
+  if (isNaN(d.getTime())) return ymd
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric', timeZone: 'UTC' })
+}
+
+const REFRESH_MS = 60_000
 
 export default function DispatchPage() {
-  const [unlinked, setUnlinked] = useState<any[]>([])
-  const [rwOrders, setRwOrders] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<any>(null)
-  const [search, setSearch] = useState('')
-  const [linking, setLinking] = useState(false)
-  const [linked, setLinked] = useState<Set<string>>(new Set())
-  const [successMsg, setSuccessMsg] = useState('')
+  const [data, setData] = useState<DispatchPayload | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null)
+  const isMobile = useIsMobile()
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/planyo/unlinked').then(r => r.json()).catch(() => ({})),
-      fetch('/api/rentalworks?pageSize=200').then(r => r.json()).catch(() => ({})),
-    ]).then(([planyoData, rwData]) => {
-      if (planyoData.ok) setUnlinked(planyoData.unlinked || [])
-      if (rwData?.orders?.Rows) {
-        const cols = rwData.orders.ColumnIndex
-        const rows = rwData.orders.Rows.map((r: any[]) => ({
-          orderId:     r[cols.OrderId],
-          orderNumber: r[cols.OrderNumber],
-          customer:    r[cols.Customer],
-          description: r[cols.Description],
-          agent:       (r[cols.Agent] || '').split(',').reverse().join(' ').trim(),
-          status:      r[cols.Status],
-          startDate:   r[cols.EstimatedStartDate] || '',
-          endDate:     r[cols.EstimatedStopDate] || '',
-          total:       Number(r[cols.Total]) || 0,
-        })).filter((o: any) => !['CLOSED','CANCELLED'].includes(o.status))
-        setRwOrders(rows)
+  const fetchData = useCallback(async () => {
+    setRefreshing(true)
+    setError(null)
+    try {
+      const r = await fetch('/api/dispatch?days=2', { cache: 'no-store' })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setError(json?.error || `HTTP ${r.status}`)
+        return
       }
-    }).finally(() => setLoading(false))
+      setData(json as DispatchPayload)
+      setLastFetchedAt(new Date())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'fetch failed')
+    } finally {
+      setRefreshing(false)
+    }
   }, [])
 
-  const filteredRw = rwOrders.filter(o => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      o.customer?.toLowerCase().includes(q) ||
-      o.orderNumber?.includes(q) ||
-      o.description?.toLowerCase().includes(q) ||
-      o.agent?.toLowerCase().includes(q)
-    )
-  })
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-  const linkOrder = async (rwOrder: any) => {
-    if (!selected) return
-    setLinking(true)
-    try {
-      const res = await fetch('/api/planyo/link-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reservationId: selected.reservationId,
-          rwOrderNumber: rwOrder.orderNumber,
-          existingNotes: selected.userNotes,
-        }),
-      })
-      const data = await res.json()
-      if (data.ok) {
-        setLinked(prev => new Set([...prev, selected.reservationId]))
-        setSuccessMsg(`Linked R${selected.reservationId} → RW #${rwOrder.orderNumber} (${rwOrder.customer})`)
-        setSelected(null)
-        setTimeout(() => setSuccessMsg(''), 4000)
-      }
-    } finally { setLinking(false) }
+  // Auto-refresh: desktop/wall only (60s). Phone refreshes on focus +
+  // manual refresh button.
+  useEffect(() => {
+    if (isMobile) return
+    const id = window.setInterval(() => {
+      void fetchData()
+    }, REFRESH_MS)
+    return () => window.clearInterval(id)
+  }, [isMobile, fetchData])
+
+  // Focus-refresh on phone — when the page returns from background.
+  useEffect(() => {
+    const onFocus = () => {
+      void fetchData()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [fetchData])
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="rounded-lg border border-rose-800 bg-rose-950/50 text-rose-200 text-sm px-3 py-2">{error}</div>
+      </div>
+    )
   }
 
-  const displayUnlinked = unlinked.filter(r => !linked.has(r.reservationId))
+  if (!data) {
+    return <div className="p-6 text-sm text-zinc-500">Loading dispatch…</div>
+  }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <header className="flex items-baseline justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Planyo → RentalWorks Linker</h1>
-          <p className="text-[12px] text-gray-500 mt-0.5">
-            Match unlinked Planyo reservations to their RentalWorks orders
+          <h1 className="text-2xl font-semibold text-white">Dispatch</h1>
+          <p className="text-sm text-zinc-400 mt-0.5">
+            As of {fmtDate(data.asOfDate)} · horizon {data.horizonDays} day{data.horizonDays === 1 ? '' : 's'}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
-          {successMsg && (
-            <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-semibold">
-              ✅ {successMsg}
-            </div>
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          {lastFetchedAt && (
+            <span>refreshed {lastFetchedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
           )}
-          <div className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-700 font-semibold">
-            {displayUnlinked.length} unlinked reservations
-          </div>
+          <button
+            onClick={fetchData}
+            disabled={refreshing}
+            className="ml-1 border border-zinc-700 text-zinc-200 hover:border-zinc-500 px-2.5 py-1 rounded text-xs disabled:opacity-40"
+          >
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
         </div>
+      </header>
+
+      <OverdueBand overdue={data.overdue} />
+
+      <DaysGrid days={data.days} />
+    </div>
+  )
+}
+
+// ─── Overdue band ─────────────────────────────────────────────────
+function OverdueBand({
+  overdue,
+}: {
+  overdue: DispatchPayload['overdue']
+}) {
+  const lateShip = overdue.lateToShip.length
+  const lateReturn = overdue.lateToReturn.length
+  if (lateShip === 0 && lateReturn === 0) return null
+  return (
+    <div className="mb-6 rounded-xl border border-red-900/70 bg-red-950/40">
+      <div className="px-4 py-2.5 border-b border-red-900/60 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-red-300">Overdue</span>
+        <span className="text-[11px] text-red-400">
+          {lateShip} late to ship · {lateReturn} late to return
+        </span>
       </div>
-
-      <div className="grid grid-cols-2 gap-4 h-[calc(100vh-180px)]">
-
-        {/* Left: Unlinked Planyo reservations */}
-        <div className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-              Planyo — Unlinked Reservations
-            </div>
-            <div className="text-[10px] text-gray-400 mt-0.5">Click a reservation to link it to an RW order</div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="text-center py-8 text-gray-400 text-sm">Loading...</div>
-            ) : displayUnlinked.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-sm">
-                <div className="text-3xl mb-2">✅</div>
-                All reservations are linked!
-              </div>
-            ) : (
-              displayUnlinked.map((r, i) => (
-                <div key={i}
-                  onClick={() => setSelected(selected?.reservationId === r.reservationId ? null : r)}
-                  className={`px-4 py-3 border-b border-gray-50 cursor-pointer transition-colors ${
-                    selected?.reservationId === r.reservationId
-                      ? 'bg-blue-50 border-l-2 border-l-blue-500'
-                      : 'hover:bg-gray-50'
-                  }`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[12px] font-bold text-gray-900 truncate">{r.unit}</div>
-                      <div className="text-[10px] text-gray-500 truncate">{r.resourceName}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        {fmt(r.start)} – {fmt(r.end)}
-                      </div>
-                      {r.company && (
-                        <div className="text-[10px] text-gray-600 font-medium mt-0.5">{r.company}</div>
-                      )}
-                      {r.jobName && (
-                        <div className="text-[10px] text-gray-400 truncate">{r.jobName}</div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[r.status] || 'bg-gray-100 text-gray-500'}`}>
-                        {r.status.toUpperCase()}
-                      </span>
-                      {r.agent && <div className="text-[9px] text-gray-400">{r.agent}</div>}
-                      <div className="text-[9px] text-gray-300">R{r.reservationId}</div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Right: RW order search */}
-        <div className="bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              RentalWorks Orders
-              {selected && (
-                <span className="ml-2 font-normal text-blue-600">— linking R{selected.reservationId} ({selected.unit})</span>
-              )}
-            </div>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by client, order #, or agent..."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
-            />
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {!selected ? (
-              <div className="text-center py-12 text-gray-400 text-sm">
-                <div className="text-3xl mb-2">←</div>
-                Select a Planyo reservation first
-              </div>
-            ) : filteredRw.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 text-sm">No orders found</div>
-            ) : (
-              filteredRw.map((o, i) => (
-                <div key={i}
-                  onClick={() => !linking && linkOrder(o)}
-                  className="px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-emerald-50 hover:border-l-2 hover:border-l-emerald-500 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[12px] font-bold text-gray-900 truncate">{o.customer}</div>
-                      <div className="text-[10px] text-gray-500 truncate">{o.description}</div>
-                      <div className="text-[10px] text-gray-400">
-                        {fmt(o.startDate)} – {fmt(o.endDate)}
-                      </div>
-                      {o.agent && <div className="text-[10px] text-gray-400">{o.agent}</div>}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <div className="text-[11px] font-bold text-gray-900">#{o.orderNumber}</div>
-                      <div className="text-[10px] font-semibold text-emerald-600">${o.total.toLocaleString()}</div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                        o.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' :
-                        o.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-500'}`}>
-                        {o.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-red-900/60">
+        <OverdueSection label="Late to ship" cards={overdue.lateToShip} />
+        <OverdueSection label="Late to return" cards={overdue.lateToReturn} />
       </div>
     </div>
   )
+}
+
+function OverdueSection({ label, cards }: { label: string; cards: DispatchCard[] }) {
+  return (
+    <div className="p-3">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-red-300 mb-2">{label}</div>
+      {cards.length === 0 ? (
+        <div className="text-xs text-red-400/70">None ✓</div>
+      ) : (
+        <div className="grid gap-1.5">
+          {cards.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} overdue /> : <WarehouseCardView key={c.cardId} c={c} overdue />))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Days grid ────────────────────────────────────────────────────
+function DaysGrid({ days }: { days: DispatchDay[] }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {days.map((d) => (
+        <DayColumn key={d.date} day={d} />
+      ))}
+    </div>
+  )
+}
+
+function DayColumn({ day }: { day: DispatchDay }) {
+  const outTotal = day.outboundFleet.length + day.outboundWarehouse.length
+  const inTotal = day.inbound.length
+  return (
+    <section className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-zinc-800 flex items-baseline justify-between">
+        <div>
+          <h2 className="font-semibold text-white">{day.label}</h2>
+          <div className="text-[11px] text-zinc-500 mt-0.5">{fmtDate(day.date)}</div>
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          {outTotal} out · {inTotal} in
+        </div>
+      </div>
+
+      <SubSection
+        label="Outbound"
+        empty={outTotal === 0}
+        emptyCopy="Nothing going out."
+      >
+        {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} />)}
+        {day.outboundWarehouse.map((c) => <WarehouseCardView key={c.cardId} c={c} />)}
+      </SubSection>
+
+      <SubSection
+        label="Inbound"
+        empty={inTotal === 0}
+        emptyCopy="Nothing coming back."
+      >
+        {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} /> : <WarehouseCardView key={c.cardId} c={c} />))}
+      </SubSection>
+    </section>
+  )
+}
+
+function SubSection({
+  label,
+  empty,
+  emptyCopy,
+  children,
+}: {
+  label: string
+  empty: boolean
+  emptyCopy: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="px-3 py-3 border-b border-zinc-800 last:border-b-0">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-2 px-1">{label}</div>
+      {empty ? (
+        <div className="text-xs text-zinc-600 px-1 py-2">{emptyCopy}</div>
+      ) : (
+        <div className="grid gap-1.5">{children}</div>
+      )}
+    </div>
+  )
+}
+
+// ─── Card views ───────────────────────────────────────────────────
+function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
+  return (
+    <Link
+      href={`/orders/${c.orderId}`}
+      className={`block px-3 py-2.5 rounded-lg border transition-colors ${
+        overdue
+          ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
+          : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+      }`}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">FLEET</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
+          {c.status.replace('_', ' ')}
+        </span>
+        {c.priority && c.priority !== 'STANDARD' && (
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
+            {c.priority}
+          </span>
+        )}
+        <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+      </div>
+      <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+        {c.assetUnitName || c.categoryName || 'Vehicle'}
+      </div>
+      <div className="mt-0.5 text-[12px] text-zinc-400 truncate">
+        {c.companyName}
+        {c.jobName && <span className="text-zinc-500"> · {c.jobName}</span>}
+      </div>
+      <div className="mt-1 text-[11px] text-zinc-500">
+        out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
+      </div>
+    </Link>
+  )
+}
+
+function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean }) {
+  return (
+    <Link
+      href={`/orders/${c.orderId}`}
+      className={`block px-3 py-2.5 rounded-lg border transition-colors ${
+        overdue
+          ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
+          : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+      }`}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300">WAREHOUSE</span>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
+          {c.status.replace('_', ' ')}
+        </span>
+        {c.pickListStatus && (
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${PICKLIST_COLOR[c.pickListStatus]}`}>
+            {c.pickListStatus.replace('_', ' ')}
+          </span>
+        )}
+        {c.priority && c.priority !== 'STANDARD' && (
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
+            {c.priority}
+          </span>
+        )}
+        <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+      </div>
+      <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+        {c.companyName}
+        {c.jobName && <span className="text-zinc-400 font-normal"> · {c.jobName}</span>}
+      </div>
+      <div className="mt-0.5 text-[12px] text-zinc-400">
+        {c.lineCount} line{c.lineCount === 1 ? '' : 's'}
+      </div>
+      <div className="mt-1 text-[11px] text-zinc-500">
+        out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
+      </div>
+    </Link>
+  )
+}
+
+// ─── Responsive hook ──────────────────────────────────────────────
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(false)
+  const mqlRef = useRef<MediaQueryList | null>(null)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)')
+    mqlRef.current = mql
+    setMobile(mql.matches)
+    const handler = (e: MediaQueryListEvent) => setMobile(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+  return mobile
 }

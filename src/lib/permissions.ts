@@ -221,6 +221,9 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.pipeline) main.push({ id: 'inquiries', label: 'Inquiries', icon: '', href: '/inquiries' });
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
+  // /dispatch now owns the staff dispatch board (Phase 4). The legacy
+  // RentalWorks-linkage tool was relocated to /dispatch/rentalworks
+  // and reached from the Admin section below.
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
   if (perms.coverage) main.push({ id: 'coverage', label: 'Coverage', icon: '', href: '/exec/coverage' });
   sections.push({ label: null, items: main });
@@ -242,6 +245,8 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.bookings) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
   if (perms.bookings) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
   if (perms.bookings) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
+  // Phase 4 — legacy RW-order linkage tool, relocated from /dispatch.
+  if (perms.dispatch) admin.push({ id: 'rw-linkage', label: 'RW Linkage', icon: '', href: '/dispatch/rentalworks' });
   if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
   if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
