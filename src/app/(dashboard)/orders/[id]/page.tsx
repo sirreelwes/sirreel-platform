@@ -435,6 +435,31 @@ export default function OrderDetailPage() {
       setGeneratingInvoice(false);
     }
   };
+  // Phase 5 commit 2 — sends the invoice via Resend with PDF attached
+  // and the portal magic link in the body. Also advances Order
+  // RETURNED → INVOICED (non-blocking). Re-fetches both the order
+  // (status may change) and the invoice list (sentAt + status).
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  const sendInvoice = async (invoiceId: string) => {
+    if (sendingInvoiceId) return;
+    setSendingInvoiceId(invoiceId);
+    setInvoiceErr(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setInvoiceErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      await Promise.all([fetchOrder(), fetchInvoices()]);
+    } finally {
+      setSendingInvoiceId(null);
+    }
+  };
 
   const fetchPortalAccess = useCallback(async () => {
     const [listRes, detRes] = await Promise.all([
@@ -1476,6 +1501,21 @@ export default function OrderDetailPage() {
                   >
                     View PDF →
                   </a>
+                )}
+                {inv.status === 'DRAFT' && (
+                  <button
+                    onClick={() => sendInvoice(inv.id)}
+                    disabled={sendingInvoiceId != null || noRecipient}
+                    title={noRecipient ? 'Add a contact to the job before sending.' : undefined}
+                    className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                  >
+                    {sendingInvoiceId === inv.id ? 'Sending…' : 'Send'}
+                  </button>
+                )}
+                {inv.sentAt && (
+                  <span className="text-[10px] text-zinc-500">
+                    Sent {new Date(inv.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
                 )}
               </div>
             ))}
