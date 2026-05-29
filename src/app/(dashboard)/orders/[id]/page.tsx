@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
 import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/EmailReviewModal";
@@ -24,6 +25,9 @@ type LineItem = {
   startDate: string | null;
   endDate: string | null;
   notes: string | null;
+  // Phase 1 lifecycle routing — set at book time.
+  fulfillmentLane: 'FLEET' | 'WAREHOUSE' | 'STAGE' | null;
+  pickStatus: 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null;
   inventoryItem: { id: string; code: string; description: string } | null;
   assetCategory: { id: string; name: string } | null;
 };
@@ -57,6 +61,9 @@ type Order = {
   quotePdfKey: string | null;
   quotePdfUrl: string | null;
   quotePdfGeneratedAt: string | null;
+  // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
+  // progress panel + "Mark Fleet Ready" / undo buttons.
+  fleetReadyAt: string | null;
 };
 
 interface RecipientChoice {
@@ -154,10 +161,18 @@ const STATUS_ACTIONS: Record<string, StatusAction[]> = {
   APPROVED: [
     { label: "Book it", next: "BOOKED", color: "bg-indigo-600 hover:bg-indigo-500", endpoint: "book" },
   ],
-  // Post-book lifecycle stays operator-driven from the legacy flow for
-  // now (ON_JOB → RETURNED → CLOSED). LOADED_READY between BOOKED and
-  // ON_JOB is rollup-derived, not exposed as a button.
-  BOOKED: [{ label: "Mark On Job", next: "ON_JOB", color: "bg-emerald-600 hover:bg-emerald-500" }],
+  // BOOKED → LOADED_READY is rollup-derived (Phase 3). No manual
+  // button — operators advance the warehouse picking floor and stamp
+  // fleet-ready via the lane progress panel below. The rollup fires
+  // automatically when both lanes hit terminal.
+  BOOKED: [],
+  // LOADED_READY → ON_JOB is the "vehicles left the yard" moment.
+  // TODO: when the digital fleet checkout flow ships, replace this
+  // manual Mark On Job with the driver e-sign payload (photos,
+  // signature, "loaded as planned" attestation) and emit the
+  // CHECKOUT_SIGN_OFF cadence event from there. Today this is just
+  // a quiet status flip — no cadence event.
+  LOADED_READY: [{ label: "Mark On Job", next: "ON_JOB", color: "bg-emerald-600 hover:bg-emerald-500" }],
   ON_JOB: [{ label: "Mark Returned", next: "RETURNED", color: "bg-purple-600 hover:bg-purple-500" }],
   RETURNED: [{ label: "Close Order", next: "CLOSED", color: "bg-zinc-600 hover:bg-zinc-500" }],
 };
@@ -583,6 +598,46 @@ export default function OrderDetailPage() {
     }
   };
 
+  // Phase 3 — fleet-side lifecycle trigger. Stamp (or undo) fleet-ready.
+  // Either call may auto-advance the order to LOADED_READY via the
+  // server-side rollup. After a successful response we re-fetch to
+  // reflect both fleetReadyAt + the new status.
+  const [fleetErr, setFleetErr] = useState<string | null>(null);
+  const [fleetBusy, setFleetBusy] = useState<'stamp' | 'undo' | null>(null);
+  const stampFleetReady = async () => {
+    if (fleetBusy) return;
+    setFleetBusy('stamp');
+    setFleetErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/fleet-ready`, { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setFleetErr(data.reason || data.error || `HTTP ${r.status}`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setFleetBusy(null);
+    }
+  };
+  const undoFleetReady = async () => {
+    if (fleetBusy) return;
+    if (!window.confirm('Undo fleet ready? If the LOADED_AND_READY email already sent to the client, it cannot be unsent.')) return;
+    setFleetBusy('undo');
+    setFleetErr(null);
+    try {
+      const r = await fetch(`/api/orders/${orderId}/fleet-ready?undo=1`, { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) {
+        setFleetErr(data.reason || data.error || `HTTP ${r.status}`);
+        return;
+      }
+      await fetchOrder();
+    } finally {
+      setFleetBusy(null);
+    }
+  };
+
   // Opens the EmailReviewModal for quote send. The modal handles
   // preview + dispatch + token mint; this component just refreshes
   // the order on success so the post-send QUOTE_SENT status reflects.
@@ -844,6 +899,97 @@ export default function OrderDetailPage() {
           </p></div>
         </div>
       </div>
+
+      {/* Phase 3 lane progress — visible only during the BOOKED →
+          LOADED_READY arc. Shows the bilateral lane state that drives
+          the rollup, plus the fleet-ready manual stamp button (until
+          the digital fleet checkout flow lands). */}
+      {(order.status === 'BOOKED' || order.status === 'LOADED_READY') && (() => {
+        const warehouseLines = order.lineItems.filter((l) => l.fulfillmentLane === 'WAREHOUSE');
+        const warehouseLoaded = warehouseLines.filter((l) => l.pickStatus === 'LOADED').length;
+        const fleetLines = order.lineItems.filter((l) => l.fulfillmentLane === 'FLEET');
+        const warehouseDone = warehouseLines.length === 0 || warehouseLoaded === warehouseLines.length;
+        const fleetDone = fleetLines.length === 0 || !!order.fleetReadyAt;
+        const bothDone = warehouseDone && fleetDone;
+        return (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-4 mb-6">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-sm font-semibold text-white">Fulfillment lanes</h2>
+              {bothDone ? (
+                <span className="text-[11px] font-semibold text-emerald-400">Both lanes ready ✓</span>
+              ) : (
+                <span className="text-[11px] text-zinc-500">
+                  {!warehouseDone && !fleetDone
+                    ? 'Warehouse + fleet pending'
+                    : !warehouseDone
+                      ? 'Warehouse pending'
+                      : 'Fleet pending'}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Warehouse cell */}
+              <div className={`rounded-lg border px-3 py-2.5 ${warehouseDone ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950'}`}>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Warehouse</div>
+                {warehouseLines.length === 0 ? (
+                  <div className="text-sm text-zinc-400 mt-0.5">No warehouse lines</div>
+                ) : (
+                  <div className="flex items-baseline justify-between mt-0.5">
+                    <div className={`text-sm font-semibold ${warehouseDone ? 'text-emerald-300' : 'text-white'}`}>
+                      {warehouseLoaded} / {warehouseLines.length} loaded
+                    </div>
+                    {!warehouseDone && (
+                      <Link href="/warehouse/pick" className="text-[11px] text-amber-400 hover:text-amber-300">
+                        Picking floor →
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Fleet cell */}
+              <div className={`rounded-lg border px-3 py-2.5 ${fleetDone ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950'}`}>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Fleet</div>
+                {fleetLines.length === 0 ? (
+                  <div className="text-sm text-zinc-400 mt-0.5">No fleet lines</div>
+                ) : (
+                  <div className="flex items-center justify-between mt-0.5 gap-2">
+                    <div className={`text-sm font-semibold ${fleetDone ? 'text-emerald-300' : 'text-white'}`}>
+                      {order.fleetReadyAt
+                        ? `Ready · ${new Date(order.fleetReadyAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                        : `${fleetLines.length} line${fleetLines.length === 1 ? '' : 's'} pending`}
+                    </div>
+                    {order.fleetReadyAt && (
+                      // The wrapper conditional limits this whole panel
+                      // to BOOKED / LOADED_READY; the server endpoint
+                      // also guards against undo past ON_JOB.
+                      <button
+                        onClick={undoFleetReady}
+                        disabled={fleetBusy != null}
+                        title="Clear fleet-ready stamp"
+                        className="text-[11px] text-zinc-500 hover:text-rose-300 underline-offset-2 hover:underline disabled:opacity-40"
+                      >
+                        {fleetBusy === 'undo' ? 'Undoing…' : 'Undo'}
+                      </button>
+                    )}
+                    {!order.fleetReadyAt && order.status === 'BOOKED' && (
+                      <button
+                        onClick={stampFleetReady}
+                        disabled={fleetBusy != null}
+                        className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded disabled:opacity-50"
+                      >
+                        {fleetBusy === 'stamp' ? 'Stamping…' : 'Mark Fleet Ready'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            {fleetErr && (
+              <div className="mt-3 text-[11px] text-rose-400">{fleetErr}</div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Quote PDF actions */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
