@@ -557,7 +557,7 @@ export function InvoiceDocument({
           </Text>
           <Text style={styles.paymentLine}>
             <Text style={{ fontFamily: 'Helvetica-Bold' }}>Wire / ACH:</Text>{' '}
-            Contact Ana DeAngelis at ana@sirreel.com for wire instructions.
+            Contact billing@sirreel.com for wire instructions.
           </Text>
           <Text style={styles.paymentLine}>
             <Text style={{ fontFamily: 'Helvetica-Bold' }}>Check:</Text>{' '}
