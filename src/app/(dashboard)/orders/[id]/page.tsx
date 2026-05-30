@@ -1079,6 +1079,220 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* Line Items */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <h2 className="text-lg font-semibold text-white">Line Items</h2>
+          {isEditable && (
+            <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+              {showAddForm ? "Cancel" : "+ Add Item"}
+            </button>
+          )}
+        </div>
+
+        {showAddForm && isEditable && (
+          <div className="px-6 py-4 bg-zinc-800/50 border-b border-zinc-800 space-y-4">
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">Type</label>
+                <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                  {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="col-span-5">
+                <label className="block text-xs text-zinc-500 mb-1">
+                  {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : "Description"}
+                </label>
+                {liType === "VEHICLE" ? (
+                  <select value={liAssetCatId} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
+                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                    <option value="">Select vehicle...</option>
+                    {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
+                  </select>
+                ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
+                  <div className="relative">
+                    <input type="text" value={invSearch} onChange={(e) => setInvSearch(e.target.value)}
+                      onFocus={() => invResults.length > 0 && setShowInvDropdown(true)}
+                      placeholder="Type to search inventory..."
+                      className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+                    {showInvDropdown && invResults.length > 0 && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-[200px] overflow-y-auto">
+                        {invResults.map((item) => (
+                          <button key={item.id} onClick={() => selectInventoryItem(item)}
+                            className="w-full px-3 py-2 text-left hover:bg-zinc-700 text-sm text-white flex justify-between">
+                            <span className="font-mono">{item.code}</span>
+                            <span className="text-zinc-400 text-xs">{item.category.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)} placeholder="e.g. Day Player Grip, Delivery Fee..."
+                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+                )}
+              </div>
+              <div className="col-span-5">
+                <label className="block text-xs text-zinc-500 mb-1">Description (on invoice)</label>
+                <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">Start</label>
+                <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">End</label>
+                <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">Rate Type</label>
+                <select value={liRateType} onChange={(e) => setLiRateType(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                  <option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="FLAT">Flat</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-zinc-500 mb-1">Rate ($)</label>
+                <input type="number" step="0.01" value={liRate} onChange={(e) => setLiRate(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div className="col-span-1">
+                <label className="block text-xs text-zinc-500 mb-1">Qty</label>
+                <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div className="col-span-3 flex items-end gap-2">
+                <button onClick={addLineItem} disabled={!liDesc || !liRate || adding}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors">
+                  {adding ? "Adding..." : "Add"}
+                </button>
+                <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-800 text-zinc-500 text-left text-xs uppercase tracking-wide">
+              <th className="px-6 py-2.5 font-medium w-[80px]">Type</th>
+              <th className="px-4 py-2.5 font-medium">Description</th>
+              <th className="px-4 py-2.5 font-medium">Dates</th>
+              <th className="px-4 py-2.5 font-medium">Rate</th>
+              <th className="px-4 py-2.5 font-medium text-center">Qty</th>
+              <th className="px-4 py-2.5 font-medium text-center">Days</th>
+              <th className="px-4 py-2.5 font-medium text-right">Total</th>
+              {/* Actions column always renders so the row-actions
+                  affordance is consistent across editable / locked
+                  states. When the order is locked the kebab self-
+                  renders as a lock glyph with a tooltip — agents see
+                  WHY editing is unavailable instead of a missing
+                  column. */}
+              <th className="px-4 py-2.5 font-medium w-[80px]"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.lineItems.length === 0 ? (
+              <tr><td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
+                No line items yet. Click \"+ Add Item\" to start building this order.
+              </td></tr>
+            ) : (
+              order.lineItems.map((li) => (
+                <tr key={li.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                  <td className="px-6 py-3">
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                      li.type === "VEHICLE" ? "bg-blue-900/40 text-blue-300" :
+                      li.type === "DISCOUNT" ? "bg-red-900/40 text-red-300" :
+                      li.type === "FEE" ? "bg-amber-900/40 text-amber-300" :
+                      "bg-zinc-700 text-zinc-300"
+                    }`}>{li.type}</span>
+                  </td>
+                  <td className="px-4 py-3 text-white">{li.description}</td>
+                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap text-xs">
+                    {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
+                  </td>
+                  {editingLineId === li.id ? (
+                    <>
+                      <td className="px-4 py-2">
+                        <input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)}
+                          className="w-24 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right font-mono" />
+                        <span className="text-zinc-500 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
+                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
+                          placeholder="auto"
+                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                      </td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <button onClick={() => saveEditLine(li.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
+                        <button onClick={() => setEditingLineId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">X</button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">
+                        {fmt(li.rate)}<span className="text-zinc-500 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
+                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
+                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        {isEditable && (
+                          <button
+                            onClick={() => startEditLine(li)}
+                            className="text-zinc-500 hover:text-blue-400 text-xs mr-2"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <span className="inline-block align-middle">
+                          <LineItemRowActions
+                            onRemove={() => { void deleteLineItem(li); }}
+                            editability={{
+                              canEdit: isEditable,
+                              lockedReason:
+                                'Order is past QUOTE_SENT — line items can\u2019t be edited directly. Re-quote or void to make changes.',
+                            }}
+                          />
+                        </span>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        {order.lineItems.length > 0 && (
+          <div className="px-6 py-4 border-t border-zinc-800 flex justify-end">
+            <div className="w-[280px] space-y-1.5 text-sm">
+              <div className="flex justify-between text-zinc-400">
+                <span>Subtotal</span><span className="font-mono text-zinc-300">{fmt(order.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-zinc-400">
+                <span>Tax ({(Number(order.taxRate) * 100).toFixed(1)}%)</span><span className="font-mono text-zinc-300">{fmt(order.taxAmount)}</span>
+              </div>
+              <div className="flex justify-between text-white font-semibold pt-1.5 border-t border-zinc-700">
+                <span>Total</span><span className="font-mono">{fmt(order.total)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Phase 3 lane progress — visible only during the BOOKED →
           LOADED_READY arc. Shows the bilateral lane state that drives
           the rollup, plus the fleet-ready manual stamp button (until
@@ -1793,220 +2007,6 @@ export default function OrderDetailPage() {
             management-only — list/revoke/regenerate live access. */}
         {inviteMsg && (
           <div className="border-t border-zinc-800 pt-3 text-[11px] text-zinc-400">{inviteMsg}</div>
-        )}
-      </div>
-
-      {/* Line Items */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-          <h2 className="text-lg font-semibold text-white">Line Items</h2>
-          {isEditable && (
-            <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-              {showAddForm ? "Cancel" : "+ Add Item"}
-            </button>
-          )}
-        </div>
-
-        {showAddForm && isEditable && (
-          <div className="px-6 py-4 bg-zinc-800/50 border-b border-zinc-800 space-y-4">
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Type</label>
-                <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
-                  {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="col-span-5">
-                <label className="block text-xs text-zinc-500 mb-1">
-                  {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : "Description"}
-                </label>
-                {liType === "VEHICLE" ? (
-                  <select value={liAssetCatId} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
-                    <option value="">Select vehicle...</option>
-                    {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
-                  </select>
-                ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
-                  <div className="relative">
-                    <input type="text" value={invSearch} onChange={(e) => setInvSearch(e.target.value)}
-                      onFocus={() => invResults.length > 0 && setShowInvDropdown(true)}
-                      placeholder="Type to search inventory..."
-                      className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
-                    {showInvDropdown && invResults.length > 0 && (
-                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-[200px] overflow-y-auto">
-                        {invResults.map((item) => (
-                          <button key={item.id} onClick={() => selectInventoryItem(item)}
-                            className="w-full px-3 py-2 text-left hover:bg-zinc-700 text-sm text-white flex justify-between">
-                            <span className="font-mono">{item.code}</span>
-                            <span className="text-zinc-400 text-xs">{item.category.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)} placeholder="e.g. Day Player Grip, Delivery Fee..."
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
-                )}
-              </div>
-              <div className="col-span-5">
-                <label className="block text-xs text-zinc-500 mb-1">Description (on invoice)</label>
-                <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
-              </div>
-            </div>
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Start</label>
-                <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">End</label>
-                <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Rate Type</label>
-                <select value={liRateType} onChange={(e) => setLiRateType(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
-                  <option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="FLAT">Flat</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Rate ($)</label>
-                <input type="number" step="0.01" value={liRate} onChange={(e) => setLiRate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div className="col-span-1">
-                <label className="block text-xs text-zinc-500 mb-1">Qty</label>
-                <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div className="col-span-3 flex items-end gap-2">
-                <button onClick={addLineItem} disabled={!liDesc || !liRate || adding}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors">
-                  {adding ? "Adding..." : "Add"}
-                </button>
-                <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-500 text-left text-xs uppercase tracking-wide">
-              <th className="px-6 py-2.5 font-medium w-[80px]">Type</th>
-              <th className="px-4 py-2.5 font-medium">Description</th>
-              <th className="px-4 py-2.5 font-medium">Dates</th>
-              <th className="px-4 py-2.5 font-medium">Rate</th>
-              <th className="px-4 py-2.5 font-medium text-center">Qty</th>
-              <th className="px-4 py-2.5 font-medium text-center">Days</th>
-              <th className="px-4 py-2.5 font-medium text-right">Total</th>
-              {/* Actions column always renders so the row-actions
-                  affordance is consistent across editable / locked
-                  states. When the order is locked the kebab self-
-                  renders as a lock glyph with a tooltip — agents see
-                  WHY editing is unavailable instead of a missing
-                  column. */}
-              <th className="px-4 py-2.5 font-medium w-[80px]"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {order.lineItems.length === 0 ? (
-              <tr><td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
-                No line items yet. Click \"+ Add Item\" to start building this order.
-              </td></tr>
-            ) : (
-              order.lineItems.map((li) => (
-                <tr key={li.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
-                  <td className="px-6 py-3">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      li.type === "VEHICLE" ? "bg-blue-900/40 text-blue-300" :
-                      li.type === "DISCOUNT" ? "bg-red-900/40 text-red-300" :
-                      li.type === "FEE" ? "bg-amber-900/40 text-amber-300" :
-                      "bg-zinc-700 text-zinc-300"
-                    }`}>{li.type}</span>
-                  </td>
-                  <td className="px-4 py-3 text-white">{li.description}</td>
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap text-xs">
-                    {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
-                  </td>
-                  {editingLineId === li.id ? (
-                    <>
-                      <td className="px-4 py-2">
-                        <input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)}
-                          className="w-24 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right font-mono" />
-                        <span className="text-zinc-500 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
-                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
-                          placeholder="auto"
-                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
-                      </td>
-                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <button onClick={() => saveEditLine(li.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
-                        <button onClick={() => setEditingLineId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">X</button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">
-                        {fmt(li.rate)}<span className="text-zinc-500 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
-                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
-                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-right">
-                        {isEditable && (
-                          <button
-                            onClick={() => startEditLine(li)}
-                            className="text-zinc-500 hover:text-blue-400 text-xs mr-2"
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <span className="inline-block align-middle">
-                          <LineItemRowActions
-                            onRemove={() => { void deleteLineItem(li); }}
-                            editability={{
-                              canEdit: isEditable,
-                              lockedReason:
-                                'Order is past QUOTE_SENT — line items can\u2019t be edited directly. Re-quote or void to make changes.',
-                            }}
-                          />
-                        </span>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-
-        {order.lineItems.length > 0 && (
-          <div className="px-6 py-4 border-t border-zinc-800 flex justify-end">
-            <div className="w-[280px] space-y-1.5 text-sm">
-              <div className="flex justify-between text-zinc-400">
-                <span>Subtotal</span><span className="font-mono text-zinc-300">{fmt(order.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>Tax ({(Number(order.taxRate) * 100).toFixed(1)}%)</span><span className="font-mono text-zinc-300">{fmt(order.taxAmount)}</span>
-              </div>
-              <div className="flex justify-between text-white font-semibold pt-1.5 border-t border-zinc-700">
-                <span>Total</span><span className="font-mono">{fmt(order.total)}</span>
-              </div>
-            </div>
-          </div>
         )}
       </div>
 
