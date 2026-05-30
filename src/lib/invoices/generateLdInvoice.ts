@@ -132,8 +132,9 @@ export async function generateLdInvoice(args: {
   const total = subtotal // no tax on LD invoices — repair pass-through
 
   const issuedAt = new Date()
-  const dueDate =
-    dueDateOverride ?? new Date(issuedAt.getTime() + 30 * 86_400_000)
+  // SirReel does not use Net terms — all invoices are due on receipt.
+  // dueDate = issuedAt so downstream aging math still works.
+  const dueDate = dueDateOverride ?? issuedAt
   const invoiceNumber = await nextInvoiceNumber('LD')
 
   // Render PDF — same InvoiceDocument, type-discriminated header.

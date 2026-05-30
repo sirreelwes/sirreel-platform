@@ -203,8 +203,10 @@ export async function generateRentalInvoice(args: {
   const billNowDamageIds = billNowDamages.map((d) => d.id)
 
   const issuedAt = new Date()
-  const dueDate =
-    dueDateOverride ?? new Date(issuedAt.getTime() + 30 * 86_400_000)
+  // SirReel does not use Net terms — all invoices are due on receipt.
+  // dueDate = issuedAt so downstream aging/overdue math (anything past
+  // dueDate by N days) keeps working without special-casing null.
+  const dueDate = dueDateOverride ?? issuedAt
   const invoiceNumber = await nextInvoiceNumber('RENTAL')
   // Invoice math: subtotal = booked + accepted damages. Tax still
   // anchored to the booked tax amount (damages are pass-through repair

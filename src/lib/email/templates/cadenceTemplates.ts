@@ -249,7 +249,7 @@ Best,
     subject: 'Invoice for {{jobName}}',
     body: `Hi {{firstName}},
 
-Your invoice for {{jobName}} is in your [job portal]({{portalLink}}) and attached here. Total is {{invoiceAmount}}, due {{invoiceDueDate}}.
+Your invoice for {{jobName}} is in your [job portal]({{portalLink}}) and attached here. Total is {{invoiceAmount}}, due on receipt.
 
 Payment options:
 • Pay online through the portal

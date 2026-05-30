@@ -350,14 +350,11 @@ const fmtPct = (rate: number): string => {
   return s + '%'
 }
 
-/** Derives "Net N" from issue→due. Falls back to "Due on receipt" if
- *  due is null or before issue. */
-function paymentTermsLabel(issuedAt: Date, dueDate: Date | null): string {
-  if (!dueDate) return 'Due on receipt'
-  const days = Math.round((dueDate.getTime() - issuedAt.getTime()) / 86_400_000)
-  if (days <= 0) return 'Due on receipt'
-  return `Net ${days}`
-}
+// SirReel does not use Net terms — all invoices are due on receipt.
+// Kept as a constant (not a derived label) so the rendered document
+// never claims a future due date and the wording is uniform across
+// rental and L&D invoices.
+const PAYMENT_TERMS_LABEL = 'Due on receipt'
 
 // ─────────────────────────────────────────────────────────────────
 // Component
@@ -368,7 +365,11 @@ export function InvoiceDocument({
   invoiceType,
   orderNumber,
   issuedAt,
-  dueDate,
+  // dueDate kept in the interface so generators can persist it on the
+  // Invoice row (downstream aging math depends on it), but not surfaced
+  // anywhere on the rendered PDF — SirReel does not use Net terms, so
+  // the document never claims a future due date.
+  dueDate: _dueDate,
   servicePeriodStart,
   servicePeriodEnd,
   subtotal,
@@ -384,7 +385,6 @@ export function InvoiceDocument({
   notes,
 }: InvoiceDocumentProps): React.ReactElement {
   const docTitle = invoiceType === 'LD' ? 'LOSS & DAMAGE INVOICE' : 'INVOICE'
-  const terms = paymentTermsLabel(issuedAt, dueDate)
 
   return (
     <Document>
@@ -408,8 +408,7 @@ export function InvoiceDocument({
             <Text style={styles.metaNum}>{invoiceNumber}</Text>
             <Text style={styles.metaLine}>Order {orderNumber}</Text>
             <Text style={styles.metaLine}>Invoice Date · {fmtDate(issuedAt)}</Text>
-            <Text style={styles.metaLine}>Payment Due · {fmtDate(dueDate)}</Text>
-            <Text style={styles.metaLine}>Terms · {terms}</Text>
+            <Text style={styles.metaLine}>Terms · {PAYMENT_TERMS_LABEL}</Text>
           </View>
         </View>
         <View style={styles.hrThick} />
@@ -546,11 +545,7 @@ export function InvoiceDocument({
         <View style={styles.termsBox}>
           <View style={styles.termsRow}>
             <Text style={styles.termsLabel}>Payment Terms</Text>
-            <Text style={styles.termsValue}>{terms} · payable to SirReel Studio Services</Text>
-          </View>
-          <View style={styles.termsRow}>
-            <Text style={styles.termsLabel}>Due By</Text>
-            <Text style={styles.termsValue}>{fmtDate(dueDate)}</Text>
+            <Text style={styles.termsValue}>{PAYMENT_TERMS_LABEL} · payable to SirReel Studio Services</Text>
           </View>
         </View>
 
