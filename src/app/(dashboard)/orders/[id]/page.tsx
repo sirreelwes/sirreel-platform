@@ -1293,6 +1293,14 @@ export default function OrderDetailPage() {
         )}
       </div>
 
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-3">Notes</h2>
+        <p className="text-zinc-400 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
+        <p className="text-xs text-zinc-600 mt-4">
+          Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+        </p>
+      </div>
+
       {/* Phase 3 lane progress — visible only during the BOOKED →
           LOADED_READY arc. Shows the bilateral lane state that drives
           the rollup, plus the fleet-ready manual stamp button (until
@@ -2008,14 +2016,6 @@ export default function OrderDetailPage() {
         {inviteMsg && (
           <div className="border-t border-zinc-800 pt-3 text-[11px] text-zinc-400">{inviteMsg}</div>
         )}
-      </div>
-
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-3">Notes</h2>
-        <p className="text-zinc-400 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
-        <p className="text-xs text-zinc-600 mt-4">
-          Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-        </p>
       </div>
 
       <EmailReviewModal
