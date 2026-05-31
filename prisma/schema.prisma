@@ -2080,6 +2080,24 @@ enum PaymentMethod {
   OTHER
 }
 
+// Phase 6 commit 1 — payment lifecycle. Pre-Phase-6 operator payments
+// (CHECK/WIRE/CASH/OTHER) write CLEARED directly; card captures write
+// CLEARED on successful auth+capture; ACH originations write PENDING,
+// advance to SETTLED when CardPointe confirms file submission, and
+// CLEARED when funds settle. RETURNED handles NSF / bank rejection;
+// FAILED is the gateway-level decline path.
+//
+// LINCHPIN: reconcileInvoiceTotals counts only CLEARED non-voided
+// payments. PENDING / SETTLED ACH must NOT mark an invoice paid or
+// advance the order to CLOSED.
+enum PaymentStatus {
+  PENDING
+  SETTLED
+  CLEARED
+  RETURNED
+  FAILED
+}
+
 model Payment {
   id            String         @id @default(uuid())
   invoiceId     String         @map("invoice_id")
@@ -2088,25 +2106,58 @@ model Payment {
   // when filtered to non-voided rows).
   amount        Decimal        @db.Decimal(12, 2)
   method        PaymentMethod
-  // Operator-supplied reference: check #, wire confirmation, CardPointe
-  // transaction id, etc. Free-text by design — CardPointe FK lives
-  // under PaymentLog for legacy continuity.
+  // Phase 6 lifecycle. CLEARED is the only state that counts toward
+  // invoice paid/balance. Default CLEARED for backward-compat with
+  // existing operator-recorded payments (CHECK/WIRE/CASH/OTHER) which
+  // are always "received" by the time they're entered.
+  status        PaymentStatus  @default(CLEARED)
+  // Operator-supplied reference: check #, wire confirmation, etc.
+  // Free-text by design.
   reference     String?
+  // Phase 6 — CardPointe transaction id (retref). Distinct from
+  // `reference` so gateway txn ids stay queryable without polluting
+  // the free-text column.
+  gatewayRefId  String?        @map("gateway_ref_id")
   receivedAt    DateTime       @map("received_at")
+  // Phase 6 ACH timestamps. Card captures stamp settledAt + clearedAt
+  // = now() on the same write since auth+capture is instant; ACH
+  // walks them out across the polling lifecycle.
+  settledAt     DateTime?      @map("settled_at")
+  clearedAt     DateTime?      @map("cleared_at")
+  returnedAt    DateTime?      @map("returned_at")
+  returnReason  String?        @map("return_reason") @db.Text
+  // Phase 6 NACHA authorization — ACH-only; captured via SigCanvas
+  // alongside the consent text shown to the payer at the moment of
+  // authorization. Stored on the row so the auth artifact is co-
+  // located with the payment it authorized.
+  nachaAuthSignatureData String?   @map("nacha_auth_signature_data") @db.Text
+  nachaAuthText          String?   @map("nacha_auth_text") @db.Text
+  nachaAuthSignedAt      DateTime? @map("nacha_auth_signed_at")
   notes         String?        @db.Text
-  recordedById  String         @map("recorded_by_id")
+  // Phase 6 portal attribution. Operator-recorded payments set
+  // recordedById; portal-initiated payments set
+  // initiatedByPortalAccessId. Exactly one of the two must be set —
+  // enforced at the application layer (Prisma can't express XOR via
+  // schema alone; the recordPayment helper guards this).
+  recordedById             String?    @map("recorded_by_id")
+  initiatedByPortalAccessId String?   @map("initiated_by_portal_access_id")
   voidedAt      DateTime?      @map("voided_at")
   voidedById    String?        @map("voided_by_id")
   voidReason    String?        @map("void_reason") @db.Text
   createdAt     DateTime       @default(now()) @map("created_at")
 
-  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  recordedBy User    @relation("PaymentRecorder", fields: [recordedById], references: [id])
-  voidedBy   User?   @relation("PaymentVoider", fields: [voidedById], references: [id])
+  invoice              Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy           User?         @relation("PaymentRecorder", fields: [recordedById], references: [id])
+  voidedBy             User?         @relation("PaymentVoider", fields: [voidedById], references: [id])
+  initiatedByPortalAccess PortalAccess? @relation("PortalInitiatedPayments", fields: [initiatedByPortalAccessId], references: [id])
 
   @@index([invoiceId])
   @@index([receivedAt])
   @@index([invoiceId, voidedAt])
+  // Phase 6 — polling job pulls PENDING/SETTLED ACH rows; status index
+  // keeps that scan tight as payment volume grows.
+  @@index([status])
+  @@index([initiatedByPortalAccessId])
   @@map("sr_payments")
 }
 
@@ -2877,6 +2928,11 @@ model PortalAccess {
   revokedBy          String?   @map("revoked_by")
   lastAccessedAt    DateTime?  @map("last_accessed_at")
   accessCount        Int       @default(0) @map("access_count")
+
+  // Phase 6 commit 1 — back-relation for portal-initiated payments
+  // (card or ACH). Recorded operator payments use Payment.recordedBy
+  // instead.
+  initiatedPayments Payment[] @relation("PortalInitiatedPayments")
 
   @@index([orderId])
   @@index([contactId])

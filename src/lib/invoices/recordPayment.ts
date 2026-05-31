@@ -221,14 +221,21 @@ export async function voidPayment(args: {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
-type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+export type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
 /**
- * Recomputes Invoice.amountPaid + balanceDue from the non-voided
- * payment sum and updates the status accordingly. Returns the new
- * shape so the caller can avoid a re-read.
+ * Recomputes Invoice.amountPaid + balanceDue from the CLEARED, non-
+ * voided payment sum and updates the status accordingly. Returns the
+ * new shape so the caller can avoid a re-read.
+ *
+ * Phase 6 LINCHPIN: only PaymentStatus = CLEARED counts toward paid.
+ * PENDING and SETTLED ACH originations do NOT mark an invoice paid
+ * and do NOT advance the order to CLOSED. RETURNED and FAILED are
+ * also excluded — those are bank-rejected / gateway-declined and
+ * never collected. Card auth+capture writes CLEARED immediately;
+ * ACH walks through PENDING → SETTLED → CLEARED via the polling job.
  */
-async function reconcileInvoiceTotals(tx: Tx, invoiceId: string) {
+export async function reconcileInvoiceTotals(tx: Tx, invoiceId: string) {
   const inv = await tx.invoice.findUnique({
     where: { id: invoiceId },
     select: { id: true, total: true, status: true, paidAt: true },
@@ -236,7 +243,7 @@ async function reconcileInvoiceTotals(tx: Tx, invoiceId: string) {
   if (!inv) throw new Error('reconcileInvoiceTotals: invoice vanished mid-tx')
 
   const agg = await tx.payment.aggregate({
-    where: { invoiceId, voidedAt: null },
+    where: { invoiceId, voidedAt: null, status: 'CLEARED' },
     _sum: { amount: true },
   })
   const total = Number(inv.total)
@@ -286,7 +293,7 @@ async function reconcileInvoiceTotals(tx: Tx, invoiceId: string) {
 /** Advances Order INVOICED → CLOSED iff the touched invoice is a
  *  fully-paid RENTAL. Non-blocking on LD per doctrine — open LD
  *  invoices and claims never gate this. */
-async function maybeAdvanceOrderToClosed(
+export async function maybeAdvanceOrderToClosed(
   tx: Tx,
   invoiceId: string,
   updated: { status: string },
@@ -323,7 +330,7 @@ async function maybeAdvanceOrderToClosed(
  *  the RENTAL invoice off PAID and the order is currently CLOSED.
  *  Forward states (none past CLOSED in the rental arc) are guarded:
  *  this never moves an order off CANCELLED, etc. */
-async function maybeRegressOrderFromClosed(
+export async function maybeRegressOrderFromClosed(
   tx: Tx,
   invoiceId: string,
   updated: { status: string },
