@@ -27,6 +27,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { SigCanvas } from './SigCanvas'
 
 interface PortalInvoice {
   id: string
@@ -200,16 +201,8 @@ function PayForm({
       {method === 'card' ? (
         <CardPayForm invoice={invoice} onPaid={onPaid} />
       ) : (
-        <AchPlaceholder />
+        <AchPayForm invoice={invoice} onPaid={onPaid} />
       )}
-    </div>
-  )
-}
-
-function AchPlaceholder() {
-  return (
-    <div className="text-xs text-gray-500 italic">
-      Bank (eCheck) coming soon.
     </div>
   )
 }
@@ -442,6 +435,331 @@ function CardPayForm({
       >
         {submitting ? 'Charging card…' : `Pay ${fmtUsd(amount || balance)}`}
       </button>
+    </form>
+  )
+}
+
+// ─── ACH (eCheck) pay form ────────────────────────────────────────
+// Bank account tokenization mirrors the card flow — same iframe +
+// postMessage tokenizer pattern, but loaded with ?mode=echeck so the
+// CardSecure widget accepts a bank account number (no expiry/CVV
+// fields). Routing number is captured on our form and posted server-
+// side alongside the token.
+//
+// NACHA authorization is mandatory: a signature + explicit consent
+// text are captured on the row at the moment of submit. Without them
+// the bank can claw the funds back as unauthorized debits.
+//
+// PENDING semantics: the success state explicitly says "submitted for
+// settlement" rather than "paid" — funds don't actually settle for
+// 1-2 business days and the invoice doesn't flip to PAID until the
+// Commit 4 polling job advances the row to CLEARED.
+
+function AchPayForm({
+  invoice,
+  onPaid,
+}: {
+  invoice: PortalInvoice
+  onPaid: () => void | Promise<void>
+}) {
+  const balance = Number(invoice.balanceDue)
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null)
+  const [bankToken, setBankToken] = useState<string | null>(null)
+  const [last4, setLast4] = useState<string | null>(null)
+  const [routingNumber, setRoutingNumber] = useState('')
+  const [accountType, setAccountType] = useState<'C' | 'S'>('C')
+  const [accountHolderName, setAccountHolderName] = useState('')
+  const [amountStr, setAmountStr] = useState(balance.toFixed(2))
+  const [nachaSignature, setNachaSignature] = useState<string | null>(null)
+  const [consentChecked, setConsentChecked] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [success, setSuccess] = useState<{
+    last4: string | null
+    amount: number
+  } | null>(null)
+
+  // Build the NACHA consent text from the invoice context. Stored
+  // verbatim on the Payment row so an auditor can see exactly what
+  // the payer agreed to at submit-time.
+  const consentText = `I authorize SirReel Studio Services to electronically debit my bank account in the amount of $${Number(amountStr || balance).toFixed(2)} for invoice ${invoice.invoiceNumber}. I agree this authorization is to remain in full force and effect until SirReel has received written notification of its termination in such time and manner as to afford SirReel a reasonable opportunity to act on it.`
+
+  // Load the ACH-mode tokenizer iframe.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/cardpointe/config?mode=echeck')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        if (d.iframeUrl) setIframeUrl(d.iframeUrl)
+        else setErr(d.error || 'Bank entry unavailable')
+      })
+      .catch(() => {
+        if (!cancelled) setErr('Bank entry unavailable')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // postMessage handler — same shape as the card path. The iframe
+  // posts the account token in msg.message.token; we never see the
+  // raw bank account number.
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (typeof e.data !== 'string' || !e.data.startsWith('{')) return
+      try {
+        const msg = JSON.parse(e.data) as {
+          message?: { token?: string; validationError?: string }
+        }
+        const inner = msg.message
+        if (!inner) return
+        if (typeof inner.token === 'string' && inner.token.length > 0) {
+          setBankToken(inner.token)
+          const tail = inner.token.slice(-4)
+          if (/^\d{4}$/.test(tail)) setLast4(tail)
+          setErr(null)
+        } else if (typeof inner.validationError === 'string' && inner.validationError) {
+          setBankToken(null)
+          setLast4(null)
+          setErr(inner.validationError)
+        }
+      } catch {
+        /* ignore non-JSON posts */
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [])
+
+  const amount = Number(amountStr)
+  const amountValid = Number.isFinite(amount) && amount > 0 && amount <= balance + 0.001
+  const routingValid = /^\d{9}$/.test(routingNumber)
+  const canSubmit =
+    !!bankToken &&
+    routingValid &&
+    accountHolderName.trim().length > 1 &&
+    amountValid &&
+    !!nachaSignature &&
+    consentChecked &&
+    !submitting
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit || !bankToken || !nachaSignature) return
+    setSubmitting(true)
+    setErr(null)
+    try {
+      const r = await fetch(`/api/portal/job/invoice/${invoice.id}/pay-ach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bankAccountToken: bankToken,
+          routingNumber,
+          accountType,
+          accountHolderName: accountHolderName.trim(),
+          amount,
+          last4,
+          nachaSignatureData: nachaSignature,
+          nachaText: consentText,
+        }),
+      })
+      const data = (await r.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        retref?: string
+        last4?: string | null
+      }
+      if (!r.ok || !data.ok) {
+        setErr(data.error || `HTTP ${r.status}`)
+        return
+      }
+      setSuccess({ last4: data.last4 ?? last4, amount })
+      await onPaid()
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : 'submit failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm px-4 py-3">
+        Bank debit authorized: {fmtUsd(success.amount)}
+        {success.last4 && <> from account ····{success.last4}</>}.
+        <span className="block text-xs mt-1">
+          Funds typically settle in 1–2 business days. We&rsquo;ll mark the invoice paid once your bank
+          confirms the transfer.
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div className="text-[11px] text-gray-500">
+        Balance due <span className="font-semibold text-gray-900">{fmtUsd(balance)}</span>. Account
+        details are tokenized by CardPointe — SirReel never sees the raw bank account number.
+      </div>
+
+      <label className="block">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+          Account holder name
+        </span>
+        <input
+          type="text"
+          value={accountHolderName}
+          onChange={(e) => setAccountHolderName(e.target.value)}
+          placeholder="As it appears on the bank account"
+          required
+          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-900"
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+            Routing number
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="\d{9}"
+            maxLength={9}
+            value={routingNumber}
+            onChange={(e) => setRoutingNumber(e.target.value.replace(/\D/g, ''))}
+            placeholder="9 digits"
+            required
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-900 font-mono"
+          />
+          {routingNumber.length > 0 && routingNumber.length !== 9 && (
+            <div className="mt-1 text-[11px] text-rose-600">Must be exactly 9 digits.</div>
+          )}
+        </label>
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+            Account type
+          </span>
+          <select
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value as 'C' | 'S')}
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-900"
+          >
+            <option value="C">Checking</option>
+            <option value="S">Savings</option>
+          </select>
+        </label>
+      </div>
+
+      <div>
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 block mb-1">
+          Account number
+        </span>
+        <div
+          className={`border rounded-lg overflow-hidden transition-colors ${
+            bankToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'
+          }`}
+          style={{ height: 48 }}
+        >
+          {iframeUrl ? (
+            <iframe
+              src={iframeUrl}
+              frameBorder="0"
+              scrolling="no"
+              width="100%"
+              height="48"
+              title="Bank account entry"
+            />
+          ) : (
+            <div className="px-3 py-2 text-xs text-gray-400">Loading bank entry…</div>
+          )}
+        </div>
+        {bankToken && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
+            <span>✓</span>
+            <span>
+              Account captured securely{last4 ? <> · ····{last4}</> : null}
+            </span>
+          </div>
+        )}
+        {!bankToken && iframeUrl && (
+          <div className="mt-1 text-[10px] text-gray-400">
+            Encrypted by CardPointe before it leaves your browser.
+          </div>
+        )}
+      </div>
+
+      <label className="block">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+          Amount
+        </span>
+        <input
+          type="number"
+          step="0.01"
+          min="0.01"
+          max={balance}
+          value={amountStr}
+          onChange={(e) => setAmountStr(e.target.value)}
+          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-900"
+        />
+        {!amountValid && amountStr.length > 0 && (
+          <div className="mt-1 text-[11px] text-rose-600">
+            Enter an amount up to {fmtUsd(balance)}.
+          </div>
+        )}
+      </label>
+
+      {/* NACHA authorization — required for ACH. The bank can reverse
+          unauthorized debits within ~60 days, so an explicit signature
+          + consent record is essential. */}
+      <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+        <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+          Authorization to debit your account
+        </div>
+        <div className="text-[12px] text-gray-700 leading-relaxed">{consentText}</div>
+        <label className="flex items-start gap-2 text-[12px] text-gray-700">
+          <input
+            type="checkbox"
+            checked={consentChecked}
+            onChange={(e) => setConsentChecked(e.target.checked)}
+            className="mt-0.5 accent-gray-900"
+          />
+          <span>
+            I authorize this ACH debit and confirm I am the account holder or am authorized to act
+            on behalf of the account holder.
+          </span>
+        </label>
+        <div>
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 block mb-1">
+            Signature
+          </span>
+          <SigCanvas
+            onChange={setNachaSignature}
+            placeholder="Sign to authorize"
+          />
+        </div>
+      </div>
+
+      {err && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+          {err}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={!canSubmit}
+        className="w-full bg-gray-900 text-white rounded-lg py-3 text-sm font-semibold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+      >
+        {submitting
+          ? 'Authorizing bank debit…'
+          : `Authorize ${fmtUsd(amount || balance)} debit`}
+      </button>
+      <div className="text-[10px] text-gray-400 leading-relaxed">
+        Funds settle in 1–2 business days. The invoice will be marked paid automatically once your
+        bank confirms the transfer.
+      </div>
     </form>
   )
 }
