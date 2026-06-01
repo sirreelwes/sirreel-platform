@@ -96,10 +96,15 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canSendEmail: false, canEditCompany: false, canManageUsers: false,
   },
 
-  // Jose, Oliver — agents. Full client + booking + fleet/dispatch view access
+  // Jose, Oliver, Ana — agents. Phase 7 tightened operational
+  // visibility: fleet / dispatch / maintenance are now ops-team
+  // surfaces (FLEET_TECH / DISPATCHER), not sales/billing concerns.
+  // Inventory + Paperwork tools dropped at the nav-line level
+  // since their perm anchors (seePricing, bookings) still gate
+  // items AGENTs need (Orders, Jobs).
   AGENT: {
-    calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
-    fleet: true, dispatch: true, crm: true, claims: false,
+    calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: false,
+    fleet: false, dispatch: false, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
     warehouse: false, billing: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
@@ -306,7 +311,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // Maintenance, COI Check, Contract Review, Contract History,
   // Scheduling, RW Linkage) drops.
   const admin: NavItem[] = [];
-  if (perms.seePricing && !salesOnly) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
+  // Phase 7 — Inventory gated to ADMIN/MANAGER (catalog admin is
+  // ops/management, not sales/billing). Can't anchor on seePricing
+  // because that perm also gates Orders, which AGENTs need.
+  const isAdminOrManager = user.role === UserRole.ADMIN || user.role === UserRole.MANAGER;
+  if (isAdminOrManager) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
   if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
   if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
   // Phase 7 consolidation — Sub-Rentals nav entry dropped. The
@@ -318,7 +327,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // entry landing on a picker page at /admin/paperwork. The
   // individual /tools/* + /admin/contract-review/history routes
   // stay accessible and are linked from the picker.
-  if (perms.bookings && !salesOnly) admin.push({ id: 'paperwork', label: 'Paperwork tools', icon: '', href: '/admin/paperwork' });
+  // Gated to ADMIN/MANAGER — bookings perm also drives Jobs in
+  // main nav, which AGENT needs; can't share that gate here.
+  if (isAdminOrManager) admin.push({ id: 'paperwork', label: 'Paperwork tools', icon: '', href: '/admin/paperwork' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
   // Phase 7 consolidation — RW Linkage nav entry dropped.
   // RentalWorks billing was off-ramped in Phase 5. The route
