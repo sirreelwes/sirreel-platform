@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
+import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -575,8 +576,13 @@ export default function JobPortalPage() {
               <PaperworkRow label="Order PDF" status="Coming soon" statusKind="pending">
                 <span className="text-xs text-gray-500">Available once your order is confirmed.</span>
               </PaperworkRow>
-              <PaperworkRow label="Invoice" status="Coming soon" statusKind="pending">
-                <span className="text-xs text-gray-500">Issued 24–48 hours after equipment return.</span>
+              {/* Phase 6 commit 2 — live invoices + portal card pay. The
+                  panel hides itself when there are no invoices (renders
+                  null), so the "Issued 24-48 hours" copy still applies
+                  in that case via the surrounding context — keeping the
+                  PaperworkRow as a fallback for the no-invoice state. */}
+              <PaperworkRow label="Invoice" status="Issued" statusKind="success">
+                <PortalPayPanel />
               </PaperworkRow>
             </div>
           </div>
