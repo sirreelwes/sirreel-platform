@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
+import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -335,8 +336,9 @@ export default function GanttPage() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-bold text-gray-900">Timeline</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-lg font-bold text-gray-900">Schedule</h1>
+          <ScheduleViewToggle current="gantt" />
           {loading && <span className="text-[11px] text-gray-400">Loading...</span>}
           {!loading && <span className="text-[11px] text-gray-400">{units.length} units · {jobs.length} jobs · Live</span>}
           <div className="flex bg-gray-100 rounded-lg p-0.5">

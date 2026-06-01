@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -116,6 +117,7 @@ export default function CalendarPage() {
             <button onClick={goToday} className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200">Today</button>
             <button onClick={nextMonth} className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200">›</button>
           </div>
+          <ScheduleViewToggle current="month" />
         </div>
         <div className="flex gap-3 text-[10px] text-gray-400">
           <span>🟢 Active</span>

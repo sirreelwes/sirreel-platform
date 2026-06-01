@@ -262,11 +262,15 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (!sales) {
     main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
   }
-  // Calendar + Timeline are operational schedule views — not a sales
-  // step, and we don't want sales gating quotes on availability.
-  // Hidden for salesOnly users.
-  if (perms.calendar && !salesOnly) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
-  if (perms.gantt && !salesOnly) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
+  // Phase 7 consolidation — Calendar + Timeline collapsed into a
+  // single "Schedule" nav entry landing on /gantt. Both pages still
+  // exist as routes and read the same /api/timeline-native data; the
+  // pages cross-link via an in-page view-toggle so the operator can
+  // flip between month-view and gantt-view without two tabs. Hidden
+  // for salesOnly users — schedule views aren't a sales step.
+  if ((perms.calendar || perms.gantt) && !salesOnly) {
+    main.push({ id: 'schedule', label: 'Schedule', icon: '', href: '/gantt' });
+  }
   if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
   // Phase 7 consolidation — /bookings retired. Page was titled
   // "Jobs" but read Booking rows (~89/105 Planyo backfill) with
@@ -309,9 +313,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // /sub-rentals route never existed on disk (dead link). When the
   // feature is built, restore this line with the new route.
   if (perms.maintenance && !salesOnly) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
-  if (perms.bookings && !salesOnly) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
-  if (perms.bookings && !salesOnly) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
-  if (perms.bookings && !salesOnly) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
+  // Phase 7 consolidation — three paperwork tools (COI Check,
+  // Contract Review, Contract History) collapsed into one nav
+  // entry landing on a picker page at /admin/paperwork. The
+  // individual /tools/* + /admin/contract-review/history routes
+  // stay accessible and are linked from the picker.
+  if (perms.bookings && !salesOnly) admin.push({ id: 'paperwork', label: 'Paperwork tools', icon: '', href: '/admin/paperwork' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
   // Phase 7 consolidation — RW Linkage nav entry dropped.
   // RentalWorks billing was off-ramped in Phase 5. The route
