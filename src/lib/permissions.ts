@@ -268,9 +268,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (perms.calendar && !salesOnly) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
   if (perms.gantt && !salesOnly) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
   if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
-  // Bookings index is redundant with Jobs for the sales loop — hide
-  // for salesOnly. Operational users keep it.
-  if (perms.bookings && !salesOnly) main.push({ id: 'bookings', label: 'Bookings', icon: '', href: '/bookings' });
+  // Phase 7 consolidation — /bookings retired. Page was titled
+  // "Jobs" but read Booking rows (~89/105 Planyo backfill) with
+  // zero linkage to the Phase 1 Order/Job spine. Booking model
+  // stays — used by scheduling, portal flows, claims, etc. The
+  // page + its admin endpoints were removed; deep-linking /bookings
+  // now 404s.
   if (!sales && perms.pipeline) {
     main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
   }
@@ -302,14 +305,18 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (perms.seePricing && !salesOnly) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
   if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
   if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  if (perms.seePricing && !salesOnly) admin.push({ id: 'sub-rentals', label: 'Sub-Rentals', icon: '', href: '/sub-rentals' });
+  // Phase 7 consolidation — Sub-Rentals nav entry dropped. The
+  // /sub-rentals route never existed on disk (dead link). When the
+  // feature is built, restore this line with the new route.
   if (perms.maintenance && !salesOnly) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
   if (perms.bookings && !salesOnly) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
-  // Phase 4 — legacy RW-order linkage tool, relocated from /dispatch.
-  if (perms.dispatch && !salesOnly) admin.push({ id: 'rw-linkage', label: 'RW Linkage', icon: '', href: '/dispatch/rentalworks' });
+  // Phase 7 consolidation — RW Linkage nav entry dropped.
+  // RentalWorks billing was off-ramped in Phase 5. The route
+  // /dispatch/rentalworks stays accessible by deep-link for any
+  // straggler legacy reconciliation work, just not surfaced in nav.
   if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
   if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
