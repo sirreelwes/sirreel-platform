@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { InquiriesSection } from '@/components/sales/InquiriesSection';
+import { NewInboundColumn } from '@/components/sales/NewInboundColumn';
+import { NewInquiryModal } from '@/components/sales/NewInquiryModal';
 import { OpenQuotesKanban } from '@/components/sales/OpenQuotesKanban';
 import { ActiveJobsKanban } from '@/components/sales/ActiveJobsKanban';
 import { ProspectsSection } from '@/components/sales/ProspectsSection';
@@ -46,6 +47,9 @@ export default function PipelinePage() {
   const [jobs, setJobs] = useState<PipelineJob[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Phase 6.5b — manual-entry modal moved up from /inquiries to here
+  // so the Pipeline header carries the "+ Inquiry" affordance.
+  const [showNewInquiry, setShowNewInquiry] = useState(false);
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
@@ -94,9 +98,17 @@ export default function PipelinePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
-          <ScopeButton active={scope === 'my'} onClick={() => setScope('my')}>My Deals</ScopeButton>
-          <ScopeButton active={scope === 'team'} onClick={() => setScope('team')}>Team View</ScopeButton>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNewInquiry(true)}
+            className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg"
+          >
+            + Inquiry
+          </button>
+          <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+            <ScopeButton active={scope === 'my'} onClick={() => setScope('my')}>My Deals</ScopeButton>
+            <ScopeButton active={scope === 'team'} onClick={() => setScope('team')}>Team View</ScopeButton>
+          </div>
         </div>
       </div>
 
@@ -106,7 +118,7 @@ export default function PipelinePage() {
 
       <FollowUpsDuePanel scope={scope} />
 
-      <InquiriesSection />
+      <NewInboundColumn onChange={refreshAll} />
 
       <OpenQuotesKanban
         jobs={openQuoteJobs.map((j) => ({
@@ -143,6 +155,19 @@ export default function PipelinePage() {
       />
 
       <ProspectsSection />
+
+      {/* Phase 6.5b — manual inquiry entry from the Pipeline header.
+          Replaces the standalone /inquiries tab's New button. On
+          create, refresh the whole page so the new card appears in
+          the New inbound column. */}
+      <NewInquiryModal
+        open={showNewInquiry}
+        onClose={() => setShowNewInquiry(false)}
+        onCreated={() => {
+          setShowNewInquiry(false);
+          refreshAll();
+        }}
+      />
     </div>
   );
 }

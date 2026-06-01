@@ -274,7 +274,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   if (!sales && perms.pipeline) {
     main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
   }
-  if (perms.pipeline) main.push({ id: 'inquiries', label: 'Inquiries', icon: '', href: '/inquiries' });
+  // Phase 6.5b — Inquiries folded into the Sales Pipeline as its
+  // "New inbound" first column. The /inquiries route stays
+  // accessible by deep-link (and the detail page /inquiries/[id]
+  // remains canonical for triage), but the standalone tab goes
+  // away for everyone — agents triage on the Pipeline now.
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   // /dispatch now owns the staff dispatch board (Phase 4). The legacy

@@ -1,0 +1,461 @@
+'use client';
+
+/**
+ * NewInboundColumn — Pipeline's first column.
+ *
+ * Phase 6.5b — folds the standalone /inquiries tab into the
+ * Sales Pipeline. Merges two streams the operator used to read on
+ * separate surfaces:
+ *
+ *   1. Persistent NEW Inquiry rows (GET /api/inquiries?status=NEW)
+ *      — all sources: MANUAL, GMAIL, WEB_FORM. Honors per-user data
+ *      scope from Phase 6.5 server-side.
+ *   2. Gmail suggestions (GET /api/sales/suggested-inquiries) —
+ *      the transient blank-slate stream of inbound emails that
+ *      LOOK like inquiries but haven't been captured yet. This is
+ *      a separate surface from the persistent backlog and stays
+ *      separate by design (operator-explicit capture, not auto).
+ *
+ * Both streams render as cards in one column with source-badge
+ * distinction. Card actions:
+ *   - Open  → /inquiries/[id] for persistent rows; ThreadDrawer
+ *             for suggestion cards (existing pattern).
+ *   - Capture & Quote → for suggestions: existing POST
+ *             /api/sales/suggested-inquiries/capture then redirect
+ *             to /orders/new-quote?inquiryId=…
+ *             for persistent rows: redirect directly to
+ *             /orders/new-quote?inquiryId=…
+ *   - Dismiss → for suggestions: existing POST
+ *             /api/sales/suggested-inquiries/dismiss (records the
+ *             decision against the email so it stops surfacing).
+ *             for persistent rows: PATCH /api/inquiries/[id] with
+ *             status=DISMISSED.
+ *
+ * The /inquiries route stays accessible by deep-link — only the nav
+ * entry goes away. Inquiry detail page is unaffected.
+ *
+ * "+ Inquiry" manual-entry surface lives on the Pipeline header
+ * (passed in as onNewInquiry); this component focuses on the list.
+ */
+
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ThreadDrawer } from './ThreadDrawer'
+import { FormTypeBadge, type FormType } from './FormTypeBadge'
+
+// ─── Types ────────────────────────────────────────────────────────
+
+type Source = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
+type Status = 'NEW' | 'CONVERTED' | 'DISMISSED'
+
+interface PersistentInquiry {
+  id: string
+  title: string
+  source: Source
+  status: Status
+  estimatedValue: number | null
+  preferredStartDate: string | null
+  preferredEndDate: string | null
+  createdAt: string
+  company: { id: string; name: string } | null
+  person: { id: string; firstName: string; lastName: string; email: string } | null
+  assignedTo: { id: string; name: string } | null
+}
+
+interface SuggestionRecord {
+  emailId: string
+  fromAddress: string
+  subject: string
+  snippet: string | null
+  sentAt: string
+  category: 'BOOKING_INQUIRY' | 'RENTAL_REQUEST' | null
+  inferredFormType: FormType | null
+  company: { id: string; name: string } | null
+  person: { id: string; firstName: string; lastName: string; email: string } | null
+  threadMessageCount?: number
+}
+
+const SOURCE_LABEL: Record<Source, string> = {
+  MANUAL: 'Manual',
+  GMAIL: 'Gmail',
+  WEB_FORM: 'Web form',
+}
+
+const SOURCE_BADGE: Record<Source, string> = {
+  MANUAL: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+  GMAIL: 'bg-blue-50 text-blue-700 border-blue-200',
+  WEB_FORM: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+}
+
+function relativeAge(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return ''
+  const ms = Date.now() - then
+  const days = Math.floor(ms / 86_400_000)
+  if (days < 1) return 'today'
+  if (days < 30) return `${days}d ago`
+  if (days < 90) return `${Math.floor(days / 7)}w ago`
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
+function fmtMoney(n: number | null): string | null {
+  if (n == null) return null
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
+// ─── Component ────────────────────────────────────────────────────
+
+export function NewInboundColumn({
+  onChange,
+}: {
+  /** Fired after a Capture or Dismiss so the parent can refetch
+   *  metrics / open-quotes if it wants to. The column refreshes
+   *  itself either way. */
+  onChange?: () => void
+}) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [inquiries, setInquiries] = useState<PersistentInquiry[] | null>(null)
+  const [suggestions, setSuggestions] = useState<SuggestionRecord[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    // Both streams in parallel.
+    Promise.all([
+      fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
+      fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
+    ]).then(([inqData, sugData]) => {
+      setInquiries((inqData?.inquiries ?? []) as PersistentInquiry[])
+      // Suggested-inquiries endpoint returns { newInquiries | suggestions, followUps, hidden }.
+      // Same convention as InquiriesSection.
+      const sug = (sugData?.newInquiries ?? sugData?.suggestions ?? []) as SuggestionRecord[]
+      setSuggestions(sug)
+    })
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // Deep-link support: /sales/pipeline?thread=<emailId> opens the
+  // drawer just like the legacy InquiriesSection.
+  useEffect(() => {
+    const t = searchParams?.get('thread') || null
+    setDrawerEmailId(t)
+  }, [searchParams])
+
+  // ─── Card actions ───────────────────────────────────────────────
+
+  const capturePersistent = (inquiryId: string) => {
+    // Persistent inquiry already has an Inquiry row; no API call
+    // needed — go straight to new-quote with the inquiryId.
+    router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`)
+  }
+
+  const captureSuggestion = async (emailId: string) => {
+    setBusyId(emailId)
+    try {
+      const res = await fetch('/api/sales/suggested-inquiries/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailId }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error || `Failed to capture (HTTP ${res.status})`)
+        return
+      }
+      const data = await res.json()
+      const inquiryId = data.inquiry?.id
+      if (inquiryId) {
+        router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`)
+        return
+      }
+      load()
+      onChange?.()
+    } catch (err) {
+      alert(`Failed to capture: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const dismissPersistent = async (inquiryId: string) => {
+    setBusyId(inquiryId)
+    try {
+      const res = await fetch(`/api/inquiries/${encodeURIComponent(inquiryId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DISMISSED' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error || `Failed to dismiss (HTTP ${res.status})`)
+        return
+      }
+      load()
+      onChange?.()
+    } catch (err) {
+      alert(`Failed to dismiss: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const dismissSuggestion = async (emailId: string) => {
+    setBusyId(emailId)
+    try {
+      const res = await fetch('/api/sales/suggested-inquiries/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailId }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error || `Failed to dismiss (HTTP ${res.status})`)
+        return
+      }
+      load()
+      onChange?.()
+    } catch (err) {
+      alert(`Failed to dismiss: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // ─── Render ────────────────────────────────────────────────────
+
+  const totalCount = (inquiries?.length ?? 0) + (suggestions?.length ?? 0)
+  const isLoading = inquiries === null || suggestions === null
+
+  return (
+    <section className="bg-white rounded-2xl border border-gray-200 shadow-sm">
+      <header className="px-5 py-4 border-b border-gray-100 flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">New inbound</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Untriaged leads — inquiries (manual, web, Gmail) and inbox suggestions waiting on a capture decision.
+          </p>
+        </div>
+        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+          {isLoading ? '…' : `${totalCount} pending`}
+        </span>
+      </header>
+
+      <div className="p-3">
+        {isLoading ? (
+          <div className="text-xs text-gray-500 px-2 py-6 text-center">Loading…</div>
+        ) : totalCount === 0 ? (
+          <div className="text-xs text-gray-500 px-2 py-6 text-center border border-dashed border-gray-200 rounded-xl">
+            Inbox is clear. New leads land here as they arrive.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {/* Persistent inquiries first — they're already triaged
+                "this is a real lead" and just need quote / dismiss. */}
+            {(inquiries ?? []).map((inq) => (
+              <PersistentCard
+                key={`inq-${inq.id}`}
+                inquiry={inq}
+                busy={busyId === inq.id}
+                onCapture={() => capturePersistent(inq.id)}
+                onDismiss={() => dismissPersistent(inq.id)}
+              />
+            ))}
+
+            {/* Gmail suggestions — blank-slate, may or may not be
+                real leads. Operator captures (becomes an inquiry +
+                redirects to new-quote) or dismisses. */}
+            {(suggestions ?? []).map((s) => (
+              <SuggestionCard
+                key={`sug-${s.emailId}`}
+                suggestion={s}
+                busy={busyId === s.emailId}
+                onOpen={() => setDrawerEmailId(s.emailId)}
+                onCapture={() => captureSuggestion(s.emailId)}
+                onDismiss={() => dismissSuggestion(s.emailId)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {drawerEmailId && (
+        <ThreadDrawer
+          emailId={drawerEmailId}
+          onClose={() => setDrawerEmailId(null)}
+          onCapture={async (emailId) => {
+            await captureSuggestion(emailId)
+            setDrawerEmailId(null)
+          }}
+          onDismiss={async (emailId) => {
+            await dismissSuggestion(emailId)
+            setDrawerEmailId(null)
+          }}
+          busy={busyId === drawerEmailId}
+        />
+      )}
+    </section>
+  )
+}
+
+// ─── Persistent-inquiry card ──────────────────────────────────────
+
+function PersistentCard({
+  inquiry,
+  busy,
+  onCapture,
+  onDismiss,
+}: {
+  inquiry: PersistentInquiry
+  busy: boolean
+  onCapture: () => void
+  onDismiss: () => void
+}) {
+  const contactName = inquiry.person
+    ? `${inquiry.person.firstName} ${inquiry.person.lastName}`.trim()
+    : null
+  const value = fmtMoney(inquiry.estimatedValue)
+
+  return (
+    <div className="border border-gray-200 rounded-xl px-3.5 py-3 bg-white hover:border-gray-300 transition-colors">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+            SOURCE_BADGE[inquiry.source]
+          }`}
+        >
+          {SOURCE_LABEL[inquiry.source]}
+        </span>
+        <span className="text-[11px] text-gray-500">{relativeAge(inquiry.createdAt)}</span>
+        {inquiry.assignedTo && (
+          <span className="text-[11px] text-gray-500 ml-auto">
+            · {inquiry.assignedTo.name}
+          </span>
+        )}
+      </div>
+      <a
+        href={`/inquiries/${inquiry.id}`}
+        className="block mt-1.5 text-sm font-semibold text-gray-900 leading-tight hover:underline underline-offset-2 decoration-gray-300"
+      >
+        {inquiry.title}
+      </a>
+      <div className="mt-1 text-[12px] text-gray-600">
+        {inquiry.company?.name ?? 'No company'}
+        {contactName ? <span className="text-gray-400"> · {contactName}</span> : null}
+      </div>
+      {value && (
+        <div className="mt-1 text-[11px] text-gray-500">Est. value {value}</div>
+      )}
+
+      <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+        <button
+          onClick={onCapture}
+          disabled={busy}
+          className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+        >
+          {busy ? '…' : 'Capture & Quote →'}
+        </button>
+        <button
+          onClick={onDismiss}
+          disabled={busy}
+          className="text-xs font-semibold border border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+        >
+          Dismiss
+        </button>
+        <a
+          href={`/inquiries/${inquiry.id}`}
+          className="text-[11px] text-gray-500 hover:text-gray-900 ml-auto"
+        >
+          Detail →
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// ─── Gmail-suggestion card ────────────────────────────────────────
+
+function SuggestionCard({
+  suggestion,
+  busy,
+  onOpen,
+  onCapture,
+  onDismiss,
+}: {
+  suggestion: SuggestionRecord
+  busy: boolean
+  onOpen: () => void
+  onCapture: () => void
+  onDismiss: () => void
+}) {
+  const contactName = suggestion.person
+    ? `${suggestion.person.firstName} ${suggestion.person.lastName}`.trim()
+    : null
+  return (
+    <div className="border border-gray-200 rounded-xl px-3.5 py-3 bg-white hover:border-gray-300 transition-colors">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${SOURCE_BADGE.GMAIL}`}
+        >
+          {SOURCE_LABEL.GMAIL}
+        </span>
+        <span className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold">
+          Suggested
+        </span>
+        {suggestion.inferredFormType && (
+          <FormTypeBadge type={suggestion.inferredFormType} size="xs" />
+        )}
+        <span className="text-[11px] text-gray-500">{relativeAge(suggestion.sentAt)}</span>
+        {(suggestion.threadMessageCount ?? 0) > 1 && (
+          <span className="text-[11px] text-gray-500 ml-auto">
+            {suggestion.threadMessageCount} msgs
+          </span>
+        )}
+      </div>
+      <button
+        onClick={onOpen}
+        className="block w-full text-left mt-1.5 text-sm font-semibold text-gray-900 leading-tight hover:underline underline-offset-2 decoration-gray-300"
+      >
+        {suggestion.subject || '(no subject)'}
+      </button>
+      <div className="mt-1 text-[12px] text-gray-600">
+        {suggestion.fromAddress}
+      </div>
+      {(suggestion.company?.name || contactName) && (
+        <div className="mt-0.5 text-[11px] text-gray-500">
+          {suggestion.company?.name ?? 'Unknown company'}
+          {contactName ? ` · ${contactName}` : ''}
+        </div>
+      )}
+      {suggestion.snippet && (
+        <div className="mt-1 text-[11px] text-gray-500 line-clamp-2">{suggestion.snippet}</div>
+      )}
+
+      <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+        <button
+          onClick={onCapture}
+          disabled={busy}
+          className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+        >
+          {busy ? '…' : 'Capture & Quote →'}
+        </button>
+        <button
+          onClick={onDismiss}
+          disabled={busy}
+          className="text-xs font-semibold border border-gray-200 text-gray-600 hover:border-rose-300 hover:text-rose-600 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+        >
+          Dismiss
+        </button>
+        <button
+          onClick={onOpen}
+          className="text-[11px] text-gray-500 hover:text-gray-900 ml-auto"
+        >
+          Open thread →
+        </button>
+      </div>
+    </div>
+  )
+}
