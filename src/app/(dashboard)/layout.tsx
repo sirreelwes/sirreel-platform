@@ -77,10 +77,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const user = session.user as any;
   const actualRole: UserRole = user.role || UserRole.AGENT;
+  const actualSalesOnly: boolean = !!user.salesOnly;
 
   const role: UserRole = (actualRole === 'ADMIN' && viewAsRole) ? viewAsRole : actualRole;
-  const perms = getPermissions(role);
-  const navItems = getNavItems(role);
+  // Admins using viewAsRole inherit the target role's default surface
+  // (non-sales-only) — they're previewing a baseline operational view.
+  // Their actual sales-only flag only applies when not impersonating.
+  const salesOnly: boolean = actualRole === 'ADMIN' && viewAsRole ? false : actualSalesOnly;
+  const permsUser = { role, salesOnly };
+  const perms = getPermissions(permsUser);
+  const navItems = getNavItems(permsUser);
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'dashboard';
 
   // Sales agents work primarily from /sales/pipeline — Dashboard isn't
@@ -112,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Navigation */}
         <nav className="flex-1 py-3 overflow-y-auto px-2">
-          {getNavSections(role).map((section, si) => (
+          {getNavSections(permsUser).map((section, si) => (
             <div key={si}>
               {section.label ? (
                 <>

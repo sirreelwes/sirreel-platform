@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { resolveDataScope } from '@/lib/auth/scope';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -11,8 +12,13 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | undefined)?.id || null;
 
-  const scope = req.nextUrl.searchParams.get('scope') === 'my' ? 'my' : 'team';
-  const mine = scope === 'my' && userId ? userId : null;
+  // Phase 6.5 — server-side data scope. OWN users always get `mine`
+  // regardless of the ?scope= query. TEAM users can opt to ?scope=my
+  // for their personal view; default stays team.
+  const dataScope = await resolveDataScope();
+  const queryScope = req.nextUrl.searchParams.get('scope') === 'my' ? 'my' : 'team';
+  const effectiveScope = dataScope.scope === 'OWN' ? 'my' : queryScope;
+  const mine = effectiveScope === 'my' && userId ? userId : null;
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -114,7 +120,7 @@ export async function GET(req: NextRequest) {
     wonTotalPrev > 0 ? (wonTotal - wonTotalPrev) / wonTotalPrev : wonTotal > 0 ? 1 : null;
 
   return NextResponse.json({
-    scope,
+    scope: effectiveScope,
     period: { start: monthStart.toISOString(), label: monthLabel(monthStart) },
     inquiriesNew,
     inquiriesNewLastMonth,

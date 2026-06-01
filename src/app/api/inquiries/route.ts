@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { resolveDataScope, inquiryScopeWhere } from '@/lib/auth/scope'
 import { prisma } from '@/lib/prisma'
 import type { InquiryStatus, InquirySource } from '@prisma/client'
 
@@ -10,10 +11,16 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const filter = (searchParams.get('status') || 'OPEN').toUpperCase()
 
-  const where =
+  // Phase 6.5 — data scope enforcement. OWN users see only inquiries
+  // assigned to them (unassigned NEW inquiries stay invisible — a
+  // privileged user triages and assigns before they show up).
+  const scope = await resolveDataScope()
+  const scopeWhere = inquiryScopeWhere(scope)
+
+  const where: Record<string, unknown> =
     filter === 'ALL'
-      ? {}
-      : { status: 'NEW' as InquiryStatus }
+      ? { ...scopeWhere }
+      : { status: 'NEW' as InquiryStatus, ...scopeWhere }
 
   const inquiries = await prisma.inquiry.findMany({
     where,

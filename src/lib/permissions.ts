@@ -174,20 +174,61 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   },
 };
 
-export function getPermissions(role: UserRole): Permissions {
-  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.CLIENT;
+// Phase 6.5 — narrow user shape carrying just the perms-relevant
+// fields. Anywhere we have a User row (session lookup, server route)
+// pass the whole record; UserRole-only callers keep working via the
+// legacy overload below (defaults salesOnly=false).
+export interface PermissionsUser {
+  role: UserRole;
+  salesOnly: boolean;
 }
 
-export function can(role: UserRole, permission: keyof Permissions): boolean {
-  return ROLE_PERMISSIONS[role]?.[permission] ?? false;
+/**
+ * Phase 6.5: `getPermissions` now takes either a full PermissionsUser
+ * or a bare UserRole (legacy callers — treated as salesOnly=false).
+ *
+ * When salesOnly is true, override OFF the operational + tooling
+ * surfaces: fleet, dispatch, maintenance, billing, and the
+ * bookings-gated tools (COI check, contract review, contract
+ * history, scheduling). Ana stays salesOnly=false so her billing
+ * access is unchanged.
+ */
+export function getPermissions(input: UserRole | PermissionsUser): Permissions {
+  const user: PermissionsUser =
+    typeof input === 'string' ? { role: input, salesOnly: false } : input;
+  const base = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.CLIENT;
+  if (!user.salesOnly) return base;
+  // Sales-only override: a reduced surface. Keep the rest of the
+  // AGENT perms intact (pipeline, crm, seePricing, seeClientNames,
+  // canSendEmail, etc — the whole sales loop).
+  return {
+    ...base,
+    fleet: false,
+    dispatch: false,
+    maintenance: false,
+    billing: false,
+    // The bookings-gated admin-section tools (COI Check, Contract
+    // Review, Contract History, Scheduling) come from `bookings`.
+    // Turning that off would also remove /jobs + /bookings from
+    // main nav — sales needs /jobs but NOT /bookings. We split
+    // bookings into "list" (kept) vs "tools" (dropped) below.
+    // Cleanest: keep `bookings` true so /jobs renders, drop the
+    // tools individually via canConfirmBooking / canCancelBooking
+    // (already false for AGENT) — and a small nav-builder edit
+    // below filters the tools when salesOnly.
+  };
+}
+
+export function can(input: UserRole | PermissionsUser, permission: keyof Permissions): boolean {
+  return getPermissions(input)[permission];
 }
 
 // Navigation items per role
 export type NavItem = { id: string; label: string; icon: string; href: string };
 export type NavSection = { label: string | null; items: NavItem[] };
 
-export function getNavItems(role: UserRole): NavItem[] {
-  const sections = getNavSections(role);
+export function getNavItems(input: UserRole | PermissionsUser): NavItem[] {
+  const sections = getNavSections(input);
   return sections.flatMap(s => s.items);
 }
 
@@ -198,15 +239,19 @@ export function isSalesRole(role: UserRole): boolean {
   return role === UserRole.AGENT;
 }
 
-export function defaultLandingPath(role: UserRole): string {
+export function defaultLandingPath(input: UserRole | PermissionsUser): string {
+  const role = typeof input === 'string' ? input : input.role;
   if (isSalesRole(role)) return '/sales/pipeline';
   return '/dashboard';
 }
 
-export function getNavSections(role: UserRole): NavSection[] {
-  const perms = getPermissions(role);
+export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
+  const user: PermissionsUser =
+    typeof input === 'string' ? { role: input, salesOnly: false } : input;
+  const perms = getPermissions(user);
   const sections: NavSection[] = [];
-  const sales = isSalesRole(role);
+  const sales = isSalesRole(user.role);
+  const salesOnly = user.salesOnly;
 
   // Main — daily operations. Sales agents get Pipeline at the top and
   // no Dashboard item; everyone else keeps the historical ordering.
@@ -217,10 +262,15 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (!sales) {
     main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
   }
-  if (perms.calendar) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
-  if (perms.gantt) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
+  // Calendar + Timeline are operational schedule views — not a sales
+  // step, and we don't want sales gating quotes on availability.
+  // Hidden for salesOnly users.
+  if (perms.calendar && !salesOnly) main.push({ id: 'calendar', label: 'Calendar', icon: '', href: '/calendar' });
+  if (perms.gantt && !salesOnly) main.push({ id: 'gantt', label: 'Timeline', icon: '', href: '/gantt' });
   if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
-  if (perms.bookings) main.push({ id: 'bookings', label: 'Bookings', icon: '', href: '/bookings' });
+  // Bookings index is redundant with Jobs for the sales loop — hide
+  // for salesOnly. Operational users keep it.
+  if (perms.bookings && !salesOnly) main.push({ id: 'bookings', label: 'Bookings', icon: '', href: '/bookings' });
   if (!sales && perms.pipeline) {
     main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
   }
@@ -240,19 +290,22 @@ export function getNavSections(role: UserRole): NavSection[] {
   if (perms.warehouse) warehouse.push({ id: 'warehouse-pick', label: 'Pick', icon: '', href: '/warehouse/pick' });
   if (warehouse.length > 0) sections.push({ label: 'Warehouse', items: warehouse });
 
-  // Admin — management & configuration
+  // Admin — management & configuration. SalesOnly users keep only
+  // Clients (CRM). Operational tooling (Inventory, Sub-Rentals,
+  // Maintenance, COI Check, Contract Review, Contract History,
+  // Scheduling, RW Linkage) drops.
   const admin: NavItem[] = [];
-  if (perms.seePricing) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
-  if (role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
+  if (perms.seePricing && !salesOnly) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
+  if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
   if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  if (perms.seePricing) admin.push({ id: 'sub-rentals', label: 'Sub-Rentals', icon: '', href: '/sub-rentals' });
-  if (perms.maintenance) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
-  if (perms.bookings) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
-  if (perms.bookings) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
-  if (perms.bookings) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
-  if (perms.bookings) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
+  if (perms.seePricing && !salesOnly) admin.push({ id: 'sub-rentals', label: 'Sub-Rentals', icon: '', href: '/sub-rentals' });
+  if (perms.maintenance && !salesOnly) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
+  if (perms.bookings && !salesOnly) admin.push({ id: 'coi-check', label: 'COI Check', icon: '', href: '/tools/coi-check' });
+  if (perms.bookings && !salesOnly) admin.push({ id: 'contract-review', label: 'Contract Review', icon: '', href: '/tools/contract-review' });
+  if (perms.bookings && !salesOnly) admin.push({ id: 'contract-history', label: 'Contract History', icon: '', href: '/admin/contract-review/history' });
+  if (perms.bookings && !salesOnly) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
   // Phase 4 — legacy RW-order linkage tool, relocated from /dispatch.
-  if (perms.dispatch) admin.push({ id: 'rw-linkage', label: 'RW Linkage', icon: '', href: '/dispatch/rentalworks' });
+  if (perms.dispatch && !salesOnly) admin.push({ id: 'rw-linkage', label: 'RW Linkage', icon: '', href: '/dispatch/rentalworks' });
   if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
   if (admin.length > 0) sections.push({ label: 'Admin', items: admin });

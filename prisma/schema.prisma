@@ -1311,11 +1311,34 @@ enum UserRole {
   CLIENT
 }
 
+// Phase 6.5 — data-scope axis. TEAM (default) is "see the whole
+// org's pipeline / orders / jobs / inquiries"; OWN is "see only
+// rows where I'm the agent / assignee." Independent of role and
+// of User.salesOnly — surface and data axes are separate.
+enum DataScope {
+  TEAM
+  OWN
+}
+
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
   name      String
   role      UserRole  @default(AGENT)
+  // Phase 6.5 — surface scoping. AGENTs split into accounting (Ana)
+  // and sales-only (Jose, Oliver). When salesOnly is true, the
+  // permissions layer overrides off the operational sections (fleet,
+  // dispatch, maintenance, scheduling, inventory, sub-rentals, the
+  // bookings-gated tools) AND billing. Ana stays salesOnly=false so
+  // her billing access is preserved. Separate from `dataScope` —
+  // surface vs data are independent axes.
+  salesOnly Boolean   @default(false) @map("sales_only")
+  // Phase 6.5 — data scoping. TEAM sees the whole org's pipeline /
+  // orders / jobs / inquiries; OWN is restricted to rows where the
+  // requesting user is the agent (or, for inquiries, the assignee).
+  // Server-side list endpoints honor this via the requireScope helper.
+  // Default TEAM preserves today's behavior for every existing user.
+  dataScope DataScope @default(TEAM) @map("data_scope")
   // Client-facing title (e.g. "COO", "Owner", "Sales Lead"). Separate from
   // `role` which is access-control / permission scope. The portal Job Page
   // shows displayTitle on the "Your SirReel Team" card; if null, the card

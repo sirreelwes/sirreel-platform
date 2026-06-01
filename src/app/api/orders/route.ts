@@ -4,6 +4,7 @@ import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { getServerSession } from "next-auth";
 import type { JobRole, ProductionType } from "@prisma/client";
 import { recomputeMostCommonProductionTypeProfile } from "@/lib/companies/recomputeMostCommonProductionTypeProfile";
+import { resolveDataScope, orderScopeWhere } from "@/lib/auth/scope";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -14,10 +15,18 @@ export async function GET(req: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "25");
 
-  const where: Record<string, unknown> = {};
+  // Phase 6.5 — data scope enforcement. OWN users see only their own
+  // orders regardless of any client-supplied agentId filter. ADMIN /
+  // MANAGER always TEAM. Unauthenticated → empty result (sentinel).
+  const scope = await resolveDataScope();
+  const where: Record<string, unknown> = { ...orderScopeWhere(scope) };
 
   if (status) where.status = status;
-  if (agentId) where.agentId = agentId;
+  // Client-opted agentId filter — only honored when it matches the
+  // user's scope. For OWN users we already constrained to their id;
+  // an explicit agentId param against a different user is ignored to
+  // prevent client-side spoofing.
+  if (agentId && scope.scope === 'TEAM') where.agentId = agentId;
   if (companyId) where.companyId = companyId;
   if (search) {
     where.OR = [

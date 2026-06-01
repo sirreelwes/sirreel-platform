@@ -5,6 +5,7 @@ import type { JobStatus, OrderStatus, OrderQuoteStatus, LineItemDepartment } fro
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
+import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,16 +30,17 @@ export async function GET(req: NextRequest) {
     ? (statusesParam.split(',').filter(Boolean) as JobStatus[])
     : null
 
-  // Resolve mine=1 to the session user's id
-  if (mine && !agentId) {
-    const session = await getServerSession()
-    if (session?.user?.email) {
-      const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-      })
-      if (user) agentId = user.id
-      else return NextResponse.json({ jobs: [] })
+  // Phase 6.5 — data scope enforcement. OWN users see only their own
+  // jobs regardless of client params. ADMIN / MANAGER always TEAM.
+  const scope = await resolveDataScope()
+  const scopeWhere = jobScopeWhere(scope)
+
+  // Legacy mine=1 still resolves to the session user's id (UI may
+  // pass it for self-view), but scope-OWN supersedes it. For TEAM
+  // users the mine=1 path is preserved.
+  if (mine && !agentId && scope.scope === 'TEAM') {
+    if (scope.userId) {
+      agentId = scope.userId
     } else {
       return NextResponse.json({ jobs: [] })
     }
@@ -47,8 +49,12 @@ export async function GET(req: NextRequest) {
   try {
     const jobs = await prisma.job.findMany({
       where: {
+        ...scopeWhere,
         ...(companyId && { companyId }),
-        ...(agentId && { agentId }),
+        // agentId client-opted filter only honored for TEAM. OWN
+        // already constrained by scopeWhere; a divergent agentId
+        // param is ignored.
+        ...(agentId && scope.scope === 'TEAM' && { agentId }),
         // `orphans=1` overrides the status filter — it's QUOTED + no
         // sent/durable order. "Durable" = any order that has progressed
         // past DRAFT (quoteStatus IN SENT/WON/LOST/EXPIRED). A job with

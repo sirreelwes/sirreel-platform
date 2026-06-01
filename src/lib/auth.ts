@@ -54,6 +54,9 @@ export const authOptions: NextAuthOptions = {
             role: true,
             location: true,
             avatarUrl: true,
+            // Phase 6.5 — surface + data scoping axes.
+            salesOnly: true,
+            dataScope: true,
           },
         });
 
@@ -61,6 +64,8 @@ export const authOptions: NextAuthOptions = {
           (session.user as any).id = dbUser.id;
           (session.user as any).role = dbUser.role;
           (session.user as any).location = dbUser.location;
+          (session.user as any).salesOnly = dbUser.salesOnly;
+          (session.user as any).dataScope = dbUser.dataScope;
           session.user.name = dbUser.name;
           session.user.image = dbUser.avatarUrl;
         }
