@@ -150,6 +150,8 @@ interface JobRow {
   billing?: BillingRollup
   cadence?: CadenceRollup
   hasLD?: boolean
+  blindPickup?: boolean
+  blindReturn?: boolean
   _count?: { orders: number }
 }
 
@@ -371,6 +373,29 @@ export default function JobsListPage() {
                               aria-label="L&D claim open"
                             >
                               ▲
+                            </span>
+                          )}
+                          {/* Blind handoff markers — eye-off glyphs sit
+                              next to the job name when any order on the
+                              job carries the flag. Two distinct icons
+                              so an agent can tell pickup vs return at a
+                              glance without hovering. */}
+                          {j.blindPickup && (
+                            <span
+                              className="text-lt-fg2 text-[11px] leading-none"
+                              title="Blind pickup — client picks up the unit themselves"
+                              aria-label="Blind pickup"
+                            >
+                              ⊘↗
+                            </span>
+                          )}
+                          {j.blindReturn && (
+                            <span
+                              className="text-lt-fg2 text-[11px] leading-none"
+                              title="Blind return — client returns the unit themselves"
+                              aria-label="Blind return"
+                            >
+                              ⊘↙
                             </span>
                           )}
                         </Link>

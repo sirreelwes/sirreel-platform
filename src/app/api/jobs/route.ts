@@ -122,6 +122,10 @@ export async function GET(req: NextRequest) {
             // against today/tomorrow.
             startDate: true,
             endDate: true,
+            // Blind handoff flags — surface eye-off icons on the Jobs
+            // list when ANY order on the job has them set.
+            blindPickup: true,
+            blindReturn: true,
             // Phase 7 paperwork rollup — minimal SignedAgreement
             // select. Aggregated across the job's non-cancelled orders
             // to compute Rental + Stage paperwork chips for the list.
@@ -282,6 +286,12 @@ export async function GET(req: NextRequest) {
           ),
       )
 
+      // Blind handoff markers — true when ANY order on the job has the
+      // matching flag set. Surfaced as eye-off icons next to the job
+      // name on the Jobs list.
+      const blindPickup = liveOrders.some((o) => (o as { blindPickup?: boolean }).blindPickup)
+      const blindReturn = liveOrders.some((o) => (o as { blindReturn?: boolean }).blindReturn)
+
       const { orders, coiChecks: _ignoreCoi, ...rest } = j
       void _ignoreCoi
       return {
@@ -302,6 +312,8 @@ export async function GET(req: NextRequest) {
         billing,
         cadence,
         hasLD,
+        blindPickup,
+        blindReturn,
         ...(includeQuoteStatus ? { pipelineColumn, quoteBreakdown } : {}),
         ...(includeDepartments ? { departments } : {}),
       }
