@@ -11,7 +11,7 @@
  * Rows link to the existing `/jobs/[id]` detail page.
  */
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
@@ -335,156 +335,148 @@ export default function JobsListPage() {
           </div>
         </div>
 
-        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-lt-inner">
-              <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-lt-fg3">
-                <th className="px-3 py-2.5">Code</th>
-                <th className="px-3 py-2.5">Job</th>
-                <th className="px-3 py-2.5">Client</th>
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5">Dates</th>
-                <th className="px-3 py-2.5">Primary contact</th>
-                <th className="px-3 py-2.5">Agent</th>
-                <th className="px-3 py-2.5 text-right">Orders</th>
-                <th className="px-3 py-2.5 text-right">Value</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-lt-hairline">
-              {jobs.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-lt-fg3 text-sm">
-                    {filter === 'orphans'
-                      ? 'No abandoned QUOTED jobs. Good housekeeping.'
-                      : 'No jobs match.'}
-                  </td>
-                </tr>
-              )}
-              {jobs.map((j) => {
-                const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
-                // Sub-row content. The billing chip always renders
-                // (NOT_INVOICED is meaningful information), so there's
-                // no "empty sub-row" case. Paperwork chips drop out
-                // when their slot is empty.
-                const paperwork = j.paperwork
-                const billing = j.billing
-                // Cadence rollup drives the left-edge bar + the merged
-                // status label. Server falls back to JobStatus for
-                // pre-booked Jobs (quoted/hold/lost) and short-circuits
-                // wrapped Jobs.
-                const cadenceState: CadenceState = j.cadence?.state ?? (
-                  j.status === 'QUOTED' ? 'quoted'
-                    : j.status === 'HOLD' ? 'hold'
-                    : j.status === 'LOST' ? 'lost'
-                    : j.status === 'WRAPPED' ? 'wrapped'
-                    : 'booked'
-                )
-                const partial = !!j.cadence?.partial
-                const cadenceLabel = formatCadenceLabel(cadenceState, partial)
-                const barCls = CADENCE_BAR[cadenceState]
-                return (
-                  <Fragment key={j.id}>
-                    <tr className="hover:bg-lt-inner transition-colors border-b-0">
-                      <td className={`pl-2 pr-3 pt-2.5 pb-1 font-mono text-xs text-lt-fg3 whitespace-nowrap border-l-4 ${barCls}`}>
-                        <Link href={`/jobs/${j.id}`} className="hover:text-lt-fg">
-                          {j.jobCode}
-                        </Link>
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1">
-                        <Link href={`/jobs/${j.id}`} className="text-lt-fg hover:text-black font-medium inline-flex items-center gap-1.5">
-                          {j.name}
-                          {j.hasLD && (
-                            <span
-                              className="text-chip-bad-fg text-[10px] leading-none"
-                              title="Loss & Damage claim open"
-                              aria-label="L&D claim open"
-                            >
-                              ▲
-                            </span>
-                          )}
-                          {/* Blind handoff markers — eye-off glyphs sit
-                              next to the job name when any order on the
-                              job carries the flag. Two distinct icons
-                              so an agent can tell pickup vs return at a
-                              glance without hovering. */}
-                          {j.blindPickup && (
-                            <span
-                              className="text-lt-fg2 text-[11px] leading-none"
-                              title="Blind pickup — client picks up the unit themselves"
-                              aria-label="Blind pickup"
-                            >
-                              ⊘↗
-                            </span>
-                          )}
-                          {j.blindReturn && (
-                            <span
-                              className="text-lt-fg2 text-[11px] leading-none"
-                              title="Blind return — client returns the unit themselves"
-                              aria-label="Blind return"
-                            >
-                              ⊘↙
-                            </span>
-                          )}
-                        </Link>
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-lt-fg2 truncate max-w-[200px]">
-                        {j.company?.name || '—'}
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1">
+        {/* Jobs list — roomy stacked rows. The earlier 9-column table
+            was dense and required column-header scanning; the list
+            puts the agent's three core questions per job (what is it,
+            where in the cadence, what does paperwork+billing look
+            like) on three distinct visual lanes. Full-height left
+            cadence bar; whole row clickable as a Link. */}
+        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden divide-y divide-lt-hairline">
+          {jobs.length === 0 && !loading && (
+            <div className="px-4 py-8 text-center text-lt-fg3 text-sm">
+              {filter === 'orphans'
+                ? 'No abandoned QUOTED jobs. Good housekeeping.'
+                : 'No jobs match.'}
+            </div>
+          )}
+          {jobs.map((j) => {
+            const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
+            // Cadence rollup drives the left-edge bar + the merged
+            // status label. Server falls back to JobStatus for
+            // pre-booked Jobs (quoted/hold/lost) and short-circuits
+            // wrapped Jobs.
+            const cadenceState: CadenceState = j.cadence?.state ?? (
+              j.status === 'QUOTED' ? 'quoted'
+                : j.status === 'HOLD' ? 'hold'
+                : j.status === 'LOST' ? 'lost'
+                : j.status === 'WRAPPED' ? 'wrapped'
+                : 'booked'
+            )
+            const partial = !!j.cadence?.partial
+            const cadenceLabel = formatCadenceLabel(cadenceState, partial)
+            const barCls = CADENCE_BAR[cadenceState]
+            const orderCount = j._count?.orders ?? 0
+            return (
+              <Link
+                key={j.id}
+                href={`/jobs/${j.id}`}
+                className={`flex items-stretch hover:bg-lt-inner transition-colors border-l-4 ${barCls}`}
+              >
+                <div className="flex-1 min-w-0 pl-4 pr-4 py-3 flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    {/* Line 1: code above title; title = "Job · Client".
+                        Inline icon badges (blind + L&D) follow the title. */}
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-lt-fg3">
+                      {j.jobCode}
+                    </div>
+                    <div className="mt-0.5 flex items-baseline gap-1.5 flex-wrap">
+                      <span className="text-[15px] font-medium text-lt-fg leading-tight">
+                        {j.name}
+                        {j.company?.name && (
+                          <>
+                            <span className="text-lt-fg3 font-normal"> · </span>
+                            <span className="text-lt-fg2 font-normal">{j.company.name}</span>
+                          </>
+                        )}
+                      </span>
+                      {j.hasLD && (
                         <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${CADENCE_PILL[cadenceState]}`}
+                          className="text-chip-bad-fg text-[10px] leading-none"
+                          title="Loss & Damage claim open"
+                          aria-label="L&D claim open"
                         >
-                          {partial && (
-                            <span className="text-[11px] leading-none" aria-hidden="true">◐</span>
-                          )}
-                          {cadenceLabel}
+                          ▲
                         </span>
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-xs text-lt-fg2 whitespace-nowrap">
-                        {fmtDate(j.startDate)} – {fmtDate(j.endDate)}
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-xs text-lt-fg2">
-                        {j.primaryContact ? (
-                          <div className="truncate max-w-[180px]">
-                            {j.primaryContact.firstName} {j.primaryContact.lastName}
-                            <span className="ml-1.5 text-[9px] font-semibold uppercase text-lt-fg3">
-                              {j.primaryContact.role}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-lt-fg3">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-xs text-lt-fg2 truncate max-w-[140px]">
-                        {j.agent?.name || '—'}
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-right text-xs text-lt-fg2 font-mono">
-                        {j._count?.orders ?? '—'}
-                      </td>
-                      <td className="px-3 pt-2.5 pb-1 text-right text-xs text-lt-fg font-mono whitespace-nowrap">
-                        {fmtMoney(value)}
-                        {j.orderTotal === 0 && j.estimatedValue != null && (
-                          <span className="ml-1 text-[9px] text-lt-fg3 uppercase">est</span>
-                        )}
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-lt-inner transition-colors">
-                      <td
-                        colSpan={9}
-                        className={`pl-2 pr-3 pb-2 pt-0 border-l-4 ${barCls}`}
-                      >
-                        <SubRowChips
-                          paperwork={paperwork}
-                          billing={billing}
-                          hasStageScope={!!j.hasStageScope}
-                        />
-                      </td>
-                    </tr>
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+                      )}
+                      {/* Blind handoff markers. Eye-off glyphs sit
+                          inline after the title so an agent can tell
+                          pickup vs return at a glance without hover. */}
+                      {j.blindPickup && (
+                        <span
+                          className="text-lt-fg2 text-[11px] leading-none"
+                          title="Blind pickup — client picks up the unit themselves"
+                          aria-label="Blind pickup"
+                        >
+                          ⊘↗
+                        </span>
+                      )}
+                      {j.blindReturn && (
+                        <span
+                          className="text-lt-fg2 text-[11px] leading-none"
+                          title="Blind return — client returns the unit themselves"
+                          aria-label="Blind return"
+                        >
+                          ⊘↙
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata: client · contact (role) · N order(s) · agent.
+                        Renders as a single muted line that wraps on narrow
+                        viewports. The client appears here as the canonical
+                        full name (the title's version may be visually
+                        de-emphasized but this line is the metadata source). */}
+                    <div className="mt-1 text-[11.5px] text-lt-fg2 flex items-center gap-1.5 flex-wrap leading-snug">
+                      <span className="text-lt-fg2">{j.company?.name || '—'}</span>
+                      <span className="text-lt-fg3">·</span>
+                      {j.primaryContact ? (
+                        <span>
+                          {j.primaryContact.firstName} {j.primaryContact.lastName}
+                          <span className="ml-1 text-[10px] text-lt-fg3 uppercase tracking-wider">({j.primaryContact.role})</span>
+                        </span>
+                      ) : (
+                        <span className="text-lt-fg3">no contact</span>
+                      )}
+                      <span className="text-lt-fg3">·</span>
+                      <span>{orderCount} order{orderCount === 1 ? '' : 's'}</span>
+                      <span className="text-lt-fg3">·</span>
+                      <span>{j.agent?.name || '—'}</span>
+                    </div>
+
+                    {/* Sub-row: paperwork buttons + billing chip. The
+                        component reads everything it needs off the
+                        rollups; tones are state-keyed. */}
+                    <div className="mt-2">
+                      <SubRowChips
+                        paperwork={j.paperwork}
+                        billing={j.billing}
+                        hasStageScope={!!j.hasStageScope}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right side: stacked status pill above the $value.
+                      Right-aligned, doesn't shrink. */}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${CADENCE_PILL[cadenceState]}`}
+                    >
+                      {partial && (
+                        <span className="text-[11px] leading-none" aria-hidden="true">◐</span>
+                      )}
+                      {cadenceLabel}
+                    </span>
+                    <span className="text-[14px] font-mono font-medium text-lt-fg whitespace-nowrap">
+                      {fmtMoney(value)}
+                      {j.orderTotal === 0 && j.estimatedValue != null && (
+                        <span className="ml-1 text-[9px] text-lt-fg3 uppercase">est</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
     </div>
