@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
-import type { JobStatus, OrderStatus, OrderQuoteStatus, LineItemDepartment } from '@prisma/client'
+import type {
+  JobStatus,
+  OrderStatus,
+  OrderQuoteStatus,
+  LineItemDepartment,
+  AgreementStatus,
+  ContractType,
+  ReviewDecision,
+} from '@prisma/client'
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
@@ -107,6 +115,12 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             subtotal: true,
+            // Phase 7 paperwork rollup — minimal SignedAgreement
+            // select. Aggregated across the job's non-cancelled orders
+            // to compute Rental + Stage paperwork chips for the list.
+            signedAgreements: {
+              select: { contractType: true, status: true },
+            },
             ...(includeQuoteStatus ? { quoteStatus: true } : {}),
             ...(includeDepartments
               ? {
@@ -115,6 +129,21 @@ export async function GET(req: NextRequest) {
                   },
                 }
               : {}),
+          },
+        },
+        // CoiCheck attaches per-Job (jobId FK). Latest non-deleted row
+        // wins — agents replace a COI on policy renewal rather than
+        // appending. Three fields drive the chip: humanDecision (the
+        // SirReel-team verdict), policyExpiryDate (vs today), and
+        // coverageVerified (AI's read).
+        coiChecks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            humanDecision: true,
+            policyExpiryDate: true,
+            coverageVerified: true,
           },
         },
         _count: { select: { orders: true } },
@@ -159,7 +188,30 @@ export async function GET(req: NextRequest) {
         departments = Array.from(deptSet)
       }
 
-      const { orders, ...rest } = j
+      // Phase 7 — paperwork rollup. Per-Order SignedAgreement rows
+      // aggregated to a single state per contractType across all
+      // non-cancelled orders on the job. CoiCheck is per-Job.
+      const liveOrders = j.orders.filter((o) => o.status !== ('CANCELLED' as OrderStatus))
+      const allAgreements = liveOrders.flatMap(
+        (o) => (o as { signedAgreements?: { contractType: ContractType; status: AgreementStatus }[] }).signedAgreements || [],
+      )
+      const rentalAgreement = rollupAgreementState(allAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT'), liveOrders.length)
+      const stageAgreementsExist = allAgreements.some((a) => a.contractType === 'STAGE_CONTRACT')
+      const stageAgreement = stageAgreementsExist
+        ? rollupAgreementState(allAgreements.filter((a) => a.contractType === 'STAGE_CONTRACT'), liveOrders.length)
+        : null
+      const coi = j.coiChecks[0]
+        ? rollupCoiState(j.coiChecks[0])
+        : { state: 'NONE' as const }
+
+      const paperwork = {
+        rental: rentalAgreement,
+        stage: stageAgreement,
+        coi,
+      }
+
+      const { orders, coiChecks: _ignoreCoi, ...rest } = j
+      void _ignoreCoi
       return {
         ...rest,
         estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
@@ -174,6 +226,7 @@ export async function GET(req: NextRequest) {
               isPrimary: primaryContact.isPrimary,
             }
           : null,
+        paperwork,
         ...(includeQuoteStatus ? { pipelineColumn, quoteBreakdown } : {}),
         ...(includeDepartments ? { departments } : {}),
       }
@@ -300,4 +353,50 @@ export async function POST(req: NextRequest) {
     console.error('POST /api/jobs error:', error)
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
   }
+}
+
+// Phase 7 — Jobs-list paperwork rollup helpers.
+//
+// SignedAgreement is per-Order. A job with two non-cancelled orders
+// either has 0/1/2 rental agreement rows. We collapse to a single
+// state for the chip:
+//   - NONE   → no rows for this contractType
+//   - DRAFT  → all rows in pre-release states (PORTAL_GENERATED only)
+//   - SENT   → at least one out the door but nothing signed
+//   - PARTIAL → some signed, some not (multi-order case)
+//   - SIGNED → every live order has a SIGNED_* row
+const SIGNED_STATES: AgreementStatus[] = ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED']
+const PRE_RELEASE_STATES: AgreementStatus[] = ['PORTAL_GENERATED']
+
+export type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
+
+function rollupAgreementState(
+  rows: { status: AgreementStatus }[],
+  liveOrderCount: number,
+): { state: AgreementRollupState; count: number } {
+  if (rows.length === 0) return { state: 'NONE', count: 0 }
+  const signed = rows.filter((r) => SIGNED_STATES.includes(r.status)).length
+  if (signed === rows.length && rows.length >= liveOrderCount) {
+    return { state: 'SIGNED', count: signed }
+  }
+  if (signed > 0) return { state: 'PARTIAL', count: signed }
+  const allPreRelease = rows.every((r) => PRE_RELEASE_STATES.includes(r.status))
+  if (allPreRelease) return { state: 'DRAFT', count: rows.length }
+  return { state: 'SENT', count: rows.length }
+}
+
+export type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
+
+function rollupCoiState(coi: {
+  humanDecision: ReviewDecision
+  policyExpiryDate: Date | null
+  coverageVerified: boolean
+}): { state: CoiRollupState; expiresAt: string | null } {
+  const expiresAt = coi.policyExpiryDate ? coi.policyExpiryDate.toISOString() : null
+  const expired = coi.policyExpiryDate ? coi.policyExpiryDate.getTime() < Date.now() : false
+  if (expired) return { state: 'EXPIRED', expiresAt }
+  if (coi.humanDecision === 'REJECTED') return { state: 'ISSUE', expiresAt }
+  if (coi.humanDecision === 'APPROVED' && coi.coverageVerified) return { state: 'VERIFIED', expiresAt }
+  // PENDING / COUNTERED / APPROVED-without-coverage all read as "in flight".
+  return { state: 'PENDING', expiresAt }
 }

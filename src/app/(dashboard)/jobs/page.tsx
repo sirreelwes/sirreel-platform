@@ -11,7 +11,7 @@
  * Rows link to the existing `/jobs/[id]` detail page.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
@@ -37,6 +37,17 @@ const STATUS_BADGE: Record<JobStatus, string> = {
   LOST:    'bg-red-900/40 text-red-300 border-red-800',
 }
 
+// Phase 7 — paperwork rollup shape returned by /api/jobs. See
+// rollupAgreementState / rollupCoiState in the route for state derivation.
+type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
+type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
+
+interface PaperworkRollup {
+  rental: { state: AgreementRollupState; count: number }
+  stage: { state: AgreementRollupState; count: number } | null
+  coi: { state: CoiRollupState; expiresAt?: string | null }
+}
+
 interface JobRow {
   id: string
   jobCode: string
@@ -55,7 +66,27 @@ interface JobRow {
     role: string
     isPrimary: boolean
   } | null
+  paperwork?: PaperworkRollup
   _count?: { orders: number }
+}
+
+// Chip color per rollup state. Goal: agent scans the column, "Signed"
+// reads as good, "Sent" + "Partially Signed" as in-flight, "None" as
+// muted, "Issue" / "Expired" as urgent.
+const AGREEMENT_CHIP: Record<AgreementRollupState, { label: string; cls: string }> = {
+  NONE:    { label: 'None',              cls: 'bg-zinc-900 text-zinc-600 border-zinc-800' },
+  DRAFT:   { label: 'Draft',             cls: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
+  SENT:    { label: 'Sent',              cls: 'bg-blue-950/40 text-blue-300 border-blue-900' },
+  PARTIAL: { label: 'Partially Signed',  cls: 'bg-amber-950/40 text-amber-300 border-amber-900' },
+  SIGNED:  { label: 'Signed',            cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900' },
+}
+
+const COI_CHIP: Record<CoiRollupState, { label: string; cls: string }> = {
+  NONE:     { label: 'None',     cls: 'bg-zinc-900 text-zinc-600 border-zinc-800' },
+  PENDING:  { label: 'Pending',  cls: 'bg-amber-950/40 text-amber-300 border-amber-900' },
+  VERIFIED: { label: 'Verified', cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900' },
+  EXPIRED:  { label: 'Expired',  cls: 'bg-red-950/40 text-red-300 border-red-900' },
+  ISSUE:    { label: 'Issue',    cls: 'bg-red-950/40 text-red-300 border-red-900' },
 }
 
 function fmtDate(d: string | null) {
@@ -190,63 +221,144 @@ export default function JobsListPage() {
             )}
             {jobs.map((j) => {
               const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
+              // Phase 7 — paperwork sub-row visibility. Hidden entirely
+              // when no paperwork exists in any slot to avoid stuffing
+              // "No paperwork yet." under every QUOTED-shell row.
+              const paperwork = j.paperwork
+              const hasAnyPaperwork =
+                !!paperwork &&
+                (paperwork.rental.state !== 'NONE' ||
+                  (paperwork.stage && paperwork.stage.state !== 'NONE') ||
+                  paperwork.coi.state !== 'NONE')
               return (
-                <tr key={j.id} className="hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-3 py-2.5 font-mono text-xs text-zinc-400 whitespace-nowrap">
-                    <Link href={`/jobs/${j.id}`} className="hover:text-amber-400">
-                      {j.jobCode}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Link href={`/jobs/${j.id}`} className="text-zinc-100 hover:text-amber-400 font-medium">
-                      {j.name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 text-zinc-300 truncate max-w-[200px]">
-                    {j.company?.name || '—'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${STATUS_BADGE[j.status]}`}
-                    >
-                      {j.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-400 whitespace-nowrap">
-                    {fmtDate(j.startDate)} – {fmtDate(j.endDate)}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-300">
-                    {j.primaryContact ? (
-                      <>
-                        <div className="truncate max-w-[180px]">
-                          {j.primaryContact.firstName} {j.primaryContact.lastName}
-                          <span className="ml-1.5 text-[9px] font-semibold uppercase text-zinc-500">
-                            {j.primaryContact.role}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-zinc-600">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-400 truncate max-w-[140px]">
-                    {j.agent?.name || '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs text-zinc-300 font-mono">
-                    {j._count?.orders ?? '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs text-zinc-100 font-mono whitespace-nowrap">
-                    {fmtMoney(value)}
-                    {j.orderTotal === 0 && j.estimatedValue != null && (
-                      <span className="ml-1 text-[9px] text-zinc-500 uppercase">est</span>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={j.id}>
+                  <tr className="hover:bg-zinc-800/40 transition-colors border-b-0">
+                    <td className="px-3 pt-2.5 pb-1 font-mono text-xs text-zinc-400 whitespace-nowrap">
+                      <Link href={`/jobs/${j.id}`} className="hover:text-amber-400">
+                        {j.jobCode}
+                      </Link>
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1">
+                      <Link href={`/jobs/${j.id}`} className="text-zinc-100 hover:text-amber-400 font-medium">
+                        {j.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-zinc-300 truncate max-w-[200px]">
+                      {j.company?.name || '—'}
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${STATUS_BADGE[j.status]}`}
+                      >
+                        {j.status}
+                      </span>
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-xs text-zinc-400 whitespace-nowrap">
+                      {fmtDate(j.startDate)} – {fmtDate(j.endDate)}
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-xs text-zinc-300">
+                      {j.primaryContact ? (
+                        <>
+                          <div className="truncate max-w-[180px]">
+                            {j.primaryContact.firstName} {j.primaryContact.lastName}
+                            <span className="ml-1.5 text-[9px] font-semibold uppercase text-zinc-500">
+                              {j.primaryContact.role}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-xs text-zinc-400 truncate max-w-[140px]">
+                      {j.agent?.name || '—'}
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-right text-xs text-zinc-300 font-mono">
+                      {j._count?.orders ?? '—'}
+                    </td>
+                    <td className="px-3 pt-2.5 pb-1 text-right text-xs text-zinc-100 font-mono whitespace-nowrap">
+                      {fmtMoney(value)}
+                      {j.orderTotal === 0 && j.estimatedValue != null && (
+                        <span className="ml-1 text-[9px] text-zinc-500 uppercase">est</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/40 transition-colors">
+                    <td colSpan={9} className="px-3 pb-2 pt-0">
+                      <PaperworkChips paperwork={paperwork} hasAny={hasAnyPaperwork} />
+                    </td>
+                  </tr>
+                </Fragment>
               )
             })}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+// Phase 7 — sub-row chip strip. Compact, muted; reads as a second
+// line on each job row. Hidden chips for paperwork that doesn't exist
+// at all (no NONE chips when nothing has even been started).
+function PaperworkChips({
+  paperwork,
+  hasAny,
+}: {
+  paperwork: PaperworkRollup | undefined
+  hasAny: boolean
+}) {
+  if (!paperwork || !hasAny) {
+    return <div className="text-[10px] text-zinc-600 italic">No paperwork yet.</div>
+  }
+
+  const expiryLabel = paperwork.coi.expiresAt
+    ? new Date(paperwork.coi.expiresAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: '2-digit',
+      })
+    : null
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+      {paperwork.rental.state !== 'NONE' && (
+        <Chip label="Rental" state={AGREEMENT_CHIP[paperwork.rental.state]} />
+      )}
+      {paperwork.stage && paperwork.stage.state !== 'NONE' && (
+        <Chip label="Stage" state={AGREEMENT_CHIP[paperwork.stage.state]} />
+      )}
+      {paperwork.coi.state !== 'NONE' && (
+        <Chip
+          label="COI"
+          state={COI_CHIP[paperwork.coi.state]}
+          tail={
+            expiryLabel && paperwork.coi.state !== 'ISSUE'
+              ? `exp ${expiryLabel}`
+              : null
+          }
+        />
+      )}
+    </div>
+  )
+}
+
+function Chip({
+  label,
+  state,
+  tail,
+}: {
+  label: string
+  state: { label: string; cls: string }
+  tail?: string | null
+}) {
+  return (
+    <span
+      className={`inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded border ${state.cls}`}
+    >
+      <span className="font-semibold uppercase tracking-wider opacity-70">{label}</span>
+      <span className="font-semibold">{state.label}</span>
+      {tail && <span className="opacity-60">· {tail}</span>}
+    </span>
   )
 }
