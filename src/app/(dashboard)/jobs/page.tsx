@@ -29,15 +29,76 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'orphans', label: 'Orphans' },
 ]
 
-// Light-motif status pills — tinted bg + dark on-tint text per the
-// theme spec. Borders dropped in favor of the tint reading on the
-// hairline-bordered card.
-const STATUS_BADGE: Record<JobStatus, string> = {
-  QUOTED:  'bg-pill-quoted-bg text-pill-quoted-fg',
-  ACTIVE:  'bg-pill-active-bg text-pill-active-fg',
-  WRAPPED: 'bg-pill-wrapped-bg text-pill-wrapped-fg',
-  HOLD:    'bg-pill-hold-bg text-pill-hold-fg',
-  LOST:    'bg-pill-lost-bg text-pill-lost-fg',
+// Phase 7 — operational cadence replaces the raw JobStatus pill on
+// the list. Each cadence state has a label, a tinted pill (bg/fg),
+// and a saturated left-edge bar tint. Static class strings so
+// Tailwind's content scanner sees them.
+type CadenceState =
+  | 'quoted'
+  | 'hold'
+  | 'lost'
+  | 'booked'
+  | 'picking-tmw'
+  | 'picking-today'
+  | 'on-rental'
+  | 'returning-tmw'
+  | 'returning-today'
+  | 'returned'
+  | 'invoiced'
+  | 'wrapped'
+
+const CADENCE_LABEL: Record<CadenceState, string> = {
+  quoted:          'Quoted',
+  hold:            'Hold',
+  lost:            'Lost',
+  booked:          'Booked',
+  'picking-tmw':   'Picking up tomorrow',
+  'picking-today': 'Picking up today',
+  'on-rental':     'On rental',
+  'returning-tmw': 'Returning tomorrow',
+  'returning-today':'Returning today',
+  returned:        'Returned',
+  invoiced:        'Invoiced',
+  wrapped:         'Wrapped',
+}
+
+const CADENCE_PILL: Record<CadenceState, string> = {
+  quoted:          'bg-pill-quoted-bg text-pill-quoted-fg',
+  hold:            'bg-pill-hold-bg text-pill-hold-fg',
+  lost:            'bg-pill-lost-bg text-pill-lost-fg',
+  booked:          'bg-cadence-booked-bg text-cadence-booked-fg',
+  'picking-tmw':   'bg-cadence-picking-tmw-bg text-cadence-picking-tmw-fg',
+  'picking-today': 'bg-cadence-picking-today-bg text-cadence-picking-today-fg',
+  'on-rental':     'bg-cadence-on-rental-bg text-cadence-on-rental-fg',
+  'returning-tmw': 'bg-cadence-returning-tmw-bg text-cadence-returning-tmw-fg',
+  'returning-today':'bg-cadence-returning-today-bg text-cadence-returning-today-fg',
+  returned:        'bg-cadence-returned-bg text-cadence-returned-fg',
+  invoiced:        'bg-cadence-invoiced-bg text-cadence-invoiced-fg',
+  wrapped:         'bg-cadence-wrapped-bg text-cadence-wrapped-fg',
+}
+
+// Edge bar uses the saturated `-bar` variant as a border-color. Each
+// class is a static literal so Tailwind's content scanner picks them
+// up. Pre-booked rows share one muted bar (`cadence-pre-bar`) since
+// their pill already carries the commercial color in `pill.*`.
+const CADENCE_BAR: Record<CadenceState, string> = {
+  quoted:          'border-cadence-pre-bar',
+  hold:            'border-cadence-pre-bar',
+  lost:            'border-cadence-pre-bar',
+  booked:          'border-cadence-booked-bar',
+  'picking-tmw':   'border-cadence-picking-tmw-bar',
+  'picking-today': 'border-cadence-picking-today-bar',
+  'on-rental':     'border-cadence-on-rental-bar',
+  'returning-tmw': 'border-cadence-returning-tmw-bar',
+  'returning-today':'border-cadence-returning-today-bar',
+  returned:        'border-cadence-returned-bar',
+  invoiced:        'border-cadence-invoiced-bar',
+  wrapped:         'border-cadence-wrapped-bar',
+}
+
+interface CadenceRollup {
+  state: CadenceState
+  partial: boolean
 }
 
 // Phase 7 — paperwork rollup shape returned by /api/jobs. See
@@ -87,6 +148,8 @@ interface JobRow {
   } | null
   paperwork?: PaperworkRollup
   billing?: BillingRollup
+  cadence?: CadenceRollup
+  hasLD?: boolean
   _count?: { orders: number }
 }
 
@@ -120,6 +183,17 @@ const BILLING_CHIP: Record<BillingRollupState, { label: string; cls: string }> =
   PARTIALLY_PAID:  { label: 'Partially paid',  cls: 'bg-chip-warn-bg text-chip-warn-fg' },
   PAID:            { label: 'Paid',            cls: 'bg-chip-good-bg text-chip-good-fg' },
   OVERDUE:         { label: 'Overdue',         cls: 'bg-chip-bad-bg text-chip-bad-fg' },
+}
+
+// Map cadence state → label, with the partial-return modifier applied
+// when the rollup flagged it. Partial replaces only the inbound return
+// labels — pickup/on-rental events are never partial.
+function formatCadenceLabel(state: CadenceState, partial: boolean): string {
+  if (!partial) return CADENCE_LABEL[state]
+  if (state === 'returning-today') return 'Partial return · today'
+  if (state === 'returning-tmw')   return 'Partial return · tomorrow'
+  if (state === 'returned')        return 'Partial returned'
+  return CADENCE_LABEL[state]
 }
 
 function fmtDate(d: string | null) {
@@ -265,17 +339,40 @@ export default function JobsListPage() {
                 // when their slot is empty.
                 const paperwork = j.paperwork
                 const billing = j.billing
+                // Cadence rollup drives the left-edge bar + the merged
+                // status label. Server falls back to JobStatus for
+                // pre-booked Jobs (quoted/hold/lost) and short-circuits
+                // wrapped Jobs.
+                const cadenceState: CadenceState = j.cadence?.state ?? (
+                  j.status === 'QUOTED' ? 'quoted'
+                    : j.status === 'HOLD' ? 'hold'
+                    : j.status === 'LOST' ? 'lost'
+                    : j.status === 'WRAPPED' ? 'wrapped'
+                    : 'booked'
+                )
+                const partial = !!j.cadence?.partial
+                const cadenceLabel = formatCadenceLabel(cadenceState, partial)
+                const barCls = CADENCE_BAR[cadenceState]
                 return (
                   <Fragment key={j.id}>
                     <tr className="hover:bg-lt-inner transition-colors border-b-0">
-                      <td className="px-3 pt-2.5 pb-1 font-mono text-xs text-lt-fg3 whitespace-nowrap">
+                      <td className={`pl-2 pr-3 pt-2.5 pb-1 font-mono text-xs text-lt-fg3 whitespace-nowrap border-l-4 ${barCls}`}>
                         <Link href={`/jobs/${j.id}`} className="hover:text-lt-fg">
                           {j.jobCode}
                         </Link>
                       </td>
                       <td className="px-3 pt-2.5 pb-1">
-                        <Link href={`/jobs/${j.id}`} className="text-lt-fg hover:text-black font-medium">
+                        <Link href={`/jobs/${j.id}`} className="text-lt-fg hover:text-black font-medium inline-flex items-center gap-1.5">
                           {j.name}
+                          {j.hasLD && (
+                            <span
+                              className="text-chip-bad-fg text-[10px] leading-none"
+                              title="Loss & Damage claim open"
+                              aria-label="L&D claim open"
+                            >
+                              ▲
+                            </span>
+                          )}
                         </Link>
                       </td>
                       <td className="px-3 pt-2.5 pb-1 text-lt-fg2 truncate max-w-[200px]">
@@ -283,9 +380,12 @@ export default function JobsListPage() {
                       </td>
                       <td className="px-3 pt-2.5 pb-1">
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${STATUS_BADGE[j.status]}`}
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${CADENCE_PILL[cadenceState]}`}
                         >
-                          {j.status}
+                          {partial && (
+                            <span className="text-[11px] leading-none" aria-hidden="true">◐</span>
+                          )}
+                          {cadenceLabel}
                         </span>
                       </td>
                       <td className="px-3 pt-2.5 pb-1 text-xs text-lt-fg2 whitespace-nowrap">
@@ -317,7 +417,10 @@ export default function JobsListPage() {
                       </td>
                     </tr>
                     <tr className="hover:bg-lt-inner transition-colors">
-                      <td colSpan={9} className="px-3 pb-2 pt-0">
+                      <td
+                        colSpan={9}
+                        className={`pl-2 pr-3 pb-2 pt-0 border-l-4 ${barCls}`}
+                      >
                         <SubRowChips paperwork={paperwork} billing={billing} />
                       </td>
                     </tr>

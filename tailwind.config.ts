@@ -48,6 +48,26 @@ const config: Config = {
           'muted-fg':      '#888780',
           'muted-border':  '#D3D1C7',
         },
+        // Operational cadence palette — temperature scheme keyed on
+        // event timing: outbound blue (cool, future) → on-rental green
+        // → inbound amber/orange (warming as return-day approaches) →
+        // returned purple → invoiced teal → wrapped grey. The `-bar`
+        // tone is the saturated edge color, `-bg/-fg` is the tinted
+        // pill label. `pre-bar` is the single muted grey for the pre-
+        // booked Job states (Quoted / Hold / Lost) which keep their
+        // existing pill colors via the `pill.*` namespace.
+        cadence: {
+          'booked-bg':           '#DBEAFE', 'booked-fg':           '#1E3A8A', 'booked-bar':           '#3B82F6',
+          'picking-tmw-bg':      '#BFDBFE', 'picking-tmw-fg':      '#1E3A8A', 'picking-tmw-bar':      '#2563EB',
+          'picking-today-bg':    '#C7D2FE', 'picking-today-fg':    '#1E1B4B', 'picking-today-bar':    '#4338CA',
+          'on-rental-bg':        '#D1FAE5', 'on-rental-fg':        '#065F46', 'on-rental-bar':        '#10B981',
+          'returning-tmw-bg':    '#FEF3C7', 'returning-tmw-fg':    '#78350F', 'returning-tmw-bar':    '#F59E0B',
+          'returning-today-bg':  '#FFEDD5', 'returning-today-fg':  '#7C2D12', 'returning-today-bar':  '#F97316',
+          'returned-bg':         '#F3E8FF', 'returned-fg':         '#581C87', 'returned-bar':         '#A855F7',
+          'invoiced-bg':         '#CCFBF1', 'invoiced-fg':         '#134E4A', 'invoiced-bar':         '#0F766E',
+          'wrapped-bg':          '#F1EFE8', 'wrapped-fg':          '#444441', 'wrapped-bar':          '#9CA3AF',
+          'pre-bar':             '#9CA3AF',
+        },
       },
       fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'] },
     },
