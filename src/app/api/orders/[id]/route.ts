@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { OrderStatus } from "@prisma/client";
+import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
@@ -57,9 +58,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params;
 
+  // Session-required for mutations. All in-app callers run from the
+  // (dashboard) shell so they have a session; this guard hardens the
+  // route + locks down the blind-handoff capture per the brief.
+  const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
-    const { status, description, startDate, endDate, taxRate, notes, companyId, agentId, bookingId } = body;
+    const {
+      status, description, startDate, endDate, taxRate, notes, companyId, agentId, bookingId,
+      blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions,
+    } = body;
 
     const data: Record<string, unknown> = {};
     if (status !== undefined) {
@@ -83,6 +95,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (companyId !== undefined) data.companyId = companyId;
     if (agentId !== undefined) data.agentId = agentId;
     if (bookingId !== undefined) data.bookingId = bookingId || null;
+    // Blind handoff capture. Toggles and their free-text instructions
+    // travel together; clearing a toggle is allowed but we don't auto-
+    // null the instructions in that case — agent may turn the toggle
+    // off temporarily without losing the text they typed.
+    if (blindPickup !== undefined) data.blindPickup = !!blindPickup;
+    if (blindReturn !== undefined) data.blindReturn = !!blindReturn;
+    if (blindPickupInstructions !== undefined) {
+      data.blindPickupInstructions = blindPickupInstructions || null;
+    }
+    if (blindReturnInstructions !== undefined) {
+      data.blindReturnInstructions = blindReturnInstructions || null;
+    }
 
     const order = await prisma.order.update({
       where: { id },

@@ -68,6 +68,12 @@ type Order = {
   // Phase 5 commit 1 — booked snapshot anchor. The Generate invoice
   // button is gated on bookedTotal being non-null.
   bookedTotal: string | null;
+  // Blind handoff fields. When the toggle is on, the matching
+  // instructions text is what the client will see in the portal.
+  blindPickup: boolean;
+  blindReturn: boolean;
+  blindPickupInstructions: string | null;
+  blindReturnInstructions: string | null;
 };
 
 // Phase 5 commit 1 — separately-fetched invoice list. Richer than the
@@ -252,6 +258,16 @@ export default function OrderDetailPage() {
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
 
+  // Blind handoff capture — toggles + their instruction text. Local
+  // state seeded from the loaded order; dirty until Save is pressed.
+  const [blindPickup, setBlindPickup] = useState(false);
+  const [blindReturn, setBlindReturn] = useState(false);
+  const [blindPickupInstructions, setBlindPickupInstructions] = useState("");
+  const [blindReturnInstructions, setBlindReturnInstructions] = useState("");
+  const [blindSaving, setBlindSaving] = useState(false);
+  const [blindDirty, setBlindDirty] = useState(false);
+  const [blindMsg, setBlindMsg] = useState<string | null>(null);
+
   const [invSearch, setInvSearch] = useState("");
   const [invResults, setInvResults] = useState<InvItem[]>([]);
   const [showInvDropdown, setShowInvDropdown] = useState(false);
@@ -334,8 +350,45 @@ export default function OrderDetailPage() {
     if (!res.ok) { router.push("/orders"); return; }
     const data = await res.json();
     setOrder(data);
+    // Reset the blind-handoff local state to the server's value on
+    // each fetch. Save zeros `blindDirty`; this also covers the
+    // post-save refetch path.
+    setBlindPickup(!!data.blindPickup);
+    setBlindReturn(!!data.blindReturn);
+    setBlindPickupInstructions(data.blindPickupInstructions ?? "");
+    setBlindReturnInstructions(data.blindReturnInstructions ?? "");
+    setBlindDirty(false);
     setLoading(false);
   }, [orderId, router]);
+
+  const saveBlindHandoff = useCallback(async () => {
+    setBlindSaving(true);
+    setBlindMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blindPickup,
+          blindReturn,
+          blindPickupInstructions: blindPickup ? blindPickupInstructions : null,
+          blindReturnInstructions: blindReturn ? blindReturnInstructions : null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Save failed (${res.status})`);
+      }
+      setBlindDirty(false);
+      setBlindMsg("Saved.");
+      // Don't refetch the whole order — the save returns the updated
+      // row but we only mutated blind* fields. Keep local state.
+    } catch (e) {
+      setBlindMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBlindSaving(false);
+    }
+  }, [orderId, blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions]);
 
   // Inline "Add quote recipient" form state — opened from the
   // RecipientLine warning, creates a JobContact + optional PortalAccess
@@ -1299,6 +1352,82 @@ export default function OrderDetailPage() {
         <p className="text-xs text-zinc-600 mt-4">
           Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
+      </div>
+
+      {/* Blind handoff capture — sales sets when the client picks up
+          or returns their unit without a SirReel rep present. Toggles
+          reveal the instructions textarea so we don't dump a textbox
+          on every order; instructions surface on the portal job page
+          when the toggle is on, and a loud check-in alert lights up
+          the inbound dispatch lane when blindReturn fires. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-lg font-semibold text-white">Blind handoff</h2>
+          <button
+            onClick={saveBlindHandoff}
+            disabled={!blindDirty || blindSaving}
+            className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {blindSaving ? "Saving…" : blindDirty ? "Save" : "Saved"}
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500 mb-4">
+          Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
+        </p>
+
+        <div className="space-y-4">
+          {/* Pickup */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={blindPickup}
+                onChange={(e) => { setBlindPickup(e.target.checked); setBlindDirty(true); }}
+                className="accent-amber-500"
+              />
+              <span className="font-medium">Blind pickup</span>
+              <span className="text-xs text-zinc-500">Client picks up the unit themselves</span>
+            </label>
+            {blindPickup && (
+              <textarea
+                value={blindPickupInstructions}
+                onChange={(e) => { setBlindPickupInstructions(e.target.value); setBlindDirty(true); }}
+                rows={4}
+                placeholder="Where the unit will be staged, gate code, lockbox combination, keys location, where to park, who to call after-hours…"
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
+              />
+            )}
+          </div>
+
+          {/* Return */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={blindReturn}
+                onChange={(e) => { setBlindReturn(e.target.checked); setBlindDirty(true); }}
+                className="accent-amber-500"
+              />
+              <span className="font-medium">Blind return</span>
+              <span className="text-xs text-zinc-500">Client returns the unit themselves</span>
+            </label>
+            {blindReturn && (
+              <textarea
+                value={blindReturnInstructions}
+                onChange={(e) => { setBlindReturnInstructions(e.target.value); setBlindDirty(true); }}
+                rows={4}
+                placeholder="Where to leave the unit, return-window hours, drop-off location, key drop, anything ops needs to know to find it…"
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
+              />
+            )}
+          </div>
+        </div>
+
+        {blindMsg && (
+          <div className={`mt-3 text-xs ${blindMsg === "Saved." ? "text-emerald-400" : "text-red-400"}`}>
+            {blindMsg}
+          </div>
+        )}
       </div>
 
       {/* Phase 3 lane progress — visible only during the BOOKED →
