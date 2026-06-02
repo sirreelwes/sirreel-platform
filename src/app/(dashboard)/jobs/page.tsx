@@ -128,6 +128,27 @@ interface BillingRollup {
   balanceDue: number
 }
 
+// Semantic chip variants — the three paperwork buttons share this
+// vocabulary so the agent eye reads "good / pending / problem /
+// missing" at a glance regardless of which doc slot they're scanning.
+type ChipTone = 'good' | 'warn' | 'bad' | 'missing'
+
+const TONE_CLS: Record<ChipTone, string> = {
+  good:    'bg-chip-good-bg text-chip-good-fg',
+  warn:    'bg-chip-warn-bg text-chip-warn-fg',
+  bad:     'bg-chip-bad-bg text-chip-bad-fg',
+  missing: 'border border-dashed border-chip-muted-border text-chip-muted-fg',
+}
+
+// Unicode icons by tone. Stays cross-platform and a11y-readable
+// (the chip's title attr describes the state in words).
+const TONE_ICON: Record<ChipTone, string> = {
+  good:    '✓',
+  warn:    '⏱',
+  bad:     '⚠',
+  missing: '−',
+}
+
 interface JobRow {
   id: string
   jobCode: string
@@ -150,29 +171,35 @@ interface JobRow {
   billing?: BillingRollup
   cadence?: CadenceRollup
   hasLD?: boolean
+  // Stage-scope marker — when true the Stage Contract paperwork
+  // button renders alongside Rental + COI; otherwise it's hidden.
+  // Set server-side from stageBookingTerms presence OR an existing
+  // STAGE_CONTRACT agreement.
+  hasStageScope?: boolean
   blindPickup?: boolean
   blindReturn?: boolean
   _count?: { orders: number }
 }
 
-// Light-motif chip palette. Per spec: paperwork chips read neutral
-// regardless of state — the agent uses the *label* to scan ("Signed"
-// vs "Sent" vs "Partially Signed"), not the color. Color is reserved
-// for billing where money-state urgency is what the eye should grab.
-const AGREEMENT_CHIP: Record<AgreementRollupState, { label: string; cls: string }> = {
-  NONE:    { label: 'None',              cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  DRAFT:   { label: 'Draft',             cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  SENT:    { label: 'Sent',              cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  PARTIAL: { label: 'Partially Signed',  cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  SIGNED:  { label: 'Signed',            cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
+// Color-coded paperwork buttons (replaces the prior all-neutral
+// flatten). Each enum state maps to a label + a semantic tone:
+//   SIGNED → good (green + ✓), pre-signed in-progress states → warn
+//   (amber + ⏱), NONE → missing (grey dashed + −). COI adds a `bad`
+//   branch for EXPIRED / rejected — the others can't fail-out.
+const AGREEMENT_CHIP: Record<AgreementRollupState, { label: string; tone: ChipTone }> = {
+  NONE:    { label: 'None',              tone: 'missing' },
+  DRAFT:   { label: 'Draft',             tone: 'warn'    },
+  SENT:    { label: 'Sent',              tone: 'warn'    },
+  PARTIAL: { label: 'Partially Signed',  tone: 'warn'    },
+  SIGNED:  { label: 'Signed',            tone: 'good'    },
 }
 
-const COI_CHIP: Record<CoiRollupState, { label: string; cls: string }> = {
-  NONE:     { label: 'None',     cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  PENDING:  { label: 'Pending',  cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  VERIFIED: { label: 'Verified', cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  EXPIRED:  { label: 'Expired',  cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  ISSUE:    { label: 'Issue',    cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
+const COI_CHIP: Record<CoiRollupState, { label: string; tone: ChipTone }> = {
+  NONE:     { label: 'None',     tone: 'missing' },
+  PENDING:  { label: 'Pending',  tone: 'warn'    },
+  VERIFIED: { label: 'Verified', tone: 'good'    },
+  EXPIRED:  { label: 'Expired',  tone: 'bad'     },
+  ISSUE:    { label: 'Issue',    tone: 'bad'     },
 }
 
 // Billing carries the urgency in this design. NOT_INVOICED renders
@@ -446,7 +473,11 @@ export default function JobsListPage() {
                         colSpan={9}
                         className={`pl-2 pr-3 pb-2 pt-0 border-l-4 ${barCls}`}
                       >
-                        <SubRowChips paperwork={paperwork} billing={billing} />
+                        <SubRowChips
+                          paperwork={paperwork}
+                          billing={billing}
+                          hasStageScope={!!j.hasStageScope}
+                        />
                       </td>
                     </tr>
                   </Fragment>
@@ -467,9 +498,11 @@ export default function JobsListPage() {
 function SubRowChips({
   paperwork,
   billing,
+  hasStageScope,
 }: {
   paperwork: PaperworkRollup | undefined
   billing: BillingRollup | undefined
+  hasStageScope: boolean
 }) {
   const expiryLabel = paperwork?.coi.expiresAt
     ? new Date(paperwork.coi.expiresAt).toLocaleDateString('en-US', {
@@ -488,27 +521,55 @@ function SubRowChips({
       : null
   const billingLabel = billing && billing.state === 'NOT_INVOICED' ? null : 'Billing'
 
+  // Rental + COI render unconditionally — a missing one is meaningful
+  // information for triage and reads as the dashed-grey "missing" tone.
+  // Stage hides entirely on jobs with no stage component so non-stage
+  // rows stay clean.
+  const rentalState = paperwork?.rental.state ?? 'NONE'
+  const coiState = paperwork?.coi.state ?? 'NONE'
+  const stageState = paperwork?.stage?.state ?? 'NONE'
+
+  const rentalChip = AGREEMENT_CHIP[rentalState]
+  const stageChip = AGREEMENT_CHIP[stageState]
+  const coiChip = COI_CHIP[coiState]
+
   return (
     <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-      {paperwork?.rental.state && paperwork.rental.state !== 'NONE' && (
-        <Chip label="Rental" state={AGREEMENT_CHIP[paperwork.rental.state]} />
-      )}
-      {paperwork?.stage && paperwork.stage.state !== 'NONE' && (
-        <Chip label="Stage" state={AGREEMENT_CHIP[paperwork.stage.state]} />
-      )}
-      {paperwork?.coi.state && paperwork.coi.state !== 'NONE' && (
+      <Chip
+        label="Rental"
+        valueLabel={rentalChip.label}
+        tone={rentalChip.tone}
+        title={`Rental agreement: ${rentalChip.label}`}
+      />
+      {hasStageScope && (
         <Chip
-          label="COI"
-          state={COI_CHIP[paperwork.coi.state]}
-          tail={
-            expiryLabel && paperwork.coi.state !== 'ISSUE'
-              ? `exp ${expiryLabel}`
-              : null
-          }
+          label="Stage"
+          valueLabel={stageChip.label}
+          tone={stageChip.tone}
+          title={`Stage contract: ${stageChip.label}`}
         />
       )}
+      <Chip
+        label="COI"
+        valueLabel={coiChip.label}
+        tone={coiChip.tone}
+        tail={
+          expiryLabel && coiState !== 'EXPIRED' && coiState !== 'ISSUE'
+            ? `exp ${expiryLabel}`
+            : null
+        }
+        title={`Certificate of insurance: ${coiChip.label}${expiryLabel ? ` · exp ${expiryLabel}` : ''}`}
+      />
       {billing && (
-        <Chip label={billingLabel} state={BILLING_CHIP[billing.state]} tail={billingTail} />
+        <Chip
+          label={billingLabel}
+          valueLabel={BILLING_CHIP[billing.state].label}
+          // Billing uses its own classed map (predates the tone
+          // refactor) — pass `customCls` to skip the tone-class lookup
+          // and stay visually distinct (no icon, "Billing ·" prefix).
+          customCls={BILLING_CHIP[billing.state].cls}
+          tail={billingTail}
+        />
       )}
     </div>
   )
@@ -516,25 +577,37 @@ function SubRowChips({
 
 function Chip({
   label,
-  state,
+  valueLabel,
+  tone,
+  customCls,
   tail,
+  title,
 }: {
   label: string | null
-  state: { label: string; cls: string }
+  valueLabel: string
+  tone?: ChipTone
+  customCls?: string
   tail?: string | null
+  title?: string
 }) {
-  // The base wrapper has no border by default — tinted chips don't
-  // need one. The NOT_INVOICED billing chip opts back in with a
-  // dashed border via its `cls`, which is why we don't force `border`
-  // here as a class baseline.
+  // Paperwork buttons go through `tone` → TONE_CLS + TONE_ICON. The
+  // billing chip predates the tone refactor and stays on its own
+  // classed map via `customCls`. Exactly one path runs; the other is
+  // a noop. Title attribute spells the state for hover + a11y.
+  const cls = customCls ?? (tone ? TONE_CLS[tone] : '')
+  const icon = tone ? TONE_ICON[tone] : null
   return (
     <span
-      className={`inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded ${state.cls}`}
+      title={title}
+      className={`inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded ${cls}`}
     >
+      {icon && (
+        <span className="font-bold leading-none" aria-hidden="true">{icon}</span>
+      )}
       {label && (
         <span className="font-semibold uppercase tracking-wider opacity-70">{label}</span>
       )}
-      <span className="font-semibold">{state.label}</span>
+      <span className="font-semibold">{valueLabel}</span>
       {tail && <span className="opacity-70">· {tail}</span>}
     </span>
   )

@@ -156,6 +156,12 @@ export async function GET(req: NextRequest) {
             booking: {
               select: { _count: { select: { insuranceClaims: true } } },
             },
+            // Stage scope marker — drives whether the Stage Contract
+            // button renders on the Jobs list. A negotiated stage
+            // booking creates this row before any agreement is sent,
+            // so it surfaces the slot earlier than the SignedAgreement
+            // signal alone would.
+            stageBookingTerms: { select: { id: true } },
             ...(includeQuoteStatus ? { quoteStatus: true } : {}),
             ...(includeDepartments
               ? {
@@ -292,6 +298,20 @@ export async function GET(req: NextRequest) {
       const blindPickup = liveOrders.some((o) => (o as { blindPickup?: boolean }).blindPickup)
       const blindReturn = liveOrders.some((o) => (o as { blindReturn?: boolean }).blindReturn)
 
+      // Stage-scope detection — drives whether the Stage Contract chip
+      // renders on the Jobs list. True when ANY live order on the job
+      // either has a negotiated StageBookingTerms row OR a
+      // STAGE_CONTRACT agreement. The first signal catches mid-
+      // negotiation jobs before any contract is generated.
+      const hasStageScope = liveOrders.some((o) => {
+        const oo = o as {
+          stageBookingTerms?: { id: string } | null
+          signedAgreements?: { contractType: ContractType }[]
+        }
+        if (oo.stageBookingTerms) return true
+        return (oo.signedAgreements || []).some((a) => a.contractType === 'STAGE_CONTRACT')
+      })
+
       const { orders, coiChecks: _ignoreCoi, ...rest } = j
       void _ignoreCoi
       return {
@@ -312,6 +332,7 @@ export async function GET(req: NextRequest) {
         billing,
         cadence,
         hasLD,
+        hasStageScope,
         blindPickup,
         blindReturn,
         ...(includeQuoteStatus ? { pipelineColumn, quoteBreakdown } : {}),
