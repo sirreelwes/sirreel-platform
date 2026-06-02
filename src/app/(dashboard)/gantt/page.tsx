@@ -56,9 +56,36 @@ export default function GanttPage() {
   }>(null)
   const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
   const [showCategoryPickerForHold, setShowCategoryPickerForHold] = useState(false)
+  // Operator-controlled window anchor. Default mirrors the prior
+  // behaviour (today-3) so the page renders the same on first load,
+  // but ‹ Today › buttons step it forward/back by the current window
+  // width and reset on demand.
+  const defaultAnchor = useMemo(() => addDays(today, -3), [])
+  const [anchorDate, setAnchorDate] = useState<string>(defaultAnchor)
+
+  const totalDays = weeks * 7
+  const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
+  const startDate = anchorDate
+  const dates = useMemo(
+    () => Array.from({ length: totalDays }, (_, i) => addDays(startDate, i)),
+    [startDate, totalDays],
+  )
+  const todayOffset = diffDays(startDate, today)
+
+  // Fetch the timeline for the visible window plus a ±7d buffer so
+  // bars straddling the edge don't pop in/out as the operator pans.
+  // Re-runs whenever the window changes; refreshTimeline() below reads
+  // the same range so post-action refreshes stay in-window.
+  const fetchRange = useMemo(() => {
+    const from = addDays(startDate, -7)
+    const to = addDays(startDate, totalDays + 7)
+    return { from, to }
+  }, [startDate, totalDays])
 
   useEffect(() => {
-    fetch('/api/timeline-native')
+    setLoading(true)
+    const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
+    fetch(`/api/timeline-native?${params.toString()}`)
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
@@ -69,7 +96,7 @@ export default function GanttPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchRange.from, fetchRange.to])
 
   useEffect(() => {
     if (categories.length > 0) return
@@ -78,12 +105,6 @@ export default function GanttPage() {
       .then((d) => { if (d.ok) setCategories(d.categories || []) })
       .catch(() => {})
   }, [categories.length])
-
-  const startDate = addDays(today, -3)
-  const totalDays = weeks * 7
-  const dates = Array.from({ length: totalDays }, (_, i) => addDays(startDate, i))
-  const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
-  const todayOffset = diffDays(startDate, today)
 
   // ── +Hold entry point: row click on an asset → modal pre-filled
   //    with that asset + clicked date. If the clicked date overlaps
@@ -122,7 +143,8 @@ export default function GanttPage() {
   //    fetch URL stays consistent with the initial load. ──
   function refreshTimeline() {
     setLoading(true)
-    fetch('/api/timeline-native')
+    const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
+    fetch(`/api/timeline-native?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
@@ -134,6 +156,17 @@ export default function GanttPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }
+
+  // ── Window paging. ‹ / › step by the current visible width
+  //    (totalDays) so a 2W window pages two weeks at a time, a 4W
+  //    window pages four. Today resets to the default anchor. ──
+  function panBackward() { setAnchorDate(addDays(anchorDate, -totalDays)) }
+  function panForward()  { setAnchorDate(addDays(anchorDate,  totalDays)) }
+  function goToday()     { setAnchorDate(defaultAnchor) }
+
+  // Range label for the header — "Jun 2 – Jun 29" style, both ends inclusive.
+  const visibleEndDate = addDays(startDate, totalDays - 1)
+  const rangeLabel = `${fMonth(startDate)} – ${fMonth(visibleEndDate)}`
 
   function closeModal() {
     setSelected(null)
@@ -347,6 +380,27 @@ export default function GanttPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Window pager — steps by the current visible width. Today
+              resets to the default anchor (today − 3d). */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={panBackward}
+              className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200"
+              aria-label="Previous window"
+              title={`Back ${totalDays} days`}
+            >‹</button>
+            <button
+              onClick={goToday}
+              className="px-2 h-7 rounded-lg bg-gray-100 text-[11px] font-semibold text-gray-600 hover:bg-gray-200"
+            >Today</button>
+            <button
+              onClick={panForward}
+              className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-[13px] hover:bg-gray-200"
+              aria-label="Next window"
+              title={`Forward ${totalDays} days`}
+            >›</button>
+          </div>
+          <span className="text-[11px] font-semibold text-gray-500 px-1">{rangeLabel}</span>
           {view === 'asset' && (
             <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] bg-white">
               <option value="all">All Categories</option>

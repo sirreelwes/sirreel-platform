@@ -17,10 +17,20 @@
  * Used by Chunk 7.5b parallel/flag work — runs alongside /api/timeline
  * during the convergence-verification window, retires it at Chunk 8.
  */
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+
+// Parse a YYYY-MM-DD string into a UTC midnight Date, or null. Anything
+// non-ISO returns null and the caller falls back to its default.
+function parseYmd(s: string | null): Date | null {
+  if (!s) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null
+  const d = new Date(`${s}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return null
+  return d
+}
 
 // Same short-key mapping the existing /api/timeline uses, applied to
 // AssetCategory.name instead of Planyo resource names. Keeps the
@@ -84,11 +94,37 @@ function nameOfPerson(p: { firstName: string | null; lastName: string | null } |
   return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()
 }
 
-export async function GET() {
-  // Same default window as /api/timeline: −14 to +45 days from today.
+export async function GET(req: NextRequest) {
+  // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD. The /gantt page passes
+  // these when the operator pans the window past the default; the
+  // legacy callers (/calendar, /dashboard) keep working unchanged
+  // because we fall back to the today-14/today+45 default below.
+  // Bounds-checked to keep a single rogue query from scanning the
+  // full Booking table — a 365-day max forward reach is plenty for
+  // an interactive timeline.
+  const { searchParams } = new URL(req.url)
   const today = new Date()
-  const from = new Date(today); from.setDate(from.getDate() - 14); from.setUTCHours(0, 0, 0, 0)
-  const to = new Date(today); to.setDate(to.getDate() + 45); to.setUTCHours(0, 0, 0, 0)
+  today.setUTCHours(0, 0, 0, 0)
+
+  const fromParam = parseYmd(searchParams.get('from'))
+  const toParam = parseYmd(searchParams.get('to'))
+
+  const defaultFrom = new Date(today); defaultFrom.setDate(defaultFrom.getDate() - 14)
+  const defaultTo = new Date(today); defaultTo.setDate(defaultTo.getDate() + 45)
+
+  // Clamp custom range to ±365d from today to bound the query.
+  const minAllowed = new Date(today); minAllowed.setDate(minAllowed.getDate() - 365)
+  const maxAllowed = new Date(today); maxAllowed.setDate(maxAllowed.getDate() + 365)
+  const clamp = (d: Date) => (d < minAllowed ? minAllowed : d > maxAllowed ? maxAllowed : d)
+
+  const from = fromParam ? clamp(fromParam) : defaultFrom
+  let to = toParam ? clamp(toParam) : defaultTo
+  // Defensive: a single mis-ordered pair (to before from) silently
+  // clipping the result set is worse than just enlarging to a 1-week
+  // window from `from` and returning data.
+  if (to < from) {
+    to = new Date(from); to.setDate(to.getDate() + 7)
+  }
 
   // ── Bookings whose rental window overlaps [from, to], with all
   //    their items + assignments. Excludes archived. ──
