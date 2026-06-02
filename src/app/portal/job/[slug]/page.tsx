@@ -29,6 +29,14 @@ interface PortalData {
     status: string;
     cadenceState: string;
     total: string;
+    // Blind handoff — server only emits the instructions when the
+    // matching toggle is true (defense-in-depth in the API). Page
+    // renders the sections conditionally on both the toggle AND the
+    // text being non-empty.
+    blindPickup: boolean;
+    blindReturn: boolean;
+    blindPickupInstructions: string | null;
+    blindReturnInstructions: string | null;
   };
   job: { id: string; name: string; jobCode: string; productionType: string } | null;
   agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null };
@@ -411,6 +419,41 @@ export default function JobPortalPage() {
             SirReel Studio Rentals · 8500 Lankershim Blvd, Sun Valley, CA 91352
           </div>
         </section>
+
+        {/* ── Self-checkout instructions ──────────────────────────────────────
+            Read-only client-facing surface for blind handoffs. Only renders
+            when the matching toggle was set on the Order AND there's actual
+            text to show. Server already nulls the text when the toggle is
+            off, but the page guards on both for belt-and-suspenders. */}
+        {((data.order.blindPickup && data.order.blindPickupInstructions) ||
+          (data.order.blindReturn && data.order.blindReturnInstructions)) && (
+          <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
+            <h2 className="text-base font-bold text-gray-900">Self-checkout instructions</h2>
+            <p className="text-xs text-gray-500">
+              You'll handle this part of the handoff on your own. Here's everything you need.
+            </p>
+            {data.order.blindPickup && data.order.blindPickupInstructions && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-2">
+                  Picking up
+                </div>
+                <div className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                  {data.order.blindPickupInstructions}
+                </div>
+              </div>
+            )}
+            {data.order.blindReturn && data.order.blindReturnInstructions && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-2">
+                  Returning
+                </div>
+                <div className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                  {data.order.blindReturnInstructions}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── Paperwork ───────────────────────────────────────────────────── */}
         <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">

@@ -84,6 +84,14 @@ export async function GET(req: NextRequest) {
         quotePdfGeneratedAt: true,
         bookingId: true,
         jobId: true,
+        // Blind handoff — client-facing self-service instructions.
+        // Selected explicitly per the CRH §7 audit checkpoint: only
+        // surface fields the client should see. Toggle gates whether
+        // the matching instructions text is rendered downstream.
+        blindPickup: true,
+        blindReturn: true,
+        blindPickupInstructions: true,
+        blindReturnInstructions: true,
         company: { select: { id: true, name: true } },
         job: { select: { id: true, name: true, jobCode: true, productionType: true } },
         agent: {
@@ -265,6 +273,14 @@ export async function GET(req: NextRequest) {
       status: order.status,
       cadenceState: order.cadenceState,
       total: order.total.toString(),
+      // Blind handoff — only emit the instructions text when the
+      // matching toggle is true. Defense-in-depth so a sales-side
+      // toggle-off doesn't accidentally leak the prior text to the
+      // client even though the column may still hold it server-side.
+      blindPickup: order.blindPickup,
+      blindReturn: order.blindReturn,
+      blindPickupInstructions: order.blindPickup ? order.blindPickupInstructions : null,
+      blindReturnInstructions: order.blindReturn ? order.blindReturnInstructions : null,
     },
     job: order.job,
     countdown: portalCountdownMs != null ? { msUntilPickup: portalCountdownMs } : null,
