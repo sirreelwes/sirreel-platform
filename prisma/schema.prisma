@@ -1819,6 +1819,18 @@ model Order {
   quotePdfUrl         String?   @map("quote_pdf_url")
   quotePdfGeneratedAt DateTime? @map("quote_pdf_generated_at")
 
+  // Blind handoff flags — set on the order when the client picks up
+  // their own unit (blindPickup) or returns it themselves (blindReturn)
+  // without a SirReel rep present. When either flag is on, the matching
+  // *Instructions text is what the agent typed for the client to see in
+  // the portal (location, gate code, lockbox combination, where to
+  // park, etc.). The Dispatch board surfaces blindReturn loudly on the
+  // inbound lane so the unit doesn't sit unprocessed.
+  blindPickup              Boolean @default(false) @map("blind_pickup")
+  blindReturn              Boolean @default(false) @map("blind_return")
+  blindPickupInstructions  String? @map("blind_pickup_instructions") @db.Text
+  blindReturnInstructions  String? @map("blind_return_instructions") @db.Text
+
   booking      Booking?        @relation(fields: [bookingId], references: [id])
   company      Company         @relation(fields: [companyId], references: [id])
   agent        User            @relation("OrderAgent", fields: [agentId], references: [id])
