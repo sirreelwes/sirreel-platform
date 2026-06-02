@@ -216,6 +216,15 @@ export default function JobDetailPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  // Phase 7 Pass B — inline scope expander. Collapsed by default;
+  // click the row to expand the full booked-scope panel.
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const toggleOrder = (oid: string) =>
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      next.has(oid) ? next.delete(oid) : next.add(oid);
+      return next;
+    });
 
   const load = () => {
     setLoading(true);
@@ -542,53 +551,286 @@ export default function JobDetailPage() {
         )}
       </div>
 
-      {/* Orders */}
+      {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
+          per-order delivery/pickup arrangements an agent needs at a
+          glance: order.notes (free-text — where after-hours dropoff
+          instructions live today), stageBookingTerms.salesNotes, and
+          any line items whose pickupDate/returnDate diverges from the
+          order window. Hidden when no order has logistics data. */}
+      {(() => {
+        const rows = liveOrders
+          .map((o) => {
+            const dateOverrides = o.lineItems.filter(
+              (li) =>
+                (li.pickupDate && li.pickupDate !== o.startDate) ||
+                (li.returnDate && li.returnDate !== o.endDate),
+            );
+            const hasNotes = !!(o.notes && o.notes.trim());
+            const hasStageNotes = !!(o.stageBookingTerms?.salesNotes && o.stageBookingTerms.salesNotes.trim());
+            const hasStageDetail = !!o.stageBookingTerms;
+            if (!hasNotes && !hasStageNotes && !hasStageDetail && dateOverrides.length === 0) return null;
+            return { order: o, dateOverrides, hasNotes, hasStageNotes, hasStageDetail };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
+        if (rows.length === 0) return null;
+
+        return (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-white">Logistics & after-hours</h2>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
+            </div>
+            <div className="space-y-4">
+              {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
+                <div key={order.id} className="border-l-2 border-amber-900/40 pl-3">
+                  <div className="flex items-center gap-2 mb-1.5 text-[11px]">
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="font-mono text-zinc-300 hover:text-amber-400"
+                    >
+                      {order.orderNumber}
+                    </Link>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[order.status] || 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      {order.status}
+                    </span>
+                    <span className="text-zinc-500">
+                      {fmtDate(order.startDate)} – {fmtDate(order.endDate)}
+                    </span>
+                  </div>
+                  {hasNotes && (
+                    <div className="mb-2">
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Order notes</div>
+                      <div className="text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
+                    </div>
+                  )}
+                  {hasStageDetail && order.stageBookingTerms && (
+                    <div className="mb-2">
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Stage terms</div>
+                      <div className="text-xs text-zinc-300 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {order.stageBookingTerms.specificSpaces?.length > 0 && (
+                          <span>Spaces: <span className="text-zinc-100">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
+                        )}
+                        {order.stageBookingTerms.productionOfficeRental && (
+                          <span className="text-amber-300">+ Production office</span>
+                        )}
+                        {order.stageBookingTerms.securityGuardRequired && (
+                          <span className="text-amber-300">+ Security guard</span>
+                        )}
+                        <span>Daily: <span className="font-mono text-zinc-100">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
+                      </div>
+                      {hasStageNotes && order.stageBookingTerms.salesNotes && (
+                        <div className="mt-1 text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
+                      )}
+                    </div>
+                  )}
+                  {dateOverrides.length > 0 && (
+                    <div>
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Off-window pickup / return</div>
+                      <ul className="text-xs text-zinc-300 space-y-0.5">
+                        {dateOverrides.map((li) => (
+                          <li key={li.id} className="flex gap-2">
+                            <span className="text-zinc-500 min-w-[1rem]">·</span>
+                            <span className="flex-1">
+                              <span className="text-zinc-100">{li.description}</span>
+                              <span className="ml-2 text-zinc-500">
+                                {li.pickupDate ? fmtDate(li.pickupDate) : '—'} → {li.returnDate ? fmtDate(li.returnDate) : '—'}
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Orders — Phase 7 Pass B: collapsible cards. Click the row to
+          expand the booked scope, signed agreements, invoices, and any
+          per-vehicle BookingAssignments. Affordances (edit, send, sign,
+          invoice, payment) live on /orders/[id] — this is read-only
+          rollup for the live engagement. */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-white">Orders</h2>
-          <span className="text-xs text-zinc-500">{job.orders.length} total</span>
+          <span className="text-xs text-zinc-500">{job.orders.length} total · click to expand scope</span>
         </div>
         {job.orders.length === 0 ? (
           <div className="text-sm text-zinc-500">No orders on this job yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
-                  <th className="pb-2 pr-3">Order</th>
-                  <th className="pb-2 pr-3">Status</th>
-                  <th className="pb-2 pr-3">Dates</th>
-                  <th className="pb-2 pr-3 text-right">Total</th>
-                  <th className="pb-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {job.orders.map((o) => (
-                  <tr key={o.id} className="text-zinc-300">
-                    <td className="py-2.5 pr-3 font-mono text-xs">{o.orderNumber}</td>
-                    <td className="py-2.5 pr-3">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-400'}`}
-                      >
-                        {o.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-3 text-xs text-zinc-400">
+          <div className="space-y-2">
+            {job.orders.map((o) => {
+              const expanded = expandedOrders.has(o.id);
+              const orderBookings = job.bookings.filter(
+                (b) => b.items.some((bi) => o.lineItems.some((li) => li.assetCategory?.slug === bi.category.slug)),
+              );
+              return (
+                <div key={o.id} className="bg-zinc-950/40 border border-zinc-800 rounded-lg">
+                  <button
+                    onClick={() => toggleOrder(o.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
+                  >
+                    <span className="text-zinc-500 text-xs w-3">{expanded ? '▾' : '▸'}</span>
+                    <span className="font-mono text-xs text-zinc-300">{o.orderNumber}</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-400'}`}
+                    >
+                      {o.status}
+                    </span>
+                    <span className="text-xs text-zinc-400 whitespace-nowrap">
                       {fmtDate(o.startDate)} – {fmtDate(o.endDate)}
-                    </td>
-                    <td className="py-2.5 pr-3 text-right font-mono">{fmtMoney(o.total)}</td>
-                    <td className="py-2.5 text-right">
-                      <Link
-                        href={`/orders/${o.id}`}
-                        className="text-xs text-amber-500 hover:text-amber-400"
-                      >
-                        Open →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 ml-2">
+                      {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
+                    </span>
+                    <span className="ml-auto font-mono text-xs text-zinc-200">{fmtMoney(o.total)}</span>
+                    <Link
+                      href={`/orders/${o.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-amber-500 hover:text-amber-400 ml-2"
+                    >
+                      Open →
+                    </Link>
+                  </button>
+
+                  {expanded && (
+                    <div className="border-t border-zinc-800 px-4 py-3 space-y-4">
+                      {/* Booked scope */}
+                      {o.lineItems.length > 0 && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Booked scope</div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead className="text-[9px] uppercase tracking-wider text-zinc-500">
+                                <tr className="border-b border-zinc-800">
+                                  <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Days</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Rate</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Total</th>
+                                  <th className="text-left pb-1.5 pl-2 font-semibold">Lane / Pick</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-900">
+                                {o.lineItems.map((li) => (
+                                  <tr key={li.id} className="text-zinc-300">
+                                    <td className="py-1.5 pr-2">
+                                      <div className="text-zinc-100">{li.description}</div>
+                                      {li.qualifier && (
+                                        <div className="text-[10px] text-zinc-500">{li.qualifier}</div>
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{li.billableDays}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.rate)}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>
+                                    <td className="py-1.5 pl-2 text-[10px]">
+                                      {li.fulfillmentLane && (
+                                        <span className="text-zinc-400 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
+                                      )}
+                                      {li.pickStatus && (
+                                        <span className="text-amber-300 uppercase tracking-wider">{li.pickStatus.replace(/_/g, ' ')}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Per-vehicle assignments — only if a Booking
+                          for this order's categories has assignments. */}
+                      {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Per-vehicle assignments</div>
+                          <ul className="text-xs text-zinc-300 space-y-0.5">
+                            {orderBookings.flatMap((b) =>
+                              b.items.flatMap((bi) =>
+                                bi.assignments.map((a) => (
+                                  <li key={a.id} className="flex gap-2">
+                                    <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                    <span>
+                                      <span className="text-zinc-100">{bi.category.name}</span>
+                                      <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
+                                      <span className="ml-2 text-zinc-500">
+                                        {fmtDate(a.startDate)} → {fmtDate(a.endDate)}
+                                      </span>
+                                      <span className="ml-2 text-[9px] uppercase tracking-wider text-zinc-500">{a.status.replace(/_/g, ' ')}</span>
+                                    </span>
+                                  </li>
+                                )),
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Signed agreements */}
+                      {o.signedAgreements.length > 0 && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Agreements</div>
+                          <ul className="text-xs text-zinc-300 space-y-0.5">
+                            {o.signedAgreements.map((a) => (
+                              <li key={a.id} className="flex gap-2">
+                                <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                <span>
+                                  <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
+                                  <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-300">
+                                    {a.status.replace(/_/g, ' ')}
+                                  </span>
+                                  {a.signedAt && (
+                                    <span className="ml-2 text-zinc-500">
+                                      signed {fmtDate(a.signedAt)}
+                                      {a.signerName ? ` · ${a.signerName}` : ''}
+                                    </span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Invoices */}
+                      {o.invoices.length > 0 && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Invoices</div>
+                          <ul className="text-xs text-zinc-300 space-y-0.5">
+                            {o.invoices.map((inv) => (
+                              <li key={inv.id} className="flex gap-2">
+                                <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                <span className="flex-1">
+                                  <span className="font-mono text-zinc-100">{inv.invoiceNumber}</span>
+                                  <span className="ml-1.5 text-[9px] text-zinc-500 uppercase tracking-wider">{inv.type}</span>
+                                  <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-300">{inv.status}</span>
+                                  <span className="ml-2 text-zinc-500">
+                                    {fmtMoney(inv.amountPaid)} paid of {fmtMoney(inv.total)}
+                                    {inv.balanceDue > 0 && (
+                                      <span className="ml-1 text-amber-300"> · {fmtMoney(inv.balanceDue)} due</span>
+                                    )}
+                                  </span>
+                                  {inv.dueDate && inv.status !== 'PAID' && (
+                                    <span className="ml-2 text-[10px] text-zinc-500">due {fmtDate(inv.dueDate)}</span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -616,8 +858,83 @@ export default function JobDetailPage() {
           className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 resize-y"
         />
       </div>
+
+      {/* Activity — Phase 7 Pass B. AuditLog feed scoped to this job
+          and everything rooted on its orders (invoices, picklists,
+          payments). Newest first. Each row formats with who/what/when;
+          for UPDATE actions we surface the changed fields' before→after
+          when oldValues + newValues both have ≤3 entries (otherwise
+          fall back to a generic "updated" line). */}
+      {job.activity.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-white">Activity</h2>
+            <span className="text-xs text-zinc-500">{job.activity.length} event{job.activity.length === 1 ? '' : 's'}</span>
+          </div>
+          <ul className="space-y-1.5">
+            {job.activity.map((a) => {
+              const formatted = formatActivity(a);
+              return (
+                <li key={a.id} className="flex gap-3 text-xs text-zinc-300 border-l border-zinc-800 pl-3 py-0.5">
+                  <span className="text-zinc-500 whitespace-nowrap min-w-[60px]" title={new Date(a.createdAt).toLocaleString()}>
+                    {relativeAge(a.createdAt)}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="text-zinc-100">{a.user?.name || 'System'}</span>
+                    <span className="text-zinc-400"> {formatted.verb} </span>
+                    <span className="text-zinc-100">{formatted.what}</span>
+                    {formatted.details && (
+                      <span className="text-zinc-500"> · {formatted.details}</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
+}
+
+// Phase 7 Pass B — readable formatter for an AuditLog row. Keeps the
+// surface honest: we only synthesize the before→after diff when the
+// values are small + scalar. For anything bigger we just say what
+// entity moved, and the user clicks through to the entity for detail.
+function formatActivity(a: ActivityRow): { verb: string; what: string; details?: string } {
+  const action = (a.action || '').toUpperCase();
+  const verb =
+    action === 'CREATE' || action === 'CREATED'
+      ? 'created'
+      : action === 'DELETE' || action === 'DELETED'
+        ? 'deleted'
+        : action === 'STATUS_CHANGE'
+          ? 'changed status of'
+          : 'updated';
+  const what = a.entityType.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  // Try to render a compact diff for UPDATE actions.
+  if ((action === 'UPDATE' || action === 'STATUS_CHANGE') && a.newValues) {
+    const newKeys = Object.keys(a.newValues);
+    if (newKeys.length > 0 && newKeys.length <= 3) {
+      const parts = newKeys.map((k) => {
+        const nv = a.newValues?.[k];
+        const ov = a.oldValues?.[k];
+        const fmt = (v: unknown) => {
+          if (v == null) return '∅';
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+          return JSON.stringify(v).slice(0, 40);
+        };
+        if (ov !== undefined && ov !== nv) {
+          return `${k}: ${fmt(ov)} → ${fmt(nv)}`;
+        }
+        return `${k}: ${fmt(nv)}`;
+      });
+      return { verb, what, details: parts.join(', ') };
+    }
+  }
+
+  return { verb, what };
 }
 
 function Meta({ label, value, sub }: { label: string; value: string; sub?: string }) {
