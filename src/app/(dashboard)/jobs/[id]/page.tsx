@@ -51,12 +51,73 @@ interface JobContact {
   };
 }
 
+// Phase 7 Pass A — expanded order payload on the Job page.
+interface OrderLineItem {
+  id: string;
+  sortOrder: number;
+  type: string;
+  department: string;
+  description: string;
+  quantity: number;
+  rate: number;
+  billableDays: number;
+  lineTotal: number;
+  pickupDate: string | null;
+  returnDate: string | null;
+  fulfillmentLane: 'FLEET' | 'WAREHOUSE' | 'STAGE' | null;
+  pickStatus: 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null;
+  qualifier: string | null;
+  notes: string | null;
+  inventoryItem: { code: string; description: string | null } | null;
+  assetCategory: { name: string; slug: string } | null;
+}
+
+interface OrderSignedAgreement {
+  id: string;
+  contractType: string;
+  status: string;
+  signedAt: string | null;
+  signerName: string | null;
+  updatedAt: string;
+}
+
+interface OrderInvoice {
+  id: string;
+  invoiceNumber: string;
+  type: 'RENTAL' | 'LD';
+  status: 'DRAFT' | 'SENT' | 'PAID' | 'PARTIAL' | 'VOID';
+  total: number;
+  amountPaid: number;
+  balanceDue: number;
+  sentAt: string | null;
+  paidAt: string | null;
+  dueDate: string | null;
+  createdAt: string;
+}
+
+interface OrderStageBookingTerms {
+  id: string;
+  rentalDates: unknown; // JSON array of YYYY-MM-DD strings
+  dailyRate: number;
+  productionOfficeRental: boolean;
+  specificSpaces: string[];
+  securityGuardRequired: boolean;
+  salesNotes: string | null;
+}
+
 interface JobOrder {
   id: string;
   orderNumber: string;
   status: string;
   subtotal: number;
   total: number;
+  bookedTotal: number | null;
+  fleetReadyAt: string | null;
+  notes: string | null;
+  lineItems: OrderLineItem[];
+  signedAgreements: OrderSignedAgreement[];
+  invoices: OrderInvoice[];
+  stageBookingTerms: OrderStageBookingTerms | null;
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
@@ -80,12 +141,46 @@ interface JobDetail {
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
   orders: JobOrder[];
+  bookings: JobBooking[];
+  activity: ActivityRow[];
   fromInquiry: {
     id: string;
     source: 'MANUAL' | 'GMAIL' | 'WEB_FORM';
     createdAt: string;
     title: string;
   } | null;
+}
+
+interface JobBooking {
+  id: string;
+  bookingNumber: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  items: Array<{
+    id: string;
+    quantity: number;
+    holdRank: number;
+    category: { id: string; name: string; slug: string };
+    assignments: Array<{
+      id: string;
+      startDate: string;
+      endDate: string;
+      status: 'ASSIGNED' | 'CHECKED_OUT' | 'RETURNED' | 'SWAPPED';
+      asset: { id: string; unitName: string };
+    }>;
+  }>;
+}
+
+interface ActivityRow {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  oldValues: Record<string, unknown> | null;
+  newValues: Record<string, unknown> | null;
+  createdAt: string;
+  user: { id: string; name: string } | null;
 }
 
 // Compact relative-time formatter for the provenance line. "today" for
@@ -225,6 +320,34 @@ export default function JobDetailPage() {
   const dealValueLabel =
     job.orderTotal > 0 ? 'Order Total' : job.estimatedValue != null ? 'Estimated' : '—';
 
+  // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
+  // the expanded payload; no extra API call.
+  const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+  const rentalAgreement = liveOrders
+    .flatMap((o) => o.signedAgreements)
+    .find((a) => a.contractType === 'RENTAL_AGREEMENT');
+  const stageAgreement = liveOrders
+    .flatMap((o) => o.signedAgreements)
+    .find((a) => a.contractType === 'STAGE_CONTRACT');
+  const agreementStatus =
+    rentalAgreement?.status === 'SIGNED_BASELINE' || rentalAgreement?.status === 'SIGNED_NEGOTIATED'
+      ? 'signed'
+      : rentalAgreement
+        ? 'pending'
+        : 'none';
+  // Invoices: sum of balanceDue across active (non-VOID) RENTAL + LD invoices.
+  const liveInvoices = liveOrders.flatMap((o) => o.invoices).filter((i) => i.status !== 'VOID');
+  const totalBalanceDue = liveInvoices.reduce((s, i) => s + i.balanceDue, 0);
+  const totalInvoiced = liveInvoices.reduce((s, i) => s + i.total, 0);
+  // Loaded-ready rollup: count BOOKED-or-past orders that have reached
+  // LOADED_READY (or later). Skips CANCELLED + un-booked.
+  const fulfillmentReady = liveOrders.filter((o) =>
+    ['LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(o.status),
+  ).length;
+  const fulfillmentTotal = liveOrders.filter((o) =>
+    ['BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(o.status),
+  ).length;
+
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <button
@@ -301,6 +424,57 @@ export default function JobDetailPage() {
           <Meta label="Updated" value={fmtDate(job.updatedAt)} />
         </div>
 
+        {/* Phase 7 Pass A — at-a-glance engagement rollup. Each chip
+            is computed from the expanded payload (no extra fetches).
+            Hidden when the job has zero non-cancelled orders — the
+            chips read as garbage during the QUOTED-no-order phase. */}
+        {liveOrders.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+            <RollupChip
+              label="Rental agreement"
+              value={
+                agreementStatus === 'signed'
+                  ? 'Signed'
+                  : agreementStatus === 'pending'
+                    ? rentalAgreement?.status.replace(/_/g, ' ') || 'Pending'
+                    : 'None'
+              }
+              tone={agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : 'idle'}
+            />
+            {stageAgreement && (
+              <RollupChip
+                label="Stage agreement"
+                value={
+                  stageAgreement.status === 'SIGNED_BASELINE' || stageAgreement.status === 'SIGNED_NEGOTIATED'
+                    ? 'Signed'
+                    : stageAgreement.status.replace(/_/g, ' ')
+                }
+                tone={
+                  stageAgreement.status === 'SIGNED_BASELINE' || stageAgreement.status === 'SIGNED_NEGOTIATED'
+                    ? 'good'
+                    : 'warn'
+                }
+              />
+            )}
+            {liveInvoices.length > 0 && (
+              <RollupChip
+                label="Balance due"
+                value={totalBalanceDue > 0 ? fmtMoney(totalBalanceDue) : 'Paid in full'}
+                sub={totalInvoiced > 0 ? `of ${fmtMoney(totalInvoiced)}` : undefined}
+                tone={totalBalanceDue > 0 ? 'warn' : 'good'}
+              />
+            )}
+            {fulfillmentTotal > 0 && (
+              <RollupChip
+                label="Loaded ready"
+                value={`${fulfillmentReady} of ${fulfillmentTotal}`}
+                sub="orders"
+                tone={fulfillmentReady === fulfillmentTotal ? 'good' : 'warn'}
+              />
+            )}
+          </div>
+        )}
+
         {/* Production type profile — drives the fleet-assignment
             optimizer. Editable in place; saving triggers the Company
             most-common-profile cache refresh on the server. The legacy
@@ -322,7 +496,10 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Contacts */}
+      {/* Contacts — Phase 7 Pass A: surface phone (already fetched,
+          previously not rendered) so the agent can reach the client
+          after-hours via a single tap. tel: link triggers native
+          dialer on mobile / Mac Continuity Calling on desktop. */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-white mb-3">Contacts</h2>
         {job.jobContacts.length === 0 ? (
@@ -340,7 +517,21 @@ export default function JobDetailPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500 truncate">{jc.person.email}</div>
+                  <div className="text-xs text-zinc-500 truncate flex items-center gap-3 flex-wrap">
+                    {jc.person.email && (
+                      <a href={`mailto:${jc.person.email}`} className="hover:text-amber-500">
+                        {jc.person.email}
+                      </a>
+                    )}
+                    {jc.person.phone && (
+                      <a
+                        href={`tel:${jc.person.phone.replace(/[^\d+]/g, '')}`}
+                        className="text-zinc-400 hover:text-amber-500 font-mono"
+                      >
+                        {jc.person.phone}
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
                   {jc.role}
@@ -435,6 +626,34 @@ function Meta({ label, value, sub }: { label: string; value: string; sub?: strin
       <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</div>
       <div className="text-sm text-white mt-0.5 truncate">{value}</div>
       {sub && <div className="text-[10px] text-zinc-500">{sub}</div>}
+    </div>
+  );
+}
+
+// Phase 7 Pass A — at-a-glance rollup chip on the Job header.
+// Three tonal modes: good (emerald), warn (amber), idle (zinc).
+function RollupChip({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: 'good' | 'warn' | 'idle';
+}) {
+  const toneClass =
+    tone === 'good'
+      ? 'border-emerald-900/60 bg-emerald-950/30 text-emerald-200'
+      : tone === 'warn'
+        ? 'border-amber-900/60 bg-amber-950/30 text-amber-200'
+        : 'border-zinc-800 bg-zinc-950 text-zinc-400';
+  return (
+    <div className={`flex items-baseline gap-1.5 px-2.5 py-1 rounded-md border ${toneClass}`}>
+      <span className="text-[9px] uppercase tracking-wider font-semibold opacity-80">{label}</span>
+      <span className="text-[12px] font-semibold">{value}</span>
+      {sub && <span className="text-[10px] opacity-70">{sub}</span>}
     </div>
   );
 }

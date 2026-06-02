@@ -131,7 +131,7 @@ export default function JobsListPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by job name or code…"
+            placeholder="Search by job, code, company, or contact…"
             className="flex-1 min-w-[240px] px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500"
           />
           <label className="flex items-center gap-1.5 text-xs text-zinc-400 px-2 py-1">

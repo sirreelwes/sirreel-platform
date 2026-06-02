@@ -69,10 +69,29 @@ export async function GET(req: NextRequest) {
           : status
           ? { status }
           : {}),
+        // Phase 7 Pass A — agent-find-a-gig predicate. Match by
+        // job name, jobCode, company name, OR any jobContact's
+        // person.firstName/lastName/email. The Person hits go through
+        // the jobContacts relation so we don't widen to the entire
+        // people table; only contacts attached to this job count.
         ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
             { jobCode: { contains: search, mode: 'insensitive' } },
+            { company: { name: { contains: search, mode: 'insensitive' } } },
+            {
+              jobContacts: {
+                some: {
+                  person: {
+                    OR: [
+                      { firstName: { contains: search, mode: 'insensitive' } },
+                      { lastName: { contains: search, mode: 'insensitive' } },
+                      { email: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            },
           ],
         }),
       },
