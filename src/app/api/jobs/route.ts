@@ -9,6 +9,7 @@ import type {
   AgreementStatus,
   ContractType,
   ReviewDecision,
+  InvoiceStatus,
 } from '@prisma/client'
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
@@ -121,6 +122,20 @@ export async function GET(req: NextRequest) {
             signedAgreements: {
               select: { contractType: true, status: true },
             },
+            // Phase 7 billing rollup — read the STORED reconciled
+            // amountPaid / balanceDue / status columns that
+            // reconcileInvoiceTotals (lib/invoices/recordPayment.ts)
+            // maintains from CLEARED non-voided payments only.
+            // LINCHPIN: we do NOT re-sum Payment rows here — PENDING /
+            // SETTLED ACH must not bleed into "paid".
+            invoices: {
+              select: {
+                status: true,
+                balanceDue: true,
+                total: true,
+                dueDate: true,
+              },
+            },
             ...(includeQuoteStatus ? { quoteStatus: true } : {}),
             ...(includeDepartments
               ? {
@@ -210,6 +225,21 @@ export async function GET(req: NextRequest) {
         coi,
       }
 
+      // Phase 7 — billing rollup across the job's non-cancelled orders.
+      // Reads only the stored reconciled fields; no payment math here.
+      const allInvoices = liveOrders.flatMap(
+        (o) =>
+          (o as {
+            invoices?: {
+              status: InvoiceStatus
+              balanceDue: import('@prisma/client').Prisma.Decimal
+              total: import('@prisma/client').Prisma.Decimal
+              dueDate: Date | null
+            }[]
+          }).invoices || [],
+      )
+      const billing = rollupBillingState(allInvoices)
+
       const { orders, coiChecks: _ignoreCoi, ...rest } = j
       void _ignoreCoi
       return {
@@ -227,6 +257,7 @@ export async function GET(req: NextRequest) {
             }
           : null,
         paperwork,
+        billing,
         ...(includeQuoteStatus ? { pipelineColumn, quoteBreakdown } : {}),
         ...(includeDepartments ? { departments } : {}),
       }
@@ -399,4 +430,74 @@ function rollupCoiState(coi: {
   if (coi.humanDecision === 'APPROVED' && coi.coverageVerified) return { state: 'VERIFIED', expiresAt }
   // PENDING / COUNTERED / APPROVED-without-coverage all read as "in flight".
   return { state: 'PENDING', expiresAt }
+}
+
+// Phase 7 — billing rollup. Inputs are the stored, reconciled Invoice
+// columns; this function does NOT consult Payment rows. The columns it
+// reads (status, amountPaid, balanceDue) are maintained by
+// reconcileInvoiceTotals which counts only CLEARED non-voided payments,
+// so PENDING / SETTLED ACH cannot make a job read as PAID.
+//
+// Precedence (top → bottom): NOT_INVOICED → OVERDUE → PARTIALLY_PAID →
+// PAID → SENT → DRAFT. OVERDUE wins over PARTIALLY_PAID so an overdue
+// partial reads as urgent rather than "progress".
+export type BillingRollupState =
+  | 'NOT_INVOICED'
+  | 'DRAFT'
+  | 'SENT'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'OVERDUE'
+
+function rollupBillingState(
+  invoices: {
+    status: InvoiceStatus
+    balanceDue: import('@prisma/client').Prisma.Decimal
+    total: import('@prisma/client').Prisma.Decimal
+    dueDate: Date | null
+  }[],
+): { state: BillingRollupState; balanceDue: number } {
+  if (invoices.length === 0) return { state: 'NOT_INVOICED', balanceDue: 0 }
+
+  const live = invoices.filter((i) => i.status !== 'VOID')
+  if (live.length === 0) return { state: 'NOT_INVOICED', balanceDue: 0 }
+
+  const totalBalance = live.reduce((s, i) => s + Number(i.balanceDue), 0)
+  const totalBilled = live.reduce((s, i) => s + Number(i.total), 0)
+  const totalPaid = totalBilled - totalBalance
+
+  const now = Date.now()
+  const hasOverdue = live.some(
+    (i) =>
+      i.status !== 'PAID' &&
+      i.status !== 'DRAFT' &&
+      i.dueDate != null &&
+      i.dueDate.getTime() < now &&
+      Number(i.balanceDue) > 0,
+  )
+  if (hasOverdue) {
+    return { state: 'OVERDUE', balanceDue: round2(totalBalance) }
+  }
+
+  const allDraft = live.every((i) => i.status === 'DRAFT')
+  if (allDraft) return { state: 'DRAFT', balanceDue: round2(totalBalance) }
+
+  // PAID requires at least one non-DRAFT/non-VOID invoice (a job with
+  // only DRAFT invoices doesn't read as paid even if their balanceDue
+  // happens to be zero) and a zero aggregate balance.
+  const hasIssued = live.some((i) => i.status !== 'DRAFT')
+  if (hasIssued && totalBalance <= 0.005) {
+    return { state: 'PAID', balanceDue: 0 }
+  }
+
+  const hasPartial = live.some((i) => i.status === 'PARTIAL')
+  if (hasPartial || totalPaid > 0.005) {
+    return { state: 'PARTIALLY_PAID', balanceDue: round2(totalBalance) }
+  }
+
+  return { state: 'SENT', balanceDue: round2(totalBalance) }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
 }

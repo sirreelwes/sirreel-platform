@@ -41,11 +41,27 @@ const STATUS_BADGE: Record<JobStatus, string> = {
 // rollupAgreementState / rollupCoiState in the route for state derivation.
 type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
 type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
+// Phase 7 — billing rollup. Derived from the reconciled Invoice columns
+// only (status / balanceDue / total / dueDate). PENDING/SETTLED ACH
+// never bleeds into "paid" because reconcileInvoiceTotals counts
+// CLEARED-only when it writes amountPaid + balanceDue.
+type BillingRollupState =
+  | 'NOT_INVOICED'
+  | 'DRAFT'
+  | 'SENT'
+  | 'PARTIALLY_PAID'
+  | 'PAID'
+  | 'OVERDUE'
 
 interface PaperworkRollup {
   rental: { state: AgreementRollupState; count: number }
   stage: { state: AgreementRollupState; count: number } | null
   coi: { state: CoiRollupState; expiresAt?: string | null }
+}
+
+interface BillingRollup {
+  state: BillingRollupState
+  balanceDue: number
 }
 
 interface JobRow {
@@ -67,6 +83,7 @@ interface JobRow {
     isPrimary: boolean
   } | null
   paperwork?: PaperworkRollup
+  billing?: BillingRollup
   _count?: { orders: number }
 }
 
@@ -87,6 +104,15 @@ const COI_CHIP: Record<CoiRollupState, { label: string; cls: string }> = {
   VERIFIED: { label: 'Verified', cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900' },
   EXPIRED:  { label: 'Expired',  cls: 'bg-red-950/40 text-red-300 border-red-900' },
   ISSUE:    { label: 'Issue',    cls: 'bg-red-950/40 text-red-300 border-red-900' },
+}
+
+const BILLING_CHIP: Record<BillingRollupState, { label: string; cls: string }> = {
+  NOT_INVOICED:    { label: 'Not invoiced',    cls: 'bg-zinc-900 text-zinc-600 border-zinc-800' },
+  DRAFT:           { label: 'Draft',           cls: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
+  SENT:            { label: 'Sent',            cls: 'bg-blue-950/40 text-blue-300 border-blue-900' },
+  PARTIALLY_PAID:  { label: 'Partially paid',  cls: 'bg-amber-950/40 text-amber-300 border-amber-900' },
+  PAID:            { label: 'Paid',            cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900' },
+  OVERDUE:         { label: 'Overdue',         cls: 'bg-red-950/40 text-red-300 border-red-900' },
 }
 
 function fmtDate(d: string | null) {
@@ -221,15 +247,12 @@ export default function JobsListPage() {
             )}
             {jobs.map((j) => {
               const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
-              // Phase 7 — paperwork sub-row visibility. Hidden entirely
-              // when no paperwork exists in any slot to avoid stuffing
-              // "No paperwork yet." under every QUOTED-shell row.
+              // Phase 7 — sub-row content. The billing chip always
+              // renders (NOT_INVOICED is meaningful information), so
+              // there's no "empty sub-row" case anymore. Paperwork
+              // chips still drop out when nothing in that slot exists.
               const paperwork = j.paperwork
-              const hasAnyPaperwork =
-                !!paperwork &&
-                (paperwork.rental.state !== 'NONE' ||
-                  (paperwork.stage && paperwork.stage.state !== 'NONE') ||
-                  paperwork.coi.state !== 'NONE')
+              const billing = j.billing
               return (
                 <Fragment key={j.id}>
                   <tr className="hover:bg-zinc-800/40 transition-colors border-b-0">
@@ -285,7 +308,7 @@ export default function JobsListPage() {
                   </tr>
                   <tr className="hover:bg-zinc-800/40 transition-colors">
                     <td colSpan={9} className="px-3 pb-2 pt-0">
-                      <PaperworkChips paperwork={paperwork} hasAny={hasAnyPaperwork} />
+                      <SubRowChips paperwork={paperwork} billing={billing} />
                     </td>
                   </tr>
                 </Fragment>
@@ -299,20 +322,17 @@ export default function JobsListPage() {
 }
 
 // Phase 7 — sub-row chip strip. Compact, muted; reads as a second
-// line on each job row. Hidden chips for paperwork that doesn't exist
-// at all (no NONE chips when nothing has even been started).
-function PaperworkChips({
+// line on each job row. Paperwork chips drop out when their slot is
+// empty; the billing chip always renders since NOT_INVOICED is itself
+// useful information for a triage scan.
+function SubRowChips({
   paperwork,
-  hasAny,
+  billing,
 }: {
   paperwork: PaperworkRollup | undefined
-  hasAny: boolean
+  billing: BillingRollup | undefined
 }) {
-  if (!paperwork || !hasAny) {
-    return <div className="text-[10px] text-zinc-600 italic">No paperwork yet.</div>
-  }
-
-  const expiryLabel = paperwork.coi.expiresAt
+  const expiryLabel = paperwork?.coi.expiresAt
     ? new Date(paperwork.coi.expiresAt).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -320,15 +340,24 @@ function PaperworkChips({
       })
     : null
 
+  // Billing chip tail. Show "$X due" when there's a positive balance,
+  // and omit the "Billing:" label entirely for NOT_INVOICED — the chip
+  // reads as a standalone "Not invoiced" tag.
+  const billingTail =
+    billing && billing.balanceDue > 0
+      ? `${fmtMoney(billing.balanceDue)} due`
+      : null
+  const billingLabel = billing && billing.state === 'NOT_INVOICED' ? null : 'Billing'
+
   return (
     <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-      {paperwork.rental.state !== 'NONE' && (
+      {paperwork?.rental.state && paperwork.rental.state !== 'NONE' && (
         <Chip label="Rental" state={AGREEMENT_CHIP[paperwork.rental.state]} />
       )}
-      {paperwork.stage && paperwork.stage.state !== 'NONE' && (
+      {paperwork?.stage && paperwork.stage.state !== 'NONE' && (
         <Chip label="Stage" state={AGREEMENT_CHIP[paperwork.stage.state]} />
       )}
-      {paperwork.coi.state !== 'NONE' && (
+      {paperwork?.coi.state && paperwork.coi.state !== 'NONE' && (
         <Chip
           label="COI"
           state={COI_CHIP[paperwork.coi.state]}
@@ -339,6 +368,9 @@ function PaperworkChips({
           }
         />
       )}
+      {billing && (
+        <Chip label={billingLabel} state={BILLING_CHIP[billing.state]} tail={billingTail} />
+      )}
     </div>
   )
 }
@@ -348,7 +380,7 @@ function Chip({
   state,
   tail,
 }: {
-  label: string
+  label: string | null
   state: { label: string; cls: string }
   tail?: string | null
 }) {
@@ -356,7 +388,9 @@ function Chip({
     <span
       className={`inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded border ${state.cls}`}
     >
-      <span className="font-semibold uppercase tracking-wider opacity-70">{label}</span>
+      {label && (
+        <span className="font-semibold uppercase tracking-wider opacity-70">{label}</span>
+      )}
       <span className="font-semibold">{state.label}</span>
       {tail && <span className="opacity-60">· {tail}</span>}
     </span>
