@@ -47,6 +47,11 @@ interface FleetCard {
   effectivePickupDate: string
   effectiveReturnDate: string
   priority: Priority | null
+  // Blind handoff flags from the parent Order. blindReturn drives
+  // the loud "needs check-in" inbound banner; blindPickup drives a
+  // light marker on outbound for prep awareness.
+  blindPickup: boolean
+  blindReturn: boolean
 }
 
 interface WarehouseCard {
@@ -63,6 +68,8 @@ interface WarehouseCard {
   effectiveReturnDate: string
   pickListStatus: PickListStatus | null
   priority: Priority | null
+  blindPickup: boolean
+  blindReturn: boolean
 }
 
 type DispatchCard = FleetCard | WarehouseCard
@@ -445,79 +452,133 @@ function LoadStat({ label, n, color }: { label: string; n: number; color: 'zinc'
 }
 
 // ─── Card views ───────────────────────────────────────────────────
+// Blind-return alert: when an inbound (ON_JOB) card has blindReturn
+// set, the unit is coming back without a SirReel rep present. The
+// agent already typed the drop-off instructions, but ops still needs
+// to physically check the unit in. The alert clears the moment ops
+// marks the Order RETURNED (the card drops off the inbound lane).
+function isInboundBlindReturn(c: { status: ListStatus; blindReturn: boolean }) {
+  return c.status === 'ON_JOB' && c.blindReturn
+}
+// Outbound blind-pickup: lighter heads-up so the warehouse / fleet
+// can stage the unit knowing nobody's coming for a face-to-face.
+function isOutboundBlindPickup(c: { status: ListStatus; blindPickup: boolean }) {
+  return (c.status === 'BOOKED' || c.status === 'LOADED_READY') && c.blindPickup
+}
+
 function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
+  const blindReturn = isInboundBlindReturn(c)
+  const blindPickup = isOutboundBlindPickup(c)
   return (
     <Link
       href={`/orders/${c.orderId}`}
-      className={`block px-3 py-2.5 rounded-lg border transition-colors ${
-        overdue
-          ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
-          : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+      className={`block rounded-lg border transition-colors overflow-hidden ${
+        blindReturn
+          ? 'border-red-500 bg-red-950/40 hover:border-red-400 shadow-[0_0_0_1px_rgba(239,68,68,0.5)]'
+          : overdue
+            ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
+            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
       }`}
     >
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">FLEET</span>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
-          {c.status.replace('_', ' ')}
-        </span>
-        {c.priority && c.priority !== 'STANDARD' && (
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
-            {c.priority}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">FLEET</span>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
+            {c.status.replace('_', ' ')}
           </span>
-        )}
-        <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+          {c.priority && c.priority !== 'STANDARD' && (
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
+              {c.priority}
+            </span>
+          )}
+          {blindPickup && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-200 border border-amber-800/60"
+              title="Blind pickup — client picks up the unit themselves; stage and leave per instructions"
+            >
+              ⊘↗ Blind pickup
+            </span>
+          )}
+          <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+        </div>
+        <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+          {c.assetUnitName || c.categoryName || 'Vehicle'}
+        </div>
+        <div className="mt-0.5 text-[12px] text-zinc-400 truncate">
+          {c.companyName}
+          {c.jobName && <span className="text-zinc-500"> · {c.jobName}</span>}
+        </div>
+        <div className="mt-1 text-[11px] text-zinc-500">
+          out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
+        </div>
       </div>
-      <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
-        {c.assetUnitName || c.categoryName || 'Vehicle'}
-      </div>
-      <div className="mt-0.5 text-[12px] text-zinc-400 truncate">
-        {c.companyName}
-        {c.jobName && <span className="text-zinc-500"> · {c.jobName}</span>}
-      </div>
-      <div className="mt-1 text-[11px] text-zinc-500">
-        out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
-      </div>
+      {blindReturn && (
+        <div className="bg-red-600 text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+          <span aria-hidden="true">⚠</span>
+          Blind return — needs check-in
+        </div>
+      )}
     </Link>
   )
 }
 
 function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean }) {
+  const blindReturn = isInboundBlindReturn(c)
+  const blindPickup = isOutboundBlindPickup(c)
   return (
     <Link
       href={`/orders/${c.orderId}`}
-      className={`block px-3 py-2.5 rounded-lg border transition-colors ${
-        overdue
-          ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
-          : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+      className={`block rounded-lg border transition-colors overflow-hidden ${
+        blindReturn
+          ? 'border-red-500 bg-red-950/40 hover:border-red-400 shadow-[0_0_0_1px_rgba(239,68,68,0.5)]'
+          : overdue
+            ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
+            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
       }`}
     >
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300">WAREHOUSE</span>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
-          {c.status.replace('_', ' ')}
-        </span>
-        {c.pickListStatus && (
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${PICKLIST_COLOR[c.pickListStatus]}`}>
-            {c.pickListStatus.replace('_', ' ')}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300">WAREHOUSE</span>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
+            {c.status.replace('_', ' ')}
           </span>
-        )}
-        {c.priority && c.priority !== 'STANDARD' && (
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
-            {c.priority}
-          </span>
-        )}
-        <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+          {c.pickListStatus && (
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${PICKLIST_COLOR[c.pickListStatus]}`}>
+              {c.pickListStatus.replace('_', ' ')}
+            </span>
+          )}
+          {c.priority && c.priority !== 'STANDARD' && (
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${PRIORITY_COLOR[c.priority]}`}>
+              {c.priority}
+            </span>
+          )}
+          {blindPickup && (
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-200 border border-amber-800/60"
+              title="Blind pickup — client picks up the load themselves; stage and leave per instructions"
+            >
+              ⊘↗ Blind pickup
+            </span>
+          )}
+          <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+        </div>
+        <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+          {c.companyName}
+          {c.jobName && <span className="text-zinc-400 font-normal"> · {c.jobName}</span>}
+        </div>
+        <div className="mt-0.5 text-[12px] text-zinc-400">
+          {c.lineCount} line{c.lineCount === 1 ? '' : 's'}
+        </div>
+        <div className="mt-1 text-[11px] text-zinc-500">
+          out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
+        </div>
       </div>
-      <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
-        {c.companyName}
-        {c.jobName && <span className="text-zinc-400 font-normal"> · {c.jobName}</span>}
-      </div>
-      <div className="mt-0.5 text-[12px] text-zinc-400">
-        {c.lineCount} line{c.lineCount === 1 ? '' : 's'}
-      </div>
-      <div className="mt-1 text-[11px] text-zinc-500">
-        out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
-      </div>
+      {blindReturn && (
+        <div className="bg-red-600 text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+          <span aria-hidden="true">⚠</span>
+          Blind return — needs check-in
+        </div>
+      )}
     </Link>
   )
 }

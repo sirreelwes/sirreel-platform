@@ -72,6 +72,12 @@ export interface FleetCard {
   effectiveReturnDate: string  // YYYY-MM-DD
   // Surfaced badges per the locked MVP scope.
   priority: BookingPriority | null
+  // Blind handoff flags from the parent Order. Light prep marker on
+  // outbound when blindPickup; loud "needs check-in" alert on inbound
+  // when blindReturn. Both auto-clear when the Order moves off the
+  // board (BOOKED/LOADED_READY/ON_JOB → RETURNED/etc).
+  blindPickup: boolean
+  blindReturn: boolean
 }
 
 export interface WarehouseCard {
@@ -93,6 +99,8 @@ export interface WarehouseCard {
   // defensive against post-book line edits — parking lot from Phase 2).
   pickListStatus: PickListStatus | null
   priority: BookingPriority | null
+  blindPickup: boolean
+  blindReturn: boolean
 }
 
 export type DispatchCard = FleetCard | WarehouseCard
@@ -185,6 +193,13 @@ export async function GET(req: NextRequest) {
           id: true,
           orderNumber: true,
           status: true,
+          // Blind handoff flags drive lane-side treatment. Loud red
+          // "needs check-in" banner on inbound blindReturn cards
+          // (clears via card disappearance when the Order transitions
+          // to RETURNED — the existing return flow). Lighter prep
+          // marker on outbound blindPickup cards.
+          blindPickup: true,
+          blindReturn: true,
           company: { select: { id: true, name: true } },
           job: { select: { id: true, jobCode: true, name: true } },
           pickList: { select: { id: true, status: true } },
@@ -260,6 +275,7 @@ export async function GET(req: NextRequest) {
 
   // ── Build cards ──────────────────────────────────────────────
   function toFleetCard(r: ResolvedLine): FleetCard {
+    const o = r.line.order as typeof r.line.order & { blindPickup?: boolean; blindReturn?: boolean }
     return {
       kind: 'FLEET',
       cardId: r.line.id,
@@ -275,6 +291,8 @@ export async function GET(req: NextRequest) {
       effectivePickupDate: r.pickupYmd,
       effectiveReturnDate: r.returnYmd,
       priority: r.priority,
+      blindPickup: !!o.blindPickup,
+      blindReturn: !!o.blindReturn,
     }
   }
 
@@ -300,6 +318,7 @@ export async function GET(req: NextRequest) {
   }
   function toWarehouseCard(key: string, g: { rows: ResolvedLine[]; pickupYmd: string; returnYmd: string }): WarehouseCard {
     const head = g.rows[0].line
+    const ho = head.order as typeof head.order & { blindPickup?: boolean; blindReturn?: boolean }
     return {
       kind: 'WAREHOUSE',
       cardId: `wh:${key}`,
@@ -314,6 +333,8 @@ export async function GET(req: NextRequest) {
       effectiveReturnDate: g.returnYmd,
       pickListStatus: head.order.pickList?.status ?? null,
       priority: g.rows[0].priority,
+      blindPickup: !!ho.blindPickup,
+      blindReturn: !!ho.blindReturn,
     }
   }
 
