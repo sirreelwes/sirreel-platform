@@ -1,0 +1,29 @@
+-- Invoice-number rebase — June 3, 2026.
+--
+-- Bumps `sr_invoice_number_seq` (RENTAL invoice number generator) so HQ
+-- invoices sit ~+10K above RW's current max, rounded to the next clean
+-- 10K boundary. While RW (max ~12,500 as of 2026-06-03) and HQ run
+-- side-by-side, the two number bands stay visually unmistakable:
+--
+--   RW   ... 12,500 (and climbing)
+--   HQ   30,000+ → SR-INV-30000, SR-INV-30001, ...
+--
+-- The next call to nextInvoiceNumber('RENTAL') will return SR-INV-30000
+-- (sequence emits 30000 directly — no zero-pad effect once we cross the
+-- 4-digit ceiling, which is the right look).
+--
+-- `sr_ld_invoice_number_seq` (LD invoices, SR-LDI-NNNN prefix) is left
+-- at its default starting value of 1. LD has its own distinct prefix
+-- and isn't part of the RW collision window — RW has no SR-LDI series.
+-- Re-run the ALTER below if a future call decides to align LD on the
+-- same band.
+--
+-- Pre-state confirmed via pg_sequences just before this ran:
+--   sr_invoice_number_seq: last_value=1 (one DRAFT invoice, SR-INV-0001)
+--
+-- This script is idempotent only in the sense that re-running it
+-- resets the sequence back to 30000. If invoices have already been
+-- issued from the new band, re-running would clash with them — don't
+-- re-run after invoices >= SR-INV-30000 exist.
+
+ALTER SEQUENCE sr_invoice_number_seq RESTART WITH 30000;
