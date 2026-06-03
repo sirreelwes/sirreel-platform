@@ -21,8 +21,8 @@ type CompanyDetail = {
 };
 
 const TIER_STYLES: Record<string, string> = {
-  VIP: "bg-amber-100 text-amber-800", PREFERRED: "bg-blue-100 text-blue-800",
-  STANDARD: "bg-zinc-200 text-zinc-700", NEW: "bg-emerald-100 text-emerald-800",
+  VIP: "bg-chip-warn-bg text-chip-warn-fg", PREFERRED: "bg-cadence-booked-bg text-cadence-booked-fg",
+  STANDARD: "bg-chip-neutral-bg text-chip-neutral-fg", NEW: "bg-chip-good-bg text-chip-good-fg",
 };
 
 const fmt = (n: string | number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(n));
@@ -125,33 +125,34 @@ export default function CompanyDetailPage() {
   };
 
   if (loading || !company) {
-    return <div className="p-6 flex items-center justify-center min-h-[400px]"><p className="text-zinc-500">Loading...</p></div>;
+    return <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)] flex items-center justify-center"><p className="text-lt-fg3">Loading...</p></div>;
   }
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto">
-      <button onClick={() => router.push("/crm")} className="text-sm text-zinc-400 hover:text-white mb-4 inline-block">&larr; Back to Clients</button>
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="max-w-[1200px] mx-auto">
+      <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
 
       {/* Header */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-semibold text-white">{company.name}</h1>
+              <h1 className="text-2xl font-semibold text-lt-fg">{company.name}</h1>
               <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TIER_STYLES[company.tier]}`}>{company.tier}</span>
             </div>
-            <p className="text-zinc-400 text-sm">{company.industry.replace(/_/g, " ")}</p>
+            <p className="text-lt-fg2 text-sm">{company.industry.replace(/_/g, " ")}</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-semibold text-white font-mono">{fmt(company.totalSpend)}</p>
-            <p className="text-sm text-zinc-400">{company.totalBookings} bookings | {company.orders.length} orders</p>
+            <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
+            <p className="text-sm text-lt-fg2">{company.totalBookings} bookings | {company.orders.length} orders</p>
           </div>
         </div>
         <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
-          <div><span className="text-zinc-500">Website</span><p className="text-white mt-0.5">{company.website || "--"}</p></div>
-          <div><span className="text-zinc-500">Billing Email</span><p className="text-white mt-0.5">{company.billingEmail || "--"}</p></div>
-          <div><span className="text-zinc-500">COI</span><p className="text-white mt-0.5">{company.coiOnFile ? `On file (exp ${fmtDate(company.coiExpiry)})` : "Missing"}</p></div>
-          <div><span className="text-zinc-500">Notes</span><p className="text-zinc-300 mt-0.5 text-xs">{company.notes || "--"}</p></div>
+          <div><span className="text-lt-fg3">Website</span><p className="text-lt-fg mt-0.5">{company.website || "--"}</p></div>
+          <div><span className="text-lt-fg3">Billing Email</span><p className="text-lt-fg mt-0.5">{company.billingEmail || "--"}</p></div>
+          <div><span className="text-lt-fg3">COI</span><p className="text-lt-fg mt-0.5">{company.coiOnFile ? `On file (exp ${fmtDate(company.coiExpiry)})` : "Missing"}</p></div>
+          <div><span className="text-lt-fg3">Notes</span><p className="text-lt-fg2 mt-0.5 text-xs">{company.notes || "--"}</p></div>
         </div>
       </div>
 
@@ -159,35 +160,35 @@ export default function CompanyDetailPage() {
         {/* Left: Contacts + Orders */}
         <div className="col-span-2 space-y-6">
           {/* Contacts + Affiliations */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-semibold text-white">Contacts on Shows</h2>
+              <h2 className="text-base font-semibold text-lt-fg">Contacts on Shows</h2>
               <button onClick={() => setShowLinkContact(true)}
-                className="text-xs text-blue-400 hover:text-blue-300 font-medium">+ Link Contact</button>
+                className="text-xs text-lt-fg hover:text-black font-medium">+ Link Contact</button>
             </div>
             {company.affiliations.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No contacts linked. Add a freelancer who worked on a production with this company.</p>
+              <p className="text-lt-fg3 text-sm">No contacts linked. Add a freelancer who worked on a production with this company.</p>
             ) : (
               <div className="space-y-2">
                 {company.affiliations.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0 group">
+                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-lt-hairline/50 last:border-0 group">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm text-white font-medium">{a.person.firstName} {a.person.lastName}</p>
-                        {a.isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Current</span>}
+                        <p className="text-sm text-lt-fg font-medium">{a.person.firstName} {a.person.lastName}</p>
+                        {a.isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">Current</span>}
                       </div>
-                      <p className="text-xs text-zinc-400">
-                        {a.productionName ? <span className="text-zinc-300">{a.productionName}</span> : ""}
+                      <p className="text-xs text-lt-fg2">
+                        {a.productionName ? <span className="text-lt-fg2">{a.productionName}</span> : ""}
                         {a.productionName && a.roleOnShow ? " | " : ""}
                         {a.roleOnShow ? a.roleOnShow.replace(/_/g, " ") : (a.productionName ? "" : a.person.role.replace(/_/g, " "))}
                       </p>
                     </div>
-                    <div className="text-right text-xs text-zinc-400 mr-3">
+                    <div className="text-right text-xs text-lt-fg2 mr-3">
                       <p>{a.person.email}</p>
                       <p>{a.person.phone || ""}</p>
                     </div>
                     <button onClick={() => removeAffiliation(a.id)}
-                      className="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-300 transition-opacity">Remove</button>
+                      className="opacity-0 group-hover:opacity-100 text-xs text-chip-bad-fg hover:opacity-70 transition-opacity">Remove</button>
                   </div>
                 ))}
               </div>
@@ -195,13 +196,13 @@ export default function CompanyDetailPage() {
           </div>
 
           {/* Orders */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-            <h2 className="text-base font-semibold text-white mb-3">Orders</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+            <h2 className="text-base font-semibold text-lt-fg mb-3">Orders</h2>
             {company.orders.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No orders yet</p>
+              <p className="text-lt-fg3 text-sm">No orders yet</p>
             ) : (
               <table className="w-full text-sm">
-                <thead><tr className="text-zinc-500 text-xs uppercase border-b border-zinc-800">
+                <thead><tr className="text-lt-fg3 text-xs uppercase border-b border-lt-hairline">
                   <th className="py-2 text-left font-medium">Order #</th>
                   <th className="py-2 text-left font-medium">Description</th>
                   <th className="py-2 font-medium">Status</th>
@@ -211,12 +212,12 @@ export default function CompanyDetailPage() {
                 <tbody>
                   {company.orders.map((o) => (
                     <tr key={o.id} onClick={() => router.push(`/orders/${o.id}`)}
-                      className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer">
-                      <td className="py-2 text-white font-mono text-xs">{o.orderNumber}</td>
-                      <td className="py-2 text-zinc-400 text-xs">{o.description || "--"}</td>
-                      <td className="py-2 text-center"><span className="text-xs text-zinc-300">{o.status.replace("_", " ")}</span></td>
-                      <td className="py-2 text-right text-white font-mono text-xs">{fmt(o.total)}</td>
-                      <td className="py-2 text-right text-zinc-400 text-xs">{fmtDate(o.createdAt)}</td>
+                      className="border-b border-lt-hairline/50 hover:bg-lt-inner/30 cursor-pointer">
+                      <td className="py-2 text-lt-fg font-mono text-xs">{o.orderNumber}</td>
+                      <td className="py-2 text-lt-fg2 text-xs">{o.description || "--"}</td>
+                      <td className="py-2 text-center"><span className="text-xs text-lt-fg2">{o.status.replace("_", " ")}</span></td>
+                      <td className="py-2 text-right text-lt-fg font-mono text-xs">{fmt(o.total)}</td>
+                      <td className="py-2 text-right text-lt-fg2 text-xs">{fmtDate(o.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -227,55 +228,55 @@ export default function CompanyDetailPage() {
 
         {/* Right: Activity Feed */}
         <div className="space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-            <h2 className="text-base font-semibold text-white mb-3">Log Activity</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+            <h2 className="text-base font-semibold text-lt-fg mb-3">Log Activity</h2>
             <div className="space-y-2">
               <select value={actType} onChange={(e) => setActType(e.target.value)}
-                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white">
+                className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg">
                 <option value="NOTE">Note</option><option value="CALL">Call</option>
                 <option value="EMAIL">Email</option><option value="MEETING">Meeting</option>
                 <option value="FOLLOW_UP">Follow-Up</option>
               </select>
               <input type="text" value={actSubject} onChange={(e) => setActSubject(e.target.value)} placeholder="Subject (optional)"
-                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500" />
+                className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3" />
               <textarea value={actBody} onChange={(e) => setActBody(e.target.value)} placeholder="What happened?" rows={3}
-                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 resize-none" />
+                className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 resize-none" />
               {(actType === "FOLLOW_UP" || actType === "CALL") && (
                 <input type="date" value={actDueDate} onChange={(e) => setActDueDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg" />
               )}
               <button onClick={addActivity} disabled={!actBody || saving}
-                className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg transition-colors">
+                className="w-full py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg transition-colors">
                 {saving ? "Saving..." : "Log"}
               </button>
             </div>
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-            <h2 className="text-base font-semibold text-white mb-3">Activity History</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+            <h2 className="text-base font-semibold text-lt-fg mb-3">Activity History</h2>
             {company.activities.length === 0 ? (
-              <p className="text-zinc-500 text-sm">No activity logged yet</p>
+              <p className="text-lt-fg3 text-sm">No activity logged yet</p>
             ) : (
               <div className="space-y-3">
                 {company.activities.map((a) => (
-                  <div key={a.id} className="border-b border-zinc-800/50 pb-3 last:border-0">
+                  <div key={a.id} className="border-b border-lt-hairline/50 pb-3 last:border-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        a.type === "CALL" ? "bg-blue-900/40 text-blue-300" :
-                        a.type === "EMAIL" ? "bg-purple-900/40 text-purple-300" :
-                        a.type === "MEETING" ? "bg-amber-900/40 text-amber-300" :
-                        a.type === "FOLLOW_UP" ? "bg-red-900/40 text-red-300" :
-                        "bg-zinc-700 text-zinc-300"
+                        a.type === "CALL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                        a.type === "EMAIL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                        a.type === "MEETING" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                        a.type === "FOLLOW_UP" ? "bg-chip-bad-bg text-chip-bad-fg" :
+                        "bg-lt-inner text-lt-fg2"
                       }`}>{a.type.replace("_", " ")}</span>
-                      <span className="text-[10px] text-zinc-500">{a.agent.name}</span>
-                      <span className="text-[10px] text-zinc-600">{fmtDate(a.createdAt)}</span>
+                      <span className="text-[10px] text-lt-fg3">{a.agent.name}</span>
+                      <span className="text-[10px] text-lt-fg3">{fmtDate(a.createdAt)}</span>
                       {a.dueDate && !a.completed && (
-                        <button onClick={() => completeActivity(a.id)} className="text-[10px] text-emerald-400 hover:text-emerald-300 ml-auto">Complete</button>
+                        <button onClick={() => completeActivity(a.id)} className="text-[10px] text-chip-good-fg hover:opacity-70 ml-auto">Complete</button>
                       )}
-                      {a.completed && <span className="text-[10px] text-emerald-600 ml-auto">Done</span>}
+                      {a.completed && <span className="text-[10px] text-chip-good-fg ml-auto">Done</span>}
                     </div>
-                    {a.subject && <p className="text-xs text-white font-medium">{a.subject}</p>}
-                    <p className="text-xs text-zinc-400">{a.body}</p>
+                    {a.subject && <p className="text-xs text-lt-fg font-medium">{a.subject}</p>}
+                    <p className="text-xs text-lt-fg2">{a.body}</p>
                   </div>
                 ))}
               </div>
@@ -287,25 +288,25 @@ export default function CompanyDetailPage() {
       {/* Link Contact Modal */}
       {showLinkContact && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLinkContact(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-4">Link Contact to {company.name}</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-lt-fg mb-4">Link Contact to {company.name}</h2>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Search Contact</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Search Contact</label>
                 <input type="text" value={contactSearch} onChange={(e) => searchContacts(e.target.value)}
                   placeholder="Type name or email..."
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
                 {contactResults.length > 0 && !selectedContactId && (
-                  <div className="mt-2 bg-zinc-800 border border-zinc-700 rounded-lg max-h-60 overflow-y-auto">
+                  <div className="mt-2 bg-lt-inner border border-lt-hairline rounded-lg max-h-60 overflow-y-auto">
                     {contactResults.map((c) => (
                       <button key={c.id} onClick={() => {
                         setSelectedContactId(c.id);
                         setContactSearch(`${c.firstName} ${c.lastName} (${c.email})`);
                         setContactResults([]);
-                      }} className="w-full text-left px-3 py-2 hover:bg-zinc-700 text-sm border-b border-zinc-700 last:border-0">
-                        <p className="text-white">{c.firstName} {c.lastName}</p>
-                        <p className="text-xs text-zinc-400">{c.email} | {c.role.replace(/_/g, " ")}</p>
+                      }} className="w-full text-left px-3 py-2 hover:bg-lt-inner text-sm border-b border-lt-hairline last:border-0">
+                        <p className="text-lt-fg">{c.firstName} {c.lastName}</p>
+                        <p className="text-xs text-lt-fg2">{c.email} | {c.role.replace(/_/g, " ")}</p>
                       </button>
                     ))}
                   </div>
@@ -313,16 +314,16 @@ export default function CompanyDetailPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Production / Show Name</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Production / Show Name</label>
                 <input type="text" value={linkProduction} onChange={(e) => setLinkProduction(e.target.value)}
                   placeholder="e.g. Stranger Things S5"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
               </div>
 
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Role on This Show</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Role on This Show</label>
                 <select value={linkRole} onChange={(e) => setLinkRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
                   <option value="">(same as contact default)</option>
                   <option value="UPM">UPM</option>
                   <option value="PRODUCER">Producer</option>
@@ -336,20 +337,21 @@ export default function CompanyDetailPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={linkIsCurrent} onChange={(e) => setLinkIsCurrent(e.target.checked)}
                   className="w-4 h-4 rounded" />
-                <span className="text-sm text-zinc-300">Currently active on this show</span>
+                <span className="text-sm text-lt-fg2">Currently active on this show</span>
               </label>
             </div>
 
             <div className="flex gap-3 mt-5">
               <button onClick={linkContact} disabled={!selectedContactId}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
                 Link Contact
               </button>
-              <button onClick={() => setShowLinkContact(false)} className="px-4 py-2 text-zinc-400 hover:text-white text-sm">Cancel</button>
+              <button onClick={() => setShowLinkContact(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>
             </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

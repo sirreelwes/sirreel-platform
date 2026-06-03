@@ -27,10 +27,10 @@ type FollowUp = {
 };
 
 const TIER_STYLES: Record<string, string> = {
-  VIP: "bg-amber-100 text-amber-800",
-  PREFERRED: "bg-blue-100 text-blue-800",
-  STANDARD: "bg-zinc-200 text-zinc-700",
-  NEW: "bg-emerald-100 text-emerald-800",
+  VIP: "bg-chip-warn-bg text-chip-warn-fg",
+  PREFERRED: "bg-cadence-booked-bg text-cadence-booked-fg",
+  STANDARD: "bg-chip-neutral-bg text-chip-neutral-fg",
+  NEW: "bg-chip-good-bg text-chip-good-fg",
 };
 
 const fmt = (n: string | number) =>
@@ -165,40 +165,41 @@ export default function CRMPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="max-w-[1400px] mx-auto">
       {selectForQuote && (
-        <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-sm text-amber-900">
+        <div className="mb-4 rounded-xl bg-chip-warn-bg border border-chip-warn-fg/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-chip-warn-fg">
             <span className="font-semibold">Select a company for your new quote.</span>{' '}
-            <span className="text-amber-700">Click any company below — you&apos;ll be returned to the quote builder with it pre-filled.</span>
+            <span className="text-chip-warn-fg">Click any company below — you&apos;ll be returned to the quote builder with it pre-filled.</span>
           </div>
           <button
             onClick={cancelSelectForQuote}
-            className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-xs font-semibold rounded-lg hover:bg-amber-50"
+            className="px-3 py-1.5 bg-lt-card border border-chip-warn-fg/30 text-chip-warn-fg text-xs font-semibold rounded-lg hover:bg-chip-warn-bg"
           >
             Cancel
           </button>
         </div>
       )}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-white">Clients</h1>
+        <h1 className="text-2xl font-semibold text-lt-fg">Clients</h1>
         <div className="flex gap-2">
           <button onClick={() => setShowAddContact(true)}
-            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium rounded-lg transition-colors">
+            className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
             + Add Contact
           </button>
           <button onClick={() => setShowAdd(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+            className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
             + Add Company
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-zinc-800 rounded-lg p-0.5 w-fit">
+      <div className="flex gap-1 mb-4 bg-lt-inner rounded-lg p-0.5 w-fit">
         {([["companies", "Companies"], ["people", "Contacts"], ["followups", `Follow-Ups${pendingCount > 0 ? ` (${pendingCount})` : ""}`]] as const).map(([key, label]) => (
           <button key={key} onClick={() => { setTab(key as typeof tab); setSearch(""); }}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === key ? "bg-white text-zinc-900" : "text-zinc-400 hover:text-white"}`}>
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === key ? "bg-white text-lt-fg" : "text-lt-fg2 hover:text-lt-fg"}`}>
             {label}
           </button>
         ))}
@@ -209,11 +210,11 @@ export default function CRMPage() {
         <div className="flex gap-3 mb-4">
           <input type="text" placeholder={tab === "companies" ? "Search companies..." : "Search contacts..."}
             value={search} onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 max-w-sm px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+            className="flex-1 max-w-sm px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
           {tab === "companies" && (
             <>
               <select value={tierFilter} onChange={(e) => setTierFilter(e.target.value)}
-                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                className="px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
                 <option value="">All Tiers</option>
                 <option value="VIP">VIP</option>
                 <option value="PREFERRED">Preferred</option>
@@ -221,7 +222,7 @@ export default function CRMPage() {
                 <option value="NEW">New</option>
               </select>
               <select value={sort} onChange={(e) => setSort(e.target.value)}
-                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                className="px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
                 <option value="spend">Top Spend</option>
                 <option value="name">A-Z</option>
                 <option value="recent">Recent</option>
@@ -233,10 +234,10 @@ export default function CRMPage() {
 
       {/* Companies Tab */}
       {tab === "companies" && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400 text-left text-xs uppercase tracking-wide">
+              <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">Company</th>
                 <th className="px-4 py-3 font-medium">Tier</th>
                 <th className="px-4 py-3 font-medium">Key Contacts</th>
@@ -248,47 +249,47 @@ export default function CRMPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">Loading...</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">No companies found</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">No companies found</td></tr>
               ) : companies.map((co) => (
                 <tr
                   key={co.id}
                   onClick={() => selectForQuote ? selectCompanyForQuote(co.id) : router.push(`/crm/${co.id}`)}
-                  className={`border-b border-zinc-800/50 cursor-pointer transition-colors ${
-                    selectForQuote ? 'hover:bg-amber-900/10' : 'hover:bg-zinc-800/50'
+                  className={`border-b border-lt-hairline/50 cursor-pointer transition-colors ${
+                    selectForQuote ? 'hover:bg-chip-warn-bg' : 'hover:bg-lt-inner/50'
                   }`}
                 >
-                  <td className="px-4 py-3 text-white font-medium">{co.name}</td>
+                  <td className="px-4 py-3 text-lt-fg font-medium">{co.name}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_STYLES[co.tier] || "bg-zinc-700 text-zinc-300"}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_STYLES[co.tier] || "bg-lt-inner text-lt-fg2"}`}>
                       {co.tier}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">
                     {co.affiliations.length > 0
                       ? co.affiliations.map(a => `${a.person.firstName} ${a.person.lastName}`).join(", ")
-                      : <span className="text-zinc-600">No contacts</span>}
+                      : <span className="text-lt-fg3">No contacts</span>}
                   </td>
-                  <td className="px-4 py-3 text-right text-white font-mono">{fmt(co.totalSpend)}</td>
-                  <td className="px-4 py-3 text-center text-zinc-300">{co.totalBookings}</td>
-                  <td className="px-4 py-3 text-center text-zinc-300">{co._count.orders}</td>
+                  <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(co.totalSpend)}</td>
+                  <td className="px-4 py-3 text-center text-lt-fg2">{co.totalBookings}</td>
+                  <td className="px-4 py-3 text-center text-lt-fg2">{co._count.orders}</td>
                   <td className="px-4 py-3 text-center">
                     {selectForQuote ? (
                       <div className="flex items-center justify-center gap-2">
-                        <span className={`text-[10px] ${co.coiOnFile ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                        <span className={`text-[10px] ${co.coiOnFile ? 'text-chip-good-fg' : 'text-lt-fg3'}`}>
                           {co.coiOnFile ? 'COI ✓' : 'no COI'}
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); selectCompanyForQuote(co.id); }}
-                          className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold rounded"
+                          className="px-2.5 py-1 bg-lt-fg hover:bg-black text-white text-[11px] font-bold rounded"
                         >
                           Select →
                         </button>
                       </div>
                     ) : co.coiOnFile
-                      ? <span className="text-emerald-400 text-xs">On File</span>
-                      : <span className="text-zinc-600 text-xs">Missing</span>}
+                      ? <span className="text-chip-good-fg text-xs">On File</span>
+                      : <span className="text-lt-fg3 text-xs">Missing</span>}
                   </td>
                 </tr>
               ))}
@@ -299,10 +300,10 @@ export default function CRMPage() {
 
       {/* People Tab */}
       {tab === "people" && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400 text-left text-xs uppercase tracking-wide">
+              <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Role</th>
                 <th className="px-4 py-3 font-medium">Company</th>
@@ -314,23 +315,23 @@ export default function CRMPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">Loading...</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : people.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-zinc-500">No contacts found</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">No contacts found</td></tr>
               ) : people.map((p) => (
                 <tr key={p.id} onClick={() => router.push(`/crm/people/${p.id}`)}
-                  className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer transition-colors">
-                  <td className="px-4 py-3 text-white font-medium">{p.firstName} {p.lastName}</td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">{p.role.replace(/_/g, " ")}</td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">
+                  className="border-b border-lt-hairline/50 hover:bg-lt-inner/30 cursor-pointer transition-colors">
+                  <td className="px-4 py-3 text-lt-fg font-medium">{p.firstName} {p.lastName}</td>
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">{p.role.replace(/_/g, " ")}</td>
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">
                     {p.affiliations.length > 0
                       ? p.affiliations.map(a => a.company.name).join(", ")
                       : "--"}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">{p.email}</td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">{p.phone || "--"}</td>
-                  <td className="px-4 py-3 text-right text-white font-mono">{fmt(p.totalSpend)}</td>
-                  <td className="px-4 py-3 text-center text-zinc-300">{p.totalBookings}</td>
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">{p.email}</td>
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">{p.phone || "--"}</td>
+                  <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(p.totalSpend)}</td>
+                  <td className="px-4 py-3 text-center text-lt-fg2">{p.totalBookings}</td>
                 </tr>
               ))}
             </tbody>
@@ -342,36 +343,36 @@ export default function CRMPage() {
       {tab === "followups" && (
         <div className="space-y-2">
           {loading ? (
-            <p className="text-zinc-500 py-12 text-center">Loading...</p>
+            <p className="text-lt-fg3 py-12 text-center">Loading...</p>
           ) : followUps.length === 0 ? (
-            <p className="text-zinc-500 py-12 text-center">No pending follow-ups</p>
+            <p className="text-lt-fg3 py-12 text-center">No pending follow-ups</p>
           ) : followUps.map((f) => {
             const overdue = f.dueDate && new Date(f.dueDate) < new Date() && !f.completed;
             return (
-              <div key={f.id} className={`bg-zinc-900 border rounded-xl p-4 flex items-start gap-4 ${overdue ? "border-red-800" : "border-zinc-800"}`}>
+              <div key={f.id} className={`bg-lt-card border rounded-xl p-4 flex items-start gap-4 ${overdue ? "border-chip-bad-fg/40" : "border-lt-hairline"}`}>
                 <button onClick={() => completeFollowUp(f.id)}
-                  className="mt-0.5 w-5 h-5 rounded border-2 border-zinc-600 hover:border-emerald-400 flex-shrink-0 transition-colors" />
+                  className="mt-0.5 w-5 h-5 rounded border-2 border-lt-hairline hover:border-chip-good-fg flex-shrink-0 transition-colors" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      f.type === "CALL" ? "bg-blue-900/40 text-blue-300" :
-                      f.type === "EMAIL" ? "bg-purple-900/40 text-purple-300" :
-                      f.type === "MEETING" ? "bg-amber-900/40 text-amber-300" :
-                      "bg-zinc-700 text-zinc-300"
+                      f.type === "CALL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      f.type === "EMAIL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      f.type === "MEETING" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      "bg-lt-inner text-lt-fg2"
                     }`}>{f.type.replace("_", " ")}</span>
-                    {f.company && <span className="text-xs text-zinc-400">{f.company.name}</span>}
-                    {f.person && <span className="text-xs text-zinc-500">({f.person.firstName} {f.person.lastName})</span>}
+                    {f.company && <span className="text-xs text-lt-fg2">{f.company.name}</span>}
+                    {f.person && <span className="text-xs text-lt-fg3">({f.person.firstName} {f.person.lastName})</span>}
                   </div>
-                  {f.subject && <p className="text-sm text-white font-medium">{f.subject}</p>}
-                  <p className="text-sm text-zinc-400">{f.body}</p>
+                  {f.subject && <p className="text-sm text-lt-fg font-medium">{f.subject}</p>}
+                  <p className="text-sm text-lt-fg2">{f.body}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   {f.dueDate && (
-                    <p className={`text-xs font-medium ${overdue ? "text-red-400" : "text-zinc-400"}`}>
+                    <p className={`text-xs font-medium ${overdue ? "text-chip-bad-fg" : "text-lt-fg2"}`}>
                       {overdue ? "Overdue: " : "Due: "}{fmtDate(f.dueDate)}
                     </p>
                   )}
-                  <p className="text-xs text-zinc-600">{f.agent.name}</p>
+                  <p className="text-xs text-lt-fg3">{f.agent.name}</p>
                 </div>
               </div>
             );
@@ -382,42 +383,42 @@ export default function CRMPage() {
       {/* Add Contact Modal */}
       {showAddContact && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddContact(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-4">Add Contact</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-lt-fg mb-4">Add Contact</h2>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">First Name *</label>
+                  <label className="block text-xs text-lt-fg2 mb-1">First Name *</label>
                   <input type="text" value={cFirst} onChange={(e) => setCFirst(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Last Name *</label>
+                  <label className="block text-xs text-lt-fg2 mb-1">Last Name *</label>
                   <input type="text" value={cLast} onChange={(e) => setCLast(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Email *</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Email *</label>
                 <input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Office Phone</label>
+                  <label className="block text-xs text-lt-fg2 mb-1">Office Phone</label>
                   <input type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Mobile</label>
+                  <label className="block text-xs text-lt-fg2 mb-1">Mobile</label>
                   <input type="tel" value={cMobile} onChange={(e) => setCMobile(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Role</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Role</label>
                 <select value={cRole} onChange={(e) => setCRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
                   <option value="OTHER">Other</option>
                   <option value="UPM">UPM</option>
                   <option value="PRODUCER">Producer</option>
@@ -429,10 +430,10 @@ export default function CRMPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={addContact} disabled={!cFirst || !cLast || !cEmail}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
                 Add Contact
               </button>
-              <button onClick={() => setShowAddContact(false)} className="px-4 py-2 text-zinc-400 hover:text-white text-sm">Cancel</button>
+              <button onClick={() => setShowAddContact(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>
             </div>
           </div>
         </div>
@@ -441,38 +442,39 @@ export default function CRMPage() {
       {/* Add Company Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAdd(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-4">Add Company</h2>
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-lt-fg mb-4">Add Company</h2>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Company Name *</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Company Name *</label>
                 <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Tier</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Tier</label>
                 <select value={newTier} onChange={(e) => setNewTier(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
                   <option value="NEW">New</option><option value="STANDARD">Standard</option>
                   <option value="PREFERRED">Preferred</option><option value="VIP">VIP</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Billing Email</label>
+                <label className="block text-xs text-lt-fg2 mb-1">Billing Email</label>
                 <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white" />
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
               </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={addCompany} disabled={!newName}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white text-sm font-medium rounded-lg">
+                className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-medium rounded-lg">
                 Add Company
               </button>
-              <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-zinc-400 hover:text-white text-sm">Cancel</button>
+              <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Cancel</button>
             </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
