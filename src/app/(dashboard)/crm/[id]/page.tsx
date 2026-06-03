@@ -10,14 +10,39 @@ type Activity = {
   agent: { id: string; name: string };
 };
 
+type DiscountTendency = 'NONE' | 'OCCASIONAL' | 'FREQUENT' | 'ALWAYS';
+
 type CompanyDetail = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
   website: string | null; billingEmail: string | null; industry: string;
   coiOnFile: boolean; coiExpiry: string | null; notes: string | null;
+  // Discount / negotiation profile — added in 859ca8e. Drives the
+  // "Negotiates" chip in the header + the next pass's CRM-list badge.
+  discountTendency: DiscountTendency;
+  typicalDiscountPct: number | null;
+  discountNotes: string | null;
   affiliations: { id: string; productionName: string | null; isCurrent: boolean; roleOnShow: string | null;
     person: { id: string; firstName: string; lastName: string; email: string; phone: string | null; role: string } }[];
   orders: { id: string; orderNumber: string; status: string; total: string; description: string | null; startDate: string | null; createdAt: string }[];
   activities: Activity[];
+};
+
+const TENDENCY_LABEL: Record<DiscountTendency, string> = {
+  NONE: 'Doesn\u2019t negotiate',
+  OCCASIONAL: 'Occasionally negotiates',
+  FREQUENT: 'Frequently negotiates',
+  ALWAYS: 'Always negotiates',
+};
+
+// Tone hints for the read-only Negotiates chip in the header. NONE
+// is suppressed entirely (chip doesn't render). OCCASIONAL stays
+// neutral. FREQUENT and ALWAYS escalate to warn so the agent sees
+// the negotiation pattern at a glance when opening the file.
+const TENDENCY_TONE: Record<DiscountTendency, string> = {
+  NONE: 'bg-chip-neutral-bg text-chip-neutral-fg',
+  OCCASIONAL: 'bg-chip-neutral-bg text-chip-neutral-fg',
+  FREQUENT: 'bg-chip-warn-bg text-chip-warn-fg',
+  ALWAYS: 'bg-chip-warn-bg text-chip-warn-fg',
 };
 
 const TIER_STYLES: Record<string, string> = {
@@ -61,6 +86,74 @@ export default function CompanyDetailPage() {
   }, [companyId, router]);
 
   useEffect(() => { fetchCompany(); }, [fetchCompany]);
+
+  // Edit mode — collapsed by default; an Edit button on the header
+  // expands the form. Same pattern as the Person detail page. Form
+  // covers the editable Company columns the PUT route accepts; the
+  // Discount profile group hangs off the bottom.
+  const [editing, setEditing] = useState(false);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    website: string;
+    billingEmail: string;
+    tier: string;
+    coiOnFile: boolean;
+    coiExpiry: string;
+    notes: string;
+    discountTendency: DiscountTendency;
+    typicalDiscountPct: string;
+    discountNotes: string;
+  } | null>(null);
+
+  // Seed the form from the loaded Company once it lands.
+  useEffect(() => {
+    if (!company) return;
+    setEditForm({
+      name: company.name,
+      website: company.website ?? '',
+      billingEmail: company.billingEmail ?? '',
+      tier: company.tier,
+      coiOnFile: company.coiOnFile,
+      coiExpiry: company.coiExpiry ? company.coiExpiry.slice(0, 10) : '',
+      notes: company.notes ?? '',
+      discountTendency: company.discountTendency,
+      typicalDiscountPct: company.typicalDiscountPct == null ? '' : String(company.typicalDiscountPct),
+      discountNotes: company.discountNotes ?? '',
+    });
+  }, [company]);
+
+  const saveCompany = useCallback(async () => {
+    if (!editForm) return;
+    setSavingCompany(true);
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name,
+          website: editForm.website || null,
+          billingEmail: editForm.billingEmail || null,
+          tier: editForm.tier,
+          coiOnFile: editForm.coiOnFile,
+          coiExpiry: editForm.coiExpiry || null,
+          notes: editForm.notes || null,
+          discountTendency: editForm.discountTendency,
+          typicalDiscountPct: editForm.typicalDiscountPct || null,
+          discountNotes: editForm.discountNotes || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Save failed');
+        return;
+      }
+      await fetchCompany();
+      setEditing(false);
+    } finally {
+      setSavingCompany(false);
+    }
+  }, [editForm, companyId, fetchCompany]);
 
   const addActivity = async () => {
     if (!actBody) return;
@@ -135,25 +228,205 @@ export default function CompanyDetailPage() {
 
       {/* Header */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-semibold text-lt-fg">{company.name}</h1>
-              <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TIER_STYLES[company.tier]}`}>{company.tier}</span>
+        {editing && editForm ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Company name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Tier</label>
+                <select
+                  value={editForm.tier}
+                  onChange={(e) => setEditForm({ ...editForm, tier: e.target.value })}
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                >
+                  <option value="NEW">New</option>
+                  <option value="STANDARD">Standard</option>
+                  <option value="PREFERRED">Preferred</option>
+                  <option value="VIP">VIP</option>
+                </select>
+              </div>
             </div>
-            <p className="text-lt-fg2 text-sm">{company.industry.replace(/_/g, " ")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Website</label>
+                <input
+                  type="text"
+                  value={editForm.website}
+                  onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Billing email</label>
+                <input
+                  type="email"
+                  value={editForm.billingEmail}
+                  onChange={(e) => setEditForm({ ...editForm, billingEmail: e.target.value })}
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-sm text-lt-fg pt-5">
+                <input
+                  type="checkbox"
+                  checked={editForm.coiOnFile}
+                  onChange={(e) => setEditForm({ ...editForm, coiOnFile: e.target.checked })}
+                  className="accent-lt-fg"
+                />
+                COI on file
+              </label>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">COI expiry</label>
+                <input
+                  type="date"
+                  value={editForm.coiExpiry}
+                  onChange={(e) => setEditForm({ ...editForm, coiExpiry: e.target.value })}
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-lt-fg3 mb-1">Notes</label>
+              <textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg resize-y"
+              />
+            </div>
+
+            {/* Negotiation & discounts — institutional memory for
+                rate-talks. Tendency drives the in-header chip + the
+                CRM-list Negotiates badge (next pass). */}
+            <div className="border-t border-lt-hairline pt-4 space-y-3">
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+                Negotiation & discounts
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Tendency</label>
+                  <select
+                    value={editForm.discountTendency}
+                    onChange={(e) => setEditForm({ ...editForm, discountTendency: e.target.value as DiscountTendency })}
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  >
+                    <option value="NONE">Doesn&rsquo;t negotiate</option>
+                    <option value="OCCASIONAL">Occasionally negotiates</option>
+                    <option value="FREQUENT">Frequently negotiates</option>
+                    <option value="ALWAYS">Always negotiates</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Typical discount (%)</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100}
+                    value={editForm.typicalDiscountPct}
+                    onChange={(e) => setEditForm({ ...editForm, typicalDiscountPct: e.target.value })}
+                    placeholder="e.g. 15"
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Discount notes</label>
+                <textarea
+                  value={editForm.discountNotes}
+                  onChange={(e) => setEditForm({ ...editForm, discountNotes: e.target.value })}
+                  rows={2}
+                  placeholder="Context — e.g. always asks for free delivery, never pays rush surcharge."
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg resize-y"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={saveCompany}
+                disabled={savingCompany}
+                className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {savingCompany ? 'Saving\u2026' : 'Save'}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                disabled={savingCompany}
+                className="px-4 py-2 text-lt-fg2 hover:text-lt-fg text-sm"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
-            <p className="text-sm text-lt-fg2">{company.totalBookings} bookings | {company.orders.length} orders</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
-          <div><span className="text-lt-fg3">Website</span><p className="text-lt-fg mt-0.5">{company.website || "--"}</p></div>
-          <div><span className="text-lt-fg3">Billing Email</span><p className="text-lt-fg mt-0.5">{company.billingEmail || "--"}</p></div>
-          <div><span className="text-lt-fg3">COI</span><p className="text-lt-fg mt-0.5">{company.coiOnFile ? `On file (exp ${fmtDate(company.coiExpiry)})` : "Missing"}</p></div>
-          <div><span className="text-lt-fg3">Notes</span><p className="text-lt-fg2 mt-0.5 text-xs">{company.notes || "--"}</p></div>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-1 flex-wrap">
+                  <h1 className="text-2xl font-semibold text-lt-fg">{company.name}</h1>
+                  <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TIER_STYLES[company.tier]}`}>{company.tier}</span>
+                  {/* Negotiates chip — only when the agent has set a
+                      non-NONE tendency or recorded a typical %. Tone
+                      escalates with frequency (warn for FREQUENT/ALWAYS). */}
+                  {(company.discountTendency !== 'NONE' || company.typicalDiscountPct != null) && (
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${TENDENCY_TONE[company.discountTendency]}`}
+                      title={company.discountNotes ?? undefined}
+                    >
+                      Negotiates · {TENDENCY_LABEL[company.discountTendency].replace(/^[A-Z]/, (c) => c.toLowerCase())}
+                      {company.typicalDiscountPct != null && ` · ~${company.typicalDiscountPct}%`}
+                    </span>
+                  )}
+                </div>
+                <p className="text-lt-fg2 text-sm">{company.industry.replace(/_/g, ' ')}</p>
+              </div>
+              <div className="text-right flex flex-col items-end gap-2">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs text-lt-fg hover:text-black"
+                >
+                  Edit
+                </button>
+                <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
+                <p className="text-sm text-lt-fg2">{company.totalBookings} bookings | {company.orders.length} orders</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
+              <div><span className="text-lt-fg3">Website</span><p className="text-lt-fg mt-0.5">{company.website || '--'}</p></div>
+              <div><span className="text-lt-fg3">Billing Email</span><p className="text-lt-fg mt-0.5">{company.billingEmail || '--'}</p></div>
+              <div><span className="text-lt-fg3">COI</span><p className="text-lt-fg mt-0.5">{company.coiOnFile ? `On file (exp ${fmtDate(company.coiExpiry)})` : 'Missing'}</p></div>
+              <div><span className="text-lt-fg3">Notes</span><p className="text-lt-fg2 mt-0.5 text-xs">{company.notes || '--'}</p></div>
+            </div>
+            {/* Discount profile — read-only mirror of the form group.
+                Renders only when the agent has filled anything in. */}
+            {(company.discountTendency !== 'NONE' || company.typicalDiscountPct != null || company.discountNotes) && (
+              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-lt-hairline text-sm">
+                <div>
+                  <span className="text-lt-fg3">Negotiation tendency</span>
+                  <p className="text-lt-fg mt-0.5">{TENDENCY_LABEL[company.discountTendency]}</p>
+                </div>
+                <div>
+                  <span className="text-lt-fg3">Typical discount</span>
+                  <p className="text-lt-fg mt-0.5">{company.typicalDiscountPct != null ? `~${company.typicalDiscountPct}%` : '--'}</p>
+                </div>
+                <div>
+                  <span className="text-lt-fg3">Discount notes</span>
+                  <p className="text-lt-fg2 mt-0.5 text-xs whitespace-pre-wrap">{company.discountNotes || '--'}</p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-6">

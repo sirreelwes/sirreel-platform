@@ -36,7 +36,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
   const { id } = await params;
   const body = await req.json();
-  const { name, website, industry, tier, billingEmail, defaultAgentId, coiOnFile, coiExpiry, notes } = body;
+  const {
+    name, website, industry, tier, billingEmail, defaultAgentId,
+    coiOnFile, coiExpiry, notes,
+    discountTendency, typicalDiscountPct, discountNotes,
+  } = body;
 
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
@@ -48,6 +52,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (coiOnFile !== undefined) data.coiOnFile = coiOnFile;
   if (coiExpiry !== undefined) data.coiExpiry = coiExpiry ? new Date(coiExpiry) : null;
   if (notes !== undefined) data.notes = notes;
+  // Discount profile — agent-edited from the client file. typicalDiscountPct
+  // accepts null/empty to clear; non-empty values are coerced via Number().
+  if (discountTendency !== undefined) data.discountTendency = discountTendency;
+  if (typicalDiscountPct !== undefined) {
+    data.typicalDiscountPct =
+      typicalDiscountPct === null || typicalDiscountPct === '' ? null : Number(typicalDiscountPct);
+  }
+  if (discountNotes !== undefined) data.discountNotes = discountNotes || null;
 
   const company = await prisma.company.update({ where: { id }, data });
   return NextResponse.json(company);
