@@ -399,6 +399,22 @@ function NewQuotePageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsed, selectedClientId, editing.startDate, editing.endDate]);
 
+  // Seed the Job picker's typed name from the inferred title once we
+  // enter review mode and have nothing picked yet. Replaces the
+  // standalone "Job Name" free-text input that pre-dated the unified
+  // control. Only runs when the picker is still in `searching` mode
+  // AND its name is blank — once the user picks/types, this effect
+  // becomes a no-op via the guard.
+  useEffect(() => {
+    if (!parsed) return;
+    const seed = parsed.productionName?.trim() || inquiry?.title?.trim() || '';
+    if (!seed) return;
+    setJob((prev) => {
+      if (prev.mode !== 'searching' || prev.name) return prev;
+      return { ...prev, name: seed };
+    });
+  }, [parsed, inquiry]);
+
   // Restore Review-Quote draft state when returning from /crm. The
   // session-saved snapshot is only read when ?clientCompanyId is in
   // the URL (the marker of a CRM-return), so fresh new-quote visits
@@ -968,7 +984,11 @@ function NewQuotePageInner() {
         body: JSON.stringify({
           companyId,
           ...(existingJobId ? { jobId: existingJobId } : { job: inlineJob }),
-          description: editing.productionName || editing.notes || 'Quote from AI extraction',
+          // Unified job control: the picker's `name` is the source of
+          // truth for both the Job (when creating new) and the Order's
+          // description. Falls back to the agent's notes or a generic
+          // label so saved orders always have something readable.
+          description: job.name?.trim() || editing.productionName?.trim() || editing.notes || 'Quote from AI extraction',
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
           notes: editing.notes || null,
@@ -1263,15 +1283,142 @@ function NewQuotePageInner() {
               <p className="text-xs text-lt-fg3 mt-1">AI extracted: <span className="text-lt-fg2">{parsed.clientName}</span></p>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs text-lt-fg3 mb-1">Job Name</label>
-              <input
-                type="text" value={editing.productionName || ''}
-                onChange={(e) => setEditing({ ...editing, productionName: e.target.value })}
-                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
-              />
+          {/* Unified Job control — replaces the prior free-text
+              "Job Name" input. Typing searches existing client Jobs;
+              no match → "Create new job: '<typed>'." The picker is
+              seeded with the inquiry/parsed title via the seed-sync
+              effect above. Recommendations + new-job-details reveal
+              live here so there's one place to think about the Job. */}
+          <div>
+            <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
+              <label className="block text-xs text-lt-fg3">Job</label>
+              <p className="text-[11px] text-lt-fg3">
+                {candidateJobs.length > 0
+                  ? `${candidateJobs.length} existing Job${candidateJobs.length === 1 ? '' : 's'} for this client — pick one, or type a new name.`
+                  : selectedClientId && selectedClientId !== '__new__'
+                    ? 'No matching Jobs — typing creates a new one on save.'
+                    : 'Pick a Client Company first to surface matching Jobs.'}
+              </p>
             </div>
+            <JobPicker
+              value={job}
+              onChange={setJob}
+              companyId={selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null}
+              placeholder={
+                job.name
+                  ? `Search jobs by name or code…`
+                  : 'Search by job name or code, or type a new name…'
+              }
+            />
+
+            {/* Recommendations: list of this client's open Jobs, only
+                shown while nothing has been picked/typed yet. Clicking
+                one links the existing Job into the picker. */}
+            {candidateJobs.length > 0 && job.mode === 'searching' && (
+              <div className="mt-2 space-y-1.5">
+                {[...candidateJobs]
+                  .sort((a, b) => {
+                    const aT = a.startDate ? new Date(a.startDate).getTime() : 0;
+                    const bT = b.startDate ? new Date(b.startDate).getTime() : 0;
+                    return bT - aT;
+                  })
+                  .map((j, idx) => {
+                    const orders = j._count?.orders ?? 0;
+                    const recommended = idx === 0;
+                    return (
+                      <button
+                        key={j.id}
+                        type="button"
+                        onClick={() =>
+                          setJob({
+                            jobId: j.id,
+                            jobCode: j.jobCode,
+                            name: j.name,
+                            mode: 'selected_existing',
+                            company: j.company,
+                          })
+                        }
+                        className="w-full text-left rounded-lg border px-3 py-2 bg-lt-card/60 border-lt-hairline hover:bg-lt-inner/60 transition-colors flex items-start gap-3"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-[13px] font-semibold text-lt-fg truncate">
+                              [{j.jobCode}] {j.name}
+                            </div>
+                            {recommended && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30">
+                                Recommended
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-lt-fg3 mt-0.5">
+                            {j.startDate && (
+                              <>
+                                {new Date(j.startDate).toLocaleDateString()}
+                                {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
+                              </>
+                            )}
+                            {j.startDate && orders > 0 && ' · '}
+                            {orders > 0 && `${orders} existing order${orders === 1 ? '' : 's'}`}
+                            {(!j.startDate && orders === 0) && 'no dates / no orders yet'}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+
+            {/* New-job details reveal — only shown while the picker is
+                in creating_new mode. ProductionType + profile + notes
+                hang off the new Job on save. */}
+            {job.mode === 'creating_new' && (
+              <div className="mt-2 rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg p-3 space-y-2">
+                <div className="text-[10px] uppercase tracking-wider text-lt-fg font-bold">
+                  New job details
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Production type</label>
+                    <select
+                      value={newJobProductionType}
+                      onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
+                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                    >
+                      {PRODUCTION_TYPES.map((pt) => (
+                        <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
+                      Profile <span className="text-lt-fg3">(routing)</span>
+                    </label>
+                    <ProductionTypeProfilePicker
+                      value={newJobProductionTypeProfileId}
+                      onChange={setNewJobProductionTypeProfileId}
+                      size="compact"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Notes (optional)</label>
+                  <textarea
+                    value={newJobNotes}
+                    onChange={(e) => setNewJobNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Context, client preferences, deal notes…"
+                    className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg resize-y"
+                  />
+                </div>
+                <p className="text-[10px] text-lt-fg3">
+                  Job + Order are created together when you Save Draft — nothing is written until then.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-lt-fg3 mb-1">Pickup Date</label>
               <input
@@ -1292,25 +1439,9 @@ function NewQuotePageInner() {
         </div>
       )}
 
-      {/* Job for this Quote — uses the shared <JobPicker> (same
-          component as the +Hold modal). The recommendations panel
-          above it surfaces this client's date-relevant Jobs without
-          requiring the user to type. Pick-existing stays prominent;
-          create-new path lives in the picker dropdown + the inline
-          details block that appears below when creating_new fires. */}
-      <JobQuoteSection
-        job={job}
-        setJob={setJob}
-        candidates={candidateJobs}
-        selectedClientId={selectedClientId}
-        newJobProductionType={newJobProductionType}
-        setNewJobProductionType={setNewJobProductionType}
-        newJobProductionTypeProfileId={newJobProductionTypeProfileId}
-        setNewJobProductionTypeProfileId={setNewJobProductionTypeProfileId}
-        newJobNotes={newJobNotes}
-        setNewJobNotes={setNewJobNotes}
-        seedName={editing.productionName || parsed?.productionName || inquiry?.title || ''}
-      />
+      {/* Job control + recommendations + new-job details now live
+          inline in the Client Company card above — no separate
+          "Job for this Quote" section. */}
 
       {/* People on this thread (AI-extracted contacts, human review) */}
       <PeopleSection contacts={contacts} setContacts={setContacts} />
@@ -1420,183 +1551,6 @@ function NewQuotePageInner() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────
 
-// Wraps the shared <JobPicker> with a parent-specific top panel:
-// (1) a "Recommended candidates" list that surfaces this client's
-// date-relevant open Jobs without forcing the user to type, and
-// (2) an inline "New job details" block (productionType + notes)
-// that appears only when the picker enters `creating_new` mode.
-//
-// The picker is the canonical control — same component used by the
-// +Hold modal — so search-or-create semantics live there. This
-// component only adds the recommendation-discovery surface and the
-// new-Job extra fields that JobPicker intentionally doesn't carry.
-function JobQuoteSection({
-  job,
-  setJob,
-  candidates,
-  selectedClientId,
-  newJobProductionType,
-  setNewJobProductionType,
-  newJobProductionTypeProfileId,
-  setNewJobProductionTypeProfileId,
-  newJobNotes,
-  setNewJobNotes,
-  seedName,
-}: {
-  job: JobPickerValue;
-  setJob: (v: JobPickerValue) => void;
-  candidates: AttachableJob[];
-  selectedClientId: string;
-  newJobProductionType: ProductionType;
-  setNewJobProductionType: (pt: ProductionType) => void;
-  newJobProductionTypeProfileId: string | null;
-  setNewJobProductionTypeProfileId: (id: string | null) => void;
-  newJobNotes: string;
-  setNewJobNotes: (notes: string) => void;
-  seedName: string;
-}) {
-  // Sort candidates: most recent first; top one gets the Recommended badge.
-  const sortedCandidates = [...candidates].sort((a, b) => {
-    const aT = a.startDate ? new Date(a.startDate).getTime() : 0;
-    const bT = b.startDate ? new Date(b.startDate).getTime() : 0;
-    return bT - aT;
-  });
-  const hasCandidates = sortedCandidates.length > 0;
-  const recommendedId = hasCandidates ? sortedCandidates[0].id : null;
-  // The recommendations panel only shows when the user hasn't yet
-  // committed to a Job (either by picking one or starting a new one).
-  // After commit, the JobPicker pill is the source of truth.
-  const showRecommendations = hasCandidates && job.mode === 'searching';
-
-  return (
-    <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
-      <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-bold text-lt-fg">Job for this Quote</h2>
-        <p className="text-[11px] text-lt-fg3">
-          {hasCandidates
-            ? `${sortedCandidates.length} existing Job${sortedCandidates.length === 1 ? '' : 's'} for this client — attach to one, or search/create below.`
-            : selectedClientId
-              ? 'No matching Jobs found — search below or start a new one.'
-              : 'Pick a Client Company above to see matching Jobs.'}
-        </p>
-      </div>
-
-      {showRecommendations && (
-        <div className="space-y-1.5">
-          {sortedCandidates.map((j) => {
-            const orders = j._count?.orders ?? 0;
-            const recommended = j.id === recommendedId;
-            return (
-              <button
-                key={j.id}
-                type="button"
-                onClick={() =>
-                  setJob({
-                    jobId: j.id,
-                    jobCode: j.jobCode,
-                    name: j.name,
-                    mode: 'selected_existing',
-                    company: j.company,
-                  })
-                }
-                className="w-full text-left rounded-lg border px-3 py-2 bg-lt-card/60 border-lt-hairline hover:bg-lt-inner/60 transition-colors flex items-start gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="text-[13px] font-semibold text-lt-fg truncate">
-                      [{j.jobCode}] {j.name}
-                    </div>
-                    {recommended && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30">
-                        Recommended
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-lt-fg3 mt-0.5">
-                    {j.startDate && (
-                      <>
-                        {new Date(j.startDate).toLocaleDateString()}
-                        {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
-                      </>
-                    )}
-                    {j.startDate && orders > 0 && ' · '}
-                    {orders > 0 && `${orders} existing order${orders === 1 ? '' : 's'}`}
-                    {(!j.startDate && orders === 0) && 'no dates / no orders yet'}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Always available — search across the client's open Jobs and
-          a fallback create-new path for unmatched names. The picker
-          ships in light-theme palette (it's also used outside this
-          dark surface); the surrounding card frames it. */}
-      <div>
-        <div className="text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
-          {hasCandidates ? 'Or search / create new' : 'Search or create new'}
-        </div>
-        <JobPicker
-          value={job}
-          onChange={setJob}
-          companyId={selectedClientId || null}
-          placeholder={
-            seedName
-              ? `Type to search — try "${seedName.slice(0, 40)}${seedName.length > 40 ? '…' : ''}"`
-              : 'Search by job name or code, or type a new name…'
-          }
-        />
-      </div>
-
-      {job.mode === 'creating_new' && (
-        <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg p-3 space-y-2">
-          <div className="text-[10px] uppercase tracking-wider text-lt-fg font-bold">
-            New job details
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Production type</label>
-              <select
-                value={newJobProductionType}
-                onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
-                className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-              >
-                {PRODUCTION_TYPES.map((pt) => (
-                  <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
-                Profile <span className="text-lt-fg3">(routing)</span>
-              </label>
-              <ProductionTypeProfilePicker
-                value={newJobProductionTypeProfileId}
-                onChange={setNewJobProductionTypeProfileId}
-                size="compact"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Notes (optional)</label>
-            <textarea
-              value={newJobNotes}
-              onChange={(e) => setNewJobNotes(e.target.value)}
-              rows={2}
-              placeholder="Context, client preferences, deal notes…"
-              className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg resize-y"
-            />
-          </div>
-          <p className="text-[10px] text-lt-fg3">
-            Job + Order are created together when you Save Draft — nothing is written until then.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Shared grid template for the dept-group "table" — header row, line item
 // rows, and subtotal row all use this so columns align vertically.
