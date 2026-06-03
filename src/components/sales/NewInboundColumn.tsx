@@ -253,31 +253,47 @@ export function NewInboundColumn({
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Persistent inquiries first — they're already triaged
-                "this is a real lead" and just need quote / dismiss. */}
-            {(inquiries ?? []).map((inq) => (
-              <PersistentCard
-                key={`inq-${inq.id}`}
-                inquiry={inq}
-                busy={busyId === inq.id}
-                onCapture={() => capturePersistent(inq.id)}
-                onDismiss={() => dismissPersistent(inq.id)}
-              />
-            ))}
-
-            {/* Gmail suggestions — blank-slate, may or may not be
-                real leads. Operator captures (becomes an inquiry +
-                redirects to new-quote) or dismisses. */}
-            {(suggestions ?? []).map((s) => (
-              <SuggestionCard
-                key={`sug-${s.emailId}`}
-                suggestion={s}
-                busy={busyId === s.emailId}
-                onOpen={() => setDrawerEmailId(s.emailId)}
-                onCapture={() => captureSuggestion(s.emailId)}
-                onDismiss={() => dismissSuggestion(s.emailId)}
-              />
-            ))}
+            {/* Merge both streams and sort newest-first across kinds.
+                Until this change, persistent NEW Inquiries rendered
+                in a block ABOVE suggestion cards — so old triage
+                backlog (oldest persistent rows from ~3 weeks ago)
+                pushed today's suggestion cards out of sight. Now the
+                column reads in true reverse-chronological order:
+                today's lead — persistent or suggestion — is the
+                first card every time. */}
+            {(() => {
+              type MergedItem =
+                | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
+                | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
+              const merged: MergedItem[] = [
+                ...(inquiries ?? []).map(
+                  (row) => ({ kind: 'persistent' as const, row, sortKey: row.createdAt }),
+                ),
+                ...(suggestions ?? []).map(
+                  (row) => ({ kind: 'suggestion' as const, row, sortKey: row.sentAt }),
+                ),
+              ].sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
+              return merged.map((item) =>
+                item.kind === 'persistent' ? (
+                  <PersistentCard
+                    key={`inq-${item.row.id}`}
+                    inquiry={item.row}
+                    busy={busyId === item.row.id}
+                    onCapture={() => capturePersistent(item.row.id)}
+                    onDismiss={() => dismissPersistent(item.row.id)}
+                  />
+                ) : (
+                  <SuggestionCard
+                    key={`sug-${item.row.emailId}`}
+                    suggestion={item.row}
+                    busy={busyId === item.row.emailId}
+                    onOpen={() => setDrawerEmailId(item.row.emailId)}
+                    onCapture={() => captureSuggestion(item.row.emailId)}
+                    onDismiss={() => dismissSuggestion(item.row.emailId)}
+                  />
+                ),
+              );
+            })()}
           </div>
         )}
       </div>
