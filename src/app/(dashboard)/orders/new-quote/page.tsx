@@ -7,7 +7,7 @@ import type { LineItemDepartment, ProductionType, RateType } from '@prisma/clien
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
-import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
+import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
 
 const PRODUCTION_TYPES: ProductionType[] = [
   'FILM', 'TV', 'COMMERCIAL', 'MUSIC_VIDEO', 'CORPORATE', 'EVENT_PLANNER', 'OTHER',
@@ -336,6 +336,38 @@ function NewQuotePageInner() {
   // the new-Job create body.
   const [newJobProductionTypeProfileId, setNewJobProductionTypeProfileId] =
     useState<string | null>(null);
+
+  // One-time profile slug→id map. Used by the auto-derive effect
+  // below to translate the agent's production type into the right
+  // ProductionTypeProfile id without surfacing a routing dropdown.
+  const [profileSlugToId, setProfileSlugToId] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/production-type-profiles', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const p of (d.profiles ?? []) as { id: string; slug: string }[]) {
+          map[p.slug] = p.id;
+        }
+        setProfileSlugToId(map);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileSlugToId({});
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Auto-derive the ProductionTypeProfile id from the chosen
+  // production type. The tier (1–5) lives on the resolved profile
+  // and is INFORMATIVE TO THE HQ AI ROUTING ONLY — agents never pick
+  // it. Re-runs when the production type changes or when the profile
+  // map first arrives.
+  useEffect(() => {
+    const next = deriveProfileIdFromProductionType(newJobProductionType, profileSlugToId);
+    setNewJobProductionTypeProfileId(next);
+  }, [newJobProductionType, profileSlugToId]);
 
   // Post-parse Job-candidate fetch. Fires when we have both a parse
   // result AND a confirmed customer. Pulls active/recent Jobs for that
@@ -1370,36 +1402,27 @@ function NewQuotePageInner() {
             )}
 
             {/* New-job details reveal — only shown while the picker is
-                in creating_new mode. ProductionType + profile + notes
-                hang off the new Job on save. */}
+                in creating_new mode. Production type is the only
+                routing field the agent picks; the tier-bearing
+                ProductionTypeProfile id is auto-derived above and
+                hangs off the new Job on save without an agent-facing
+                dropdown. Notes round out what the form collects. */}
             {job.mode === 'creating_new' && (
               <div className="mt-2 rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg p-3 space-y-2">
                 <div className="text-[10px] uppercase tracking-wider text-lt-fg font-bold">
                   New job details
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Production type</label>
-                    <select
-                      value={newJobProductionType}
-                      onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
-                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-                    >
-                      {PRODUCTION_TYPES.map((pt) => (
-                        <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
-                      Profile <span className="text-lt-fg3">(routing)</span>
-                    </label>
-                    <ProductionTypeProfilePicker
-                      value={newJobProductionTypeProfileId}
-                      onChange={setNewJobProductionTypeProfileId}
-                      size="compact"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Production type</label>
+                  <select
+                    value={newJobProductionType}
+                    onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
+                    className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                  >
+                    {PRODUCTION_TYPES.map((pt) => (
+                      <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Notes (optional)</label>
