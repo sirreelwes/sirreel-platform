@@ -52,9 +52,17 @@ export default function CRMPage() {
   const selectForQuote = searchParams?.get('selectForQuote') === '1';
   const returnInquiryId = searchParams?.get('inquiryId') || null;
 
-  const [tab, setTab] = useState<"companies" | "people" | "followups">(
-    selectForQuote ? "companies" : "companies",
+  // People-first default. selectForQuote (incoming from the new-quote
+  // builder's "pick a client" flow) still lands on Companies — that
+  // flow specifically needs the company picker.
+  const [tab, setTab] = useState<"companies" | "people">(
+    selectForQuote ? "companies" : "people",
   );
+  // "Needs attention" strip — collapsed by default; expanding shows
+  // the prior Follow-Ups tab content inline. The count badge stays
+  // visible regardless. Future passes (gone-quiet, discount-watch)
+  // add their own collapsible sections to the same strip.
+  const [needsAttentionExpanded, setNeedsAttentionExpanded] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [people, setPeople] = useState<PersonResult[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -105,9 +113,16 @@ export default function CRMPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      tab === "companies" ? fetchCompanies() : tab === "people" ? fetchPeople() : fetchFollowUps(),
+      tab === "companies" ? fetchCompanies() : fetchPeople(),
     ]).then(() => setLoading(false));
-  }, [tab, fetchCompanies, fetchPeople, fetchFollowUps]);
+  }, [tab, fetchCompanies, fetchPeople]);
+
+  // Follow-ups fetch independent of the tab — drives the
+  // "Needs attention" strip at the top of the page, which is always
+  // visible regardless of which list is open.
+  useEffect(() => {
+    fetchFollowUps();
+  }, [fetchFollowUps]);
 
   const addContact = async () => {
     if (!cFirst || !cLast || !cEmail) return;
@@ -196,9 +211,24 @@ export default function CRMPage() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Needs attention — strip at the top of the page. Follow-ups
+          due is the first signal wired in; gone-quiet and discount-
+          watch slot in here on later passes. Always visible; click
+          the count to expand the inline list of follow-ups (formerly
+          a dedicated tab). */}
+      <NeedsAttentionStrip
+        pendingCount={pendingCount}
+        followUps={followUps}
+        expanded={needsAttentionExpanded}
+        onToggle={() => setNeedsAttentionExpanded((v) => !v)}
+        onComplete={completeFollowUp}
+      />
+
+      {/* Tabs — People first; Contacts renamed to People (label only;
+          underlying tab key + route + data shape unchanged). Follow-
+          Ups tab is gone, surfaced in the strip above. */}
       <div className="flex gap-1 mb-4 bg-lt-inner rounded-lg p-0.5 w-fit">
-        {([["companies", "Companies"], ["people", "Contacts"], ["followups", `Follow-Ups${pendingCount > 0 ? ` (${pendingCount})` : ""}`]] as const).map(([key, label]) => (
+        {([["people", "People"], ["companies", "Companies"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => { setTab(key as typeof tab); setSearch(""); }}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === key ? "bg-white text-lt-fg" : "text-lt-fg2 hover:text-lt-fg"}`}>
             {label}
@@ -207,9 +237,9 @@ export default function CRMPage() {
       </div>
 
       {/* Filters */}
-      {tab !== "followups" && (
+      {(
         <div className="flex gap-3 mb-4">
-          <input type="text" placeholder={tab === "companies" ? "Search companies..." : "Search contacts..."}
+          <input type="text" placeholder={tab === "companies" ? "Search companies..." : "Search people..."}
             value={search} onChange={(e) => setSearch(e.target.value)}
             className="flex-1 max-w-sm px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
           {tab === "companies" && (
@@ -368,46 +398,9 @@ export default function CRMPage() {
         </div>
       )}
 
-      {/* Follow-Ups Tab */}
-      {tab === "followups" && (
-        <div className="space-y-2">
-          {loading ? (
-            <p className="text-lt-fg3 py-12 text-center">Loading...</p>
-          ) : followUps.length === 0 ? (
-            <p className="text-lt-fg3 py-12 text-center">No pending follow-ups</p>
-          ) : followUps.map((f) => {
-            const overdue = f.dueDate && new Date(f.dueDate) < new Date() && !f.completed;
-            return (
-              <div key={f.id} className={`bg-lt-card border rounded-xl p-4 flex items-start gap-4 ${overdue ? "border-chip-bad-fg/40" : "border-lt-hairline"}`}>
-                <button onClick={() => completeFollowUp(f.id)}
-                  className="mt-0.5 w-5 h-5 rounded border-2 border-lt-hairline hover:border-chip-good-fg flex-shrink-0 transition-colors" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      f.type === "CALL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      f.type === "EMAIL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      f.type === "MEETING" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                      "bg-lt-inner text-lt-fg2"
-                    }`}>{f.type.replace("_", " ")}</span>
-                    {f.company && <span className="text-xs text-lt-fg2">{f.company.name}</span>}
-                    {f.person && <span className="text-xs text-lt-fg3">({f.person.firstName} {f.person.lastName})</span>}
-                  </div>
-                  {f.subject && <p className="text-sm text-lt-fg font-medium">{f.subject}</p>}
-                  <p className="text-sm text-lt-fg2">{f.body}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  {f.dueDate && (
-                    <p className={`text-xs font-medium ${overdue ? "text-chip-bad-fg" : "text-lt-fg2"}`}>
-                      {overdue ? "Overdue: " : "Due: "}{fmtDate(f.dueDate)}
-                    </p>
-                  )}
-                  <p className="text-xs text-lt-fg3">{f.agent.name}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Follow-Ups tab content moved to the NeedsAttentionStrip
+          rendered above. completeFollowUp + fetchFollowUps + the
+          underlying /api/crm/activities calls are unchanged. */}
 
       {/* Add Contact Modal */}
       {showAddContact && (
@@ -504,6 +497,91 @@ export default function CRMPage() {
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+// "Needs attention" strip at the top of the Clients page. First
+// signal wired in is the follow-ups-due count + inline list (the
+// data that lived in the deprecated Follow-Ups tab). Future passes
+// add gone-quiet + discount-watch signals as additional rows in the
+// same strip. Always rendered; the count is visible at a glance and
+// the list expands inline on click — keeping the prior tab's data
+// reachable without giving it a top-nav slot.
+function NeedsAttentionStrip({
+  pendingCount,
+  followUps,
+  expanded,
+  onToggle,
+  onComplete,
+}: {
+  pendingCount: number;
+  followUps: FollowUp[];
+  expanded: boolean;
+  onToggle: () => void;
+  onComplete: (id: string) => void;
+}) {
+  const hasAny = pendingCount > 0;
+  const hasOverdue = followUps.some((f) => f.dueDate && new Date(f.dueDate) < new Date() && !f.completed);
+  return (
+    <div className="bg-lt-card border border-lt-hairline rounded-xl mb-4 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">Needs attention</span>
+          {hasAny ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-lt-fg hover:text-black"
+            >
+              <span className={`inline-block w-2 h-2 rounded-full ${hasOverdue ? 'bg-chip-bad-fg' : 'bg-chip-warn-fg'}`} />
+              {pendingCount} follow-up{pendingCount === 1 ? '' : 's'} due
+              <span className="text-lt-fg3 ml-0.5">{expanded ? '▾' : '▸'}</span>
+            </button>
+          ) : (
+            <span className="text-xs text-lt-fg3">All clear — nothing pending.</span>
+          )}
+        </div>
+        {/* Slot for future signals: gone-quiet count, discount-watch
+            count. They'll render as additional clickable chips in
+            this row. */}
+      </div>
+      {expanded && hasAny && (
+        <div className="border-t border-lt-hairline px-4 py-3 space-y-2">
+          {followUps.map((f) => {
+            const overdue = f.dueDate && new Date(f.dueDate) < new Date() && !f.completed;
+            return (
+              <div key={f.id} className={`bg-lt-card border rounded-lg p-3 flex items-start gap-3 ${overdue ? 'border-chip-bad-fg/40' : 'border-lt-hairline'}`}>
+                <button
+                  onClick={() => onComplete(f.id)}
+                  className="mt-0.5 w-4 h-4 rounded border-2 border-lt-hairline hover:border-chip-good-fg flex-shrink-0 transition-colors"
+                  aria-label="Mark complete"
+                  title="Mark complete"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg uppercase tracking-wider">
+                      {f.type.replace('_', ' ')}
+                    </span>
+                    {f.company && <span className="text-[11px] text-lt-fg2">{f.company.name}</span>}
+                    {f.person && <span className="text-[11px] text-lt-fg3">({f.person.firstName} {f.person.lastName})</span>}
+                  </div>
+                  {f.subject && <p className="text-[13px] text-lt-fg font-medium">{f.subject}</p>}
+                  <p className="text-[12px] text-lt-fg2">{f.body}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  {f.dueDate && (
+                    <p className={`text-[11px] font-medium ${overdue ? 'text-chip-bad-fg' : 'text-lt-fg2'}`}>
+                      {overdue ? 'Overdue: ' : 'Due: '}{fmtDate(f.dueDate)}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-lt-fg3">{f.agent.name}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
