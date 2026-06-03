@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import { computeCompanyBadgeFacts } from "@/lib/crm/clientBadges";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -35,7 +36,41 @@ export async function GET(req: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json({ companies });
+  // Single Order groupBy across the page's companyIds — gives us
+  // first + last order date per company without an N+1. The
+  // companyIds set is at most 100 (page take).
+  const companyIds = companies.map((c) => c.id);
+  const orderDateRollup = companyIds.length > 0
+    ? await prisma.order.groupBy({
+        by: ['companyId'],
+        where: { companyId: { in: companyIds } },
+        _min: { createdAt: true },
+        _max: { createdAt: true },
+      })
+    : [];
+  const firstLast = new Map(
+    orderDateRollup.map((r) => [
+      r.companyId,
+      { companyId: r.companyId, firstOrderAt: r._min.createdAt, lastOrderAt: r._max.createdAt },
+    ]),
+  );
+
+  const badgeFacts = computeCompanyBadgeFacts(
+    companies.map((c) => ({
+      id: c.id,
+      totalSpend: c.totalSpend,
+      orderCount: c._count.orders,
+      discountTendency: c.discountTendency,
+    })),
+    firstLast,
+  );
+
+  const enriched = companies.map((c) => ({
+    ...c,
+    ...(badgeFacts.get(c.id) ?? { badges: [], firstOrderAt: null, lastOrderAt: null, loyalSinceYear: null }),
+  }));
+
+  return NextResponse.json({ companies: enriched });
 }
 
 export async function POST(req: NextRequest) {
