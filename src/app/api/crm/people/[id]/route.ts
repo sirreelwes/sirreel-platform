@@ -6,6 +6,13 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
+  // Pulls the four Person→Company paths so the detail page can
+  // derive "Company & Production History" without auto-creating
+  // Affiliation rows: jobContacts (Job grain), orderContacts
+  // (Order grain — relation OrderJobContact), bookings (Booking
+  // contact), and referredBookings (Booking referrer). The detail
+  // page collapses these into one company-keyed list and merges
+  // with explicit affiliations.
   const person = await prisma.person.findUnique({
     where: { id },
     include: {
@@ -20,6 +27,57 @@ export async function GET(_req: NextRequest, { params }: Params) {
         },
         orderBy: { createdAt: "desc" },
         take: 50,
+      },
+      jobContacts: {
+        select: {
+          role: true,
+          isPrimary: true,
+          job: {
+            select: {
+              id: true,
+              jobCode: true,
+              name: true,
+              status: true,
+              startDate: true,
+              company: { select: { id: true, name: true, tier: true } },
+            },
+          },
+        },
+      },
+      orderContacts: {
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          startDate: true,
+          company: { select: { id: true, name: true, tier: true } },
+          job: { select: { id: true, jobCode: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      bookings: {
+        select: {
+          id: true,
+          bookingNumber: true,
+          jobName: true,
+          startDate: true,
+          status: true,
+          company: { select: { id: true, name: true, tier: true } },
+          job: { select: { id: true, jobCode: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+      referredBookings: {
+        select: {
+          id: true,
+          bookingNumber: true,
+          jobName: true,
+          startDate: true,
+          status: true,
+          company: { select: { id: true, name: true, tier: true } },
+          job: { select: { id: true, jobCode: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
       },
     },
   });

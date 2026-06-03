@@ -24,6 +24,41 @@ type Affiliation = {
   company: { id: string; name: string; tier: string };
 };
 
+// Per-Person job/order/booking participation. The API now includes
+// these four arrays alongside `affiliations`; the page collapses
+// them into one company-keyed history list. Each path lands the
+// same shape: a Company reference + a "production" descriptor
+// (Job name or Booking jobName) so they merge into a single row.
+type JobContactRow = {
+  role: string;
+  isPrimary: boolean;
+  job: {
+    id: string;
+    jobCode: string;
+    name: string;
+    status: string;
+    startDate: string | null;
+    company: { id: string; name: string; tier: string };
+  };
+};
+type OrderContactRow = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  startDate: string | null;
+  company: { id: string; name: string; tier: string };
+  job: { id: string; jobCode: string; name: string } | null;
+};
+type BookingContactRow = {
+  id: string;
+  bookingNumber: string;
+  jobName: string;
+  startDate: string | null;
+  status: string;
+  company: { id: string; name: string; tier: string };
+  job: { id: string; jobCode: string; name: string } | null;
+};
+
 type PersonDetail = {
   id: string;
   firstName: string; lastName: string;
@@ -34,7 +69,125 @@ type PersonDetail = {
   notes: string | null;
   affiliations: Affiliation[];
   activities: Activity[];
+  jobContacts: JobContactRow[];
+  orderContacts: OrderContactRow[];
+  bookings: BookingContactRow[];
+  referredBookings: BookingContactRow[];
 };
+
+// Merged company-history row computed on read from the four
+// participation paths + the manual affiliations. Each row groups
+// the productions for one company; `sources` flags whether the row
+// came from manual links, derived participation, or both.
+type CompanyHistoryRow = {
+  company: { id: string; name: string; tier: string };
+  productions: {
+    key: string;
+    label: string;      // Job name OR booking jobName OR affiliation productionName
+    code: string | null; // jobCode where available
+    detail: string | null; // role/status/order# context
+    href: string | null; // /jobs/<id> when navigable
+  }[];
+  hasManualLink: boolean;
+  hasDerived: boolean;
+};
+
+function buildCompanyHistory(p: PersonDetail): CompanyHistoryRow[] {
+  const rows = new Map<string, CompanyHistoryRow>();
+  const ensure = (c: { id: string; name: string; tier: string }) => {
+    let r = rows.get(c.id);
+    if (!r) {
+      r = { company: c, productions: [], hasManualLink: false, hasDerived: false };
+      rows.set(c.id, r);
+    }
+    return r;
+  };
+  const addProduction = (
+    r: CompanyHistoryRow,
+    key: string,
+    label: string,
+    code: string | null,
+    detail: string | null,
+    href: string | null,
+  ) => {
+    if (r.productions.some((x) => x.key === key)) return;
+    r.productions.push({ key, label, code, detail, href });
+  };
+
+  // Manual affiliations
+  for (const a of p.affiliations) {
+    const r = ensure(a.company);
+    r.hasManualLink = true;
+    if (a.productionName) {
+      addProduction(
+        r,
+        `aff:${a.id}`,
+        a.productionName,
+        null,
+        a.roleOnShow ? a.roleOnShow.replace(/_/g, ' ') : null,
+        null,
+      );
+    }
+  }
+
+  // JobContact path
+  for (const jc of p.jobContacts) {
+    const r = ensure(jc.job.company);
+    r.hasDerived = true;
+    addProduction(
+      r,
+      `job:${jc.job.id}`,
+      jc.job.name,
+      jc.job.jobCode,
+      `${jc.role.replace(/_/g, ' ')}${jc.isPrimary ? ' · primary' : ''} · ${jc.job.status}`,
+      `/jobs/${jc.job.id}`,
+    );
+  }
+
+  // Order.jobContact path
+  for (const o of p.orderContacts) {
+    const r = ensure(o.company);
+    r.hasDerived = true;
+    const label = o.job?.name || o.orderNumber;
+    addProduction(
+      r,
+      o.job ? `job:${o.job.id}` : `order:${o.id}`,
+      label,
+      o.job?.jobCode ?? null,
+      `Order ${o.orderNumber} · ${o.status}`,
+      o.job ? `/jobs/${o.job.id}` : `/orders/${o.id}`,
+    );
+  }
+
+  // Booking contact + referrer paths — same shape
+  const seenBookingIds = new Set<string>();
+  const addBooking = (b: BookingContactRow) => {
+    if (seenBookingIds.has(b.id)) return;
+    seenBookingIds.add(b.id);
+    const r = ensure(b.company);
+    r.hasDerived = true;
+    const label = b.job?.name || b.jobName || b.bookingNumber;
+    addProduction(
+      r,
+      b.job ? `job:${b.job.id}` : `booking:${b.id}`,
+      label,
+      b.job?.jobCode ?? null,
+      `Booking ${b.bookingNumber} · ${b.status}`,
+      b.job ? `/jobs/${b.job.id}` : null,
+    );
+  };
+  for (const b of p.bookings) addBooking(b);
+  for (const b of p.referredBookings) addBooking(b);
+
+  // Sort: current/recently-active companies first (manual link or
+  // many productions wins). Within each company, productions stay
+  // in insertion order (which matches API orderBy).
+  return Array.from(rows.values()).sort((a, b) => {
+    const aw = (a.hasManualLink ? 100 : 0) + a.productions.length;
+    const bw = (b.hasManualLink ? 100 : 0) + b.productions.length;
+    return bw - aw;
+  });
+}
 
 const TIER_STYLES: Record<string, string> = {
   VIP: "bg-chip-warn-bg text-chip-warn-fg",
@@ -319,34 +472,97 @@ export default function PersonDetailPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Left: Company History + Affiliations */}
+        {/* Left: Company & Production History — merged view of
+            explicit affiliations + derived participation across
+            Jobs / Orders / Bookings. Same company appearing in
+            both shows once with a "Linked + From jobs" source
+            label. */}
         <div className="col-span-2 space-y-6">
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-lt-fg">Company & Production History</h2>
               <button onClick={() => setShowLinkCompany(true)} className="text-xs text-lt-fg hover:text-black font-medium">+ Link to Company</button>
             </div>
-            {person.affiliations.length === 0 ? (
-              <p className="text-lt-fg3 text-sm">No company affiliations yet. Link this person to a production company they&apos;ve worked with.</p>
-            ) : (
-              <div className="space-y-2">
-                {person.affiliations.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between py-2 border-b border-lt-hairline/50 last:border-0 group">
-                    <div className="flex-1 cursor-pointer" onClick={() => router.push(`/crm/${a.company.id}`)}>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-lt-fg font-medium hover:text-lt-fg">{a.company.name}</p>
-                        {a.isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">Current</span>}
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TIER_STYLES[a.company.tier]}`}>{a.company.tier}</span>
+            {(() => {
+              const history = buildCompanyHistory(person);
+              if (history.length === 0) {
+                return (
+                  <p className="text-lt-fg3 text-sm">
+                    No companies yet. {person.firstName} hasn&apos;t been added as a contact on a job, order, or booking — and there are no explicit links. Use <span className="text-lt-fg">+ Link to Company</span> to add one.
+                  </p>
+                );
+              }
+              return (
+                <div className="space-y-3">
+                  {history.map((row) => {
+                    const sourceLabel =
+                      row.hasManualLink && row.hasDerived
+                        ? 'Linked + From jobs'
+                        : row.hasManualLink
+                          ? 'Linked'
+                          : 'From jobs';
+                    // Find the explicit affiliation (if any) to wire the
+                    // Remove button — derived rows don't have one.
+                    const aff = person.affiliations.find((a) => a.company.id === row.company.id) ?? null;
+                    return (
+                      <div key={row.company.id} className="border border-lt-hairline rounded-lg p-3 group">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => router.push(`/crm/${row.company.id}`)}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm text-lt-fg font-medium hover:text-black truncate">{row.company.name}</p>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TIER_STYLES[row.company.tier]}`}>{row.company.tier}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg uppercase tracking-wider font-semibold">
+                                {sourceLabel}
+                              </span>
+                            </div>
+                            {row.productions.length > 0 && (
+                              <ul className="mt-2 space-y-1">
+                                {row.productions.map((p) => (
+                                  <li key={p.key} className="text-xs text-lt-fg2 flex items-baseline gap-1.5 flex-wrap">
+                                    <span className="text-lt-fg3">·</span>
+                                    {p.href ? (
+                                      <a
+                                        href={p.href}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="text-lt-fg hover:text-black"
+                                      >
+                                        {p.code && (
+                                          <span className="font-mono text-lt-fg3 mr-1.5">[{p.code}]</span>
+                                        )}
+                                        {p.label}
+                                      </a>
+                                    ) : (
+                                      <span>
+                                        {p.code && (
+                                          <span className="font-mono text-lt-fg3 mr-1.5">[{p.code}]</span>
+                                        )}
+                                        {p.label}
+                                      </span>
+                                    )}
+                                    {p.detail && (
+                                      <span className="text-[10px] text-lt-fg3 uppercase tracking-wider">{p.detail}</span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          {aff && (
+                            <button
+                              onClick={() => removeAffiliation(aff.id)}
+                              className="opacity-0 group-hover:opacity-100 text-xs text-chip-bad-fg hover:opacity-70 transition-opacity flex-shrink-0"
+                              title="Remove the manual link (job/order/booking history stays)"
+                            >
+                              Remove link
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {a.productionName && <p className="text-xs text-lt-fg2 mt-0.5">{a.productionName}</p>}
-                      {a.roleOnShow && <p className="text-xs text-lt-fg3">{a.roleOnShow.replace(/_/g, " ")}</p>}
-                    </div>
-                    <button onClick={() => removeAffiliation(a.id)}
-                      className="opacity-0 group-hover:opacity-100 text-xs text-chip-bad-fg hover:opacity-70 transition-opacity">Remove</button>
-                  </div>
-                ))}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
