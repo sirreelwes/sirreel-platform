@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
+import type { ClientBadge } from "@/lib/crm/clientBadges";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -11,13 +12,68 @@ type Company = {
   updatedAt: string;
   _count: { orders: number };
   affiliations: { person: { id: string; firstName: string; lastName: string; role: string; email: string; phone: string | null } }[];
+  // Server-derived (21d149c). Per-row badge facts.
+  badges?: ClientBadge[];
+  loyalSinceYear?: number | null;
 };
 
 type PersonResult = {
   id: string; firstName: string; lastName: string; email: string; phone: string | null;
   role: string; tier: string; totalSpend: string; totalBookings: number;
   affiliations: { company: { id: string; name: string }; isCurrent: boolean }[];
+  // Server-derived (21d149c). Combines primary-company inheritance
+  // (value badges + NEGOTIATES + QUIET) with the person's own
+  // FOLLOW_UP_DUE flag.
+  badges?: ClientBadge[];
+  primaryCompanyBadgeFacts?: { loyalSinceYear: number | null } | null;
 };
+
+// Client badge palette — light-tokens mapped to the spec's intent:
+// Top client gold, Repeat green, Loyal teal, New blue, Negotiates
+// amber/warn, Follow-up due red, Quiet muted.
+const BADGE_TONE: Record<ClientBadge, string> = {
+  TOP_CLIENT:    'bg-chip-warn-bg text-chip-warn-fg',
+  REPEAT:        'bg-chip-good-bg text-chip-good-fg',
+  LOYAL:         'bg-cadence-invoiced-bg text-cadence-invoiced-fg',
+  NEW:           'bg-cadence-booked-bg text-cadence-booked-fg',
+  NEGOTIATES:    'bg-chip-warn-bg text-chip-warn-fg',
+  FOLLOW_UP_DUE: 'bg-chip-bad-bg text-chip-bad-fg',
+  QUIET:         'bg-chip-neutral-bg text-chip-neutral-fg',
+};
+
+function badgeLabel(b: ClientBadge, loyalSinceYear: number | null | undefined): string {
+  switch (b) {
+    case 'TOP_CLIENT':    return '\u2605 Top client';
+    case 'REPEAT':        return '\u21bb Repeat';
+    case 'LOYAL':         return `\u23F3 Loyal\u2009\u00b7\u2009since ${loyalSinceYear ?? '?'}`;
+    case 'NEW':           return '\u2728 New';
+    case 'NEGOTIATES':    return '\uFE0F\uD83D\uDCB2 Negotiates';
+    case 'FOLLOW_UP_DUE': return '\uD83D\uDD14 Follow-up due';
+    case 'QUIET':         return '\uD83D\uDCA4 Quiet';
+  }
+}
+
+function ClientBadgeChips({
+  badges,
+  loyalSinceYear,
+}: {
+  badges: ClientBadge[] | undefined;
+  loyalSinceYear?: number | null;
+}) {
+  if (!badges || badges.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1">
+      {badges.map((b) => (
+        <span
+          key={b}
+          className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${BADGE_TONE[b]}`}
+        >
+          {badgeLabel(b, loyalSinceYear)}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 type FollowUp = {
   id: string; type: string; subject: string | null; body: string; dueDate: string | null;
@@ -291,7 +347,10 @@ export default function CRMPage() {
                     selectForQuote ? 'hover:bg-chip-warn-bg' : 'hover:bg-lt-inner/50'
                   }`}
                 >
-                  <td className="px-4 py-3 text-lt-fg font-medium">{co.name}</td>
+                  <td className="px-4 py-3">
+                    <div className="text-lt-fg font-medium">{co.name}</div>
+                    <ClientBadgeChips badges={co.badges} loyalSinceYear={co.loyalSinceYear} />
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_STYLES[co.tier] || "bg-lt-inner text-lt-fg2"}`}>
                       {co.tier}
@@ -361,7 +420,13 @@ export default function CRMPage() {
                   className="group border-b border-lt-hairline/50 hover:bg-lt-inner cursor-pointer transition-colors"
                   title={`Click to edit ${p.firstName} ${p.lastName}`}
                 >
-                  <td className="px-4 py-3 text-lt-fg font-medium group-hover:text-black">{p.firstName} {p.lastName}</td>
+                  <td className="px-4 py-3">
+                    <div className="text-lt-fg font-medium group-hover:text-black">{p.firstName} {p.lastName}</div>
+                    <ClientBadgeChips
+                      badges={p.badges}
+                      loyalSinceYear={p.primaryCompanyBadgeFacts?.loyalSinceYear ?? null}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.role.replace(/_/g, " ")}</td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">
                     {p.affiliations.length > 0
