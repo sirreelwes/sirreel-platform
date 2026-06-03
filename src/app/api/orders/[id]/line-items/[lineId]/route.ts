@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
 export async function PUT(req: NextRequest, { params }: Params) {
+  const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { id: orderId, lineId } = await params;
 
   try {
@@ -92,6 +97,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { id: orderId, lineId } = await params;
 
   await prisma.orderLineItem.delete({ where: { id: lineId } });
