@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
+import { formatPhoneDashed } from "@/lib/format/phone";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -213,13 +214,21 @@ export default function PersonDetailPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-lt-fg3 mb-1">Office Phone</label>
-                    <input type="tel" value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
+                    <input
+                      type="tel"
+                      value={form.phone || ""}
+                      onChange={(e) => setForm({ ...form, phone: formatPhoneDashed(e.target.value) })}
+                      className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs text-lt-fg3 mb-1">Mobile</label>
-                    <input type="tel" value={form.mobile || ""} onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-                      className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg" />
+                    <input
+                      type="tel"
+                      value={form.mobile || ""}
+                      onChange={(e) => setForm({ ...form, mobile: formatPhoneDashed(e.target.value) })}
+                      className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -280,11 +289,11 @@ export default function PersonDetailPage() {
                   </div>
                   <div>
                     <span className="text-lt-fg3 text-xs">Office</span>
-                    <p className="text-lt-fg mt-0.5">{person.phone || "--"}</p>
+                    <p className="text-lt-fg mt-0.5">{person.phone ? formatPhoneDashed(person.phone) : "--"}</p>
                   </div>
                   <div>
                     <span className="text-lt-fg3 text-xs">Mobile</span>
-                    <p className="text-lt-fg mt-0.5">{person.mobile || "--"}</p>
+                    <p className="text-lt-fg mt-0.5">{person.mobile ? formatPhoneDashed(person.mobile) : "--"}</p>
                   </div>
                 </div>
                 {person.notes && (
