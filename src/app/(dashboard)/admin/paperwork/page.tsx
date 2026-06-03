@@ -34,6 +34,12 @@ const TOOLS = [
     description:
       'Past contract reviews — search, re-open a previous AI run, see per-clause decisions.',
   },
+  {
+    href: '/admin/negotiated-agreements',
+    title: 'Negotiated Agreements',
+    description:
+      'Every client with a recorded standing agreement — established date, review-due, summary, and the PDF in use on new orders.',
+  },
 ]
 
 export default function PaperworkToolsIndex() {
