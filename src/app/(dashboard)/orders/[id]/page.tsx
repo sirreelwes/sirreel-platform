@@ -177,18 +177,24 @@ function computeRecipients(order: Order): RecipientChoice {
 type AssetCat = { id: string; name: string; slug: string; dailyRate: string; weeklyRate: string | null };
 type InvItem = { id: string; code: string; description: string; category: { id: string; name: string } };
 
+// Order status pill — reuses the cadence palette so the pill reads
+// the same on the Jobs list, the dispatch board, and this detail page.
+// QUOTE_SENT/APPROVED/LD_CHECK don't have direct cadence counterparts;
+// QUOTE_SENT inherits the in-flight warn tone, APPROVED reads as
+// inbound-aware booked, LD_CHECK as the warmer "almost done" tone.
+// CANCELLED uses the bad-chip tone since it isn't a cadence state.
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-zinc-700 text-zinc-300",
-  QUOTE_SENT: "bg-amber-900/60 text-amber-300",
-  APPROVED: "bg-blue-900/60 text-blue-300",
-  BOOKED: "bg-indigo-900/60 text-indigo-300",
-  LOADED_READY: "bg-teal-900/60 text-teal-300",
-  ON_JOB: "bg-emerald-900/60 text-emerald-300",
-  RETURNED: "bg-purple-900/60 text-purple-300",
-  LD_CHECK: "bg-orange-900/60 text-orange-300",
-  INVOICED: "bg-cyan-900/60 text-cyan-300",
-  CLOSED: "bg-zinc-800 text-zinc-400",
-  CANCELLED: "bg-red-900/60 text-red-300",
+  DRAFT:        "bg-chip-neutral-bg text-chip-neutral-fg",
+  QUOTE_SENT:   "bg-chip-warn-bg text-chip-warn-fg",
+  APPROVED:     "bg-cadence-booked-bg text-cadence-booked-fg",
+  BOOKED:       "bg-cadence-booked-bg text-cadence-booked-fg",
+  LOADED_READY: "bg-cadence-picking-today-bg text-cadence-picking-today-fg",
+  ON_JOB:       "bg-cadence-on-rental-bg text-cadence-on-rental-fg",
+  RETURNED:     "bg-cadence-returned-bg text-cadence-returned-fg",
+  LD_CHECK:     "bg-cadence-returning-today-bg text-cadence-returning-today-fg",
+  INVOICED:     "bg-cadence-invoiced-bg text-cadence-invoiced-fg",
+  CLOSED:       "bg-cadence-wrapped-bg text-cadence-wrapped-fg",
+  CANCELLED:    "bg-chip-bad-bg text-chip-bad-fg",
 };
 
 const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE", "DISCOUNT"] as const;
@@ -208,14 +214,20 @@ type StatusAction = {
   endpoint?: string
 }
 
+// Status-transition button colors — semantic mapping that harmonizes
+// with the cadence palette: primary CTAs use the near-black lt-fg
+// background (matches the Jobs "+ New quote"), advancing actions
+// pick up the destination cadence tint as a saturated -bar/-fg600
+// equivalent. "Back to Draft" and "Close Order" use a restrained
+// muted tone since they aren't forward-progress on the engagement.
 const STATUS_ACTIONS: Record<string, StatusAction[]> = {
-  DRAFT: [{ label: "Send Quote", next: "QUOTE_SENT", color: "bg-amber-600 hover:bg-amber-500" }],
+  DRAFT: [{ label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" }],
   QUOTE_SENT: [
-    { label: "Mark Approved", next: "APPROVED", color: "bg-blue-600 hover:bg-blue-500" },
-    { label: "Back to Draft", next: "DRAFT", color: "bg-zinc-600 hover:bg-zinc-500" },
+    { label: "Mark Approved", next: "APPROVED", color: "bg-lt-fg hover:bg-black" },
+    { label: "Back to Draft", next: "DRAFT", color: "bg-lt-fg2 hover:bg-lt-fg" },
   ],
   APPROVED: [
-    { label: "Book it", next: "BOOKED", color: "bg-indigo-600 hover:bg-indigo-500", endpoint: "book" },
+    { label: "Book it", next: "BOOKED", color: "bg-lt-fg hover:bg-black", endpoint: "book" },
   ],
   // BOOKED → LOADED_READY is rollup-derived (Phase 3). No manual
   // button — operators advance the warehouse picking floor and stamp
@@ -228,9 +240,9 @@ const STATUS_ACTIONS: Record<string, StatusAction[]> = {
   // signature, "loaded as planned" attestation) and emit the
   // CHECKOUT_SIGN_OFF cadence event from there. Today this is just
   // a quiet status flip — no cadence event.
-  LOADED_READY: [{ label: "Mark On Job", next: "ON_JOB", color: "bg-emerald-600 hover:bg-emerald-500" }],
-  ON_JOB: [{ label: "Mark Returned", next: "RETURNED", color: "bg-purple-600 hover:bg-purple-500" }],
-  RETURNED: [{ label: "Close Order", next: "CLOSED", color: "bg-zinc-600 hover:bg-zinc-500" }],
+  LOADED_READY: [{ label: "Mark On Job", next: "ON_JOB", color: "bg-cadence-on-rental-bar hover:opacity-90" }],
+  ON_JOB: [{ label: "Mark Returned", next: "RETURNED", color: "bg-cadence-returned-bar hover:opacity-90" }],
+  RETURNED: [{ label: "Close Order", next: "CLOSED", color: "bg-lt-fg2 hover:bg-lt-fg" }],
 };
 
 export default function OrderDetailPage() {
@@ -1018,7 +1030,7 @@ export default function OrderDetailPage() {
   if (loading || !order) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <p className="text-zinc-500">Loading order...</p>
+        <p className="text-lt-fg3">Loading order...</p>
       </div>
     );
   }
@@ -1029,22 +1041,26 @@ export default function OrderDetailPage() {
   const noRecipient = !recipients.primary;
 
   return (
-    <div className="p-6 max-w-[1200px] mx-auto">
-      <button onClick={() => router.push("/orders")} className="text-sm text-zinc-400 hover:text-white mb-4 inline-block">
-        &larr; Back to Orders
-      </button>
+    // Light-motif page bg — overrides the dashboard shell's default
+    // until the rollout converts every page. Matches the Jobs page's
+    // wrapper so the two surfaces feel like one engagement.
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="max-w-[1200px] mx-auto">
+        <button onClick={() => router.push("/orders")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
+          &larr; Back to Orders
+        </button>
 
       {/* Order Header */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-semibold text-white font-mono">{order.orderNumber}</h1>
+              <h1 className="text-2xl font-semibold text-lt-fg3 font-mono tracking-tight">{order.orderNumber}</h1>
               <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[order.status]}`}>
                 {order.status.replace("_", " ")}
               </span>
             </div>
-            <p className="text-zinc-400">{order.description || "No description"}</p>
+            <p className="text-lt-fg2">{order.description || "No description"}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <div className="flex gap-2">
@@ -1072,24 +1088,24 @@ export default function OrderDetailPage() {
                     onClick={onClick}
                     disabled={disabled}
                     title={title}
-                    className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60`}
+                    className={`px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${action.color} disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {isBook && booking ? "Booking…" : action.label}
                   </button>
                 );
               })}
               {order.status !== "CANCELLED" && order.status !== "CLOSED" && (
-                <button onClick={cancelOrder} className="px-3 py-2 text-red-400 hover:text-red-300 text-sm">Cancel</button>
+                <button onClick={cancelOrder} className="px-3 py-2 text-chip-bad-fg hover:opacity-70 text-sm">Cancel</button>
               )}
               {order.status === "DRAFT" && (
-                <button onClick={deleteOrder} className="px-3 py-2 text-zinc-500 hover:text-red-400 text-sm">Delete</button>
+                <button onClick={deleteOrder} className="px-3 py-2 text-lt-fg3 hover:text-chip-bad-fg text-sm">Delete</button>
               )}
             </div>
             {order.status === "DRAFT" && (
               <RecipientLine recipients={recipients} onAdd={() => setAddContactOpen(true)} />
             )}
             {bookErr && (
-              <div className="text-xs text-red-400 mt-1.5 max-w-xs text-right">
+              <div className="text-xs text-chip-bad-fg mt-1.5 max-w-xs text-right">
                 Book it failed: {bookErr}
               </div>
             )}
@@ -1097,7 +1113,7 @@ export default function OrderDetailPage() {
         </div>
 
         {addContactOpen && (
-          <div className="mt-4 border-t border-zinc-800 pt-4">
+          <div className="mt-4 border-t border-lt-hairline pt-4">
             <AddContactForm
               email={addEmail}
               first={addFirst}
@@ -1123,44 +1139,44 @@ export default function OrderDetailPage() {
           </div>
         )}
         <div className="grid grid-cols-4 gap-6 text-sm">
-          <div><span className="text-zinc-500">Company</span><p className="text-white mt-0.5">{order.company.name}</p></div>
-          <div><span className="text-zinc-500">Agent</span><p className="text-white mt-0.5">{order.agent.name}</p></div>
-          <div><span className="text-zinc-500">Dates</span><p className="text-white mt-0.5">{fmtDate(order.startDate)} - {fmtDate(order.endDate)}</p></div>
-          <div><span className="text-zinc-500">Linked Booking</span><p className="text-white mt-0.5">
-            {order.booking ? <a href={`/jobs/${order.booking.id}`} className="text-blue-400 hover:text-blue-300">{order.booking.bookingNumber}</a> : <span className="text-zinc-500">None</span>}
+          <div><span className="text-lt-fg3">Company</span><p className="text-lt-fg mt-0.5">{order.company.name}</p></div>
+          <div><span className="text-lt-fg3">Agent</span><p className="text-lt-fg mt-0.5">{order.agent.name}</p></div>
+          <div><span className="text-lt-fg3">Dates</span><p className="text-lt-fg mt-0.5">{fmtDate(order.startDate)} - {fmtDate(order.endDate)}</p></div>
+          <div><span className="text-lt-fg3">Linked Booking</span><p className="text-lt-fg mt-0.5">
+            {order.booking ? <a href={`/jobs/${order.booking.id}`} className="text-lt-fg hover:text-black">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
           </p></div>
         </div>
       </div>
 
       {/* Line Items */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-          <h2 className="text-lg font-semibold text-white">Line Items</h2>
+      <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
+          <h2 className="text-lg font-semibold text-lt-fg">Line Items</h2>
           {isEditable && (
             <button onClick={() => { setShowAddForm(!showAddForm); if (!showAddForm) resetForm(); }}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+              className="px-3 py-1.5 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
               {showAddForm ? "Cancel" : "+ Add Item"}
             </button>
           )}
         </div>
 
         {showAddForm && isEditable && (
-          <div className="px-6 py-4 bg-zinc-800/50 border-b border-zinc-800 space-y-4">
+          <div className="px-6 py-4 bg-lt-inner/50 border-b border-lt-hairline space-y-4">
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Type</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Type</label>
                 <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                   {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="col-span-5">
-                <label className="block text-xs text-zinc-500 mb-1">
+                <label className="block text-xs text-lt-fg3 mb-1">
                   {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : "Description"}
                 </label>
                 {liType === "VEHICLE" ? (
                   <select value={liAssetCatId} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                    className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                     <option value="">Select vehicle...</option>
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
                   </select>
@@ -1169,14 +1185,14 @@ export default function OrderDetailPage() {
                     <input type="text" value={invSearch} onChange={(e) => setInvSearch(e.target.value)}
                       onFocus={() => invResults.length > 0 && setShowInvDropdown(true)}
                       placeholder="Type to search inventory..."
-                      className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
                     {showInvDropdown && invResults.length > 0 && (
-                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-[200px] overflow-y-auto">
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-lt-inner border border-lt-hairline rounded-lg shadow-xl max-h-[200px] overflow-y-auto">
                         {invResults.map((item) => (
                           <button key={item.id} onClick={() => selectInventoryItem(item)}
-                            className="w-full px-3 py-2 text-left hover:bg-zinc-700 text-sm text-white flex justify-between">
+                            className="w-full px-3 py-2 text-left hover:bg-lt-inner text-sm text-lt-fg flex justify-between">
                             <span className="font-mono">{item.code}</span>
-                            <span className="text-zinc-400 text-xs">{item.category.name}</span>
+                            <span className="text-lt-fg2 text-xs">{item.category.name}</span>
                           </button>
                         ))}
                       </div>
@@ -1184,49 +1200,49 @@ export default function OrderDetailPage() {
                   </div>
                 ) : (
                   <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)} placeholder="e.g. Day Player Grip, Delivery Fee..."
-                    className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+                    className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
                 )}
               </div>
               <div className="col-span-5">
-                <label className="block text-xs text-zinc-500 mb-1">Description (on invoice)</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Description (on invoice)</label>
                 <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
             </div>
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Start</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Start</label>
                 <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">End</label>
+                <label className="block text-xs text-lt-fg3 mb-1">End</label>
                 <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Rate Type</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Rate Type</label>
                 <select value={liRateType} onChange={(e) => setLiRateType(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500">
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                   <option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="FLAT">Flat</option>
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-zinc-500 mb-1">Rate ($)</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Rate ($)</label>
                 <input type="number" step="0.01" value={liRate} onChange={(e) => setLiRate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
               <div className="col-span-1">
-                <label className="block text-xs text-zinc-500 mb-1">Qty</label>
+                <label className="block text-xs text-lt-fg3 mb-1">Qty</label>
                 <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white focus:outline-none focus:border-zinc-500" />
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
               <div className="col-span-3 flex items-end gap-2">
                 <button onClick={addLineItem} disabled={!liDesc || !liRate || adding}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors">
+                  className="px-4 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-medium rounded transition-colors">
                   {adding ? "Adding..." : "Add"}
                 </button>
-                <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
+                <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-lt-fg2 hover:text-lt-fg text-sm transition-colors">Cancel</button>
               </div>
             </div>
           </div>
@@ -1234,7 +1250,7 @@ export default function OrderDetailPage() {
 
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-800 text-zinc-500 text-left text-xs uppercase tracking-wide">
+            <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-xs uppercase tracking-wide">
               <th className="px-6 py-2.5 font-medium w-[80px]">Type</th>
               <th className="px-4 py-2.5 font-medium">Description</th>
               <th className="px-4 py-2.5 font-medium">Dates</th>
@@ -1253,59 +1269,59 @@ export default function OrderDetailPage() {
           </thead>
           <tbody>
             {order.lineItems.length === 0 ? (
-              <tr><td colSpan={8} className="px-6 py-8 text-center text-zinc-500">
+              <tr><td colSpan={8} className="px-6 py-8 text-center text-lt-fg3">
                 No line items yet. Click \"+ Add Item\" to start building this order.
               </td></tr>
             ) : (
               order.lineItems.map((li) => (
-                <tr key={li.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                <tr key={li.id} className="border-b border-lt-hairline/50 hover:bg-lt-inner/30">
                   <td className="px-6 py-3">
                     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                      li.type === "VEHICLE" ? "bg-blue-900/40 text-blue-300" :
-                      li.type === "DISCOUNT" ? "bg-red-900/40 text-red-300" :
-                      li.type === "FEE" ? "bg-amber-900/40 text-amber-300" :
-                      "bg-zinc-700 text-zinc-300"
+                      li.type === "VEHICLE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      li.type === "DISCOUNT" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      li.type === "FEE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                      "bg-lt-inner text-lt-fg2"
                     }`}>{li.type}</span>
                   </td>
-                  <td className="px-4 py-3 text-white">{li.description}</td>
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap text-xs">
+                  <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+                  <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
                     {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
                   </td>
                   {editingLineId === li.id ? (
                     <>
                       <td className="px-4 py-2">
                         <input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)}
-                          className="w-24 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right font-mono" />
-                        <span className="text-zinc-500 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                          className="w-24 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-right font-mono" />
+                        <span className="text-lt-fg3 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
                       </td>
                       <td className="px-4 py-2 text-center">
                         <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
-                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                          className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
                       </td>
                       <td className="px-4 py-2 text-center">
                         <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
                           placeholder="auto"
-                          className="w-14 px-2 py-1 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
+                          className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
                       </td>
-                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <button onClick={() => saveEditLine(li.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
-                        <button onClick={() => setEditingLineId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">X</button>
+                        <button onClick={() => saveEditLine(li.id)} className="text-chip-good-fg hover:opacity-70 text-xs mr-2">Save</button>
+                        <button onClick={() => setEditingLineId(null)} className="text-lt-fg3 hover:text-lt-fg2 text-xs">X</button>
                       </td>
                     </>
                   ) : (
                     <>
-                      <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">
-                        {fmt(li.rate)}<span className="text-zinc-500 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                      <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
+                        {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
                       </td>
-                      <td className="px-4 py-3 text-center text-zinc-300">{li.quantity}</td>
-                      <td className="px-4 py-3 text-center text-zinc-400">{li.days ?? "--"}</td>
-                      <td className="px-4 py-3 text-right text-white font-mono">{fmt(li.lineTotal)}</td>
+                      <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
+                      <td className="px-4 py-3 text-center text-lt-fg2">{li.days ?? "--"}</td>
+                      <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
                         {isEditable && (
                           <button
                             onClick={() => startEditLine(li)}
-                            className="text-zinc-500 hover:text-blue-400 text-xs mr-2"
+                            className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
                           >
                             Edit
                           </button>
@@ -1330,15 +1346,15 @@ export default function OrderDetailPage() {
         </table>
 
         {order.lineItems.length > 0 && (
-          <div className="px-6 py-4 border-t border-zinc-800 flex justify-end">
+          <div className="px-6 py-4 border-t border-lt-hairline flex justify-end">
             <div className="w-[280px] space-y-1.5 text-sm">
-              <div className="flex justify-between text-zinc-400">
-                <span>Subtotal</span><span className="font-mono text-zinc-300">{fmt(order.subtotal)}</span>
+              <div className="flex justify-between text-lt-fg2">
+                <span>Subtotal</span><span className="font-mono text-lt-fg2">{fmt(order.subtotal)}</span>
               </div>
-              <div className="flex justify-between text-zinc-400">
-                <span>Tax ({(Number(order.taxRate) * 100).toFixed(1)}%)</span><span className="font-mono text-zinc-300">{fmt(order.taxAmount)}</span>
+              <div className="flex justify-between text-lt-fg2">
+                <span>Tax ({(Number(order.taxRate) * 100).toFixed(1)}%)</span><span className="font-mono text-lt-fg2">{fmt(order.taxAmount)}</span>
               </div>
-              <div className="flex justify-between text-white font-semibold pt-1.5 border-t border-zinc-700">
+              <div className="flex justify-between text-lt-fg font-semibold pt-1.5 border-t border-lt-hairline">
                 <span>Total</span><span className="font-mono">{fmt(order.total)}</span>
               </div>
             </div>
@@ -1346,10 +1362,10 @@ export default function OrderDetailPage() {
         )}
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-3">Notes</h2>
-        <p className="text-zinc-400 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
-        <p className="text-xs text-zinc-600 mt-4">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-lt-fg mb-3">Notes</h2>
+        <p className="text-lt-fg2 text-sm whitespace-pre-wrap">{order.notes || "No notes."}</p>
+        <p className="text-xs text-lt-fg3 mt-4">
           Created {new Date(order.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
       </div>
@@ -1360,33 +1376,33 @@ export default function OrderDetailPage() {
           on every order; instructions surface on the portal job page
           when the toggle is on, and a loud check-in alert lights up
           the inbound dispatch lane when blindReturn fires. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-lg font-semibold text-white">Blind handoff</h2>
+          <h2 className="text-lg font-semibold text-lt-fg">Blind handoff</h2>
           <button
             onClick={saveBlindHandoff}
             disabled={!blindDirty || blindSaving}
-            className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+            className="text-xs font-semibold bg-lt-fg hover:bg-black text-white px-3 py-1.5 rounded disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {blindSaving ? "Saving…" : blindDirty ? "Save" : "Saved"}
           </button>
         </div>
-        <p className="text-xs text-zinc-500 mb-4">
+        <p className="text-xs text-lt-fg3 mb-4">
           Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
         </p>
 
         <div className="space-y-4">
           {/* Pickup */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-lt-fg cursor-pointer">
               <input
                 type="checkbox"
                 checked={blindPickup}
                 onChange={(e) => { setBlindPickup(e.target.checked); setBlindDirty(true); }}
-                className="accent-amber-500"
+                className="accent-lt-fg"
               />
               <span className="font-medium">Blind pickup</span>
-              <span className="text-xs text-zinc-500">Client picks up the unit themselves</span>
+              <span className="text-xs text-lt-fg3">Client picks up the unit themselves</span>
             </label>
             {blindPickup && (
               <textarea
@@ -1394,22 +1410,22 @@ export default function OrderDetailPage() {
                 onChange={(e) => { setBlindPickupInstructions(e.target.value); setBlindDirty(true); }}
                 rows={4}
                 placeholder="Where the unit will be staged, gate code, lockbox combination, keys location, where to park, who to call after-hours…"
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2 resize-y"
               />
             )}
           </div>
 
           {/* Return */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-lt-fg cursor-pointer">
               <input
                 type="checkbox"
                 checked={blindReturn}
                 onChange={(e) => { setBlindReturn(e.target.checked); setBlindDirty(true); }}
-                className="accent-amber-500"
+                className="accent-lt-fg"
               />
               <span className="font-medium">Blind return</span>
-              <span className="text-xs text-zinc-500">Client returns the unit themselves</span>
+              <span className="text-xs text-lt-fg3">Client returns the unit themselves</span>
             </label>
             {blindReturn && (
               <textarea
@@ -1417,14 +1433,14 @@ export default function OrderDetailPage() {
                 onChange={(e) => { setBlindReturnInstructions(e.target.value); setBlindDirty(true); }}
                 rows={4}
                 placeholder="Where to leave the unit, return-window hours, drop-off location, key drop, anything ops needs to know to find it…"
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2 resize-y"
               />
             )}
           </div>
         </div>
 
         {blindMsg && (
-          <div className={`mt-3 text-xs ${blindMsg === "Saved." ? "text-emerald-400" : "text-red-400"}`}>
+          <div className={`mt-3 text-xs ${blindMsg === "Saved." ? "text-chip-good-fg" : "text-chip-bad-fg"}`}>
             {blindMsg}
           </div>
         )}
@@ -1442,13 +1458,13 @@ export default function OrderDetailPage() {
         const fleetDone = fleetLines.length === 0 || !!order.fleetReadyAt;
         const bothDone = warehouseDone && fleetDone;
         return (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-4 mb-6">
+          <div className="bg-lt-card border border-lt-hairline rounded-xl px-6 py-4 mb-6">
             <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-sm font-semibold text-white">Fulfillment lanes</h2>
+              <h2 className="text-sm font-semibold text-lt-fg">Fulfillment lanes</h2>
               {bothDone ? (
-                <span className="text-[11px] font-semibold text-emerald-400">Both lanes ready ✓</span>
+                <span className="text-[11px] font-semibold text-chip-good-fg">Both lanes ready ✓</span>
               ) : (
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] text-lt-fg3">
                   {!warehouseDone && !fleetDone
                     ? 'Warehouse + fleet pending'
                     : !warehouseDone
@@ -1459,17 +1475,17 @@ export default function OrderDetailPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Warehouse cell */}
-              <div className={`rounded-lg border px-3 py-2.5 ${warehouseDone ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950'}`}>
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Warehouse</div>
+              <div className={`rounded-lg border px-3 py-2.5 ${warehouseDone ? 'border-chip-good-fg/30 bg-chip-good-bg' : 'border-lt-hairline bg-lt-inner'}`}>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">Warehouse</div>
                 {warehouseLines.length === 0 ? (
-                  <div className="text-sm text-zinc-400 mt-0.5">No warehouse lines</div>
+                  <div className="text-sm text-lt-fg2 mt-0.5">No warehouse lines</div>
                 ) : (
                   <div className="flex items-baseline justify-between mt-0.5">
-                    <div className={`text-sm font-semibold ${warehouseDone ? 'text-emerald-300' : 'text-white'}`}>
+                    <div className={`text-sm font-semibold ${warehouseDone ? 'text-chip-good-fg' : 'text-lt-fg'}`}>
                       {warehouseLoaded} / {warehouseLines.length} loaded
                     </div>
                     {!warehouseDone && (
-                      <Link href="/warehouse/pick" className="text-[11px] text-amber-400 hover:text-amber-300">
+                      <Link href="/warehouse/pick" className="text-[11px] text-lt-fg hover:text-black">
                         Picking floor →
                       </Link>
                     )}
@@ -1477,13 +1493,13 @@ export default function OrderDetailPage() {
                 )}
               </div>
               {/* Fleet cell */}
-              <div className={`rounded-lg border px-3 py-2.5 ${fleetDone ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-950'}`}>
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Fleet</div>
+              <div className={`rounded-lg border px-3 py-2.5 ${fleetDone ? 'border-chip-good-fg/30 bg-chip-good-bg' : 'border-lt-hairline bg-lt-inner'}`}>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">Fleet</div>
                 {fleetLines.length === 0 ? (
-                  <div className="text-sm text-zinc-400 mt-0.5">No fleet lines</div>
+                  <div className="text-sm text-lt-fg2 mt-0.5">No fleet lines</div>
                 ) : (
                   <div className="flex items-center justify-between mt-0.5 gap-2">
-                    <div className={`text-sm font-semibold ${fleetDone ? 'text-emerald-300' : 'text-white'}`}>
+                    <div className={`text-sm font-semibold ${fleetDone ? 'text-chip-good-fg' : 'text-lt-fg'}`}>
                       {order.fleetReadyAt
                         ? `Ready · ${new Date(order.fleetReadyAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
                         : `${fleetLines.length} line${fleetLines.length === 1 ? '' : 's'} pending`}
@@ -1496,7 +1512,7 @@ export default function OrderDetailPage() {
                         onClick={undoFleetReady}
                         disabled={fleetBusy != null}
                         title="Clear fleet-ready stamp"
-                        className="text-[11px] text-zinc-500 hover:text-rose-300 underline-offset-2 hover:underline disabled:opacity-40"
+                        className="text-[11px] text-lt-fg3 hover:text-chip-bad-fg underline-offset-2 hover:underline disabled:opacity-40"
                       >
                         {fleetBusy === 'undo' ? 'Undoing…' : 'Undo'}
                       </button>
@@ -1505,7 +1521,7 @@ export default function OrderDetailPage() {
                       <button
                         onClick={stampFleetReady}
                         disabled={fleetBusy != null}
-                        className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded disabled:opacity-50"
+                        className="text-[11px] font-semibold bg-cadence-on-rental-bar hover:opacity-90 text-white px-2.5 py-1 rounded disabled:opacity-50"
                       >
                         {fleetBusy === 'stamp' ? 'Stamping…' : 'Mark Fleet Ready'}
                       </button>
@@ -1515,17 +1531,17 @@ export default function OrderDetailPage() {
               </div>
             </div>
             {fleetErr && (
-              <div className="mt-3 text-[11px] text-rose-400">{fleetErr}</div>
+              <div className="mt-3 text-[11px] text-chip-bad-fg">{fleetErr}</div>
             )}
           </div>
         );
       })()}
 
       {/* Quote PDF actions */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-6 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl px-6 py-4 mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">Quote PDF</div>
-          <div className="text-xs text-zinc-500 mt-0.5">
+          <div className="text-sm font-semibold text-lt-fg">Quote PDF</div>
+          <div className="text-xs text-lt-fg3 mt-0.5">
             {order.quotePdfUrl
               ? `Last generated ${order.quotePdfGeneratedAt ? new Date(order.quotePdfGeneratedAt).toLocaleString() : ""}`
               : "Not generated yet"}
@@ -1538,20 +1554,20 @@ export default function OrderDetailPage() {
                 href={`/api/orders/${orderId}/quote-pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Preview
               </a>
               <a
                 href={`/api/orders/${orderId}/quote-pdf?download=1`}
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Download
               </a>
               <button
                 onClick={regeneratePdf}
                 disabled={regeneratingPdf}
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
                 title="Re-render the PDF off the current line items and totals"
               >
                 {regeneratingPdf ? "Regenerating…" : "Regenerate"}
@@ -1559,7 +1575,7 @@ export default function OrderDetailPage() {
               <div className="flex flex-col items-end gap-1">
                 <button
                   disabled
-                  className="px-3 py-1.5 bg-zinc-800 text-zinc-500 text-sm font-semibold rounded-lg cursor-not-allowed"
+                  className="px-3 py-1.5 bg-lt-inner text-lt-fg3 text-sm font-semibold rounded-lg cursor-not-allowed"
                   title={
                     noRecipient
                       ? "Add a contact to the job before sending."
@@ -1575,7 +1591,7 @@ export default function OrderDetailPage() {
             <button
               onClick={regeneratePdf}
               disabled={regeneratingPdf || order.lineItems.length === 0}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:bg-zinc-700 text-white text-sm font-semibold rounded-lg"
+              className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 disabled:bg-lt-inner text-white text-sm font-semibold rounded-lg"
               title={order.lineItems.length === 0 ? "Add at least one line item first" : "Generate the client-facing Quote PDF"}
             >
               {regeneratingPdf ? "Generating…" : "Generate Quote PDF"}
@@ -1589,12 +1605,12 @@ export default function OrderDetailPage() {
 
       {/* Cadence (CRH) */}
       {cadence && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-3">
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6 space-y-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-lg font-semibold text-white">Email cadence</h2>
-              <div className="text-xs text-zinc-500 mt-0.5">
-                State: <span className="text-white font-mono">{cadence.order.cadenceState}</span>
+              <h2 className="text-lg font-semibold text-lt-fg">Email cadence</h2>
+              <div className="text-xs text-lt-fg3 mt-0.5">
+                State: <span className="text-lt-fg font-mono">{cadence.order.cadenceState}</span>
                 {cadence.order.cadencePausedUntil && (
                   <>
                     {" · "}
@@ -1608,7 +1624,7 @@ export default function OrderDetailPage() {
                 <button
                   onClick={clearCadencePause}
                   disabled={cadenceBusy}
-                  className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+                  className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
                 >
                   Clear pause
                 </button>
@@ -1616,10 +1632,10 @@ export default function OrderDetailPage() {
               <button
                 onClick={() => toggleCadenceOverride(!cadence.order.cadenceManualOverride)}
                 disabled={cadenceBusy}
-                className={`px-3 py-1.5 disabled:opacity-50 text-white text-sm font-semibold rounded-lg ${
+                className={`px-3 py-1.5 disabled:opacity-50 text-sm font-semibold rounded-lg ${
                   cadence.order.cadenceManualOverride
-                    ? 'bg-amber-600 hover:bg-amber-500'
-                    : 'bg-zinc-700 hover:bg-zinc-600'
+                    ? 'bg-lt-fg hover:bg-black text-white'
+                    : 'bg-lt-inner hover:bg-lt-hairline text-lt-fg'
                 }`}
               >
                 {cadence.order.cadenceManualOverride ? 'Resume auto-cadence' : 'Pause auto-cadence'}
@@ -1627,8 +1643,8 @@ export default function OrderDetailPage() {
             </div>
           </div>
           {cadence.events.length > 0 && (
-            <div className="border-t border-zinc-800 pt-3">
-              <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">
+            <div className="border-t border-lt-hairline pt-3">
+              <div className="text-xs text-lt-fg3 uppercase tracking-wider font-semibold mb-2">
                 Scheduled events ({cadence.events.length})
               </div>
               <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -1639,12 +1655,12 @@ export default function OrderDetailPage() {
                       : 'sent'
                     : 'pending';
                   return (
-                    <div key={e.id} className="text-xs font-mono flex items-center justify-between gap-2 text-zinc-400">
+                    <div key={e.id} className="text-xs font-mono flex items-center justify-between gap-2 text-lt-fg2">
                       <span className="truncate">{e.eventType}</span>
-                      <span className="text-zinc-600">{new Date(e.scheduledFor).toLocaleString()}</span>
+                      <span className="text-lt-fg3">{new Date(e.scheduledFor).toLocaleString()}</span>
                       <span
                         className={`flex-shrink-0 ${
-                          status === 'sent' ? 'text-emerald-400' : status === 'pending' ? 'text-amber-400' : 'text-zinc-500'
+                          status === 'sent' ? 'text-chip-good-fg' : status === 'pending' ? 'text-lt-fg' : 'text-lt-fg3'
                         }`}
                       >
                         {status}
@@ -1668,11 +1684,11 @@ export default function OrderDetailPage() {
 
       {/* Signed Agreement */}
       {agreement && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6 space-y-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-lg font-semibold text-white">Rental Agreement</h2>
-              <div className="text-xs text-zinc-500 mt-0.5">
+              <h2 className="text-lg font-semibold text-lt-fg">Rental Agreement</h2>
+              <div className="text-xs text-lt-fg3 mt-0.5">
                 {agreement.documentType === "NEGOTIATED" ? "Negotiated" : "Baseline"}
                 {agreement.baselineVersion ? ` · v${agreement.baselineVersion}` : ""}
                 {" · "}
@@ -1697,9 +1713,9 @@ export default function OrderDetailPage() {
               this entirely (the manual-override strip below still
               allows admin recovery flips if needed). */}
           {agreement.status === "PORTAL_GENERATED" && (
-            <div className="border border-amber-900/40 bg-amber-950/30 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs text-amber-200/90">
-                <div className="font-semibold text-amber-100">Not yet visible to the client.</div>
+            <div className="border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-chip-warn-fg">
+                <div className="font-semibold text-chip-warn-fg">Not yet visible to the client.</div>
                 <div className="mt-0.5">
                   The PDF is ready; release it to the portal to let the client view + sign it
                   in-session.
@@ -1713,7 +1729,7 @@ export default function OrderDetailPage() {
                     ? "Regenerate the agreement before releasing — no PDF on file"
                     : "Release to the client portal"
                 }
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg whitespace-nowrap"
+                className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg whitespace-nowrap"
               >
                 Release to portal
               </button>
@@ -1721,37 +1737,37 @@ export default function OrderDetailPage() {
           )}
 
           {(agreement.signedAt || agreement.signerName) && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-lt-inner border border-lt-hairline rounded-lg p-4">
               <div>
-                <div className="text-zinc-500 text-xs">Signed at</div>
-                <div className="text-white mt-0.5">
+                <div className="text-lt-fg3 text-xs">Signed at</div>
+                <div className="text-lt-fg mt-0.5">
                   {agreement.signedAt ? new Date(agreement.signedAt).toLocaleString() : "—"}
                 </div>
               </div>
               <div>
-                <div className="text-zinc-500 text-xs">Signer</div>
-                <div className="text-white mt-0.5">{agreement.signerName || "—"}</div>
+                <div className="text-lt-fg3 text-xs">Signer</div>
+                <div className="text-lt-fg mt-0.5">{agreement.signerName || "—"}</div>
               </div>
               <div>
-                <div className="text-zinc-500 text-xs">Title</div>
-                <div className="text-white mt-0.5">{agreement.signerTitle || "—"}</div>
+                <div className="text-lt-fg3 text-xs">Title</div>
+                <div className="text-lt-fg mt-0.5">{agreement.signerTitle || "—"}</div>
               </div>
               <div>
-                <div className="text-zinc-500 text-xs">Email</div>
-                <div className="text-white mt-0.5 break-all">{agreement.signerEmail || "—"}</div>
+                <div className="text-lt-fg3 text-xs">Email</div>
+                <div className="text-lt-fg mt-0.5 break-all">{agreement.signerEmail || "—"}</div>
               </div>
               <div className="col-span-2">
-                <div className="text-zinc-500 text-xs">IP address</div>
-                <div className="text-white mt-0.5">{agreement.signerIpAddress || "—"}</div>
+                <div className="text-lt-fg3 text-xs">IP address</div>
+                <div className="text-lt-fg mt-0.5">{agreement.signerIpAddress || "—"}</div>
               </div>
               <div className="col-span-2">
-                <div className="text-zinc-500 text-xs">User agent</div>
-                <div className="text-white mt-0.5 text-xs break-all">{agreement.signerUserAgent || "—"}</div>
+                <div className="text-lt-fg3 text-xs">User agent</div>
+                <div className="text-lt-fg mt-0.5 text-xs break-all">{agreement.signerUserAgent || "—"}</div>
               </div>
               {agreement.acknowledgmentText && (
                 <div className="col-span-full">
-                  <div className="text-zinc-500 text-xs">Acknowledgment</div>
-                  <div className="text-zinc-300 mt-0.5 text-xs leading-relaxed italic">
+                  <div className="text-lt-fg3 text-xs">Acknowledgment</div>
+                  <div className="text-lt-fg2 mt-0.5 text-xs leading-relaxed italic">
                     &ldquo;{agreement.acknowledgmentText}&rdquo;
                   </div>
                 </div>
@@ -1765,7 +1781,7 @@ export default function OrderDetailPage() {
                 href={portalUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Open portal as client ↗
               </a>
@@ -1775,7 +1791,7 @@ export default function OrderDetailPage() {
                 href={agreement.documentToSignUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Doc to sign
               </a>
@@ -1785,7 +1801,7 @@ export default function OrderDetailPage() {
                 href={agreement.wordDocumentUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Last .docx download
               </a>
@@ -1795,7 +1811,7 @@ export default function OrderDetailPage() {
                 href={agreement.redlineUploadUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Client redline
               </a>
@@ -1805,7 +1821,7 @@ export default function OrderDetailPage() {
                 href={agreement.signedDocumentUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 text-white text-sm font-semibold rounded-lg"
               >
                 Signed PDF
               </a>
@@ -1813,7 +1829,7 @@ export default function OrderDetailPage() {
             {agreement.contractReviewId && (
               <a
                 href={`/tools/contract-review/${agreement.contractReviewId}`}
-                className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
               >
                 Open contract review
               </a>
@@ -1821,15 +1837,15 @@ export default function OrderDetailPage() {
             <button
               onClick={resendPortalLink}
               disabled={agreementBusy}
-              className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+              className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             >
               Resend portal link
             </button>
           </div>
 
           {/* Manual override — recovery only. Signed states are intentionally absent. */}
-          <div className="border-t border-zinc-800 pt-4 space-y-2">
-            <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+          <div className="border-t border-lt-hairline pt-4 space-y-2">
+            <div className="text-xs text-lt-fg3 uppercase tracking-wider font-semibold">
               Manual override
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1840,19 +1856,19 @@ export default function OrderDetailPage() {
                     key={s}
                     onClick={() => overrideAgreementStatus(s)}
                     disabled={agreementBusy}
-                    className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 border border-zinc-700 text-zinc-300 text-xs font-semibold rounded"
+                    className="px-2.5 py-1 bg-lt-inner hover:bg-lt-inner disabled:opacity-50 border border-lt-hairline text-lt-fg2 text-xs font-semibold rounded"
                   >
                     → {describeAgreementStatus(s).label}
                   </button>
                 ))}
             </div>
-            <div className="text-[10px] text-zinc-600">
+            <div className="text-[10px] text-lt-fg3">
               Recovery only — SIGNED_BASELINE / SIGNED_NEGOTIATED are never settable here (signing event required).
             </div>
           </div>
 
           {agreementMsg && (
-            <div className="text-xs text-zinc-300 bg-zinc-950 border border-zinc-800 rounded-lg p-2">
+            <div className="text-xs text-lt-fg2 bg-lt-inner border border-lt-hairline rounded-lg p-2">
               {agreementMsg}
             </div>
           )}
@@ -1868,11 +1884,11 @@ export default function OrderDetailPage() {
 
       {/* Phase 5 commit 1 — Invoices block. RW billing off-ramp:
           generate a native RENTAL invoice from the booked snapshot. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
           <div>
-            <h2 className="text-lg font-semibold text-white">Invoices</h2>
-            <div className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-lt-fg">Invoices</h2>
+            <div className="text-xs text-lt-fg3 mt-0.5">
               Native SirReel billing. Rental invoice anchors to the booked value snapshot.
             </div>
           </div>
@@ -1891,7 +1907,7 @@ export default function OrderDetailPage() {
                 onClick={generateRentalInvoice}
                 disabled={!canGenerate || generatingInvoice}
                 title={title}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
               >
                 {generatingInvoice ? 'Generating…' : 'Generate rental invoice'}
               </button>
@@ -1900,15 +1916,15 @@ export default function OrderDetailPage() {
         </div>
 
         {invoiceErr && (
-          <div className="mb-3 rounded-lg border border-rose-800 bg-rose-950/50 text-rose-200 text-xs px-3 py-2">
+          <div className="mb-3 rounded-lg border border-chip-bad-fg/40 bg-chip-bad-bg text-chip-bad-fg text-xs px-3 py-2">
             {invoiceErr}
           </div>
         )}
 
         {invoices === null ? (
-          <div className="text-xs text-zinc-500">Loading invoices…</div>
+          <div className="text-xs text-lt-fg3">Loading invoices…</div>
         ) : invoices.length === 0 ? (
-          <div className="text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-3 py-4 text-center">
+          <div className="text-xs text-lt-fg3 border border-dashed border-lt-hairline rounded-lg px-3 py-4 text-center">
             No invoices yet.
           </div>
         ) : (
@@ -1921,44 +1937,44 @@ export default function OrderDetailPage() {
               return (
                 <div
                   key={inv.id}
-                  className="border border-zinc-800 bg-zinc-950 rounded-lg"
+                  className="border border-lt-hairline bg-lt-inner rounded-lg"
                 >
                   <div className="flex items-center gap-3 flex-wrap px-3 py-2.5">
                     <button
                       onClick={() => toggleInvoiceRow(inv.id)}
-                      className="text-zinc-500 hover:text-zinc-200 text-xs w-4"
+                      className="text-lt-fg3 hover:text-lt-fg text-xs w-4"
                     >
                       {expanded ? '−' : '+'}
                     </button>
-                    <span className="font-mono text-[11px] text-zinc-400">{inv.invoiceNumber}</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                    <span className="font-mono text-[11px] text-lt-fg2">{inv.invoiceNumber}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-lt-inner text-lt-fg2">
                       {inv.type}
                     </span>
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                        inv.status === 'PAID'    ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' :
-                        inv.status === 'SENT'    ? 'bg-blue-900/40 text-blue-300 border-blue-800' :
-                        inv.status === 'PARTIAL' ? 'bg-amber-900/40 text-amber-300 border-amber-800' :
-                        inv.status === 'VOID'    ? 'bg-red-900/40 text-red-300 border-red-800' :
-                                                   'bg-zinc-800 text-zinc-300 border-zinc-700'
+                        inv.status === 'PAID'    ? 'bg-chip-good-bg text-chip-good-fg border-chip-good-fg/30' :
+                        inv.status === 'SENT'    ? 'bg-cadence-booked-bg text-cadence-booked-fg border-cadence-booked-fg/30' :
+                        inv.status === 'PARTIAL' ? 'bg-chip-warn-bg text-chip-warn-fg border-chip-warn-fg/30' :
+                        inv.status === 'VOID'    ? 'bg-chip-bad-bg text-chip-bad-fg' :
+                                                   'bg-lt-inner text-lt-fg2 border-lt-hairline'
                       }`}
                     >
                       {inv.status}
                     </span>
-                    <span className="text-sm text-white font-semibold ml-auto">
+                    <span className="text-sm text-lt-fg font-semibold ml-auto">
                       ${Number(inv.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                     {Number(inv.amountPaid) > 0 && (
-                      <span className="text-[11px] text-emerald-400">
+                      <span className="text-[11px] text-chip-good-fg">
                         −${Number(inv.amountPaid).toLocaleString('en-US', { minimumFractionDigits: 2 })} paid
                       </span>
                     )}
                     {balanceNum > 0 && inv.status !== 'DRAFT' && (
-                      <span className="text-[11px] text-amber-400">
+                      <span className="text-[11px] text-lt-fg">
                         ${balanceNum.toLocaleString('en-US', { minimumFractionDigits: 2 })} due
                       </span>
                     )}
-                    <div className="text-[10px] text-zinc-500 w-full md:w-auto md:ml-3">
+                    <div className="text-[10px] text-lt-fg3 w-full md:w-auto md:ml-3">
                       Issued {new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       {inv.dueDate && (
                         <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
@@ -1969,7 +1985,7 @@ export default function OrderDetailPage() {
                         href={`/api/invoices/${inv.id}/pdf`}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                        className="text-[11px] font-semibold text-lt-fg hover:text-black"
                       >
                         View PDF →
                       </a>
@@ -1979,19 +1995,19 @@ export default function OrderDetailPage() {
                         onClick={() => sendInvoice(inv.id)}
                         disabled={sendingInvoiceId != null || noRecipient}
                         title={noRecipient ? 'Add a contact to the job before sending.' : undefined}
-                        className="text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
+                        className="text-[11px] font-semibold bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white px-2.5 py-1 rounded"
                       >
                         {sendingInvoiceId === inv.id ? 'Sending…' : 'Send'}
                       </button>
                     )}
                     {inv.sentAt && inv.status !== 'DRAFT' && (
-                      <span className="text-[10px] text-zinc-500">
+                      <span className="text-[10px] text-lt-fg3">
                         Sent {new Date(inv.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     )}
                   </div>
                   {expanded && (
-                    <div className="border-t border-zinc-800 px-3 py-3 space-y-3 bg-zinc-900">
+                    <div className="border-t border-lt-hairline px-3 py-3 space-y-3 bg-lt-card">
                       <PaymentsPanel
                         invoiceId={inv.id}
                         balanceDue={balanceNum}
@@ -2015,26 +2031,26 @@ export default function OrderDetailPage() {
       </div>
 
       {/* Portal Access */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-lg font-semibold text-white">Portal access</h2>
-            <div className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-lt-fg">Portal access</h2>
+            <div className="text-xs text-lt-fg3 mt-0.5">
               Per-contact magic links · 7-day TTL · 30-day session.{' '}
-              <span className="text-zinc-600">Add new contacts via &ldquo;+ Add quote recipient&rdquo; above.</span>
+              <span className="text-lt-fg3">Add new contacts via &ldquo;+ Add quote recipient&rdquo; above.</span>
             </div>
           </div>
         </div>
 
         {/* Active accesses */}
         {accesses === null ? (
-          <div className="text-xs text-zinc-500">Loading…</div>
+          <div className="text-xs text-lt-fg3">Loading…</div>
         ) : accesses.length === 0 ? (
-          <div className="text-xs text-zinc-500">No portal access issued yet.</div>
+          <div className="text-xs text-lt-fg3">No portal access issued yet.</div>
         ) : (
-          <div className="border border-zinc-800 rounded-lg overflow-hidden">
+          <div className="border border-lt-hairline rounded-lg overflow-hidden">
             <table className="w-full text-xs">
-              <thead className="bg-zinc-950 text-zinc-500">
+              <thead className="bg-lt-inner text-lt-fg3">
                 <tr>
                   <th className="text-left p-2 font-semibold">Contact</th>
                   <th className="text-left p-2 font-semibold">Status</th>
@@ -2042,29 +2058,29 @@ export default function OrderDetailPage() {
                   <th className="text-right p-2 font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-lt-hairline">
                 {accesses.map((a) => {
                   const expired = new Date(a.magicLinkExpiresAt).getTime() < Date.now();
                   const status = a.revokedAt ? 'Revoked' : expired ? 'Expired' : a.accessCount > 0 ? 'Active' : 'Invited';
                   const statusColor = a.revokedAt
-                    ? 'bg-zinc-700 text-zinc-400'
+                    ? 'bg-lt-inner text-lt-fg2'
                     : expired
-                    ? 'bg-amber-900/60 text-amber-300'
+                    ? 'bg-chip-warn-bg text-chip-warn-fg'
                     : a.accessCount > 0
-                    ? 'bg-emerald-900/60 text-emerald-300'
-                    : 'bg-blue-900/60 text-blue-300';
+                    ? 'bg-chip-good-bg text-chip-good-fg'
+                    : 'bg-cadence-booked-bg text-cadence-booked-fg';
                   return (
                     <tr key={a.id}>
                       <td className="p-2">
-                        <div className="text-white">{a.contact ? `${a.contact.firstName} ${a.contact.lastName}` : '—'}</div>
-                        <div className="text-zinc-500 text-[10px]">{a.contact?.email || '—'}</div>
+                        <div className="text-lt-fg">{a.contact ? `${a.contact.firstName} ${a.contact.lastName}` : '—'}</div>
+                        <div className="text-lt-fg3 text-[10px]">{a.contact?.email || '—'}</div>
                       </td>
                       <td className="p-2">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${statusColor}`}>{status}</span>
                       </td>
-                      <td className="p-2 text-zinc-500">
+                      <td className="p-2 text-lt-fg3">
                         {a.lastAccessedAt ? new Date(a.lastAccessedAt).toLocaleString() : '—'}
-                        {a.accessCount > 0 && <span className="text-zinc-600"> · {a.accessCount}x</span>}
+                        {a.accessCount > 0 && <span className="text-lt-fg3"> · {a.accessCount}x</span>}
                       </td>
                       <td className="p-2 text-right">
                         <div className="inline-flex gap-2">
@@ -2073,14 +2089,14 @@ export default function OrderDetailPage() {
                               {a.contact && (
                                 <button
                                   onClick={() => regenerateAccess(a.contact!.id)}
-                                  className="text-zinc-400 hover:text-white text-[11px]"
+                                  className="text-lt-fg2 hover:text-lt-fg text-[11px]"
                                 >
                                   Regenerate
                                 </button>
                               )}
                               <button
                                 onClick={() => revokeAccess(a.id)}
-                                className="text-red-400 hover:text-red-300 text-[11px]"
+                                className="text-chip-bad-fg hover:opacity-70 text-[11px]"
                               >
                                 Revoke
                               </button>
@@ -2089,7 +2105,7 @@ export default function OrderDetailPage() {
                           {a.revokedAt && a.contact && (
                             <button
                               onClick={() => regenerateAccess(a.contact!.id)}
-                              className="text-emerald-400 hover:text-emerald-300 text-[11px]"
+                              className="text-chip-good-fg hover:opacity-70 text-[11px]"
                             >
                               Reactivate
                             </button>
@@ -2106,16 +2122,16 @@ export default function OrderDetailPage() {
 
         {/* Detected contacts */}
         {detected.length > 0 && (
-          <div className="border-t border-zinc-800 pt-4">
-            <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">
+          <div className="border-t border-lt-hairline pt-4">
+            <div className="text-xs text-lt-fg3 uppercase tracking-wider font-semibold mb-2">
               New contact{detected.length === 1 ? '' : 's'} detected on this company&rsquo;s email threads
             </div>
             <div className="space-y-2">
               {detected.map((d) => (
-                <div key={d.email} className="flex items-center justify-between gap-3 bg-zinc-950 border border-zinc-800 rounded-lg p-2.5">
+                <div key={d.email} className="flex items-center justify-between gap-3 bg-lt-inner border border-lt-hairline rounded-lg p-2.5">
                   <div className="min-w-0 flex-1">
-                    <div className="text-white text-sm truncate">{d.displayName}</div>
-                    <div className="text-zinc-500 text-[10px] truncate">
+                    <div className="text-lt-fg text-sm truncate">{d.displayName}</div>
+                    <div className="text-lt-fg3 text-[10px] truncate">
                       {d.email} · last seen {new Date(d.mostRecentAt).toLocaleDateString()}
                     </div>
                   </div>
@@ -2128,7 +2144,7 @@ export default function OrderDetailPage() {
                       })
                     }
                     disabled={inviteBusy}
-                    className="px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-[11px] font-semibold rounded"
+                    className="px-2.5 py-1 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-[11px] font-semibold rounded"
                   >
                     Invite to portal
                   </button>
@@ -2143,7 +2159,7 @@ export default function OrderDetailPage() {
             both a JobContact and a PortalAccess. This section is now
             management-only — list/revoke/regenerate live access. */}
         {inviteMsg && (
-          <div className="border-t border-zinc-800 pt-3 text-[11px] text-zinc-400">{inviteMsg}</div>
+          <div className="border-t border-lt-hairline pt-3 text-[11px] text-lt-fg2">{inviteMsg}</div>
         )}
       </div>
 
@@ -2161,12 +2177,13 @@ export default function OrderDetailPage() {
       />
 
       {sendQuoteFlash && (
-        <div className="fixed bottom-6 right-6 z-40 bg-emerald-900/90 border border-emerald-700 text-emerald-100 text-sm px-4 py-2.5 rounded-lg shadow-lg">
+        <div className="fixed bottom-6 right-6 z-40 bg-chip-good-bg border border-chip-good-fg/30 text-chip-good-fg text-sm px-4 py-2.5 rounded-lg shadow-lg">
           {sendQuoteFlash}
         </div>
       )}
 
       <LineItemUndoToast toast={lineItemUndoToast} />
+      </div>
     </div>
   );
 }
@@ -2184,14 +2201,14 @@ function RecipientLine({
         <button
           type="button"
           onClick={onAdd}
-          className="text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted underline-offset-2"
+          className="text-[11px] text-lt-fg hover:text-black underline decoration-dotted underline-offset-2"
         >
           + Add quote recipient
         </button>
       );
     }
     return (
-      <div className="text-[11px] text-amber-400">
+      <div className="text-[11px] text-lt-fg">
         ⚠ No recipient — add a contact to send
       </div>
     );
@@ -2201,17 +2218,17 @@ function RecipientLine({
     ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}`).join('\n')
     : undefined;
   return (
-    <div className="text-[11px] text-zinc-500 leading-tight">
-      <span className="text-zinc-600">→ </span>
+    <div className="text-[11px] text-lt-fg3 leading-tight">
+      <span className="text-lt-fg3">→ </span>
       <a
         href={`/crm/people/${recipients.primary.id}`}
-        className="text-zinc-300 hover:text-white underline decoration-dotted underline-offset-2"
+        className="text-lt-fg2 hover:text-lt-fg underline decoration-dotted underline-offset-2"
         title="Open contact"
       >
         {recipients.primary.email}
       </a>
       {others.length > 0 && (
-        <span className="text-zinc-500 cursor-help" title={tooltip}>
+        <span className="text-lt-fg3 cursor-help" title={tooltip}>
           {' '}and {others.length} other{others.length === 1 ? '' : 's'}
         </span>
       )}
@@ -2251,8 +2268,8 @@ function AddContactForm({
   onCancel: () => void;
 }) {
   return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 space-y-3">
-      <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Add quote recipient</div>
+    <div className="bg-lt-inner border border-lt-hairline rounded-lg p-4 space-y-3">
+      <div className="text-xs text-lt-fg3 uppercase tracking-wider font-semibold">Add quote recipient</div>
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
         <input
           value={email}
@@ -2260,28 +2277,28 @@ function AddContactForm({
           placeholder="email@example.com"
           type="email"
           autoFocus
-          className="sm:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+          className="sm:col-span-2 bg-lt-card border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
         />
         <input
           value={first}
           onChange={(e) => onChange.first(e.target.value)}
           placeholder="First name"
-          className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+          className="bg-lt-card border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
         />
         <input
           value={last}
           onChange={(e) => onChange.last(e.target.value)}
           placeholder="Last name"
-          className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+          className="bg-lt-card border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
         />
       </div>
       <div className="flex items-center gap-4 flex-wrap">
-        <label className="flex items-center gap-2 text-xs text-zinc-400">
+        <label className="flex items-center gap-2 text-xs text-lt-fg2">
           Role
           <select
             value={role}
             onChange={(e) => onChange.role(e.target.value as typeof role)}
-            className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-600"
+            className="bg-lt-card border border-lt-hairline rounded-lg px-2 py-1.5 text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
           >
             <option value="PRODUCER">Producer</option>
             <option value="PM">PM</option>
@@ -2290,7 +2307,7 @@ function AddContactForm({
             <option value="OTHER">Other</option>
           </select>
         </label>
-        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+        <label className="flex items-center gap-2 text-xs text-lt-fg2 cursor-pointer">
           <input
             type="checkbox"
             checked={grantPortal}
@@ -2300,12 +2317,12 @@ function AddContactForm({
           Also grant portal access (sends magic link)
         </label>
       </div>
-      {err && <div className="text-[11px] text-red-400">{err}</div>}
+      {err && <div className="text-[11px] text-chip-bad-fg">{err}</div>}
       <div className="flex items-center justify-end gap-2 flex-wrap">
         <button
           onClick={onCancel}
           disabled={busy}
-          className="text-zinc-400 hover:text-zinc-200 disabled:opacity-50 text-sm"
+          className="text-lt-fg2 hover:text-lt-fg disabled:opacity-50 text-sm"
         >
           Cancel
         </button>
@@ -2313,7 +2330,7 @@ function AddContactForm({
           <button
             onClick={() => onSubmit(true)}
             disabled={busy || !email.trim()}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
           >
             {busy ? "Adding…" : "Add and Send Quote"}
           </button>
@@ -2321,7 +2338,7 @@ function AddContactForm({
           <button
             onClick={() => onSubmit(false)}
             disabled={busy || !email.trim()}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            className="px-3 py-1.5 bg-lt-fg hover:bg-black disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
           >
             {busy ? "Adding…" : "Add"}
           </button>
@@ -2385,13 +2402,13 @@ function PaymentsPanel({
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-2">
+        <div className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3 mb-2">
           Payments
         </div>
         {payments === null ? (
-          <div className="text-xs text-zinc-500">Loading…</div>
+          <div className="text-xs text-lt-fg3">Loading…</div>
         ) : payments.length === 0 ? (
-          <div className="text-xs text-zinc-500 italic">No payments recorded yet.</div>
+          <div className="text-xs text-lt-fg3 italic">No payments recorded yet.</div>
         ) : (
           <div className="space-y-1.5">
             {payments.map((p) => {
@@ -2401,29 +2418,29 @@ function PaymentsPanel({
                   key={p.id}
                   className={`flex items-center gap-3 flex-wrap text-xs px-2.5 py-1.5 rounded border ${
                     voided
-                      ? 'border-zinc-800 bg-zinc-950 text-zinc-600 line-through'
-                      : 'border-zinc-800 bg-zinc-950 text-zinc-200'
+                      ? 'border-lt-hairline bg-lt-inner text-lt-fg3 line-through'
+                      : 'border-lt-hairline bg-lt-inner text-lt-fg'
                   }`}
                 >
                   <span className="font-semibold">
                     ${Number(p.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500">{p.method}</span>
-                  {p.reference && <span className="text-[11px] text-zinc-400">ref {p.reference}</span>}
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{p.method}</span>
+                  {p.reference && <span className="text-[11px] text-lt-fg2">ref {p.reference}</span>}
+                  <span className="text-[11px] text-lt-fg3">
                     Received {new Date(p.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
-                  <span className="text-[11px] text-zinc-500 ml-auto">
+                  <span className="text-[11px] text-lt-fg3 ml-auto">
                     by {p.recordedBy.name}
                   </span>
                   {voided ? (
-                    <span className="text-[10px] text-rose-400 no-underline">
+                    <span className="text-[10px] text-chip-bad-fg no-underline">
                       Voided · {p.voidReason}
                     </span>
                   ) : (
                     <button
                       onClick={() => onVoid(p.id)}
-                      className="text-[10px] text-zinc-500 hover:text-rose-300 underline-offset-2 hover:underline"
+                      className="text-[10px] text-lt-fg3 hover:text-chip-bad-fg underline-offset-2 hover:underline"
                     >
                       Void
                     </button>
@@ -2438,9 +2455,9 @@ function PaymentsPanel({
       {canRecord && balanceDue > 0 && (
         <form
           onSubmit={submit}
-          className="border border-zinc-800 rounded-lg p-3 grid grid-cols-12 gap-2 bg-zinc-950"
+          className="border border-lt-hairline rounded-lg p-3 grid grid-cols-12 gap-2 bg-lt-inner"
         >
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Amount
             <input
               type="number"
@@ -2451,47 +2468,47 @@ function PaymentsPanel({
               onChange={(e) => setAmount(e.target.value)}
               placeholder={balanceDue.toFixed(2)}
               required
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Method
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             >
               {PAYMENT_METHODS.map((m) => (
                 <option key={m} value={m}>{m.replace('_', ' ')}</option>
               ))}
             </select>
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Received
             <input
               type="date"
               value={receivedAt}
               onChange={(e) => setReceivedAt(e.target.value)}
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Reference
             <input
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               placeholder="Check #, wire id…"
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-9 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-9 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Notes (optional)
             <input
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
           <div className="col-span-3 flex items-end">
@@ -2503,13 +2520,13 @@ function PaymentsPanel({
                   ? `Amount exceeds balance due ($${balanceDue.toFixed(2)})`
                   : undefined
               }
-              className="w-full px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
+              className="w-full px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
             >
               {recording ? 'Recording…' : 'Record payment'}
             </button>
           </div>
           {overpay && (
-            <div className="col-span-12 text-[11px] text-rose-400">
+            <div className="col-span-12 text-[11px] text-chip-bad-fg">
               Amount exceeds the ${balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })} balance due.
             </div>
           )}
@@ -2517,13 +2534,13 @@ function PaymentsPanel({
       )}
 
       {err && (
-        <div className="text-[11px] text-rose-400 border border-rose-900 bg-rose-950/40 rounded px-2 py-1.5">
+        <div className="text-[11px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded px-2 py-1.5">
           {err}
         </div>
       )}
 
       {!canRecord && (
-        <div className="text-[11px] text-zinc-500 italic">
+        <div className="text-[11px] text-lt-fg3 italic">
           Payment recording opens once the invoice is sent.
         </div>
       )}
@@ -2602,44 +2619,44 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
     }
   };
 
-  if (loading) return <div className="text-xs text-zinc-500">Loading claim…</div>;
+  if (loading) return <div className="text-xs text-lt-fg3">Loading claim…</div>;
 
   return (
-    <div className="border-t border-zinc-800 pt-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500">
+    <div className="border-t border-lt-hairline pt-3 space-y-2">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3">
         Insurance claim
       </div>
       {err && (
-        <div className="text-[11px] text-rose-400 border border-rose-900 bg-rose-950/40 rounded px-2 py-1.5">
+        <div className="text-[11px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded px-2 py-1.5">
           {err}
         </div>
       )}
       {claim ? (
-        <div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap text-xs">
-          <span className="font-mono text-[11px] text-zinc-400">{claim.claimNumber}</span>
-          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-900/40 text-orange-300 border border-orange-800">
+        <div className="bg-lt-inner border border-lt-hairline rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap text-xs">
+          <span className="font-mono text-[11px] text-lt-fg2">{claim.claimNumber}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cadence-returning-today-bg text-cadence-returning-today-fg border border-cadence-returning-today-fg/30">
             {claim.status}
           </span>
-          <span className="text-zinc-300">filed against <span className="font-semibold">{claim.filedAgainst}</span></span>
+          <span className="text-lt-fg2">filed against <span className="font-semibold">{claim.filedAgainst}</span></span>
           {claim.totalDemand && (
-            <span className="text-zinc-400">demand ${Number(claim.totalDemand).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            <span className="text-lt-fg2">demand ${Number(claim.totalDemand).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
           )}
           {claim.amountSettled && (
-            <span className="text-emerald-400">settled ${Number(claim.amountSettled).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            <span className="text-chip-good-fg">settled ${Number(claim.amountSettled).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
           )}
           {claim.assignedToUser && (
-            <span className="text-zinc-500 ml-auto">assigned {claim.assignedToUser.name}</span>
+            <span className="text-lt-fg3 ml-auto">assigned {claim.assignedToUser.name}</span>
           )}
           <a
             href={`/claims/${claim.id}`}
-            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+            className="text-[11px] font-semibold text-lt-fg hover:text-black"
           >
             Open in claims →
           </a>
         </div>
       ) : showForm ? (
-        <form onSubmit={submit} className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 grid grid-cols-12 gap-2">
-          <label className="col-span-5 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+        <form onSubmit={submit} className="bg-lt-inner border border-lt-hairline rounded-lg p-3 grid grid-cols-12 gap-2">
+          <label className="col-span-5 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Filed against
             <input
               type="text"
@@ -2647,41 +2664,41 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
               onChange={(e) => setFiledAgainst(e.target.value)}
               placeholder="Insurance company name"
               required
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Incident date
             <input
               type="date"
               value={incidentDate}
               onChange={(e) => setIncidentDate(e.target.value)}
               required
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-12 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+          <label className="col-span-12 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Description (≥10 chars)
             <textarea
               value={incidentDescription}
               onChange={(e) => setIncidentDescription(e.target.value)}
               rows={3}
               required
-              className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
+              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
           <div className="col-span-12 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="text-xs font-semibold border border-zinc-700 text-zinc-300 hover:border-zinc-500 px-3 py-1.5 rounded-lg"
+              className="text-xs font-semibold border border-lt-hairline text-lt-fg2 hover:border-lt-fg2 px-3 py-1.5 rounded-lg"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={posting || incidentDescription.trim().length < 10 || !filedAgainst.trim()}
-              className="text-xs font-semibold bg-orange-600 hover:bg-orange-500 disabled:bg-zinc-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg"
+              className="text-xs font-semibold bg-chip-bad-fg hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 text-white px-3 py-1.5 rounded-lg"
             >
               {posting ? "Opening…" : "Open claim"}
             </button>
@@ -2690,7 +2707,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg"
+          className="text-xs font-semibold bg-chip-bad-fg hover:opacity-90 text-white px-3 py-1.5 rounded-lg"
         >
           Open claim against carrier
         </button>
