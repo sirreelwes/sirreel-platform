@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff } from "@/lib/crm/clientBadges";
+import {
+  computeCompanyBadgeFacts,
+  fetchPopulationTopClientCutoff,
+  QUIET_DAYS,
+} from "@/lib/crm/clientBadges";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const tier = searchParams.get("tier");
   const sort = searchParams.get("sort") || "spend";
+  // Sales-segment chips. Filtering happens BEFORE take:100 so the
+  // chip operates on the full population (the loaded slice is the
+  // top-100 within the segment). Counts for the chip labels come
+  // from /api/crm/stats so they don't drift with the slice.
+  const segment = searchParams.get("segment");
 
   const where: Record<string, unknown> = {};
   if (tier) where.tier = tier;
@@ -16,6 +25,39 @@ export async function GET(req: NextRequest) {
       { name: { contains: search, mode: "insensitive" } },
       { billingEmail: { contains: search, mode: "insensitive" } },
     ];
+  }
+
+  // Pre-compute the population cutoff once — used by both the
+  // segment filter (when segment === 'topClients') and the badge
+  // facts below. Saves a second ordered scan for the topClients case.
+  const populationCutoff = await fetchPopulationTopClientCutoff();
+
+  if (segment === 'topClients') {
+    // Cutoff 0 = no spenders in the population → empty result.
+    if (populationCutoff > 0) {
+      where.totalSpend = { gte: populationCutoff };
+    } else {
+      where.id = { in: [] };
+    }
+  } else if (segment === 'neverOrdered') {
+    where.orders = { none: {} };
+  } else if (segment === 'quiet') {
+    // Companies whose MAX(order.createdAt) is before the quiet
+    // cutoff. Prisma can't filter on aggregate directly, so a
+    // single Order groupBy returns the qualifying companyIds.
+    // Same logic as /api/crm/stats so the chip count matches.
+    const quietCutoff = new Date();
+    quietCutoff.setDate(quietCutoff.getDate() - QUIET_DAYS);
+    const rollup = await prisma.order.groupBy({
+      by: ['companyId'],
+      _max: { createdAt: true },
+    });
+    const quietIds = rollup
+      .filter((r) => r._max.createdAt && r._max.createdAt <= quietCutoff)
+      .map((r) => r.companyId);
+    where.id = { in: quietIds };
+  } else if (segment === 'discount') {
+    where.discountTendency = { in: ['FREQUENT', 'ALWAYS'] };
   }
 
   const orderBy = sort === "name" ? { name: "asc" as const }
@@ -38,21 +80,18 @@ export async function GET(req: NextRequest) {
 
   // Single Order groupBy across the page's companyIds — gives us
   // first + last order date per company without an N+1. The
-  // companyIds set is at most 100 (page take). Run the population
-  // top-client cutoff in parallel so the badge means the same thing
-  // on every page + filter (otherwise: cutoff drifts with the page).
+  // companyIds set is at most 100 (page take). The population
+  // top-client cutoff was already fetched above (drives both the
+  // segment filter + badge facts).
   const companyIds = companies.map((c) => c.id);
-  const [orderDateRollup, populationCutoff] = await Promise.all([
-    companyIds.length > 0
-      ? prisma.order.groupBy({
-          by: ['companyId'],
-          where: { companyId: { in: companyIds } },
-          _min: { createdAt: true },
-          _max: { createdAt: true },
-        })
-      : Promise.resolve([]),
-    fetchPopulationTopClientCutoff(),
-  ]);
+  const orderDateRollup = companyIds.length > 0
+    ? await prisma.order.groupBy({
+        by: ['companyId'],
+        where: { companyId: { in: companyIds } },
+        _min: { createdAt: true },
+        _max: { createdAt: true },
+      })
+    : [];
   const firstLast = new Map(
     orderDateRollup.map((r) => [
       r.companyId,

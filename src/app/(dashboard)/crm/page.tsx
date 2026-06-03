@@ -218,6 +218,7 @@ export default function CRMPage() {
   // tap-to-filter doesn't change the count next to it.
   const [stats, setStats] = useState<{
     topClientSpendCutoff: number;
+    topClientsCount: number;
     goneQuietCount: number;
     discountWatchCount: number;
     neverOrderedCount: number;
@@ -240,15 +241,33 @@ export default function CRMPage() {
   const [cMobile, setCMobile] = useState("");
   const [cRole, setCRole] = useState("OTHER");
 
+  // Companies-list segment filter. Drives the server-side `segment`
+  // query param so the chip operates over the FULL population
+  // (filter happens BEFORE the take:100 page slice). The chips on
+  // the Companies tab and the strip's company-side cards share this
+  // single state — one source of truth per the spec.
+  // 'followups' stays a People-tab concern (no server segment).
+  const [segmentFilter, setSegmentFilter] = useState<
+    null | 'followups' | 'topClients' | 'quiet' | 'discount' | 'neverOrdered'
+  >(null);
+
   const fetchCompanies = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (tierFilter) params.set("tier", tierFilter);
     params.set("sort", sort);
+    if (
+      segmentFilter === 'topClients' ||
+      segmentFilter === 'quiet' ||
+      segmentFilter === 'discount' ||
+      segmentFilter === 'neverOrdered'
+    ) {
+      params.set("segment", segmentFilter);
+    }
     const res = await fetch(`/api/crm/companies?${params}`);
     const data = await res.json();
     setCompanies(data.companies || []);
-  }, [search, tierFilter, sort]);
+  }, [search, tierFilter, sort, segmentFilter]);
 
   const fetchPeople = useCallback(async () => {
     const params = new URLSearchParams();
@@ -328,35 +347,25 @@ export default function CRMPage() {
     fetchFollowUps();
   };
 
-  // Needs-attention filter — `null` = "no filter, show everything";
-  // otherwise restricts the People + Companies lists to the matching
-  // subset. Driven by tap-to-filter on the strip's three cards.
-  const [attentionFilter, setAttentionFilter] = useState<null | 'followups' | 'quiet' | 'discount'>(null);
-
   // Strip counts come from /api/crm/stats — population aggregates,
-  // not the loaded page. The previous derivation
-  //   companies.filter((c) => c.badges?.includes('QUIET'))
-  // drifted with the take:100 page slice, so a card saying
-  // "12 gone quiet" actually meant "12 in this page" — misleading
-  // once population > 100. Fall back to the local activities array
+  // not the loaded page. Fall back to the local activities array
   // for followUps so the count stays live while the user marks
   // them complete inline.
   const pendingCount = stats?.followUpDueCount ?? followUps.filter(f => !f.completed).length;
   const goneQuietCount = stats?.goneQuietCount ?? 0;
   const discountWatchCount = stats?.discountWatchCount ?? 0;
+  const topClientsCount = stats?.topClientsCount ?? 0;
+  const neverOrderedCount = stats?.neverOrderedCount ?? 0;
 
-  // Apply the active needs-attention filter to whichever list the
-  // user is looking at. The filter is set in lockstep with a tab
-  // switch in the strip's onPick, so the filter and the visible
-  // tab always agree on which list it constrains.
-  const filteredCompanies =
-    attentionFilter === 'quiet'
-      ? companies.filter((c) => c.badges?.includes('QUIET'))
-      : attentionFilter === 'discount'
-        ? companies.filter((c) => c.badges?.includes('NEGOTIATES'))
-        : companies;
+  // Company-list filtering is now SERVER-side via segment=*; the page
+  // just renders whatever /api/crm/companies returned. No local
+  // filter — the chip filters operate on the FULL population (not
+  // the take:100 slice) precisely because the server is doing the
+  // work. People-side 'followups' stays a local filter for now (the
+  // /api/crm/people route doesn't take a segment param yet).
+  const filteredCompanies = companies;
   const filteredPeople =
-    attentionFilter === 'followups'
+    segmentFilter === 'followups'
       ? people.filter((p) => p.badges?.includes('FOLLOW_UP_DUE'))
       : people;
 
@@ -412,13 +421,17 @@ export default function CRMPage() {
         followUpCount={pendingCount}
         goneQuietCount={goneQuietCount}
         discountWatchCount={discountWatchCount}
-        active={attentionFilter}
+        active={
+          segmentFilter === 'followups' || segmentFilter === 'quiet' || segmentFilter === 'discount'
+            ? segmentFilter
+            : null
+        }
         onPick={(next) => {
-          if (next === attentionFilter) {
-            setAttentionFilter(null);
+          if (next === segmentFilter) {
+            setSegmentFilter(null);
             return;
           }
-          setAttentionFilter(next);
+          setSegmentFilter(next);
           // Route to the tab whose list will surface the filter.
           // Follow-ups + people-side filters live on the People tab;
           // company-side filters (quiet, discount) on Companies.
@@ -466,6 +479,31 @@ export default function CRMPage() {
         </div>
       )}
 
+      {/* Sales-segment chips — Companies tab only. Server-driven
+          (segment=* on /api/crm/companies), so each chip filters
+          over the FULL population, not the take:100 page slice.
+          Chip counts come from /api/crm/stats so they don't drift.
+          Sharing state with the strip means tapping the Gone-quiet
+          card and the Gone-quiet chip do exactly the same thing —
+          one source of truth. */}
+      {tab === "companies" && (
+        <SegmentChips
+          active={
+            segmentFilter === 'topClients' ||
+            segmentFilter === 'quiet' ||
+            segmentFilter === 'neverOrdered'
+              ? segmentFilter
+              : null
+          }
+          counts={{
+            topClients: topClientsCount,
+            quiet: goneQuietCount,
+            neverOrdered: neverOrderedCount,
+          }}
+          onPick={(next) => setSegmentFilter(next === segmentFilter ? null : next)}
+        />
+      )}
+
       {/* Companies Tab */}
       {tab === "companies" && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
@@ -486,11 +524,15 @@ export default function CRMPage() {
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : filteredCompanies.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">
-                  {attentionFilter === 'quiet'
+                  {segmentFilter === 'quiet'
                     ? 'No gone-quiet companies — every active client has ordered in the last 90 days.'
-                    : attentionFilter === 'discount'
+                    : segmentFilter === 'discount'
                       ? 'No companies on discount-watch — nobody is set to Frequent or Always negotiate.'
-                      : 'No companies found'}
+                      : segmentFilter === 'topClients'
+                        ? 'No top clients yet — nothing has crossed the 90th-percentile spend cutoff.'
+                        : segmentFilter === 'neverOrdered'
+                          ? 'No never-ordered companies — every client on file has at least one order.'
+                          : 'No companies found'}
                 </td></tr>
               ) : filteredCompanies.map((co) => (
                 <tr
@@ -562,7 +604,7 @@ export default function CRMPage() {
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : filteredPeople.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">
-                  {attentionFilter === 'followups'
+                  {segmentFilter === 'followups'
                     ? 'No follow-ups due — inbox zero.'
                     : 'No contacts found'}
                 </td></tr>
@@ -793,6 +835,68 @@ function NeedsAttentionStrip({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Sales-segment chips above the Companies table. Each chip filters
+// the list to a population subset — All / Top clients / Gone quiet /
+// Never ordered. The filter is server-side (segment=* query param),
+// so chips operate on the full population, not the take:100 page
+// slice. Counts come from /api/crm/stats. "Gone quiet" shares state
+// with the strip's Gone-quiet card — one filter, two entry points.
+type SegmentKey = 'topClients' | 'quiet' | 'neverOrdered';
+
+function SegmentChips({
+  active,
+  counts,
+  onPick,
+}: {
+  active: SegmentKey | null;
+  counts: { topClients: number; quiet: number; neverOrdered: number };
+  onPick: (next: SegmentKey) => void;
+}) {
+  // "All" is just the null/cleared state — re-tapping the active chip
+  // clears it via the parent's toggle logic, so the explicit All chip
+  // is a discoverable affordance for the same gesture.
+  const chips: { key: SegmentKey; label: string; count: number }[] = [
+    { key: 'topClients',   label: 'Top clients',   count: counts.topClients },
+    { key: 'quiet',        label: 'Gone quiet',    count: counts.quiet },
+    { key: 'neverOrdered', label: 'Never ordered', count: counts.neverOrdered },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+      <button
+        type="button"
+        onClick={() => active && onPick(active)}
+        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+          active === null
+            ? 'bg-lt-fg border-lt-fg text-white'
+            : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+        }`}
+        title="Show every company"
+      >
+        All
+      </button>
+      {chips.map((c) => {
+        const isActive = active === c.key;
+        return (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onPick(c.key)}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1.5 ${
+              isActive
+                ? 'bg-lt-fg border-lt-fg text-white'
+                : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+            }`}
+            title={isActive ? 'Tap to clear filter' : `Filter to ${c.label.toLowerCase()}`}
+          >
+            <span>{c.label}</span>
+            <span className={`font-mono ${isActive ? 'text-white' : 'text-lt-fg3'}`}>{c.count}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

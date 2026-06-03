@@ -11,6 +11,8 @@
  *   topClientSpendCutoff  — 90th-percentile totalSpend across
  *                           Companies WHERE totalSpend > 0 (single
  *                           ordered query, no N+1)
+ *   topClientsCount       — companies WHERE totalSpend >= cutoff
+ *                           (used by the Top-clients segment chip)
  *   goneQuietCount        — companies WHERE lastOrderAt is set AND
  *                           is older than QUIET_DAYS
  *   discountWatchCount    — companies WHERE discountTendency IN
@@ -41,8 +43,13 @@ export async function GET() {
 
   // 1) Top-client decile cutoff — shared helper, single ordered
   // query over Companies WHERE totalSpend > 0. Also used by the
-  // list routes so badges agree across pages.
+  // list routes so badges agree across pages. Count tags along so
+  // the Top-clients segment chip can show "Top clients · 12" with
+  // the exact population count (including ties at the cutoff).
   const topClientSpendCutoff = await fetchPopulationTopClientCutoff()
+  const topClientsCount = topClientSpendCutoff > 0
+    ? await prisma.company.count({ where: { totalSpend: { gte: topClientSpendCutoff } } })
+    : 0
 
   // 2) Gone-quiet count. Single Order groupBy + an in-memory pass
   // (no per-company query). For each company that has orders we
@@ -74,6 +81,7 @@ export async function GET() {
 
   return NextResponse.json({
     topClientSpendCutoff,
+    topClientsCount,
     goneQuietCount,
     discountWatchCount,
     neverOrderedCount,
