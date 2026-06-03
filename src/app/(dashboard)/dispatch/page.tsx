@@ -13,7 +13,7 @@
  * window focus, no auto-refresh. Both use the same card components.
  *
  * Dark visual language mirrors /warehouse/pick exactly — same
- * bg-zinc-900 / border-zinc-800 cards, same status badge palette.
+ * bg-lt-card / border-lt-hairline cards, same status badge palette.
  *
  * Data source: GET /api/dispatch?asOf=today&days=2. Look-ahead toggle
  * (Commit 3) re-fetches with days=14.
@@ -90,25 +90,25 @@ interface DispatchPayload {
 }
 
 const STATUS_COLOR: Record<ListStatus, string> = {
-  BOOKED:       'bg-indigo-900/40 text-indigo-300 border-indigo-800',
-  LOADED_READY: 'bg-teal-900/40 text-teal-300 border-teal-800',
-  ON_JOB:       'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  BOOKED:       'bg-cadence-booked-bg text-cadence-booked-fg border-cadence-booked-fg/30',
+  LOADED_READY: 'bg-cadence-picking-today-bg text-cadence-picking-today-fg border-cadence-picking-today-fg/30',
+  ON_JOB:       'bg-cadence-on-rental-bg text-cadence-on-rental-fg border-cadence-on-rental-fg/30',
 }
 
 const PICKLIST_COLOR: Record<PickListStatus, string> = {
-  DRAFT:          'bg-zinc-800 text-zinc-300',
-  PICKING:        'bg-amber-900/40 text-amber-300',
-  READY_TO_STAGE: 'bg-blue-900/40 text-blue-300',
-  STAGED:         'bg-indigo-900/40 text-indigo-300',
-  LOADED:         'bg-emerald-900/40 text-emerald-300',
-  CANCELLED:      'bg-red-900/40 text-red-300',
+  DRAFT:          'bg-chip-neutral-bg text-chip-neutral-fg',
+  PICKING:        'bg-chip-warn-bg text-chip-warn-fg',
+  READY_TO_STAGE: 'bg-cadence-booked-bg text-cadence-booked-fg',
+  STAGED:         'bg-cadence-picking-today-bg text-cadence-picking-today-fg',
+  LOADED:         'bg-chip-good-bg text-chip-good-fg',
+  CANCELLED:      'bg-chip-bad-bg text-chip-bad-fg',
 }
 
 const PRIORITY_COLOR: Record<Priority, string> = {
-  URGENT:   'bg-red-900/40 text-red-200 border-red-800',
-  HIGH:     'bg-orange-900/40 text-orange-300 border-orange-800',
-  STANDARD: 'bg-zinc-800 text-zinc-400 border-zinc-700',
-  LOW:      'bg-zinc-800 text-zinc-500 border-zinc-700',
+  URGENT:   'bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30',
+  HIGH:     'bg-cadence-returning-today-bg text-cadence-returning-today-fg border-cadence-returning-today-fg/30',
+  STANDARD: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  LOW:      'border border-dashed border-chip-muted-border text-chip-muted-fg',
 }
 
 function fmtDate(ymd: string): string {
@@ -177,26 +177,34 @@ export default function DispatchPage() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
-        <div className="rounded-lg border border-rose-800 bg-rose-950/50 text-rose-200 text-sm px-3 py-2">{error}</div>
+      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+        <div className="max-w-6xl mx-auto">
+          <div className="rounded-lg border border-chip-bad-fg/40 bg-chip-bad-bg text-chip-bad-fg text-sm px-3 py-2">{error}</div>
+        </div>
       </div>
     )
   }
 
   if (!data) {
-    return <div className="p-6 text-sm text-zinc-500">Loading dispatch…</div>
+    return (
+      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+        <div className="text-sm text-lt-fg3">Loading dispatch…</div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
+    // Light-motif page bg — matches Jobs / Orders / Order detail.
+    <div className="bg-lt-page -m-6 p-4 sm:p-6 min-h-[calc(100vh-3rem)] overflow-x-hidden">
+      <div className="max-w-7xl mx-auto">
       <header className="flex items-baseline justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Dispatch</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">
+          <h1 className="text-2xl font-semibold text-lt-fg">Dispatch</h1>
+          <p className="text-sm text-lt-fg2 mt-0.5">
             As of {fmtDate(data.asOfDate)} · horizon {data.horizonDays} day{data.horizonDays === 1 ? '' : 's'}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap justify-end">
+        <div className="flex items-center gap-2 text-xs text-lt-fg3 flex-wrap justify-end">
           <HorizonToggle horizon={horizon} onChange={setHorizon} />
           {lastFetchedAt && (
             <span>refreshed {lastFetchedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
@@ -204,7 +212,7 @@ export default function DispatchPage() {
           <button
             onClick={fetchData}
             disabled={refreshing}
-            className="ml-1 border border-zinc-700 text-zinc-200 hover:border-zinc-500 px-2.5 py-1 rounded text-xs disabled:opacity-40"
+            className="ml-1 border border-lt-hairline text-lt-fg hover:border-lt-fg2 px-2.5 py-1 rounded text-xs disabled:opacity-40"
           >
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -218,21 +226,22 @@ export default function DispatchPage() {
       ) : (
         <LookAheadGrid days={data.days} />
       )}
+      </div>
     </div>
   )
 }
 
 function HorizonToggle({ horizon, onChange }: { horizon: Horizon; onChange: (h: Horizon) => void }) {
   return (
-    <div className="inline-flex rounded-md border border-zinc-700 overflow-hidden">
+    <div className="inline-flex rounded-md border border-lt-hairline overflow-hidden">
       {(['soon', 'fortnight'] as Horizon[]).map((h) => (
         <button
           key={h}
           onClick={() => onChange(h)}
           className={`px-2.5 py-1 text-xs font-medium ${
             horizon === h
-              ? 'bg-zinc-700 text-white'
-              : 'bg-transparent text-zinc-400 hover:text-zinc-200'
+              ? 'bg-lt-fg text-white'
+              : 'bg-lt-card text-lt-fg2 hover:text-lt-fg'
           }`}
         >
           {h === 'soon' ? 'Today / Tomorrow' : 'Next 14 days'}
@@ -252,14 +261,14 @@ function OverdueBand({
   const lateReturn = overdue.lateToReturn.length
   if (lateShip === 0 && lateReturn === 0) return null
   return (
-    <div className="mb-6 rounded-xl border border-red-900/70 bg-red-950/40">
-      <div className="px-4 py-2.5 border-b border-red-900/60 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-red-300">Overdue</span>
-        <span className="text-[11px] text-red-400">
+    <div className="mb-6 rounded-xl border border-chip-bad-fg/40 bg-chip-bad-bg">
+      <div className="px-4 py-2.5 border-b border-chip-bad-fg/30 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-chip-bad-fg">Overdue</span>
+        <span className="text-[11px] text-chip-bad-fg">
           {lateShip} late to ship · {lateReturn} late to return
         </span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-red-900/60">
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-chip-bad-fg/30">
         <OverdueSection label="Late to ship" cards={overdue.lateToShip} />
         <OverdueSection label="Late to return" cards={overdue.lateToReturn} />
       </div>
@@ -270,9 +279,9 @@ function OverdueBand({
 function OverdueSection({ label, cards }: { label: string; cards: DispatchCard[] }) {
   return (
     <div className="p-3">
-      <div className="text-[10px] uppercase tracking-wider font-bold text-red-300 mb-2">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider font-bold text-chip-bad-fg mb-2">{label}</div>
       {cards.length === 0 ? (
-        <div className="text-xs text-red-400/70">None ✓</div>
+        <div className="text-xs text-chip-bad-fg/70">None ✓</div>
       ) : (
         <div className="grid gap-1.5">
           {cards.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} overdue /> : <WarehouseCardView key={c.cardId} c={c} overdue />))}
@@ -297,13 +306,13 @@ function DayColumn({ day }: { day: DispatchDay }) {
   const outTotal = day.outboundFleet.length + day.outboundWarehouse.length
   const inTotal = day.inbound.length
   return (
-    <section className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-800 flex items-baseline justify-between">
+    <section className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-lt-hairline flex items-baseline justify-between">
         <div>
-          <h2 className="font-semibold text-white">{day.label}</h2>
-          <div className="text-[11px] text-zinc-500 mt-0.5">{fmtDate(day.date)}</div>
+          <h2 className="font-semibold text-lt-fg">{day.label}</h2>
+          <div className="text-[11px] text-lt-fg3 mt-0.5">{fmtDate(day.date)}</div>
         </div>
-        <div className="text-[11px] text-zinc-500">
+        <div className="text-[11px] text-lt-fg3">
           {outTotal} out · {inTotal} in
         </div>
       </div>
@@ -340,10 +349,10 @@ function SubSection({
   children: React.ReactNode
 }) {
   return (
-    <div className="px-3 py-3 border-b border-zinc-800 last:border-b-0">
-      <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mb-2 px-1">{label}</div>
+    <div className="px-3 py-3 border-b border-lt-hairline last:border-b-0">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3 mb-2 px-1">{label}</div>
       {empty ? (
-        <div className="text-xs text-zinc-600 px-1 py-2">{emptyCopy}</div>
+        <div className="text-xs text-lt-fg3 px-1 py-2">{emptyCopy}</div>
       ) : (
         <div className="grid gap-1.5">{children}</div>
       )}
@@ -361,14 +370,14 @@ function LookAheadGrid({ days }: { days: DispatchDay[] }) {
     ...days.map((d) => d.outboundFleet.length + d.outboundWarehouse.length + d.inbound.length),
   )
   return (
-    <section className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-zinc-800">
-        <h2 className="font-semibold text-white">Daily load · {days.length} days</h2>
-        <div className="text-[11px] text-zinc-500 mt-0.5">
+    <section className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-lt-hairline">
+        <h2 className="font-semibold text-lt-fg">Daily load · {days.length} days</h2>
+        <div className="text-[11px] text-lt-fg3 mt-0.5">
           Tap a row to expand. Heat accent scales to the heaviest day in view.
         </div>
       </div>
-      <div className="divide-y divide-zinc-800">
+      <div className="divide-y divide-lt-hairline">
         {days.map((d) => (
           <LookAheadRow key={d.date} day={d} maxTotal={maxTotal} />
         ))}
@@ -386,19 +395,19 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
   const heat = Math.min(1, total / maxTotal)
   // Heat → alpha amber accent on the bar
   return (
-    <div className="bg-zinc-950">
+    <div className="bg-lt-inner">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-zinc-900/60 transition-colors"
+        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-lt-inner transition-colors"
       >
         {/* Heat bar */}
-        <div className="flex-none w-1.5 h-10 rounded overflow-hidden bg-zinc-900">
-          <div className="w-full bg-amber-500" style={{ height: `${Math.round(heat * 100)}%`, marginTop: `${Math.round((1 - heat) * 100)}%` }} />
+        <div className="flex-none w-1.5 h-10 rounded overflow-hidden bg-lt-card">
+          <div className="w-full bg-cadence-returning-today-bar" style={{ height: `${Math.round(heat * 100)}%`, marginTop: `${Math.round((1 - heat) * 100)}%` }} />
         </div>
         {/* Date */}
         <div className="flex-none min-w-[88px]">
-          <div className="text-sm font-semibold text-white">{day.label}</div>
-          <div className="text-[11px] text-zinc-500">{fmtDate(day.date)}</div>
+          <div className="text-sm font-semibold text-lt-fg">{day.label}</div>
+          <div className="text-[11px] text-lt-fg3">{fmtDate(day.date)}</div>
         </div>
         {/* Counts strip */}
         <div className="flex-1 grid grid-cols-3 gap-2 text-center text-xs">
@@ -406,14 +415,14 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
           <LoadStat label="Out WHS"   n={outWh}    color="amber" />
           <LoadStat label="In"        n={inboundN} color="emerald" />
         </div>
-        <div className="flex-none text-[11px] text-zinc-500">{expanded ? '−' : '+'}</div>
+        <div className="flex-none text-[11px] text-lt-fg3">{expanded ? '−' : '+'}</div>
       </button>
       {expanded && total > 0 && (
-        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-zinc-800/60">
+        <div className="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-lt-hairline">
           <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mt-2 mb-2">Outbound</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3 mt-2 mb-2">Outbound</div>
             {outFleet + outWh === 0 ? (
-              <div className="text-xs text-zinc-600">None.</div>
+              <div className="text-xs text-lt-fg3">None.</div>
             ) : (
               <div className="grid gap-1.5">
                 {day.outboundFleet.map((c) => <FleetCardView key={c.cardId} c={c} />)}
@@ -422,9 +431,9 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
             )}
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-zinc-500 mt-2 mb-2">Inbound</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3 mt-2 mb-2">Inbound</div>
             {inboundN === 0 ? (
-              <div className="text-xs text-zinc-600">None.</div>
+              <div className="text-xs text-lt-fg3">None.</div>
             ) : (
               <div className="grid gap-1.5">
                 {day.inbound.map((c) => (c.kind === 'FLEET' ? <FleetCardView key={c.cardId} c={c} /> : <WarehouseCardView key={c.cardId} c={c} />))}
@@ -439,13 +448,13 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
 
 function LoadStat({ label, n, color }: { label: string; n: number; color: 'zinc' | 'amber' | 'emerald' }) {
   const palettes = {
-    zinc:    { text: n > 0 ? 'text-zinc-200'    : 'text-zinc-600' },
-    amber:   { text: n > 0 ? 'text-amber-300'   : 'text-zinc-600' },
-    emerald: { text: n > 0 ? 'text-emerald-300' : 'text-zinc-600' },
+    zinc:    { text: n > 0 ? 'text-lt-fg'    : 'text-lt-fg3' },
+    amber:   { text: n > 0 ? 'text-chip-warn-fg'   : 'text-lt-fg3' },
+    emerald: { text: n > 0 ? 'text-chip-good-fg' : 'text-lt-fg3' },
   }
   return (
-    <div className="rounded border border-zinc-800 px-2 py-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold">{label}</div>
+    <div className="rounded border border-lt-hairline px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-lt-fg3 font-semibold">{label}</div>
       <div className={`text-base font-bold ${palettes[color].text}`}>{n}</div>
     </div>
   )
@@ -474,15 +483,15 @@ function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
       href={`/orders/${c.orderId}`}
       className={`block rounded-lg border transition-colors overflow-hidden ${
         blindReturn
-          ? 'border-red-500 bg-red-950/40 hover:border-red-400 shadow-[0_0_0_1px_rgba(239,68,68,0.5)]'
+          ? 'border-chip-bad-fg bg-chip-bad-bg hover:border-chip-bad-fg shadow-[0_0_0_1px_rgba(220,38,38,0.4)]'
           : overdue
-            ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
-            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+            ? 'border-chip-bad-fg/40 bg-chip-bad-bg hover:border-chip-bad-fg/60'
+            : 'border-lt-hairline bg-lt-card hover:border-lt-fg2'
       }`}
     >
       <div className="px-3 py-2.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">FLEET</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg">FLEET</span>
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
             {c.status.replace('_', ' ')}
           </span>
@@ -493,27 +502,27 @@ function FleetCardView({ c, overdue }: { c: FleetCard; overdue?: boolean }) {
           )}
           {blindPickup && (
             <span
-              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-200 border border-amber-800/60"
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg border border-chip-warn-fg/30"
               title="Blind pickup — client picks up the unit themselves; stage and leave per instructions"
             >
               ⊘↗ Blind pickup
             </span>
           )}
-          <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+          <span className="font-mono text-[11px] text-lt-fg3 ml-auto">{c.orderNumber}</span>
         </div>
-        <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+        <div className="mt-1.5 font-semibold text-[14px] text-lt-fg leading-tight truncate">
           {c.assetUnitName || c.categoryName || 'Vehicle'}
         </div>
-        <div className="mt-0.5 text-[12px] text-zinc-400 truncate">
+        <div className="mt-0.5 text-[12px] text-lt-fg2 truncate">
           {c.companyName}
-          {c.jobName && <span className="text-zinc-500"> · {c.jobName}</span>}
+          {c.jobName && <span className="text-lt-fg3"> · {c.jobName}</span>}
         </div>
-        <div className="mt-1 text-[11px] text-zinc-500">
+        <div className="mt-1 text-[11px] text-lt-fg3">
           out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
         </div>
       </div>
       {blindReturn && (
-        <div className="bg-red-600 text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
           <span aria-hidden="true">⚠</span>
           Blind return — needs check-in
         </div>
@@ -530,15 +539,15 @@ function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean
       href={`/orders/${c.orderId}`}
       className={`block rounded-lg border transition-colors overflow-hidden ${
         blindReturn
-          ? 'border-red-500 bg-red-950/40 hover:border-red-400 shadow-[0_0_0_1px_rgba(239,68,68,0.5)]'
+          ? 'border-chip-bad-fg bg-chip-bad-bg hover:border-chip-bad-fg shadow-[0_0_0_1px_rgba(220,38,38,0.4)]'
           : overdue
-            ? 'border-red-900/60 bg-red-950/30 hover:border-red-700'
-            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-600'
+            ? 'border-chip-bad-fg/40 bg-chip-bad-bg hover:border-chip-bad-fg/60'
+            : 'border-lt-hairline bg-lt-card hover:border-lt-fg2'
       }`}
     >
       <div className="px-3 py-2.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300">WAREHOUSE</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg">WAREHOUSE</span>
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_COLOR[c.status]}`}>
             {c.status.replace('_', ' ')}
           </span>
@@ -554,27 +563,27 @@ function WarehouseCardView({ c, overdue }: { c: WarehouseCard; overdue?: boolean
           )}
           {blindPickup && (
             <span
-              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-200 border border-amber-800/60"
+              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg border border-chip-warn-fg/30"
               title="Blind pickup — client picks up the load themselves; stage and leave per instructions"
             >
               ⊘↗ Blind pickup
             </span>
           )}
-          <span className="font-mono text-[11px] text-zinc-500 ml-auto">{c.orderNumber}</span>
+          <span className="font-mono text-[11px] text-lt-fg3 ml-auto">{c.orderNumber}</span>
         </div>
-        <div className="mt-1.5 font-semibold text-[14px] text-white leading-tight truncate">
+        <div className="mt-1.5 font-semibold text-[14px] text-lt-fg leading-tight truncate">
           {c.companyName}
-          {c.jobName && <span className="text-zinc-400 font-normal"> · {c.jobName}</span>}
+          {c.jobName && <span className="text-lt-fg2 font-normal"> · {c.jobName}</span>}
         </div>
-        <div className="mt-0.5 text-[12px] text-zinc-400">
+        <div className="mt-0.5 text-[12px] text-lt-fg2">
           {c.lineCount} line{c.lineCount === 1 ? '' : 's'}
         </div>
-        <div className="mt-1 text-[11px] text-zinc-500">
+        <div className="mt-1 text-[11px] text-lt-fg3">
           out {fmtDate(c.effectivePickupDate)} → in {fmtDate(c.effectiveReturnDate)}
         </div>
       </div>
       {blindReturn && (
-        <div className="bg-red-600 text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <div className="bg-chip-bad-fg text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
           <span aria-hidden="true">⚠</span>
           Blind return — needs check-in
         </div>
