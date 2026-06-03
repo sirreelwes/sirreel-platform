@@ -57,3 +57,21 @@ export function getMessageDirection(fromHeader: string): EmailDirection {
   if (SIRREEL_AGENT_ADDRESSES.includes(addr)) return 'OUTBOUND'
   return 'INBOUND'
 }
+
+/**
+ * Parse a multi-recipient header (To: or Cc:) into a deduped list of
+ * bare lowercased addresses. Quoted-comma edge cases (e.g.
+ * `"Smith, Bob" <bob@x.com>`) aren't bulletproof here — split-on-comma
+ * matches the existing parser in src/app/api/gmail/fetch/route.ts so
+ * the behavior is consistent across sync paths. Empty/missing
+ * headers return [].
+ */
+export function parseRecipientHeader(value: string | null | undefined): string[] {
+  if (!value) return []
+  const seen = new Set<string>()
+  for (const part of value.split(',')) {
+    const addr = parseEmailAddress(part)
+    if (addr) seen.add(addr)
+  }
+  return Array.from(seen)
+}

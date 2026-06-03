@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
-import { getMessageDirection } from "@/lib/email/direction"
+import { getMessageDirection, parseRecipientHeader } from "@/lib/email/direction"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
@@ -108,6 +108,30 @@ async function syncInbox(email: string) {
     // no risk of an outbound message creating an Inquiry.
     const direction = getMessageDirection(fromAddress)
 
+    // toAddresses semantics differ by direction:
+    //   OUTBOUND — store the real recipients parsed from the To: + Cc:
+    //              headers. Without this, cold-outreach outbound
+    //              (e.g. a quote send to a brand-new client with no
+    //              prior inbound thread) can't match the contact on
+    //              /crm/[id] timeline. Fall back to [email] when the
+    //              headers are missing so the row is never empty.
+    //   INBOUND  — keep [email] (the polled inbox). The dashboard's
+    //              agent-load tally reads toAddresses[0] expecting
+    //              the inbox; changing inbound semantics would break
+    //              that surface without a follow-up. Scope this fix
+    //              to outbound only.
+    const toAddresses =
+      direction === 'OUTBOUND'
+        ? (() => {
+            const parsed = [
+              ...parseRecipientHeader(get('To')),
+              ...parseRecipientHeader(get('Cc')),
+            ]
+            const deduped = Array.from(new Set(parsed))
+            return deduped.length > 0 ? deduped : [email]
+          })()
+        : [email]
+
     const { category, priority } = quickTriage(subject, snippet)
     if (priority === 9) continue
 
@@ -153,7 +177,7 @@ async function syncInbox(email: string) {
         inReplyTo,
         duplicateOfId,
         fromAddress,
-        toAddresses: [email],
+        toAddresses,
         subject,
         snippet,
         bodyText: body.bodyText,
