@@ -114,11 +114,6 @@ export default function CRMPage() {
   const [tab, setTab] = useState<"companies" | "people">(
     selectForQuote ? "companies" : "people",
   );
-  // "Needs attention" strip — collapsed by default; expanding shows
-  // the prior Follow-Ups tab content inline. The count badge stays
-  // visible regardless. Future passes (gone-quiet, discount-watch)
-  // add their own collapsible sections to the same strip.
-  const [needsAttentionExpanded, setNeedsAttentionExpanded] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [people, setPeople] = useState<PersonResult[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -223,6 +218,33 @@ export default function CRMPage() {
 
   const pendingCount = followUps.filter(f => !f.completed).length;
 
+  // Needs-attention filter — `null` = "no filter, show everything";
+  // otherwise restricts the People + Companies lists to the matching
+  // subset. Driven by tap-to-filter on the strip's three cards.
+  const [attentionFilter, setAttentionFilter] = useState<null | 'followups' | 'quiet' | 'discount'>(null);
+
+  // Live counts for the strip — derived from the already-fetched
+  // result sets, no extra queries. People drive the follow-up count;
+  // Companies drive Gone-quiet + Discount-watch. The counts update
+  // as the tab data refreshes.
+  const goneQuietCount = companies.filter((c) => c.badges?.includes('QUIET')).length;
+  const discountWatchCount = companies.filter((c) => c.badges?.includes('NEGOTIATES')).length;
+
+  // Apply the active needs-attention filter to whichever list the
+  // user is looking at. The filter is set in lockstep with a tab
+  // switch in the strip's onPick, so the filter and the visible
+  // tab always agree on which list it constrains.
+  const filteredCompanies =
+    attentionFilter === 'quiet'
+      ? companies.filter((c) => c.badges?.includes('QUIET'))
+      : attentionFilter === 'discount'
+        ? companies.filter((c) => c.badges?.includes('NEGOTIATES'))
+        : companies;
+  const filteredPeople =
+    attentionFilter === 'followups'
+      ? people.filter((p) => p.badges?.includes('FOLLOW_UP_DUE'))
+      : people;
+
   const selectCompanyForQuote = (companyId: string) => {
     const params = new URLSearchParams();
     if (returnInquiryId) params.set('inquiryId', returnInquiryId);
@@ -267,17 +289,27 @@ export default function CRMPage() {
         </div>
       </div>
 
-      {/* Needs attention — strip at the top of the page. Follow-ups
-          due is the first signal wired in; gone-quiet and discount-
-          watch slot in here on later passes. Always visible; click
-          the count to expand the inline list of follow-ups (formerly
-          a dedicated tab). */}
+      {/* Needs attention — three live-count cards. Tapping a card
+          routes the list to the matching subset (and switches tabs
+          if the data lives there). Re-tapping the active card
+          clears the filter. */}
       <NeedsAttentionStrip
-        pendingCount={pendingCount}
-        followUps={followUps}
-        expanded={needsAttentionExpanded}
-        onToggle={() => setNeedsAttentionExpanded((v) => !v)}
-        onComplete={completeFollowUp}
+        followUpCount={pendingCount}
+        goneQuietCount={goneQuietCount}
+        discountWatchCount={discountWatchCount}
+        active={attentionFilter}
+        onPick={(next) => {
+          if (next === attentionFilter) {
+            setAttentionFilter(null);
+            return;
+          }
+          setAttentionFilter(next);
+          // Route to the tab whose list will surface the filter.
+          // Follow-ups + people-side filters live on the People tab;
+          // company-side filters (quiet, discount) on Companies.
+          if (next === 'followups') setTab('people');
+          else if (next === 'quiet' || next === 'discount') setTab('companies');
+        }}
       />
 
       {/* Tabs — People first; Contacts renamed to People (label only;
@@ -337,9 +369,15 @@ export default function CRMPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
-              ) : companies.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">No companies found</td></tr>
-              ) : companies.map((co) => (
+              ) : filteredCompanies.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">
+                  {attentionFilter === 'quiet'
+                    ? 'No gone-quiet companies — every active client has ordered in the last 90 days.'
+                    : attentionFilter === 'discount'
+                      ? 'No companies on discount-watch — nobody is set to Frequent or Always negotiate.'
+                      : 'No companies found'}
+                </td></tr>
+              ) : filteredCompanies.map((co) => (
                 <tr
                   key={co.id}
                   onClick={() => selectForQuote ? selectCompanyForQuote(co.id) : router.push(`/crm/${co.id}`)}
@@ -407,9 +445,13 @@ export default function CRMPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
-              ) : people.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">No contacts found</td></tr>
-              ) : people.map((p) => (
+              ) : filteredPeople.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">
+                  {attentionFilter === 'followups'
+                    ? 'No follow-ups due — inbox zero.'
+                    : 'No contacts found'}
+                </td></tr>
+              ) : filteredPeople.map((p) => (
                 // ?edit=1 hands the person-detail page a hint to open
                 // in edit mode immediately — saves one click vs. the
                 // detail page's standard "click Edit then change fields"
@@ -566,87 +608,75 @@ export default function CRMPage() {
   );
 }
 
-// "Needs attention" strip at the top of the Clients page. First
-// signal wired in is the follow-ups-due count + inline list (the
-// data that lived in the deprecated Follow-Ups tab). Future passes
-// add gone-quiet + discount-watch signals as additional rows in the
-// same strip. Always rendered; the count is visible at a glance and
-// the list expands inline on click — keeping the prior tab's data
-// reachable without giving it a top-nav slot.
+// "Needs attention" strip — three live-count cards across the top
+// of the Clients page. Each card surfaces a signal worth acting on
+// and taps to filter the list below to the matching subset:
+//   Follow-ups due  → People where badges includes FOLLOW_UP_DUE
+//   Gone quiet      → Companies with no order in the last QUIET_DAYS
+//   Discount-watch  → Companies whose discountTendency is
+//                     FREQUENT or ALWAYS
+// Re-tap an active card to clear the filter. Counts update with
+// the underlying data — no extra round trips.
+type AttentionKey = 'followups' | 'quiet' | 'discount';
+
 function NeedsAttentionStrip({
-  pendingCount,
-  followUps,
-  expanded,
-  onToggle,
-  onComplete,
+  followUpCount,
+  goneQuietCount,
+  discountWatchCount,
+  active,
+  onPick,
 }: {
-  pendingCount: number;
-  followUps: FollowUp[];
-  expanded: boolean;
-  onToggle: () => void;
-  onComplete: (id: string) => void;
+  followUpCount: number;
+  goneQuietCount: number;
+  discountWatchCount: number;
+  active: AttentionKey | null;
+  onPick: (next: AttentionKey) => void;
 }) {
-  const hasAny = pendingCount > 0;
-  const hasOverdue = followUps.some((f) => f.dueDate && new Date(f.dueDate) < new Date() && !f.completed);
+  const cards: { key: AttentionKey; label: string; count: number; tone: string; icon: string; activeBg: string }[] = [
+    { key: 'followups', label: 'Follow-ups due',  count: followUpCount,     tone: 'text-chip-bad-fg',     icon: '\uD83D\uDD14', activeBg: 'bg-chip-bad-bg border-chip-bad-fg' },
+    { key: 'quiet',     label: 'Gone quiet',      count: goneQuietCount,    tone: 'text-chip-neutral-fg', icon: '\uD83D\uDCA4', activeBg: 'bg-chip-neutral-bg border-chip-neutral-fg' },
+    { key: 'discount',  label: 'Discount-watch',  count: discountWatchCount, tone: 'text-chip-warn-fg',   icon: '\uD83D\uDCB2', activeBg: 'bg-chip-warn-bg border-chip-warn-fg' },
+  ];
   return (
-    <div className="bg-lt-card border border-lt-hairline rounded-xl mb-4 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">Needs attention</span>
-          {hasAny ? (
+    <div className="mb-4">
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3 mb-2">Needs attention</div>
+      <div className="grid grid-cols-3 gap-3">
+        {cards.map((c) => {
+          const isActive = active === c.key;
+          const hasAny = c.count > 0;
+          return (
             <button
+              key={c.key}
               type="button"
-              onClick={onToggle}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-lt-fg hover:text-black"
+              onClick={() => onPick(c.key)}
+              className={`text-left rounded-xl border p-3 transition-colors ${
+                isActive
+                  ? c.activeBg
+                  : hasAny
+                    ? 'bg-lt-card border-lt-hairline hover:border-lt-fg2'
+                    : 'bg-lt-card border-lt-hairline opacity-70 hover:opacity-100'
+              }`}
+              title={
+                isActive
+                  ? `Tap to clear filter`
+                  : hasAny
+                    ? `Tap to filter the list to ${c.label.toLowerCase()}`
+                    : 'Nothing here right now'
+              }
             >
-              <span className={`inline-block w-2 h-2 rounded-full ${hasOverdue ? 'bg-chip-bad-fg' : 'bg-chip-warn-fg'}`} />
-              {pendingCount} follow-up{pendingCount === 1 ? '' : 's'} due
-              <span className="text-lt-fg3 ml-0.5">{expanded ? '▾' : '▸'}</span>
-            </button>
-          ) : (
-            <span className="text-xs text-lt-fg3">All clear — nothing pending.</span>
-          )}
-        </div>
-        {/* Slot for future signals: gone-quiet count, discount-watch
-            count. They'll render as additional clickable chips in
-            this row. */}
-      </div>
-      {expanded && hasAny && (
-        <div className="border-t border-lt-hairline px-4 py-3 space-y-2">
-          {followUps.map((f) => {
-            const overdue = f.dueDate && new Date(f.dueDate) < new Date() && !f.completed;
-            return (
-              <div key={f.id} className={`bg-lt-card border rounded-lg p-3 flex items-start gap-3 ${overdue ? 'border-chip-bad-fg/40' : 'border-lt-hairline'}`}>
-                <button
-                  onClick={() => onComplete(f.id)}
-                  className="mt-0.5 w-4 h-4 rounded border-2 border-lt-hairline hover:border-chip-good-fg flex-shrink-0 transition-colors"
-                  aria-label="Mark complete"
-                  title="Mark complete"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg uppercase tracking-wider">
-                      {f.type.replace('_', ' ')}
-                    </span>
-                    {f.company && <span className="text-[11px] text-lt-fg2">{f.company.name}</span>}
-                    {f.person && <span className="text-[11px] text-lt-fg3">({f.person.firstName} {f.person.lastName})</span>}
-                  </div>
-                  {f.subject && <p className="text-[13px] text-lt-fg font-medium">{f.subject}</p>}
-                  <p className="text-[12px] text-lt-fg2">{f.body}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  {f.dueDate && (
-                    <p className={`text-[11px] font-medium ${overdue ? 'text-chip-bad-fg' : 'text-lt-fg2'}`}>
-                      {overdue ? 'Overdue: ' : 'Due: '}{fmtDate(f.dueDate)}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-lt-fg3">{f.agent.name}</p>
-                </div>
+              <div className="flex items-start justify-between gap-2">
+                <span className={`text-[11px] uppercase tracking-wider font-semibold ${isActive ? c.tone : 'text-lt-fg2'}`}>
+                  {c.icon} {c.label}
+                </span>
+                {isActive && <span className="text-[10px] text-lt-fg3">tap to clear</span>}
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div className={`mt-1 text-2xl font-semibold font-mono ${hasAny ? c.tone : 'text-lt-fg3'}`}>
+                {c.count}
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
