@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -265,7 +266,17 @@ export default function PersonDetailPage() {
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <span className="text-lt-fg3 text-xs">Email</span>
-                    <p className="text-lt-fg mt-0.5"><a href={`mailto:${person.email}`} className="hover:text-lt-fg">{person.email}</a></p>
+                    <p className="text-lt-fg mt-0.5">
+                      <a href={`mailto:${person.email}`} className="hover:text-lt-fg">{person.email}</a>
+                      {isHighRiskEmailDomain(person.email) && (
+                        <span
+                          className="ml-2 inline-block text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg whitespace-nowrap align-middle"
+                          title="Apple iCloud may silently filter mail to this address — confirm receipt or use another channel."
+                        >
+                          iCloud — may be filtered
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div>
                     <span className="text-lt-fg3 text-xs">Office</span>

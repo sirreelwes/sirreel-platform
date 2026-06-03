@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isHighRiskEmailDomain } from '@/lib/email/emailDomain';
 
 /**
  * Small debounce hook — used to delay re-fetching the live preview
@@ -353,6 +354,14 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                     <div className="text-white text-sm truncate">
                       {preview.to.name}
                       <span className="text-zinc-400 font-mono ml-2">&lt;{preview.to.email}&gt;</span>
+                      {isHighRiskEmailDomain(preview.to.email) && (
+                        <span
+                          className="ml-2 inline-block text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg whitespace-nowrap align-middle"
+                          title="Apple iCloud may silently filter mail to this address."
+                        >
+                          iCloud — may be filtered
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-zinc-500 mt-0.5">
                       {preview.to.role ?? 'Contact'}
@@ -382,6 +391,14 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                         <div className="text-sm text-white">
                           {alt.name}
                           <span className="text-zinc-400 font-mono ml-2 text-[12px]">&lt;{alt.email}&gt;</span>
+                          {isHighRiskEmailDomain(alt.email) && (
+                            <span
+                              className="ml-2 inline-block text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg whitespace-nowrap align-middle"
+                              title="Apple iCloud may silently filter mail to this address."
+                            >
+                              iCloud — may be filtered
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-zinc-500">
                           {alt.role ?? 'Contact'}
@@ -481,6 +498,21 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
             </>
           )}
         </div>
+
+        {/* iCloud deliverability warning — non-blocking. Shows when
+            the chosen To is on an Apple-filtered domain (me/icloud/mac
+            .com). The send isn't gated; the agent confirms receipt or
+            uses another channel. */}
+        {preview && isHighRiskEmailDomain(preview.to.email) && (
+          <div className="px-5 pt-3 flex-shrink-0">
+            <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-[12px] leading-snug">
+              <span className="font-bold uppercase tracking-wider text-[10px]">iCloud deliverability</span>
+              <span className="block mt-0.5">
+                This is an iCloud address — Apple may silently filter it. Confirm the client received it, or send the portal link another way.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* ── Footer ──────────────────────────────────────────── */}
         <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-end gap-2 flex-shrink-0">

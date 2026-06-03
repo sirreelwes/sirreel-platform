@@ -11,6 +11,7 @@ import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
+import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus } from "@prisma/client";
 
 type LineItem = {
@@ -2215,8 +2216,9 @@ function RecipientLine({
   }
   const others = recipients.others;
   const tooltip = others.length
-    ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}`).join('\n')
+    ? others.map((o) => `${o.name} <${o.email}>${o.role ? ` · ${o.role}` : ''}${isHighRiskEmailDomain(o.email) ? '  ⚠ iCloud — may be filtered' : ''}`).join('\n')
     : undefined;
+  const primaryRisky = isHighRiskEmailDomain(recipients.primary.email);
   return (
     <div className="text-[11px] text-lt-fg3 leading-tight">
       <span className="text-lt-fg3">→ </span>
@@ -2227,6 +2229,14 @@ function RecipientLine({
       >
         {recipients.primary.email}
       </a>
+      {primaryRisky && (
+        <span
+          className="ml-1.5 inline-block text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg whitespace-nowrap align-middle"
+          title="Apple iCloud may silently filter mail to this address — confirm receipt or use another channel."
+        >
+          iCloud — may be filtered
+        </span>
+      )}
       {others.length > 0 && (
         <span className="text-lt-fg3 cursor-help" title={tooltip}>
           {' '}and {others.length} other{others.length === 1 ? '' : 's'}

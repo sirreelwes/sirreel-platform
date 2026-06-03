@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -337,7 +338,19 @@ export default function CRMPage() {
                       ? p.affiliations.map(a => a.company.name).join(", ")
                       : "--"}
                   </td>
-                  <td className="px-4 py-3 text-lt-fg2 text-xs">{p.email}</td>
+                  <td className="px-4 py-3 text-lt-fg2 text-xs">
+                    <span className="inline-flex items-baseline gap-1.5 flex-wrap">
+                      <span>{p.email}</span>
+                      {isHighRiskEmailDomain(p.email) && (
+                        <span
+                          className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg whitespace-nowrap"
+                          title="Apple iCloud may silently filter mail to this address — confirm receipt or use another channel."
+                        >
+                          iCloud — may be filtered
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.phone || "--"}</td>
                   <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(p.totalSpend)}</td>
                   <td className="px-4 py-3 text-center text-lt-fg2">{p.totalBookings}</td>
