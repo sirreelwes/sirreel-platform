@@ -229,6 +229,21 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     resetCart,
   } = useSupplyCart()
 
+  // Per-vehicle window helpers — bound to the VehicleCard so each
+  // window row addresses its own cart line via the stable
+  // cartLineId. The card no longer has its own date-editing surface
+  // shared across windows.
+  type WindowOps = {
+    onSetWindowDates: (cartLineId: string, pickup: string, returnD: string) => void
+    onSetWindowQty: (cartLineId: string, q: number) => void
+    onRemoveWindow: (cartLineId: string) => void
+  }
+  const windowOps: WindowOps = {
+    onSetWindowDates: (id, p, r) => setDates(id, p, r),
+    onSetWindowQty: (id, q) => setQty(id, q),
+    onRemoveWindow: (id) => removeLine(id),
+  }
+
   // touchedLineIds — line ids the agent has manually changed dates on.
   // Used by category-level date cascade in the Review panel:
   // category-level pickup/return changes propagate to every line in
@@ -612,12 +627,12 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
                     {vehicles.map((v) => {
                       const slot = cartByItemId.get(v.id)
-                      const firstLineId = slot?.lines[0]?.cartLineId ?? null
+                      const windows = slot?.lines ?? []
                       return (
                         <VehicleCard
                           key={v.id}
                           vehicle={v}
-                          inCartQty={slot?.totalQty ?? 0}
+                          windows={windows}
                           formDefaults={defaultDatesForAdd(form)}
                           onAdd={(pickupDate, returnDate) => {
                             addToCart({
@@ -631,9 +646,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                               returnDate,
                             })
                           }}
-                          onSetQty={(q) => {
-                            if (firstLineId) setQty(firstLineId, q)
-                          }}
+                          onSetWindowDates={windowOps.onSetWindowDates}
+                          onSetWindowQty={windowOps.onSetWindowQty}
+                          onRemoveWindow={windowOps.onRemoveWindow}
                         />
                       )
                     })}
@@ -985,34 +1000,58 @@ function ItemCard({
   )
 }
 
-// VehicleCard — Featured section tile. Each vehicle carries its own
-// pickup/return date inputs so the agent can add the same vehicle
-// across multiple windows (the cart line key includes dates, so each
-// add with a different window becomes a separate line). Defaults seed
-// from the form-level pickup/return when present, else the
-// defaultDatesForAdd fallback (today / today+7).
+// VehicleCard — Featured section tile.
+//
+// Each existing window already in the cart for this vehicle renders
+// as its own editable row (pickup, return, qty stepper, remove ×).
+// Each row binds to its own cart line via the stable cartLineId.
+//
+// Below the rows sits a "next window" form: a fresh pickup/return
+// pair + an "+ Add window" button that commits the form to the cart
+// and then resets the form's date inputs back to the seed defaults.
+// Resetting is the LINCHPIN of the fix — without it, two clicks
+// without changing dates produced the same cart key and merged into
+// a qty bump on the existing window rather than appending a new line.
+//
+// First-time state (zero windows): the form is the only thing
+// visible, with the button labeled "+ Reserve". Same form shape,
+// different copy.
 function VehicleCard({
   vehicle,
-  inCartQty,
+  windows,
   formDefaults,
   onAdd,
-  onSetQty,
+  onSetWindowDates,
+  onSetWindowQty,
+  onRemoveWindow,
 }: {
   vehicle: VehicleCategoryItem
-  inCartQty: number
+  windows: CartLine[]
   formDefaults: { pickupDate: string; returnDate: string }
   onAdd: (pickupDate: string, returnDate: string) => void
-  onSetQty: (q: number) => void
+  onSetWindowDates: (cartLineId: string, pickup: string, returnD: string) => void
+  onSetWindowQty: (cartLineId: string, q: number) => void
+  onRemoveWindow: (cartLineId: string) => void
 }) {
   const [pickup, setPickup] = useState(formDefaults.pickupDate)
   const [returnD, setReturnD] = useState(formDefaults.returnDate)
-  const inCart = inCartQty > 0
+  const hasWindows = windows.length > 0
   const priceOnQuote = vehicle.dailyRate == null || vehicle.dailyRate === 0
-  const datesValid = pickup && returnD && returnD >= pickup
+  const datesValid = !!pickup && !!returnD && returnD >= pickup
+
+  const commitWindow = () => {
+    if (!datesValid) return
+    onAdd(pickup, returnD)
+    // Reset the form so the next "+ Add window" click writes a NEW
+    // cart line instead of merging into the same one.
+    setPickup(formDefaults.pickupDate)
+    setReturnD(formDefaults.returnDate)
+  }
+
   return (
     <div
       className={`bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
-        inCart ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
+        hasWindows ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
       }`}
     >
       {vehicle.photoUrl ? (
@@ -1048,55 +1087,108 @@ function VehicleCard({
             )}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <label className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup</span>
-            <input
-              type="date"
-              value={pickup}
-              onChange={(e) => setPickup(e.target.value)}
-              className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
-            />
-          </label>
-          <label className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Return</span>
-            <input
-              type="date"
-              value={returnD}
-              onChange={(e) => setReturnD(e.target.value)}
-              min={pickup || undefined}
-              className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
-            />
-          </label>
-        </div>
-        <div className="flex items-center gap-2 mt-auto">
-          {inCart ? (
-            <>
-              <div className="flex items-center border-[1.5px] border-[#c39a3f] rounded-[10px] overflow-hidden h-[36px] flex-none">
-                <button onClick={() => onSetQty(inCartQty - 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-lg font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
-                <span className="min-w-[28px] text-center font-extrabold text-[14px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{inCartQty}</span>
-                <button onClick={() => onSetQty(inCartQty + 1)} className="w-[30px] h-full bg-white text-[#a37f2c] text-lg font-bold hover:bg-[#fbf6ea]" aria-label="Increase">+</button>
-              </div>
-              <button
-                onClick={() => datesValid && onAdd(pickup, returnD)}
-                disabled={!datesValid}
-                className="flex-1 border-[1.5px] border-[#cdc7b9] bg-white text-[#1a1a1c] rounded-[10px] h-[36px] px-2 font-bold text-[11.5px] tracking-wide hover:border-[#0c0c0d] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ fontFamily: 'Archivo, sans-serif' }}
-                title="Reserve another window of this vehicle"
+
+        {/* Existing windows for this vehicle — each one its own row
+            bound to its own cart line. Editing dates here calls
+            setDates(lineId, …); qty stepper + × remove are the per-
+            window controls. The row order matches insertion order. */}
+        {hasWindows && (
+          <div className="flex flex-col gap-2">
+            {windows.map((w, idx) => (
+              <div
+                key={w.cartLineId}
+                className="rounded-[8px] border border-[#e4dfd4] bg-[#fbf6ea]/40 p-2 flex flex-col gap-1.5"
               >
-                + Add window
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => datesValid && onAdd(pickup, returnD)}
-              disabled={!datesValid}
-              className="w-full border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[36px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform disabled:opacity-40 disabled:bg-[#5a5a5c] disabled:translate-y-0 disabled:cursor-not-allowed"
-              style={{ fontFamily: 'Archivo, sans-serif' }}
-            >
-              + Reserve
-            </button>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                    Window {idx + 1}
+                  </span>
+                  <button
+                    onClick={() => onRemoveWindow(w.cartLineId)}
+                    className="text-[#8b857a] hover:text-[#a3431b] text-[14px] leading-none px-1"
+                    aria-label={`Remove window ${idx + 1}`}
+                    title="Remove this window"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="flex flex-col">
+                    <span className="text-[9px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup</span>
+                    <input
+                      type="date"
+                      value={w.pickupDate}
+                      onChange={(e) => onSetWindowDates(w.cartLineId, e.target.value, w.returnDate)}
+                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                    />
+                  </label>
+                  <label className="flex flex-col">
+                    <span className="text-[9px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Return</span>
+                    <input
+                      type="date"
+                      value={w.returnDate}
+                      onChange={(e) => onSetWindowDates(w.cartLineId, w.pickupDate, e.target.value)}
+                      min={w.pickupDate || undefined}
+                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                    />
+                  </label>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold" style={{ fontFamily: 'Archivo, sans-serif' }}>Qty</span>
+                  <div className="flex items-center border-[1.5px] border-[#c39a3f] rounded-[8px] overflow-hidden h-[28px]">
+                    <button onClick={() => onSetWindowQty(w.cartLineId, w.qty - 1)} className="w-[24px] h-full bg-white text-[#a37f2c] text-base font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
+                    <span className="min-w-[24px] text-center font-extrabold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{w.qty}</span>
+                    <button onClick={() => onSetWindowQty(w.cartLineId, w.qty + 1)} className="w-[24px] h-full bg-white text-[#a37f2c] text-base font-bold hover:bg-[#fbf6ea]" aria-label="Increase">+</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Next-window form — fresh pickup/return + the "+ Add window"
+            (or "+ Reserve" when none yet) button. Both labels commit
+            the form via the same handler and reset the inputs. */}
+        <div className="mt-auto flex flex-col gap-1.5">
+          {hasWindows && (
+            <div className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold pt-1 border-t border-[#e4dfd4]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Next window
+            </div>
           )}
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup</span>
+              <input
+                type="date"
+                value={pickup}
+                onChange={(e) => setPickup(e.target.value)}
+                className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+              />
+            </label>
+            <label className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-[0.08em] text-[#8b857a] font-semibold mb-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>Return</span>
+              <input
+                type="date"
+                value={returnD}
+                onChange={(e) => setReturnD(e.target.value)}
+                min={pickup || undefined}
+                className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+              />
+            </label>
+          </div>
+          <button
+            onClick={commitWindow}
+            disabled={!datesValid}
+            className={
+              hasWindows
+                ? 'w-full border-[1.5px] border-[#cdc7b9] bg-white text-[#1a1a1c] rounded-[10px] h-[36px] px-3 font-bold text-[12px] tracking-wide hover:border-[#0c0c0d] disabled:opacity-40 disabled:cursor-not-allowed'
+                : 'w-full border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[36px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform disabled:opacity-40 disabled:bg-[#5a5a5c] disabled:translate-y-0 disabled:cursor-not-allowed'
+            }
+            style={{ fontFamily: 'Archivo, sans-serif' }}
+            title={hasWindows ? 'Reserve another window of this vehicle' : 'Reserve this vehicle'}
+          >
+            {hasWindows ? '+ Add window' : '+ Reserve'}
+          </button>
         </div>
       </div>
     </div>
