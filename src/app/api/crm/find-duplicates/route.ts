@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 
 // Normalize company name for matching
 function normalize(name: string): string {
@@ -50,6 +51,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   // Merge manual company into RW company
   // Move all orders, affiliations, activities from manual to rw
   const body = await req.json();
