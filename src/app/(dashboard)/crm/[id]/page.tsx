@@ -21,6 +21,16 @@ type CompanyDetail = {
   discountTendency: DiscountTendency;
   typicalDiscountPct: number | null;
   discountNotes: string | null;
+  // Negotiated standing agreement — Path A from the contract-review
+  // discovery report. When set, future orders auto-present this PDF
+  // instead of the baseline (wired in step b).
+  negotiatedTermsUrl: string | null;
+  negotiatedTermsSummary: string | null;
+  negotiatedTermsNegotiatedAt: string | null;
+  negotiatedTermsApprovedBy: string | null;
+  negotiatedTermsApprovedAt: string | null;
+  negotiatedTermsActiveAsOf: string | null;
+  negotiatedTermsReviewDueDate: string | null;
   affiliations: { id: string; productionName: string | null; isCurrent: boolean; roleOnShow: string | null;
     person: { id: string; firstName: string; lastName: string; email: string; phone: string | null; role: string } }[];
   orders: { id: string; orderNumber: string; status: string; total: string; description: string | null; startDate: string | null; createdAt: string }[];
@@ -122,6 +132,77 @@ export default function CompanyDetailPage() {
       discountNotes: company.discountNotes ?? '',
     });
   }, [company]);
+
+  // Standing-agreement form. Owned separately from the main edit
+  // form because file upload + multipart POST has a different
+  // shape than the JSON PUT used for the rest of the Company row.
+  // Visible inside the same edit panel; has its own Save button.
+  const [saFile, setSaFile] = useState<File | null>(null);
+  const [saSummary, setSaSummary] = useState('');
+  const [saApprovedBy, setSaApprovedBy] = useState('');
+  const [saNegotiatedAt, setSaNegotiatedAt] = useState('');
+  const [saApprovedAt, setSaApprovedAt] = useState('');
+  const [saActiveAsOf, setSaActiveAsOf] = useState('');
+  const [saReviewDueDate, setSaReviewDueDate] = useState('');
+  const [savingStanding, setSavingStanding] = useState(false);
+  const [standingMsg, setStandingMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!company) return;
+    setSaSummary(company.negotiatedTermsSummary ?? '');
+    setSaApprovedBy(company.negotiatedTermsApprovedBy ?? '');
+    setSaNegotiatedAt(company.negotiatedTermsNegotiatedAt ? company.negotiatedTermsNegotiatedAt.slice(0, 10) : '');
+    setSaApprovedAt(company.negotiatedTermsApprovedAt ? company.negotiatedTermsApprovedAt.slice(0, 10) : '');
+    setSaActiveAsOf(company.negotiatedTermsActiveAsOf ? company.negotiatedTermsActiveAsOf.slice(0, 10) : '');
+    setSaReviewDueDate(company.negotiatedTermsReviewDueDate ? company.negotiatedTermsReviewDueDate.slice(0, 10) : '');
+    setSaFile(null);
+  }, [company]);
+
+  const saveStandingAgreement = useCallback(async () => {
+    setSavingStanding(true);
+    setStandingMsg(null);
+    try {
+      const fd = new FormData();
+      if (saFile) fd.append('file', saFile);
+      fd.append('summary', saSummary);
+      fd.append('approvedBy', saApprovedBy);
+      fd.append('negotiatedAt', saNegotiatedAt);
+      fd.append('approvedAt', saApprovedAt);
+      fd.append('activeAsOf', saActiveAsOf);
+      fd.append('reviewDueDate', saReviewDueDate);
+      const res = await fetch(`/api/crm/companies/${companyId}/standing-agreement`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStandingMsg(data.error || 'Save failed');
+        return;
+      }
+      await fetchCompany();
+      setStandingMsg('Saved.');
+    } finally {
+      setSavingStanding(false);
+    }
+  }, [companyId, saFile, saSummary, saApprovedBy, saNegotiatedAt, saApprovedAt, saActiveAsOf, saReviewDueDate, fetchCompany]);
+
+  const clearStandingAgreement = useCallback(async () => {
+    if (!confirm('Clear the standing agreement on this company? The PDF stays in storage for audit; future orders revert to the baseline template.')) return;
+    setSavingStanding(true);
+    setStandingMsg(null);
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}/standing-agreement`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setStandingMsg(data.error || 'Clear failed');
+        return;
+      }
+      await fetchCompany();
+      setStandingMsg('Cleared.');
+    } finally {
+      setSavingStanding(false);
+    }
+  }, [companyId, fetchCompany]);
 
   const saveCompany = useCallback(async () => {
     if (!editForm) return;
@@ -351,6 +432,126 @@ export default function CompanyDetailPage() {
               </div>
             </div>
 
+            {/* Negotiated standing agreement — separate save path
+                (multipart) because the PDF upload doesn't fit into
+                the JSON PUT used by the rest of the form. Its own
+                Save button keeps the data flow clean; the agent
+                explicitly commits one or the other. */}
+            <div className="border-t border-lt-hairline pt-4 space-y-3">
+              <div className="flex items-baseline justify-between flex-wrap gap-2">
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+                  Negotiated standing agreement
+                </div>
+                {company.negotiatedTermsApprovedAt && (
+                  <button
+                    type="button"
+                    onClick={clearStandingAgreement}
+                    disabled={savingStanding}
+                    className="text-[11px] text-chip-bad-fg hover:opacity-70 disabled:opacity-40"
+                  >
+                    Clear standing agreement
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-lt-fg3">
+                Upload the negotiated PDF and the dates that bound it. When set, future orders for this client auto-present this PDF instead of the standard baseline.
+              </p>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">
+                  PDF {company.negotiatedTermsUrl ? '(replace existing)' : '(required for first record)'}
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setSaFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-lt-fg2 file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-lt-inner file:text-lt-fg file:cursor-pointer hover:file:bg-lt-hairline"
+                />
+                {company.negotiatedTermsUrl && (
+                  <a
+                    href={company.negotiatedTermsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-lt-fg hover:text-black mt-1 inline-block"
+                  >
+                    Current PDF on file ↗
+                  </a>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-lt-fg3 mb-1">Summary (plain-English diff)</label>
+                <textarea
+                  value={saSummary}
+                  onChange={(e) => setSaSummary(e.target.value)}
+                  rows={3}
+                  placeholder="What was negotiated — e.g. liability cap lowered to insured value; missing-equipment return window extended to 30 days; admin fee waived. If this came from a Contract Review, paste the review id or link here for the audit trail."
+                  className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg resize-y"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Negotiated on</label>
+                  <input
+                    type="date"
+                    value={saNegotiatedAt}
+                    onChange={(e) => setSaNegotiatedAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Approved by</label>
+                  <input
+                    type="text"
+                    value={saApprovedBy}
+                    onChange={(e) => setSaApprovedBy(e.target.value)}
+                    placeholder="Name or email"
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Approved on</label>
+                  <input
+                    type="date"
+                    value={saApprovedAt}
+                    onChange={(e) => setSaApprovedAt(e.target.value)}
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-lt-fg3 mb-1">Active as of</label>
+                  <input
+                    type="date"
+                    value={saActiveAsOf}
+                    onChange={(e) => setSaActiveAsOf(e.target.value)}
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-lt-fg3 mb-1">Review due</label>
+                  <input
+                    type="date"
+                    value={saReviewDueDate}
+                    onChange={(e) => setSaReviewDueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={saveStandingAgreement}
+                  disabled={savingStanding}
+                  className="px-3 py-2 bg-lt-fg hover:bg-black text-white text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {savingStanding ? 'Saving…' : 'Save standing agreement'}
+                </button>
+                {standingMsg && (
+                  <span className={`text-[11px] ${standingMsg === 'Saved.' || standingMsg === 'Cleared.' ? 'text-chip-good-fg' : 'text-chip-bad-fg'}`}>
+                    {standingMsg}
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <button
                 onClick={saveCompany}
@@ -425,6 +626,76 @@ export default function CompanyDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Negotiated standing agreement — read-only block.
+                Renders only when the agreement has been approved
+                (approvedAt is the canonical "this is active" flag).
+                Includes a soft past-review hint when the review-due
+                date has passed; future orders still auto-present the
+                PDF — past-review never blocks. */}
+            {company.negotiatedTermsApprovedAt && (() => {
+              const reviewDue = company.negotiatedTermsReviewDueDate
+                ? new Date(company.negotiatedTermsReviewDueDate)
+                : null;
+              const pastReview = reviewDue ? reviewDue.getTime() < Date.now() : false;
+              return (
+                <div className="mt-4 pt-4 border-t border-lt-hairline">
+                  <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-chip-warn-fg bg-chip-warn-bg px-2 py-0.5 rounded">
+                        Standing agreement on file
+                      </span>
+                      {pastReview && (
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-semibold text-chip-bad-fg bg-chip-bad-bg px-2 py-0.5 rounded"
+                          title="Review-due date has passed. Future orders still use this PDF; consider re-papering."
+                        >
+                          Past review · re-paper soon
+                        </span>
+                      )}
+                    </div>
+                    {company.negotiatedTermsUrl && (
+                      <a
+                        href={company.negotiatedTermsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-lt-fg hover:text-black"
+                      >
+                        Open PDF ↗
+                      </a>
+                    )}
+                  </div>
+                  {company.negotiatedTermsSummary && (
+                    <p className="text-xs text-lt-fg2 whitespace-pre-wrap mb-2">{company.negotiatedTermsSummary}</p>
+                  )}
+                  <div className="grid grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="text-lt-fg3">Negotiated</span>
+                      <p className="text-lt-fg mt-0.5">{fmtDate(company.negotiatedTermsNegotiatedAt)}</p>
+                    </div>
+                    <div>
+                      <span className="text-lt-fg3">Approved</span>
+                      <p className="text-lt-fg mt-0.5">
+                        {fmtDate(company.negotiatedTermsApprovedAt)}
+                        {company.negotiatedTermsApprovedBy && (
+                          <span className="text-lt-fg3"> · by {company.negotiatedTermsApprovedBy}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-lt-fg3">Active as of</span>
+                      <p className="text-lt-fg mt-0.5">{fmtDate(company.negotiatedTermsActiveAsOf)}</p>
+                    </div>
+                    <div>
+                      <span className="text-lt-fg3">Review due</span>
+                      <p className={`mt-0.5 ${pastReview ? 'text-chip-bad-fg' : 'text-lt-fg'}`}>
+                        {fmtDate(company.negotiatedTermsReviewDueDate)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
       </div>
