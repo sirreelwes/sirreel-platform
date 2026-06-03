@@ -12,6 +12,14 @@ interface ServiceHealth {
   [k: string]: unknown;
 }
 
+interface GmailInboxDetail {
+  emailAddress: string;
+  lastWatchedAt: string | null;
+  lastInboundAt: string | null;
+  status: ServiceStatus;
+  note: string | null;
+}
+
 interface HealthReport {
   timestamp: string;
   overall: ServiceStatus;
@@ -21,6 +29,7 @@ interface HealthReport {
     neon: ServiceHealth;
     rentalworks: ServiceHealth & { httpStatus?: number };
     cloudflare_dns: ServiceHealth & { hqCname?: string; sirreelA?: string[]; hqResolves?: boolean };
+    gmail_ingestion: ServiceHealth & { inboxes?: GmailInboxDetail[] };
   };
 }
 
@@ -39,6 +48,7 @@ const SERVICE_LABELS: Record<keyof HealthReport["services"], string> = {
   neon: "Neon (Postgres)",
   rentalworks: "RentalWorks API",
   cloudflare_dns: "DNS (hq.sirreel.com)",
+  gmail_ingestion: "Gmail ingestion (watch + flow)",
 };
 
 function StatusBadge({ status }: { status: ServiceStatus }) {
@@ -237,6 +247,16 @@ export default function AdminHealthPage() {
                   : null,
               ].filter(Boolean) as { label: string; value: string }[]}
             />
+            <ServiceCard
+              label={SERVICE_LABELS.gmail_ingestion}
+              service={current.services.gmail_ingestion}
+              extras={
+                current.services.gmail_ingestion.inboxes?.map((i) => ({
+                  label: i.emailAddress,
+                  value: i.note ?? (i.status === "healthy" ? "ok" : i.status),
+                })) ?? []
+              }
+            />
           </div>
 
           <h2 className="text-sm font-semibold text-white mb-2">Last 24 hours</h2>
@@ -251,13 +271,14 @@ export default function AdminHealthPage() {
                   <th className="px-4 py-3 font-medium">Neon</th>
                   <th className="px-4 py-3 font-medium">RW</th>
                   <th className="px-4 py-3 font-medium">DNS</th>
+                  <th className="px-4 py-3 font-medium">Gmail</th>
                   <th className="px-4 py-3 font-medium text-center">Alerted</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
                       No history yet
                     </td>
                   </tr>
@@ -284,6 +305,11 @@ export default function AdminHealthPage() {
                       </td>
                       <td className="px-4 py-2">
                         <StatusBadge status={row.services.cloudflare_dns.status} />
+                      </td>
+                      <td className="px-4 py-2">
+                        <StatusBadge
+                          status={row.services.gmail_ingestion?.status ?? "healthy"}
+                        />
                       </td>
                       <td className="px-4 py-2 text-center">
                         {row.alertedAt ? (

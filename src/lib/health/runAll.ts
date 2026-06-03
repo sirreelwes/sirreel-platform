@@ -3,6 +3,7 @@ import { checkResend } from './resend'
 import { checkNeon } from './neon'
 import { checkRentalWorks } from './rentalworks'
 import { checkDns } from './dns'
+import { checkGmailIngestion } from './gmail'
 import { rollupOverall, type HealthReport } from './types'
 
 /**
@@ -17,18 +18,19 @@ import { rollupOverall, type HealthReport } from './types'
 export async function runAllHealthChecks(): Promise<HealthReport> {
   const timestamp = new Date().toISOString()
 
-  const [anthropic, resend, neon, rentalworks, cloudflare_dns] = await Promise.all([
+  const [anthropic, resend, neon, rentalworks, cloudflare_dns, gmail_ingestion] = await Promise.all([
     safe(checkAnthropic, 'anthropic'),
     safe(checkResend, 'resend'),
     safe(checkNeon, 'neon'),
     safe(checkRentalWorks, 'rentalworks'),
     safe(checkDns, 'cloudflare_dns'),
+    safe(checkGmailIngestion, 'gmail_ingestion'),
   ])
 
   const report: HealthReport = {
     timestamp,
     overall: 'healthy',
-    services: { anthropic, resend, neon, rentalworks, cloudflare_dns },
+    services: { anthropic, resend, neon, rentalworks, cloudflare_dns, gmail_ingestion },
   }
   report.overall = rollupOverall(report)
   return report

@@ -43,6 +43,16 @@ export interface DnsHealth extends ServiceHealth {
   hqResolves: boolean
 }
 
+export interface GmailIngestionHealth extends ServiceHealth {
+  inboxes: {
+    emailAddress: string
+    lastWatchedAt: string | null
+    lastInboundAt: string | null
+    status: ServiceStatus
+    note: string | null
+  }[]
+}
+
 export interface HealthReport {
   timestamp: string
   overall: ServiceStatus
@@ -52,6 +62,7 @@ export interface HealthReport {
     neon: ServiceHealth
     rentalworks: RentalWorksHealth
     cloudflare_dns: DnsHealth
+    gmail_ingestion: GmailIngestionHealth
   }
 }
 
