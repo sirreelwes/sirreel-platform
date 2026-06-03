@@ -16,6 +16,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,8 @@ interface PromoteBody {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const auth = await requireDispatchAccess()
+  if (!auth.ok) return auth.response
   const body = (await req.json().catch(() => null)) as PromoteBody | null
   const force = body?.force === true
   const bufferDays = body?.bufferDays ?? 1

@@ -16,6 +16,7 @@
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
 import type { BookingStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,8 @@ export const dynamic = 'force-dynamic'
 const CONFIRMABLE_FROM: readonly BookingStatus[] = ['REQUEST', 'AI_REVIEW', 'PENDING_APPROVAL'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const auth = await requireDispatchAccess()
+  if (!auth.ok) return auth.response
   const booking = await prisma.booking.findUnique({
     where: { id: params.id },
     select: { id: true, bookingNumber: true, status: true, archivedAt: true },

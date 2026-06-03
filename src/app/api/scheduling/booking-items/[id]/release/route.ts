@@ -24,12 +24,15 @@
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
 
 export const dynamic = 'force-dynamic'
 
 const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
+  const auth = await requireDispatchAccess()
+  if (!auth.ok) return auth.response
   const item = await prisma.bookingItem.findUnique({
     where: { id: params.id },
     select: {
