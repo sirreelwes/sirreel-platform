@@ -311,17 +311,26 @@ export default function CRMPage() {
                 <th className="px-4 py-3 font-medium">Phone</th>
                 <th className="px-4 py-3 font-medium text-right">Spend</th>
                 <th className="px-4 py-3 font-medium text-center">Bookings</th>
+                <th className="px-2 py-3 font-medium text-right w-10" aria-label="Edit" />
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : people.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-lt-fg3">No contacts found</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">No contacts found</td></tr>
               ) : people.map((p) => (
-                <tr key={p.id} onClick={() => router.push(`/crm/people/${p.id}`)}
-                  className="border-b border-lt-hairline/50 hover:bg-lt-inner/30 cursor-pointer transition-colors">
-                  <td className="px-4 py-3 text-lt-fg font-medium">{p.firstName} {p.lastName}</td>
+                // ?edit=1 hands the person-detail page a hint to open
+                // in edit mode immediately — saves one click vs. the
+                // detail page's standard "click Edit then change fields"
+                // flow. The detail page reads the param on mount.
+                <tr
+                  key={p.id}
+                  onClick={() => router.push(`/crm/people/${p.id}?edit=1`)}
+                  className="group border-b border-lt-hairline/50 hover:bg-lt-inner cursor-pointer transition-colors"
+                  title={`Click to edit ${p.firstName} ${p.lastName}`}
+                >
+                  <td className="px-4 py-3 text-lt-fg font-medium group-hover:text-black">{p.firstName} {p.lastName}</td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.role.replace(/_/g, " ")}</td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">
                     {p.affiliations.length > 0
@@ -332,6 +341,13 @@ export default function CRMPage() {
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.phone || "--"}</td>
                   <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(p.totalSpend)}</td>
                   <td className="px-4 py-3 text-center text-lt-fg2">{p.totalBookings}</td>
+                  {/* Trailing chevron with a hover-revealed "Edit"
+                      label so the affordance reads as "this row is
+                      tappable to edit" at a glance. */}
+                  <td className="px-3 py-3 text-right whitespace-nowrap text-lt-fg3 group-hover:text-lt-fg text-xs">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity mr-1 font-medium">Edit</span>
+                    <span aria-hidden="true">›</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

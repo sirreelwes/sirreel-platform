@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 type Activity = {
@@ -47,7 +47,9 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-US"
 export default function PersonDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const personId = params.id as string;
+  const editIntent = searchParams?.get('edit') === '1';
   const { data: session } = useSession();
 
   const [person, setPerson] = useState<PersonDetail | null>(null);
@@ -83,6 +85,19 @@ export default function PersonDetailPage() {
   }, [personId, router]);
 
   useEffect(() => { fetchPerson(); }, [fetchPerson]);
+
+  // ?edit=1 from the /crm Contacts row click opens the edit form
+  // immediately so the agent doesn't have to land then hunt for the
+  // "Edit" button. Runs once when both the person + the query param
+  // are ready; subsequent param changes don't re-toggle edit mode
+  // (the agent may have cancelled deliberately).
+  const [didApplyEditIntent, setDidApplyEditIntent] = useState(false);
+  useEffect(() => {
+    if (didApplyEditIntent) return;
+    if (!person || !editIntent) return;
+    setEditing(true);
+    setDidApplyEditIntent(true);
+  }, [person, editIntent, didApplyEditIntent]);
 
   const saveEdits = async () => {
     await fetch(`/api/crm/people/${personId}`, {
