@@ -86,8 +86,12 @@ export function buildQuoteSendEmail(input: QuoteSendEmailInput): QuoteSendEmail 
     customText,
     `Let us know if anything needs adjusting — we'll re-quote as needed.`,
     ``,
-    portalUrl ? `Portal: ${portalUrl}` : '',
-    `Need expendables for this shoot? ${SUPPLY_URL}`,
+    // One warm CTA line — matches the HTML's single two-line button.
+    // portalUrl carries the per-recipient magic-link token at send time;
+    // the preview path passes portalUrl=null and falls back to the
+    // generic supplies URL so the preview still reads sensibly.
+    `Order Supplies — we'll load it onto your vehicle, ready to roll:`,
+    `${portalUrl ?? SUPPLY_URL}`,
     ``,
     `Thanks,`,
     `${input.agentName || 'the SirReel team'}`,
@@ -174,30 +178,35 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             </td>
           </tr>
 
-          <!-- ── Standing CTAs (portal + supply) ───────────────────── -->
-          <!-- Portal button renders when the order has a portalSlug — gives
-               the client a one-tap path to review, sign, and pay without
-               a reply round-trip. Supply link is unconditional ("standing"
-               link) so every quote reply quietly carries the up-sell path
-               whether the agent thought to mention it or not. -->
+          <!-- ── Warm two-line CTA ────────────────────────────────────
+               One inviting filled button — main label + softer subline
+               stacked. Lands the client in their authenticated portal
+               session via the per-recipient magic-link token (minted
+               in the send route as portalUrl). When portalUrl is null
+               (preview path), falls back to the generic supplies URL
+               so the preview still renders a working CTA. Table-based
+               so the two-line content survives Outlook + every other
+               client; VML wrapper kept for Outlook's button rounding. -->
           <tr>
             <td style="padding:20px 36px 8px;text-align:center;">
-              ${portalUrl ? `
-              <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalUrl}" style="height:44px;v-text-anchor:middle;width:200px;" arcsize="14%" stroke="f" fillcolor="${GOLD}">
-                <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">Open Your Customer Portal</center>
-              </v:roundrect>
-              <![endif]-->
-              <!--[if !mso]><!-- -->
-              <a href="${portalUrl}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:12px 28px;border-radius:6px;margin:0 6px 8px;">
-                Open Your Customer Portal
-              </a>
-              <!--<![endif]-->
-              ` : ''}
-              <a href="${SUPPLY_URL}" style="display:inline-block;background-color:transparent;color:${DARK};text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:6px;border:1.5px solid ${DARK};margin:0 6px 8px;">
-                Order Supplies
-              </a>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" bgcolor="${GOLD}" style="background-color:${GOLD};border-radius:8px;">
+                    <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalUrl ?? SUPPLY_URL}" style="height:62px;v-text-anchor:middle;width:280px;" arcsize="14%" stroke="f" fillcolor="${GOLD}">
+                      <w:anchorlock/>
+                      <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;">Order Supplies</center>
+                    </v:roundrect>
+                    <![endif]-->
+                    <!--[if !mso]><!-- -->
+                    <a href="${portalUrl ?? SUPPLY_URL}" style="display:block;padding:14px 32px;text-decoration:none;color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;border-radius:8px;">
+                      <span style="display:block;font-weight:700;font-size:16px;line-height:1.2;letter-spacing:0.2px;">Order Supplies</span>
+                      <span style="display:block;font-weight:400;font-size:12px;line-height:1.4;margin-top:4px;color:#3a2e10;">We&rsquo;ll load it onto your vehicle, ready to roll</span>
+                    </a>
+                    <!--<![endif]-->
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
