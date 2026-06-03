@@ -21,6 +21,14 @@ import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 interface PortalData {
   contact: { id: string; firstName: string; lastName: string; email: string } | null;
   company: { id: string; name: string };
+  /** Standing-agreement banner context. Renders when the order's
+   *  rental agreement was auto-applied from the Company's negotiated
+   *  PDF (Path A from the contract-review work). */
+  standingAgreement: {
+    companyName: string;
+    approvedAt: string;
+    summary: string | null;
+  } | null;
   order: {
     id: string;
     orderNumber: string;
@@ -462,6 +470,26 @@ export default function JobPortalPage() {
           {/* Your paperwork */}
           <div>
             <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your paperwork</div>
+
+            {/* Standing-agreement banner — renders when the order's
+                rental agreement was auto-applied from the company's
+                negotiated PDF. Tells the client up front so they
+                aren't surprised to see different terms than the
+                public template. */}
+            {data.standingAgreement && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] leading-relaxed text-amber-900">
+                <div className="font-bold uppercase tracking-wider text-[10px] text-amber-700 mb-1">
+                  Negotiated terms in use
+                </div>
+                <p>
+                  Using {data.standingAgreement.companyName}&apos;s negotiated terms (established{' '}
+                  {new Date(data.standingAgreement.approvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).
+                </p>
+                {data.standingAgreement.summary && (
+                  <p className="mt-1 text-amber-800 whitespace-pre-wrap">{data.standingAgreement.summary}</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3">
               {/* Rental Agreement */}

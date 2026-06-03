@@ -311,6 +311,18 @@ export default function OrderDetailPage() {
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [agreementBusy, setAgreementBusy] = useState(false);
   const [agreementMsg, setAgreementMsg] = useState<string>("");
+  // Standing-agreement context — when set, this order's
+  // SignedAgreement was auto-pointed at the Company's negotiated PDF
+  // by ensureSignedAgreementForOrder. Drives the banner above the
+  // Rental Agreement section.
+  type StandingAgreement = {
+    companyName: string;
+    approvedAt: string;
+    summary: string | null;
+    reviewDueDate: string | null;
+    pdfUrl: string;
+  };
+  const [standingAgreement, setStandingAgreement] = useState<StandingAgreement | null>(null);
 
   type CadenceSummary = {
     order: { cadenceState: string; cadenceManualOverride: boolean; cadencePausedUntil: string | null };
@@ -473,6 +485,7 @@ export default function OrderDetailPage() {
     const data = await res.json();
     setAgreement(data.agreement || null);
     setPortalUrl(data.portalUrl || null);
+    setStandingAgreement(data.standingAgreement || null);
   }, [orderId]);
 
   useEffect(() => {
@@ -1686,6 +1699,46 @@ export default function OrderDetailPage() {
       {/* Signed Agreement */}
       {agreement && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6 space-y-4">
+          {/* Standing-agreement banner — renders when this order was
+              auto-pointed at the Company's negotiated PDF (step b of
+              the negotiated-terms work). Soft past-review marker when
+              the company's reviewDueDate has passed; we never
+              auto-revert and never block sending. */}
+          {standingAgreement && (() => {
+            const reviewDue = standingAgreement.reviewDueDate ? new Date(standingAgreement.reviewDueDate) : null;
+            const pastReview = reviewDue ? reviewDue.getTime() < Date.now() : false;
+            return (
+              <div className={`rounded-lg border px-3 py-2.5 ${pastReview ? 'border-chip-bad-fg/40 bg-chip-bad-bg' : 'border-chip-warn-fg/30 bg-chip-warn-bg'}`}>
+                <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${pastReview ? 'text-chip-bad-fg' : 'text-chip-warn-fg'}`}>
+                    {pastReview ? 'Standing terms · past review' : 'Standing terms in use'}
+                  </span>
+                  <a
+                    href={standingAgreement.pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`text-[11px] font-semibold ${pastReview ? 'text-chip-bad-fg' : 'text-chip-warn-fg'} hover:opacity-80`}
+                  >
+                    Open PDF ↗
+                  </a>
+                </div>
+                <p className={`text-[12px] mt-1 ${pastReview ? 'text-chip-bad-fg' : 'text-chip-warn-fg'}`}>
+                  Using {standingAgreement.companyName}'s negotiated terms (established {fmtDate(standingAgreement.approvedAt)}).
+                </p>
+                {standingAgreement.summary && (
+                  <p className={`text-[11px] mt-1 whitespace-pre-wrap ${pastReview ? 'text-chip-bad-fg' : 'text-chip-warn-fg'}`}>
+                    {standingAgreement.summary}
+                  </p>
+                )}
+                {pastReview && (
+                  <p className="text-[11px] mt-1 text-chip-bad-fg">
+                    Review-due date has passed. This order still uses the standing PDF — consider re-papering with the client.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-lg font-semibold text-lt-fg">Rental Agreement</h2>

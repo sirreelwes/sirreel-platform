@@ -92,7 +92,19 @@ export async function GET(req: NextRequest) {
         blindReturn: true,
         blindPickupInstructions: true,
         blindReturnInstructions: true,
-        company: { select: { id: true, name: true } },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            // Standing-agreement context for the portal banner. Only
+            // the fields the client should see (no raw PDF URL when
+            // the order's SignedAgreement already carries it via
+            // documentToSignUrl).
+            negotiatedTermsApprovedAt: true,
+            negotiatedTermsSummary: true,
+            negotiatedTermsActiveAsOf: true,
+          },
+        },
         job: { select: { id: true, name: true, jobCode: true, productionType: true } },
         agent: {
           select: { id: true, name: true, email: true, phone: true, avatarUrl: true, displayTitle: true },
@@ -261,10 +273,31 @@ export async function GET(req: NextRequest) {
     ? Math.max(0, order.startDate.getTime() - Date.now())
     : null
 
+  // Standing-agreement banner context. Only fires when the company
+  // has an approved + active standing agreement AND the order's
+  // signed-agreement row is on the NEGOTIATED side (i.e. auto-applied
+  // by ensureSignedAgreementForOrder). Orders that were papered on
+  // baseline before the company recorded standing terms keep their
+  // baseline + don't surface the banner.
+  const now = new Date()
+  const standingAgreementActive =
+    !!order.company.negotiatedTermsApprovedAt &&
+    (order.company.negotiatedTermsActiveAsOf == null ||
+      order.company.negotiatedTermsActiveAsOf <= now)
+  const standingAgreement =
+    standingAgreementActive && rentalAgreement?.documentType === 'NEGOTIATED'
+      ? {
+          companyName: order.company.name,
+          approvedAt: order.company.negotiatedTermsApprovedAt!.toISOString(),
+          summary: order.company.negotiatedTermsSummary,
+        }
+      : null
+
   return NextResponse.json({
     contact: resolved.contact,
     portalAccessId: resolved.portalAccessId,
-    company: order.company,
+    company: { id: order.company.id, name: order.company.name },
+    standingAgreement,
     order: {
       id: order.id,
       orderNumber: order.orderNumber,

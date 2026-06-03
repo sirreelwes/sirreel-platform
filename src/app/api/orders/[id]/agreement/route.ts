@@ -33,7 +33,21 @@ export async function GET(
 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
-    select: { id: true, bookingId: true },
+    select: {
+      id: true,
+      bookingId: true,
+      company: {
+        select: {
+          id: true,
+          name: true,
+          negotiatedTermsUrl: true,
+          negotiatedTermsSummary: true,
+          negotiatedTermsApprovedAt: true,
+          negotiatedTermsActiveAsOf: true,
+          negotiatedTermsReviewDueDate: true,
+        },
+      },
+    },
   })
   if (!order) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -75,10 +89,29 @@ export async function GET(
     portalToken = paperwork?.token || null
   }
 
+  // Company standing-agreement context — drives the "using {Company}'s
+  // negotiated terms" banner on the order detail page. Only the
+  // fields the banner reads; never expose the URL on the public
+  // surface beyond what the page renders.
+  const co = order.company
+  const standingAgreement =
+    co?.negotiatedTermsUrl &&
+    co.negotiatedTermsApprovedAt &&
+    (co.negotiatedTermsActiveAsOf == null || co.negotiatedTermsActiveAsOf <= new Date())
+      ? {
+          companyName: co.name,
+          approvedAt: co.negotiatedTermsApprovedAt,
+          summary: co.negotiatedTermsSummary,
+          reviewDueDate: co.negotiatedTermsReviewDueDate,
+          pdfUrl: co.negotiatedTermsUrl,
+        }
+      : null
+
   return NextResponse.json({
     agreement,
     portalToken,
     portalUrl: portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null,
+    standingAgreement,
   })
 }
 
