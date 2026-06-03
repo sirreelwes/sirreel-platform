@@ -183,13 +183,13 @@ function pickRate(p: { dailyRate: number; weeklyRate: number }, rt: RateType): n
 }
 
 const DEPT_BADGE: Record<LineItemDepartment, string> = {
-  VEHICLES:       'bg-sky-900/40 text-sky-300 border-sky-800',
-  COMMUNICATIONS: 'bg-violet-900/40 text-violet-300 border-violet-800',
-  STAGES:         'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-800',
-  GE:             'bg-amber-900/40 text-amber-300 border-amber-800',
-  EXPENDABLES:    'bg-orange-900/40 text-orange-300 border-orange-800',
-  PRO_SUPPLIES:   'bg-zinc-800 text-zinc-300 border-zinc-700',
-  ART:            'bg-pink-900/40 text-pink-300 border-pink-800',
+  VEHICLES:       'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  COMMUNICATIONS: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  STAGES:         'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  GE:             'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  EXPENDABLES:    'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  PRO_SUPPLIES:   'bg-lt-inner text-lt-fg2 border-lt-hairline',
+  ART:            'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
 };
 
 function fmtMoney(n: number) {
@@ -284,7 +284,7 @@ function rateTypeLabel(rt: RateType): string {
 
 export default function NewQuotePage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-zinc-400">Loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-lt-fg2">Loading…</div>}>
       <NewQuotePageInner />
     </Suspense>
   );
@@ -1091,39 +1091,40 @@ function NewQuotePageInner() {
   // Step 1: Input
   if (!parsed && items.length === 0) {
     return (
-      <div className="p-6 max-w-3xl mx-auto space-y-4">
-        <button onClick={() => router.push('/orders')} className="text-sm text-gray-500 hover:text-gray-900">
+      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+        <div className="max-w-3xl mx-auto space-y-4">
+        <button onClick={() => router.push('/orders')} className="text-sm text-lt-fg3 hover:text-lt-fg">
           &larr; Back to Orders
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">New Quote</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <h1 className="text-2xl font-semibold text-lt-fg">New Quote</h1>
+          <p className="text-sm text-lt-fg2 mt-1">
             Paste an email or upload a PDF. AI extracts line items + matches them against the catalog.
           </p>
         </div>
 
         {inquiry && (
-          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-[12px] flex items-center justify-between gap-3">
+          <div className="bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30 rounded-xl p-3 text-[12px] flex items-center justify-between gap-3">
             <span>
-              Created from Inquiry: <span className="font-semibold text-emerald-900">{inquiry.title}</span>
-              {inquiry.company && <> · <span className="font-semibold text-emerald-900">{inquiry.company.name}</span></>}
+              Created from Inquiry: <span className="font-semibold text-chip-good-fg">{inquiry.title}</span>
+              {inquiry.company && <> · <span className="font-semibold text-chip-good-fg">{inquiry.company.name}</span></>}
             </span>
             <a
               href={`/inquiries/${inquiry.id}`}
-              className="font-semibold text-emerald-800 hover:text-emerald-900 hover:underline whitespace-nowrap"
+              className="font-semibold text-chip-good-fg hover:opacity-80 hover:underline whitespace-nowrap"
             >
               View original →
             </a>
           </div>
         )}
 
-        <div className="flex gap-1 bg-zinc-800 rounded-lg p-0.5 w-fit">
+        <div className="flex gap-1 bg-lt-inner rounded-lg p-0.5 w-fit">
           {(['paste', 'pdf'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setInputMode(m)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium ${
-                inputMode === m ? 'bg-white text-zinc-900' : 'text-zinc-400 hover:text-white'
+                inputMode === m ? 'bg-white text-lt-fg' : 'text-lt-fg2 hover:text-lt-fg'
               }`}
             >
               {m === 'paste' ? 'Paste Email' : 'Upload PDF'}
@@ -1138,12 +1139,12 @@ function NewQuotePageInner() {
               onChange={(e) => setEmailText(e.target.value)}
               placeholder="Paste the client's email or quote request here..."
               rows={14}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 resize-y"
+              className="w-full px-4 py-3 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-hairline resize-y"
             />
             <button
               onClick={parseEmail}
               disabled={!emailText.trim() || parsing}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white font-medium rounded-lg"
+              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg"
             >
               {parsing ? 'AI is parsing…' : 'Parse with AI'}
             </button>
@@ -1154,58 +1155,60 @@ function NewQuotePageInner() {
               type="file"
               accept="application/pdf"
               onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm text-zinc-400 file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:bg-zinc-800 file:text-white file:cursor-pointer hover:file:bg-zinc-700"
+              className="block w-full text-sm text-lt-fg2 file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:bg-lt-inner file:text-lt-fg file:cursor-pointer hover:file:bg-lt-inner"
             />
-            {pdfFile && <p className="text-sm text-zinc-400">{pdfFile.name} ({(pdfFile.size / 1024).toFixed(0)} KB)</p>}
+            {pdfFile && <p className="text-sm text-lt-fg2">{pdfFile.name} ({(pdfFile.size / 1024).toFixed(0)} KB)</p>}
             <button
               onClick={parsePDF}
               disabled={!pdfFile || parsing}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 text-white font-medium rounded-lg"
+              className="w-full py-3 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white font-medium rounded-lg"
             >
               {parsing ? 'AI is processing PDF…' : 'Upload & Parse'}
             </button>
           </div>
         )}
 
-        <button onClick={addBlankItem} className="text-xs text-zinc-500 hover:text-zinc-300 underline">
+        <button onClick={addBlankItem} className="text-xs text-lt-fg3 hover:text-lt-fg2 underline">
           Or skip parsing and add line items manually
         </button>
+        </div>
       </div>
     );
   }
 
   // Step 2: Review
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-4">
-      <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-gray-500 hover:text-gray-900">
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="max-w-5xl mx-auto space-y-4">
+      <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-lt-fg3 hover:text-lt-fg">
         &larr; Start Over
       </button>
       {inquiry && (
-        <div className="text-[11.5px] text-zinc-500">
-          Created from Inquiry: <span className="text-zinc-700 font-medium">{inquiry.title}</span>
+        <div className="text-[11.5px] text-lt-fg3">
+          Created from Inquiry: <span className="text-lt-fg3 font-medium">{inquiry.title}</span>
           {' · '}
-          <a href={`/inquiries/${inquiry.id}`} className="text-zinc-600 hover:text-zinc-900 hover:underline">
+          <a href={`/inquiries/${inquiry.id}`} className="text-lt-fg3 hover:text-lt-fg hover:underline">
             View original →
           </a>
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Review Quote</h1>
-        <p className="text-sm text-gray-600 mt-1">
+        <h1 className="text-2xl font-semibold text-lt-fg">Review Quote</h1>
+        <p className="text-sm text-lt-fg2 mt-1">
           Adjust each line item. Departments, rates, and rate-types are editable per row.
         </p>
       </div>
 
       {/* Header context — editable client/dates extracted by the AI. */}
       {(
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Client Company</label>
+            <label className="block text-xs text-lt-fg3 mb-1">Client Company</label>
             {clientCandidates.length > 0 ? (
               <select
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
               >
                 <option value="">— Select a match —</option>
                 {clientCandidates.map((c) => (
@@ -1218,9 +1221,9 @@ function NewQuotePageInner() {
                 )}
               </select>
             ) : inquiry?.company ? (
-              <div className="text-sm text-zinc-300">{inquiry.company.name}</div>
+              <div className="text-sm text-lt-fg2">{inquiry.company.name}</div>
             ) : (
-              <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="text-sm text-chip-warn-fg bg-chip-warn-bg border border-chip-warn-fg/30 rounded-lg p-3">
                 No client extracted.{' '}
                 <button
                   type="button"
@@ -1249,7 +1252,7 @@ function NewQuotePageInner() {
                     if (inquiry?.id) params.set('inquiryId', inquiry.id);
                     router.push(`/crm?${params.toString()}`);
                   }}
-                  className="underline font-semibold text-amber-800 hover:text-amber-900"
+                  className="underline font-semibold text-chip-warn-fg hover:opacity-80"
                 >
                   Pick one in CRM
                 </button>
@@ -1257,32 +1260,32 @@ function NewQuotePageInner() {
               </div>
             )}
             {parsed?.clientName && (
-              <p className="text-xs text-zinc-500 mt-1">AI extracted: <span className="text-zinc-300">{parsed.clientName}</span></p>
+              <p className="text-xs text-lt-fg3 mt-1">AI extracted: <span className="text-lt-fg2">{parsed.clientName}</span></p>
             )}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Job Name</label>
+              <label className="block text-xs text-lt-fg3 mb-1">Job Name</label>
               <input
                 type="text" value={editing.productionName || ''}
                 onChange={(e) => setEditing({ ...editing, productionName: e.target.value })}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Pickup Date</label>
+              <label className="block text-xs text-lt-fg3 mb-1">Pickup Date</label>
               <input
                 type="date" value={editing.startDate || ''}
                 onChange={(e) => updateQuoteDate('startDate', e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Return Date</label>
+              <label className="block text-xs text-lt-fg3 mb-1">Return Date</label>
               <input
                 type="date" value={editing.endDate || ''}
                 onChange={(e) => updateQuoteDate('endDate', e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
               />
             </div>
           </div>
@@ -1313,15 +1316,15 @@ function NewQuotePageInner() {
       <PeopleSection contacts={contacts} setContacts={setContacts} />
 
       {/* Line items grouped by department */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white">Line Items ({items.length})</h2>
-          <button onClick={addBlankItem} className="text-[11px] font-semibold text-zinc-400 hover:text-white">
+          <h2 className="text-sm font-bold text-lt-fg">Line Items ({items.length})</h2>
+          <button onClick={addBlankItem} className="text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg">
             + Add line manually
           </button>
         </div>
         {items.length === 0 ? (
-          <div className="text-xs text-zinc-600 text-center py-6">No line items.</div>
+          <div className="text-xs text-lt-fg3 text-center py-6">No line items.</div>
         ) : (
           DEPARTMENTS.map((dept) => {
             const group = items
@@ -1343,47 +1346,47 @@ function NewQuotePageInner() {
       </div>
 
       {/* Discount */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-        <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-bold">Discount (optional)</div>
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-2">
+        <div className="text-[11px] uppercase tracking-wider text-lt-fg3 font-bold">Discount (optional)</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Label</label>
+            <label className="block text-xs text-lt-fg3 mb-1">Label</label>
             <input
               type="text" value={discountLabel}
               onChange={(e) => setDiscountLabel(e.target.value)}
               placeholder="e.g. Loyalty discount"
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white"
+              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
             />
           </div>
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Amount (negative)</label>
+            <label className="block text-xs text-lt-fg3 mb-1">Amount (negative)</label>
             <input
               type="number" step="0.01" value={discountAmount}
               onChange={(e) => setDiscountAmount(e.target.value)}
               placeholder="-500"
-              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white font-mono"
+              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
             />
           </div>
         </div>
       </div>
 
       {/* Footer actions */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-sm">
-          <span className="text-zinc-500">Subtotal:</span>
-          <span className="ml-2 font-mono text-white text-base">{fmtMoney(orderTotal)}</span>
+          <span className="text-lt-fg3">Subtotal:</span>
+          <span className="ml-2 font-mono text-lt-fg text-base">{fmtMoney(orderTotal)}</span>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => { setParsed(null); setItems([]); }}
-            className="px-4 py-2 text-sm text-zinc-400 hover:text-white"
+            className="px-4 py-2 text-sm text-lt-fg2 hover:text-lt-fg"
           >
             Cancel
           </button>
           <button
             onClick={() => createQuote('download')}
             disabled={!canCreate || creating}
-            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and download the PDF"
           >
             {creating ? 'Saving…' : 'Download PDF'}
@@ -1391,7 +1394,7 @@ function NewQuotePageInner() {
           <button
             onClick={() => createQuote('preview')}
             disabled={!canCreate || creating}
-            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+            className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and open the PDF in a new tab"
           >
             {creating ? 'Saving…' : 'Preview PDF'}
@@ -1399,7 +1402,7 @@ function NewQuotePageInner() {
           <button
             onClick={() => createQuote('draft')}
             disabled={!canCreate || creating}
-            className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 text-white text-sm font-bold rounded-lg"
+            className="px-5 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-bold rounded-lg"
             title="Save as draft and open the order detail page"
           >
             {creating ? 'Saving Draft…' : 'Save Draft'}
@@ -1408,6 +1411,7 @@ function NewQuotePageInner() {
       </div>
 
       <LineItemUndoToast toast={undoToast} />
+      </div>
     </div>
   );
 }
@@ -1465,10 +1469,10 @@ function JobQuoteSection({
   const showRecommendations = hasCandidates && job.mode === 'searching';
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-bold text-white">Job for this Quote</h2>
-        <p className="text-[11px] text-zinc-500">
+        <h2 className="text-sm font-bold text-lt-fg">Job for this Quote</h2>
+        <p className="text-[11px] text-lt-fg3">
           {hasCandidates
             ? `${sortedCandidates.length} existing Job${sortedCandidates.length === 1 ? '' : 's'} for this client — attach to one, or search/create below.`
             : selectedClientId
@@ -1495,20 +1499,20 @@ function JobQuoteSection({
                     company: j.company,
                   })
                 }
-                className="w-full text-left rounded-lg border px-3 py-2 bg-zinc-900/60 border-zinc-700 hover:bg-zinc-800/60 transition-colors flex items-start gap-3"
+                className="w-full text-left rounded-lg border px-3 py-2 bg-lt-card/60 border-lt-hairline hover:bg-lt-inner/60 transition-colors flex items-start gap-3"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="text-[13px] font-semibold text-white truncate">
+                    <div className="text-[13px] font-semibold text-lt-fg truncate">
                       [{j.jobCode}] {j.name}
                     </div>
                     {recommended && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-800">
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg border border-chip-good-fg/30">
                         Recommended
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5">
+                  <div className="text-[11px] text-lt-fg3 mt-0.5">
                     {j.startDate && (
                       <>
                         {new Date(j.startDate).toLocaleDateString()}
@@ -1531,7 +1535,7 @@ function JobQuoteSection({
           ships in light-theme palette (it's also used outside this
           dark surface); the surrounding card frames it. */}
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
+        <div className="text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
           {hasCandidates ? 'Or search / create new' : 'Search or create new'}
         </div>
         <JobPicker
@@ -1547,17 +1551,17 @@ function JobQuoteSection({
       </div>
 
       {job.mode === 'creating_new' && (
-        <div className="rounded-lg border border-amber-700 bg-amber-900/20 p-3 space-y-2">
-          <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">
+        <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg p-3 space-y-2">
+          <div className="text-[10px] uppercase tracking-wider text-lt-fg font-bold">
             New job details
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Production type</label>
+              <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Production type</label>
               <select
                 value={newJobProductionType}
                 onChange={(e) => setNewJobProductionType(e.target.value as ProductionType)}
-                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
               >
                 {PRODUCTION_TYPES.map((pt) => (
                   <option key={pt} value={pt}>{PRODUCTION_TYPE_LABEL[pt]}</option>
@@ -1565,8 +1569,8 @@ function JobQuoteSection({
               </select>
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
-                Profile <span className="text-zinc-600">(routing)</span>
+              <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">
+                Profile <span className="text-lt-fg3">(routing)</span>
               </label>
               <ProductionTypeProfilePicker
                 value={newJobProductionTypeProfileId}
@@ -1576,16 +1580,16 @@ function JobQuoteSection({
             </div>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Notes (optional)</label>
+            <label className="block text-[10px] uppercase tracking-wider text-lt-fg3 mb-1">Notes (optional)</label>
             <textarea
               value={newJobNotes}
               onChange={(e) => setNewJobNotes(e.target.value)}
               rows={2}
               placeholder="Context, client preferences, deal notes…"
-              className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white resize-y"
+              className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg resize-y"
             />
           </div>
-          <p className="text-[10px] text-zinc-500">
+          <p className="text-[10px] text-lt-fg3">
             Job + Order are created together when you Save Draft — nothing is written until then.
           </p>
         </div>
@@ -1647,30 +1651,30 @@ function DepartmentGroup({
   );
 
   return (
-    <section className="border border-zinc-800 rounded-lg overflow-x-auto">
+    <section className="border border-lt-hairline rounded-lg overflow-x-auto">
       {/* Group header — dept name + count + bulk-set strip */}
-      <header className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-900/60 border-b border-zinc-800 rounded-t-lg flex-wrap">
+      <header className="flex items-center justify-between gap-2 px-3 py-2 bg-lt-card/60 border-b border-lt-hairline rounded-t-lg flex-wrap">
         <div className="flex items-center gap-2">
           <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}>
             {DEPARTMENT_SHORT[department]}
           </span>
-          <span className="text-[11px] text-zinc-200 font-semibold">{DEPARTMENT_LABEL[department].toUpperCase()}</span>
-          <span className="text-[10px] text-zinc-500">· {rows.length} item{rows.length === 1 ? '' : 's'}</span>
+          <span className="text-[11px] text-lt-fg font-semibold">{DEPARTMENT_LABEL[department].toUpperCase()}</span>
+          <span className="text-[10px] text-lt-fg3">· {rows.length} item{rows.length === 1 ? '' : 's'}</span>
         </div>
         {showBulk && (
           <div className="flex items-center gap-1.5 text-[11px]">
-            <span className="text-zinc-500">Apply to category:</span>
+            <span className="text-lt-fg3">Apply to category:</span>
             <input
               type="date" value={bulkPickup}
               onChange={(e) => setBulkPickup(e.target.value)}
               title="Pickup"
-              className="w-32 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white"
+              className="w-32 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg"
             />
             <input
               type="date" value={bulkReturn}
               onChange={(e) => setBulkReturn(e.target.value)}
               title="Return"
-              className="w-32 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white"
+              className="w-32 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg"
             />
             <input
               type="number" min={1} step={1} value={bulkDays}
@@ -1678,17 +1682,17 @@ function DepartmentGroup({
               onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
               placeholder="Days"
               title="Billable days"
-              className="w-16 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] text-white font-mono"
+              className="w-16 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5 text-[11px] text-lt-fg font-mono"
             />
             <button
               onClick={apply}
               disabled={!bulkPickup && !bulkReturn && !bulkDays}
-              className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-[10px] font-bold rounded"
+              className="px-2 py-0.5 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-[10px] font-bold rounded"
             >
               Apply
             </button>
             {appliedFlash && (
-              <span className="text-[10px] font-semibold text-emerald-400 ml-1">Applied ✓</span>
+              <span className="text-[10px] font-semibold text-chip-good-fg ml-1">Applied ✓</span>
             )}
           </div>
         )}
@@ -1698,7 +1702,7 @@ function DepartmentGroup({
           groups. EXPENDABLES are consumed/sold (not rented), so Pickup /
           Return / Billable-days don't apply — header labels in those
           columns are suppressed and the row cells render an em-dash. */}
-      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-zinc-900/40 border-b border-zinc-800 text-[9px] uppercase tracking-wider text-zinc-500 font-bold items-center`}>
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-lt-card/40 border-b border-lt-hairline text-[9px] uppercase tracking-wider text-lt-fg3 font-bold items-center`}>
         <div>Qty</div>
         <div>Description</div>
         <div>{isExpendable ? 'Price' : 'Price/day'}</div>
@@ -1710,16 +1714,16 @@ function DepartmentGroup({
       </div>
 
       {/* Line item rows */}
-      <div className="divide-y divide-zinc-800/60">
+      <div className="divide-y divide-lt-hairline/60">
         {rows.map(({ it, idx }) => (
           <LineItemRow key={idx} item={it} idx={idx} onChange={onChange} onDelete={onDelete} />
         ))}
       </div>
 
       {/* Subtotal row */}
-      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-zinc-900/40 border-t border-zinc-800 text-[11px] text-zinc-400 items-center`}>
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-[11px] text-lt-fg2 items-center`}>
         <div className="col-span-6 font-semibold uppercase tracking-wider text-[10px]">Subtotal</div>
-        <div className="text-right font-mono text-emerald-400 text-sm">{fmtMoney(subtotal)}</div>
+        <div className="text-right font-mono text-chip-good-fg text-sm">{fmtMoney(subtotal)}</div>
         <div></div>
       </div>
     </section>
@@ -1804,16 +1808,16 @@ function LineItemRow({
     item.department === 'STAGES' &&
     (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY');
 
-  const dash = <span className="text-zinc-700">—</span>;
+  const dash = <span className="text-lt-fg3">—</span>;
 
   return (
-    <div className="px-3 py-2 hover:bg-zinc-900/30">
+    <div className="px-3 py-2 hover:bg-lt-card/30">
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
         {/* QTY */}
         <input
           type="number" min={1} step={1} value={item.quantity}
           onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
         />
 
         {/* DESCRIPTION column — vertical stack */}
@@ -1823,7 +1827,7 @@ function LineItemRow({
               type="text"
               value={item.description}
               onChange={(e) => onChange(idx, { description: e.target.value })}
-              className="flex-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-semibold focus:outline-none focus:border-zinc-600"
+              className="flex-1 min-w-0 bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-semibold focus:outline-none focus:border-lt-hairline"
             />
             <span
               className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${DEPT_BADGE[item.department]}`}
@@ -1833,54 +1837,54 @@ function LineItemRow({
             </span>
           </div>
           {item.qualifier && (
-            <div className="text-[11px] text-zinc-400 italic">— {item.qualifier}</div>
+            <div className="text-[11px] text-lt-fg2 italic">— {item.qualifier}</div>
           )}
           {matched ? (
             <div className="flex items-center gap-2 text-[10px]">
-              <span className="bg-emerald-900/40 text-emerald-300 px-1.5 py-0.5 rounded font-semibold">
+              <span className="bg-chip-good-bg text-chip-good-fg px-1.5 py-0.5 rounded font-semibold">
                 ✓ Matched: {item.matchedProduct?.name}
               </span>
               <button
                 onClick={() => setShowOverride((s) => !s)}
-                className="text-zinc-500 hover:text-white underline decoration-dotted"
+                className="text-lt-fg3 hover:text-lt-fg underline decoration-dotted"
               >
                 Change match
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-[10px]">
-              <span className="bg-amber-900/40 text-amber-300 px-1.5 py-0.5 rounded font-semibold">
+              <span className="bg-chip-warn-bg text-chip-warn-fg px-1.5 py-0.5 rounded font-semibold">
                 ⚠ No catalog match
               </span>
               <button
                 onClick={() => setShowOverride((s) => !s)}
-                className="text-zinc-500 hover:text-white underline decoration-dotted"
+                className="text-lt-fg3 hover:text-lt-fg underline decoration-dotted"
               >
                 Pick one
               </button>
             </div>
           )}
           {showOverride && (
-            <div className="p-2 border border-zinc-800 rounded bg-zinc-900">
+            <div className="p-2 border border-lt-hairline rounded bg-lt-card">
               <input
                 type="text"
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 placeholder="Search the catalog…"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[12px] text-white focus:outline-none focus:border-zinc-600"
+                className="w-full bg-lt-inner border border-lt-hairline rounded px-2 py-1 text-[12px] text-lt-fg focus:outline-none focus:border-lt-hairline"
               />
-              {searching && <div className="text-[11px] text-zinc-500 mt-1">Searching…</div>}
+              {searching && <div className="text-[11px] text-lt-fg3 mt-1">Searching…</div>}
               {searchResults.length > 0 && (
                 <div className="mt-1.5 max-h-44 overflow-y-auto space-y-0.5">
                   {searchResults.map((r) => (
                     <button
                       key={`${r.type}-${r.id}`}
                       onClick={() => applyMatch(r)}
-                      className="block w-full text-left px-2 py-1 hover:bg-zinc-800 rounded text-[11px] text-zinc-300"
+                      className="block w-full text-left px-2 py-1 hover:bg-lt-inner rounded text-[11px] text-lt-fg2"
                     >
-                      <span className="text-zinc-500">[{r.type === 'INVENTORY' ? 'Inv' : 'Fleet'}]</span>{' '}
+                      <span className="text-lt-fg3">[{r.type === 'INVENTORY' ? 'Inv' : 'Fleet'}]</span>{' '}
                       {r.name}
-                      <span className="text-zinc-500 ml-2">· {DEPARTMENT_LABEL[r.department]}</span>
+                      <span className="text-lt-fg3 ml-2">· {DEPARTMENT_LABEL[r.department]}</span>
                     </button>
                   ))}
                 </div>
@@ -1893,7 +1897,7 @@ function LineItemRow({
         <input
           type="number" step="0.50" min={0} value={item.rate}
           onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
         />
 
         {/* PICKUP */}
@@ -1903,7 +1907,7 @@ function LineItemRow({
           <input
             type="date" value={item.pickupDate}
             onChange={(e) => onChange(idx, { pickupDate: e.target.value })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-[11px] text-lt-fg"
           />
         )}
 
@@ -1914,7 +1918,7 @@ function LineItemRow({
           <input
             type="date" value={item.returnDate}
             onChange={(e) => onChange(idx, { returnDate: e.target.value })}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[11px] text-white"
+            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-[11px] text-lt-fg"
           />
         )}
 
@@ -1926,10 +1930,10 @@ function LineItemRow({
             <input
               type="number" min={1} step={1} value={item.billableDays}
               onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-white font-mono"
+              className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
             />
             {showToggle && (
-              <div className="flex bg-zinc-900 border border-zinc-800 rounded p-0.5">
+              <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
                 {visibleRateTypes.map((rt) => {
                   const enabled = allowedRateTypes.includes(rt);
                   const reason =
@@ -1946,10 +1950,10 @@ function LineItemRow({
                       title={reason}
                       className={`flex-1 px-1 py-0.5 text-[9px] font-semibold rounded ${
                         item.rateType === rt
-                          ? 'bg-amber-600 text-white'
+                          ? 'bg-lt-fg text-white'
                           : enabled
-                            ? 'text-zinc-400 hover:text-white'
-                            : 'text-zinc-700 cursor-not-allowed'
+                            ? 'text-lt-fg2 hover:text-lt-fg'
+                            : 'text-lt-fg3 cursor-not-allowed'
                       }`}
                     >
                       {rt === 'DAILY' ? 'D' : rt === 'WEEKLY' ? 'W' : 'M'}
@@ -1962,7 +1966,7 @@ function LineItemRow({
         )}
 
         {/* TOTAL */}
-        <div className="text-right text-sm font-mono text-emerald-400 self-center pt-1">
+        <div className="text-right text-sm font-mono text-chip-good-fg self-center pt-1">
           {fmtMoney(total)}
         </div>
 
@@ -1983,10 +1987,10 @@ function LineItemRow({
       </div>
 
       {showStagesDiscountNote && (
-        <div className="mt-1 text-[10px] text-zinc-500 leading-tight">{breakdown}</div>
+        <div className="mt-1 text-[10px] text-lt-fg3 leading-tight">{breakdown}</div>
       )}
       {item.rateTypeAutoResetNote && (
-        <div className="mt-1 text-[10px] text-amber-400 italic">{item.rateTypeAutoResetNote}</div>
+        <div className="mt-1 text-[10px] text-lt-fg italic">{item.rateTypeAutoResetNote}</div>
       )}
     </div>
   );
@@ -2005,13 +2009,13 @@ function RowActionsMenu({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="px-1 py-0.5 text-zinc-500 hover:text-white text-sm"
+        className="px-1 py-0.5 text-lt-fg3 hover:text-lt-fg text-sm"
         title="Row actions"
       >
         ⋯
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-10 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg p-1 space-y-0.5">
+        <div className="absolute right-0 top-full mt-1 z-10 w-48 bg-lt-card border border-lt-hairline rounded-lg shadow-lg p-1 space-y-0.5">
           {editingDept ? (
             <select
               value={currentDepartment}
@@ -2021,7 +2025,7 @@ function RowActionsMenu({
                 setOpen(false);
               }}
               autoFocus
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] text-white"
+              className="w-full bg-lt-inner border border-lt-hairline rounded px-2 py-1 text-[11px] text-lt-fg"
             >
               {DEPARTMENTS.map((d) => (
                 <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
@@ -2030,14 +2034,14 @@ function RowActionsMenu({
           ) : (
             <button
               onClick={() => setEditingDept(true)}
-              className="w-full text-left px-2 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-800 rounded"
+              className="w-full text-left px-2 py-1.5 text-[11px] text-lt-fg hover:bg-lt-inner rounded"
             >
               Change department
             </button>
           )}
           <button
             onClick={() => { onDelete(); setOpen(false); }}
-            className="w-full text-left px-2 py-1.5 text-[11px] text-red-400 hover:bg-zinc-800 rounded"
+            className="w-full text-left px-2 py-1.5 text-[11px] text-chip-bad-fg hover:bg-lt-inner rounded"
           >
             Remove line item
           </button>
@@ -2052,9 +2056,9 @@ function RowActionsMenu({
 // ─────────────────────────────────────────────────────────────────────────
 
 const MATCH_BADGE: Record<ContactMatchStatus, { label: string; cls: string }> = {
-  existing:        { label: '✓ Existing',      cls: 'bg-emerald-900/40 text-emerald-300 border-emerald-800' },
-  new:             { label: '✚ New',           cls: 'bg-sky-900/40 text-sky-300 border-sky-800' },
-  possible_match:  { label: '? Possible match', cls: 'bg-amber-900/40 text-amber-300 border-amber-800' },
+  existing:        { label: '✓ Existing',      cls: 'bg-chip-good-bg text-chip-good-fg border-chip-good-fg/30' },
+  new:             { label: '✚ New',           cls: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30' },
+  possible_match:  { label: '? Possible match', cls: 'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30' },
 };
 
 const SOURCE_LABEL: Record<ContactSource, string> = {
@@ -2079,12 +2083,12 @@ function PeopleSection({
   const includedCount = contacts.filter((c) => c.include).length;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-white">
+        <h2 className="text-sm font-bold text-lt-fg">
           People on this thread ({includedCount} of {contacts.length} selected)
         </h2>
-        <p className="text-[11px] text-zinc-500">Will associate with the new Job on save</p>
+        <p className="text-[11px] text-lt-fg3">Will associate with the new Job on save</p>
       </div>
       <div className="space-y-2">
         {contacts.map((c, idx) => {
@@ -2093,7 +2097,7 @@ function PeopleSection({
             <div
               key={`${c.email}-${idx}`}
               className={`border rounded-lg p-3 space-y-2 ${
-                c.include ? 'bg-zinc-900/60 border-zinc-700' : 'bg-zinc-950/40 border-zinc-800 opacity-70'
+                c.include ? 'bg-lt-card/60 border-lt-hairline' : 'bg-lt-inner/40 border-lt-hairline opacity-70'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -2101,7 +2105,7 @@ function PeopleSection({
                   type="checkbox"
                   checked={c.include}
                   onChange={(e) => updateContact(idx, { include: e.target.checked })}
-                  className="mt-1 h-3.5 w-3.5 accent-amber-500"
+                  className="mt-1 h-3.5 w-3.5 accent-lt-fg"
                   aria-label={`Include ${c.name || c.email}`}
                 />
                 <div className="flex-1 min-w-0">
@@ -2109,7 +2113,7 @@ function PeopleSection({
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badge.cls}`}>
                       {badge.label}
                     </span>
-                    <span className="text-[10px] text-zinc-500">· {SOURCE_LABEL[c.source]} ({c.confidence})</span>
+                    <span className="text-[10px] text-lt-fg3">· {SOURCE_LABEL[c.source]} ({c.confidence})</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <input
@@ -2117,36 +2121,36 @@ function PeopleSection({
                       value={c.name}
                       onChange={(e) => updateContact(idx, { name: e.target.value })}
                       placeholder="Name"
-                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                     />
                     <input
                       type="email"
                       value={c.email}
                       onChange={(e) => updateContact(idx, { email: e.target.value })}
                       placeholder="Email"
-                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                     />
                     <input
                       type="text"
                       value={c.title || ''}
                       onChange={(e) => updateContact(idx, { title: e.target.value || null })}
                       placeholder="Title"
-                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                     />
                     <input
                       type="tel"
                       value={c.phone || ''}
                       onChange={(e) => updateContact(idx, { phone: e.target.value || null })}
                       placeholder="Phone"
-                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                     />
                   </div>
                   <div className="flex items-center gap-3 mt-2">
-                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Role</label>
+                    <label className="text-[10px] text-lt-fg3 uppercase tracking-wider">Role</label>
                     <select
                       value={c.role}
                       onChange={(e) => updateContact(idx, { role: e.target.value as SuggestedJobRole })}
-                      className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[12px] text-white"
+                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                     >
                       {JOB_ROLES.map((r) => (
                         <option key={r} value={r}>{r}</option>
@@ -2156,7 +2160,7 @@ function PeopleSection({
                       <select
                         value={c.decision || 'create_new'}
                         onChange={(e) => updateContact(idx, { decision: e.target.value as 'merge' | 'create_new' })}
-                        className="px-2 py-1 bg-zinc-800 border border-amber-700 rounded text-[12px] text-amber-200"
+                        className="px-2 py-1 bg-lt-inner border border-chip-warn-fg/30 rounded text-[12px] text-chip-warn-fg"
                         title="Same name found in CRM with a different email — decide what to do"
                       >
                         <option value="create_new">Create new person</option>
@@ -2164,7 +2168,7 @@ function PeopleSection({
                       </select>
                     )}
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-1.5">
+                  <p className="text-[10px] text-lt-fg3 mt-1.5">
                     {c.match_status === 'existing'
                       ? `Will associate existing CRM record as ${c.role}.`
                       : c.match_status === 'possible_match'

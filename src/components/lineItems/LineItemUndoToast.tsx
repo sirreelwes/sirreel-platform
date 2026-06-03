@@ -37,21 +37,21 @@ export function LineItemUndoToast({ toast }: { toast: LineItemUndoToastState | n
   if (!toast) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg px-4 py-2.5 flex items-center gap-4 text-sm">
-      <span className="text-zinc-200">
-        Removed <span className="text-zinc-400 italic">{toast.label}</span>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-lt-card border border-lt-hairline rounded-lg shadow-lg px-4 py-2.5 flex items-center gap-4 text-sm">
+      <span className="text-lt-fg">
+        Removed <span className="text-lt-fg2 italic">{toast.label}</span>
       </span>
       <button
         type="button"
         onClick={() => { toast.onUndo(); toast.onDismiss(); }}
-        className="text-amber-300 hover:text-amber-200 font-semibold text-xs uppercase tracking-wider"
+        className="text-lt-fg hover:text-black font-semibold text-xs uppercase tracking-wider"
       >
         Undo
       </button>
       <button
         type="button"
         onClick={toast.onDismiss}
-        className="text-zinc-500 hover:text-white text-sm leading-none"
+        className="text-lt-fg3 hover:text-lt-fg text-sm leading-none"
         aria-label="Dismiss"
       >
         ×

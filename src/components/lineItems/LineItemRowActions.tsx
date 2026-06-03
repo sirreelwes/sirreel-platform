@@ -81,7 +81,7 @@ export function LineItemRowActions({
     // empty cell would read like a UI bug.
     return (
       <span
-        className="inline-block text-zinc-700 cursor-not-allowed select-none"
+        className="inline-block text-lt-fg3 cursor-not-allowed select-none"
         title={editability.lockedReason ?? 'This document is locked — line items cannot be edited.'}
         aria-label="Locked"
       >
@@ -97,7 +97,7 @@ export function LineItemRowActions({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`${btnPad} text-zinc-500 hover:text-white rounded`}
+        className={`${btnPad} text-lt-fg3 hover:text-lt-fg rounded`}
         title="Row actions"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -107,7 +107,7 @@ export function LineItemRowActions({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg p-1 space-y-0.5"
+          className="absolute right-0 top-full mt-1 z-20 w-48 bg-lt-card border border-lt-hairline rounded-lg shadow-lg p-1 space-y-0.5"
         >
           {extras?.map((extra) => (
             <button
@@ -115,19 +115,19 @@ export function LineItemRowActions({
               type="button"
               role="menuitem"
               onClick={() => { setOpen(false); extra.onClick(); }}
-              className={`w-full text-left px-2 py-1.5 text-[11px] hover:bg-zinc-800 rounded ${
-                extra.tone === 'destructive' ? 'text-red-400' : 'text-zinc-200'
+              className={`w-full text-left px-2 py-1.5 text-[11px] hover:bg-lt-inner rounded ${
+                extra.tone === 'destructive' ? 'text-chip-bad-fg' : 'text-lt-fg'
               }`}
             >
               {extra.label}
             </button>
           ))}
-          {extras && extras.length > 0 && <div className="my-0.5 border-t border-zinc-800" />}
+          {extras && extras.length > 0 && <div className="my-0.5 border-t border-lt-hairline" />}
           <button
             type="button"
             role="menuitem"
             onClick={() => { setOpen(false); onRemove(); }}
-            className="w-full text-left px-2 py-1.5 text-[11px] text-red-400 hover:bg-zinc-800 rounded"
+            className="w-full text-left px-2 py-1.5 text-[11px] text-chip-bad-fg hover:bg-lt-inner rounded"
           >
             Remove line item
           </button>
