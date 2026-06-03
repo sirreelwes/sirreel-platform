@@ -4,23 +4,23 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
 const CAT: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
-  BOOKING_INQUIRY: { label: 'New Booking',  icon: '📋', color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200' },
-  COI:             { label: 'COI',          icon: '🛡️', color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
-  CONTRACT:        { label: 'Contract',     icon: '📄', color: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-  PO:              { label: 'PO',           icon: '📎', color: 'text-cyan-700',   bg: 'bg-cyan-50',   border: 'border-cyan-200' },
-  BILLING:         { label: 'Billing',      icon: '💳', color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  FLEET_ISSUE:     { label: 'Fleet Issue',  icon: '🔧', color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200' },
-  FOLLOW_UP:       { label: 'Follow-up',   icon: '🔄', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' },
-  COMPLAINT:       { label: 'Complaint',    icon: '⚠️', color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200' },
-  SUPPORT:         { label: 'Support',      icon: '🙋', color: 'text-teal-700',   bg: 'bg-teal-50',   border: 'border-teal-200' },
-  GENERAL:         { label: 'General',      icon: '📧', color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200' },
+  BOOKING_INQUIRY: { label: 'New Booking',  icon: '📋', color: 'text-cadence-booked-fg',   bg: 'bg-cadence-booked-bg',   border: 'border-cadence-booked-fg/30' },
+  COI:             { label: 'COI',          icon: '🛡️', color: 'text-cadence-returned-fg', bg: 'bg-cadence-returned-bg', border: 'border-cadence-returned-fg/30' },
+  CONTRACT:        { label: 'Contract',     icon: '📄', color: 'text-cadence-picking-today-fg', bg: 'bg-cadence-picking-today-bg', border: 'border-cadence-picking-today-fg/30' },
+  PO:              { label: 'PO',           icon: '📎', color: 'text-cadence-invoiced-fg',   bg: 'bg-cadence-invoiced-bg',   border: 'border-cadence-invoiced-fg/30' },
+  BILLING:         { label: 'Billing',      icon: '💳', color: 'text-chip-warn-fg',  bg: 'bg-chip-warn-bg',  border: 'border-chip-warn-fg/30' },
+  FLEET_ISSUE:     { label: 'Fleet Issue',  icon: '🔧', color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
+  FOLLOW_UP:       { label: 'Follow-up',   icon: '🔄', color: 'text-cadence-returning-today-fg', bg: 'bg-cadence-returning-today-bg', border: 'border-cadence-returning-today-fg/30' },
+  COMPLAINT:       { label: 'Complaint',    icon: '⚠️', color: 'text-chip-bad-fg',    bg: 'bg-chip-bad-bg',    border: 'border-chip-bad-fg/30' },
+  SUPPORT:         { label: 'Support',      icon: '🙋', color: 'text-cadence-on-rental-fg',   bg: 'bg-cadence-on-rental-bg',   border: 'border-cadence-on-rental-fg/30' },
+  GENERAL:         { label: 'General',      icon: '📧', color: 'text-chip-neutral-fg',   bg: 'bg-chip-neutral-bg',   border: 'border-chip-neutral-fg/30' },
 };
 
 const URGENCY = [
-  { level: 0, label: 'Critical', dot: 'bg-red-500',    header: 'bg-red-50 border-red-200 text-red-700' },
-  { level: 1, label: 'High',     dot: 'bg-amber-400',  header: 'bg-amber-50 border-amber-200 text-amber-700' },
-  { level: 2, label: 'Normal',   dot: 'bg-blue-400',   header: 'bg-blue-50 border-blue-200 text-blue-600' },
-  { level: 3, label: 'Low',      dot: 'bg-gray-300',   header: 'bg-gray-50 border-gray-200 text-gray-500' },
+  { level: 0, label: 'Critical', dot: 'bg-chip-bad-fg',    header: 'bg-chip-bad-bg border-chip-bad-fg/30 text-chip-bad-fg' },
+  { level: 1, label: 'High',     dot: 'bg-cadence-returning-today-bar',  header: 'bg-chip-warn-bg border-chip-warn-fg/30 text-chip-warn-fg' },
+  { level: 2, label: 'Normal',   dot: 'bg-cadence-booked-bar',   header: 'bg-cadence-booked-bg border-cadence-booked-fg/30 text-cadence-booked-fg' },
+  { level: 3, label: 'Low',      dot: 'bg-chip-neutral-fg',   header: 'bg-chip-neutral-bg border-chip-neutral-fg/30 text-chip-neutral-fg' },
 ];
 
 function timeAgo(d: string) {
@@ -108,7 +108,8 @@ export default function InboxPage() {
   const usedCats = [...new Set(emails.map(e => e.category))].filter(Boolean);
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-120px)]">
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="flex gap-4 h-[calc(100vh-180px)]">
 
       {/* LEFT — list */}
       <div className="w-[400px] flex-shrink-0 flex flex-col gap-3">
@@ -116,26 +117,26 @@ export default function InboxPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[16px] font-bold text-gray-900">Inbox</h1>
-            <p className="text-[10px] text-gray-400">
+            <h1 className="text-[16px] font-bold text-lt-fg">Inbox</h1>
+            <p className="text-[10px] text-lt-fg3">
               {isAdmin ? 'All inboxes' : `${firstName?.toLowerCase()}@ + info@`}
               {lastSync && <span> · synced {lastSync}</span>}
             </p>
           </div>
           <button onClick={syncNow} disabled={syncing}
-            className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40">
+            className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-lt-fg text-white hover:bg-black disabled:opacity-40">
             {syncing ? '⏳' : '↻'} Sync
           </button>
         </div>
 
         {/* Needs Reply toggle */}
         <button onClick={() => setReplyFilter(v => !v)}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border font-semibold transition-all ${replyFilter ? 'bg-red-600 text-white border-red-600' : needsReplyCount > 0 ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border font-semibold transition-all ${replyFilter ? 'bg-chip-bad-fg text-white border-chip-bad-fg' : needsReplyCount > 0 ? 'bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30 hover:opacity-90' : 'bg-lt-inner text-lt-fg3 border-lt-hairline'}`}>
           <div className="flex items-center gap-2">
             <span className="text-base">↩</span>
             <span className="text-[13px]">Needs Reply</span>
           </div>
-          <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${replyFilter ? 'bg-white/20 text-white' : needsReplyCount > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'}`}>
+          <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${replyFilter ? 'bg-lt-card/20 text-lt-fg' : needsReplyCount > 0 ? 'bg-chip-bad-bg text-chip-bad-fg' : 'bg-lt-inner text-lt-fg3'}`}>
             {needsReplyCount}
           </span>
         </button>
@@ -143,7 +144,7 @@ export default function InboxPage() {
         {/* Category pills */}
         <div className="flex gap-1.5 flex-wrap">
           <button onClick={() => setCatFilter('ALL')}
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${catFilter === 'ALL' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${catFilter === 'ALL' ? 'bg-lt-fg text-white border-lt-fg' : 'bg-lt-card text-lt-fg3 border-lt-hairline hover:border-lt-fg2'}`}>
             All ({emails.length})
           </button>
           {usedCats.map(cat => {
@@ -151,7 +152,7 @@ export default function InboxPage() {
             const count = emails.filter(e => e.category === cat).length;
             return (
               <button key={cat} onClick={() => setCatFilter(catFilter === cat ? 'ALL' : cat)}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${catFilter === cat ? `${cfg.bg} ${cfg.color} ${cfg.border}` : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${catFilter === cat ? `${cfg.bg} ${cfg.color} ${cfg.border}` : 'bg-lt-card text-lt-fg3 border-lt-hairline hover:border-lt-fg2'}`}>
                 {cfg.icon} {cfg.label} ({count})
               </button>
             );
@@ -161,9 +162,9 @@ export default function InboxPage() {
         {/* Email list by urgency */}
         <div className="flex-1 overflow-y-auto space-y-4">
           {loading ? (
-            <div className="text-center py-12 text-gray-400 text-sm">Loading...</div>
+            <div className="text-center py-12 text-lt-fg3 text-sm">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 text-sm">No emails{replyFilter ? ' needing reply' : ''}</div>
+            <div className="text-center py-12 text-lt-fg3 text-sm">No emails{replyFilter ? ' needing reply' : ''}</div>
           ) : (
             URGENCY.map(urg => {
               const group = filtered.filter(e => (e.priority ?? 2) === urg.level);
@@ -182,7 +183,7 @@ export default function InboxPage() {
                       const isSelected = selected?.id === e.id;
                       return (
                         <div key={e.id} onClick={() => setSelected(isSelected ? null : e)}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'ring-2 ring-gray-900 bg-white' : 'bg-white hover:shadow-sm border-gray-100'}`}>
+                          className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'ring-2 ring-lt-fg bg-lt-card' : 'bg-lt-card hover:shadow-sm border-lt-hairline'}`}>
                           {/* Category badge — prominent */}
                           <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold mb-2 ${cat.bg} ${cat.color} ${cat.border} border`}>
                             <span>{cat.icon}</span>
@@ -190,28 +191,28 @@ export default function InboxPage() {
                           </div>
                           {/* Sender + time */}
                           <div className="flex items-start justify-between gap-2 mb-0.5">
-                            <span className="text-[13px] font-bold text-gray-900 truncate flex-1">{fromName(e.fromAddress)}</span>
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">{timeAgo(e.sentAt)}</span>
+                            <span className="text-[13px] font-bold text-lt-fg truncate flex-1">{fromName(e.fromAddress)}</span>
+                            <span className="text-[10px] text-lt-fg3 flex-shrink-0">{timeAgo(e.sentAt)}</span>
                           </div>
                           {/* Subject */}
-                          <div className="text-[11px] text-gray-600 font-medium truncate mb-1">{e.subject}</div>
+                          <div className="text-[11px] text-lt-fg2 font-medium truncate mb-1">{e.subject}</div>
                           {/* Snippet */}
-                          <div className="text-[10px] text-gray-400 truncate">{e.snippet}</div>
+                          <div className="text-[10px] text-lt-fg3 truncate">{e.snippet}</div>
                           {/* Tags */}
                           <div className="flex items-center gap-1.5 mt-2">
                             {e.needsReply && (
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold bg-chip-bad-bg text-chip-bad-fg`}>
                                 ↩ Reply needed
                               </span>
                             )}
                             {e.needsReply && e.waitHours >= 1 && (
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.urgencyFromWait <= 1 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.urgencyFromWait <= 1 ? 'bg-chip-bad-bg text-chip-bad-fg' : 'bg-chip-warn-bg text-chip-warn-fg'}`}>
                                 {e.waitLabel}
                               </span>
                             )}
-                            {!e.isRead && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                            {!e.isRead && <span className="w-2 h-2 rounded-full bg-cadence-booked-bar flex-shrink-0" />}
                             {e.toAddress && (
-                              <span className="text-[9px] text-gray-300 truncate">
+                              <span className="text-[9px] text-lt-fg3 truncate">
                                 → {e.toAddress.split('@')[0]}@
                               </span>
                             )}
@@ -228,16 +229,16 @@ export default function InboxPage() {
       </div>
 
       {/* RIGHT — detail panel */}
-      <div className="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden">
+      <div className="flex-1 bg-lt-card rounded-xl border border-lt-hairline flex flex-col overflow-hidden">
         {!selected ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+          <div className="flex-1 flex flex-col items-center justify-center text-lt-fg3">
             <div className="text-4xl mb-3">📬</div>
             <div className="text-sm font-semibold">Select an email to view</div>
             <div className="text-[11px] mt-1">{filtered.length} thread{filtered.length !== 1 ? 's' : ''} shown</div>
           </div>
         ) : (
           <>
-            <div className="px-5 py-4 border-b border-gray-100">
+            <div className="px-5 py-4 border-b border-lt-hairline">
               {(() => {
                 const cat = CAT[selected.category] || CAT.GENERAL;
                 const urg = URGENCY.find(u => u.level === (selected.priority ?? 2)) || URGENCY[2];
@@ -252,14 +253,14 @@ export default function InboxPage() {
                         {urg.label}
                       </span>
                       {selected.needsReply && (
-                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-100 text-red-700 border border-red-200">
+                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-chip-bad-bg text-chip-bad-fg border border-chip-bad-fg/30">
                           ↩ Reply needed {selected.waitLabel && `· ${selected.waitLabel}`}
                         </span>
                       )}
                     </div>
-                    <h2 className="text-[15px] font-bold text-gray-900">{selected.subject}</h2>
-                    <div className="text-[12px] text-gray-500">{selected.fromAddress}</div>
-                    <div className="text-[10px] text-gray-400">
+                    <h2 className="text-[15px] font-bold text-lt-fg">{selected.subject}</h2>
+                    <div className="text-[12px] text-lt-fg3">{selected.fromAddress}</div>
+                    <div className="text-[10px] text-lt-fg3">
                       {new Date(selected.sentAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       {selected.toAddress && <span> · to {selected.toAddress}</span>}
                     </div>
@@ -270,7 +271,7 @@ export default function InboxPage() {
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {/* Snippet */}
-              <div className="text-[13px] text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-4">
+              <div className="text-[13px] text-lt-fg2 leading-relaxed bg-lt-inner rounded-xl p-4">
                 {selected.snippet}
               </div>
 
@@ -278,16 +279,17 @@ export default function InboxPage() {
               <EmailActionPanel email={selected} />
 
               {/* Open in Gmail */}
-              <div className="pt-2 border-t border-gray-100 space-y-2">
+              <div className="pt-2 border-t border-lt-hairline space-y-2">
                 <a href={`https://mail.google.com/mail/u/0/#inbox/${selected.threadId || ''}`}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 py-2.5 bg-gray-900 text-white rounded-xl text-[12px] font-bold hover:bg-gray-700">
+                  className="flex items-center justify-center gap-2 py-2.5 bg-lt-fg text-white rounded-xl text-[12px] font-bold hover:bg-black">
                   ↗ Open Full Thread in Gmail
                 </a>
               </div>
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );
