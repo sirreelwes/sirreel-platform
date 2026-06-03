@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { computeCompanyBadgeFacts, type ClientBadge } from "@/lib/crm/clientBadges";
+import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff, type ClientBadge } from "@/lib/crm/clientBadges";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -47,14 +47,20 @@ export async function GET(req: NextRequest) {
     ),
   );
 
-  const orderDateRollup = companyIds.length > 0
-    ? await prisma.order.groupBy({
-        by: ['companyId'],
-        where: { companyId: { in: companyIds } },
-        _min: { createdAt: true },
-        _max: { createdAt: true },
-      })
-    : [];
+  // Order rollup + population top-client cutoff in parallel. The
+  // cutoff is the same value /api/crm/stats hands the page strip, so
+  // TOP_CLIENT means the same thing on every CRM surface.
+  const [orderDateRollup, populationCutoff] = await Promise.all([
+    companyIds.length > 0
+      ? prisma.order.groupBy({
+          by: ['companyId'],
+          where: { companyId: { in: companyIds } },
+          _min: { createdAt: true },
+          _max: { createdAt: true },
+        })
+      : Promise.resolve([]),
+    fetchPopulationTopClientCutoff(),
+  ]);
   const firstLast = new Map(
     orderDateRollup.map((r) => [
       r.companyId,
@@ -84,6 +90,8 @@ export async function GET(req: NextRequest) {
   const badgeFacts = computeCompanyBadgeFacts(
     Array.from(distinctCompanies.values()),
     firstLast,
+    new Date(),
+    populationCutoff,
   );
 
   // Per-person FOLLOW_UP_DUE — a single Activity groupBy against the

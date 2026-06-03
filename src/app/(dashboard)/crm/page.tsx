@@ -28,28 +28,118 @@ type PersonResult = {
   primaryCompanyBadgeFacts?: { loyalSinceYear: number | null } | null;
 };
 
-// Client badge palette — light-tokens mapped to the spec's intent:
-// Top client gold, Repeat green, Loyal teal, New blue, Negotiates
-// amber/warn, Follow-up due red, Quiet muted.
+// Client badge palette — light-tokens mapped to the spec's intent.
+// TOP_CLIENT keeps gold/amber. NEGOTIATES is coral (returning-today
+// cadence token) so it no longer reads as just-another-gold-badge.
 const BADGE_TONE: Record<ClientBadge, string> = {
   TOP_CLIENT:    'bg-chip-warn-bg text-chip-warn-fg',
   REPEAT:        'bg-chip-good-bg text-chip-good-fg',
   LOYAL:         'bg-cadence-invoiced-bg text-cadence-invoiced-fg',
   NEW:           'bg-cadence-booked-bg text-cadence-booked-fg',
-  NEGOTIATES:    'bg-chip-warn-bg text-chip-warn-fg',
+  NEGOTIATES:    'bg-cadence-returning-today-bg text-cadence-returning-today-fg',
   FOLLOW_UP_DUE: 'bg-chip-bad-bg text-chip-bad-fg',
   QUIET:         'bg-chip-neutral-bg text-chip-neutral-fg',
 };
 
+// Inline Tabler-style icons — kept tiny + currentColor so they ride
+// the same `text-*` token as the surrounding badge. We inline rather
+// than pull a library: only seven shapes, never updated, no need to
+// ship a runtime dep just for this strip + chip set.
+const ICON_PROPS = {
+  width: 12,
+  height: 12,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+
+function StarIcon() { // ti-star
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M12 17.75 5.83 21l1.18-6.88L2 9.24l6.91-1L12 2l3.09 6.24 6.91 1-5.01 4.88L18.18 21z" />
+    </svg>
+  );
+}
+function RepeatIcon() { // ti-repeat
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M4 12V9a3 3 0 0 1 3-3h13" />
+      <path d="m17 3 3 3-3 3" />
+      <path d="M20 12v3a3 3 0 0 1-3 3H4" />
+      <path d="m7 21-3-3 3-3" />
+    </svg>
+  );
+}
+function HourglassIcon() { // ti-hourglass — LOYAL
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M6.5 7h11" />
+      <path d="M6.5 17h11" />
+      <path d="M6 3h12v3a6 6 0 0 1-3 5.2v1.6A6 6 0 0 1 18 18v3H6v-3a6 6 0 0 1 3-5.2v-1.6A6 6 0 0 1 6 6z" />
+    </svg>
+  );
+}
+function SparklesIcon() { // ti-sparkles — NEW
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+    </svg>
+  );
+}
+function DiscountIcon() { // ti-discount — NEGOTIATES
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="m9 15 6-6" />
+      <circle cx="9.5" cy="9.5" r="1.2" />
+      <circle cx="14.5" cy="14.5" r="1.2" />
+      <path d="M5 7.5 7.5 5h9L19 7.5v9L16.5 19h-9L5 16.5z" />
+    </svg>
+  );
+}
+function BellIcon() { // ti-bell — FOLLOW_UP_DUE
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M10 5a2 2 0 0 1 4 0" />
+      <path d="M17 16h2l-2-3v-3a5 5 0 0 0-10 0v3l-2 3h2" />
+      <path d="M9 17a3 3 0 0 0 6 0" />
+    </svg>
+  );
+}
+function ZzzIcon() { // ti-zzz — QUIET
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M4 7h6L4 17h6" />
+      <path d="M14 4h6l-6 8h6" />
+      <path d="M16 14h4l-4 6h4" />
+    </svg>
+  );
+}
+
+function BadgeIcon({ badge }: { badge: ClientBadge }) {
+  switch (badge) {
+    case 'TOP_CLIENT':    return <StarIcon />;
+    case 'REPEAT':        return <RepeatIcon />;
+    case 'LOYAL':         return <HourglassIcon />;
+    case 'NEW':           return <SparklesIcon />;
+    case 'NEGOTIATES':    return <DiscountIcon />;
+    case 'FOLLOW_UP_DUE': return <BellIcon />;
+    case 'QUIET':         return <ZzzIcon />;
+  }
+}
+
 function badgeLabel(b: ClientBadge, loyalSinceYear: number | null | undefined): string {
   switch (b) {
-    case 'TOP_CLIENT':    return '\u2605 Top client';
-    case 'REPEAT':        return '\u21bb Repeat';
-    case 'LOYAL':         return `\u23F3 Loyal\u2009\u00b7\u2009since ${loyalSinceYear ?? '?'}`;
-    case 'NEW':           return '\u2728 New';
-    case 'NEGOTIATES':    return '\uFE0F\uD83D\uDCB2 Negotiates';
-    case 'FOLLOW_UP_DUE': return '\uD83D\uDD14 Follow-up due';
-    case 'QUIET':         return '\uD83D\uDCA4 Quiet';
+    case 'TOP_CLIENT':    return 'Top client';
+    case 'REPEAT':        return 'Repeat';
+    case 'LOYAL':         return `Loyal\u2009\u00b7\u2009since ${loyalSinceYear ?? '?'}`;
+    case 'NEW':           return 'New';
+    case 'NEGOTIATES':    return 'Negotiates';
+    case 'FOLLOW_UP_DUE': return 'Follow-up due';
+    case 'QUIET':         return 'Quiet';
   }
 }
 
@@ -66,8 +156,9 @@ function ClientBadgeChips({
       {badges.map((b) => (
         <span
           key={b}
-          className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${BADGE_TONE[b]}`}
+          className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded ${BADGE_TONE[b]}`}
         >
+          <BadgeIcon badge={b} />
           {badgeLabel(b, loyalSinceYear)}
         </span>
       ))}
@@ -122,6 +213,18 @@ export default function CRMPage() {
   const [sort, setSort] = useState("spend");
   const [loading, setLoading] = useState(true);
 
+  // Population aggregates from /api/crm/stats — the strip + segment
+  // chips show the same numbers regardless of pagination/filter so a
+  // tap-to-filter doesn't change the count next to it.
+  const [stats, setStats] = useState<{
+    topClientSpendCutoff: number;
+    goneQuietCount: number;
+    discountWatchCount: number;
+    neverOrderedCount: number;
+    followUpDueCount: number;
+    totalCompanies: number;
+  } | null>(null);
+
   // Add company modal
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
@@ -161,6 +264,13 @@ export default function CRMPage() {
     setFollowUps(data.activities || []);
   }, []);
 
+  const fetchStats = useCallback(async () => {
+    const res = await fetch("/api/crm/stats");
+    if (!res.ok) return;
+    const data = await res.json();
+    setStats(data);
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -170,10 +280,12 @@ export default function CRMPage() {
 
   // Follow-ups fetch independent of the tab — drives the
   // "Needs attention" strip at the top of the page, which is always
-  // visible regardless of which list is open.
+  // visible regardless of which list is open. /api/crm/stats runs
+  // alongside for the population aggregates (strip + segment chips).
   useEffect(() => {
     fetchFollowUps();
-  }, [fetchFollowUps]);
+    fetchStats();
+  }, [fetchFollowUps, fetchStats]);
 
   const addContact = async () => {
     if (!cFirst || !cLast || !cEmail) return;
@@ -216,19 +328,22 @@ export default function CRMPage() {
     fetchFollowUps();
   };
 
-  const pendingCount = followUps.filter(f => !f.completed).length;
-
   // Needs-attention filter — `null` = "no filter, show everything";
   // otherwise restricts the People + Companies lists to the matching
   // subset. Driven by tap-to-filter on the strip's three cards.
   const [attentionFilter, setAttentionFilter] = useState<null | 'followups' | 'quiet' | 'discount'>(null);
 
-  // Live counts for the strip — derived from the already-fetched
-  // result sets, no extra queries. People drive the follow-up count;
-  // Companies drive Gone-quiet + Discount-watch. The counts update
-  // as the tab data refreshes.
-  const goneQuietCount = companies.filter((c) => c.badges?.includes('QUIET')).length;
-  const discountWatchCount = companies.filter((c) => c.badges?.includes('NEGOTIATES')).length;
+  // Strip counts come from /api/crm/stats — population aggregates,
+  // not the loaded page. The previous derivation
+  //   companies.filter((c) => c.badges?.includes('QUIET'))
+  // drifted with the take:100 page slice, so a card saying
+  // "12 gone quiet" actually meant "12 in this page" — misleading
+  // once population > 100. Fall back to the local activities array
+  // for followUps so the count stays live while the user marks
+  // them complete inline.
+  const pendingCount = stats?.followUpDueCount ?? followUps.filter(f => !f.completed).length;
+  const goneQuietCount = stats?.goneQuietCount ?? 0;
+  const discountWatchCount = stats?.discountWatchCount ?? 0;
 
   // Apply the active needs-attention filter to whichever list the
   // user is looking at. The filter is set in lockstep with a tab
@@ -632,10 +747,10 @@ function NeedsAttentionStrip({
   active: AttentionKey | null;
   onPick: (next: AttentionKey) => void;
 }) {
-  const cards: { key: AttentionKey; label: string; count: number; tone: string; icon: string; activeBg: string }[] = [
-    { key: 'followups', label: 'Follow-ups due',  count: followUpCount,     tone: 'text-chip-bad-fg',     icon: '\uD83D\uDD14', activeBg: 'bg-chip-bad-bg border-chip-bad-fg' },
-    { key: 'quiet',     label: 'Gone quiet',      count: goneQuietCount,    tone: 'text-chip-neutral-fg', icon: '\uD83D\uDCA4', activeBg: 'bg-chip-neutral-bg border-chip-neutral-fg' },
-    { key: 'discount',  label: 'Discount-watch',  count: discountWatchCount, tone: 'text-chip-warn-fg',   icon: '\uD83D\uDCB2', activeBg: 'bg-chip-warn-bg border-chip-warn-fg' },
+  const cards: { key: AttentionKey; label: string; count: number; tone: string; Icon: () => JSX.Element; activeBg: string }[] = [
+    { key: 'followups', label: 'Follow-ups due', count: followUpCount,      tone: 'text-chip-bad-fg',      Icon: BellIcon,     activeBg: 'bg-chip-bad-bg border-chip-bad-fg' },
+    { key: 'quiet',     label: 'Gone quiet',     count: goneQuietCount,     tone: 'text-chip-neutral-fg',  Icon: ZzzIcon,      activeBg: 'bg-chip-neutral-bg border-chip-neutral-fg' },
+    { key: 'discount',  label: 'Discount-watch', count: discountWatchCount, tone: 'text-cadence-returning-today-fg', Icon: DiscountIcon, activeBg: 'bg-cadence-returning-today-bg border-cadence-returning-today-fg' },
   ];
   return (
     <div className="mb-4">
@@ -665,8 +780,9 @@ function NeedsAttentionStrip({
               }
             >
               <div className="flex items-start justify-between gap-2">
-                <span className={`text-[11px] uppercase tracking-wider font-semibold ${isActive ? c.tone : 'text-lt-fg2'}`}>
-                  {c.icon} {c.label}
+                <span className={`inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold ${isActive ? c.tone : 'text-lt-fg2'}`}>
+                  <c.Icon />
+                  {c.label}
                 </span>
                 {isActive && <span className="text-[10px] text-lt-fg3">tap to clear</span>}
               </div>

@@ -10,12 +10,15 @@
  * People inherit their primary affiliation's company-side badges +
  * carry their own FOLLOW_UP_DUE.
  *
- * Thresholds are tunable constants. The TOP_CLIENT cutoff is computed
- * from the spend distribution of the current result set (top decile);
- * "current result set" intentionally — running the cutoff across the
- * whole DB would penalize a busy month or a one-off mega-quote.
+ * Thresholds are tunable constants. The TOP_CLIENT cutoff is normally
+ * supplied by the caller as the *population* 90th-percentile spend
+ * (computed once in /api/crm/stats so the badge means the same thing
+ * on every page + filter). If no cutoff is passed, the helper falls
+ * back to the local result-set cutoff — useful for one-off callers
+ * that don't have a population aggregate handy.
  */
 import type { DiscountTendency } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 export const REPEAT_MIN = 3
 export const LOYAL_YEARS = 3
@@ -73,17 +76,43 @@ export function topDecileThreshold(spends: number[]): number {
 }
 
 /**
+ * Population top-client cutoff — single ordered query against every
+ * Company with non-zero spend. Indexed by the default Company orderBy
+ * (totalSpend desc), so this is one ordered scan. Shared by
+ * /api/crm/stats and by the list routes so badges agree across the
+ * whole CRM regardless of page or filter.
+ */
+export async function fetchPopulationTopClientCutoff(): Promise<number> {
+  const spends = await prisma.company.findMany({
+    where: { totalSpend: { gt: 0 } },
+    select: { totalSpend: true },
+    orderBy: { totalSpend: 'desc' },
+  })
+  if (spends.length === 0) return 0
+  const idx = Math.max(0, Math.floor(spends.length * TOP_CLIENT_DECILE) - 1)
+  return Number(spends[idx]?.totalSpend ?? 0)
+}
+
+/**
  * Compute the per-company badge facts. Single pass over the input;
  * the firstLast map is built upstream from a single Order groupBy.
+ *
+ * `topClientSpendCutoffOverride` — when provided, used in place of
+ * the local decile (typical: the value from /api/crm/stats so every
+ * page agrees on what "top client" means). Falls back to a local
+ * decile over the input array when omitted.
  */
 export function computeCompanyBadgeFacts(
   companies: CompanyInput[],
   firstLast: Map<string, FirstLast>,
   now: Date = new Date(),
+  topClientSpendCutoffOverride?: number,
 ): Map<string, CompanyBadgeFacts> {
   const result = new Map<string, CompanyBadgeFacts>()
-  const spends = companies.map((c) => Number(c.totalSpend))
-  const topCutoff = topDecileThreshold(spends)
+  const topCutoff =
+    typeof topClientSpendCutoffOverride === 'number'
+      ? topClientSpendCutoffOverride
+      : topDecileThreshold(companies.map((c) => Number(c.totalSpend)))
 
   const loyalCutoff = new Date(now)
   loyalCutoff.setFullYear(loyalCutoff.getFullYear() - LOYAL_YEARS)

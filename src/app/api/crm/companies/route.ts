@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { computeCompanyBadgeFacts } from "@/lib/crm/clientBadges";
+import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff } from "@/lib/crm/clientBadges";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -38,16 +38,21 @@ export async function GET(req: NextRequest) {
 
   // Single Order groupBy across the page's companyIds — gives us
   // first + last order date per company without an N+1. The
-  // companyIds set is at most 100 (page take).
+  // companyIds set is at most 100 (page take). Run the population
+  // top-client cutoff in parallel so the badge means the same thing
+  // on every page + filter (otherwise: cutoff drifts with the page).
   const companyIds = companies.map((c) => c.id);
-  const orderDateRollup = companyIds.length > 0
-    ? await prisma.order.groupBy({
-        by: ['companyId'],
-        where: { companyId: { in: companyIds } },
-        _min: { createdAt: true },
-        _max: { createdAt: true },
-      })
-    : [];
+  const [orderDateRollup, populationCutoff] = await Promise.all([
+    companyIds.length > 0
+      ? prisma.order.groupBy({
+          by: ['companyId'],
+          where: { companyId: { in: companyIds } },
+          _min: { createdAt: true },
+          _max: { createdAt: true },
+        })
+      : Promise.resolve([]),
+    fetchPopulationTopClientCutoff(),
+  ]);
   const firstLast = new Map(
     orderDateRollup.map((r) => [
       r.companyId,
@@ -63,6 +68,8 @@ export async function GET(req: NextRequest) {
       discountTendency: c.discountTendency,
     })),
     firstLast,
+    new Date(),
+    populationCutoff,
   );
 
   const enriched = companies.map((c) => ({
