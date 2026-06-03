@@ -19,14 +19,20 @@ type Order = {
   _count: { lineItems: number; invoices: number };
 };
 
+// Mirrors the cadence palette used on the Jobs list, the Dispatch
+// board, and the Order detail page so the pill reads the same here.
+// Keys preserved as-is — this file uses legacy CONFIRMED/ACTIVE
+// instead of the canonical BOOKED/ON_JOB, but that's a data concern
+// (the /api/orders response shape) and out of scope for a styling
+// commit.
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-zinc-700 text-zinc-300",
-  QUOTE_SENT: "bg-amber-900/60 text-amber-300",
-  CONFIRMED: "bg-blue-900/60 text-blue-300",
-  ACTIVE: "bg-emerald-900/60 text-emerald-300",
-  RETURNED: "bg-purple-900/60 text-purple-300",
-  CLOSED: "bg-zinc-800 text-zinc-400",
-  CANCELLED: "bg-red-900/60 text-red-300",
+  DRAFT:      "bg-chip-neutral-bg text-chip-neutral-fg",
+  QUOTE_SENT: "bg-chip-warn-bg text-chip-warn-fg",
+  CONFIRMED:  "bg-cadence-booked-bg text-cadence-booked-fg",
+  ACTIVE:     "bg-cadence-on-rental-bg text-cadence-on-rental-fg",
+  RETURNED:   "bg-cadence-returned-bg text-cadence-returned-fg",
+  CLOSED:     "bg-cadence-wrapped-bg text-cadence-wrapped-fg",
+  CANCELLED:  "bg-chip-bad-bg text-chip-bad-fg",
 };
 
 const ALL_STATUSES = ["DRAFT", "QUOTE_SENT", "CONFIRMED", "ACTIVE", "RETURNED", "CLOSED", "CANCELLED"];
@@ -66,138 +72,142 @@ export default function OrdersPage() {
     d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "--";
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Orders</h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            {total} order{total !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push("/orders/new-quote")}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            ✨ AI Quote
-          </button>
-          <button
-            onClick={() => router.push("/orders/new")}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            + New Order
-          </button>
-        </div>
-      </div>
-
-      <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Search orders, companies..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 max-w-sm px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">All Statuses</option>
-          {ALL_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace("_", " ")}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-              <th className="px-4 py-3 font-medium">Order #</th>
-              <th className="px-4 py-3 font-medium">Company</th>
-              <th className="px-4 py-3 font-medium">Description</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Dates</th>
-              <th className="px-4 py-3 font-medium text-right">Total</th>
-              <th className="px-4 py-3 font-medium text-center">Items</th>
-              <th className="px-4 py-3 font-medium">Agent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
-                  Loading...
-                </td>
-              </tr>
-            ) : orders.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-zinc-500">
-                  No orders found
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <tr
-                  key={order.id}
-                  onClick={() => router.push(`/orders/${order.id}`)}
-                  className="border-b border-zinc-800/50 hover:bg-zinc-800/50 cursor-pointer transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-white">{order.orderNumber}</span>
-                  </td>
-                  <td className="px-4 py-3 text-white">{order.company.name}</td>
-                  <td className="px-4 py-3 text-zinc-400 max-w-[200px] truncate">
-                    {order.description || (order.booking ? order.booking.jobName : "--")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[order.status] || "bg-zinc-700 text-zinc-300"}`}>
-                      {order.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
-                    {fmtDate(order.startDate)} - {fmtDate(order.endDate)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-white font-mono">
-                    {fmt(order.total)}
-                  </td>
-                  <td className="px-4 py-3 text-center text-zinc-400">
-                    {order._count.lineItems}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">{order.agent.name}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {total > 25 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-zinc-400">
-            Page {page} of {Math.ceil(total / 25)}
-          </p>
+    // Light-motif page bg — overrides the shell's default so this
+    // page reads as the same surface as Jobs and Order detail.
+    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="max-w-[1400px] mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-lt-fg">Orders</h1>
+            <p className="text-sm text-lt-fg2 mt-1">
+              {total} order{total !== 1 ? "s" : ""}
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-300 disabled:opacity-40"
+              onClick={() => router.push("/orders/new-quote")}
+              className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Prev
+              ✨ AI Quote
             </button>
             <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= Math.ceil(total / 25)}
-              className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-300 disabled:opacity-40"
+              onClick={() => router.push("/orders/new")}
+              className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Next
+              + New Order
             </button>
           </div>
         </div>
-      )}
+
+        <div className="flex gap-3 mb-4">
+          <input
+            type="text"
+            placeholder="Search orders, companies..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="flex-1 max-w-sm px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+            className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
+          >
+            <option value="">All Statuses</option>
+            {ALL_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-lt-hairline text-lt-fg3 text-left text-[10px] font-semibold uppercase tracking-wider bg-lt-inner">
+                <th className="px-4 py-3">Order #</th>
+                <th className="px-4 py-3">Company</th>
+                <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Dates</th>
+                <th className="px-4 py-3 text-right">Total</th>
+                <th className="px-4 py-3 text-center">Items</th>
+                <th className="px-4 py-3">Agent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">
+                    Loading...
+                  </td>
+                </tr>
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">
+                    No orders found
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    onClick={() => router.push(`/orders/${order.id}`)}
+                    className="border-b border-lt-hairline last:border-b-0 hover:bg-lt-inner cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-lt-fg3">{order.orderNumber}</span>
+                    </td>
+                    <td className="px-4 py-3 text-lt-fg font-medium">{order.company.name}</td>
+                    <td className="px-4 py-3 text-lt-fg2 max-w-[200px] truncate">
+                      {order.description || (order.booking ? order.booking.jobName : "--")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[order.status] || "bg-chip-neutral-bg text-chip-neutral-fg"}`}>
+                        {order.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
+                      {fmtDate(order.startDate)} - {fmtDate(order.endDate)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-lt-fg font-mono">
+                      {fmt(order.total)}
+                    </td>
+                    <td className="px-4 py-3 text-center text-lt-fg2">
+                      {order._count.lineItems}
+                    </td>
+                    <td className="px-4 py-3 text-lt-fg2">{order.agent.name}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {total > 25 && (
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-lt-fg2">
+              Page {page} of {Math.ceil(total / 25)}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg2 hover:bg-lt-inner disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= Math.ceil(total / 25)}
+                className="px-3 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg2 hover:bg-lt-inner disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
