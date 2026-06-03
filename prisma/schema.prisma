@@ -1172,6 +1172,11 @@ model EmailAccount {
   refreshToken String?   @map("refresh_token") @db.Text
   tokenExpiry  DateTime? @map("token_expiry")
   lastSyncAt   DateTime? @map("last_sync_at")
+  // Ground truth for the last SUCCESSFUL Gmail watch renewal. Stamped
+  // inside /api/gmail/watch on the per-inbox `gmail.users.watch()`
+  // success path. The dead-man's-switch health probe alerts when this
+  // goes stale past the 7-day Gmail watch TTL on any active inbox.
+  lastWatchedAt DateTime? @map("last_watched_at")
   isActive     Boolean   @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
