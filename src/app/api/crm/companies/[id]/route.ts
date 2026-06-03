@@ -26,7 +26,64 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
   });
   if (!company) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(company);
+
+  // Outbound emails this company has been part of — see the matching
+  // notes on /api/crm/people/[id]; same union-of-three-signals
+  // approach, fanned out across every affiliated person's email.
+  // Limited to currentish + historical affiliations to be inclusive.
+  const peopleEmails = company.affiliations
+    .map((a) => a.person?.email)
+    .filter((e): e is string => !!e);
+  const allEmailCandidates = Array.from(
+    new Set(peopleEmails.flatMap((e) => [e, e.toLowerCase()])),
+  );
+
+  let threadIds: string[] = [];
+  if (allEmailCandidates.length > 0) {
+    const inboundFromAnyone = await prisma.emailMessage.findMany({
+      where: {
+        direction: 'inbound',
+        duplicateOfId: null,
+        threadId: { not: null },
+        OR: allEmailCandidates.map((e) => ({
+          fromAddress: { contains: e, mode: 'insensitive' as const },
+        })),
+      },
+      select: { threadId: true },
+      distinct: ['threadId'],
+      take: 400,
+    });
+    threadIds = inboundFromAnyone
+      .map((r) => r.threadId)
+      .filter((t): t is string => !!t);
+  }
+
+  const outboundEmails = await prisma.emailMessage.findMany({
+    where: {
+      direction: 'outbound',
+      duplicateOfId: null,
+      OR: [
+        ...(threadIds.length > 0 ? [{ threadId: { in: threadIds } }] : []),
+        ...(allEmailCandidates.length > 0
+          ? [{ toAddresses: { hasSome: allEmailCandidates } }]
+          : []),
+        { companyId: id },
+      ],
+    },
+    select: {
+      id: true,
+      subject: true,
+      snippet: true,
+      sentAt: true,
+      fromAddress: true,
+      toAddresses: true,
+      threadId: true,
+    },
+    orderBy: { sentAt: 'desc' },
+    take: 50,
+  });
+
+  return NextResponse.json({ ...company, outboundEmails });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

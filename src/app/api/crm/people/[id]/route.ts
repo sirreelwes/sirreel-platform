@@ -82,7 +82,58 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
   });
   if (!person) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(person);
+
+  // Outbound emails this contact has been part of — surfaces "we
+  // emailed this client on X" on the timeline without anyone having
+  // to log it manually. Match is intentionally broad because the
+  // Pub/Sub sync stores toAddresses=[inboxEmail] (the agent's own
+  // mailbox) instead of the real recipient — so a literal recipient
+  // match alone would miss most rows. Union of three signals:
+  //   (a) toAddresses hasSome [person.email] — catches gmail/fetch
+  //       rows where the real To: header was parsed
+  //   (b) threadId in (threads with an inbound from person.email) —
+  //       catches Pub/Sub-synced outbound replies on a client thread
+  //   (c) personId match — future-proof if the column gets populated
+  const personEmailLower = person.email.toLowerCase();
+  const inboundFromPerson = await prisma.emailMessage.findMany({
+    where: {
+      direction: 'inbound',
+      duplicateOfId: null,
+      threadId: { not: null },
+      fromAddress: { contains: personEmailLower, mode: 'insensitive' },
+    },
+    select: { threadId: true },
+    distinct: ['threadId'],
+    take: 200,
+  });
+  const threadIds = inboundFromPerson
+    .map((r) => r.threadId)
+    .filter((t): t is string => !!t);
+
+  const outboundEmails = await prisma.emailMessage.findMany({
+    where: {
+      direction: 'outbound',
+      duplicateOfId: null,
+      OR: [
+        ...(threadIds.length > 0 ? [{ threadId: { in: threadIds } }] : []),
+        { toAddresses: { hasSome: [person.email, personEmailLower] } },
+        { personId: id },
+      ],
+    },
+    select: {
+      id: true,
+      subject: true,
+      snippet: true,
+      sentAt: true,
+      fromAddress: true,
+      toAddresses: true,
+      threadId: true,
+    },
+    orderBy: { sentAt: 'desc' },
+    take: 50,
+  });
+
+  return NextResponse.json({ ...person, outboundEmails });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

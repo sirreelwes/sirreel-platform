@@ -10,6 +10,24 @@ type Activity = {
   agent: { id: string; name: string };
 };
 
+// Server-derived (timeline-merge feature). Outbound emails matched
+// to this company via affiliated-person email / thread / companyId.
+type OutboundEmail = {
+  id: string;
+  subject: string;
+  snippet: string | null;
+  sentAt: string;
+  fromAddress: string;
+  toAddresses: string[];
+  threadId: string | null;
+};
+
+function fromHeaderDisplay(header: string): string {
+  const m = header.match(/^(.+?)\s*<[^>]+>\s*$/);
+  if (m && m[1]) return m[1].replace(/^['"]|['"]$/g, '').trim();
+  return header.trim();
+}
+
 type DiscountTendency = 'NONE' | 'OCCASIONAL' | 'FREQUENT' | 'ALWAYS';
 
 type CompanyDetail = {
@@ -35,6 +53,7 @@ type CompanyDetail = {
     person: { id: string; firstName: string; lastName: string; email: string; phone: string | null; role: string } }[];
   orders: { id: string; orderNumber: string; status: string; total: string; description: string | null; startDate: string | null; createdAt: string }[];
   activities: Activity[];
+  outboundEmails: OutboundEmail[];
 };
 
 const TENDENCY_LABEL: Record<DiscountTendency, string> = {
@@ -798,33 +817,61 @@ export default function CompanyDetailPage() {
 
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <h2 className="text-base font-semibold text-lt-fg mb-3">Activity History</h2>
-            {company.activities.length === 0 ? (
-              <p className="text-lt-fg3 text-sm">No activity logged yet</p>
-            ) : (
-              <div className="space-y-3">
-                {company.activities.map((a) => (
-                  <div key={a.id} className="border-b border-lt-hairline/50 pb-3 last:border-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        a.type === "CALL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                        a.type === "EMAIL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                        a.type === "MEETING" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
-                        a.type === "FOLLOW_UP" ? "bg-chip-bad-bg text-chip-bad-fg" :
-                        "bg-lt-inner text-lt-fg2"
-                      }`}>{a.type.replace("_", " ")}</span>
-                      <span className="text-[10px] text-lt-fg3">{a.agent.name}</span>
-                      <span className="text-[10px] text-lt-fg3">{fmtDate(a.createdAt)}</span>
-                      {a.dueDate && !a.completed && (
-                        <button onClick={() => completeActivity(a.id)} className="text-[10px] text-chip-good-fg hover:opacity-70 ml-auto">Complete</button>
-                      )}
-                      {a.completed && <span className="text-[10px] text-chip-good-fg ml-auto">Done</span>}
-                    </div>
-                    {a.subject && <p className="text-xs text-lt-fg font-medium">{a.subject}</p>}
-                    <p className="text-xs text-lt-fg2">{a.body}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+            {(() => {
+              // Same timeline-merge as on the person detail page —
+              // manual activities + auto-derived outbound emails, time-
+              // sorted desc, emails rendered read-only with an EMAIL · SENT
+              // chip and an "auto" hint so reps know it wasn't manually logged.
+              const timeline = [
+                ...company.activities.map((a) => ({ kind: 'activity' as const, at: a.createdAt, row: a })),
+                ...company.outboundEmails.map((e) => ({ kind: 'email' as const, at: e.sentAt, row: e })),
+              ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+              if (timeline.length === 0) {
+                return <p className="text-lt-fg3 text-sm">No activity logged yet</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {timeline.map((item) =>
+                    item.kind === 'activity' ? (
+                      <div key={`a-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                            item.row.type === "CALL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                            item.row.type === "EMAIL" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                            item.row.type === "MEETING" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
+                            item.row.type === "FOLLOW_UP" ? "bg-chip-bad-bg text-chip-bad-fg" :
+                            "bg-lt-inner text-lt-fg2"
+                          }`}>{item.row.type.replace("_", " ")}</span>
+                          <span className="text-[10px] text-lt-fg3">{item.row.agent.name}</span>
+                          <span className="text-[10px] text-lt-fg3">{fmtDate(item.row.createdAt)}</span>
+                          {item.row.dueDate && !item.row.completed && (
+                            <button onClick={() => completeActivity(item.row.id)} className="text-[10px] text-chip-good-fg hover:opacity-70 ml-auto">Complete</button>
+                          )}
+                          {item.row.completed && <span className="text-[10px] text-chip-good-fg ml-auto">Done</span>}
+                        </div>
+                        {item.row.subject && <p className="text-xs text-lt-fg font-medium">{item.row.subject}</p>}
+                        <p className="text-xs text-lt-fg2">{item.row.body}</p>
+                      </div>
+                    ) : (
+                      <div key={`e-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-cadence-booked-bg text-cadence-booked-fg">
+                            EMAIL · SENT
+                          </span>
+                          <span className="text-[10px] text-lt-fg3">{fromHeaderDisplay(item.row.fromAddress)}</span>
+                          <span className="text-[10px] text-lt-fg3">{fmtDate(item.row.sentAt)}</span>
+                          <span className="text-[10px] text-lt-fg3 ml-auto" title="Auto-recorded from Gmail">auto</span>
+                        </div>
+                        <p className="text-xs text-lt-fg font-medium">{item.row.subject || '(no subject)'}</p>
+                        {item.row.snippet && (
+                          <p className="text-xs text-lt-fg2 line-clamp-2">{item.row.snippet}</p>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
