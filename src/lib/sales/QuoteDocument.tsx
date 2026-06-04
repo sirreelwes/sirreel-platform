@@ -3,12 +3,28 @@ import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
 
-// Disable mid-word hyphenation across the document. React-PDF's default
-// behaviour breaks long words at letter boundaries (e.g. "Fox Sports
-// Produc-tions"), which looks broken on client-facing quotes. Returning
-// the word as a single-element array tells the line-break engine to
-// treat each word atomically — wrapping only occurs at whitespace.
-Font.registerHyphenationCallback((word) => [word])
+// Mid-word breaks are off by default — keeps real words intact
+// (e.g. "Productions" stays whole, not "Produc-tions") because the
+// engine's default hyphenation looks broken on client-facing quotes.
+//
+// Exception: inventory-code shape — long, ALL-CAPS, only letters /
+// digits / hyphens (e.g. "TEN-CARAVAN-CANOPY-10X10"). The default
+// "treat as one atomic word" path overflows narrow columns like the
+// 11%-wide ITEM cell and overprints the DESCRIPTION cell to its right.
+//
+// Preferred fold: at hyphen boundaries — splits on the existing
+// hyphens in the code so the visual wrap reads cleanly as
+// "TEN- / CARAVAN- / CANOPY- / 10X10" instead of awkward mid-segment
+// breaks. The lookbehind regex keeps the hyphen as a trailing char on
+// each part so the wrapped lines still display the original glyphs.
+// Fallback fold: per-character — only for long all-caps tokens that
+// have no hyphens to break on (rare edge case).
+Font.registerHyphenationCallback((word) => {
+  if (word.length > 14 && /^[A-Z0-9-]+$/.test(word)) {
+    return word.includes('-') ? word.split(/(?<=-)/) : word.split('')
+  }
+  return [word]
+})
 
 // Load the SirReel logo once at module load (server-only — the QuoteDocument
 // is rendered exclusively via renderToBuffer in the API route). Passing the
@@ -547,7 +563,15 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                 fmtDate(item.returnDate) === fmtDate(props.endDate)
               return (
                 <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]}>
-                  <Text style={styles.colCode}>{item.inventoryCode || '—'}</Text>
+                  {/* Wrap the inventory code in a View (mirrors colDesc)
+                      so the column acts as a hard layout container.
+                      Without this, a Text whose content is wider than
+                      its width style renders glyphs past the right
+                      edge and over the next cell — the symptom this
+                      patch is fixing. */}
+                  <View style={styles.colCode}>
+                    <Text>{item.inventoryCode || '—'}</Text>
+                  </View>
                   <View style={styles.colDesc}>
                     <Text>{item.description}</Text>
                     {item.qualifier && <Text style={styles.qualifier}>{item.qualifier}</Text>}
