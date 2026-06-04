@@ -75,6 +75,24 @@ type Order = {
   blindReturn: boolean;
   blindPickupInstructions: string | null;
   blindReturnInstructions: string | null;
+  // Per-send delivery audit — one row per outbound Resend dispatch
+  // anchored to this order. Webhook advances `status` as Resend's
+  // events arrive (sent → delivered / delayed / bounced / complained).
+  emailDeliveries: EmailDelivery[];
+};
+
+type EmailDeliveryStatus = 'SENT' | 'DELIVERED' | 'DELAYED' | 'BOUNCED' | 'COMPLAINED';
+
+type EmailDelivery = {
+  id: string;
+  resendMessageId: string;
+  status: EmailDeliveryStatus;
+  statusDetail: string | null;
+  statusAt: string;
+  toAddress: string;
+  subject: string;
+  label: string | null;
+  sentAt: string;
 };
 
 // Phase 5 commit 1 — separately-fetched invoice list. Richer than the
@@ -1617,6 +1635,8 @@ export default function OrderDetailPage() {
       {/* Quote follow-up (Mode A) — only renders when a quote has been sent. */}
       <QuoteFollowUpPanel orderId={orderId} isQuoteSent={order.status === "QUOTE_SENT"} />
 
+      <EmailDeliveriesPanel deliveries={order.emailDeliveries} />
+
       {/* Cadence (CRH) */}
       {cadence && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6 space-y-3">
@@ -2775,6 +2795,76 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
           Open claim against carrier
         </button>
       )}
+    </div>
+  );
+}
+
+// Per-send delivery audit panel — surfaces Resend's lifecycle for
+// every order-anchored email this order has sent. Each row is one
+// dispatch; the status pill is updated by the
+// /api/webhooks/resend handler as events arrive.
+//   SENT       → grey neutral (accepted by Resend, not yet delivered)
+//   DELIVERED  → green
+//   DELAYED    → amber
+//   BOUNCED    → red (statusDetail = bounce reason — type/subtype/msg)
+//   COMPLAINED → red (recipient flagged as spam)
+const DELIVERY_TONE: Record<EmailDeliveryStatus, string> = {
+  SENT:       'bg-chip-neutral-bg text-chip-neutral-fg',
+  DELIVERED:  'bg-chip-good-bg text-chip-good-fg',
+  DELAYED:    'bg-chip-warn-bg text-chip-warn-fg',
+  BOUNCED:    'bg-chip-bad-bg text-chip-bad-fg',
+  COMPLAINED: 'bg-chip-bad-bg text-chip-bad-fg',
+};
+
+function fmtDeliveryAt(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function EmailDeliveriesPanel({ deliveries }: { deliveries: EmailDelivery[] }) {
+  if (deliveries.length === 0) return null;
+  return (
+    <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+        <h2 className="text-lg font-semibold text-lt-fg">Email delivery</h2>
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          {deliveries.length} {deliveries.length === 1 ? 'send' : 'sends'} · live from Resend
+        </span>
+      </div>
+      <div className="space-y-2">
+        {deliveries.map((d) => (
+          <div
+            key={d.id}
+            className="border border-lt-hairline/50 rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap"
+          >
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${DELIVERY_TONE[d.status]}`}
+              title={d.statusDetail ?? undefined}
+            >
+              {d.status}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-lt-fg truncate">{d.subject}</div>
+              <div className="text-[11px] text-lt-fg3 truncate">
+                to {d.toAddress}
+                {d.label ? <span className="text-lt-fg3"> · {d.label}</span> : null}
+              </div>
+              {d.statusDetail && d.status !== 'SENT' && d.status !== 'DELIVERED' && (
+                <div className="text-[11px] text-chip-bad-fg mt-0.5">{d.statusDetail}</div>
+              )}
+            </div>
+            <div className="text-[11px] text-lt-fg3 whitespace-nowrap text-right">
+              <div>sent {fmtDeliveryAt(d.sentAt)}</div>
+              {d.status !== 'SENT' && (
+                <div>{d.status.toLowerCase()} {fmtDeliveryAt(d.statusAt)}</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

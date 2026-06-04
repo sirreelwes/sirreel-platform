@@ -45,6 +45,26 @@ export async function GET(_req: NextRequest, { params }: Params) {
         orderBy: { sortOrder: "asc" },
       },
       invoices: { orderBy: { createdAt: "desc" } },
+      // Per-send delivery audit — drives the small status pills on the
+      // order's email/cadence rows. Each row is one Resend dispatch
+      // (sent → delivered / delayed / bounced / complained). Cap at
+      // 50 to keep the payload sane; the order page only needs the
+      // most recent in any practical case.
+      emailDeliveries: {
+        select: {
+          id: true,
+          resendMessageId: true,
+          status: true,
+          statusDetail: true,
+          statusAt: true,
+          toAddress: true,
+          subject: true,
+          label: true,
+          sentAt: true,
+        },
+        orderBy: { sentAt: "desc" },
+        take: 50,
+      },
     },
   });
 
