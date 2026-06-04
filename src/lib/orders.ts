@@ -1,12 +1,65 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeLineTotal } from "@/lib/orders/billing";
 
-export async function nextOrderNumber(): Promise<string> {
-  const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
-    SELECT nextval('sr_order_number_seq')
+/**
+ * Generate the next quote/order number in the date-based format
+ * `S{YYMMDD}-{NNN}` — e.g. `S260604-001`.
+ *
+ * Date + reset boundary are Pacific time (America/Los_Angeles), not
+ * UTC — a quote created at 23:50 PT on June 3rd has number S260603-…,
+ * not S260604-… (which would surprise a rep reading the audit trail
+ * the next morning).
+ *
+ * The per-day counter lives in `OrderDailyCounter` (one row per
+ * YYMMDD). The UPSERT runs INSIDE the caller's transaction so:
+ *   - increment is race-safe (the row-level lock on the upserted row
+ *     serializes concurrent calls to nextOrderNumber for the same day)
+ *   - if the order insert later fails and the tx rolls back, the
+ *     counter increment rolls back too — no daily gaps from aborted
+ *     creates
+ *
+ * The 11 pre-existing `SR-ORD-NNNN` orders keep their numbers; this
+ * is a forward-only switch. The legacy `sr_order_number_seq` Postgres
+ * SEQUENCE remains in place but is no longer called. Sibling
+ * sequences (sr_invoice_number_seq, sr_ld_invoice_number_seq,
+ * sr_claim_number_seq) are intentionally unchanged.
+ */
+export async function nextOrderNumber(
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const dateKey = pacificDateKey();
+  // UPSERT + RETURNING is the atomic per-day increment. The row-level
+  // lock on the conflicting row inside the tx prevents two concurrent
+  // calls on the same day from racing to the same seq value.
+  const rows = await tx.$queryRaw<{ seq: number }[]>`
+    INSERT INTO order_daily_counter (date_key, seq)
+    VALUES (${dateKey}, 1)
+    ON CONFLICT (date_key) DO UPDATE
+      SET seq = order_daily_counter.seq + 1
+    RETURNING seq
   `;
-  const num = Number(result[0].nextval);
-  return `SR-ORD-${String(num).padStart(4, "0")}`;
+  const seq = rows[0]?.seq ?? 1;
+  return `S${dateKey}-${String(seq).padStart(3, "0")}`;
+}
+
+/**
+ * Today's date as `YYMMDD` in America/Los_Angeles, regardless of the
+ * server's clock zone. Intl.DateTimeFormat with timeZone is the
+ * dependency-free way to do this — no date-fns / luxon needed.
+ *
+ * Exported for tests; not used outside this file in production.
+ */
+export function pacificDateKey(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}${get("month")}${get("day")}`;
 }
 
 /**

@@ -3022,6 +3022,21 @@ model HealthCheckLog {
   @@map("sr_health_check_logs")
 }
 
+/// Per-day counter for the date-based order/quote number format
+/// (`S{YYMMDD}-{NNN}`). One row per Pacific-time calendar date; `seq`
+/// is incremented atomically by `nextOrderNumber()` via UPSERT inside
+/// the same transaction as the Order insert, so a rolled-back order
+/// rolls back its number too (no daily gaps unless the day itself
+/// rolls over mid-tx — acceptable). The legacy `sr_order_number_seq`
+/// Postgres SEQUENCE is retained but unused — the 11 pre-existing
+/// SR-ORD-* orders keep their numbers (forward-only switch).
+model OrderDailyCounter {
+  dateKey String @id @map("date_key") // YYMMDD in America/Los_Angeles
+  seq     Int    @default(0)
+
+  @@map("order_daily_counter")
+}
+
 /// Per-send delivery audit — one row per outbound Resend dispatch.
 /// Capture: written at send time with `resendMessageId` (the unique
 /// id Resend returns from emails.send()) and `status=SENT`.

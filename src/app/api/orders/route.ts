@@ -118,9 +118,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const orderNumber = await nextOrderNumber();
-
     const { order, createdJobId } = await prisma.$transaction(async (tx) => {
+      // Order number lives INSIDE the tx now that the per-day counter
+      // backs it — a rolled-back order rolls back its number too, so
+      // there are no daily-counter gaps from aborted creates.
+      const orderNumber = await nextOrderNumber(tx);
       let resolvedJobId = jobId as string | undefined;
       let createdId: string | null = null;
 
