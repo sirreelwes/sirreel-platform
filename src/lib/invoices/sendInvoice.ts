@@ -32,6 +32,7 @@
 import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { renderCadenceTemplate } from '@/lib/email/templates/renderCadenceTemplate'
@@ -210,6 +211,22 @@ export async function sendInvoice(args: {
   })
   if (!result.ok) {
     return { ok: false, status: 502, error: `Email send failed: ${result.reason}` }
+  }
+
+  // Delivery audit so the order detail surface (and a future
+  // invoice-detail surface) can show sent → delivered / bounced from
+  // Resend's webhook events. Best-effort — failure here doesn't undo
+  // the send.
+  if (result.id) {
+    await recordEmailDelivery({
+      resendMessageId: result.id,
+      toAddress: primary.email,
+      ccAddresses: others.map((o) => o.email),
+      subject: rendered.subject,
+      label: `send-invoice:${invoice.invoiceNumber}`,
+      orderId: invoice.order.id,
+      invoiceId: invoice.id,
+    })
   }
 
   // ── Stamp Invoice + advance Order in one tx ─────────────────────

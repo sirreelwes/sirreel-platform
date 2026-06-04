@@ -1878,6 +1878,7 @@ model Order {
   stageBookingTerms  StageBookingTerms?
   cadenceEvents      CadenceEvent[]
   portalAccesses     PortalAccess[]
+  emailDeliveries    EmailDelivery[]
   // Phase 2 warehouse lane: zero-or-one PickList per Order, created at
   // book time iff the order has ≥1 WAREHOUSE-lane line item.
   pickList           PickList?
@@ -1930,6 +1931,7 @@ model QuoteFollowUp {
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   sentBy    User? @relation("FollowUpSentBy", fields: [sentById], references: [id])
   skippedBy User? @relation("FollowUpSkippedBy", fields: [skippedById], references: [id])
+  emailDeliveries EmailDelivery[]
 
   @@unique([orderId, stage])
   @@index([status, dueAt])
@@ -2114,6 +2116,7 @@ model Invoice {
   // against it.
   damageItems     DamageItem[]
   insuranceClaims InsuranceClaim[]
+  emailDeliveries EmailDelivery[]
 
   @@index([orderId, type])
   @@map("sr_invoices")
@@ -3017,4 +3020,57 @@ model HealthCheckLog {
   @@index([checkedAt(sort: Desc)])
   @@index([overall, checkedAt])
   @@map("sr_health_check_logs")
+}
+
+/// Per-send delivery audit — one row per outbound Resend dispatch.
+/// Capture: written at send time with `resendMessageId` (the unique
+/// id Resend returns from emails.send()) and `status=SENT`.
+/// Webhook: POST /api/webhooks/resend looks up by resendMessageId
+/// (unique) and updates `status` + `statusDetail` + `statusAt` as
+/// Resend's events arrive (delivered / delivery_delayed / bounced /
+/// complained).
+/// Surface: order detail page joins on `orderId` to render a
+/// delivery pill next to each cadence/email row.
+/// Parent FKs are all optional + SetNull on delete so the delivery
+/// audit row survives even if the order/invoice is hard-deleted.
+model EmailDelivery {
+  id              String              @id @default(uuid())
+  resendMessageId String              @unique @map("resend_message_id")
+  status          EmailDeliveryStatus @default(SENT)
+  statusDetail    String?             @map("status_detail")
+  statusAt        DateTime            @default(now()) @map("status_at")
+
+  // Send context — at least one of these is set by the caller. Used
+  // by the order detail UI to scope the deliveries shown.
+  orderId         String?  @map("order_id")
+  invoiceId       String?  @map("invoice_id")
+  quoteFollowUpId String?  @map("quote_follow_up_id")
+
+  // Envelope — recorded at send for display + debugging
+  toAddress       String   @map("to_address")
+  ccAddresses     String[] @map("cc_addresses")
+  subject         String
+  // sendAgreementEmail's `label` — e.g. "send-quote:SR-ORD-0042"
+  label           String?
+
+  sentAt    DateTime @default(now()) @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt        @map("updated_at")
+
+  order   Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  invoice Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  quoteFollowUp QuoteFollowUp? @relation(fields: [quoteFollowUpId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, sentAt(sort: Desc)])
+  @@index([invoiceId])
+  @@index([status])
+  @@map("sr_email_deliveries")
+}
+
+enum EmailDeliveryStatus {
+  SENT
+  DELIVERED
+  DELAYED
+  BOUNCED
+  COMPLAINED
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,6 +116,16 @@ export async function POST(
       },
       { status: 502 },
     )
+  }
+
+  if (emailResult.id) {
+    await recordEmailDelivery({
+      resendMessageId: emailResult.id,
+      toAddress: recipient,
+      subject: `Paperwork portal link · ${order.company?.name || order.orderNumber}`,
+      label: 'orders/agreement/resend-link',
+      orderId: order.id,
+    })
   }
 
   return NextResponse.json({ ok: true, portalUrl, recipient, emailed: true, emailResult })

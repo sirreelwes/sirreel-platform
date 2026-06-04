@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { composeFollowUpEmail } from '@/lib/email/preview/composeFollowUpEmail'
 import { CADENCE_STAGES, type CadenceStage } from '@/lib/sales/quoteCadence'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -136,12 +137,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     where: { orderId_stage: { orderId: params.id, stage: final.stage } },
     select: { id: true, status: true },
   })
+  let followUpRowId: string
   if (!existing) {
     // Need the cadence-computed dueAt for audit. Re-derive cheaply
     // from the composer's order.validUntil + the stage table — but
     // we'd lose the exact dueAt the helper saw. Refetch state for
     // accuracy.
-    await prisma.quoteFollowUp.create({
+    const created = await prisma.quoteFollowUp.create({
       data: {
         orderId: params.id,
         stage: final.stage,
@@ -156,17 +158,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         sentAt: new Date(),
         sentById: userRow?.id ?? null,
       },
+      select: { id: true },
     })
-  } else if (existing.status !== 'SENT') {
-    await prisma.quoteFollowUp.update({
-      where: { id: existing.id },
-      data: {
-        status: 'SENT',
-        sentAt: new Date(),
-        sentById: userRow?.id ?? null,
-        draftSubject: final.subject,
-        draftBody: final.text,
-      },
+    followUpRowId = created.id
+  } else {
+    followUpRowId = existing.id
+    if (existing.status !== 'SENT') {
+      await prisma.quoteFollowUp.update({
+        where: { id: existing.id },
+        data: {
+          status: 'SENT',
+          sentAt: new Date(),
+          sentById: userRow?.id ?? null,
+          draftSubject: final.subject,
+          draftBody: final.text,
+        },
+      })
+    }
+  }
+
+  // Delivery audit so the order timeline can show sent → delivered /
+  // bounced from Resend's webhook events. Best-effort.
+  if (result.id) {
+    await recordEmailDelivery({
+      resendMessageId: result.id,
+      toAddress: final.to.email,
+      subject: final.subject,
+      label: `follow-up:${final.stage}:${final.order.orderNumber}`,
+      orderId: params.id,
+      quoteFollowUpId: followUpRowId,
     })
   }
 

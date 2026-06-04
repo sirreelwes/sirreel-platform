@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 
 export const dynamic = 'force-dynamic'
@@ -99,6 +100,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     html: tpl.html,
     text: tpl.text,
   })
+  if (emailResult.ok && emailResult.id) {
+    await recordEmailDelivery({
+      resendMessageId: emailResult.id,
+      toAddress: person.email,
+      subject: tpl.subject,
+      label: 'portal/invite',
+      orderId: order.id,
+    })
+  }
 
   return NextResponse.json({
     ok: true,

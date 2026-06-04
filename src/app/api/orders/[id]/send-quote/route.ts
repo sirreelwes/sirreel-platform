@@ -33,6 +33,7 @@ import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { rankRecipients } from '@/lib/email/recipients'
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 
 const PORTAL_HOST = 'https://hq.sirreel.com'
 
@@ -191,6 +192,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { ok: false, error: `Email send failed: ${emailResult.reason}`, emailResult },
       { status: 502 },
     )
+  }
+
+  // Audit the delivery so the order detail page can show
+  // sent/delivered/bounced as Resend's webhook events arrive. Best-
+  // effort; a failure here doesn't undo the send.
+  if (emailResult.id) {
+    await recordEmailDelivery({
+      resendMessageId: emailResult.id,
+      toAddress: primary.email,
+      ccAddresses: others.map((o) => o.email),
+      subject: final.subject,
+      label: `send-quote:${order.orderNumber}`,
+      orderId: order.id,
+    })
   }
 
   // ── State transition (DRAFT → QUOTE_SENT) ────────────────
