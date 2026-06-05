@@ -28,6 +28,7 @@ import {
   PERSON_SESSION_COOKIE,
   verifyPersonSessionCookieValue,
 } from '@/lib/portal/personSession'
+import { RequestAddOnButton } from '@/components/portal/RequestAddOnButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -236,6 +237,7 @@ export default async function PortalAccountPage() {
                       </div>
                     </div>
                   </div>
+                  <RequestAddOnButton jobId={j.id} jobName={j.name} />
                 </Card>
               ))}
             </div>
