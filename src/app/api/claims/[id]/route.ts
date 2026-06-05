@@ -49,7 +49,32 @@ export async function GET(_req: NextRequest, { params }: Params) {
         select: {
           id: true, invoiceNumber: true, type: true, status: true,
           total: true, amountPaid: true, balanceDue: true,
-          order: { select: { id: true, orderNumber: true, jobContactId: true } },
+          dueDate: true, sentAt: true, paidAt: true,
+          order: {
+            select: {
+              id: true, orderNumber: true, jobContactId: true,
+              // The renter-side primary contact for the order — the
+              // "who do I call at the renter to ask about the loss"
+              // gap. Walks order.jobContact (Person) directly.
+              jobContact: {
+                select: { id: true, firstName: true, lastName: true, email: true, phone: true, mobile: true },
+              },
+              // Fallback: the Job's contact roster, so the panel can
+              // still surface a contact when jobContact is null.
+              job: {
+                select: {
+                  id: true, jobCode: true, name: true,
+                  jobContacts: {
+                    select: {
+                      role: true, isPrimary: true,
+                      person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+                    },
+                    orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }],
+                  },
+                },
+              },
+            },
+          },
         },
       },
       coiCheck: { select: { id: true, fileUrl: true, aiRiskLevel: true, policyExpiryDate: true } },
@@ -76,16 +101,56 @@ export async function GET(_req: NextRequest, { params }: Params) {
   })
   if (!claim) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
+  // Decimal → Number for the wire. Doing the conversion here once so
+  // the client doesn't carry a Decimal lib.
+  const num = (v: { toString(): string } | null | undefined): number | null =>
+    v == null ? null : Number(v)
+
+  // Ledger composition — read-time, derived from existing columns.
+  //   CONTRACT side comes from the linked LD Invoice:
+  //     billed       = invoice.total
+  //     paid         = invoice.amountPaid
+  //     balanceDue   = invoice.balanceDue (what the renter owes US
+  //                                        per the LD invoice, gross)
+  //   INSURANCE side comes from the claim:
+  //     lossAmount   — replacement-cost anchor
+  //     acvReceived  — carrier valuation
+  //     depreciationApplied
+  //     amountOffered / amountSettled (GROSS — see schema comment)
+  //     deductibleAmount
+  //     adminFeeAmount
+  //   CLIENT EXPOSURE — the goal metric:
+  //     = LD balanceDue − (amountSettled − deductibleAmount),
+  //       floored at 0
+  //   When the carrier hasn't settled yet, exposure falls back to the
+  //   full LD balance (no insurance offset to apply). When there's no
+  //   LD invoice at all (onboarded claim, no billed amount), exposure
+  //   is null — there's nothing to compute against.
+  const ldBalanceDue = claim.invoice && claim.invoice.type === 'LD'
+    ? Number(claim.invoice.balanceDue)
+    : null
+  const settledGross = num(claim.amountSettled)
+  const deductible   = num(claim.deductibleAmount) ?? 0
+  const settledNet   = settledGross == null ? null : Math.max(0, settledGross - deductible)
+  const clientExposure = ldBalanceDue == null
+    ? null
+    : Math.max(0, ldBalanceDue - (settledNet ?? 0))
+
   return NextResponse.json({
     claim: {
       ...claim,
-      repairEstimate: claim.repairEstimate == null ? null : Number(claim.repairEstimate),
-      repairActual: claim.repairActual == null ? null : Number(claim.repairActual),
-      dailyRevenueRate: claim.dailyRevenueRate == null ? null : Number(claim.dailyRevenueRate),
-      lossOfRevenue: claim.lossOfRevenue == null ? null : Number(claim.lossOfRevenue),
-      totalDemand: claim.totalDemand == null ? null : Number(claim.totalDemand),
-      amountOffered: claim.amountOffered == null ? null : Number(claim.amountOffered),
-      amountSettled: claim.amountSettled == null ? null : Number(claim.amountSettled),
+      repairEstimate: num(claim.repairEstimate),
+      repairActual: num(claim.repairActual),
+      dailyRevenueRate: num(claim.dailyRevenueRate),
+      lossOfRevenue: num(claim.lossOfRevenue),
+      totalDemand: num(claim.totalDemand),
+      amountOffered: num(claim.amountOffered),
+      amountSettled: num(claim.amountSettled),
+      lossAmount: num(claim.lossAmount),
+      acvReceived: num(claim.acvReceived),
+      depreciationApplied: num(claim.depreciationApplied),
+      deductibleAmount: num(claim.deductibleAmount),
+      adminFeeAmount: num(claim.adminFeeAmount),
       invoice: claim.invoice
         ? {
             ...claim.invoice,
@@ -96,12 +161,23 @@ export async function GET(_req: NextRequest, { params }: Params) {
         : null,
       damageItems: claim.damageItems.map((d) => ({
         ...d,
-        estimatedRepairCost: d.estimatedRepairCost == null ? null : Number(d.estimatedRepairCost),
+        estimatedRepairCost: num(d.estimatedRepairCost),
       })),
       timeline: claim.timeline.map((t) => ({
         ...t,
-        amount: t.amount == null ? null : Number(t.amount),
+        amount: num(t.amount),
       })),
+      // Server-computed ledger view — clients don't redo the math,
+      // and the formula stays in one place.
+      ledger: {
+        contractBilled:     ldBalanceDue == null ? null : Number(claim.invoice!.total),
+        contractPaid:       ldBalanceDue == null ? null : Number(claim.invoice!.amountPaid),
+        contractBalanceDue: ldBalanceDue,
+        insuranceSettledGross: settledGross,
+        insuranceSettledNetOfDeductible: settledNet,
+        deductibleApplied:  deductible || null,
+        clientExposure,
+      },
     },
   })
 }
@@ -122,6 +198,15 @@ interface PatchBody {
   totalDemand?: unknown
   amountOffered?: unknown
   amountSettled?: unknown
+  // Phase A ledger fields
+  lossAmount?: unknown
+  acvReceived?: unknown
+  depreciationApplied?: unknown
+  deductibleAmount?: unknown
+  adminFeeAmount?: unknown
+  // Phase A follow-up cadence
+  nextActionAt?: unknown      // ISO date string or null
+  lastContactAt?: unknown     // ISO date string or null
   assignedTo?: unknown // userId or null to unassign
   notes?: unknown
 }
@@ -217,6 +302,35 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (repairVendor !== undefined) data.repairVendor = repairVendor
   const notes = asString(body.notes, 20_000)
   if (notes !== undefined) data.notes = notes
+
+  // Phase A ledger money — same Decimal handling as the existing
+  // money fields. No timeline event on these; the rep can log a
+  // note manually via /timeline if they want context.
+  const lossAmount = asDecimal(body.lossAmount)
+  if (lossAmount !== undefined) data.lossAmount = lossAmount
+  const acvReceived = asDecimal(body.acvReceived)
+  if (acvReceived !== undefined) data.acvReceived = acvReceived
+  const depreciationApplied = asDecimal(body.depreciationApplied)
+  if (depreciationApplied !== undefined) data.depreciationApplied = depreciationApplied
+  const deductibleAmount = asDecimal(body.deductibleAmount)
+  if (deductibleAmount !== undefined) data.deductibleAmount = deductibleAmount
+  const adminFeeAmount = asDecimal(body.adminFeeAmount)
+  if (adminFeeAmount !== undefined) data.adminFeeAmount = adminFeeAmount
+
+  // Phase A follow-up timestamps. Stored as DateTime; the wire
+  // value is an ISO string ("2026-06-10" or full timestamp).
+  // Empty/null clears.
+  const parseDate = (v: unknown): Date | null | undefined => {
+    if (v === undefined) return undefined
+    if (v === null || v === '') return null
+    if (typeof v !== 'string') return undefined
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? undefined : d
+  }
+  const nextActionAt = parseDate(body.nextActionAt)
+  if (nextActionAt !== undefined) data.nextActionAt = nextActionAt
+  const lastContactAt = parseDate(body.lastContactAt)
+  if (lastContactAt !== undefined) data.lastContactAt = lastContactAt
 
   // Money fields — log timeline events for offer/settlement changes
   // (the two numbers reps will look back at first).

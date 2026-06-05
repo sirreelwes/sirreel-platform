@@ -73,6 +73,15 @@ interface ClaimDetail {
   totalDemand: number | null
   amountOffered: number | null
   amountSettled: number | null
+  // Phase A ledger
+  lossAmount: number | null
+  acvReceived: number | null
+  depreciationApplied: number | null
+  deductibleAmount: number | null
+  adminFeeAmount: number | null
+  // Phase A follow-up cadence
+  nextActionAt: string | null
+  lastContactAt: string | null
   notes: string | null
   submittedAt: string | null
   settledAt: string | null
@@ -91,8 +100,29 @@ interface ClaimDetail {
   invoice: {
     id: string; invoiceNumber: string; type: string; status: string;
     total: number; amountPaid: number; balanceDue: number;
-    order: { id: string; orderNumber: string; jobContactId: string | null } | null
+    dueDate: string | null; sentAt: string | null; paidAt: string | null;
+    order: {
+      id: string; orderNumber: string; jobContactId: string | null;
+      jobContact: { id: string; firstName: string; lastName: string; email: string; phone: string | null; mobile: string | null } | null;
+      job: {
+        id: string; jobCode: string; name: string;
+        jobContacts: { role: string; isPrimary: boolean;
+          person: { id: string; firstName: string; lastName: string; email: string; phone: string | null }
+        }[]
+      } | null;
+    } | null
   } | null
+  // Server-composed two-payer ledger view — the math lives in the
+  // GET handler so client renders never disagree.
+  ledger: {
+    contractBilled: number | null
+    contractPaid: number | null
+    contractBalanceDue: number | null
+    insuranceSettledGross: number | null
+    insuranceSettledNetOfDeductible: number | null
+    deductibleApplied: number | null
+    clientExposure: number | null
+  }
   coiCheck: { id: string; fileUrl: string; aiRiskLevel: string | null; policyExpiryDate: string | null } | null
   assignedToUser: { id: string; name: string; email: string } | null
   damageItems: {
@@ -144,7 +174,24 @@ type EditForm = {
   totalDemand: string
   amountOffered: string
   amountSettled: string
+  // Phase A ledger
+  lossAmount: string
+  acvReceived: string
+  depreciationApplied: string
+  deductibleAmount: string
+  adminFeeAmount: string
+  // Phase A follow-up — captured as YYYY-MM-DD via <input type="date">
+  nextActionAt: string
+  lastContactAt: string
   notes: string
+}
+// ISO datetime → YYYY-MM-DD for the date input. Empty string when
+// null so the input stays blank rather than rendering Invalid Date.
+function ymd(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
 }
 function formFromClaim(c: ClaimDetail): EditForm {
   return {
@@ -163,6 +210,13 @@ function formFromClaim(c: ClaimDetail): EditForm {
     totalDemand: c.totalDemand == null ? '' : String(c.totalDemand),
     amountOffered: c.amountOffered == null ? '' : String(c.amountOffered),
     amountSettled: c.amountSettled == null ? '' : String(c.amountSettled),
+    lossAmount: c.lossAmount == null ? '' : String(c.lossAmount),
+    acvReceived: c.acvReceived == null ? '' : String(c.acvReceived),
+    depreciationApplied: c.depreciationApplied == null ? '' : String(c.depreciationApplied),
+    deductibleAmount: c.deductibleAmount == null ? '' : String(c.deductibleAmount),
+    adminFeeAmount: c.adminFeeAmount == null ? '' : String(c.adminFeeAmount),
+    nextActionAt: ymd(c.nextActionAt),
+    lastContactAt: ymd(c.lastContactAt),
     notes: c.notes ?? '',
   }
 }
@@ -177,9 +231,19 @@ function diffPatch(prev: EditForm, next: EditForm): Record<string, unknown> {
   for (const k of strFields) {
     if (prev[k] !== next[k]) out[k] = next[k] === '' ? null : next[k]
   }
-  const numFields = ['repairEstimate','repairActual','daysOutOfService','dailyRevenueRate','lossOfRevenue','totalDemand','amountOffered','amountSettled'] as const
+  const numFields = [
+    'repairEstimate','repairActual','daysOutOfService','dailyRevenueRate','lossOfRevenue',
+    'totalDemand','amountOffered','amountSettled',
+    'lossAmount','acvReceived','depreciationApplied','deductibleAmount','adminFeeAmount',
+  ] as const
   for (const k of numFields) {
     if (prev[k] !== next[k]) out[k] = next[k] === '' ? null : Number(next[k])
+  }
+  // Date fields — the input gives us YYYY-MM-DD; pass through as
+  // string (server parses) or null on clear.
+  const dateFields = ['nextActionAt','lastContactAt'] as const
+  for (const k of dateFields) {
+    if (prev[k] !== next[k]) out[k] = next[k] === '' ? null : next[k]
   }
   return out
 }
@@ -376,6 +440,20 @@ export default function ClaimDetailPage() {
               </div>
             </Section>
 
+            <Section title="Follow-up">
+              <div className="grid grid-cols-2 gap-4">
+                <DateInput label="Next action due"
+                  value={form.nextActionAt}
+                  onChange={(v) => setForm({ ...form, nextActionAt: v })} />
+                <DateInput label="Last contact"
+                  value={form.lastContactAt}
+                  onChange={(v) => setForm({ ...form, lastContactAt: v })} />
+              </div>
+              <p className="text-[11px] text-lt-fg3 mt-2">
+                Drives the OVERDUE_RESPONSE and GONE_QUIET badges on the claims list.
+              </p>
+            </Section>
+
             <Section title="Internal notes">
               <textarea
                 value={form.notes}
@@ -387,8 +465,11 @@ export default function ClaimDetailPage() {
             </Section>
           </div>
 
-          {/* RIGHT 1/3 — context + timeline */}
+          {/* RIGHT 1/3 — ledger + context + timeline */}
           <div className="md:col-span-1 space-y-5">
+            <LedgerPanel claim={claim} form={form} setForm={setForm} />
+            <RenterContactPanel claim={claim} />
+
             <Section title="Context">
               <Field label="Client">
                 <Link href={`/crm/${claim.company.id}`} className="text-lt-fg hover:text-black underline-offset-2 hover:underline">
@@ -626,5 +707,161 @@ function Int({ label, value, onChange }: { label: string; value: string; onChang
         className="mt-0.5 w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm text-lt-fg font-mono focus:outline-none focus:border-lt-fg2"
       />
     </label>
+  )
+}
+
+function DateInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] uppercase tracking-wider text-lt-fg3">{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-0.5 w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
+      />
+    </label>
+  )
+}
+
+// ─── Ledger panel — contract side vs insurance side + client exposure ──
+
+function LedgerPanel({
+  claim,
+  form,
+  setForm,
+}: {
+  claim: ClaimDetail
+  form: EditForm
+  setForm: (f: EditForm) => void
+}) {
+  const L = claim.ledger
+  const hasContract = L.contractBilled != null
+
+  return (
+    <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+      <h2 className="text-[11px] uppercase tracking-wider font-semibold text-lt-fg3 mb-3">
+        Contract vs insurance — client exposure
+      </h2>
+
+      {/* Client exposure — the goal metric. Prominent treatment so a
+          rep glancing at the right rail knows immediately what the
+          client owes us once the carrier pays out. */}
+      <div className="mb-4 rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg/40 p-3">
+        <div className="text-[10px] uppercase tracking-wider text-chip-warn-fg font-semibold">
+          Client exposure
+        </div>
+        <div className="text-2xl font-semibold font-mono text-chip-warn-fg mt-0.5">
+          {L.clientExposure == null ? '—' : fmtMoney(L.clientExposure)}
+        </div>
+        <div className="text-[11px] text-lt-fg3 mt-0.5">
+          {hasContract
+            ? `LD balance ${fmtMoney(L.contractBalanceDue)} − net settlement ${fmtMoney(L.insuranceSettledNetOfDeductible ?? 0)}`
+            : 'No LD invoice linked — exposure isn’t computable until billing is in place.'}
+        </div>
+      </div>
+
+      {/* Two-payer split */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {/* Contract side */}
+        <div className="rounded-lg border border-lt-hairline p-3">
+          <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">
+            Contract side
+          </div>
+          {hasContract ? (
+            <>
+              <Row label="Billed (LD)" value={fmtMoney(L.contractBilled)} />
+              <Row label="Paid"        value={fmtMoney(L.contractPaid)} />
+              <Row label="Balance due" value={fmtMoney(L.contractBalanceDue)} bold />
+            </>
+          ) : (
+            <div className="text-[11px] text-lt-fg3 mt-1">No LD invoice linked.</div>
+          )}
+        </div>
+        {/* Insurance side */}
+        <div className="rounded-lg border border-lt-hairline p-3">
+          <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">
+            Insurance side
+          </div>
+          <Row label="Loss"          value={fmtMoney(claim.lossAmount)} />
+          <Row label="ACV recvd"     value={fmtMoney(claim.acvReceived)} />
+          <Row label="Depreciation"  value={fmtMoney(claim.depreciationApplied)} />
+          <Row label="Offered"       value={fmtMoney(claim.amountOffered)} />
+          <Row label="Settled (gr)"  value={fmtMoney(L.insuranceSettledGross)} bold />
+          <Row label="Deductible"    value={fmtMoney(L.deductibleApplied)} />
+          <Row label="Net to us"     value={fmtMoney(L.insuranceSettledNetOfDeductible)} />
+        </div>
+      </div>
+
+      {/* Inline-editable money fields — flows through the same
+          diff-PATCH save the rest of the form uses. */}
+      <div className="grid grid-cols-2 gap-3">
+        <Money label="Loss amount"        value={form.lossAmount}          onChange={(v) => setForm({ ...form, lossAmount: v })} />
+        <Money label="ACV received"       value={form.acvReceived}         onChange={(v) => setForm({ ...form, acvReceived: v })} />
+        <Money label="Depreciation"       value={form.depreciationApplied} onChange={(v) => setForm({ ...form, depreciationApplied: v })} />
+        <Money label="Deductible"         value={form.deductibleAmount}    onChange={(v) => setForm({ ...form, deductibleAmount: v })} />
+        <Money label="Admin fee (10%)"    value={form.adminFeeAmount}      onChange={(v) => setForm({ ...form, adminFeeAmount: v })} />
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between mt-1.5 text-xs">
+      <span className="text-lt-fg3">{label}</span>
+      <span className={`font-mono ${bold ? 'text-lt-fg font-semibold' : 'text-lt-fg2'}`}>{value}</span>
+    </div>
+  )
+}
+
+// ─── Renter contact — "who do I call at the renter?" ─────────────
+
+function RenterContactPanel({ claim }: { claim: ClaimDetail }) {
+  // Resolution waterfall, mirroring how the order detail picks a
+  // primary contact: order.jobContact (the on-order primary) → first
+  // jobContact marked isPrimary → first jobContact by role. When the
+  // claim has no LD invoice (onboarded), there's nothing to walk —
+  // surface the company name only and prompt the rep to add a contact.
+  const order = claim.invoice?.order ?? null
+  const direct = order?.jobContact ?? null
+  const fromRoster = !direct && order?.job?.jobContacts && order.job.jobContacts.length > 0
+    ? (order.job.jobContacts.find((c) => c.isPrimary) ?? order.job.jobContacts[0])
+    : null
+  const contact = direct
+    ? { id: direct.id, firstName: direct.firstName, lastName: direct.lastName, email: direct.email, phone: direct.phone, role: 'PRIMARY' }
+    : fromRoster
+      ? { id: fromRoster.person.id, firstName: fromRoster.person.firstName, lastName: fromRoster.person.lastName, email: fromRoster.person.email, phone: fromRoster.person.phone, role: fromRoster.role }
+      : null
+
+  return (
+    <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+      <h2 className="text-[11px] uppercase tracking-wider font-semibold text-lt-fg3 mb-3">
+        Renter contact
+      </h2>
+      <div className="text-sm text-lt-fg font-semibold">{claim.company.name}</div>
+      {contact ? (
+        <div className="mt-2 space-y-0.5">
+          <div className="text-sm text-lt-fg">
+            {contact.firstName} {contact.lastName}{' '}
+            <span className="text-[10px] uppercase tracking-wider text-lt-fg3">· {contact.role.replace('_', ' ')}</span>
+          </div>
+          {contact.email && (
+            <div className="text-xs text-lt-fg2">
+              <a href={`mailto:${contact.email}`} className="hover:text-lt-fg">{contact.email}</a>
+            </div>
+          )}
+          {contact.phone && (
+            <div className="text-xs text-lt-fg2">
+              <a href={`tel:${contact.phone}`} className="hover:text-lt-fg">{contact.phone}</a>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-lt-fg3 mt-2">
+          No contact resolvable from this claim — add a JobContact on the linked job, or attach the claim to an LD invoice.
+        </p>
+      )}
+    </div>
   )
 }
