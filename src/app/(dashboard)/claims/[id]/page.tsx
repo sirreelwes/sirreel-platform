@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import type { ClaimBadge } from '@/lib/claims/claimBadges'
 
 type ClaimStatus =
   | 'DRAFT' | 'READY_TO_SEND' | 'SUBMITTED' | 'ACKNOWLEDGED'
@@ -41,6 +42,25 @@ const STATUS_TONE: Record<ClaimStatus, string> = {
   DENIED:        'bg-chip-bad-bg text-chip-bad-fg',
   ESCALATED:     'bg-chip-bad-bg text-chip-bad-fg',
 }
+const BADGE_TONE: Record<ClaimBadge, string> = {
+  ESCALATED:          'bg-chip-bad-bg text-chip-bad-fg',
+  OVERDUE_RESPONSE:   'bg-chip-bad-bg text-chip-bad-fg',
+  LD_INVOICE_OVERDUE: 'bg-chip-bad-bg text-chip-bad-fg',
+  HIGH_EXPOSURE:      'bg-chip-warn-bg text-chip-warn-fg',
+  GONE_QUIET:         'bg-chip-warn-bg text-chip-warn-fg',
+  STALE_NEGOTIATING:  'bg-chip-warn-bg text-chip-warn-fg',
+  MISSING_COI:        'bg-chip-neutral-bg text-chip-neutral-fg',
+}
+const BADGE_LABEL: Record<ClaimBadge, string> = {
+  ESCALATED:          'Escalated',
+  OVERDUE_RESPONSE:   'Overdue',
+  LD_INVOICE_OVERDUE: 'LD past-due',
+  HIGH_EXPOSURE:      'High exposure',
+  GONE_QUIET:         'Quiet',
+  STALE_NEGOTIATING:  'Stale',
+  MISSING_COI:        'No COI',
+}
+
 const STATUS_LABEL: Record<ClaimStatus, string> = {
   DRAFT:         'Draft',
   READY_TO_SEND: 'Ready to send',
@@ -123,6 +143,8 @@ interface ClaimDetail {
     deductibleApplied: number | null
     clientExposure: number | null
   }
+  // Phase A — server-computed badge facts.
+  badges: ClaimBadge[]
   coiCheck: { id: string; fileUrl: string; aiRiskLevel: string | null; policyExpiryDate: string | null } | null
   assignedToUser: { id: string; name: string; email: string } | null
   damageItems: {
@@ -377,6 +399,14 @@ export default function ClaimDetailPage() {
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_TONE[claim.status]}`}>
                   {STATUS_LABEL[claim.status]}
                 </span>
+                {claim.badges.map((b) => (
+                  <span
+                    key={b}
+                    className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${BADGE_TONE[b]}`}
+                  >
+                    {BADGE_LABEL[b]}
+                  </span>
+                ))}
               </div>
               <div className="text-sm text-lt-fg2 mt-1">
                 {claim.filedAgainst}

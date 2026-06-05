@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { nextClaimNumber } from '@/lib/orders'
+import { computeClaimBadgeFacts } from '@/lib/claims/claimBadges'
 import type { ClaimStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -65,6 +66,10 @@ export async function GET(req: NextRequest) {
       totalDemand: true,
       amountOffered: true,
       amountSettled: true,
+      deductibleAmount: true,
+      coiCheckId: true,
+      nextActionAt: true,
+      lastContactAt: true,
       submittedAt: true,
       settledAt: true,
       createdAt: true,
@@ -77,15 +82,51 @@ export async function GET(req: NextRequest) {
         },
       },
       assignedToUser: { select: { id: true, name: true } },
-      invoice: { select: { id: true, invoiceNumber: true, type: true, total: true } },
+      invoice: {
+        select: {
+          id: true, invoiceNumber: true, type: true,
+          total: true, balanceDue: true, dueDate: true,
+        },
+      },
       _count: { select: { timeline: true, documents: true, damageItems: true } },
     },
     orderBy: { updatedAt: 'desc' },
     take: 200,
   })
 
-  return NextResponse.json({
-    claims: claims.map((c) => ({
+  const now = new Date()
+  const enriched = claims.map((c) => {
+    // Same client-exposure formula as GET /api/claims/[id]. Kept
+    // inline here (rather than a shared helper) because the list
+    // doesn't pull invoice.amountPaid — we only need balanceDue for
+    // the math, and importing a 3-line formula isn't worth the
+    // extra abstraction yet.
+    const ldBalanceDue = c.invoice && c.invoice.type === 'LD' ? Number(c.invoice.balanceDue) : null
+    const settledGross = c.amountSettled == null ? null : Number(c.amountSettled)
+    const deductible = c.deductibleAmount == null ? 0 : Number(c.deductibleAmount)
+    const settledNet = settledGross == null ? null : Math.max(0, settledGross - deductible)
+    const clientExposure = ldBalanceDue == null ? null : Math.max(0, ldBalanceDue - (settledNet ?? 0))
+
+    const facts = computeClaimBadgeFacts(
+      {
+        status: c.status,
+        nextActionAt: c.nextActionAt,
+        lastContactAt: c.lastContactAt,
+        clientExposure,
+        coiCheckId: c.coiCheckId,
+        invoice: c.invoice
+          ? {
+              type: c.invoice.type,
+              dueDate: c.invoice.dueDate,
+              balanceDue: Number(c.invoice.balanceDue),
+            }
+          : null,
+        statusUpdatedAt: c.updatedAt,
+      },
+      now,
+    )
+
+    return {
       ...c,
       repairEstimate: c.repairEstimate == null ? null : Number(c.repairEstimate),
       repairActual: c.repairActual == null ? null : Number(c.repairActual),
@@ -93,10 +134,22 @@ export async function GET(req: NextRequest) {
       amountOffered: c.amountOffered == null ? null : Number(c.amountOffered),
       amountSettled: c.amountSettled == null ? null : Number(c.amountSettled),
       invoice: c.invoice
-        ? { ...c.invoice, total: Number(c.invoice.total) }
+        ? { ...c.invoice, total: Number(c.invoice.total), balanceDue: Number(c.invoice.balanceDue) }
         : null,
-    })),
+      clientExposure,
+      badges: facts.badges,
+      severity: facts.severity,
+    }
   })
+
+  // Sort by severity desc, then updatedAt desc. Attention-needing
+  // claims always sit at the top regardless of the active filter.
+  enriched.sort((a, b) => {
+    if (a.severity !== b.severity) return b.severity - a.severity
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+
+  return NextResponse.json({ claims: enriched })
 }
 
 interface CreateBody {

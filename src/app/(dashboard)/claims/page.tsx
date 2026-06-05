@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { NewClaimModal } from '@/components/claims/NewClaimModal'
+import type { ClaimBadge } from '@/lib/claims/claimBadges'
 
 type ClaimStatus =
   | 'DRAFT' | 'READY_TO_SEND' | 'SUBMITTED' | 'ACKNOWLEDGED'
@@ -52,6 +53,47 @@ interface ClaimRow {
   assignedToUser: { id: string; name: string } | null
   invoice: { id: string; invoiceNumber: string; type: string; total: number } | null
   _count: { timeline: number; documents: number; damageItems: number }
+  // Phase A — server-computed badge facts + client exposure + severity.
+  badges: ClaimBadge[]
+  severity: number
+  clientExposure: number | null
+}
+
+// Light tokens already in the palette (chip / cadence / chip-bad).
+// Severity escalates neutral → warn → bad. No new colors.
+const BADGE_TONE: Record<ClaimBadge, string> = {
+  ESCALATED:          'bg-chip-bad-bg text-chip-bad-fg',
+  OVERDUE_RESPONSE:   'bg-chip-bad-bg text-chip-bad-fg',
+  LD_INVOICE_OVERDUE: 'bg-chip-bad-bg text-chip-bad-fg',
+  HIGH_EXPOSURE:      'bg-chip-warn-bg text-chip-warn-fg',
+  GONE_QUIET:         'bg-chip-warn-bg text-chip-warn-fg',
+  STALE_NEGOTIATING:  'bg-chip-warn-bg text-chip-warn-fg',
+  MISSING_COI:        'bg-chip-neutral-bg text-chip-neutral-fg',
+}
+const BADGE_LABEL: Record<ClaimBadge, string> = {
+  ESCALATED:          'Escalated',
+  OVERDUE_RESPONSE:   'Overdue',
+  LD_INVOICE_OVERDUE: 'LD past-due',
+  HIGH_EXPOSURE:      'High exposure',
+  GONE_QUIET:         'Quiet',
+  STALE_NEGOTIATING:  'Stale',
+  MISSING_COI:        'No COI',
+}
+
+function BadgeChips({ badges }: { badges: ClaimBadge[] }) {
+  if (badges.length === 0) return null
+  return (
+    <div className="flex items-center gap-1 flex-wrap mt-1">
+      {badges.map((b) => (
+        <span
+          key={b}
+          className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${BADGE_TONE[b]}`}
+        >
+          {BADGE_LABEL[b]}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 // Single-character mapping so all 9 enum values fit cleanly on a
@@ -222,11 +264,19 @@ export default function ClaimsPage() {
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-lt-fg3">Loading…</td></tr>
               ) : claims.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-lt-fg3">No claims in this view.</td></tr>
-              ) : claims.map((c) => (
+              ) : claims.map((c) => {
+                // Left-accent treatment for attention-needing rows.
+                // The neutral→warn→bad escalation mirrors the chip
+                // tone palette — no new colors.
+                const accent =
+                  c.severity >= 50 ? 'border-l-4 border-l-chip-bad-fg' :
+                  c.severity >= 20 ? 'border-l-4 border-l-chip-warn-fg' :
+                  'border-l-4 border-l-transparent'
+                return (
                 <tr
                   key={c.id}
                   onClick={() => router.push(`/claims/${c.id}`)}
-                  className="border-b border-lt-hairline/50 hover:bg-lt-inner/60 cursor-pointer transition-colors"
+                  className={`border-b border-lt-hairline/50 hover:bg-lt-inner/60 cursor-pointer transition-colors ${accent}`}
                 >
                   <td className="px-4 py-3 align-top">
                     <div className="font-mono text-xs text-lt-fg font-semibold">{c.claimNumber}</div>
@@ -235,6 +285,7 @@ export default function ClaimsPage() {
                         inv {c.invoice.invoiceNumber}
                       </div>
                     )}
+                    <BadgeChips badges={c.badges} />
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_TONE[c.status]}`}>
@@ -276,7 +327,8 @@ export default function ClaimsPage() {
                       : <span className="text-lt-fg3">Unassigned</span>}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

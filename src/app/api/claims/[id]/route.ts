@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { computeClaimBadgeFacts } from '@/lib/claims/claimBadges'
 import type { ClaimAction, ClaimStatus, Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -178,6 +179,22 @@ export async function GET(_req: NextRequest, { params }: Params) {
         deductibleApplied:  deductible || null,
         clientExposure,
       },
+      // Phase A — server-computed badges (same shape as the list).
+      badges: computeClaimBadgeFacts({
+        status: claim.status,
+        nextActionAt: claim.nextActionAt,
+        lastContactAt: claim.lastContactAt,
+        clientExposure,
+        coiCheckId: claim.coiCheckId,
+        invoice: claim.invoice
+          ? {
+              type: claim.invoice.type,
+              dueDate: claim.invoice.dueDate,
+              balanceDue: Number(claim.invoice.balanceDue),
+            }
+          : null,
+        statusUpdatedAt: claim.updatedAt,
+      }).badges,
     },
   })
 }
