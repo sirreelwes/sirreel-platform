@@ -1864,6 +1864,14 @@ model Order {
   blindPickupInstructions  String? @map("blind_pickup_instructions") @db.Text
   blindReturnInstructions  String? @map("blind_return_instructions") @db.Text
 
+  // Phase 1b client-intake — set when this Order was added as an
+  // "add-on" to an existing Job via the inquiry triage path (rather
+  // than created alongside a new Job at quote time). Null on every
+  // Order that was the FIRST order on its job. Drives the "Add-on"
+  // chip on the order list + detail and the convertedOrder relation
+  // back-link from the Inquiry it satisfied.
+  addedToJobAt             DateTime? @map("added_to_job_at")
+
   booking      Booking?        @relation(fields: [bookingId], references: [id])
   company      Company         @relation(fields: [companyId], references: [id])
   agent        User            @relation("OrderAgent", fields: [agentId], references: [id])
@@ -1886,6 +1894,10 @@ model Order {
   cadenceEvents      CadenceEvent[]
   portalAccesses     PortalAccess[]
   emailDeliveries    EmailDelivery[]
+  // 1-1 back-relation to the Inquiry that became this Order via the
+  // add-on triage path. Mirrors Job.fromInquiry — Inquiry.convertedOrderId
+  // is @unique so at most one Inquiry points here.
+  fromInquiry        Inquiry?         @relation("ConvertedFromInquiryToOrder")
   // Phase 2 warehouse lane: zero-or-one PickList per Order, created at
   // book time iff the order has ≥1 WAREHOUSE-lane line item.
   pickList           PickList?
@@ -2499,6 +2511,15 @@ model Inquiry {
 
   convertedJobId     String?       @unique @map("converted_job_id")
   convertedJob       Job?          @relation("ConvertedFromInquiry", fields: [convertedJobId], references: [id])
+
+  // Phase 1b add-on triage — set when the inquiry was converted by
+  // attaching to an EXISTING Job (a new Order on that job, marked
+  // with Order.addedToJobAt). Disjoint with convertedJobId in
+  // practice: the new-Job path sets convertedJobId, the add-on path
+  // sets convertedOrderId. @unique mirrors convertedJobId so each
+  // Order can satisfy at most one inquiry.
+  convertedOrderId   String?       @unique @map("converted_order_id")
+  convertedOrder     Order?        @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
 
   sourceMetadata     Json?         @map("source_metadata")
 
