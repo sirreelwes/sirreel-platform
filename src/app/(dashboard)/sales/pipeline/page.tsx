@@ -10,6 +10,7 @@ import { ProspectsSection } from '@/components/sales/ProspectsSection';
 import { FunnelMetricsStrip } from '@/components/sales/FunnelMetricsStrip';
 import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
 import { FollowUpsDuePanel } from '@/components/sales/FollowUpsDuePanel';
+import { CopyIntakeLinkButton } from '@/components/intake/CopyIntakeLinkButton';
 import type { LineItemDepartment } from '@prisma/client';
 import type { PipelineColumn } from '@/lib/sales/pipeline';
 
@@ -99,6 +100,7 @@ export default function PipelinePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <CopyIntakeLinkButton />
           <button
             onClick={() => setShowNewInquiry(true)}
             className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg"

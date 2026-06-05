@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { CopyIntakeLinkButton } from "@/components/intake/CopyIntakeLinkButton";
 
 type Order = {
   id: string;
@@ -83,7 +84,8 @@ export default function OrdersPage() {
               {total} order{total !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <CopyIntakeLinkButton />
             <button
               onClick={() => router.push("/orders/new-quote")}
               className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"

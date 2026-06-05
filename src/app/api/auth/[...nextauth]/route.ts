@@ -32,14 +32,18 @@ const handler = NextAuth({
     async session({ session, token }) {
       (session as any).accessToken = token.accessToken;
       (session as any).error = token.error;
-      // Pull role fresh from DB on every session check
+      // Pull role + sales-rep flags fresh from DB on every session
+      // check. salesOnly + publicSlug feed the client-side guard for
+      // the agent-shareable intake-link button (sales reps only).
       if (session.user?.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: session.user.email },
-          select: { role: true, name: true }
+          select: { role: true, name: true, salesOnly: true, publicSlug: true }
         });
         if (dbUser) {
           (session.user as any).role = dbUser.role;
+          (session.user as any).salesOnly = dbUser.salesOnly;
+          (session.user as any).publicSlug = dbUser.publicSlug;
           if (dbUser.name) session.user.name = dbUser.name;
         }
       }
