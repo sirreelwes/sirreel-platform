@@ -52,6 +52,10 @@ export async function GET(
             // Booked snapshot — Phase 1 commit 2. Surface for rollup.
             bookedTotal: true,
             fleetReadyAt: true,
+            // Phase 1b — set on Orders created via the inquiry add-on
+            // triage path. Drives the "Add-on" chip on the job detail
+            // order row.
+            addedToJobAt: true,
             // Booked scope — Pass A core ask.
             lineItems: {
               orderBy: { sortOrder: 'asc' },

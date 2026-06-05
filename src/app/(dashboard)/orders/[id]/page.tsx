@@ -75,6 +75,10 @@ type Order = {
   blindReturn: boolean;
   blindPickupInstructions: string | null;
   blindReturnInstructions: string | null;
+  // Phase 1b — set when this Order was created via the inquiry
+  // add-on triage path. Drives the small "Add-on" chip next to the
+  // status pill in the header.
+  addedToJobAt: string | null;
   // Per-send delivery audit — one row per outbound Resend dispatch
   // anchored to this order. Webhook advances `status` as Resend's
   // events arrive (sent → delivered / delayed / bounced / complained).
@@ -1086,11 +1090,19 @@ export default function OrderDetailPage() {
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
               <h1 className="text-2xl font-semibold text-lt-fg3 font-mono tracking-tight">{order.orderNumber}</h1>
               <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[order.status]}`}>
                 {order.status.replace("_", " ")}
               </span>
+              {order.addedToJobAt && (
+                <span
+                  title="Added later via inquiry triage"
+                  className="px-2.5 py-0.5 rounded text-xs font-medium bg-chip-neutral-bg text-chip-neutral-fg"
+                >
+                  Add-on
+                </span>
+              )}
             </div>
             <p className="text-lt-fg2">{order.description || "No description"}</p>
           </div>

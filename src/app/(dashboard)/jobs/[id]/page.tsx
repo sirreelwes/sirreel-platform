@@ -121,6 +121,9 @@ interface JobOrder {
   startDate: string | null;
   endDate: string | null;
   createdAt: string;
+  // Phase 1b — set on Orders created via the inquiry add-on triage
+  // path. Drives the "Add-on" chip on this row.
+  addedToJobAt: string | null;
 }
 
 interface JobDetail {
@@ -683,6 +686,14 @@ export default function JobDetailPage() {
                     >
                       {o.status}
                     </span>
+                    {o.addedToJobAt && (
+                      <span
+                        title="Added later via inquiry triage"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700"
+                      >
+                        Add-on
+                      </span>
+                    )}
                     <span className="text-xs text-zinc-400 whitespace-nowrap">
                       {fmtDate(o.startDate)} – {fmtDate(o.endDate)}
                     </span>
