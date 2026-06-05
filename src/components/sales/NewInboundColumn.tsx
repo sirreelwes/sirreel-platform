@@ -61,7 +61,26 @@ interface PersistentInquiry {
   company: { id: string; name: string } | null
   person: { id: string; firstName: string; lastName: string; email: string } | null
   assignedTo: { id: string; name: string } | null
+  // Phase 2 — present on inquiries created via /api/portal/add-on-request.
+  // When sourceMetadata.kind === 'portal-add-on', the inquiry card shows
+  // a "Portal" pill and the add-on modal pre-selects the targeted job.
+  sourceMetadata: PortalAddOnMetadata | OtherSourceMetadata | null
 }
+
+interface PortalAddOnMetadata {
+  kind: 'portal-add-on'
+  targetJobId: string
+  targetJobCode: string
+  targetJobName: string
+  requesterName?: string
+  requesterEmail?: string
+  notes?: string | null
+}
+
+// Catch-all so the parser doesn't trip on other inquiry shapes
+// (`intake`, the supply-request payload, AI-extracted email metadata,
+// etc.) — we only special-case the portal-add-on case.
+type OtherSourceMetadata = { kind?: string } & Record<string, unknown>
 
 interface SuggestionRecord {
   emailId: string
@@ -361,6 +380,12 @@ export function NewInboundColumn({
   )
 }
 
+function isPortalAddOnMeta(m: unknown): m is PortalAddOnMetadata {
+  if (!m || typeof m !== 'object') return false
+  const r = m as Record<string, unknown>
+  return r.kind === 'portal-add-on' && typeof r.targetJobId === 'string'
+}
+
 // ─── Add-on modal ─────────────────────────────────────────────────
 
 function AddOnModal({
@@ -379,7 +404,43 @@ function AddOnModal({
   // confirm button on mode === 'selected_existing' so the create
   // path is inert. Scope the picker to the inquiry's company when
   // we have one — falls back to all-open-jobs search otherwise.
+  //
+  // Phase 2 — when the inquiry was created via portal-add-on, the
+  // client already named the target job. Pre-seed the picker so the
+  // rep only needs to confirm (or override) rather than re-search.
+  const portalHint = isPortalAddOnMeta(inquiry.sourceMetadata)
+    ? inquiry.sourceMetadata
+    : null
   const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE)
+
+  // Resolve the hinted job's display info on open so the picker
+  // mounts in selected_existing mode. The picker needs the job's
+  // companyId+name for its display invariants — a bare id alone
+  // would render an empty selection chip.
+  useEffect(() => {
+    if (!portalHint) return
+    let cancelled = false
+    fetch(`/api/jobs/${encodeURIComponent(portalHint.targetJobId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j?.id) return
+        setJob({
+          jobId: j.id,
+          name: j.name,
+          jobCode: j.jobCode,
+          mode: 'selected_existing',
+          company: j.company ? { id: j.company.id, name: j.company.name } : null,
+        })
+      })
+      .catch(() => {
+        // Hint lookup failed — leave the picker empty so the rep can
+        // search manually. The hint is convenience, not authority.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [portalHint])
+
   const canConfirm = job.mode === 'selected_existing' && !!job.jobId && !busy
 
   return (
@@ -403,6 +464,17 @@ function AddOnModal({
           Inquiry
         </div>
         <div className="text-sm text-gray-900 line-clamp-2 mb-3">{inquiry.title}</div>
+
+        {portalHint && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <div className="font-semibold">
+              Portal client requested {portalHint.targetJobCode}
+            </div>
+            {portalHint.notes && (
+              <div className="mt-1 whitespace-pre-wrap text-amber-800">{portalHint.notes}</div>
+            )}
+          </div>
+        )}
 
         <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Job</div>
         <JobPicker
@@ -461,6 +533,9 @@ function PersistentCard({
     ? `${inquiry.person.firstName} ${inquiry.person.lastName}`.trim()
     : null
   const value = fmtMoney(inquiry.estimatedValue)
+  const portalAddOn = isPortalAddOnMeta(inquiry.sourceMetadata)
+    ? inquiry.sourceMetadata
+    : null
 
   return (
     <div className="border border-gray-200 rounded-xl px-3.5 py-3 bg-white hover:border-gray-300 transition-colors">
@@ -472,6 +547,14 @@ function PersistentCard({
         >
           {SOURCE_LABEL[inquiry.source]}
         </span>
+        {portalAddOn && (
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200"
+            title={`Portal client requested an add-on to ${portalAddOn.targetJobCode}`}
+          >
+            Portal add-on
+          </span>
+        )}
         <span className="text-[11px] text-gray-500">{relativeAge(inquiry.createdAt)}</span>
         {inquiry.assignedTo && (
           <span className="text-[11px] text-gray-500 ml-auto">
