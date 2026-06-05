@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { NewClaimModal } from '@/components/claims/NewClaimModal'
 
 type ClaimStatus =
   | 'DRAFT' | 'READY_TO_SEND' | 'SUBMITTED' | 'ACKNOWLEDGED'
@@ -108,6 +109,7 @@ export default function ClaimsPage() {
   const [filter, setFilter] = useState<FilterKey>('open')
   const [claims, setClaims] = useState<ClaimRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showNew, setShowNew] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -163,6 +165,13 @@ export default function ClaimsPage() {
               )}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            + New claim
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
@@ -190,6 +199,8 @@ export default function ClaimsPage() {
             {error}
           </div>
         )}
+
+        {showNew && <NewClaimModal onClose={() => setShowNew(false)} />}
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">

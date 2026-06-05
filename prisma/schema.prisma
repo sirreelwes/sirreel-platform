@@ -985,8 +985,16 @@ model InsuranceClaim {
   // Legacy SRC-2026-NNNN-style numbers are accepted for any rows the
   // RentalWorks-era data migration may bring in later.
   claimNumber          String      @unique @map("claim_number")
-  bookingId            String      @map("booking_id")
-  assetId              String      @map("asset_id")
+  // Phase A onboarding — bookingId/assetId became nullable so
+  // historical in-flight claims (created before the asset/booking
+  // tracking existed in HQ, or for total-loss/theft cases where
+  // a clean inspection pair doesn't exist) can be onboarded. The
+  // openLdClaim() helper still requires + sets both from the LD
+  // invoice graph; null is only for the POST /api/claims manual
+  // onboarding path. companyId stays required — every claim is
+  // filed against a renter.
+  bookingId            String?     @map("booking_id")
+  assetId              String?     @map("asset_id")
   companyId            String      @map("company_id")
   // Phase 5 commit 4 — high-dollar disputes (theft / total loss /
   // major mechanical) may lack a clean inspection pair, and a hard
@@ -1040,8 +1048,8 @@ model InsuranceClaim {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  booking            Booking             @relation(fields: [bookingId], references: [id])
-  asset              Asset               @relation(fields: [assetId], references: [id])
+  booking            Booking?            @relation(fields: [bookingId], references: [id])
+  asset              Asset?              @relation(fields: [assetId], references: [id])
   company            Company             @relation(fields: [companyId], references: [id])
   checkoutInspection Inspection?         @relation("CheckoutInspection", fields: [checkoutInspectionId], references: [id])
   returnInspection   Inspection?         @relation("ReturnInspection", fields: [returnInspectionId], references: [id])

@@ -136,14 +136,15 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as CreateBody
 
   const companyId = asString(body.companyId, 100)
+  // Phase A — bookingId/assetId are NULLABLE now so historical claims
+  // can be onboarded without an HQ booking/asset record. When supplied,
+  // we still verify they exist; when omitted, we proceed with null.
   const assetId = asString(body.assetId, 100)
   const bookingId = asString(body.bookingId, 100)
   const filedAgainst = asString(body.filedAgainst, 200)
   const incidentDescription = asString(body.incidentDescription, 10_000)
   const incidentDateStr = asString(body.incidentDate, 10)
   if (!companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 })
-  if (!assetId) return NextResponse.json({ error: 'assetId required' }, { status: 400 })
-  if (!bookingId) return NextResponse.json({ error: 'bookingId required' }, { status: 400 })
   if (!filedAgainst) return NextResponse.json({ error: 'filedAgainst required (carrier name)' }, { status: 400 })
   if (!incidentDescription || incidentDescription.length < 10) {
     return NextResponse.json({ error: 'incidentDescription required (≥10 chars)' }, { status: 400 })
@@ -153,15 +154,20 @@ export async function POST(req: NextRequest) {
   }
   const incidentDate = new Date(`${incidentDateStr}T00:00:00.000Z`)
 
-  // Confirm parent rows exist + (when invoice supplied) it's LD type.
-  const [company, asset, booking] = await Promise.all([
-    prisma.company.findUnique({ where: { id: companyId }, select: { id: true } }),
-    prisma.asset.findUnique({ where: { id: assetId }, select: { id: true } }),
-    prisma.booking.findUnique({ where: { id: bookingId }, select: { id: true } }),
-  ])
+  // Confirm company always; asset / booking only when supplied.
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true },
+  })
   if (!company) return NextResponse.json({ error: 'company not found' }, { status: 404 })
-  if (!asset) return NextResponse.json({ error: 'asset not found' }, { status: 404 })
-  if (!booking) return NextResponse.json({ error: 'booking not found' }, { status: 404 })
+  if (assetId) {
+    const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { id: true } })
+    if (!asset) return NextResponse.json({ error: 'asset not found' }, { status: 404 })
+  }
+  if (bookingId) {
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId }, select: { id: true } })
+    if (!booking) return NextResponse.json({ error: 'booking not found' }, { status: 404 })
+  }
 
   const invoiceId = asString(body.invoiceId, 100)
   if (invoiceId) {
