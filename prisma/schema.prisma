@@ -1375,6 +1375,13 @@ model User {
   location  Location? // Home base
   isActive  Boolean   @default(true) @map("is_active")
 
+  // Agent-shareable public-intake handle. Lowercased first name by
+  // convention (e.g. "jose", "oliver") — populated by the seed script
+  // at scripts/seed-agent-slugs.ts. Used to attribute web-form
+  // inquiries: /intake/<publicSlug> sets Inquiry.assignedToId to this
+  // user on submit (validated server-side: isActive + role=AGENT).
+  publicSlug String? @unique @map("public_slug")
+
   // Link to person if client portal user
   personId String? @unique @map("person_id")
 
