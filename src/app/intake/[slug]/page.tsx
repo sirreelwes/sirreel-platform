@@ -29,8 +29,11 @@ type PageProps = { params: Promise<{ slug: string }> }
 
 export default async function AgentIntakePage({ params }: PageProps) {
   const { slug } = await params
+  // Sales-rep only: intake links are a sales tool. Accounting agents
+  // (salesOnly=false, e.g. Ana) don't get attribution — a stale slug
+  // for a non-sales user falls back to the generic copy.
   const agent = await prisma.user.findFirst({
-    where: { publicSlug: slug, isActive: true, role: 'AGENT' },
+    where: { publicSlug: slug, isActive: true, role: 'AGENT', salesOnly: true },
     select: { name: true, publicSlug: true },
   })
 

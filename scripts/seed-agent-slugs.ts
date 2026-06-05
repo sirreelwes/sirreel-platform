@@ -1,7 +1,12 @@
 /**
- * Seed `User.publicSlug` for every active AGENT that doesn't already
- * have one. Used by the agent-shareable intake link feature
- * (/intake/<slug>).
+ * Seed `User.publicSlug` for every active SALES-REP agent (role=AGENT
+ * AND salesOnly=true) that doesn't already have one. Used by the
+ * agent-shareable intake link feature (/intake/<slug>).
+ *
+ * Scope: intake links are sales-only — they exist so reps like Jose
+ * and Oliver can hand out a personal URL to leads. Accounting agents
+ * (Ana, salesOnly=false) do not get a slug. See User.salesOnly in
+ * the schema for the split.
  *
  * Algorithm — assign in stable order (oldest createdAt first) so the
  * earliest-onboarded agent gets the shorter form on collision:
@@ -63,7 +68,7 @@ async function pickSlug(user: { id: string; name: string }): Promise<string | nu
 
 async function main() {
   const agents = await prisma.user.findMany({
-    where: { role: 'AGENT', isActive: true },
+    where: { role: 'AGENT', isActive: true, salesOnly: true },
     select: { id: true, name: true, publicSlug: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
