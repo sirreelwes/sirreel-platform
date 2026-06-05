@@ -24,5 +24,6 @@ scripts/*
 !scripts/supply-catalog-seed.ts
 !scripts/supply-catalog-seed.json
 !scripts/verify-rw-token.ts
+!scripts/seed-agent-slugs.ts
 .env.local.bak
 .gcp-service-account.json
