@@ -42,6 +42,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ThreadDrawer } from './ThreadDrawer'
 import { FormTypeBadge, type FormType } from './FormTypeBadge'
+import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -119,6 +120,12 @@ export function NewInboundColumn({
   const [suggestions, setSuggestions] = useState<SuggestionRecord[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null)
+  // Add-on triage state. When set, the modal is open against this
+  // persistent inquiry; the rep picks an existing Job, then confirm
+  // hits POST /api/inquiries/[id]/add-on and redirects to the new
+  // order. Phase 1b: persistent inquiries only — suggestion cards
+  // would need a 2-step capture-then-pick flow that's out of scope.
+  const [addOnInquiry, setAddOnInquiry] = useState<PersistentInquiry | null>(null)
 
   const load = useCallback(() => {
     // Both streams in parallel.
@@ -176,6 +183,33 @@ export function NewInboundColumn({
       onChange?.()
     } catch (err) {
       alert(`Failed to capture: ${err instanceof Error ? err.message : 'network error'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const submitAddOn = async (inquiryId: string, jobId: string) => {
+    setBusyId(inquiryId)
+    try {
+      const res = await fetch(`/api/inquiries/${encodeURIComponent(inquiryId)}/add-on`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.ok) {
+        alert(data?.error || `Failed to add-on (HTTP ${res.status})`)
+        return
+      }
+      setAddOnInquiry(null)
+      if (data.redirectTo) {
+        router.push(data.redirectTo)
+        return
+      }
+      load()
+      onChange?.()
+    } catch (err) {
+      alert(`Failed to add-on: ${err instanceof Error ? err.message : 'network error'}`)
     } finally {
       setBusyId(null)
     }
@@ -280,6 +314,7 @@ export function NewInboundColumn({
                     inquiry={item.row}
                     busy={busyId === item.row.id}
                     onCapture={() => capturePersistent(item.row.id)}
+                    onAddOn={() => setAddOnInquiry(item.row)}
                     onDismiss={() => dismissPersistent(item.row.id)}
                   />
                 ) : (
@@ -313,7 +348,97 @@ export function NewInboundColumn({
           busy={busyId === drawerEmailId}
         />
       )}
+
+      {addOnInquiry && (
+        <AddOnModal
+          inquiry={addOnInquiry}
+          busy={busyId === addOnInquiry.id}
+          onCancel={() => setAddOnInquiry(null)}
+          onConfirm={(jobId) => submitAddOn(addOnInquiry.id, jobId)}
+        />
+      )}
     </section>
+  )
+}
+
+// ─── Add-on modal ─────────────────────────────────────────────────
+
+function AddOnModal({
+  inquiry,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  inquiry: PersistentInquiry
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (jobId: string) => void
+}) {
+  // The shared JobPicker supports both pick-existing AND create-new
+  // modes; the add-on flow only wants existing. We just gate the
+  // confirm button on mode === 'selected_existing' so the create
+  // path is inert. Scope the picker to the inquiry's company when
+  // we have one — falls back to all-open-jobs search otherwise.
+  const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE)
+  const canConfirm = job.mode === 'selected_existing' && !!job.jobId && !busy
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3">
+          <h3 className="text-base font-semibold text-gray-900">Add on to an existing job</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Picks a job and creates a new order on it for this inquiry. The new order will
+            be marked as an add-on.
+          </p>
+        </div>
+
+        <div className="mt-2 text-[11px] uppercase tracking-wider text-gray-500 mb-1">
+          Inquiry
+        </div>
+        <div className="text-sm text-gray-900 line-clamp-2 mb-3">{inquiry.title}</div>
+
+        <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Job</div>
+        <JobPicker
+          value={job}
+          onChange={setJob}
+          companyId={inquiry.company?.id ?? null}
+          placeholder="Search open jobs by name or code…"
+          allowReset
+        />
+
+        {job.mode === 'creating_new' && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            Add-ons attach to an EXISTING job. To create a new job, use Capture & Quote instead.
+          </div>
+        )}
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="text-xs font-semibold border border-gray-200 text-gray-600 hover:border-gray-400 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => canConfirm && job.jobId && onConfirm(job.jobId)}
+            disabled={!canConfirm}
+            className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
+          >
+            {busy ? 'Adding…' : 'Add to job →'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -323,11 +448,13 @@ function PersistentCard({
   inquiry,
   busy,
   onCapture,
+  onAddOn,
   onDismiss,
 }: {
   inquiry: PersistentInquiry
   busy: boolean
   onCapture: () => void
+  onAddOn: () => void
   onDismiss: () => void
 }) {
   const contactName = inquiry.person
@@ -373,6 +500,14 @@ function PersistentCard({
           className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
         >
           {busy ? '…' : 'Capture & Quote →'}
+        </button>
+        <button
+          onClick={onAddOn}
+          disabled={busy}
+          title="Create a new order on an existing job instead of a new one"
+          className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-gray-500 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+        >
+          Add on to existing job
         </button>
         <button
           onClick={onDismiss}
