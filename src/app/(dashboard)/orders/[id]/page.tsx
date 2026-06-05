@@ -59,7 +59,10 @@ type Order = {
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
   job: { id: string; jobCode: string; name: string; jobContacts: JobContactRow[] } | null;
   lineItems: LineItem[];
-  invoices: { id: string; invoiceNumber: string; status: string; total: string }[];
+  invoices: {
+    id: string; invoiceNumber: string; status: string; total: string;
+    insuranceClaims?: { id: string; claimNumber: string; status: string }[];
+  }[];
   quotePdfKey: string | null;
   quotePdfUrl: string | null;
   quotePdfGeneratedAt: string | null;
@@ -1103,6 +1106,19 @@ export default function OrderDetailPage() {
                   Add-on
                 </span>
               )}
+              {/* Insurance-claim chip — one per claim attached to any
+                  invoice on this order. Links to /claims/[id] so the
+                  rep can jump from the order to the live claim. */}
+              {order.invoices.flatMap((inv) => inv.insuranceClaims ?? []).map((claim) => (
+                <Link
+                  key={claim.id}
+                  href={`/claims/${claim.id}`}
+                  title={`Claim ${claim.claimNumber} · ${claim.status}`}
+                  className="px-2.5 py-0.5 rounded text-xs font-medium bg-chip-warn-bg text-chip-warn-fg hover:underline underline-offset-2"
+                >
+                  Claim {claim.claimNumber}
+                </Link>
+              ))}
             </div>
             <p className="text-lt-fg2">{order.description || "No description"}</p>
           </div>

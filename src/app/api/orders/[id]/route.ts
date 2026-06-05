@@ -44,7 +44,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
         },
         orderBy: { sortOrder: "asc" },
       },
-      invoices: { orderBy: { createdAt: "desc" } },
+      invoices: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          // Surface any InsuranceClaim attached to an LD invoice on
+          // this order — drives the "Claim" chip in the order
+          // detail header, linking to /claims/[id]. One claim per
+          // LD invoice (enforced by openLdClaim); the array shape
+          // accommodates future relaxation without a reader change.
+          insuranceClaims: {
+            select: { id: true, claimNumber: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      },
       // Per-send delivery audit — drives the small status pills on the
       // order's email/cadence rows. Each row is one Resend dispatch
       // (sent → delivered / delayed / bounced / complained). Cap at
