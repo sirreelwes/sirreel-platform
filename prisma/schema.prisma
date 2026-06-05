@@ -1032,7 +1032,48 @@ model InsuranceClaim {
   lossOfRevenue    Decimal? @map("loss_of_revenue") @db.Decimal(10, 2)
   totalDemand      Decimal? @map("total_demand") @db.Decimal(10, 2)
   amountOffered    Decimal? @map("amount_offered") @db.Decimal(10, 2)
+  // amountSettled is GROSS — the dollar figure the carrier honored
+  // before the renter's deductible is netted out. Client-exposure
+  // math (LD balanceDue − (amountSettled − deductibleAmount)) does
+  // the subtraction at compute time. Don't pre-net at write or the
+  // deductible will be double-counted.
   amountSettled    Decimal? @map("amount_settled") @db.Decimal(10, 2)
+
+  // Phase A ledger fields — replace the prior "everything goes in
+  // notes" workflow with structured columns so the contract-vs-
+  // insurance ledger + client-exposure math can be computed
+  // server-side and rendered consistently.
+  //
+  //   lossAmount         — replacement-cost value of the loss (the
+  //                        Clause-14 anchor we'd argue from at trial)
+  //   acvReceived        — carrier's depreciated valuation (pre-
+  //                        negotiation), captured for adjuster-
+  //                        strategy + "how much did they shave off"
+  //                        rollups
+  //   depreciationApplied — explicit dollar value the carrier removed
+  //                        from lossAmount to arrive at ACV. Stored
+  //                        separately so the rollup doesn't need to
+  //                        infer it
+  //   deductibleAmount    — renter's deductible per Clause 9. Drives
+  //                        the (amountSettled − deductibleAmount)
+  //                        net-to-us value in client-exposure math
+  //   adminFeeAmount      — the 10% admin fee per the Missing
+  //                        Equipment Return Policy. Today hand-rolled
+  //                        into LD invoice line items by Ana —
+  //                        storing it on the claim makes the
+  //                        client-exposure picture explicit
+  lossAmount           Decimal? @map("loss_amount")            @db.Decimal(10, 2)
+  acvReceived          Decimal? @map("acv_received")           @db.Decimal(10, 2)
+  depreciationApplied  Decimal? @map("depreciation_applied")   @db.Decimal(10, 2)
+  deductibleAmount     Decimal? @map("deductible_amount")      @db.Decimal(10, 2)
+  adminFeeAmount       Decimal? @map("admin_fee_amount")       @db.Decimal(10, 2)
+
+  // Phase A follow-up cadence — drives the OVERDUE_RESPONSE /
+  // GONE_QUIET badges. assignedTo (already on the model) is the
+  // owner; these two columns are when-it's-on-them and when-they-
+  // last-heard-anything.
+  nextActionAt         DateTime? @map("next_action_at")
+  lastContactAt        DateTime? @map("last_contact_at")
 
   // AI
   demandLetterUrl   String? @map("demand_letter_url")
