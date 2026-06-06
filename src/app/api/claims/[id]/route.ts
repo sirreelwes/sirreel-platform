@@ -125,17 +125,29 @@ export async function GET(_req: NextRequest, { params }: Params) {
   //       floored at 0
   //   When the carrier hasn't settled yet, exposure falls back to the
   //   full LD balance (no insurance offset to apply). When there's no
-  //   LD invoice at all (onboarded claim, no billed amount), exposure
-  //   is null — there's nothing to compute against.
+  //   LD invoice at all (onboarded claim), the contract side falls
+  //   back to claim.contractAmount — the rep-captured "what we billed
+  //   the client" figure. Exposure is null only when BOTH the LD
+  //   invoice and contractAmount are missing.
   const ldBalanceDue = claim.invoice && claim.invoice.type === 'LD'
     ? Number(claim.invoice.balanceDue)
     : null
+  const contractAmount = num(claim.contractAmount)
+  // contractBilled comes from the LD invoice when linked, else from
+  // the rep-captured contractAmount field.
+  const contractBilled = ldBalanceDue != null
+    ? Number(claim.invoice!.total)
+    : contractAmount
+  // contractBalanceDue mirrors the LD invoice when linked; for
+  // onboarded claims with no LD invoice yet we treat the entire
+  // billed amount as outstanding (no payment audit to subtract).
+  const contractBalanceDue = ldBalanceDue ?? contractAmount
   const settledGross = num(claim.amountSettled)
   const deductible   = num(claim.deductibleAmount) ?? 0
   const settledNet   = settledGross == null ? null : Math.max(0, settledGross - deductible)
-  const clientExposure = ldBalanceDue == null
+  const clientExposure = contractBalanceDue == null
     ? null
-    : Math.max(0, ldBalanceDue - (settledNet ?? 0))
+    : Math.max(0, contractBalanceDue - (settledNet ?? 0))
 
   return NextResponse.json({
     claim: {
@@ -148,6 +160,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       amountOffered: num(claim.amountOffered),
       amountSettled: num(claim.amountSettled),
       lossAmount: num(claim.lossAmount),
+      contractAmount: num(claim.contractAmount),
       acvReceived: num(claim.acvReceived),
       depreciationApplied: num(claim.depreciationApplied),
       deductibleAmount: num(claim.deductibleAmount),
@@ -171,9 +184,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
       // Server-computed ledger view — clients don't redo the math,
       // and the formula stays in one place.
       ledger: {
-        contractBilled:     ldBalanceDue == null ? null : Number(claim.invoice!.total),
-        contractPaid:       ldBalanceDue == null ? null : Number(claim.invoice!.amountPaid),
-        contractBalanceDue: ldBalanceDue,
+        contractBilled,
+        contractPaid:       ldBalanceDue != null ? Number(claim.invoice!.amountPaid) : null,
+        contractBalanceDue,
+        // True when the contract side comes from the rep-captured
+        // claim.contractAmount rather than an LD invoice. UI uses this
+        // to render an "Estimated — no LD invoice yet" caveat next to
+        // the contract column.
+        contractFromOnboardingField: ldBalanceDue == null && contractAmount != null,
         insuranceSettledGross: settledGross,
         insuranceSettledNetOfDeductible: settledNet,
         deductibleApplied:  deductible || null,
@@ -218,6 +236,7 @@ interface PatchBody {
   amountSettled?: unknown
   // Phase A ledger fields
   lossAmount?: unknown
+  contractAmount?: unknown
   acvReceived?: unknown
   depreciationApplied?: unknown
   deductibleAmount?: unknown
@@ -328,6 +347,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // note manually via /timeline if they want context.
   const lossAmount = asDecimal(body.lossAmount)
   if (lossAmount !== undefined) data.lossAmount = lossAmount
+  const contractAmount = asDecimal(body.contractAmount)
+  if (contractAmount !== undefined) data.contractAmount = contractAmount
   const acvReceived = asDecimal(body.acvReceived)
   if (acvReceived !== undefined) data.acvReceived = acvReceived
   const depreciationApplied = asDecimal(body.depreciationApplied)

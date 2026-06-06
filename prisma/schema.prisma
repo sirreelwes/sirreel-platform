@@ -1069,6 +1069,13 @@ model InsuranceClaim {
   //                        storing it on the claim makes the
   //                        client-exposure picture explicit
   lossAmount           Decimal? @map("loss_amount")            @db.Decimal(10, 2)
+  // Contract-side billed amount captured DIRECTLY on the claim. When
+  // an LD invoice gets linked later, Invoice.total takes precedence
+  // for the ledger view. During historical onboarding the LD invoice
+  // typically doesn't exist yet, so this field carries the
+  // "what we billed the client" figure so the contract-vs-insurance
+  // ledger composition has a contract side to net against.
+  contractAmount       Decimal? @map("contract_amount")         @db.Decimal(10, 2)
   acvReceived          Decimal? @map("acv_received")           @db.Decimal(10, 2)
   depreciationApplied  Decimal? @map("depreciation_applied")   @db.Decimal(10, 2)
   deductibleAmount     Decimal? @map("deductible_amount")      @db.Decimal(10, 2)

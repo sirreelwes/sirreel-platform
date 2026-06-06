@@ -96,6 +96,7 @@ interface ClaimDetail {
   amountSettled: number | null
   // Phase A ledger
   lossAmount: number | null
+  contractAmount: number | null
   acvReceived: number | null
   depreciationApplied: number | null
   deductibleAmount: number | null
@@ -139,6 +140,7 @@ interface ClaimDetail {
     contractBilled: number | null
     contractPaid: number | null
     contractBalanceDue: number | null
+    contractFromOnboardingField: boolean
     insuranceSettledGross: number | null
     insuranceSettledNetOfDeductible: number | null
     deductibleApplied: number | null
@@ -200,6 +202,7 @@ type EditForm = {
   amountSettled: string
   // Phase A ledger
   lossAmount: string
+  contractAmount: string
   acvReceived: string
   depreciationApplied: string
   deductibleAmount: string
@@ -236,6 +239,7 @@ function formFromClaim(c: ClaimDetail): EditForm {
     amountOffered: c.amountOffered == null ? '' : String(c.amountOffered),
     amountSettled: c.amountSettled == null ? '' : String(c.amountSettled),
     lossAmount: c.lossAmount == null ? '' : String(c.lossAmount),
+    contractAmount: c.contractAmount == null ? '' : String(c.contractAmount),
     acvReceived: c.acvReceived == null ? '' : String(c.acvReceived),
     depreciationApplied: c.depreciationApplied == null ? '' : String(c.depreciationApplied),
     deductibleAmount: c.deductibleAmount == null ? '' : String(c.deductibleAmount),
@@ -259,7 +263,7 @@ function diffPatch(prev: EditForm, next: EditForm): Record<string, unknown> {
   const numFields = [
     'repairEstimate','repairActual','daysOutOfService','dailyRevenueRate','lossOfRevenue',
     'totalDemand','amountOffered','amountSettled',
-    'lossAmount','acvReceived','depreciationApplied','deductibleAmount','adminFeeAmount',
+    'lossAmount','contractAmount','acvReceived','depreciationApplied','deductibleAmount','adminFeeAmount',
   ] as const
   for (const k of numFields) {
     if (prev[k] !== next[k]) out[k] = next[k] === '' ? null : Number(next[k])
@@ -810,14 +814,19 @@ function LedgerPanel({
           <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">
             Contract side
           </div>
-          {hasContract ? (
+          {L.contractFromOnboardingField ? (
+            <>
+              <div className="text-[10px] text-lt-fg3 mt-1 italic">Estimated · no LD invoice yet</div>
+              <Row label="Billed (snap)" value={fmtMoney(L.contractBilled)} bold />
+            </>
+          ) : hasContract ? (
             <>
               <Row label="Billed (LD)" value={fmtMoney(L.contractBilled)} />
               <Row label="Paid"        value={fmtMoney(L.contractPaid)} />
               <Row label="Balance due" value={fmtMoney(L.contractBalanceDue)} bold />
             </>
           ) : (
-            <div className="text-[11px] text-lt-fg3 mt-1">No LD invoice linked.</div>
+            <div className="text-[11px] text-lt-fg3 mt-1">No LD invoice and no contract snapshot.</div>
           )}
         </div>
         {/* Insurance side */}
@@ -839,6 +848,7 @@ function LedgerPanel({
           diff-PATCH save the rest of the form uses. */}
       <div className="grid grid-cols-2 gap-3">
         <Money label="Loss amount"        value={form.lossAmount}          onChange={(v) => setForm({ ...form, lossAmount: v })} />
+        <Money label="Contract billed"    value={form.contractAmount}      onChange={(v) => setForm({ ...form, contractAmount: v })} />
         <Money label="ACV received"       value={form.acvReceived}         onChange={(v) => setForm({ ...form, acvReceived: v })} />
         <Money label="Depreciation"       value={form.depreciationApplied} onChange={(v) => setForm({ ...form, depreciationApplied: v })} />
         <Money label="Deductible"         value={form.deductibleAmount}    onChange={(v) => setForm({ ...form, deductibleAmount: v })} />

@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
       amountOffered: true,
       amountSettled: true,
       deductibleAmount: true,
+      contractAmount: true,
       coiCheckId: true,
       nextActionAt: true,
       lastContactAt: true,
@@ -103,10 +104,15 @@ export async function GET(req: NextRequest) {
     // the math, and importing a 3-line formula isn't worth the
     // extra abstraction yet.
     const ldBalanceDue = c.invoice && c.invoice.type === 'LD' ? Number(c.invoice.balanceDue) : null
+    // Onboarded-claim fallback — when no LD invoice exists, use the
+    // rep-captured contractAmount as the contract-side anchor. Same
+    // semantics as GET /api/claims/[id]'s ledger composition.
+    const contractAmount = c.contractAmount == null ? null : Number(c.contractAmount)
+    const contractBalanceDue = ldBalanceDue ?? contractAmount
     const settledGross = c.amountSettled == null ? null : Number(c.amountSettled)
     const deductible = c.deductibleAmount == null ? 0 : Number(c.deductibleAmount)
     const settledNet = settledGross == null ? null : Math.max(0, settledGross - deductible)
-    const clientExposure = ldBalanceDue == null ? null : Math.max(0, ldBalanceDue - (settledNet ?? 0))
+    const clientExposure = contractBalanceDue == null ? null : Math.max(0, contractBalanceDue - (settledNet ?? 0))
 
     const facts = computeClaimBadgeFacts(
       {
@@ -162,13 +168,40 @@ interface CreateBody {
   filedAgainst?: unknown
   incidentDate?: unknown // 'YYYY-MM-DD'
   incidentDescription?: unknown
+  // Carrier-side identifiers
   adjusterName?: unknown
   adjusterPhone?: unknown
   adjusterEmail?: unknown
   policyNumber?: unknown
   carrierClaimNumber?: unknown
+  // One-step onboarding snapshot — the full set the rep typically has
+  // when loading a historical / in-flight claim. All optional; the
+  // create endpoint accepts the snapshot in one POST so Ana doesn't
+  // have to create-then-PATCH across the backlog.
+  status?: unknown // ClaimStatus — defaults DRAFT when omitted
+  nextActionAt?: unknown // ISO date string
+  lossAmount?: unknown
+  contractAmount?: unknown
+  acvReceived?: unknown
+  depreciationApplied?: unknown
+  deductibleAmount?: unknown
+  adminFeeAmount?: unknown
+  totalDemand?: unknown
+  amountOffered?: unknown
+  amountSettled?: unknown
   assignedTo?: unknown
   notes?: unknown
+}
+
+// Number-or-null coercion for the optional money fields. Empty
+// string + null both clear; anything non-numeric is dropped (treated
+// as undefined so it doesn't blank an existing value).
+function asMoney(v: unknown): number | null | undefined {
+  if (v === undefined) return undefined
+  if (v === null || v === '') return null
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return undefined
+  return n
 }
 
 function asString(v: unknown, max = 500): string | null {
@@ -239,6 +272,45 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Status — defaults DRAFT when omitted. Auto-stamps submittedAt /
+  // settledAt the same way PATCH does when the claim opens directly
+  // into a later lifecycle state (the historical onboarding case:
+  // we know the claim was submitted last March, no point parking
+  // it in DRAFT first).
+  const CLAIM_STATUSES = ['DRAFT','READY_TO_SEND','SUBMITTED','ACKNOWLEDGED','NEGOTIATING','SETTLED','DENIED','ESCALATED','CLOSED'] as const
+  type ClaimStatusLit = (typeof CLAIM_STATUSES)[number]
+  const statusInRaw = asString(body.status, 30)
+  const statusIn: ClaimStatusLit =
+    statusInRaw && (CLAIM_STATUSES as readonly string[]).includes(statusInRaw)
+      ? (statusInRaw as ClaimStatusLit)
+      : 'DRAFT'
+  const now = new Date()
+  const submittedAt = statusIn === 'SUBMITTED' || statusIn === 'ACKNOWLEDGED' || statusIn === 'NEGOTIATING' || statusIn === 'SETTLED' || statusIn === 'DENIED' || statusIn === 'CLOSED' || statusIn === 'ESCALATED'
+    ? now
+    : null
+  const settledAt = statusIn === 'SETTLED' ? now : null
+
+  // Money snapshot. All optional; null clears (rep can explicitly
+  // unset). The endpoint's same Decimal handling as the PATCH path.
+  const moneyFields = {
+    lossAmount: asMoney(body.lossAmount),
+    contractAmount: asMoney(body.contractAmount),
+    acvReceived: asMoney(body.acvReceived),
+    depreciationApplied: asMoney(body.depreciationApplied),
+    deductibleAmount: asMoney(body.deductibleAmount),
+    adminFeeAmount: asMoney(body.adminFeeAmount),
+    totalDemand: asMoney(body.totalDemand),
+    amountOffered: asMoney(body.amountOffered),
+    amountSettled: asMoney(body.amountSettled),
+  }
+
+  // nextActionAt — optional ISO date.
+  const nextActionAtRaw = asString(body.nextActionAt, 30)
+  const nextActionAt = nextActionAtRaw ? new Date(nextActionAtRaw) : null
+  if (nextActionAtRaw && Number.isNaN(nextActionAt!.getTime())) {
+    return NextResponse.json({ error: 'nextActionAt must be a valid date' }, { status: 400 })
+  }
+
   const claimNumber = await nextClaimNumber()
   const claim = await prisma.$transaction(async (tx) => {
     const created = await tx.insuranceClaim.create({
@@ -249,7 +321,9 @@ export async function POST(req: NextRequest) {
         companyId,
         invoiceId: invoiceId ?? null,
         coiCheckId: asString(body.coiCheckId, 100),
-        status: 'DRAFT',
+        status: statusIn,
+        submittedAt,
+        settledAt,
         filedAgainst,
         adjusterName: asString(body.adjusterName, 200),
         adjusterPhone: asString(body.adjusterPhone, 50),
@@ -260,6 +334,17 @@ export async function POST(req: NextRequest) {
         notes: asString(body.notes, 10_000),
         incidentDate,
         incidentDescription,
+        nextActionAt,
+        // Money snapshot — only set the fields the caller supplied.
+        ...(moneyFields.lossAmount         !== undefined && { lossAmount:         moneyFields.lossAmount }),
+        ...(moneyFields.contractAmount     !== undefined && { contractAmount:     moneyFields.contractAmount }),
+        ...(moneyFields.acvReceived        !== undefined && { acvReceived:        moneyFields.acvReceived }),
+        ...(moneyFields.depreciationApplied!== undefined && { depreciationApplied:moneyFields.depreciationApplied }),
+        ...(moneyFields.deductibleAmount   !== undefined && { deductibleAmount:   moneyFields.deductibleAmount }),
+        ...(moneyFields.adminFeeAmount     !== undefined && { adminFeeAmount:     moneyFields.adminFeeAmount }),
+        ...(moneyFields.totalDemand        !== undefined && { totalDemand:        moneyFields.totalDemand }),
+        ...(moneyFields.amountOffered      !== undefined && { amountOffered:      moneyFields.amountOffered }),
+        ...(moneyFields.amountSettled      !== undefined && { amountSettled:      moneyFields.amountSettled }),
       },
       select: { id: true, claimNumber: true },
     })
@@ -267,7 +352,9 @@ export async function POST(req: NextRequest) {
       data: {
         claimId: created.id,
         action: 'CREATED',
-        description: `Manual onboarding — filed against ${filedAgainst}.`,
+        description: statusIn === 'DRAFT'
+          ? `Manual onboarding — filed against ${filedAgainst}.`
+          : `Onboarded into ${statusIn} — filed against ${filedAgainst}.`,
         performedBy: me.id,
       },
     })
@@ -280,6 +367,7 @@ export async function POST(req: NextRequest) {
         newValues: {
           claimNumber: created.claimNumber,
           filedAgainst,
+          status: statusIn,
           onboarded: true,
         },
       },
