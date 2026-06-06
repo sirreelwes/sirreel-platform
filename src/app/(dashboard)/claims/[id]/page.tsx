@@ -82,6 +82,7 @@ interface ClaimDetail {
   adjusterPhone: string | null
   adjusterEmail: string | null
   policyNumber: string | null
+  carrierClaimNumber: string | null
   incidentDate: string
   incidentDescription: string
   repairEstimate: number | null
@@ -187,6 +188,7 @@ type EditForm = {
   adjusterPhone: string
   adjusterEmail: string
   policyNumber: string
+  carrierClaimNumber: string
   repairEstimate: string
   repairActual: string
   repairVendor: string
@@ -223,6 +225,7 @@ function formFromClaim(c: ClaimDetail): EditForm {
     adjusterPhone: c.adjusterPhone ?? '',
     adjusterEmail: c.adjusterEmail ?? '',
     policyNumber: c.policyNumber ?? '',
+    carrierClaimNumber: c.carrierClaimNumber ?? '',
     repairEstimate: c.repairEstimate == null ? '' : String(c.repairEstimate),
     repairActual: c.repairActual == null ? '' : String(c.repairActual),
     repairVendor: c.repairVendor ?? '',
@@ -249,7 +252,7 @@ function formFromClaim(c: ClaimDetail): EditForm {
 function diffPatch(prev: EditForm, next: EditForm): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (prev.status !== next.status) out.status = next.status
-  const strFields = ['filedAgainst','adjusterName','adjusterPhone','adjusterEmail','policyNumber','repairVendor','notes'] as const
+  const strFields = ['filedAgainst','adjusterName','adjusterPhone','adjusterEmail','policyNumber','carrierClaimNumber','repairVendor','notes'] as const
   for (const k of strFields) {
     if (prev[k] !== next[k]) out[k] = next[k] === '' ? null : next[k]
   }
@@ -410,6 +413,9 @@ export default function ClaimDetailPage() {
               </div>
               <div className="text-sm text-lt-fg2 mt-1">
                 {claim.filedAgainst}
+                {claim.carrierClaimNumber && (
+                  <span className="text-lt-fg3"> · carrier # <span className="font-mono text-lt-fg2">{claim.carrierClaimNumber}</span></span>
+                )}
                 {claim.policyNumber && <span className="text-lt-fg3"> · policy {claim.policyNumber}</span>}
               </div>
               <div className="text-xs text-lt-fg3 mt-1">
@@ -463,11 +469,17 @@ export default function ClaimDetailPage() {
             <Section title="Adjuster">
               <div className="grid grid-cols-2 gap-4">
                 <Text  label="Carrier"        value={form.filedAgainst}  onChange={(v) => setForm({ ...form, filedAgainst: v })} />
+                <Text  label="Carrier claim #" value={form.carrierClaimNumber} onChange={(v) => setForm({ ...form, carrierClaimNumber: v })} />
                 <Text  label="Policy number"  value={form.policyNumber}  onChange={(v) => setForm({ ...form, policyNumber: v })} />
                 <Text  label="Adjuster name"  value={form.adjusterName}  onChange={(v) => setForm({ ...form, adjusterName: v })} />
                 <Text  label="Adjuster phone" value={form.adjusterPhone} onChange={(v) => setForm({ ...form, adjusterPhone: v })} />
                 <Text  label="Adjuster email" value={form.adjusterEmail} onChange={(v) => setForm({ ...form, adjusterEmail: v })} />
               </div>
+              <p className="text-[11px] text-lt-fg3 mt-2">
+                Carrier claim # is the insurer&apos;s own reference (e.g. Intact &quot;0AB459860&quot;) — distinct from
+                SR-CLM and from the renter&apos;s policy. The future email scanner uses it as a join key to attach
+                inbound adjuster mail to this record.
+              </p>
             </Section>
 
             <Section title="Follow-up">

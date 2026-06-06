@@ -33,6 +33,7 @@ interface ClaimRow {
   adjusterName: string | null
   adjusterEmail: string | null
   policyNumber: string | null
+  carrierClaimNumber: string | null
   incidentDate: string
   incidentDescription: string
   repairEstimate: number | null
@@ -294,6 +295,11 @@ export default function ClaimsPage() {
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="text-xs text-lt-fg">{c.filedAgainst}</div>
+                    {c.carrierClaimNumber && (
+                      <div className="text-[11px] text-lt-fg2 font-mono mt-0.5" title="Carrier's own claim number">
+                        # {c.carrierClaimNumber}
+                      </div>
+                    )}
                     {c.adjusterName && (
                       <div className="text-[11px] text-lt-fg3 mt-0.5">{c.adjusterName}</div>
                     )}

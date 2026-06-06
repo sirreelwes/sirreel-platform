@@ -1018,6 +1018,12 @@ model InsuranceClaim {
   adjusterPhone String? @map("adjuster_phone")
   adjusterEmail String? @map("adjuster_email")
   policyNumber  String? @map("policy_number")
+  // The carrier's own claim number (e.g. Intact "0AB459860"), distinct
+  // from our SR-CLM-NNNN and from the renter's policyNumber. Captured
+  // so reps can quote either side's reference in correspondence and
+  // so the future email scanner has a deterministic join key to
+  // auto-attach inbound adjuster mail to the right claim record.
+  carrierClaimNumber String? @map("carrier_claim_number")
 
   // Incident
   incidentDate        DateTime @map("incident_date") @db.Date

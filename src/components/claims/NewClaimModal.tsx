@@ -43,6 +43,7 @@ export function NewClaimModal({ onClose }: { onClose: () => void }) {
   // the detail page either way.
   const [more, setMore] = useState(false)
   const [policyNumber, setPolicyNumber] = useState('')
+  const [carrierClaimNumber, setCarrierClaimNumber] = useState('')
   const [adjusterName, setAdjusterName] = useState('')
   const [adjusterEmail, setAdjusterEmail] = useState('')
   const [adjusterPhone, setAdjusterPhone] = useState('')
@@ -92,6 +93,7 @@ export function NewClaimModal({ onClose }: { onClose: () => void }) {
         incidentDescription: incidentDescription.trim(),
       }
       if (policyNumber.trim()) body.policyNumber = policyNumber.trim()
+      if (carrierClaimNumber.trim()) body.carrierClaimNumber = carrierClaimNumber.trim()
       if (adjusterName.trim()) body.adjusterName = adjusterName.trim()
       if (adjusterEmail.trim()) body.adjusterEmail = adjusterEmail.trim()
       if (adjusterPhone.trim()) body.adjusterPhone = adjusterPhone.trim()
@@ -224,6 +226,11 @@ export function NewClaimModal({ onClose }: { onClose: () => void }) {
               <Field label="Policy #">
                 <input type="text" value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)}
                   className="w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm text-lt-fg" />
+              </Field>
+              <Field label="Carrier claim #">
+                <input type="text" value={carrierClaimNumber} onChange={(e) => setCarrierClaimNumber(e.target.value)}
+                  placeholder="e.g. 0AB459860"
+                  className="w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm text-lt-fg font-mono" />
               </Field>
               <Field label="Adjuster name">
                 <input type="text" value={adjusterName} onChange={(e) => setAdjusterName(e.target.value)}

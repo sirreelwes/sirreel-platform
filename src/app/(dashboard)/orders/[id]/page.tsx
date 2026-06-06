@@ -61,7 +61,11 @@ type Order = {
   lineItems: LineItem[];
   invoices: {
     id: string; invoiceNumber: string; status: string; total: string;
-    insuranceClaims?: { id: string; claimNumber: string; status: string }[];
+    insuranceClaims?: {
+      id: string; claimNumber: string;
+      carrierClaimNumber: string | null;
+      status: string;
+    }[];
   }[];
   quotePdfKey: string | null;
   quotePdfUrl: string | null;
@@ -1108,15 +1112,21 @@ export default function OrderDetailPage() {
               )}
               {/* Insurance-claim chip — one per claim attached to any
                   invoice on this order. Links to /claims/[id] so the
-                  rep can jump from the order to the live claim. */}
+                  rep can jump from the order to the live claim. When
+                  the carrier's own claim number is known, render
+                  both so a rep can quote either side's reference
+                  without opening the claim. */}
               {order.invoices.flatMap((inv) => inv.insuranceClaims ?? []).map((claim) => (
                 <Link
                   key={claim.id}
                   href={`/claims/${claim.id}`}
-                  title={`Claim ${claim.claimNumber} · ${claim.status}`}
+                  title={`Claim ${claim.claimNumber}${claim.carrierClaimNumber ? ` · carrier # ${claim.carrierClaimNumber}` : ''} · ${claim.status}`}
                   className="px-2.5 py-0.5 rounded text-xs font-medium bg-chip-warn-bg text-chip-warn-fg hover:underline underline-offset-2"
                 >
                   Claim {claim.claimNumber}
+                  {claim.carrierClaimNumber && (
+                    <span className="font-mono text-chip-warn-fg/70"> · {claim.carrierClaimNumber}</span>
+                  )}
                 </Link>
               ))}
             </div>

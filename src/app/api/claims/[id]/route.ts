@@ -206,6 +206,7 @@ interface PatchBody {
   adjusterPhone?: unknown
   adjusterEmail?: unknown
   policyNumber?: unknown
+  carrierClaimNumber?: unknown
   repairEstimate?: unknown
   repairActual?: unknown
   repairVendor?: unknown
@@ -315,6 +316,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (adjusterEmail !== undefined) data.adjusterEmail = adjusterEmail
   const policyNumber = asString(body.policyNumber, 100)
   if (policyNumber !== undefined) data.policyNumber = policyNumber
+  const carrierClaimNumber = asString(body.carrierClaimNumber, 100)
+  if (carrierClaimNumber !== undefined) data.carrierClaimNumber = carrierClaimNumber
   const repairVendor = asString(body.repairVendor, 200)
   if (repairVendor !== undefined) data.repairVendor = repairVendor
   const notes = asString(body.notes, 20_000)

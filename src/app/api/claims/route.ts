@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
       adjusterName: true,
       adjusterEmail: true,
       policyNumber: true,
+      carrierClaimNumber: true,
       incidentDate: true,
       incidentDescription: true,
       repairEstimate: true,
@@ -165,6 +166,7 @@ interface CreateBody {
   adjusterPhone?: unknown
   adjusterEmail?: unknown
   policyNumber?: unknown
+  carrierClaimNumber?: unknown
   assignedTo?: unknown
   notes?: unknown
 }
@@ -253,6 +255,7 @@ export async function POST(req: NextRequest) {
         adjusterPhone: asString(body.adjusterPhone, 50),
         adjusterEmail: asString(body.adjusterEmail, 200),
         policyNumber: asString(body.policyNumber, 100),
+        carrierClaimNumber: asString(body.carrierClaimNumber, 100),
         assignedTo: asString(body.assignedTo, 100),
         notes: asString(body.notes, 10_000),
         incidentDate,

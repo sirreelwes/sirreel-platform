@@ -53,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
           // LD invoice (enforced by openLdClaim); the array shape
           // accommodates future relaxation without a reader change.
           insuranceClaims: {
-            select: { id: true, claimNumber: true, status: true },
+            select: { id: true, claimNumber: true, carrierClaimNumber: true, status: true },
             orderBy: { createdAt: 'desc' },
           },
         },
