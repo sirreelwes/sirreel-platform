@@ -4,10 +4,9 @@ import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
+import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-const WATCHED_INBOXES = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
 
 function getGmailClient(email: string) {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"

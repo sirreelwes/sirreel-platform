@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
+import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 
 /**
  * POST/GET /api/gmail/watch — renew the Gmail Pub/Sub watch on every
@@ -21,12 +22,9 @@ import { prisma } from "@/lib/prisma"
  */
 
 const TOPIC_NAME = "projects/optical-torch-490915-e3/topics/gmail-notifications"
-const WATCHED_INBOXES = [
-  "info@sirreel.com",
-  "jose@sirreel.com",
-  "oliver@sirreel.com",
-  "ana@sirreel.com",
-]
+// WATCHED_INBOXES centralized in src/lib/email/watchedInboxes.ts —
+// imported above so this route's renewal loop iterates the same
+// list pubsub / sync / fetch use.
 
 interface PerInboxResult {
   email: string

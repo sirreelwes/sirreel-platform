@@ -4,8 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { EmailCategory, EmailStatus } from "@prisma/client"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
-
-const WATCHED_INBOXES = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
+import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"

@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { prisma } from "@/lib/prisma"
 import { getMessageDirection, parseRecipientHeader } from "@/lib/email/direction"
+import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 
-const MONITORED = ["info@sirreel.com", "jose@sirreel.com", "oliver@sirreel.com", "ana@sirreel.com"]
+// Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
+// the existing in-file references; same array, single source of
+// truth so the four ingest paths can't drift apart again.
+const MONITORED = WATCHED_INBOXES
 
 function getGmailClient(email: string) {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
