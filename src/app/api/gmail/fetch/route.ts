@@ -6,6 +6,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
+import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -91,6 +92,22 @@ export async function POST(req: NextRequest) {
           }).catch(() => null)
           if (existing) duplicateOfId = existing.id
         }
+
+        // Per-inbox ingest filter. Same contract as pubsub — see
+        // src/lib/email/ingestFilter.ts. Fetch uses format=metadata so
+        // bodyText/bodyHtml aren't available; SALES body rules won't
+        // fire and the decision relies on subject + sender only.
+        const filterDecision = shouldIngest({
+          inbox: email,
+          direction: direction === 'outbound' ? 'OUTBOUND' : 'INBOUND',
+          fromAddress,
+          subject,
+          bodyText: null,
+          bodyHtml: null,
+          routingHeaders,
+        })
+        void recordIngestDecision(email, filterDecision)
+        if (!filterDecision.keep) { skipped.push(msgId); continue }
 
         await prisma.emailThread.upsert({
           where: { gmailThreadId: threadId },

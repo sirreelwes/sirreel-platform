@@ -10,6 +10,7 @@ import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClass
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
+import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 
 const CLAIMS_INBOX = "claims@sirreel.com"
 
@@ -146,6 +147,25 @@ async function syncInbox(email: string) {
 
     const { category, priority } = quickTriage(subject, snippet)
     if (priority === 9) continue
+
+    // Per-inbox ingest filter — drops noise BEFORE persistence + AI.
+    // CLAIMS / PRESERVE modes are pass-through (claims@ and ana@/dani@
+    // keep their existing store-all contract). SALES mode is a negative
+    // junk filter (no-reply, calendars, bounces, newsletters — bias
+    // inclusive). MONEY mode is positive triggers (invoice/payment
+    // keywords or known billing sender). Outbound always kept (drives
+    // thread state). Stats land in IngestFilterStat for tuning.
+    const decision = shouldIngest({
+      inbox: email,
+      direction,
+      fromAddress,
+      subject,
+      bodyText: body.bodyText,
+      bodyHtml: body.bodyHtml,
+      routingHeaders,
+    })
+    void recordIngestDecision(email, decision)
+    if (!decision.keep) continue
 
     // Upsert the thread; directional timestamp + lastDirection are
     // updated below with max-semantics so out-of-order processing can't

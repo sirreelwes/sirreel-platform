@@ -6,6 +6,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
+import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -140,6 +141,24 @@ export async function POST() {
 
             const { category, priority } = quickTriage(subject, snippet)
             if (priority === 9) { skipped++; continue }
+
+            // Per-inbox ingest filter. Same contract as pubsub — see
+            // src/lib/email/ingestFilter.ts. Sync runs with format=
+            // "metadata", so bodyText/bodyHtml are null at this point;
+            // the SALES body-side rules will simply not fire, leaving
+            // subject + sender as the only signals. That's acceptable
+            // for the backfill / debug path this route serves.
+            const decision = shouldIngest({
+              inbox: email,
+              direction: 'INBOUND',
+              fromAddress,
+              subject,
+              bodyText: null,
+              bodyHtml: null,
+              routingHeaders,
+            })
+            void recordIngestDecision(email, decision)
+            if (!decision.keep) { skipped++; continue }
 
             // Upsert thread — get existing summary for context
             const existingThread = await prisma.emailThread.findUnique({ where: { gmailThreadId: gmailThreadId! } })

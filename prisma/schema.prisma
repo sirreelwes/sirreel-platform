@@ -1407,6 +1407,26 @@ model EmailMessage {
   @@map("email_messages")
 }
 
+// Per-inbox kept-vs-dropped counter for the ingest filter. Lets us
+// tune the SALES negative junk-filter without flying blind: see which
+// reason is firing most, whether a real human lead is being dropped,
+// etc. Single row per inbox; updated in the pubsub handler at filter
+// time. The dropped count is not a recoverable archive — dropped mail
+// stays in Gmail itself, which remains the authoritative store of
+// record for anything we deliberately didn't pull into the DB.
+model IngestFilterStat {
+  inbox          String    @id
+  mode           String    // 'SALES' | 'MONEY' | 'CLAIMS' | 'PRESERVE'
+  kept           Int       @default(0)
+  dropped        Int       @default(0)
+  lastDropReason String?   @map("last_drop_reason")
+  lastDropAt     DateTime? @map("last_drop_at")
+  lastKeptAt     DateTime? @map("last_kept_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("ingest_filter_stats")
+}
+
 // ═══════════════════════════════════════
 
 enum EmailCategory {
