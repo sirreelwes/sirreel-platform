@@ -7,6 +7,8 @@ import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
+import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -219,6 +221,17 @@ export async function POST() {
             if (!duplicateOfId) {
               void runMessageExtractionForId(created.id).catch((err) =>
                 console.warn('[sync] message extraction failed:', created.id, err instanceof Error ? err.message : err),
+              )
+            }
+            // claims@ onboarding bridge — same gate as pubsub (shared
+            // helper). Catches the backfill-path equivalent: if sync
+            // pulls a forwarded claim email that pubsub missed, we
+            // still onboard it. Helper re-fetches from Gmail for body +
+            // attachments since sync uses format=metadata.
+            if (shouldOnboardClaimEmail({ inbox: email, fromAddress })) {
+              const messageId = created.id
+              void onboardFromEmail(messageId).catch((err) =>
+                console.warn('[sync] claims onboarding failed:', messageId, err instanceof Error ? err.message : err),
               )
             }
             processed++

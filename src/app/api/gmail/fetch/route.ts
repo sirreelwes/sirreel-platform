@@ -7,6 +7,8 @@ import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
+import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -144,6 +146,13 @@ export async function POST(req: NextRequest) {
         if (direction === 'inbound' && !duplicateOfId) {
           void runMessageExtractionForId(created.id).catch((err) =>
             console.warn('[fetch] message extraction failed:', created.id, err instanceof Error ? err.message : err),
+          )
+        }
+        // claims@ onboarding bridge — same shared gate as pubsub/sync.
+        if (shouldOnboardClaimEmail({ inbox: email, fromAddress })) {
+          const messageId = created.id
+          void onboardFromEmail(messageId).catch((err) =>
+            console.warn('[fetch] claims onboarding failed:', messageId, err instanceof Error ? err.message : err),
           )
         }
         processed.push(msgId)

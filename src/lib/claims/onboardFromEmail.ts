@@ -1,24 +1,24 @@
 /**
  * claims@ → claim onboarding bridge.
  *
- * System-triggered (called fire-and-forget from the Gmail Pub/Sub
- * handler). Never throws past the caller; any error is logged + the
- * function returns. Failure to onboard is non-fatal — the EmailMessage
- * row still exists and Ana can paste it through the manual flow.
+ * System-triggered (called fire-and-forget from the Gmail ingest paths
+ * — pubsub for live notifications, sync/fetch when those routes run).
+ * Never throws past the caller; any error is logged + the function
+ * returns. Failure to onboard is non-fatal — the EmailMessage row
+ * still exists and Ana can paste it through the manual flow.
  *
  * Three branches:
  *   1. Existing claim — parsed.carrierClaimNumber matches an
- *      InsuranceClaim already in the DB. Attach the email body as a
- *      CORRESPONDENCE ClaimDocument, append a NEGOTIATION_NOTE
- *      timeline row, link EmailMessage.claimId. Do NOT create a
- *      new claim.
+ *      InsuranceClaim already in the DB. Attach the email body + its
+ *      attachments as CORRESPONDENCE ClaimDocuments, append a
+ *      NEGOTIATION_NOTE timeline row, link EmailMessage.claimId. Do
+ *      NOT create a new claim.
  *   2. New draft — no carrier# match AND the parse is confident
  *      (carrierName set + (carrierClaimNumber OR lossDescription)
  *      set + clientCompanyName matches an existing Company). Create
- *      a DRAFT claim with the parsed snapshot, attach the body as a
- *      CORRESPONDENCE ClaimDocument, link both directions. Ana
- *      reviews and finalizes via the "From email — review" badge on
- *      /claims.
+ *      a DRAFT claim with the parsed snapshot, attach the body + its
+ *      attachments, link both directions. Ana reviews and finalizes
+ *      via the "From email — review" badge on /claims.
  *   3. Low confidence — leave the EmailMessage as-is. Don't create a
  *      junk draft.
  *
@@ -27,6 +27,12 @@
  * If any are found, the message is already onboarded (via another
  * inbox copy — typically the ana@ forwarded mirror). Skip.
  *
+ * The body + attachments are pulled fresh from Gmail via DWD
+ * impersonation of the inbox the message landed in. This lets the
+ * helper work even when the EmailMessage row was created by the
+ * format=metadata sync/fetch paths (which don't store bodyText), and
+ * gives access to attachmentId values for the per-attachment download.
+ *
  * No getServerSession. ClaimTimeline.performedBy + ClaimDocument
  * .uploadedBy are nullable, so the system-actor case writes null and
  * surfaces in the UI as "system" wherever that's rendered.
@@ -34,12 +40,18 @@
 
 import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
+import { google } from 'googleapis'
 import { prisma } from '@/lib/prisma'
-import { parsePastedClaim } from '@/lib/claims/parsePastedClaim'
+import { parsePastedClaim, type ParsedClaim } from '@/lib/claims/parsePastedClaim'
 import { nextClaimNumber } from '@/lib/orders'
+import { extractBodyFromGmailPayload, type GmailMessagePart } from '@/lib/email/body'
 
 const TEXT_MIN_CHARS = 30
 const TEXT_MAX_CHARS = 200_000
+// Cap individual attachment downloads at 25 MB — Gmail's per-attachment
+// API limit is 25 MiB anyway. Anything larger is almost certainly a
+// misuse (video, raw photo dump) and should be uploaded manually.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export interface OnboardOutcome {
   status: 'attached' | 'drafted' | 'skipped'
@@ -47,6 +59,63 @@ export interface OnboardOutcome {
   claimId?: string
   claimNumber?: string
   documentId?: string
+  attachmentsAttached?: number
+}
+
+interface GmailAttachmentMeta {
+  filename: string
+  mimeType: string
+  attachmentId: string
+  size: number
+}
+
+interface FetchedMessage {
+  bodyText: string | null
+  attachments: GmailAttachmentMeta[]
+  payload: GmailMessagePart | undefined
+}
+
+function getGmailClient(impersonate: string) {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '{}'
+  const creds = JSON.parse(raw)
+  const auth = new google.auth.JWT(
+    creds.client_email,
+    undefined,
+    creds.private_key,
+    ['https://www.googleapis.com/auth/gmail.readonly'],
+    impersonate,
+  )
+  return google.gmail({ version: 'v1', auth })
+}
+
+function walkForAttachments(payload: GmailMessagePart | undefined | null, out: GmailAttachmentMeta[]): void {
+  if (!payload) return
+  if (payload.filename && payload.body?.attachmentId) {
+    out.push({
+      filename: payload.filename,
+      mimeType: payload.mimeType || 'application/octet-stream',
+      attachmentId: payload.body.attachmentId,
+      size: payload.body.size || 0,
+    })
+  }
+  if (payload.parts) {
+    for (const child of payload.parts) walkForAttachments(child, out)
+  }
+}
+
+async function fetchFromGmail(inbox: string, gmailMessageId: string): Promise<FetchedMessage | null> {
+  try {
+    const gmail = getGmailClient(inbox)
+    const res = await gmail.users.messages.get({ userId: 'me', id: gmailMessageId, format: 'full' })
+    const payload = res.data.payload as GmailMessagePart | undefined
+    const body = extractBodyFromGmailPayload(payload)
+    const attachments: GmailAttachmentMeta[] = []
+    walkForAttachments(payload, attachments)
+    return { bodyText: body.bodyText, attachments, payload }
+  } catch (err) {
+    console.warn('[claims/onboardFromEmail] Gmail fetch failed for', inbox, gmailMessageId, err instanceof Error ? err.message : err)
+    return null
+  }
 }
 
 export async function onboardFromEmail(emailMessageId: string): Promise<OnboardOutcome> {
@@ -73,6 +142,7 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
       subject: true,
       fromAddress: true,
       sentAt: true,
+      emailAccount: { select: { emailAddress: true } },
     },
   })
   if (!msg) return { status: 'skipped', reason: 'message not found' }
@@ -86,8 +156,6 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
       select: { id: true, claimId: true },
     })
     if (sibling?.claimId) {
-      // Mirror the link onto this row so future queries (timeline,
-      // claim detail page "source emails") see both copies.
       await prisma.emailMessage.update({
         where: { id: msg.id },
         data: { claimId: sibling.claimId },
@@ -96,13 +164,21 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
     }
   }
 
-  // bodyText is the parse-ready form; bodyHtml is fallback (rare —
-  // pubsub already converts when possible).
-  const text = (msg.bodyText && msg.bodyText.length > 0 ? msg.bodyText : (msg.bodyHtml ?? '')).trim()
+  // Pull fresh body + attachment metadata from Gmail. Falls back to the
+  // stored bodyText if the Gmail fetch fails (no network / 404 / etc.)
+  // so the function still runs without attachments instead of refusing
+  // outright.
+  const inbox = msg.emailAccount?.emailAddress ?? ''
+  const fetched = inbox && msg.gmailMessageId ? await fetchFromGmail(inbox, msg.gmailMessageId) : null
+
+  const freshText = fetched?.bodyText ?? null
+  const storedText = msg.bodyText ?? msg.bodyHtml ?? null
+  const text = (freshText && freshText.length > 0 ? freshText : (storedText ?? '')).trim()
   if (text.length < TEXT_MIN_CHARS) return { status: 'skipped', reason: 'body too short' }
   const truncated = text.length > TEXT_MAX_CHARS ? text.slice(0, TEXT_MAX_CHARS) : text
 
   const parsed = await parsePastedClaim(truncated)
+  const attachments = fetched?.attachments ?? []
 
   // Branch 1: carrier# match → attach to existing claim.
   if (parsed.carrierClaimNumber) {
@@ -117,6 +193,8 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
         claimNumber: existing.claimNumber,
         msg,
         text: truncated,
+        inbox,
+        attachments,
       })
     }
   }
@@ -139,10 +217,10 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
     return { status: 'skipped', reason: 'no matching Company — needs manual onboarding' }
   }
 
-  return await createDraft({ msg, parsed, company, text: truncated })
+  return await createDraft({ msg, parsed, company, text: truncated, inbox, attachments })
 }
 
-async function uploadBody(args: {
+async function uploadText(args: {
   text: string
   claimNumber: string
   gmailMessageId: string
@@ -159,14 +237,100 @@ async function uploadBody(args: {
   return blob.url
 }
 
+// Sanitize a Gmail-supplied filename so it's a safe blob key segment.
+// Strip path separators + control chars; collapse runs of whitespace.
+function safeName(name: string): string {
+  return name
+    .replace(/[\\/\x00-\x1f]+/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 180) || 'attachment'
+}
+
+async function uploadAttachmentBytes(args: {
+  inbox: string
+  gmailMessageId: string
+  claimNumber: string
+  attachment: GmailAttachmentMeta
+}): Promise<{ fileUrl: string; bytes: number } | null> {
+  const { inbox, gmailMessageId, claimNumber, attachment } = args
+  if (attachment.size > MAX_ATTACHMENT_BYTES) {
+    console.warn(`[claims/onboardFromEmail] attachment too large (${attachment.size} bytes): ${attachment.filename}`)
+    return null
+  }
+  try {
+    const gmail = getGmailClient(inbox)
+    const res = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: gmailMessageId,
+      id: attachment.attachmentId,
+    })
+    const data = res.data.data
+    if (!data) return null
+    const buf = Buffer.from(data, 'base64url')
+    const now = new Date()
+    const yyyy = String(now.getUTCFullYear())
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
+    const blobKey = `claims/${yyyy}/${mm}/${randomUUID()}-${claimNumber}-att-${safeName(attachment.filename)}`
+    const blob = await put(blobKey, buf, {
+      access: 'private' as 'public',
+      contentType: attachment.mimeType,
+    })
+    return { fileUrl: blob.url, bytes: buf.length }
+  } catch (err) {
+    console.warn(`[claims/onboardFromEmail] attachment download failed for ${attachment.filename}:`, err instanceof Error ? err.message : err)
+    return null
+  }
+}
+
+async function persistAttachments(args: {
+  claimId: string
+  claimNumber: string
+  inbox: string
+  gmailMessageId: string
+  msgId: string
+  attachments: GmailAttachmentMeta[]
+}): Promise<number> {
+  const { claimId, claimNumber, inbox, gmailMessageId, msgId, attachments } = args
+  if (attachments.length === 0) return 0
+  let attached = 0
+  for (const att of attachments) {
+    const uploaded = await uploadAttachmentBytes({ inbox, gmailMessageId, claimNumber, attachment: att })
+    if (!uploaded) continue
+    try {
+      await prisma.claimDocument.create({
+        data: {
+          claimId,
+          type: 'CORRESPONDENCE',
+          title: `Email attachment: ${att.filename.slice(0, 200)}`,
+          fileUrl: uploaded.fileUrl,
+          uploadedBy: null,
+          notes: [
+            `Auto-attached from claims@ inbox.`,
+            `Filename: ${att.filename}`,
+            `MIME: ${att.mimeType}`,
+            `Size: ${uploaded.bytes} bytes`,
+            `Source EmailMessage: ${msgId}`,
+          ].join('\n\n'),
+        },
+      })
+      attached += 1
+    } catch (err) {
+      console.warn(`[claims/onboardFromEmail] claimDocument create failed for ${att.filename}:`, err instanceof Error ? err.message : err)
+    }
+  }
+  return attached
+}
+
 async function attachToExisting(args: {
   claimId: string
   claimNumber: string
   msg: { id: string; subject: string | null; sentAt: Date; fromAddress: string; gmailMessageId: string }
   text: string
+  inbox: string
+  attachments: GmailAttachmentMeta[]
 }): Promise<OnboardOutcome> {
-  const { claimId, claimNumber, msg, text } = args
-  const fileUrl = await uploadBody({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
+  const { claimId, claimNumber, msg, text, inbox, attachments } = args
+  const fileUrl = await uploadText({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
   const preview = msg.subject?.slice(0, 240) ?? ''
 
   const result = await prisma.$transaction(async (tx) => {
@@ -201,39 +365,43 @@ async function attachToExisting(args: {
     return doc
   })
 
+  // Attachments AFTER the main transaction — each is a Gmail+Blob round-
+  // trip and we don't want to hold a DB transaction open across them.
+  const attachmentsAttached = await persistAttachments({
+    claimId, claimNumber, inbox, gmailMessageId: msg.gmailMessageId, msgId: msg.id, attachments,
+  })
+
   return {
     status: 'attached',
     claimId,
     claimNumber,
     documentId: result.id,
+    attachmentsAttached,
   }
 }
 
 async function createDraft(args: {
   msg: { id: string; subject: string | null; sentAt: Date; fromAddress: string; gmailMessageId: string }
-  parsed: Awaited<ReturnType<typeof parsePastedClaim>>
+  parsed: ParsedClaim
   company: { id: string; name: string }
   text: string
+  inbox: string
+  attachments: GmailAttachmentMeta[]
 }): Promise<OnboardOutcome> {
-  const { msg, parsed, company, text } = args
+  const { msg, parsed, company, text, inbox, attachments } = args
 
-  // incidentDate is non-null on the schema. Use the parsed dateOfLoss
-  // when present, else fall back to the email sentAt — the rep will
-  // correct it during review.
   const incidentDate =
     parsed.dateOfLoss
       ? new Date(`${parsed.dateOfLoss}T00:00:00.000Z`)
       : new Date(Date.UTC(msg.sentAt.getUTCFullYear(), msg.sentAt.getUTCMonth(), msg.sentAt.getUTCDate()))
 
-  // incidentDescription is non-null. Use parsed.lossDescription when
-  // available, else build a minimum-viable description from the subject.
   const incidentDescription =
     parsed.lossDescription && parsed.lossDescription.length >= 10
       ? parsed.lossDescription
       : `Auto-drafted from forwarded email — subject: "${msg.subject ?? '(no subject)'}". Pending Ana review.`
 
   const claimNumber = await nextClaimNumber()
-  const fileUrl = await uploadBody({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
+  const fileUrl = await uploadText({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
 
   const created = await prisma.$transaction(async (tx) => {
     const claim = await tx.insuranceClaim.create({
@@ -296,10 +464,20 @@ async function createDraft(args: {
     return { claim, doc }
   })
 
+  const attachmentsAttached = await persistAttachments({
+    claimId: created.claim.id,
+    claimNumber: created.claim.claimNumber,
+    inbox,
+    gmailMessageId: msg.gmailMessageId,
+    msgId: msg.id,
+    attachments,
+  })
+
   return {
     status: 'drafted',
     claimId: created.claim.id,
     claimNumber: created.claim.claimNumber,
     documentId: created.doc.id,
+    attachmentsAttached,
   }
 }

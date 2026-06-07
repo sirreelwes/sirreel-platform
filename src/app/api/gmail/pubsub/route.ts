@@ -10,9 +10,8 @@ import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClass
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
+import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
-
-const CLAIMS_INBOX = "claims@sirreel.com"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -281,15 +280,16 @@ async function syncInbox(email: string) {
       })
     }
 
-    // claims@ → claim onboarding bridge. STRICTLY gated on the inbox
-    // (must be claims@) and direction (INBOUND). Never fires for any
-    // other inbox — this is the contract that keeps info@/jose@/oliver@/
-    // ana@ etc. from spawning junk drafts. The helper itself is
-    // additionally cross-inbox idempotent via rfc822MessageId, so a
-    // claims@ + ana@-forwarded copy pair never drafts twice regardless
-    // of canonical-row ordering. Fire-and-forget — Sonnet calls can
-    // run 4-6s and we don't want to stall the batch.
-    if (createdMessage && direction === 'INBOUND' && email === CLAIMS_INBOX) {
+    // claims@ → claim onboarding bridge. Gated via shouldOnboardClaimEmail
+    // (src/lib/claims/shouldOnboardClaimEmail.ts) so the contract stays in
+    // one place across pubsub/sync/fetch. Re-gating on AUTHORSHIP (not
+    // direction) is what catches the staff-forward-into-claims@ case —
+    // those messages have a SirReel agent in From: and would have been
+    // classified OUTBOUND under the old INBOUND-only gate. Helper is
+    // additionally cross-inbox idempotent via rfc822MessageId. Fire-and-
+    // forget; Sonnet + attachment downloads can take 10s+ and we don't
+    // want to stall the batch.
+    if (createdMessage && shouldOnboardClaimEmail({ inbox: email, fromAddress })) {
       const messageId = createdMessage.id
       void onboardFromEmail(messageId).catch((err) => {
         console.warn('[pubsub] claims onboarding failed:', messageId, err instanceof Error ? err.message : err)
