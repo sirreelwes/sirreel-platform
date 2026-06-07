@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { NewClaimModal } from '@/components/claims/NewClaimModal'
+import { ClaimMailTriage } from '@/components/claims/ClaimMailTriage'
 import type { ClaimBadge } from '@/lib/claims/claimBadges'
 
 type ClaimStatus =
@@ -155,6 +156,7 @@ export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
+  const [prefillClaimMailId, setPrefillClaimMailId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -245,7 +247,16 @@ export default function ClaimsPage() {
           </div>
         )}
 
-        {showNew && <NewClaimModal onClose={() => setShowNew(false)} />}
+        <ClaimMailTriage
+          onOpenPrefill={(id) => { setPrefillClaimMailId(id); setShowNew(true) }}
+        />
+
+        {showNew && (
+          <NewClaimModal
+            onClose={() => { setShowNew(false); setPrefillClaimMailId(null) }}
+            prefillFromClaimMailId={prefillClaimMailId ?? undefined}
+          />
+        )}
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">

@@ -41,6 +41,7 @@
 import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
 import { google } from 'googleapis'
+import type { ClaimMailDisposition, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { parsePastedClaim, type ParsedClaim } from '@/lib/claims/parsePastedClaim'
 import { nextClaimNumber } from '@/lib/orders'
@@ -54,12 +55,15 @@ const TEXT_MAX_CHARS = 200_000
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export interface OnboardOutcome {
-  status: 'attached' | 'drafted' | 'skipped'
+  // Maps 1:1 to ClaimMailDisposition (lowercased for the return shape;
+  // 'skipped' kept as legacy alias for callers that may still inspect it).
+  status: 'attached' | 'drafted' | 'needs_review' | 'ignored' | 'skipped'
   reason?: string
   claimId?: string
   claimNumber?: string
   documentId?: string
   attachmentsAttached?: number
+  claimMailId?: string
 }
 
 interface GmailAttachmentMeta {
@@ -146,7 +150,18 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
     },
   })
   if (!msg) return { status: 'skipped', reason: 'message not found' }
-  if (msg.claimId) return { status: 'skipped', reason: 'already linked' }
+  const inbox = msg.emailAccount?.emailAddress ?? ''
+
+  if (msg.claimId) {
+    // Already linked — still record the disposition so the triage widget
+    // can show "this email was onboarded earlier" rather than disappear.
+    const claimMailId = await recordClaimMail({
+      emailMessageId: msg.id, inbox,
+      disposition: 'ATTACHED', parse: null, claimId: msg.claimId,
+      reason: 'already linked to this claim before re-run',
+    })
+    return { status: 'attached', claimId: msg.claimId, claimMailId, reason: 'already linked' }
+  }
 
   // Cross-inbox idempotency: any other EmailMessage with the same
   // rfc822MessageId already linked? (ana@ may have ingested first.)
@@ -160,7 +175,12 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
         where: { id: msg.id },
         data: { claimId: sibling.claimId },
       })
-      return { status: 'skipped', reason: 'already linked via sibling', claimId: sibling.claimId }
+      const claimMailId = await recordClaimMail({
+        emailMessageId: msg.id, inbox,
+        disposition: 'ATTACHED', parse: null, claimId: sibling.claimId,
+        reason: 'already onboarded via duplicate inbox copy',
+      })
+      return { status: 'attached', claimId: sibling.claimId, claimMailId, reason: 'sibling-linked' }
     }
   }
 
@@ -168,19 +188,28 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
   // stored bodyText if the Gmail fetch fails (no network / 404 / etc.)
   // so the function still runs without attachments instead of refusing
   // outright.
-  const inbox = msg.emailAccount?.emailAddress ?? ''
   const fetched = inbox && msg.gmailMessageId ? await fetchFromGmail(inbox, msg.gmailMessageId) : null
 
   const freshText = fetched?.bodyText ?? null
   const storedText = msg.bodyText ?? msg.bodyHtml ?? null
   const text = (freshText && freshText.length > 0 ? freshText : (storedText ?? '')).trim()
-  if (text.length < TEXT_MIN_CHARS) return { status: 'skipped', reason: 'body too short' }
+  if (text.length < TEXT_MIN_CHARS) {
+    // No usable body to parse — still record the disposition so the
+    // message is visible in the triage widget and a reviewer can manually
+    // onboard if needed.
+    const claimMailId = await recordClaimMail({
+      emailMessageId: msg.id, inbox,
+      disposition: 'IGNORED', parse: null, claimId: null,
+      reason: 'body too short to parse',
+    })
+    return { status: 'ignored', reason: 'body too short', claimMailId }
+  }
   const truncated = text.length > TEXT_MAX_CHARS ? text.slice(0, TEXT_MAX_CHARS) : text
 
   const parsed = await parsePastedClaim(truncated)
   const attachments = fetched?.attachments ?? []
 
-  // Branch 1: carrier# match → attach to existing claim.
+  // Branch 1: carrier# match → ATTACH to existing claim.
   if (parsed.carrierClaimNumber) {
     const existing = await prisma.insuranceClaim.findFirst({
       where: { carrierClaimNumber: parsed.carrierClaimNumber },
@@ -188,36 +217,106 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
       orderBy: { createdAt: 'desc' },
     })
     if (existing) {
-      return await attachToExisting({
+      const outcome = await attachToExisting({
         claimId: existing.id,
         claimNumber: existing.claimNumber,
-        msg,
-        text: truncated,
-        inbox,
-        attachments,
+        msg, text: truncated, inbox, attachments,
       })
+      const claimMailId = await recordClaimMail({
+        emailMessageId: msg.id, inbox,
+        disposition: 'ATTACHED', parse: parsed, claimId: existing.id,
+        reason: `carrier claim# ${parsed.carrierClaimNumber} matched`,
+      })
+      return { ...outcome, claimMailId }
     }
   }
 
-  // Branch 2: new draft. Confidence gate.
+  // Branch 2: DRAFT. Carrier-required floor is UNCHANGED — explicit
+  // design intent so pre-claim forwards (no carrier yet) don't spawn
+  // junk drafts. Those fall into NEEDS_REVIEW below.
   const hasCarrier = !!parsed.carrierName
   const hasIdOrLoss = !!parsed.carrierClaimNumber || !!parsed.lossDescription
-  if (!hasCarrier || !hasIdOrLoss) {
-    return { status: 'skipped', reason: 'low confidence — carrier or claim# / loss desc missing' }
-  }
-  if (!parsed.clientCompanyName) {
-    return { status: 'skipped', reason: 'no client company name in parse' }
-  }
-  const company = await prisma.company.findFirst({
-    where: { name: { contains: parsed.clientCompanyName, mode: 'insensitive' } },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!company) {
-    return { status: 'skipped', reason: 'no matching Company — needs manual onboarding' }
+  if (hasCarrier && hasIdOrLoss && parsed.clientCompanyName) {
+    const company = await prisma.company.findFirst({
+      where: { name: { contains: parsed.clientCompanyName, mode: 'insensitive' } },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (company) {
+      const outcome = await createDraft({
+        msg, parsed, company, text: truncated, inbox, attachments,
+      })
+      const claimMailId = await recordClaimMail({
+        emailMessageId: msg.id, inbox,
+        disposition: 'DRAFTED', parse: parsed, claimId: outcome.claimId ?? null,
+        reason: `auto-drafted against ${company.name}`,
+      })
+      return { ...outcome, claimMailId }
+    }
+    // Carrier identified but no Company match — falls into NEEDS_REVIEW
+    // below so Ana can pick the right Company manually.
   }
 
-  return await createDraft({ msg, parsed, company, text: truncated, inbox, attachments })
+  // Branch 3: NEEDS_REVIEW. Loss or client present, but the DRAFT gate
+  // didn't pass (no carrier, or no Company match). Preserve the parse so
+  // the Create-claim modal can pre-fill from it without a second Sonnet
+  // call.
+  if (parsed.lossDescription || parsed.clientCompanyName) {
+    const reason = !hasCarrier
+      ? 'no carrier identified — pre-claim or claim# absent'
+      : !parsed.clientCompanyName
+        ? 'client company not in parse'
+        : 'no matching Company in CRM'
+    const claimMailId = await recordClaimMail({
+      emailMessageId: msg.id, inbox,
+      disposition: 'NEEDS_REVIEW', parse: parsed, claimId: null, reason,
+    })
+    return { status: 'needs_review', reason, claimMailId }
+  }
+
+  // Branch 4: IGNORED. No loss description, no client — almost certainly
+  // not claim-related. Still recorded so the rep can spot a missed one
+  // in the widget and manually onboard.
+  const claimMailId = await recordClaimMail({
+    emailMessageId: msg.id, inbox,
+    disposition: 'IGNORED', parse: parsed, claimId: null,
+    reason: 'no loss or client identified in body',
+  })
+  return { status: 'ignored', reason: 'no loss/client', claimMailId }
+}
+
+async function recordClaimMail(args: {
+  emailMessageId: string
+  inbox: string
+  disposition: ClaimMailDisposition
+  parse: ParsedClaim | null
+  claimId: string | null
+  reason: string | null
+}): Promise<string> {
+  // Prisma's Json columns reject `null` as an InputJsonValue at the type
+  // level — use the sentinel `Prisma.JsonNull` for explicit DB nulls.
+  const parseValue = args.parse == null
+    ? (await import('@prisma/client')).Prisma.JsonNull
+    : (args.parse as unknown as Prisma.InputJsonValue)
+  const row = await prisma.claimMail.upsert({
+    where: { emailMessageId: args.emailMessageId },
+    create: {
+      emailMessageId: args.emailMessageId,
+      inbox: args.inbox,
+      disposition: args.disposition,
+      parse: parseValue,
+      claimId: args.claimId,
+      reason: args.reason,
+    },
+    update: {
+      disposition: args.disposition,
+      parse: parseValue,
+      claimId: args.claimId,
+      reason: args.reason,
+    },
+    select: { id: true },
+  })
+  return row.id
 }
 
 async function uploadText(args: {

@@ -1131,6 +1131,11 @@ model InsuranceClaim {
   // onboardingSource is exactly the message that drafted this claim (for
   // FROM_EMAIL_REVIEW badge + click-through).
   sourceEmails       EmailMessage[]      @relation("ClaimSourceEmails")
+  // Reverse for ClaimMail.claim — every triage row that ended up
+  // attached to this claim. Many-to-one because one claim can collect
+  // multiple inbound emails over its life (initial draft + follow-up
+  // attaches).
+  claimMail          ClaimMail[]
 
   @@index([invoiceId])
   @@index([coiCheckId])
@@ -1400,6 +1405,9 @@ model EmailMessage {
   // exactly one EmailMessage per auto-drafted claim. Used by the claim
   // detail page to render the source-chain link back to this row.
   draftedClaim InsuranceClaim? @relation("OnboardingSourceEmail")
+  // ClaimMail triage row — one per claims@-inbox EmailMessage. Drives
+  // the triage widget on /claims.
+  claimMail    ClaimMail?
 
   @@index([rfc822MessageId])
   @@index([duplicateOfId])
@@ -1414,6 +1422,68 @@ model EmailMessage {
 // time. The dropped count is not a recoverable archive — dropped mail
 // stays in Gmail itself, which remains the authoritative store of
 // record for anything we deliberately didn't pull into the DB.
+// Per-message disposition for inbound claims@ mail. Replaces the
+// silent-skip behavior of onboardFromEmail — every claims@ email gets
+// exactly one ClaimMail row written, so the triage widget can show
+// what happened (drafted? attached? still needs review? ignored?).
+//
+// Disposition rules (recorded by onboardFromEmail):
+//   DRAFTED       — carrier identified + matched company → auto-drafted
+//                   a new claim. claimId set.
+//   ATTACHED      — parsed.carrierClaimNumber matched an existing
+//                   claim. claimId set.
+//   NEEDS_REVIEW  — lossDescription and/or client identified but no
+//                   carrier (so DRAFTED's carrier-required floor
+//                   couldn't fire). Parse is preserved so the Create-
+//                   claim modal can pre-fill from it.
+//   IGNORED       — no loss/incident described. Still shown in the
+//                   widget (muted) so the rep can manually onboard
+//                   if the classifier got it wrong.
+//
+// The unique constraint on emailMessageId makes the upsert idempotent
+// across retries (helper crashed midway, cron re-ran it, etc.).
+enum ClaimMailDisposition {
+  DRAFTED
+  ATTACHED
+  NEEDS_REVIEW
+  IGNORED
+}
+
+model ClaimMail {
+  id             String               @id @default(uuid())
+  emailMessageId String               @unique @map("email_message_id")
+  inbox          String
+  disposition    ClaimMailDisposition
+  // The Sonnet parse output (ParsedClaim shape) — preserved so the
+  // Create-claim modal can pre-fill on NEEDS_REVIEW without paying
+  // for a second Sonnet call. Null when the parse never ran (rare —
+  // body-too-short skip; the row still exists with disposition
+  // IGNORED so the message isn't invisible).
+  parse          Json?
+  // Set for DRAFTED + ATTACHED. The matching InsuranceClaim row.
+  claimId        String?              @map("claim_id")
+  // Free-form one-liner — why this disposition. e.g. "no matching
+  // Company in CRM" on NEEDS_REVIEW, "body too short" on IGNORED.
+  reason         String?
+
+  // Reviewer state — Dismiss / Create-claim buttons in the widget
+  // stamp these so the row drops out of the active triage view.
+  dismissed      Boolean              @default(false)
+  reviewedById   String?              @map("reviewed_by_id")
+  reviewedAt     DateTime?            @map("reviewed_at")
+
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  emailMessage EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  claim        InsuranceClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  reviewedBy   User?           @relation("ClaimMailReviewer", fields: [reviewedById], references: [id])
+
+  @@index([disposition, dismissed])
+  @@index([createdAt])
+  @@map("claim_mail")
+}
+
 model IngestFilterStat {
   inbox          String    @id
   mode           String    // 'SALES' | 'MONEY' | 'CLAIMS' | 'PRESERVE'
@@ -1525,6 +1595,7 @@ model User {
   assignedClaims      InsuranceClaim[]    @relation("ClaimAssignee")
   uploadedDocs        ClaimDocument[]     @relation("DocUploader")
   timelineActions     ClaimTimeline[]     @relation("TimelineActor")
+  reviewedClaimMail   ClaimMail[]         @relation("ClaimMailReviewer")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]

@@ -60,9 +60,21 @@ const STATUS_CHOICES: { value: string; label: string }[] = [
 
 type Step = 'CHOOSE' | 'PASTE' | 'FORM'
 
-export function NewClaimModal({ onClose }: { onClose: () => void }) {
+export function NewClaimModal({
+  onClose,
+  prefillFromClaimMailId,
+}: {
+  onClose: () => void
+  /**
+   * Optional ClaimMail row id. When set, the modal skips the
+   * CHOOSE/PASTE steps and lands directly on FORM with the stored
+   * parse already populating the fields. The reviewer just adds the
+   * missing carrier + claim# and saves.
+   */
+  prefillFromClaimMailId?: string
+}) {
   const router = useRouter()
-  const [step, setStep] = useState<Step>('CHOOSE')
+  const [step, setStep] = useState<Step>(prefillFromClaimMailId ? 'FORM' : 'CHOOSE')
 
   // ── Paste-mode state ────────────────────────────────────────────
   const [pasteText, setPasteText] = useState('')
@@ -107,6 +119,58 @@ export function NewClaimModal({ onClose }: { onClose: () => void }) {
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Pre-fill from a ClaimMail row when the caller passed an id. Same
+  // seed-logic shape as the paste-flow's parsePaste(), just sourced
+  // from the persisted parse instead of a fresh Sonnet call. Fires
+  // exactly once.
+  useEffect(() => {
+    if (!prefillFromClaimMailId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/claims/mail-triage/${prefillFromClaimMailId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        const ex = (data.row?.parse ?? null) as ParsedClaim | null
+        if (!ex) return
+        const fills = new Set<string>()
+        const ifPresent = (key: string, v: unknown, setter: (s: string) => void) => {
+          if (v == null) return
+          setter(String(v))
+          fills.add(key)
+        }
+        ifPresent('filedAgainst', ex.carrierName, setFiledAgainst)
+        ifPresent('carrierClaimNumber', ex.carrierClaimNumber, setCarrierClaimNumber)
+        ifPresent('policyNumber', ex.policyNumber, setPolicyNumber)
+        ifPresent('adjusterName', ex.adjusterName, setAdjusterName)
+        ifPresent('adjusterEmail', ex.adjusterEmail, setAdjusterEmail)
+        ifPresent('adjusterPhone', ex.adjusterPhone, setAdjusterPhone)
+        ifPresent('incidentDescription', ex.lossDescription, setIncidentDescription)
+        ifPresent('incidentDate', ex.dateOfLoss, setIncidentDate)
+        ifPresent('lossAmount', ex.lossAmount, setLossAmount)
+        ifPresent('acvReceived', ex.acvReceived, setAcvReceived)
+        ifPresent('depreciationApplied', ex.depreciationApplied, setDepreciationApplied)
+        ifPresent('deductibleAmount', ex.deductibleAmount, setDeductibleAmount)
+        ifPresent('totalDemand', ex.totalDemand, setTotalDemand)
+        ifPresent('amountOffered', ex.amountOffered, setAmountOffered)
+        ifPresent('amountSettled', ex.amountSettled, setAmountSettled)
+        if (ex.statusGuess) {
+          setStatus(ex.statusGuess)
+          fills.add('status')
+        }
+        if (ex.clientCompanyName) {
+          // Pre-seed the company-search box. The typeahead will fire on
+          // its own and populate hits; reviewer picks the right one.
+          setCompanyQ(ex.clientCompanyName)
+        }
+        setAiFilled(fills)
+        setParseUsed(true)
+      } catch { /* network blip — modal still usable empty */ }
+    })()
+    return () => { cancelled = true }
+  }, [prefillFromClaimMailId])
 
   // Manual company typeahead (also used after paste when the parse
   // didn't auto-resolve a company).
