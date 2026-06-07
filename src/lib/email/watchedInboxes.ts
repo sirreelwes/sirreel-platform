@@ -14,6 +14,21 @@
  *      every run at 06:00 UTC, so the new mailbox starts
  *      receiving Pub/Sub deliveries on the next tick. Trigger
  *      manually via POST /api/gmail/watch to start sooner.
+ *
+ * Dedup contract for Ana-managed inboxes (billing/payments/jobs/
+ * studios/hello, also claims). Several of these forward into ana@
+ * for Ana's day-to-day workflow. The pubsub handler already dedups
+ * by rfc822MessageId — when the same Message-ID arrives in N
+ * watched inboxes, the OLDEST createdAt becomes canonical and the
+ * rest are tagged `duplicateOfId`. Going forward this means: when a
+ * billing@-addressed message lands in billing@ first and is then
+ * forwarded into ana@, billing@'s row is canonical and ana@'s copy
+ * is the duplicate — which is what reports want. For per-inbox
+ * activity views (e.g. "how much mail is billing@ getting?"), do
+ * NOT count ana@'s mirrored copies — filter on
+ * `routing_headers->>'deliveredTo' = '<inbox>@sirreel.com'`
+ * (populated by extractRoutingHeaders at ingest), which is robust
+ * regardless of which copy ended up canonical.
  */
 
 export const WATCHED_INBOXES: readonly string[] = [
@@ -28,6 +43,21 @@ export const WATCHED_INBOXES: readonly string[] = [
   // appearing in the legacy diagnostic /api/gmail search-only path.
   'claims@sirreel.com',
   'dani@sirreel.com',
+  // Added 2026-06-07 — five operational Ana-managed mailboxes.
+  // All five DWD-impersonability-confirmed (probe returned
+  // messagesTotal in the 14k-116k range) — none are aliases.
+  // studios@: studio-relationship inbox.
+  // jobs@:    paperwork (job sheets, contracts, COIs).
+  // hello@:   first-touch / general inbound — heaviest mailbox.
+  // payments@:incoming payment notifications + remittance.
+  // billing@: AR-side billing correspondence (Ana's primary inbox).
+  // Several of these forward into ana@ — see the "Dedup contract"
+  // note above for the correct way to count per-inbox activity.
+  'studios@sirreel.com',
+  'jobs@sirreel.com',
+  'hello@sirreel.com',
+  'payments@sirreel.com',
+  'billing@sirreel.com',
 ]
 
 export function isWatchedInbox(email: string): boolean {
