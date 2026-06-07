@@ -212,6 +212,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
             }
           : null,
         statusUpdatedAt: claim.updatedAt,
+        fromEmailDraft: !!claim.onboardedFromEmailMessageId,
       }).badges,
     },
   })

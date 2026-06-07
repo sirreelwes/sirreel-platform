@@ -69,6 +69,7 @@ const BADGE_TONE: Record<ClaimBadge, string> = {
   HIGH_EXPOSURE:      'bg-chip-warn-bg text-chip-warn-fg',
   GONE_QUIET:         'bg-chip-warn-bg text-chip-warn-fg',
   STALE_NEGOTIATING:  'bg-chip-warn-bg text-chip-warn-fg',
+  FROM_EMAIL_REVIEW:  'bg-chip-warn-bg text-chip-warn-fg',
   MISSING_COI:        'bg-chip-neutral-bg text-chip-neutral-fg',
 }
 const BADGE_LABEL: Record<ClaimBadge, string> = {
@@ -78,6 +79,7 @@ const BADGE_LABEL: Record<ClaimBadge, string> = {
   HIGH_EXPOSURE:      'High exposure',
   GONE_QUIET:         'Quiet',
   STALE_NEGOTIATING:  'Stale',
+  FROM_EMAIL_REVIEW:  'From email — review',
   MISSING_COI:        'No COI',
 }
 

@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
       settledAt: true,
       createdAt: true,
       updatedAt: true,
+      onboardedFromEmailMessageId: true,
       company: { select: { id: true, name: true } },
       asset: {
         select: {
@@ -129,6 +130,7 @@ export async function GET(req: NextRequest) {
             }
           : null,
         statusUpdatedAt: c.updatedAt,
+        fromEmailDraft: !!c.onboardedFromEmailMessageId,
       },
       now,
     )

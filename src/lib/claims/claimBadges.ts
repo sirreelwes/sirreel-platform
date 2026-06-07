@@ -42,6 +42,11 @@ export type ClaimBadge =
   | 'LD_INVOICE_OVERDUE'
   | 'ESCALATED'
   | 'MISSING_COI'
+  // Fires on DRAFT claims that the claims@ → onboarding helper auto-
+  // created from a forwarded email. Surfaces "this isn't a real claim
+  // yet — Ana, sign off." Cleared the moment the claim moves out of
+  // DRAFT via the normal PATCH lifecycle.
+  | 'FROM_EMAIL_REVIEW'
 
 // Tunable thresholds. Same export pattern as REPEAT_MIN / LOYAL_YEARS
 // in clientBadges.ts so they're discoverable from one place.
@@ -74,6 +79,10 @@ export interface ClaimBadgeInput {
   // since we don't track per-field change timestamps. Good-enough
   // proxy for "how long has this been in NEGOTIATING."
   statusUpdatedAt: Date | string
+  // True when InsuranceClaim.onboardedFromEmailMessageId is non-null —
+  // i.e. this claim was auto-drafted from a forwarded claims@ email
+  // and is awaiting Ana's review. Drives FROM_EMAIL_REVIEW.
+  fromEmailDraft?: boolean
 }
 
 export interface ClaimBadgeFacts {
@@ -150,6 +159,13 @@ export function computeClaimBadgeFacts(
     badges.push('MISSING_COI')
   }
 
+  // FROM_EMAIL_REVIEW — auto-drafted from a forwarded claims@ email,
+  // still in DRAFT. Cleared as soon as the rep moves it to any other
+  // lifecycle state. Acts as the "Ana, please sign off" surface.
+  if (status === 'DRAFT' && input.fromEmailDraft) {
+    badges.push('FROM_EMAIL_REVIEW')
+  }
+
   // Severity rollup — same neutral→warn→bad palette logic the chip
   // tones use. ESCALATED + OVERDUE_RESPONSE + HIGH_EXPOSURE +
   // LD_INVOICE_OVERDUE escalate to "bad"; the rest are "warn"; the
@@ -161,6 +177,7 @@ export function computeClaimBadgeFacts(
   if (badges.includes('HIGH_EXPOSURE'))      severity += 40
   if (badges.includes('GONE_QUIET'))         severity += 30
   if (badges.includes('STALE_NEGOTIATING'))  severity += 20
+  if (badges.includes('FROM_EMAIL_REVIEW'))  severity += 15
   if (badges.includes('MISSING_COI'))        severity += 10
 
   return { badges, severity }

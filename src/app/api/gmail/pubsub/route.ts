@@ -9,6 +9,9 @@ import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
+import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
+
+const CLAIMS_INBOX = "claims@sirreel.com"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -255,6 +258,21 @@ async function syncInbox(email: string) {
       const messageId = createdMessage.id
       void runMessageExtractionForId(messageId).catch((err) => {
         console.warn('[pubsub] message extraction failed:', messageId, err instanceof Error ? err.message : err)
+      })
+    }
+
+    // claims@ → claim onboarding bridge. STRICTLY gated on the inbox
+    // (must be claims@) and direction (INBOUND). Never fires for any
+    // other inbox — this is the contract that keeps info@/jose@/oliver@/
+    // ana@ etc. from spawning junk drafts. The helper itself is
+    // additionally cross-inbox idempotent via rfc822MessageId, so a
+    // claims@ + ana@-forwarded copy pair never drafts twice regardless
+    // of canonical-row ordering. Fire-and-forget — Sonnet calls can
+    // run 4-6s and we don't want to stall the batch.
+    if (createdMessage && direction === 'INBOUND' && email === CLAIMS_INBOX) {
+      const messageId = createdMessage.id
+      void onboardFromEmail(messageId).catch((err) => {
+        console.warn('[pubsub] claims onboarding failed:', messageId, err instanceof Error ? err.message : err)
       })
     }
 

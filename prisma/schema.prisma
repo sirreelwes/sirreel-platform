@@ -1096,6 +1096,18 @@ model InsuranceClaim {
   assignedTo String? @map("assigned_to")
   notes      String? @db.Text
 
+  // Set when the claims@ → onboarding handler created this DRAFT claim
+  // from an inbound forwarded email. Two purposes:
+  //   1. Drives the "From email — review" badge on /claims so Ana can
+  //      sign off before the draft becomes a real claim.
+  //   2. Click-through to the source EmailMessage from the claim detail
+  //      page (the rep should be able to see the original chain that
+  //      drafted the claim).
+  // Null for everything onboarded via the manual paste flow or the
+  // openLdClaim() LD-invoice path.
+  onboardedFromEmailMessageId String?    @unique @map("onboarded_from_email_message_id")
+  onboardedFromEmailMessage   EmailMessage? @relation("OnboardingSourceEmail", fields: [onboardedFromEmailMessageId], references: [id])
+
   submittedAt DateTime? @map("submitted_at")
   settledAt   DateTime? @map("settled_at")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -1114,6 +1126,11 @@ model InsuranceClaim {
   timeline           ClaimTimeline[]
   damageItems        DamageItem[]
   maintenanceRecords MaintenanceRecord[]
+  // Reverse relations for the claims@ → onboarding bridge. sourceEmails
+  // is every EmailMessage attached to this claim (correspondence inbox);
+  // onboardingSource is exactly the message that drafted this claim (for
+  // FROM_EMAIL_REVIEW badge + click-through).
+  sourceEmails       EmailMessage[]      @relation("ClaimSourceEmails")
 
   @@index([invoiceId])
   @@index([coiCheckId])
@@ -1326,6 +1343,16 @@ model EmailMessage {
   companyId String? @map("company_id")
   personId  String? @map("person_id")
 
+  // Matched to an InsuranceClaim by the claims@ → onboarding handler
+  // (src/lib/claims/onboardFromEmail.ts). Set whenever the helper
+  // attaches the message to an existing claim OR auto-creates a DRAFT
+  // from it. Cross-inbox idempotency contract: before the helper acts,
+  // it looks up any EmailMessage sharing this row's rfc822MessageId where
+  // claimId IS NOT NULL — if found, skip. So a claims@ + ana@ duplicate
+  // pair can never trigger double-onboarding regardless of which row is
+  // canonical.
+  claimId String? @map("claim_id")
+
   fromAddress String   @map("from_address")
   toAddresses String[] @map("to_addresses")
   subject     String
@@ -1368,9 +1395,15 @@ model EmailMessage {
   thread       EmailThread? @relation(fields: [threadId], references: [id])
   company      Company?     @relation(fields: [companyId], references: [id])
   person       Person?      @relation(fields: [personId], references: [id])
+  claim        InsuranceClaim? @relation("ClaimSourceEmails", fields: [claimId], references: [id])
+  // Inverse of InsuranceClaim.onboardedFromEmailMessage — present on
+  // exactly one EmailMessage per auto-drafted claim. Used by the claim
+  // detail page to render the source-chain link back to this row.
+  draftedClaim InsuranceClaim? @relation("OnboardingSourceEmail")
 
   @@index([rfc822MessageId])
   @@index([duplicateOfId])
+  @@index([claimId])
   @@map("email_messages")
 }
 
