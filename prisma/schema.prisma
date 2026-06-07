@@ -1341,6 +1341,16 @@ model EmailMessage {
   bodySource      String? @map("body_source")
   attachmentCount Int     @default(0) @map("attachment_count")
 
+  // Routing headers captured from the Gmail payload at ingest time, so
+  // forwarded mail (e.g. claims@ → ana@) can be classified by its ORIGINAL
+  // recipient instead of just the inbox it landed in. Stored as JSON to
+  // stay schema-light while keeping the keys queryable via Prisma's Json
+  // path filters. Shape:
+  //   { to, cc, deliveredTo, xOriginalTo, xForwardedFor, xForwardedTo }
+  // All values are lower-cased on write so equality / contains filters
+  // don't need to worry about case sensitivity.
+  routingHeaders Json? @map("routing_headers")
+
   sentAt       DateTime       @map("sent_at")
   isRead       Boolean        @default(false) @map("is_read")
   // Triage

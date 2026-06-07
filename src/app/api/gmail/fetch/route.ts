@@ -5,6 +5,7 @@ import { EmailCategory, EmailStatus } from "@prisma/client"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
+import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
           userId: "me",
           id: msgId,
           format: "metadata",
-          metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID", "In-Reply-To"],
+          metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", ...ROUTING_HEADER_NAMES],
         })
 
         const headers = full.data.payload?.headers || []
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
         const { category, priority } = triageEmail(subject, snippet)
         const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
         const inReplyTo = get("In-Reply-To") || null
+        const routingHeaders = extractRoutingHeaders(headers)
         let duplicateOfId: string | null = null
         if (rfc822MessageId) {
           const existing = await prisma.emailMessage.findFirst({
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
             gmailMessageId: msgId,
             rfc822MessageId,
             inReplyTo,
+            routingHeaders: routingHeaders ?? undefined,
             duplicateOfId,
             fromAddress,
             toAddresses,

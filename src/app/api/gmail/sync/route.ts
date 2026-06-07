@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
+import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -110,7 +111,7 @@ export async function POST() {
             const existing = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id! } })
             if (existing) { skipped++; continue }
 
-            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID", "In-Reply-To"] })
+            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", ...ROUTING_HEADER_NAMES] })
             const get = (h: string) => full.data.payload?.headers?.find(x => x.name?.toLowerCase() === h.toLowerCase())?.value || ""
 
             const fromAddress = get("From")
@@ -121,6 +122,7 @@ export async function POST() {
             const labelIds = full.data.labelIds || []
             const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
             const inReplyTo = get("In-Reply-To") || null
+            const routingHeaders = extractRoutingHeaders(full.data.payload?.headers)
             let duplicateOfId: string | null = null
             if (rfc822MessageId) {
               const dupExisting = await prisma.emailMessage.findFirst({
@@ -176,6 +178,7 @@ export async function POST() {
                 gmailMessageId: msg.id!,
                 rfc822MessageId,
                 inReplyTo,
+                routingHeaders: routingHeaders ?? undefined,
                 duplicateOfId,
                 fromAddress,
                 toAddresses: [email],

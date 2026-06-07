@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getMessageDirection, parseRecipientHeader } from "@/lib/email/direction"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
+import { extractRoutingHeaders } from "@/lib/email/routingHeaders"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
@@ -88,6 +89,10 @@ async function syncInbox(email: string) {
     // dedup the same message landing in info@/jose@/oliver@/ana@.
     const rfc822MessageId = get("Message-ID") || get("Message-Id") || null
     const inReplyTo = get("In-Reply-To") || null
+    // Routing headers — captures the original recipient on forwarded mail
+    // (claims@ → ana@ etc.) so downstream classification can route on
+    // true addressing instead of the inbox-of-record.
+    const routingHeaders = extractRoutingHeaders(headers)
 
     // Cross-inbox dedup. Look up any older copy with this Message-ID; if one
     // exists, this row becomes a pointer to it. If we are the oldest, we stay
@@ -179,6 +184,7 @@ async function syncInbox(email: string) {
         gmailMessageId: msg.id,
         rfc822MessageId,
         inReplyTo,
+        routingHeaders: routingHeaders ?? undefined,
         duplicateOfId,
         fromAddress,
         toAddresses,
