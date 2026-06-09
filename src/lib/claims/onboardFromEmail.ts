@@ -46,6 +46,7 @@ import { prisma } from '@/lib/prisma'
 import { parsePastedClaim, type ParsedClaim } from '@/lib/claims/parsePastedClaim'
 import { nextClaimNumber } from '@/lib/orders'
 import { extractBodyFromGmailPayload, type GmailMessagePart } from '@/lib/email/body'
+import { classifyClaimDocument } from '@/lib/claims/classifyClaimDocument'
 
 const TEXT_MIN_CHARS = 30
 const TEXT_MAX_CHARS = 200_000
@@ -350,7 +351,7 @@ async function uploadAttachmentBytes(args: {
   gmailMessageId: string
   claimNumber: string
   attachment: GmailAttachmentMeta
-}): Promise<{ fileUrl: string; bytes: number } | null> {
+}): Promise<{ fileUrl: string; bytes: number; buf: Buffer } | null> {
   const { inbox, gmailMessageId, claimNumber, attachment } = args
   if (attachment.size > MAX_ATTACHMENT_BYTES) {
     console.warn(`[claims/onboardFromEmail] attachment too large (${attachment.size} bytes): ${attachment.filename}`)
@@ -374,7 +375,9 @@ async function uploadAttachmentBytes(args: {
       access: 'private' as 'public',
       contentType: attachment.mimeType,
     })
-    return { fileUrl: blob.url, bytes: buf.length }
+    // Return the buffer alongside the URL so the classifier can read
+    // the same bytes without a second round trip to Gmail.
+    return { fileUrl: blob.url, bytes: buf.length, buf }
   } catch (err) {
     console.warn(`[claims/onboardFromEmail] attachment download failed for ${attachment.filename}:`, err instanceof Error ? err.message : err)
     return null
@@ -395,21 +398,35 @@ async function persistAttachments(args: {
   for (const att of attachments) {
     const uploaded = await uploadAttachmentBytes({ inbox, gmailMessageId, claimNumber, attachment: att })
     if (!uploaded) continue
+    // Per-attachment classification — same Sonnet path the drag-drop
+    // upload route uses. Bounded by classifyClaimDocument's own
+    // try/catch so a bad classify never blocks the row write; the
+    // attachment still lands as OTHER with EMAIL_INGEST provenance if
+    // Sonnet returns FALLBACK.
+    const cls = await classifyClaimDocument({
+      filename: att.filename,
+      contentType: att.mimeType,
+      fileBuffer: uploaded.buf,
+    })
+    const sourceTag = cls.confidence > 0 ? 'AI_SUGGESTED' as const : 'EMAIL_INGEST' as const
     try {
       await prisma.claimDocument.create({
         data: {
           claimId,
-          type: 'CORRESPONDENCE',
+          type: cls.docType,
+          typeSource: sourceTag,
+          typeConfidence: cls.confidence,
           title: `Email attachment: ${att.filename.slice(0, 200)}`,
           fileUrl: uploaded.fileUrl,
           uploadedBy: null,
           notes: [
             `Auto-attached from claims@ inbox.`,
+            cls.reasoning ? `AI: ${cls.reasoning}` : null,
             `Filename: ${att.filename}`,
             `MIME: ${att.mimeType}`,
             `Size: ${uploaded.bytes} bytes`,
             `Source EmailMessage: ${msgId}`,
-          ].join('\n\n'),
+          ].filter(Boolean).join('\n\n'),
         },
       })
       attached += 1
@@ -436,7 +453,12 @@ async function attachToExisting(args: {
     const doc = await tx.claimDocument.create({
       data: {
         claimId,
+        // Body row stays CORRESPONDENCE by design (the email chain is
+        // correspondence regardless of what it discusses). Provenance
+        // is EMAIL_INGEST so the typed-document UI doesn't surface a
+        // "review the AI classification" affordance for it.
         type: 'CORRESPONDENCE',
+        typeSource: 'EMAIL_INGEST',
         title: `Email from ${msg.fromAddress.slice(0, 200)} — ${msg.sentAt.toISOString().slice(0, 10)}`,
         fileUrl,
         uploadedBy: null,
@@ -532,6 +554,7 @@ async function createDraft(args: {
       data: {
         claimId: claim.id,
         type: 'CORRESPONDENCE',
+        typeSource: 'EMAIL_INGEST',
         title: `Source email — ${msg.sentAt.toISOString().slice(0, 10)}`,
         fileUrl,
         uploadedBy: null,
