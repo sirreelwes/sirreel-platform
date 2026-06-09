@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeLineTotal } from "@/lib/orders/billing";
+import { computeOrderTotals } from "@/lib/orders/discountedTotals";
 
 /**
  * Generate the next quote/order number in the date-based format
@@ -130,11 +131,14 @@ export function rentalDays(start: Date, end: Date): number {
 // — or any future external write that bypasses the API — converge to
 // the correct number the next time anything touches the Order.
 export async function recalcOrderTotals(orderId: string) {
+  // ── Line-total convergence pass — same contract as before:
+  // recompute each row's lineTotal from (quantity × rate × days × kind)
+  // semantics; persist only if it drifted. Historical rows + any future
+  // external write that bypasses the API converge here.
   const lineItems = await prisma.orderLineItem.findMany({
     where: { orderId },
   });
 
-  let subtotal = 0;
   for (const li of lineItems) {
     const computed = computeLineTotal({
       quantity: li.quantity,
@@ -150,18 +154,52 @@ export async function recalcOrderTotals(orderId: string) {
         data: { lineTotal: rounded },
       });
     }
-    subtotal += rounded;
   }
 
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  // ── Pull fresh state + structured discounts; delegate the actual
+  // subtotal/tax/total math to the shared util so quote PDF + invoice
+  // generator + the order detail API can't drift from this surface.
+  const [order, discounts, freshLines] = await Promise.all([
+    prisma.order.findUnique({ where: { id: orderId } }),
+    prisma.orderDiscount.findMany({ where: { orderId } }),
+    prisma.orderLineItem.findMany({ where: { orderId } }),
+  ]);
   const taxRate = order ? Number(order.taxRate) : 0;
-  const taxAmount = subtotal * taxRate;
-  const total = subtotal + taxAmount;
+  const breakdown = computeOrderTotals({
+    lines: freshLines.map((l) => ({
+      department: l.department,
+      type: l.type,
+      lineTotal: Number(l.lineTotal),
+    })),
+    discounts: discounts.map((d) => ({
+      id: d.id,
+      scope: d.scope,
+      departmentKey: d.departmentKey,
+      type: d.type,
+      value: Number(d.value),
+      label: d.label,
+    })),
+    taxRate,
+  });
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { subtotal, taxAmount, total },
+    data: {
+      // subtotal stays semantically "sum of all OrderLineItem.lineTotal"
+      // (incl legacy DISCOUNT rows already negative) — discount-aware
+      // math operates on top of it and is reflected in tax + total.
+      // Keeping this column's meaning unchanged means external readers
+      // that consume Order.subtotal alone don't silently shift.
+      subtotal: breakdown.rawSubtotal,
+      taxAmount: breakdown.taxAmount,
+      total: breakdown.total,
+    },
   });
 
-  return { subtotal, taxAmount, total };
+  return {
+    subtotal: breakdown.rawSubtotal,
+    taxAmount: breakdown.taxAmount,
+    total: breakdown.total,
+    breakdown,
+  };
 }
