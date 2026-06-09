@@ -3,21 +3,71 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff, type ClientBadge } from "@/lib/crm/clientBadges";
 
+// PersonRole enum mirrored locally for runtime validation of the
+// ?role= query param. Postgres rejects unknown enum values but we
+// reject earlier so a typo returns 400 instead of 500.
+const PERSON_ROLES = [
+  'UPM', 'PRODUCER', 'LINE_PRODUCER', 'PRODUCTION_COORDINATOR',
+  'PRODUCTION_SUPERVISOR', 'TRANSPORTATION_COORDINATOR', 'ART_COORDINATOR',
+  'COORDINATOR', 'OWNER', 'OTHER',
+] as const
+type PersonRoleKey = (typeof PERSON_ROLES)[number]
+const PERSON_ROLES_SET = new Set<string>(PERSON_ROLES)
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
+  const roleFilterRaw = searchParams.get("role");
+  const roleFilter = roleFilterRaw && PERSON_ROLES_SET.has(roleFilterRaw)
+    ? (roleFilterRaw as PersonRoleKey)
+    : null;
 
-  const where: Record<string, unknown> = {};
+  // ── Search clause — shared between the list query and the stats
+  // groupBy so the chip counts reflect the SEARCHED subset (matches the
+  // spec). Role filter is intentionally NOT included in the stats
+  // clause — narrowing stats by the active role would zero every other
+  // chip and defeat the point of showing the chip strip.
+  const searchClause: Record<string, unknown> = {};
   if (search) {
-    where.OR = [
+    searchClause.OR = [
       { firstName: { contains: search, mode: "insensitive" } },
       { lastName: { contains: search, mode: "insensitive" } },
       { email: { contains: search, mode: "insensitive" } },
     ];
   }
+  // "Internal staff" exclusion for the COUNT only — the spec calls
+  // this out as a counting rule, not a visibility rule, so the list
+  // query below DOES NOT apply this filter (sirreel.com contacts still
+  // appear in the People table).
+  const statsClause = {
+    ...searchClause,
+    NOT: { email: { contains: '@sirreel.com', mode: 'insensitive' as const } },
+  };
+  const listClause: Record<string, unknown> = { ...searchClause };
+  if (roleFilter) listClause.role = roleFilter;
+
+  // ── Single groupBy for the role chip strip. One query, not N.
+  const statsRaw = await prisma.person.groupBy({
+    by: ['role'],
+    where: statsClause,
+    _count: { _all: true },
+  });
+  const byRole: Record<PersonRoleKey, number> = {
+    UPM: 0, PRODUCER: 0, LINE_PRODUCER: 0, PRODUCTION_COORDINATOR: 0,
+    PRODUCTION_SUPERVISOR: 0, TRANSPORTATION_COORDINATOR: 0, ART_COORDINATOR: 0,
+    COORDINATOR: 0, OWNER: 0, OTHER: 0,
+  };
+  let statsTotal = 0;
+  for (const row of statsRaw) {
+    if (PERSON_ROLES_SET.has(row.role)) {
+      byRole[row.role as PersonRoleKey] = row._count._all;
+      statsTotal += row._count._all;
+    }
+  }
+  const roleStats = { total: statsTotal, byRole };
 
   const people = await prisma.person.findMany({
-    where,
+    where: listClause,
     include: {
       affiliations: {
         where: { isCurrent: true },
@@ -132,7 +182,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ people: enriched });
+  return NextResponse.json({ people: enriched, roleStats });
 }
 
 export async function POST(req: NextRequest) {

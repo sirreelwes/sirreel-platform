@@ -207,6 +207,13 @@ export default function CRMPage() {
   );
   const [companies, setCompanies] = useState<Company[]>([]);
   const [people, setPeople] = useState<PersonResult[]>([]);
+  // Role-chip strip state for the People tab. Counts come from the
+  // /api/crm/people response (single groupBy, internal-staff excluded
+  // server-side). Active filter is mirrored to the URL `?role=` so it
+  // survives refresh and is shareable.
+  const [roleStats, setRoleStats] = useState<{ total: number; byRole: Record<string, number> } | null>(null);
+  const roleFromUrl = searchParams?.get('role') ?? null;
+  const [roleFilter, setRoleFilter] = useState<string | null>(roleFromUrl);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("");
@@ -272,10 +279,12 @@ export default function CRMPage() {
   const fetchPeople = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
+    if (roleFilter) params.set("role", roleFilter);
     const res = await fetch(`/api/crm/people?${params}`);
     const data = await res.json();
     setPeople(data.people || []);
-  }, [search]);
+    if (data.roleStats) setRoleStats(data.roleStats);
+  }, [search, roleFilter]);
 
   const fetchFollowUps = useCallback(async () => {
     const res = await fetch("/api/crm/activities?pending=true");
@@ -296,6 +305,21 @@ export default function CRMPage() {
       tab === "companies" ? fetchCompanies() : fetchPeople(),
     ]).then(() => setLoading(false));
   }, [tab, fetchCompanies, fetchPeople]);
+
+  // Mirror roleFilter into the URL so refresh + share preserve it.
+  // Replace (not push) so the back button doesn't accumulate every
+  // chip click as a history entry.
+  useEffect(() => {
+    if (tab !== 'people') return;
+    const params = new URLSearchParams(window.location.search);
+    if (roleFilter) params.set('role', roleFilter);
+    else params.delete('role');
+    const query = params.toString();
+    const next = `/crm${query ? `?${query}` : ''}`;
+    if (next !== window.location.pathname + window.location.search) {
+      router.replace(next, { scroll: false });
+    }
+  }, [roleFilter, tab, router]);
 
   // Follow-ups fetch independent of the tab — drives the
   // "Needs attention" strip at the top of the page, which is always
@@ -445,7 +469,7 @@ export default function CRMPage() {
           Ups tab is gone, surfaced in the strip above. */}
       <div className="flex gap-1 mb-4 bg-lt-inner rounded-lg p-0.5 w-fit">
         {([["people", "People"], ["companies", "Companies"]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => { setTab(key as typeof tab); setSearch(""); }}
+          <button key={key} onClick={() => { setTab(key as typeof tab); setSearch(""); setRoleFilter(null); }}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === key ? "bg-white text-lt-fg" : "text-lt-fg2 hover:text-lt-fg"}`}>
             {label}
           </button>
@@ -476,6 +500,74 @@ export default function CRMPage() {
               </select>
             </>
           )}
+        </div>
+      )}
+
+      {/* Role-stats chip strip — People tab only. Counts come from
+          /api/crm/people (single groupBy, server-side filter on
+          @sirreel.com so internal staff are excluded from totals but
+          still visible in the table). Counts respect the active search
+          but NOT the active role filter (otherwise clicking PRODUCER
+          would zero every other chip and defeat the strip). Matches
+          the Companies tab's SegmentChips rhythm: rounded-full pills,
+          dark-bg/white when active. */}
+      {tab === 'people' && roleStats && roleStats.total > 0 && (
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setRoleFilter(null)}
+            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1.5 ${
+              roleFilter === null
+                ? 'bg-lt-fg border-lt-fg text-white'
+                : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+            }`}
+            title="Show every role"
+          >
+            <span>All</span>
+            <span className={`font-mono ${roleFilter === null ? 'text-white' : 'text-lt-fg3'}`}>{roleStats.total}</span>
+          </button>
+          {(() => {
+            // Spec ordering: count DESC, OTHER always last regardless
+            // of count. Zero-count roles don't render at all so the
+            // strip stays scannable on small client books.
+            const PERSON_ROLE_LABELS: Record<string, string> = {
+              UPM: 'UPM',
+              PRODUCER: 'Producer',
+              LINE_PRODUCER: 'Line Producer',
+              PRODUCTION_COORDINATOR: 'Prod. Coordinator',
+              PRODUCTION_SUPERVISOR: 'Prod. Supervisor',
+              TRANSPORTATION_COORDINATOR: 'Transpo',
+              ART_COORDINATOR: 'Art Coord.',
+              COORDINATOR: 'Coordinator',
+              OWNER: 'Owner',
+              OTHER: 'Other',
+            }
+            const entries = Object.entries(roleStats.byRole)
+              .filter(([k, v]) => v > 0 && k !== 'OTHER')
+              .sort(([, a], [, b]) => b - a)
+            if ((roleStats.byRole.OTHER ?? 0) > 0) {
+              entries.push(['OTHER', roleStats.byRole.OTHER])
+            }
+            return entries.map(([role, count]) => {
+              const isActive = roleFilter === role
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setRoleFilter(isActive ? null : role)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-lt-fg border-lt-fg text-white'
+                      : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+                  }`}
+                  title={isActive ? 'Tap to clear filter' : `Filter to ${PERSON_ROLE_LABELS[role] ?? role}`}
+                >
+                  <span>{PERSON_ROLE_LABELS[role] ?? role}</span>
+                  <span className={`font-mono ${isActive ? 'text-white' : 'text-lt-fg3'}`}>{count}</span>
+                </button>
+              )
+            })
+          })()}
         </div>
       )}
 
