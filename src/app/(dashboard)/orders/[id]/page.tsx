@@ -10,6 +10,7 @@ import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/Ema
 import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
+import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus } from "@prisma/client";
@@ -227,7 +228,12 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED:    "bg-chip-bad-bg text-chip-bad-fg",
 };
 
-const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE", "DISCOUNT"] as const;
+// "DISCOUNT" intentionally OMITTED here — new discounts now flow through
+// the first-class OrderDiscount surface (DiscountsPanel below the line
+// items). Legacy DISCOUNT-type rows on existing orders continue to render
+// and contribute to subtotal as today; the entry path is just closed so
+// there's only one way to add a new discount going forward.
+const LINE_TYPES = ["VEHICLE", "EQUIPMENT", "EXPENDABLE", "LABOR", "FEE"] as const;
 
 // Status transitions exposed as buttons on the order detail page.
 // Buttons whose `endpoint` is set POST to that path (the book action
@@ -283,6 +289,11 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [assetCats, setAssetCats] = useState<AssetCat[]>([]);
+  // First-class order discounts (OrderDiscount model). Fetched from
+  // /api/orders/[id]/discounts which returns the rows plus the shared
+  // util's breakdown so we render persisted totals + per-dept summary
+  // from one source.
+  const [discountsData, setDiscountsData] = useState<DiscountsPanelData | null>(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [liType, setLiType] = useState<string>("EQUIPMENT");
@@ -400,9 +411,12 @@ export default function OrderDetailPage() {
     d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "--";
 
   const fetchOrder = useCallback(async () => {
-    const res = await fetch(`/api/orders/${orderId}`);
-    if (!res.ok) { router.push("/orders"); return; }
-    const data = await res.json();
+    const [orderRes, discountsRes] = await Promise.all([
+      fetch(`/api/orders/${orderId}`),
+      fetch(`/api/orders/${orderId}/discounts`),
+    ]);
+    if (!orderRes.ok) { router.push("/orders"); return; }
+    const data = await orderRes.json();
     setOrder(data);
     // Reset the blind-handoff local state to the server's value on
     // each fetch. Save zeros `blindDirty`; this also covers the
@@ -412,6 +426,12 @@ export default function OrderDetailPage() {
     setBlindPickupInstructions(data.blindPickupInstructions ?? "");
     setBlindReturnInstructions(data.blindReturnInstructions ?? "");
     setBlindDirty(false);
+    if (discountsRes.ok) {
+      const d = await discountsRes.json();
+      setDiscountsData({ discounts: d.discounts, breakdown: d.breakdown });
+    } else {
+      setDiscountsData(null);
+    }
     setLoading(false);
   }, [orderId, router]);
 
@@ -1415,12 +1435,41 @@ export default function OrderDetailPage() {
           </tbody>
         </table>
 
+        {/* Discounts panel — first-class. Renders null when there's no
+            line content AND no existing discounts ("no discounts =
+            layout unchanged" per the spec). isEditable mirrors the
+            line-item editability rule. */}
+        <DiscountsPanel
+          orderId={orderId}
+          isEditable={isEditable}
+          data={discountsData}
+          onChange={fetchOrder}
+        />
+
         {order.lineItems.length > 0 && (
           <div className="px-6 py-4 border-t border-lt-hairline flex justify-end">
             <div className="w-[280px] space-y-1.5 text-sm">
               <div className="flex justify-between text-lt-fg2">
                 <span>Subtotal</span><span className="font-mono text-lt-fg2">{fmt(order.subtotal)}</span>
               </div>
+              {/* Per-department discount lines render between Subtotal
+                  and Tax when present. When breakdown is unavailable
+                  or there are no discounts, this collapses to nothing
+                  and the original layout is preserved. */}
+              {discountsData?.breakdown.byDepartment
+                .filter((d) => d.discount > 0)
+                .map((d) => (
+                  <div key={d.department} className="flex justify-between text-chip-bad-fg text-xs">
+                    <span>{(d.discountLabel || 'Discount') + ` — ${d.department}`}</span>
+                    <span className="font-mono">−{fmt(d.discount)}</span>
+                  </div>
+                ))}
+              {discountsData && discountsData.breakdown.orderDiscount > 0 && (
+                <div className="flex justify-between text-chip-bad-fg text-xs">
+                  <span>{discountsData.breakdown.orderDiscountLabel || 'Order discount'}</span>
+                  <span className="font-mono">−{fmt(discountsData.breakdown.orderDiscount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-lt-fg2">
                 <span>Tax ({(Number(order.taxRate) * 100).toFixed(1)}%)</span><span className="font-mono text-lt-fg2">{fmt(order.taxAmount)}</span>
               </div>
