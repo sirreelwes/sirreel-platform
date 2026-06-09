@@ -2,6 +2,7 @@ import React from 'react'
 import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+import { ZellePayBlock } from './ZellePayBlock'
 
 /**
  * SirReel Invoice PDF. Shell mirrors the QuoteDocument / contracts
@@ -540,6 +541,11 @@ export function InvoiceDocument({
             <Text style={styles.balanceValue}>{fmtUsd(balanceDue)}</Text>
           </View>
         </View>
+
+        {/* ── Zelle pay-by block — right-aligned with the totals,
+            kept on the same page so the client sees the QR + handle
+            the instant their eye lands on Balance Due. ───────── */}
+        <ZellePayBlock />
 
         {/* ── Payment terms + instructions ────────────────────── */}
         <View style={styles.termsBox}>
