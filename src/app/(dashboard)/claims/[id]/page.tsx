@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { ClaimBadge } from '@/lib/claims/claimBadges'
+import { DocumentDropZone } from '@/components/claims/DocumentDropZone'
 
 type ClaimStatus =
   | 'DRAFT' | 'READY_TO_SEND' | 'SUBMITTED' | 'ACKNOWLEDGED'
@@ -607,8 +608,14 @@ export default function ClaimDetailPage() {
               </Section>
             )}
 
-            {claim.documents.length > 0 && (
-              <Section title={`Documents (${claim.documents.length})`}>
+            {/* Documents — drag-drop upload + classified list. The drop
+                zone is always present (so reps can add docs to claims
+                that don't have any yet); the list collapses when empty. */}
+            <Section title={`Documents${claim.documents.length > 0 ? ` (${claim.documents.length})` : ''}`}>
+              <div className="mb-3">
+                <DocumentDropZone claimId={claim.id} onDocumentsChanged={load} />
+              </div>
+              {claim.documents.length > 0 && (
                 <ul className="space-y-1.5">
                   {claim.documents.map((doc) => (
                     <li key={doc.id} className="text-xs">
@@ -619,8 +626,8 @@ export default function ClaimDetailPage() {
                     </li>
                   ))}
                 </ul>
-              </Section>
-            )}
+              )}
+            </Section>
 
             {/* Timeline */}
             <Section title="Timeline">
