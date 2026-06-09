@@ -36,17 +36,18 @@ try {
 export const ZELLE_ACCOUNT_NAME = 'SIRREEL PRODUCTION VEHICLES INC'
 
 /**
- * Plain-text Zelle handle — printed under the QR as the B&W / image-
+ * Plain-text Zelle tag — printed under the QR as the B&W / image-
  * stripped-email fallback. Must remain accurate even when the QR can't
  * be scanned (printed black-and-white, mail client stripped images,
- * client is squinting at a tiny preview, etc.).
+ * client is squinting at a tiny preview).
  *
- * TODO(wes): set this to the real Zelle email or phone before the next
- * invoice is generated. The placeholder below is intentionally
- * unmistakeable so an accidental ship is obvious in the PDF preview
- * rather than misdirected payments.
+ * Rendered with the "Zelle® tag:" label in the component below so the
+ * line reads as "Zelle® tag: sirreel" — the recipient-name line
+ * (ZELLE_ACCOUNT_NAME above) is what the client confirms in their
+ * banking app once they enter the tag.
  */
-export const ZELLE_HANDLE = 'SET_ZELLE_HANDLE_IN_ZellePayBlock.tsx'
+export const ZELLE_HANDLE = 'sirreel'
+export const ZELLE_HANDLE_LABEL = 'Zelle® tag:'
 
 // ── Styles — sized to drop next to the invoice totals block ────────
 
@@ -117,6 +118,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 2,
   },
+  // Lighter weight on the "Zelle® tag:" prefix so the actual tag
+  // (the next inline Text) reads as the dominant token in the line.
+  handleLabel: {
+    fontFamily: 'Helvetica',
+    color: C.muted,
+  },
 })
 
 // ── Component ──────────────────────────────────────────────────────
@@ -133,7 +140,10 @@ export function ZellePayBlock() {
         </View>
       )}
       <Text style={styles.accountName}>{ZELLE_ACCOUNT_NAME}</Text>
-      <Text style={styles.handle}>{ZELLE_HANDLE}</Text>
+      <Text style={styles.handle}>
+        <Text style={styles.handleLabel}>{ZELLE_HANDLE_LABEL} </Text>
+        {ZELLE_HANDLE}
+      </Text>
     </View>
   )
 }
