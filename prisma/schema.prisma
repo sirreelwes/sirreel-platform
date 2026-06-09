@@ -1596,6 +1596,7 @@ model User {
   uploadedDocs        ClaimDocument[]     @relation("DocUploader")
   timelineActions     ClaimTimeline[]     @relation("TimelineActor")
   reviewedClaimMail   ClaimMail[]         @relation("ClaimMailReviewer")
+  createdOrderDiscounts OrderDiscount[]   @relation("OrderDiscountCreator")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -1817,6 +1818,28 @@ enum LineItemDepartment {
   EXPENDABLES
   GE
   ART
+}
+
+// First-class order discounts (additive Phase). Coexists with legacy
+// type='DISCOUNT' OrderLineItem rows — those stay as-is for existing
+// orders, but all NEW discount entry funnels through this model so the
+// two surfaces can't ship divergent rendering / clamping rules. The
+// shared discount-aware totals util treats legacy DISCOUNT lines as
+// part of the line subtotal (their negative lineTotal already reduces
+// it) and applies these structured discounts ON TOP.
+//
+// Booked invoices are NOT retro-modified by new discounts — the
+// existing bookedSubtotal/bookedTotal snapshot stays canonical for
+// already-issued RENTAL invoices; the discount surfaces as an
+// ADJUSTMENT line on next regen instead.
+enum DiscountScope {
+  ORDER
+  DEPARTMENT
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
 }
 
 // Phase 1 lifecycle / book-time line routing. Set on each OrderLineItem
@@ -2075,6 +2098,7 @@ model Order {
   invoices     Invoice[]
   subRentals   SubRental[]
   followUps    QuoteFollowUp[]
+  discounts    OrderDiscount[]
   jobId        String          @map("job_id")
   jobContactId String?         @map("job_contact_id")
 
@@ -2203,6 +2227,52 @@ model OrderLineItem {
   pickListItem  PickListItem?
 
   @@map("sr_order_line_items")
+}
+
+// First-class discounts on an order. Two scopes:
+//   ORDER       — single grand-level discount; clamped to the
+//                 department-discounted subtotal.
+//   DEPARTMENT  — per LineItemDepartment; clamped to that
+//                 department's line subtotal.
+//
+// App-layer uniqueness contract enforced in the API layer (not via
+// @@unique here because the constraint is partial — one ORDER-scope
+// row, and one row per departmentKey — Postgres doesn't model
+// partial-unique-with-enum cleanly without an extension).
+//
+// Flat-total mode (UI affordance) computes an implied FIXED-value
+// ORDER discount against the post-department subtotal and stores
+// the result here — it's not a third type.
+model OrderDiscount {
+  id            String              @id @default(uuid())
+  orderId       String              @map("order_id")
+
+  scope         DiscountScope
+  // Required when scope=DEPARTMENT, must be null when scope=ORDER.
+  // Uses the LineItemDepartment enum directly so an invalid value
+  // can't land via the API.
+  departmentKey LineItemDepartment? @map("department_key")
+
+  type          DiscountType
+  // PERCENT: 0–100 (validated app-side). FIXED: dollar amount.
+  // Stored at 2 decimals to match the rest of the money columns.
+  value         Decimal             @db.Decimal(10, 2)
+
+  // Surfaces on the PDF + UI row. Defaults to "Discount" so the
+  // creator can ship without picking a label, but reps usually
+  // type a reason (e.g. "Repeat-client courtesy").
+  label         String              @default("Discount")
+
+  createdById   String?             @map("created_by_id")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt      @map("updated_at")
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("OrderDiscountCreator", fields: [createdById], references: [id])
+
+  @@index([orderId])
+  @@index([orderId, scope, departmentKey])
+  @@map("sr_order_discounts")
 }
 
 // ════════════════════════════════════════════════════════════════
