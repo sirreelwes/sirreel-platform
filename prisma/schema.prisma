@@ -1153,13 +1153,43 @@ enum ClaimDocType {
   RENTAL_AGREEMENT
   CORRESPONDENCE
   SETTLEMENT
+  // Added with the typed-document system (drag-drop upload +
+  // AI classification + email-attachment reclassification). Coexists
+  // with the existing CHECKOUT_PHOTO/RETURN_PHOTO values — both stay
+  // for legacy rows; the classifier's UI prompt only suggests from
+  // the simpler new-vocabulary set.
+  PHOTO
+  DAMAGE_INVOICE
+  POLICE_REPORT
   OTHER
+}
+
+// How a ClaimDocument's `type` was decided. Drives the UI cue:
+// AI_SUGGESTED renders with a "review" affordance until the user
+// confirms; the moment they touch the type chip we flip it to USER.
+// EMAIL_INGEST is the pre-classifier legacy default for attachments
+// the email pipeline used to flatten to CORRESPONDENCE — kept so
+// migration of older rows can tell user-confirmed types apart from
+// the inferred ones.
+enum DocTypeSource {
+  EMAIL_INGEST
+  USER
+  AI_SUGGESTED
 }
 
 model ClaimDocument {
   id         String       @id @default(uuid())
   claimId    String       @map("claim_id")
   type       ClaimDocType
+  // Provenance of the `type` decision. NULL on rows written before
+  // the typed-document system shipped — UI treats null as "unknown
+  // source, treat as user-set" so legacy rows don't surface a phantom
+  // review prompt. New writes always populate this.
+  typeSource DocTypeSource? @map("type_source")
+  // AI confidence score when typeSource = AI_SUGGESTED. 0..1 scale,
+  // matching the messageExtractor + reply-classifier convention.
+  // NULL for USER / EMAIL_INGEST sources where confidence is N/A.
+  typeConfidence Float?  @map("type_confidence")
   title      String
   fileUrl    String       @map("file_url")
   uploadedBy String?      @map("uploaded_by")
