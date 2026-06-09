@@ -36,6 +36,10 @@ export async function POST(
         },
         orderBy: { sortOrder: 'asc' },
       },
+      // Structured discounts (OrderDiscount). Passed to QuoteDocument
+      // which renders dept discount lines under each section subtotal
+      // and the order discount in the totals block.
+      discounts: true,
     },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -76,6 +80,13 @@ export async function POST(
       total: Number(order.total),
       quoteExpDays: order.quoteExpDays,
       lineItems,
+      discounts: order.discounts.map((d) => ({
+        scope: d.scope,
+        departmentKey: d.departmentKey as Department | null,
+        type: d.type,
+        value: Number(d.value),
+        label: d.label,
+      })),
       company: {
         name: order.company.name,
         billingAddress: order.company.billingAddress,

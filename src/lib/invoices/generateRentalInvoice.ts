@@ -91,6 +91,12 @@ export async function generateRentalInvoice(args: {
         orderBy: { sortOrder: 'asc' },
       },
       invoices: { select: { id: true, type: true, status: true } },
+      // Structured OrderDiscounts surface on the invoice as the same
+      // discount line rows the order detail / quote PDF show. RENTAL
+      // invoices anchor tax + total to the booked snapshot (immutable
+      // AR figures); these lines render between Subtotal and Tax for
+      // client transparency about what discount was applied.
+      discounts: true,
     },
   })
   if (!order) return { ok: false, status: 404, error: 'order not found' }
@@ -216,6 +222,44 @@ export async function generateRentalInvoice(args: {
   const invoiceSubtotal = bookedSubtotal + billNowTotal
   const invoiceTotal = bookedTotal + billNowTotal
 
+  // ── Discount lines for the InvoiceDocument totals block ────────
+  // Built from CURRENT OrderDiscount rows. Each gets a labeled row
+  // rendered between Subtotal and Tax. Department discounts compute
+  // against per-dept line subtotals (same math the order detail UI +
+  // quote PDF use); order discount applies to the post-dept subtotal.
+  // The label includes the dept context so "Discount — Vehicles" is
+  // distinguishable from a flat order-level "Repeat client" credit.
+  const deptLineMap = new Map<string, number>()
+  for (const li of order.lineItems) {
+    if (li.type === 'DISCOUNT') continue
+    deptLineMap.set(li.department, (deptLineMap.get(li.department) ?? 0) + Number(li.lineTotal))
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  const discountLines: { label: string; amount: number }[] = []
+  let postDeptSubtotal = order.lineItems.reduce((s, l) => s + Number(l.lineTotal), 0)
+  for (const d of order.discounts.filter((x) => x.scope === 'DEPARTMENT' && x.departmentKey)) {
+    const deptSub = round2(deptLineMap.get(d.departmentKey!) ?? 0)
+    if (deptSub <= 0) continue
+    const raw = d.type === 'PERCENT' ? deptSub * (Number(d.value) / 100) : Number(d.value)
+    const amount = round2(Math.max(0, Math.min(raw, deptSub)))
+    if (amount <= 0) continue
+    discountLines.push({
+      label: `${d.label || 'Discount'} — ${d.departmentKey}`,
+      amount,
+    })
+    postDeptSubtotal -= amount
+  }
+  const orderRow = order.discounts.find((x) => x.scope === 'ORDER')
+  if (orderRow && postDeptSubtotal > 0) {
+    const raw = orderRow.type === 'PERCENT'
+      ? postDeptSubtotal * (Number(orderRow.value) / 100)
+      : Number(orderRow.value)
+    const amount = round2(Math.max(0, Math.min(raw, postDeptSubtotal)))
+    if (amount > 0) {
+      discountLines.push({ label: orderRow.label || 'Order discount', amount })
+    }
+  }
+
   // ── Render PDF ──────────────────────────────────────────────────
   let pdfBytes: Buffer
   try {
@@ -234,6 +278,7 @@ export async function generateRentalInvoice(args: {
       amountPaid: 0,
       balanceDue: invoiceTotal,
       lines: snapshot,
+      discountLines,
       company: {
         name: order.company.name,
         billingAddress: order.company.billingAddress,

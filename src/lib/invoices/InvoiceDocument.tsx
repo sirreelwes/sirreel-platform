@@ -79,6 +79,13 @@ export interface InvoiceDocumentProps {
   amountPaid: number
   balanceDue: number
   lines: InvoiceLineSnapshotEntry[]
+  /** Optional structured discount lines rendered between Subtotal and
+   *  Tax. Each entry is one row (negative amount, label). Used by the
+   *  OrderDiscount surface — RENTAL invoice generator passes current
+   *  order discounts; LD invoice never sets this. Omitting or passing
+   *  [] preserves the original 3-row totals layout (Subtotal/Tax/Total)
+   *  for invoices generated before discounts shipped. */
+  discountLines?: { label: string; amount: number }[]
   company: InvoiceCompanyForRender
   job: InvoiceJobForRender | null
   agent: InvoiceAgentForRender
@@ -380,6 +387,7 @@ export function InvoiceDocument({
   amountPaid,
   balanceDue,
   lines,
+  discountLines,
   company,
   job,
   agent,
@@ -520,6 +528,18 @@ export function InvoiceDocument({
             <Text style={styles.totalsLabel}>Subtotal</Text>
             <Text style={styles.totalsValue}>{fmtUsd(subtotal)}</Text>
           </View>
+          {/* Structured discounts (OrderDiscount surface) render between
+              Subtotal and Tax. The label carries dept or order context
+              ("Discount — Vehicles" / "Repeat client") so the client
+              sees what they got. When the array is empty or omitted —
+              true for invoices generated before discounts shipped — the
+              original 3-row layout is preserved bit-identically. */}
+          {discountLines?.filter((d) => d.amount > 0).map((d, i) => (
+            <View key={i} style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>{d.label}</Text>
+              <Text style={styles.totalsValue}>-{fmtUsd(d.amount)}</Text>
+            </View>
+          ))}
           <View style={styles.totalsRow}>
             <Text style={styles.totalsLabel}>
               Tax {taxRate != null && taxRate > 0 ? `(${fmtPct(taxRate)})` : '(-)'}

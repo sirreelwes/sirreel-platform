@@ -2,6 +2,7 @@ import React from 'react'
 import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 
 // Mid-word breaks are off by default — keeps real words intact
 // (e.g. "Productions" stays whole, not "Produc-tions") because the
@@ -100,6 +101,14 @@ export interface QuoteJobForRender {
   name: string | null
 }
 
+export interface QuoteDiscountInput {
+  scope: 'ORDER' | 'DEPARTMENT'
+  departmentKey: Department | null
+  type: 'PERCENT' | 'FIXED'
+  value: number
+  label: string
+}
+
 export interface QuoteDocumentProps {
   orderNumber: string
   description: string | null
@@ -112,6 +121,11 @@ export interface QuoteDocumentProps {
   total: number
   quoteExpDays: number
   lineItems: QuoteLineItem[]
+  /** Structured discounts (OrderDiscount rows). Dept discounts render
+   *  UNDER each affected section's subtotal; the order-scope discount
+   *  renders between Subtotal and Tax in the totals block. Empty/absent
+   *  → original layout, byte-identical to pre-discount quotes. */
+  discounts?: QuoteDiscountInput[]
   company: QuoteCompanyForRender
   jobContact: QuoteContactForRender | null
   agent: QuoteAgentForRender
@@ -592,6 +606,23 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               <Text style={styles.subtotalLabel}>{DEPT_LABELS[dept]} Subtotal</Text>
               <Text style={styles.subtotalValue}>{fmtMoney(subtotal)}</Text>
             </View>
+            {/* Department discount line — renders directly under the
+                section subtotal when a DEPARTMENT-scope OrderDiscount
+                applies. Clamped to the section subtotal so the visible
+                amount can never exceed what's being discounted. */}
+            {(() => {
+              const d = (props.discounts ?? []).find((x) => x.scope === 'DEPARTMENT' && x.departmentKey === dept)
+              if (!d) return null
+              const raw = d.type === 'PERCENT' ? subtotal * (d.value / 100) : d.value
+              const amt = Math.round(Math.max(0, Math.min(raw, subtotal)) * 100) / 100
+              if (amt <= 0) return null
+              return (
+                <View style={styles.subtotalRow}>
+                  <Text style={styles.subtotalLabel}>{d.label || 'Discount'}</Text>
+                  <Text style={styles.subtotalValue}>-{fmtMoney(amt)}</Text>
+                </View>
+              )
+            })()}
           </View>
         ))}
 
@@ -603,34 +634,55 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
           </View>
         ))}
 
-        {/* Totals — derived from computed line totals, NOT the stored
-            Order.subtotal/taxAmount/total fields. Those were summed
-            from a stale OrderLineItem.lineTotal column at save time
-            and routinely read as $0 (see fix in commit history). */}
+        {/* Totals — derived from the shared discount-aware util
+            (src/lib/orders/discountedTotals.ts). Same math that
+            recalcOrderTotals persists to the Order row, so the PDF
+            grand total matches what the order detail UI shows. With
+            ZERO discounts the util's output is bit-identical to the
+            legacy `subtotal × taxRate` math — no regression on
+            pre-discount quotes. */}
         {(() => {
-          const computedSubtotal = props.lineItems.reduce(
-            (s, l) => s + computeLineTotal(l),
-            0,
-          )
-          const computedTaxAmount = computedSubtotal > 0 ? computedSubtotal * props.taxRate : 0
-          const computedGrandTotal = computedSubtotal + computedTaxAmount
+          const breakdown = computeOrderTotals({
+            lines: props.lineItems.map((l) => ({
+              department: l.department,
+              type: l.isDiscount ? 'DISCOUNT' as const : 'EQUIPMENT' as const,
+              lineTotal: computeLineTotal(l),
+            })),
+            discounts: (props.discounts ?? []).map((d) => ({
+              scope: d.scope,
+              departmentKey: d.departmentKey,
+              type: d.type,
+              value: d.value,
+              label: d.label,
+            })),
+            taxRate: props.taxRate,
+          })
           return (
             <View style={styles.totals}>
               <View style={styles.totalsRow}>
                 <Text style={styles.totalsLabel}>Subtotal</Text>
-                <Text style={styles.totalsValue}>{fmtMoney(computedSubtotal)}</Text>
+                <Text style={styles.totalsValue}>{fmtMoney(breakdown.rawSubtotal)}</Text>
               </View>
-              {computedTaxAmount > 0 && (
+              {/* Order-scope discount line — sits between Subtotal and
+                  Tax. Dept discounts already rendered under their
+                  section subtotals above. */}
+              {breakdown.orderDiscount > 0 && (
+                <View style={styles.totalsRow}>
+                  <Text style={styles.totalsLabel}>{breakdown.orderDiscountLabel || 'Order discount'}</Text>
+                  <Text style={styles.totalsValue}>-{fmtMoney(breakdown.orderDiscount)}</Text>
+                </View>
+              )}
+              {breakdown.taxAmount > 0 && (
                 <View style={styles.totalsRow}>
                   <Text style={styles.totalsLabel}>
                     Tax {props.taxRate > 0 ? `(${(props.taxRate * 100).toFixed(3)}%)` : ''}
                   </Text>
-                  <Text style={styles.totalsValue}>{fmtMoney(computedTaxAmount)}</Text>
+                  <Text style={styles.totalsValue}>{fmtMoney(breakdown.taxAmount)}</Text>
                 </View>
               )}
               <View style={styles.grandRow}>
                 <Text style={styles.grandLabel}>Grand Total</Text>
-                <Text style={styles.grandValue}>{fmtMoney(computedGrandTotal)}</Text>
+                <Text style={styles.grandValue}>{fmtMoney(breakdown.total)}</Text>
               </View>
             </View>
           )
