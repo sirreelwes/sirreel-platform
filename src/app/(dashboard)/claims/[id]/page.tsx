@@ -23,6 +23,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { ClaimBadge } from '@/lib/claims/claimBadges'
 import { DocumentDropZone } from '@/components/claims/DocumentDropZone'
+import { TypedDocumentList } from '@/components/claims/TypedDocumentList'
 
 type ClaimStatus =
   | 'DRAFT' | 'READY_TO_SEND' | 'SUBMITTED' | 'ACKNOWLEDGED'
@@ -162,7 +163,16 @@ interface ClaimDetail {
     id: string; action: string; description: string; amount: number | null;
     isAi: boolean; createdAt: string; performedByUser: { id: string; name: string } | null
   }[]
-  documents: { id: string; type: string; title: string; fileUrl: string; notes: string | null; createdAt: string }[]
+  documents: {
+    id: string
+    type: import('@prisma/client').ClaimDocType
+    typeSource: 'EMAIL_INGEST' | 'USER' | 'AI_SUGGESTED' | null
+    typeConfidence: number | null
+    title: string
+    fileUrl: string
+    notes: string | null
+    createdAt: string
+  }[]
 }
 
 const fmtMoney = (n: number | null): string => {
@@ -615,18 +625,11 @@ export default function ClaimDetailPage() {
               <div className="mb-3">
                 <DocumentDropZone claimId={claim.id} onDocumentsChanged={load} />
               </div>
-              {claim.documents.length > 0 && (
-                <ul className="space-y-1.5">
-                  {claim.documents.map((doc) => (
-                    <li key={doc.id} className="text-xs">
-                      <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black underline-offset-2 hover:underline">
-                        {doc.title}
-                      </a>
-                      <span className="text-[10px] uppercase tracking-wider text-lt-fg3 ml-2">{doc.type}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <TypedDocumentList
+                claimId={claim.id}
+                documents={claim.documents}
+                onChanged={load}
+              />
             </Section>
 
             {/* Timeline */}

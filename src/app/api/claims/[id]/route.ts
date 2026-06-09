@@ -95,7 +95,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
         orderBy: { createdAt: 'desc' },
       },
       documents: {
-        select: { id: true, type: true, title: true, fileUrl: true, notes: true, createdAt: true },
+        select: {
+          id: true, type: true,
+          // Provenance + confidence drive the "review this AI suggestion"
+          // chip in the typed document list (STEP 4). NULL on legacy rows
+          // — UI treats null as "user-set, no review needed".
+          typeSource: true, typeConfidence: true,
+          title: true, fileUrl: true, notes: true, createdAt: true,
+        },
         orderBy: { createdAt: 'desc' },
       },
     },
