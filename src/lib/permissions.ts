@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client';
+import { isAllowedHrEmail } from '@/lib/hr/allowlist';
 
 // ═══════════════════════════════════════
 // SIRREEL — Role-Based Permissions
@@ -186,6 +187,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 export interface PermissionsUser {
   role: UserRole;
   salesOnly: boolean;
+  // Optional. When passed, getNavSections uses it to decide HR nav
+  // visibility via the code-reviewed allowlist (see
+  // src/lib/hr/allowlist.ts). HR access is NOT role-based — it's a
+  // distinct, narrower gate. Legacy callers that pass only role +
+  // salesOnly still work; they just don't see the HR nav entry,
+  // matching the safe default.
+  email?: string;
 }
 
 /**
@@ -337,6 +345,13 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // straggler legacy reconciliation work, just not surfaced in nav.
   if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
+  // HR nav entry. Gated on the hardcoded allowlist (Wes + Dani) +
+  // HR_ALLOWLIST env override — NOT on role. Other ADMINs see no HR
+  // entry. Cosmetic only; the page + every HR API route does its own
+  // requireHrAccess() check so a bypass here would still 403.
+  if (user.email && isAllowedHrEmail(user.email)) {
+    admin.push({ id: 'hr', label: 'HR', icon: '', href: '/hr' });
+  }
   if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
 
   return sections;

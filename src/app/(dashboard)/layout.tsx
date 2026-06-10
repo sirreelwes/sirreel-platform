@@ -37,7 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [adminOpen, setAdminOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
-      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/reporting','/scheduling','/stale-holds'].some(a => p.startsWith(a));
+      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/reporting','/scheduling','/stale-holds','/hr'].some(a => p.startsWith(a));
     }
     return false;
   });
@@ -84,7 +84,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // (non-sales-only) — they're previewing a baseline operational view.
   // Their actual sales-only flag only applies when not impersonating.
   const salesOnly: boolean = actualRole === 'ADMIN' && viewAsRole ? false : actualSalesOnly;
-  const permsUser = { role, salesOnly };
+  // email passed so getNavSections can gate the HR entry on the
+  // hardcoded allowlist (Wes + Dani). Not used by getPermissions —
+  // the HR API is the actual authorization gate.
+  const permsUser = { role, salesOnly, email: user.email as string | undefined };
   const perms = getPermissions(permsUser);
   const navItems = getNavItems(permsUser);
   const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'dashboard';
