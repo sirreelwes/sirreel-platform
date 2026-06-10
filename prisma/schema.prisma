@@ -1627,6 +1627,14 @@ model User {
   timelineActions     ClaimTimeline[]     @relation("TimelineActor")
   reviewedClaimMail   ClaimMail[]         @relation("ClaimMailReviewer")
   createdOrderDiscounts OrderDiscount[]   @relation("OrderDiscountCreator")
+  // HR back-relations. employee is the 0-or-1 Employee row for staff
+  // who happen to also have an HQ login — most do. reviewedHrMail is
+  // every HR triage decision this user stamped. Access to HR data
+  // itself is gated by src/lib/hr/allowlist.ts, NOT by these
+  // relations — having a login + an Employee row does NOT imply
+  // permission to see other employees' HR mail.
+  employee            Employee?           @relation("EmployeeUserLink")
+  reviewedHrMail      HrMail[]            @relation("HrMailReviewer")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -3412,4 +3420,190 @@ enum EmailDeliveryStatus {
   DELAYED
   BOUNCED
   COMPLAINED
+}
+
+// ════════════════════════════════════════════════════════════════
+// PHASE — HR (isolated)
+// ════════════════════════════════════════════════════════════════
+//
+// HR data is the most sensitive in the system (medical, leave,
+// discipline, payroll). The architecture mirrors the claims mail
+// pipeline (inbox mode → authorship gate → parse → disposition →
+// triage UI) with one structural difference: HR mail is STORED IN
+// SEPARATE TABLES (HrEmail, HrMail, HrAttachment) and NEVER written
+// to EmailMessage / EmailThread / ClaimMail. The 12+ existing email-
+// read surfaces (sales suggested-inquiries, claims triage, exec
+// coverage, inbox view, AI extraction cron, etc.) all query
+// EmailMessage — so by design they cannot return HR rows. Adding a
+// new email-read feature does not need to remember to "exclude HR";
+// the table partition makes leakage structurally impossible rather
+// than procedurally avoidable.
+//
+// Access is double-gated: every HR API route AND the nav entry call
+// requireHrAccess() (src/lib/hr/allowlist.ts), which checks a
+// hardcoded constant + HR_ALLOWLIST env override. A DB-managed flag
+// was rejected here because a UI bug or schema migration that wrote
+// the wrong row could escalate privilege; the code-reviewed constant
+// can only change via a deploy.
+
+// Employee — payroll/HR identity. Distinct from User (which is the
+// access-control / login identity). 1:0..1 link from Employee to
+// User: most current staff have an HQ login and the link is
+// populated; non-login staff (future drivers / warehouse) can exist
+// as Employees without a User row.
+//
+// Email-match fields: workEmail is the canonical address; personalEmails
+// captures the secondary addresses HR mail might actually come from
+// (Gmail personal accounts, payroll-provider addresses, etc.). The
+// Sonnet employee-match step in onboardFromHrEmail searches both.
+model Employee {
+  id              String   @id @default(uuid())
+  fullName        String
+  workEmail       String?  @unique @map("work_email")
+  personalEmails  String[] @map("personal_emails")
+  title           String?
+  department      String?
+  isActive        Boolean  @default(true) @map("is_active")
+  startedOn       DateTime? @map("started_on") @db.Date
+  leftOn          DateTime? @map("left_on")    @db.Date
+  notes           String?  @db.Text
+
+  // Nullable link to the HQ login. UNIQUE so the inverse on User
+  // is a clean 1:1; reverse is User.employee.
+  userId          String?  @unique @map("user_id")
+  user            User?    @relation("EmployeeUserLink", fields: [userId], references: [id], onDelete: SetNull)
+
+  hrMail          HrMail[]
+  hrAttachments   HrAttachment[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  @@map("hr_employees")
+}
+
+// HrEmail — parallel to EmailMessage; ISOLATED. Pubsub branches at
+// the source (`if email === hr@sirreel.com`) and writes here instead
+// of EmailMessage. This row is the single source-of-truth for an
+// inbound HR Gmail message; the HrMail disposition + HrAttachment
+// children point back to it.
+model HrEmail {
+  id              String   @id @default(uuid())
+  // Same dedup contract EmailMessage has — Gmail's per-inbox id is
+  // unique within an inbox; the RFC-2822 Message-Id is the cross-
+  // inbox key (used for the staff-forward-into-hr@ idempotency check).
+  gmailMessageId  String   @unique @map("gmail_message_id")
+  rfc822MessageId String?  @map("rfc822_message_id")
+  inReplyTo       String?  @map("in_reply_to")
+
+  fromAddress     String   @map("from_address")
+  toAddresses     String[] @map("to_addresses")
+  subject         String
+  snippet         String?  @db.Text
+  bodyText        String?  @map("body_text") @db.Text
+  bodyHtml        String?  @map("body_html") @db.Text
+  bodySource      String?  @map("body_source")
+  attachmentCount Int      @default(0) @map("attachment_count")
+  routingHeaders  Json?    @map("routing_headers")
+
+  sentAt          DateTime @map("sent_at")
+  isRead          Boolean  @default(false) @map("is_read")
+
+  // 0-or-1 — populated by onboardFromHrEmail. Null when the
+  // background helper hasn't run yet (rare; fire-and-forget); the UI
+  // treats missing disposition as "still being processed".
+  hrMail          HrMail?
+  attachments     HrAttachment[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  @@index([rfc822MessageId])
+  @@index([sentAt(sort: Desc)])
+  @@map("hr_emails")
+}
+
+enum HrCategory {
+  TIMESHEET
+  PTO_LEAVE
+  MEDICAL
+  PAYROLL
+  BENEFITS
+  DISCIPLINE
+  COMPLAINT
+  ONBOARDING
+  RESIGNATION
+  OTHER
+}
+
+enum HrDisposition {
+  FILED         // confident employee match + category assigned
+  NEEDS_REVIEW  // partial info — Wes/Dani assign manually
+  IGNORED       // non-HR noise (auto-replies, newsletters that slipped through)
+}
+
+// HrMail — disposition + parse snapshot per HrEmail. Mirror of
+// ClaimMail's role on the claims side. employeeId is nullable for
+// NEEDS_REVIEW + IGNORED rows; the triage UI lets Wes/Dani assign it.
+model HrMail {
+  id              String        @id @default(uuid())
+  hrEmailId       String        @unique @map("hr_email_id")
+  employeeId      String?       @map("employee_id")
+
+  category        HrCategory
+  disposition    HrDisposition
+  // Sonnet parse output: { employeeNameGuess, category, summary,
+  // confidence, reasoning }. JSON keeps the surface flexible while
+  // the classifier prompt evolves; the triage UI reads named keys.
+  parse           Json?
+  reason          String?
+
+  dismissed       Boolean       @default(false)
+  reviewedById    String?       @map("reviewed_by_id")
+  reviewedAt      DateTime?     @map("reviewed_at")
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt      @map("updated_at")
+
+  hrEmail         HrEmail       @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
+  employee        Employee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  reviewedBy      User?         @relation("HrMailReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, createdAt(sort: Desc)])
+  @@index([disposition, dismissed])
+  @@map("hr_mail")
+}
+
+// HrAttachment — file metadata + Vercel Blob URL. Parallel to
+// ClaimDocument with HR-specific category set. employeeId is set
+// when the parent HrEmail's HrMail row links to an employee;
+// orphaned attachments (NEEDS_REVIEW / IGNORED) keep employeeId null
+// until the rep assigns the parent row.
+model HrAttachment {
+  id              String      @id @default(uuid())
+  hrEmailId       String?     @map("hr_email_id")
+  employeeId      String?     @map("employee_id")
+
+  category        HrCategory  @default(OTHER)
+  title           String
+  fileUrl         String      @map("file_url")
+  mimeType        String?     @map("mime_type")
+  sizeBytes       Int?        @map("size_bytes")
+  notes           String?     @db.Text
+
+  // AI classifier provenance — same idea as ClaimDocument.typeSource
+  // (EMAIL_INGEST vs AI_SUGGESTED vs USER). Reuses the existing
+  // DocTypeSource enum since the semantics are identical.
+  typeSource      DocTypeSource? @map("type_source")
+  typeConfidence  Float?         @map("type_confidence")
+
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt      @map("updated_at")
+
+  hrEmail         HrEmail?    @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
+  employee        Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, createdAt(sort: Desc)])
+  @@index([hrEmailId])
+  @@map("hr_attachments")
 }

@@ -27,5 +27,6 @@ scripts/*
 !scripts/seed-agent-slugs.ts
 !scripts/backfillRoutingHeaders.ts
 !scripts/_loadProdEnv.ts
+!scripts/seed-hr-employees.ts
 .env.local.bak
 .gcp-service-account.json
