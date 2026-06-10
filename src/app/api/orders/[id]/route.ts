@@ -6,6 +6,7 @@ import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
 import { transitionCadenceState, rebaselineCadenceForOrder } from "@/lib/cadence/scheduler";
+import { projectCadenceFromOrderStatus } from "@/lib/orders/cadenceProjection";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -107,15 +108,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
     } = body;
 
     const data: Record<string, unknown> = {};
+    // Capture the prior status so post-update cadence projection only
+    // fires when status actually changed — projection itself is monotonic
+    // (won't regress, won't fire on no-op), but skipping the call on
+    // unchanged-status writes saves a DB roundtrip.
+    let priorStatus: OrderStatus | null = null;
     if (status !== undefined) {
       data.status = status;
       // Phase 1 sales pipeline: keep quoteStatus in lockstep with status
       // and stamp the sales-stage timestamps on first transition.
       const current = await prisma.order.findUnique({
         where: { id },
-        select: { sentAt: true, wonAt: true, lostAt: true },
+        select: { status: true, sentAt: true, wonAt: true, lostAt: true },
       });
       if (current) {
+        priorStatus = current.status;
         const sync = computeQuoteStatusSync(status as OrderStatus, current);
         Object.assign(data, sync);
       }
@@ -163,6 +170,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
         await transitionCadenceState(id, 'QUOTE_SENT');
       } catch (err) {
         console.error('[orders/PUT] cadence schedule failed:', err);
+      }
+    }
+
+    // Project cadence on ANY status transition — not just QUOTE_SENT.
+    // Without this, manually flipping an order to ON_JOB / RETURNED /
+    // INVOICED / CLOSED / CANCELLED via the order detail page bypassed
+    // the cadence ladder entirely: the pickup-day reminder, return-day
+    // reminder, completion thank-you, etc. cron events never got
+    // scheduled. The bookOrder service already calls this helper
+    // post-transaction; symmetrical here for every other transition.
+    // Helper is monotonic + idempotent + guards against regressing past
+    // LOST/CANCELLED, so a no-op write doesn't double-schedule.
+    if (status !== undefined && priorStatus !== null && status !== priorStatus) {
+      try {
+        await projectCadenceFromOrderStatus(id, status as OrderStatus);
+      } catch (err) {
+        console.error('[orders/PUT] cadence projection failed:', err);
       }
     }
 
