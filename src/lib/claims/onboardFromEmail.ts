@@ -40,20 +40,25 @@
 
 import { put } from '@vercel/blob'
 import { randomUUID } from 'crypto'
-import { google } from 'googleapis'
 import type { ClaimMailDisposition, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { parsePastedClaim, type ParsedClaim } from '@/lib/claims/parsePastedClaim'
 import { nextClaimNumber } from '@/lib/orders'
-import { extractBodyFromGmailPayload, type GmailMessagePart } from '@/lib/email/body'
 import { classifyClaimDocument } from '@/lib/claims/classifyClaimDocument'
+// Lifted to a shared helper so the HR ingest pipeline can reuse the
+// Gmail-attachment download + Blob-upload plumbing without duplicating
+// it. Behavior-neutral for this consumer — same blob keys, same per-
+// attachment loop, same size cap. The per-attachment callback below
+// preserves the claim-specific side effect (classify + create
+// ClaimDocument).
+import {
+  fetchGmailMessageFull,
+  forEachInboxAttachment,
+  type GmailAttachmentMeta,
+} from '@/lib/email/persistGmailAttachments'
 
 const TEXT_MIN_CHARS = 30
 const TEXT_MAX_CHARS = 200_000
-// Cap individual attachment downloads at 25 MB — Gmail's per-attachment
-// API limit is 25 MiB anyway. Anything larger is almost certainly a
-// misuse (video, raw photo dump) and should be uploaded manually.
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export interface OnboardOutcome {
   // Maps 1:1 to ClaimMailDisposition (lowercased for the return shape;
@@ -65,62 +70,6 @@ export interface OnboardOutcome {
   documentId?: string
   attachmentsAttached?: number
   claimMailId?: string
-}
-
-interface GmailAttachmentMeta {
-  filename: string
-  mimeType: string
-  attachmentId: string
-  size: number
-}
-
-interface FetchedMessage {
-  bodyText: string | null
-  attachments: GmailAttachmentMeta[]
-  payload: GmailMessagePart | undefined
-}
-
-function getGmailClient(impersonate: string) {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '{}'
-  const creds = JSON.parse(raw)
-  const auth = new google.auth.JWT(
-    creds.client_email,
-    undefined,
-    creds.private_key,
-    ['https://www.googleapis.com/auth/gmail.readonly'],
-    impersonate,
-  )
-  return google.gmail({ version: 'v1', auth })
-}
-
-function walkForAttachments(payload: GmailMessagePart | undefined | null, out: GmailAttachmentMeta[]): void {
-  if (!payload) return
-  if (payload.filename && payload.body?.attachmentId) {
-    out.push({
-      filename: payload.filename,
-      mimeType: payload.mimeType || 'application/octet-stream',
-      attachmentId: payload.body.attachmentId,
-      size: payload.body.size || 0,
-    })
-  }
-  if (payload.parts) {
-    for (const child of payload.parts) walkForAttachments(child, out)
-  }
-}
-
-async function fetchFromGmail(inbox: string, gmailMessageId: string): Promise<FetchedMessage | null> {
-  try {
-    const gmail = getGmailClient(inbox)
-    const res = await gmail.users.messages.get({ userId: 'me', id: gmailMessageId, format: 'full' })
-    const payload = res.data.payload as GmailMessagePart | undefined
-    const body = extractBodyFromGmailPayload(payload)
-    const attachments: GmailAttachmentMeta[] = []
-    walkForAttachments(payload, attachments)
-    return { bodyText: body.bodyText, attachments, payload }
-  } catch (err) {
-    console.warn('[claims/onboardFromEmail] Gmail fetch failed for', inbox, gmailMessageId, err instanceof Error ? err.message : err)
-    return null
-  }
 }
 
 export async function onboardFromEmail(emailMessageId: string): Promise<OnboardOutcome> {
@@ -189,7 +138,7 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
   // stored bodyText if the Gmail fetch fails (no network / 404 / etc.)
   // so the function still runs without attachments instead of refusing
   // outright.
-  const fetched = inbox && msg.gmailMessageId ? await fetchFromGmail(inbox, msg.gmailMessageId) : null
+  const fetched = inbox && msg.gmailMessageId ? await fetchGmailMessageFull(inbox, msg.gmailMessageId) : null
 
   const freshText = fetched?.bodyText ?? null
   const storedText = msg.bodyText ?? msg.bodyHtml ?? null
@@ -346,44 +295,13 @@ function safeName(name: string): string {
     .slice(0, 180) || 'attachment'
 }
 
-async function uploadAttachmentBytes(args: {
-  inbox: string
-  gmailMessageId: string
-  claimNumber: string
-  attachment: GmailAttachmentMeta
-}): Promise<{ fileUrl: string; bytes: number; buf: Buffer } | null> {
-  const { inbox, gmailMessageId, claimNumber, attachment } = args
-  if (attachment.size > MAX_ATTACHMENT_BYTES) {
-    console.warn(`[claims/onboardFromEmail] attachment too large (${attachment.size} bytes): ${attachment.filename}`)
-    return null
-  }
-  try {
-    const gmail = getGmailClient(inbox)
-    const res = await gmail.users.messages.attachments.get({
-      userId: 'me',
-      messageId: gmailMessageId,
-      id: attachment.attachmentId,
-    })
-    const data = res.data.data
-    if (!data) return null
-    const buf = Buffer.from(data, 'base64url')
-    const now = new Date()
-    const yyyy = String(now.getUTCFullYear())
-    const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
-    const blobKey = `claims/${yyyy}/${mm}/${randomUUID()}-${claimNumber}-att-${safeName(attachment.filename)}`
-    const blob = await put(blobKey, buf, {
-      access: 'private' as 'public',
-      contentType: attachment.mimeType,
-    })
-    // Return the buffer alongside the URL so the classifier can read
-    // the same bytes without a second round trip to Gmail.
-    return { fileUrl: blob.url, bytes: buf.length, buf }
-  } catch (err) {
-    console.warn(`[claims/onboardFromEmail] attachment download failed for ${attachment.filename}:`, err instanceof Error ? err.message : err)
-    return null
-  }
-}
-
+// Domain-specific persistence built on the shared
+// forEachInboxAttachment iterator. Same blob key convention as before
+// the lift (`claims/{yyyy}/{mm}/{uuid}-{claimNumber}-att-{filename}`),
+// same per-attachment classify-then-create-ClaimDocument flow, same
+// EMAIL_INGEST-vs-AI_SUGGESTED provenance rule. Behavior-neutral
+// refactor — verified against the existing NEEDS_REVIEW fixture
+// (msg 54584809-1d14-4256-9aa0-7d7033beae4c) before HR shipped.
 async function persistAttachments(args: {
   claimId: string
   claimNumber: string
@@ -393,48 +311,43 @@ async function persistAttachments(args: {
   attachments: GmailAttachmentMeta[]
 }): Promise<number> {
   const { claimId, claimNumber, inbox, gmailMessageId, msgId, attachments } = args
-  if (attachments.length === 0) return 0
-  let attached = 0
-  for (const att of attachments) {
-    const uploaded = await uploadAttachmentBytes({ inbox, gmailMessageId, claimNumber, attachment: att })
-    if (!uploaded) continue
-    // Per-attachment classification — same Sonnet path the drag-drop
-    // upload route uses. Bounded by classifyClaimDocument's own
-    // try/catch so a bad classify never blocks the row write; the
-    // attachment still lands as OTHER with EMAIL_INGEST provenance if
-    // Sonnet returns FALLBACK.
-    const cls = await classifyClaimDocument({
-      filename: att.filename,
-      contentType: att.mimeType,
-      fileBuffer: uploaded.buf,
-    })
-    const sourceTag = cls.confidence > 0 ? 'AI_SUGGESTED' as const : 'EMAIL_INGEST' as const
-    try {
-      await prisma.claimDocument.create({
+  return forEachInboxAttachment({
+    inbox, gmailMessageId, attachments,
+    buildBlobKey: (att) => {
+      const now = new Date()
+      const yyyy = String(now.getUTCFullYear())
+      const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
+      return `claims/${yyyy}/${mm}/${randomUUID()}-${claimNumber}-att-${safeName(att.filename)}`
+    },
+    put: (key, data, opts) => put(key, data, opts as { access: 'public'; contentType: string }),
+    onAttachment: async (dl) => {
+      const cls = await classifyClaimDocument({
+        filename: dl.filename,
+        contentType: dl.mimeType,
+        fileBuffer: dl.buf,
+      })
+      const sourceTag = cls.confidence > 0 ? 'AI_SUGGESTED' as const : 'EMAIL_INGEST' as const
+      return prisma.claimDocument.create({
         data: {
           claimId,
           type: cls.docType,
           typeSource: sourceTag,
           typeConfidence: cls.confidence,
-          title: `Email attachment: ${att.filename.slice(0, 200)}`,
-          fileUrl: uploaded.fileUrl,
+          title: `Email attachment: ${dl.filename.slice(0, 200)}`,
+          fileUrl: dl.fileUrl,
           uploadedBy: null,
           notes: [
             `Auto-attached from claims@ inbox.`,
             cls.reasoning ? `AI: ${cls.reasoning}` : null,
-            `Filename: ${att.filename}`,
-            `MIME: ${att.mimeType}`,
-            `Size: ${uploaded.bytes} bytes`,
+            `Filename: ${dl.filename}`,
+            `MIME: ${dl.mimeType}`,
+            `Size: ${dl.bytes} bytes`,
             `Source EmailMessage: ${msgId}`,
           ].filter(Boolean).join('\n\n'),
         },
       })
-      attached += 1
-    } catch (err) {
-      console.warn(`[claims/onboardFromEmail] claimDocument create failed for ${att.filename}:`, err instanceof Error ? err.message : err)
-    }
-  }
-  return attached
+    },
+  })
 }
 
 async function attachToExisting(args: {
