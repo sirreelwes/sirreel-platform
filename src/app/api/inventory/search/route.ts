@@ -23,9 +23,19 @@ export async function GET(req: NextRequest) {
     where.category = { slug: categorySlug };
   }
 
+  // dailyRate + weeklyRate added to the projection so the order-detail
+  // line-item form can auto-fill the rate field on inventory pick —
+  // matches the AssetCategory selector's behavior (which has had rate
+  // auto-fill since day one). Decimals serialize as strings; the page
+  // coerces with Number().
   const items = await prisma.inventoryItem.findMany({
     where,
-    include: {
+    select: {
+      id: true,
+      code: true,
+      description: true,
+      dailyRate: true,
+      weeklyRate: true,
       category: { select: { id: true, name: true, slug: true } },
     },
     take: limit,

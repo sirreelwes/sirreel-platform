@@ -206,7 +206,16 @@ function computeRecipients(order: Order): RecipientChoice {
 }
 
 type AssetCat = { id: string; name: string; slug: string; dailyRate: string; weeklyRate: string | null };
-type InvItem = { id: string; code: string; description: string; category: { id: string; name: string } };
+type InvItem = {
+  id: string;
+  code: string;
+  description: string;
+  // Decimal columns serialize as strings; Number() at point of use.
+  // weeklyRate optional — only used when the rep flips rateType=WEEKLY.
+  dailyRate: string;
+  weeklyRate: string | null;
+  category: { id: string; name: string };
+};
 
 // Order status pill — reuses the cadence palette so the pill reads
 // the same on the Jobs list, the dispatch board, and this detail page.
@@ -1019,6 +1028,18 @@ export default function OrderDetailPage() {
   const selectInventoryItem = (item: InvItem) => {
     setLiInvItemId(item.id);
     maybeAutoFillDesc(item.description || item.code);
+    // Auto-fill the rate field from the catalog — matches what
+    // selectAssetCategory has always done, and what reps were silently
+    // expecting on the inventory path (Jose's repro: typing a custom
+    // rate after picking an item, because nothing pre-populated). Rate
+    // is unconditionally set: the rep can still override the value in
+    // the input. weeklyRate kicks in only when the rep flips rateType
+    // to WEEKLY; default rateType stays DAILY.
+    const daily = Number(item.dailyRate);
+    if (Number.isFinite(daily) && daily > 0) {
+      setLiRate(String(daily));
+      setLiRateType("DAILY");
+    }
     setInvSearch(item.code);
     setShowInvDropdown(false);
   };
