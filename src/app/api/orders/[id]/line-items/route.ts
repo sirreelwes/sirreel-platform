@@ -43,20 +43,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
     const sortOrder = (maxSort._max.sortOrder ?? -1) + 1;
 
-    // Resolve billable days: prefer client-supplied billableDays, fall back
-    // to the pickup→return range, then start/end (legacy), default 1.
-    let days = 1;
-    if (billableDays != null && Number(billableDays) > 0) {
-      days = Math.floor(Number(billableDays));
-    } else if (pickupDate && returnDate) {
-      days = computeRentalDays(new Date(pickupDate), new Date(returnDate));
-    } else if (startDate && endDate) {
-      days = computeRentalDays(new Date(startDate), new Date(endDate));
-    }
-
-    // Resolve pickup/return dates: prefer per-line, fall back to start/end,
-    // then to the parent Order's range. NOT NULL constraint requires
-    // something — if nothing usable, default to today + days.
+    // Resolve pickup/return FIRST so the days computation below can
+    // fall back to the same window the row will actually bill against.
+    // Previously days defaulted to 1 when no dates were supplied — even
+    // though pickup/return would correctly inherit from the parent
+    // Order — so a manually-added item on a 3-day order shipped with
+    // billableDays=1 against a 3-day pickup/return range.
     let pickupResolved: Date;
     let returnResolved: Date;
     if (pickupDate && returnDate) {
@@ -74,9 +66,22 @@ export async function POST(req: NextRequest, { params }: Params) {
         pickupResolved = parent.startDate;
         returnResolved = parent.endDate;
       } else {
+        // Final fallback (parent has no dates either). 1-day window so
+        // computeRentalDays returns 1 below.
         pickupResolved = new Date();
-        returnResolved = new Date(Date.now() + days * 86400000);
+        returnResolved = pickupResolved;
       }
+    }
+
+    // Resolve billable days: prefer client-supplied billableDays
+    // (explicit override), else compute from the resolved pickup→return
+    // window. Net: added items inherit the order's billable days by
+    // default — matches original quote items.
+    let days: number;
+    if (billableDays != null && Number(billableDays) > 0) {
+      days = Math.floor(Number(billableDays));
+    } else {
+      days = computeRentalDays(pickupResolved, returnResolved);
     }
 
     // Department is required by the new billing rules. If the client

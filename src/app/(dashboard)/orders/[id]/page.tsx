@@ -318,6 +318,16 @@ export default function OrderDetailPage() {
   const [liInvItemId, setLiInvItemId] = useState("");
   const [liStartDate, setLiStartDate] = useState("");
   const [liEndDate, setLiEndDate] = useState("");
+  // Custom-dates toggle on the Add form. OFF by default — new rows
+  // inherit the order's pickup/return + billable days from the parent
+  // Order (the API does the fallback). ON reveals Start/End inputs so
+  // a rep can override on a per-line basis (e.g. an expendable with a
+  // different return).
+  const [liCustomDates, setLiCustomDates] = useState(false);
+  // Optional days override. Empty string = "auto" (compute from
+  // pickup/return). A typed value wins and persists; the row's days
+  // column shows the user value, not the computed one.
+  const [liDays, setLiDays] = useState("");
   const [liRateType, setLiRateType] = useState("DAILY");
   const [liRate, setLiRate] = useState("");
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
@@ -423,8 +433,21 @@ export default function OrderDetailPage() {
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
 
-  const fmtDate = (d: string | null) =>
-    d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "--";
+  const fmtDate = (d: string | null) => {
+    if (!d) return "--";
+    const dt = new Date(d + "T00:00:00");
+    if (Number.isNaN(dt.getTime())) {
+      // Legacy rows can carry a malformed date string from an earlier
+      // write path; render the same "--" the null case shows rather
+      // than letting "Invalid Date" leak into the UI. Logged once per
+      // bad value so the data team can spot the pattern.
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("[orders/detail] unparseable line-item date — rendering '--':", d);
+      }
+      return "--";
+    }
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
 
   const fetchOrder = useCallback(async () => {
     const [orderRes, discountsRes] = await Promise.all([
@@ -879,12 +902,15 @@ export default function OrderDetailPage() {
     }, 250);
   }, [invSearch]);
 
-  useEffect(() => {
-    if (showAddForm && order) {
-      if (order.startDate && !liStartDate) setLiStartDate(order.startDate.split("T")[0]);
-      if (order.endDate && !liEndDate) setLiEndDate(order.endDate.split("T")[0]);
-    }
-  }, [showAddForm, order]);
+  // No date pre-population on mount — the spec says new rows inherit
+  // the order's dates + billable days by default, and the API does the
+  // fallback when startDate/endDate are omitted. Pre-filling them on
+  // the form caused two bugs: (a) the form unconditionally shipped
+  // dates, so changing the order's range later didn't propagate to
+  // already-added rows, and (b) the API's computeRentalDays applied
+  // its +1 inclusive-day adjustment on a date pair that matched the
+  // order's range exactly, producing the "5 days for a 3-day order"
+  // miscount Jose hit. Custom dates is now an explicit opt-in toggle.
 
   const updateStatus = async (newStatus: string) => {
     await fetch(`/api/orders/${orderId}`, {
@@ -1046,8 +1072,12 @@ export default function OrderDetailPage() {
 
   const resetForm = () => {
     setLiType("EQUIPMENT"); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId("");
-    setLiStartDate(order?.startDate?.split("T")[0] || "");
-    setLiEndDate(order?.endDate?.split("T")[0] || "");
+    // Custom dates default OFF — the API inherits from the parent
+    // Order. Per-line override is opt-in via the toggle on the form.
+    setLiStartDate("");
+    setLiEndDate("");
+    setLiCustomDates(false);
+    setLiDays("");
     setLiRateType("DAILY"); setLiRate(""); setLiQty("1");
     setInvSearch(""); setInvResults([]);
     lastAutoFilledDescRef.current = "";
@@ -1056,17 +1086,32 @@ export default function OrderDetailPage() {
   const addLineItem = async () => {
     if (!liDesc || !liRate) return;
     setAdding(true);
+    // Body shape: only include startDate/endDate when the rep explicitly
+    // opted into Custom dates. Otherwise the API inherits from the parent
+    // Order's range — identical billing window to original quote items.
+    // Same for billableDays: omit when blank ("auto"), include when typed.
+    const body: Record<string, unknown> = {
+      type: liType,
+      description: liDesc,
+      inventoryItemId: liInvItemId || null,
+      assetCategoryId: liAssetCatId || null,
+      rateType: liRateType,
+      rate: parseFloat(liRate),
+      quantity: parseInt(liQty) || 1,
+    };
+    if (liCustomDates) {
+      body.startDate = liStartDate || null;
+      body.endDate = liEndDate || null;
+    }
+    const typedDays = liDays.trim();
+    if (typedDays !== "") {
+      const n = Number(typedDays);
+      if (Number.isFinite(n) && n > 0) body.billableDays = n;
+    }
     await fetch(`/api/orders/${orderId}/line-items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: liType, description: liDesc,
-        inventoryItemId: liInvItemId || null,
-        assetCategoryId: liAssetCatId || null,
-        startDate: liStartDate || null, endDate: liEndDate || null,
-        rateType: liRateType, rate: parseFloat(liRate),
-        quantity: parseInt(liQty) || 1,
-      }),
+      body: JSON.stringify(body),
     });
     resetForm(); setAdding(false); fetchOrder();
   };
@@ -1340,17 +1385,42 @@ export default function OrderDetailPage() {
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
             </div>
+            {/* Custom-dates toggle. Default OFF: new rows inherit the
+                order's pickup/return + billable days (matches original
+                quote items). When ON, the Start/End inputs reveal so a
+                rep can override per-line. Days is always editable —
+                blank = "auto" (compute from window). */}
+            <div className="flex items-center justify-between text-xs mb-2">
+              <label className="inline-flex items-center gap-2 text-lt-fg2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={liCustomDates}
+                  onChange={(e) => setLiCustomDates(e.target.checked)}
+                  className="rounded border-lt-hairline"
+                />
+                Custom dates
+              </label>
+              {!liCustomDates && order?.startDate && order?.endDate && (
+                <span className="text-lt-fg3">
+                  Inherits order range: {fmtDate(order.startDate)} – {fmtDate(order.endDate)}
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs text-lt-fg3 mb-1">Start</label>
-                <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs text-lt-fg3 mb-1">End</label>
-                <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
-              </div>
+              {liCustomDates && (
+                <>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-lt-fg3 mb-1">Start</label>
+                    <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-lt-fg3 mb-1">End</label>
+                    <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
+                  </div>
+                </>
+              )}
               <div className="col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Rate Type</label>
                 <select value={liRateType} onChange={(e) => setLiRateType(e.target.value)}
@@ -1364,11 +1434,24 @@ export default function OrderDetailPage() {
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
               <div className="col-span-1">
+                <label className="block text-xs text-lt-fg3 mb-1">Days</label>
+                <input
+                  type="number" step="0.5" min="0"
+                  value={liDays}
+                  onChange={(e) => setLiDays(e.target.value)}
+                  placeholder="auto"
+                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 placeholder:italic focus:outline-none focus:border-lt-fg2"
+                />
+              </div>
+              <div className="col-span-1">
                 <label className="block text-xs text-lt-fg3 mb-1">Qty</label>
                 <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
               </div>
-              <div className="col-span-3 flex items-end gap-2">
+              {/* Dynamic col-span — fewer columns are visible when
+                  Custom dates is OFF, so the Add/Cancel block stretches
+                  to fill the row width consistently. */}
+              <div className={`${liCustomDates ? 'col-span-3' : 'col-span-7'} flex items-end gap-2`}>
                 <button onClick={addLineItem} disabled={!liDesc || !liRate || adding}
                   className="px-4 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-medium rounded transition-colors">
                   {adding ? "Adding..." : "Add"}
