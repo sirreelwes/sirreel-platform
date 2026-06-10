@@ -44,10 +44,18 @@
 import { prisma } from '@/lib/prisma'
 import type { RoutingHeaders } from '@/lib/email/routingHeaders'
 
-export type InboxMode = 'SALES' | 'MONEY' | 'CLAIMS' | 'PRESERVE'
+export type InboxMode = 'SALES' | 'MONEY' | 'CLAIMS' | 'HR' | 'PRESERVE'
 
 export const INBOX_MODES: Record<string, InboxMode> = {
   'claims@sirreel.com':   'CLAIMS',
+  // HR mode is a routing mode, not a keep-all signal. The pubsub
+  // handler short-circuits hr@ to the HR ingest branch BEFORE the
+  // EmailMessage write path, so this mode's behavior is "structural
+  // redirect" — the shouldIngest() switch below returns keep:false
+  // (with reason: 'hr-redirect') for the safety belt: even if a
+  // future code path forgets to short-circuit, the filter prevents
+  // hr@ mail from ever landing in EmailMessage.
+  'hr@sirreel.com':       'HR',
   'billing@sirreel.com':  'MONEY',
   'payments@sirreel.com': 'MONEY',
   'info@sirreel.com':     'SALES',
@@ -217,9 +225,22 @@ function evaluateMoney(input: FilterInput): FilterDecision {
  */
 export function shouldIngest(input: FilterInput): FilterDecision {
   const mode = inboxMode(input.inbox)
+  // HR is structurally redirected at the pubsub handler — hr@ mail
+  // writes to HrEmail, NOT EmailMessage. Returning keep:false here
+  // is a SAFETY BELT: even if a future code path forgets the short-
+  // circuit, the filter still prevents hr@ mail from ever landing
+  // in EmailMessage. Outbound HR mail (the rare case of replying
+  // FROM hr@ via send-as) is also blocked from the standard email
+  // table; if we want a thread view for outbound HR replies the HR
+  // pipeline will store them in HrEmail too.
+  if (mode === 'HR') {
+    return { keep: false, reason: 'hr-redirect', mode }
+  }
   if (input.direction === 'OUTBOUND') {
     return { keep: true, reason: 'outbound', mode }
   }
+  // HR is already returned above; the narrowed switch is exhaustive
+  // over the remaining union members.
   switch (mode) {
     case 'CLAIMS':   return { keep: true, reason: 'claims-all', mode }
     case 'PRESERVE': return { keep: true, reason: 'preserve', mode }

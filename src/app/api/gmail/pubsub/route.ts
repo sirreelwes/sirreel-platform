@@ -12,6 +12,7 @@ import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { ingestHrEmail, HR_INBOX } from "@/lib/hr/ingestHrEmail"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -67,6 +68,35 @@ async function syncInbox(email: string) {
 
   for (const msg of messages) {
     if (!msg.id) continue
+
+    // ── HR isolation short-circuit ─────────────────────────────
+    // hr@ mail writes to HrEmail / HrMail / HrAttachment — NEVER
+    // EmailMessage. We branch BEFORE the EmailMessage dedup check
+    // and BEFORE the format=full fetch (ingestHrEmail does its own
+    // fetch inside the isolated pipeline). A cheap metadata-only
+    // fetch grabs From: for the authorship gate. Fire-and-forget —
+    // matches the claims onboarding pattern; never blocks the
+    // pubsub batch.
+    if (email === HR_INBOX) {
+      let hrFromAddress = ''
+      try {
+        const meta = await gmail.users.messages.get({
+          userId: 'me', id: msg.id, format: 'metadata', metadataHeaders: ['From'],
+        })
+        hrFromAddress = meta.data.payload?.headers?.find(
+          (h) => h.name?.toLowerCase() === 'from',
+        )?.value || ''
+      } catch (err) {
+        console.warn('[pubsub] hr metadata fetch failed:', msg.id, err instanceof Error ? err.message : err)
+        continue
+      }
+      const messageId = msg.id
+      void ingestHrEmail({ inbox: email, gmailMessageId: messageId, fromAddress: hrFromAddress }).catch(
+        (err) => console.warn('[pubsub] hr ingest failed:', messageId, err instanceof Error ? err.message : err),
+      )
+      continue
+    }
+
     const exists = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id } }).catch(() => null)
     if (exists) continue
 

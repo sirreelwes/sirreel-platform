@@ -58,6 +58,15 @@ export const WATCHED_INBOXES: readonly string[] = [
   'hello@sirreel.com',
   'payments@sirreel.com',
   'billing@sirreel.com',
+  // Added 2026-06-10 — HR pipeline. IMPORTANT: hr@ is in a separate
+  // structural partition. The pubsub handler short-circuits hr@ at
+  // the source so its mail writes to HrEmail (not EmailMessage), and
+  // the ingest filter has HR mode that returns keep:false for any
+  // EmailMessage write attempt as a safety belt. Listed here so the
+  // daily Gmail watch cron renews push notifications for the inbox
+  // (the watch is what makes hr@ deliver pub/sub events in the first
+  // place). DWD impersonability confirmed by Wes.
+  'hr@sirreel.com',
 ]
 
 export function isWatchedInbox(email: string): boolean {
