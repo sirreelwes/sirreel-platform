@@ -294,6 +294,13 @@ export default function OrderDetailPage() {
   // util's breakdown so we render persisted totals + per-dept summary
   // from one source.
   const [discountsData, setDiscountsData] = useState<DiscountsPanelData | null>(null);
+  // Last description value that the inventory / asset-category pickers
+  // auto-filled. Tracked in a ref (no re-render) so the pickers can
+  // tell "rep didn't touch the field" (current value === last auto-fill)
+  // from "rep typed a real description" (current value diverged) and
+  // ONLY overwrite in the former case. Without this guard, picking a
+  // catalog item silently nuked the rep's typed description.
+  const lastAutoFilledDescRef = useRef<string>("");
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [liType, setLiType] = useState<string>("EQUIPMENT");
@@ -990,16 +997,28 @@ export default function OrderDetailPage() {
     }
   };
 
+  // Description guard: only auto-fill when the field is empty OR still
+  // holds the last value WE auto-filled. If the rep typed something the
+  // picker isn't allowed to clobber it — preserves typed input across
+  // catalog picks while still letting two successive picks update each
+  // other naturally.
+  const maybeAutoFillDesc = (next: string) => {
+    if (liDesc === "" || liDesc === lastAutoFilledDescRef.current) {
+      setLiDesc(next);
+      lastAutoFilledDescRef.current = next;
+    }
+  };
+
   const selectAssetCategory = (cat: AssetCat) => {
     setLiAssetCatId(cat.id);
-    setLiDesc(cat.name);
+    maybeAutoFillDesc(cat.name);
     setLiRate(String(Number(cat.dailyRate)));
     setLiRateType("DAILY");
   };
 
   const selectInventoryItem = (item: InvItem) => {
     setLiInvItemId(item.id);
-    setLiDesc(item.description || item.code);
+    maybeAutoFillDesc(item.description || item.code);
     setInvSearch(item.code);
     setShowInvDropdown(false);
   };
@@ -1010,6 +1029,7 @@ export default function OrderDetailPage() {
     setLiEndDate(order?.endDate?.split("T")[0] || "");
     setLiRateType("DAILY"); setLiRate(""); setLiQty("1");
     setInvSearch(""); setInvResults([]);
+    lastAutoFilledDescRef.current = "";
   };
 
   const addLineItem = async () => {

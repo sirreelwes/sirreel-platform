@@ -851,7 +851,14 @@ function NewQuotePageInner() {
     setItems((prev) => [
       ...prev,
       {
-        description: 'New line item',
+        // Empty so the rep's typed name is the only thing that ever
+        // lands in the saved row. "New line item" now renders as the
+        // input's HTML placeholder (greyed prompt) — never as a real
+        // value the user has to delete before typing. Prior behavior
+        // (hardcoded value) made "New line item" the actual saved
+        // description whenever a rep moved past the row without
+        // selecting + clearing it.
+        description: '',
         quantity: 1,
         catalogProductId: null,
         catalogType: null,
@@ -1804,7 +1811,8 @@ function LineItemRow({
               type="text"
               value={item.description}
               onChange={(e) => onChange(idx, { description: e.target.value })}
-              className="flex-1 min-w-0 bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-semibold focus:outline-none focus:border-lt-hairline"
+              placeholder="New line item"
+              className="flex-1 min-w-0 bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-semibold placeholder:text-lt-fg3 placeholder:italic placeholder:font-normal focus:outline-none focus:border-lt-hairline"
             />
             <span
               className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${DEPT_BADGE[item.department]}`}
