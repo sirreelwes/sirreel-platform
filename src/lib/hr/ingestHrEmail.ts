@@ -66,9 +66,18 @@ export async function ingestHrEmail(args: {
   inbox: string
   gmailMessageId: string
   fromAddress: string
+  /** Routing headers from the message. Required for the Path B (forward
+   *  alias) flow where args.inbox != hr@. The gate uses these to
+   *  confirm hr@ addressing before we do any DB work. Optional when
+   *  args.inbox is hr@ directly (Path A). */
+  routingHeaders?: import('@/lib/email/routingHeaders').RoutingHeaders | null
 }): Promise<HrIngestOutcome> {
   try {
-    if (!shouldIngestHrEmail({ inbox: args.inbox, fromAddress: args.fromAddress })) {
+    if (!shouldIngestHrEmail({
+      inbox: args.inbox,
+      fromAddress: args.fromAddress,
+      routingHeaders: args.routingHeaders ?? null,
+    })) {
       return { status: 'skipped', reason: 'gate rejected (wrong inbox or hr@-authored)' }
     }
     return await runIngest(args.inbox, args.gmailMessageId)

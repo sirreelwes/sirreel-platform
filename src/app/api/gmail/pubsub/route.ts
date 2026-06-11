@@ -127,6 +127,37 @@ async function syncInbox(email: string) {
     // true addressing instead of the inbox-of-record.
     const routingHeaders = extractRoutingHeaders(headers)
 
+    // ── HR routing-header short-circuit (Path B) ────────────────
+    // hr@sirreel.com is configured as a Workspace group/alias that
+    // forwards into a real mailbox (currently dani@). DWD can't
+    // impersonate the alias, so the direct hr@-inbox branch above
+    // never fires. Catch hr-addressed mail HERE — once routing
+    // headers are extracted but BEFORE any EmailMessage write —
+    // route it into the HR pipeline and `continue` so the row never
+    // lands in EmailMessage. Preserves the structural isolation
+    // contract: HR mail still lives in HrEmail only.
+    //
+    // The HR gate also checks From: so a hr@-authored outbound reply
+    // (rare; only via send-as) doesn't loop. shouldIngestHrEmail
+    // accepts either the direct-inbox path or the routing-header
+    // path; we hand it both.
+    if (routingHeaders) {
+      const { shouldIngestHrEmail: gate } = await import('@/lib/hr/shouldIngestHrEmail')
+      if (gate({ inbox: email, fromAddress, routingHeaders })) {
+        // Direct-hr@ already handled at the top of the loop; only
+        // route-here when the polled inbox isn't hr@ itself.
+        if (email !== HR_INBOX) {
+          const messageId = msg.id
+          void ingestHrEmail({
+            inbox: email, gmailMessageId: messageId, fromAddress, routingHeaders,
+          }).catch((err) =>
+            console.warn('[pubsub] hr (routing-header) ingest failed:', messageId, err instanceof Error ? err.message : err),
+          )
+          continue
+        }
+      }
+    }
+
     // Cross-inbox dedup. Look up any older copy with this Message-ID; if one
     // exists, this row becomes a pointer to it. If we are the oldest, we stay
     // canonical and older inbox copies (if any later) will point at us.
