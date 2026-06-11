@@ -341,6 +341,7 @@ model Company {
   contractReviews ContractReview[]
   coiChecks       CoiCheck[]
   inquiries       Inquiry[]
+  inquiryCaptures InquiryCapture[] @relation("CaptureCompany")
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -387,6 +388,25 @@ model Person {
   notes    String? @db.Text
   isActive Boolean @default(true) @map("is_active")
 
+  // Provenance — populated by the CRM auto-capture pipeline (see
+  // src/lib/crm/captureFromEmail.ts). `source` is a free-form tag
+  // ("email_capture", "manual", "intake_form", "import") so callers
+  // can attribute records without a schema migration each time a new
+  // origin shows up. `sourceMessageId` is the EmailMessage.id of the
+  // mail that produced or last enriched this person — exposed on the
+  // contact detail page as "Captured from <inbox>, <date>".
+  source           String?  @map("source")
+  sourceMessageId  String?  @map("source_message_id")
+  // Verbatim signature title (e.g. "Sr. Production Coordinator —
+  // FX Networks"). Kept alongside the mapped `role` enum because the
+  // enum collapses dozens of real-world titles into ~10 buckets;
+  // rawTitle preserves what the person actually called themselves.
+  rawTitle         String?  @map("raw_title")
+  // Most recent project / show / production name parsed off mail
+  // from this contact. Single string, not a history — the review
+  // widget surfaces "last seen on" as a sales prompt.
+  lastKnownProject String?  @map("last_known_project")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -404,6 +424,7 @@ model Person {
   inquiries        Inquiry[]      @relation("InquiryContact")
   portalAccesses   PortalAccess[] @relation("PortalAccessContact")
   personSessions   PersonSession[]
+  inquiryCaptures  InquiryCapture[] @relation("CaptureContact")
 
   @@map("people")
 }
@@ -1464,6 +1485,9 @@ model EmailMessage {
   // ClaimMail triage row — one per claims@-inbox EmailMessage. Drives
   // the triage widget on /claims.
   claimMail    ClaimMail?
+  // InquiryCapture verdict row — one per evaluated INBOUND message on
+  // info@/jose@/oliver@. Drives the CRM capture-review widget.
+  inquiryCapture InquiryCapture?
 
   @@index([rfc822MessageId])
   @@index([duplicateOfId])
@@ -1670,6 +1694,7 @@ model User {
   // permission to see other employees' HR mail.
   employee            Employee?           @relation("EmployeeUserLink")
   reviewedHrMail      HrMail[]            @relation("HrMailReviewer")
+  resolvedInquiryCaptures InquiryCapture[] @relation("CaptureResolver")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -2875,6 +2900,83 @@ model Inquiry {
   @@index([assignedToId])
   @@index([rfc822MessageId])
   @@map("sr_inquiries")
+}
+
+// InquiryCapture — verdict-per-inbound-message audit trail for the
+// aggressive CRM auto-capture pipeline. ONE row per evaluated
+// EmailMessage on info@/jose@/oliver@. Verdict says what happened;
+// parsed fields are the harvested signature data; person/company FKs
+// link the row that was captured or enriched (null for SKIPPED and
+// for NEEDS_REVIEW until the rep resolves).
+//
+// rfc822MessageId enables cross-inbox dedup the same way Inquiry does:
+// a single human-sent message that lands in info@ + jose@ gets ONE
+// capture, not two. The shared helper at
+// src/lib/crm/captureFromEmail.ts is responsible for the lookup.
+enum CaptureVerdict {
+  AUTO_CAPTURED  // contact added or enriched automatically
+  NEEDS_REVIEW   // production-related but uncertain — surface to rep
+  SKIPPED        // hard skip OR no production signal; stored, muted
+}
+
+enum CaptureResolution {
+  PENDING        // default for NEEDS_REVIEW awaiting human action
+  AUTO_FILED     // AUTO_CAPTURED created a new Person
+  AUTO_ENRICHED  // AUTO_CAPTURED filled empty fields on an existing Person
+  AUTO_SKIPPED   // SKIPPED set this immediately, no action needed
+  ADDED          // rep accepted the NEEDS_REVIEW row, person now linked
+  DISMISSED      // rep dismissed the NEEDS_REVIEW row
+}
+
+model InquiryCapture {
+  id              String          @id @default(uuid())
+  emailMessageId  String          @unique @map("email_message_id")
+  rfc822MessageId String?         @map("rfc822_message_id")
+  inbox           String          // info@, jose@, oliver@ — denormalized for filters
+
+  verdict         CaptureVerdict
+  verdictReason   String          @map("verdict_reason") @db.Text
+  // Production-legitimacy signals matched (role title, project name,
+  // domain match, history language, freemail-rental-intent). Stored
+  // as an array of short tags for the review widget; classifier
+  // populates it.
+  signals         Json?
+
+  // Parsed signature payload — denormalized so the review widget can
+  // render the row without joining EmailMessage.extractedData.
+  parsedName          String?     @map("parsed_name")
+  parsedEmail         String?     @map("parsed_email")
+  parsedPhone         String?     @map("parsed_phone")
+  parsedTitle         String?     @map("parsed_title")
+  parsedCompanyString String?     @map("parsed_company_string")
+  parsedProject       String?     @map("parsed_project")
+
+  // Linked rows once captured/enriched. Company is set ONLY on a
+  // confident match (domain or exact name); the classifier never
+  // auto-creates companies — unmatched company strings stay in
+  // parsedCompanyString for the review widget to surface.
+  personId        String?         @map("person_id")
+  person          Person?         @relation("CaptureContact", fields: [personId], references: [id], onDelete: SetNull)
+  companyId       String?         @map("company_id")
+  company         Company?        @relation("CaptureCompany", fields: [companyId], references: [id], onDelete: SetNull)
+
+  resolution      CaptureResolution @default(PENDING)
+  // Audit trail of fields filled on an existing Person during enrich.
+  // Shape: { phone: { from: null, to: "..." }, rawTitle: {...}, ... }
+  enrichmentLog   Json?           @map("enrichment_log")
+  resolvedById    String?         @map("resolved_by_id")
+  resolvedBy      User?           @relation("CaptureResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt      DateTime?       @map("resolved_at")
+
+  emailMessage    EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([verdict, createdAt(sort: Desc)])
+  @@index([resolution, createdAt(sort: Desc)])
+  @@index([rfc822MessageId])
+  @@map("sr_inquiry_captures")
 }
 
 model JobContact {
