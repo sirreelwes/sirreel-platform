@@ -30,6 +30,7 @@ scripts/*
 !scripts/seed-hr-employees.ts
 !scripts/backfillThreadIncidents.ts
 !scripts/replayHrEmailById.ts
+!scripts/backfillCrmCapture.ts
 .env.local.bak
 .gcp-service-account.json
 .e2e-scratch/
