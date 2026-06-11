@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
       ...(verdictParam === 'NEEDS_REVIEW' && !includeResolved
         ? { resolution: 'PENDING' }
         : {}),
+      // Parent rows only — children of a pending dedup attach to
+      // their parent and are surfaced inside the thread viewer.
+      attachedToCaptureId: null,
     },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -78,6 +81,8 @@ export async function GET(req: NextRequest) {
       emailMessage: {
         select: { id: true, subject: true, fromAddress: true, sentAt: true },
       },
+      // +N more on this thread badge.
+      _count: { select: { attachedChildren: true } },
     },
   })
 

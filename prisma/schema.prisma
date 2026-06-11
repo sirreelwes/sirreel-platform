@@ -2968,6 +2968,17 @@ model InquiryCapture {
   resolvedBy      User?           @relation("CaptureResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
   resolvedAt      DateTime?       @map("resolved_at")
 
+  // Pending-review dedup. When a new NEEDS_REVIEW would mint and an
+  // existing PENDING parent already exists for the same parsedEmail
+  // (lowercased), the new row is created with attachedToCaptureId
+  // pointing at the parent — keeping the backfill idempotency intact
+  // (every EmailMessage still gets exactly one capture row) while
+  // surfacing only the parent in the review widget. Resolving the
+  // parent cascades the action to all attached children in one shot.
+  attachedToCaptureId String?       @map("attached_to_capture_id")
+  attachedTo          InquiryCapture?  @relation("CaptureAttached", fields: [attachedToCaptureId], references: [id], onDelete: SetNull)
+  attachedChildren    InquiryCapture[] @relation("CaptureAttached")
+
   emailMessage    EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
 
   createdAt       DateTime        @default(now()) @map("created_at")
@@ -2976,6 +2987,7 @@ model InquiryCapture {
   @@index([verdict, createdAt(sort: Desc)])
   @@index([resolution, createdAt(sort: Desc)])
   @@index([rfc822MessageId])
+  @@index([attachedToCaptureId])
   @@map("sr_inquiry_captures")
 }
 

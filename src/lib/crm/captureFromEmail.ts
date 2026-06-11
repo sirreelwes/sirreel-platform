@@ -293,6 +293,25 @@ export async function captureFromEmail(emailMessageId: string): Promise<CaptureO
     }
 
     if (verdict.verdict === 'NEEDS_REVIEW') {
+      // Pending-review dedupe — one pending row per contact email at a
+      // time. If a parent PENDING NEEDS_REVIEW already exists for this
+      // sender, mint the new row but attach it to the parent so the
+      // widget surfaces a single review item and the rep resolves all
+      // attached messages with one Add/Dismiss.
+      const parsedEmailLower = verdict.parsed.email?.toLowerCase() ?? null
+      const parent = parsedEmailLower
+        ? await prisma.inquiryCapture.findFirst({
+            where: {
+              verdict: CaptureVerdict.NEEDS_REVIEW,
+              resolution: CaptureResolution.PENDING,
+              attachedToCaptureId: null,
+              parsedEmail: { equals: parsedEmailLower, mode: 'insensitive' },
+            },
+            select: { id: true },
+            orderBy: { createdAt: 'asc' },
+          })
+        : null
+
       const capture = await prisma.inquiryCapture.create({
         data: {
           emailMessageId: email.id,
@@ -309,12 +328,13 @@ export async function captureFromEmail(emailMessageId: string): Promise<CaptureO
           parsedProject: verdict.parsed.project,
           companyId: linkedCompanyId,
           resolution: CaptureResolution.PENDING,
+          attachedToCaptureId: parent?.id ?? null,
         },
         select: { id: true },
       })
       return {
         status: 'needs_review',
-        reason: verdict.reason,
+        reason: parent ? `${verdict.reason} (attached to ${parent.id})` : verdict.reason,
         captureId: capture.id,
         verdict: CaptureVerdict.NEEDS_REVIEW,
       }

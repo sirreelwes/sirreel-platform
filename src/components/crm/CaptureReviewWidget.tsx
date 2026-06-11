@@ -67,6 +67,24 @@ interface CaptureRow {
     fromAddress: string
     sentAt: string
   }
+  _count?: { attachedChildren: number }
+}
+
+interface ThreadMessage {
+  id: string
+  fromAddress: string
+  toAddresses: string[]
+  subject: string
+  snippet: string | null
+  bodyText: string | null
+  sentAt: string
+  attachmentCount: number
+  direction: string
+}
+
+interface ThreadResponse {
+  capture: CaptureRow & { attachedCount: number }
+  messages: ThreadMessage[]
 }
 
 interface Counts {
@@ -125,6 +143,10 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  // Thread viewer (slide-over) state.
+  const [viewingId, setViewingId] = useState<string | null>(null)
+  const [thread, setThread] = useState<ThreadResponse | null>(null)
+  const [threadLoading, setThreadLoading] = useState(false)
   // Editing-a-row state for the Add modal.
   const [editing, setEditing] = useState<CaptureRow | null>(null)
   const [eFirst, setEFirst] = useState('')
@@ -156,6 +178,33 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
   useEffect(() => {
     load()
   }, [load])
+
+  const openThread = useCallback(async (id: string) => {
+    setViewingId(id)
+    setThread(null)
+    setThreadLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/crm/captures/${id}`)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d?.error || `HTTP ${res.status}`)
+        setThreadLoading(false)
+        return
+      }
+      const data = (await res.json()) as ThreadResponse
+      setThread(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to load thread')
+    } finally {
+      setThreadLoading(false)
+    }
+  }, [])
+
+  const closeThread = () => {
+    setViewingId(null)
+    setThread(null)
+  }
 
   const openEdit = (r: CaptureRow) => {
     const n = splitName(r.parsedName)
@@ -324,6 +373,7 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
                   key={r.id}
                   row={r}
                   pending={pendingId === r.id}
+                  onClick={() => openThread(r.id)}
                   onAdd={() => openEdit(r)}
                   onDismiss={() => dismiss(r)}
                   onUndo={() => undo(r)}
@@ -334,8 +384,29 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
         </div>
       )}
 
+      {viewingId && (
+        <ThreadDrawer
+          viewingId={viewingId}
+          thread={thread}
+          loading={threadLoading}
+          pendingId={pendingId}
+          onClose={closeThread}
+          onAdd={(row) => {
+            openEdit(row)
+          }}
+          onDismiss={async (row) => {
+            await dismiss(row)
+            closeThread()
+          }}
+          onUndo={async (row) => {
+            await undo(row)
+            closeThread()
+          }}
+        />
+      )}
+
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md">
             <h3 className="text-base font-semibold text-lt-fg mb-1">Add contact</h3>
             <p className="text-xs text-lt-fg2 mb-4">
@@ -449,21 +520,35 @@ function Field({
 function CaptureRowView({
   row,
   pending,
+  onClick,
   onAdd,
   onDismiss,
   onUndo,
 }: {
   row: CaptureRow
   pending: boolean
+  onClick: () => void
   onAdd: () => void
   onDismiss: () => void
   onUndo: () => void
 }) {
   const isReview = row.verdict === 'NEEDS_REVIEW'
   const isAuto = row.verdict === 'AUTO_CAPTURED'
+  const attachedCount = row._count?.attachedChildren ?? 0
 
   return (
-    <div className="px-4 py-3 flex items-start justify-between gap-4">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className="px-4 py-3 flex items-start justify-between gap-4 cursor-pointer hover:bg-lt-inner/40 transition-colors"
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className={`text-xs px-2 py-0.5 rounded ${VERDICT_CHIP[row.verdict]}`}>
@@ -473,6 +558,11 @@ function CaptureRowView({
           <span className="text-xs text-lt-fg3">{fmtTime(row.createdAt)}</span>
           {row.resolution !== 'PENDING' && (
             <span className="text-xs text-lt-fg3">· {row.resolution.toLowerCase().replace('_', ' ')}</span>
+          )}
+          {attachedCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-lt-inner text-lt-fg2" title={`${attachedCount} additional message(s) on this thread`}>
+              +{attachedCount} on thread
+            </span>
           )}
         </div>
 
@@ -515,7 +605,7 @@ function CaptureRowView({
         )}
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
         {isReview && (
           <>
             <button
@@ -548,6 +638,203 @@ function CaptureRowView({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function ThreadDrawer({
+  viewingId,
+  thread,
+  loading,
+  pendingId,
+  onClose,
+  onAdd,
+  onDismiss,
+  onUndo,
+}: {
+  viewingId: string
+  thread: ThreadResponse | null
+  loading: boolean
+  pendingId: string | null
+  onClose: () => void
+  onAdd: (row: CaptureRow) => void
+  onDismiss: (row: CaptureRow) => Promise<void> | void
+  onUndo: (row: CaptureRow) => Promise<void> | void
+}) {
+  const capture = thread?.capture
+  const isReview = capture?.verdict === 'NEEDS_REVIEW'
+  const isAuto = capture?.verdict === 'AUTO_CAPTURED'
+  const signals = (capture?.signals as string[] | null) ?? []
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/60" onClick={onClose} />
+      <div className="w-full max-w-4xl bg-lt-card border-l border-lt-hairline flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-lt-hairline">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-sm font-semibold text-lt-fg truncate">
+              {capture ? capture.parsedName || '(no name)' : 'Loading…'}
+            </span>
+            {capture && capture.parsedEmail && (
+              <span className="text-xs text-lt-fg2 truncate">{capture.parsedEmail}</span>
+            )}
+            {capture && (
+              <span className={`text-xs px-2 py-0.5 rounded ${VERDICT_CHIP[capture.verdict]}`}>
+                {VERDICT_LABEL[capture.verdict]}
+              </span>
+            )}
+            {capture && capture.attachedCount > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-lt-inner text-lt-fg2">
+                {capture.attachedCount + 1} messages on thread
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-lt-fg2 hover:text-lt-fg"
+          >
+            Close ✕
+          </button>
+        </div>
+
+        {loading && (
+          <div className="flex-1 flex items-center justify-center text-sm text-lt-fg2">
+            Loading thread…
+          </div>
+        )}
+
+        {!loading && capture && (
+          <div className="flex-1 flex min-h-0">
+            {/* Left: email thread, newest first. */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 border-r border-lt-hairline">
+              {thread?.messages.map((m, idx) => (
+                <div key={m.id} className={idx > 0 ? 'mt-6 pt-6 border-t border-lt-hairline' : ''}>
+                  <div className="text-xs text-lt-fg3 mb-1">
+                    {new Date(m.sentAt).toLocaleString('en-US', {
+                      month: 'short', day: 'numeric', year: 'numeric',
+                      hour: 'numeric', minute: '2-digit',
+                    })}
+                    {m.direction && (
+                      <span className="ml-2 uppercase tracking-wide">{m.direction}</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-lt-fg mb-1">
+                    <span className="text-lt-fg3">From:</span> {m.fromAddress}
+                  </div>
+                  {m.toAddresses.length > 0 && (
+                    <div className="text-xs text-lt-fg2 mb-1">
+                      <span className="text-lt-fg3">To:</span> {m.toAddresses.join(', ')}
+                    </div>
+                  )}
+                  <div className="text-sm font-medium text-lt-fg mb-2">{m.subject || '(no subject)'}</div>
+                  {m.attachmentCount > 0 && (
+                    <div className="text-xs text-lt-fg2 mb-2">📎 {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}</div>
+                  )}
+                  <div className="text-sm text-lt-fg2 whitespace-pre-wrap break-words">
+                    {m.bodyText || m.snippet || '(empty body)'}
+                  </div>
+                </div>
+              ))}
+              {(!thread?.messages || thread.messages.length === 0) && (
+                <div className="text-sm text-lt-fg3">No message body available.</div>
+              )}
+            </div>
+
+            {/* Right: parsed payload + actions. */}
+            <div className="w-80 shrink-0 overflow-y-auto px-5 py-4">
+              <div className="text-xs text-lt-fg3 mb-1">Inbox</div>
+              <div className="text-sm text-lt-fg mb-3">{capture.inbox}</div>
+
+              <div className="text-xs text-lt-fg3 mb-1">Parsed</div>
+              <dl className="space-y-1 text-sm mb-4">
+                <DRow label="Name" value={capture.parsedName} />
+                <DRow label="Email" value={capture.parsedEmail} />
+                <DRow label="Phone" value={capture.parsedPhone} />
+                <DRow label="Title" value={capture.parsedTitle} />
+                <DRow label="Company" value={capture.parsedCompanyString} note={capture.company ? '✓ linked' : 'no CRM match'} />
+                <DRow label="Project" value={capture.parsedProject} />
+              </dl>
+
+              {signals.length > 0 && (
+                <>
+                  <div className="text-xs text-lt-fg3 mb-1">Signals</div>
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {signals.map((s) => (
+                      <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-lt-inner text-lt-fg2">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="text-xs text-lt-fg3 mb-1">Reason</div>
+              <div className="text-xs text-lt-fg2 mb-4">{capture.verdictReason}</div>
+
+              {capture.person && (
+                <>
+                  <div className="text-xs text-lt-fg3 mb-1">Linked Person</div>
+                  <Link
+                    href={`/crm/people/${capture.person.id}`}
+                    className="text-sm text-amber-500 hover:text-amber-400 mb-4 block"
+                  >
+                    {capture.person.firstName} {capture.person.lastName} →
+                  </Link>
+                </>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-lt-hairline">
+                {isReview && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onAdd(capture)}
+                      disabled={pendingId === viewingId}
+                      className="flex-1 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-500 text-white rounded disabled:opacity-50"
+                    >
+                      Add contact
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDismiss(capture)}
+                      disabled={pendingId === viewingId}
+                      className="px-3 py-1.5 text-sm text-lt-fg2 hover:text-lt-fg"
+                    >
+                      Dismiss
+                    </button>
+                  </>
+                )}
+                {isAuto && (
+                  <button
+                    type="button"
+                    onClick={() => onUndo(capture)}
+                    disabled={pendingId === viewingId}
+                    className="flex-1 px-3 py-1.5 text-sm text-lt-fg2 hover:text-lt-fg border border-lt-hairline rounded"
+                  >
+                    Undo capture
+                  </button>
+                )}
+                {!isReview && !isAuto && (
+                  <div className="text-xs text-lt-fg3">Read-only — no action available for this verdict.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DRow({ label, value, note }: { label: string; value: string | null; note?: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-16 text-xs text-lt-fg3 shrink-0">{label}</dt>
+      <dd className="text-sm text-lt-fg break-words flex-1">
+        {value || <span className="text-lt-fg3">—</span>}
+        {note && <span className="ml-1 text-xs text-lt-fg3">· {note}</span>}
+      </dd>
     </div>
   )
 }

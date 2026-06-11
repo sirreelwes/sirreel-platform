@@ -31,6 +31,100 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
+/**
+ * GET — capture detail + email thread for the slide-over viewer.
+ *
+ * Returns the capture row plus an array of EmailMessages: the
+ * parent's email first, followed by every attached child's email,
+ * sorted newest first. Body text is included; bodyHtml is omitted
+ * (the viewer renders bodyText as plain text, matching the existing
+ * ThreadDrawer pattern on the suggested-inquiries surface). Each
+ * message carries attachmentCount; per-attachment metadata isn't
+ * stored at the EmailMessage layer, only the count.
+ */
+export async function GET(_req: NextRequest, { params }: Params) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const capture = await prisma.inquiryCapture.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      verdict: true,
+      resolution: true,
+      verdictReason: true,
+      signals: true,
+      inbox: true,
+      parsedName: true,
+      parsedEmail: true,
+      parsedPhone: true,
+      parsedTitle: true,
+      parsedCompanyString: true,
+      parsedProject: true,
+      personId: true,
+      companyId: true,
+      enrichmentLog: true,
+      createdAt: true,
+      attachedToCaptureId: true,
+      person: { select: { id: true, firstName: true, lastName: true, email: true } },
+      company: { select: { id: true, name: true } },
+      emailMessageId: true,
+      attachedChildren: {
+        select: { emailMessageId: true },
+      },
+    },
+  })
+  if (!capture) return NextResponse.json({ error: 'not found' }, { status: 404 })
+
+  const messageIds = [
+    capture.emailMessageId,
+    ...capture.attachedChildren.map((c) => c.emailMessageId),
+  ]
+  const messages = await prisma.emailMessage.findMany({
+    where: { id: { in: messageIds } },
+    select: {
+      id: true,
+      fromAddress: true,
+      toAddresses: true,
+      subject: true,
+      snippet: true,
+      bodyText: true,
+      sentAt: true,
+      attachmentCount: true,
+      direction: true,
+    },
+    orderBy: { sentAt: 'desc' },
+  })
+
+  return NextResponse.json({
+    capture: {
+      id: capture.id,
+      verdict: capture.verdict,
+      resolution: capture.resolution,
+      verdictReason: capture.verdictReason,
+      signals: capture.signals,
+      inbox: capture.inbox,
+      parsedName: capture.parsedName,
+      parsedEmail: capture.parsedEmail,
+      parsedPhone: capture.parsedPhone,
+      parsedTitle: capture.parsedTitle,
+      parsedCompanyString: capture.parsedCompanyString,
+      parsedProject: capture.parsedProject,
+      personId: capture.personId,
+      companyId: capture.companyId,
+      enrichmentLog: capture.enrichmentLog,
+      createdAt: capture.createdAt,
+      attachedCount: capture.attachedChildren.length,
+      person: capture.person,
+      company: capture.company,
+    },
+    messages,
+  })
+}
+
 type AddPayload = {
   firstName: string
   lastName: string
@@ -86,12 +180,16 @@ export async function POST(req: NextRequest, { params }: Params) {
         { status: 409 },
       )
     }
-    await prisma.inquiryCapture.update({
-      where: { id },
+    // Cascade to attached children — they were minted under this
+    // parent by the pending-review dedup. One Dismiss clears the
+    // whole thread.
+    const now = new Date()
+    await prisma.inquiryCapture.updateMany({
+      where: { OR: [{ id }, { attachedToCaptureId: id }] },
       data: {
         resolution: CaptureResolution.DISMISSED,
         resolvedById: user.id,
-        resolvedAt: new Date(),
+        resolvedAt: now,
       },
     })
     return NextResponse.json({ ok: true, resolution: CaptureResolution.DISMISSED })
@@ -153,13 +251,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       personId = created.id
     }
 
-    await prisma.inquiryCapture.update({
-      where: { id },
+    // Cascade to attached children — they share the same sender.
+    // One Add resolves the whole thread and points every attached
+    // row at the same Person.
+    const now = new Date()
+    await prisma.inquiryCapture.updateMany({
+      where: { OR: [{ id }, { attachedToCaptureId: id }] },
       data: {
         personId,
         resolution: CaptureResolution.ADDED,
         resolvedById: user.id,
-        resolvedAt: new Date(),
+        resolvedAt: now,
       },
     })
     return NextResponse.json({ ok: true, resolution: CaptureResolution.ADDED, personId })
