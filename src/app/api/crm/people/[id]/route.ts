@@ -133,7 +133,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
     take: 50,
   });
 
-  return NextResponse.json({ ...person, outboundEmails });
+  // Capture provenance — when this Person was auto-captured or
+  // enriched from a sales-inbox email, surface the originating
+  // message so the detail page can render "Captured from <inbox> on
+  // <date>". Stays null for legacy / manually-added contacts.
+  const sourceMessage = person.sourceMessageId
+    ? await prisma.emailMessage.findUnique({
+        where: { id: person.sourceMessageId },
+        select: {
+          id: true,
+          subject: true,
+          sentAt: true,
+          fromAddress: true,
+          emailAccount: { select: { emailAddress: true } },
+        },
+      })
+    : null;
+
+  return NextResponse.json({ ...person, outboundEmails, sourceMessage });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

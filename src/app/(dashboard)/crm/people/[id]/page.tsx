@@ -89,6 +89,12 @@ type PersonDetail = {
   role: string; tier: string;
   totalSpend: string; totalBookings: number;
   notes: string | null;
+  // Auto-capture provenance (populated by the CRM capture pipeline).
+  // Stays null for legacy / manually-added contacts.
+  source: string | null;
+  sourceMessageId: string | null;
+  rawTitle: string | null;
+  lastKnownProject: string | null;
   affiliations: Affiliation[];
   activities: Activity[];
   outboundEmails: OutboundEmail[];
@@ -96,6 +102,13 @@ type PersonDetail = {
   orderContacts: OrderContactRow[];
   bookings: BookingContactRow[];
   referredBookings: BookingContactRow[];
+  sourceMessage: {
+    id: string;
+    subject: string;
+    sentAt: string;
+    fromAddress: string;
+    emailAccount: { emailAddress: string };
+  } | null;
 };
 
 // Merged company-history row computed on read from the four
@@ -476,6 +489,37 @@ export default function PersonDetailPage() {
                   <div className="mt-4 p-3 bg-lt-inner/50 border border-lt-hairline rounded-lg">
                     <p className="text-xs text-lt-fg3 mb-1">Notes</p>
                     <p className="text-sm text-lt-fg2 whitespace-pre-wrap">{person.notes}</p>
+                  </div>
+                )}
+                {/* Capture provenance — only renders for auto-captured /
+                    enriched contacts. Shows the inbox + originating
+                    message so future-Wes can trace where a row came
+                    from. rawTitle and lastKnownProject surface as
+                    inline pills when present. */}
+                {person.source && (
+                  <div className="mt-3 text-xs text-lt-fg3 flex flex-wrap items-center gap-2">
+                    <span>
+                      Source: <span className="text-lt-fg2">{person.source}</span>
+                    </span>
+                    {person.sourceMessage && (
+                      <>
+                        <span>·</span>
+                        <span>
+                          Captured from <span className="text-lt-fg2">{person.sourceMessage.emailAccount.emailAddress}</span> on{' '}
+                          {new Date(person.sourceMessage.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </>
+                    )}
+                    {person.rawTitle && (
+                      <span className="px-2 py-0.5 rounded bg-lt-inner text-lt-fg2" title="Verbatim title from signature">
+                        “{person.rawTitle}”
+                      </span>
+                    )}
+                    {person.lastKnownProject && (
+                      <span className="px-2 py-0.5 rounded bg-lt-inner text-lt-fg2" title="Last project mentioned in mail from this contact">
+                        Project: {person.lastKnownProject}
+                      </span>
+                    )}
                   </div>
                 )}
               </>

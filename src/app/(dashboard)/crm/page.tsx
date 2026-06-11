@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { ClientBadge } from "@/lib/crm/clientBadges";
+import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -501,6 +502,16 @@ export default function CRMPage() {
             </>
           )}
         </div>
+      )}
+
+      {/* CRM auto-capture review — People tab only. Mirrors the
+          ClaimMailTriage widget pattern: counts header, NEEDS_REVIEW
+          rows with Add+Dismiss, AUTO_CAPTURED audit list with Undo,
+          SKIPPED rows visible for forensics. onChanged refreshes the
+          People list so newly-added contacts surface without a manual
+          reload. */}
+      {tab === 'people' && (
+        <CaptureReviewWidget onChanged={() => { fetchPeople(); }} />
       )}
 
       {/* Role-stats chip strip — People tab only. Counts come from
