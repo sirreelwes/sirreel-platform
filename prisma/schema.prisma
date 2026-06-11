@@ -151,6 +151,7 @@ model Asset {
   dispatchTasks      DispatchTask[]
   inspections        Inspection[]
   insuranceClaims    InsuranceClaim[]
+  incidents          Incident[]
   checkoutRecords    CheckoutRecord[]
   lotChecks          LotCheck[]
 
@@ -334,6 +335,7 @@ model Company {
   bookings        Booking[]
   drivers         Driver[]
   insuranceClaims InsuranceClaim[]
+  incidents       Incident[]
   emailMessages   EmailMessage[]
   jobs            Job[]
   contractReviews ContractReview[]
@@ -952,14 +954,21 @@ model DamageItem {
 
   // Link to claim
   claimId String? @map("claim_id")
+  // Phase Incidents — damage rows now know about their parent Incident
+  // when one exists. The "Bill renter" action on an Incident routes
+  // here. Nullable to keep existing damage rows (created via inspection
+  // capture, not yet through the Incident hub) untouched.
+  incidentId String? @map("incident_id")
 
   // Relations
   inspection Inspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   claim      InsuranceClaim? @relation(fields: [claimId], references: [id])
   invoice    Invoice?        @relation(fields: [invoiceId], references: [id])
+  incident   Incident?       @relation(fields: [incidentId], references: [id], onDelete: SetNull)
 
   @@index([disposition])
   @@index([invoiceId])
+  @@index([incidentId])
   @@map("damage_items")
 }
 
@@ -1108,6 +1117,14 @@ model InsuranceClaim {
   onboardedFromEmailMessageId String?    @unique @map("onboarded_from_email_message_id")
   onboardedFromEmailMessage   EmailMessage? @relation("OnboardingSourceEmail", fields: [onboardedFromEmailMessageId], references: [id])
 
+  // Phase Incidents — every NEW claim is now created from an Incident
+  // (the "Upgrade to claim" action). Nullable on the column so existing
+  // claims keep working unchanged; new claims always set it. The
+  // carrier-required floor that used to live on the auto-draft path
+  // moves to the upgrade form gated on this FK.
+  incidentId String?    @map("incident_id")
+  incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
   submittedAt DateTime? @map("submitted_at")
   settledAt   DateTime? @map("settled_at")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -1179,7 +1196,13 @@ enum DocTypeSource {
 
 model ClaimDocument {
   id         String       @id @default(uuid())
-  claimId    String       @map("claim_id")
+  // Phase Incidents — claimId becomes nullable so the document can
+  // attach to either a Claim OR an Incident (incidentId below). Legacy
+  // rows always have claimId set; new writes pick exactly one. The
+  // "exactly one" invariant is app-layer (no partial CHECK constraint
+  // in Postgres without an extension); the upload routes enforce it.
+  claimId    String?      @map("claim_id")
+  incidentId String?      @map("incident_id")
   type       ClaimDocType
   // Provenance of the `type` decision. NULL on rows written before
   // the typed-document system shipped — UI treats null as "unknown
@@ -1198,9 +1221,12 @@ model ClaimDocument {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
-  claim          InsuranceClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  uploadedByUser User?          @relation("DocUploader", fields: [uploadedBy], references: [id])
+  claim          InsuranceClaim? @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  incident       Incident?       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  uploadedByUser User?           @relation("DocUploader", fields: [uploadedBy], references: [id])
 
+  @@index([claimId])
+  @@index([incidentId])
   @@map("claim_documents")
 }
 
@@ -1492,6 +1518,12 @@ model ClaimMail {
   parse          Json?
   // Set for DRAFTED + ATTACHED. The matching InsuranceClaim row.
   claimId        String?              @map("claim_id")
+  // Phase Incidents — set when a NEEDS_REVIEW row is upgraded via
+  // "Open incident report" or when an auto-DRAFTED claim's incident
+  // parent is created. Forward-only on the column; existing rows stay
+  // null and the triage UI treats null as "no incident yet, action
+  // creates one".
+  incidentId     String?              @map("incident_id")
   // Free-form one-liner — why this disposition. e.g. "no matching
   // Company in CRM" on NEEDS_REVIEW, "body too short" on IGNORED.
   reason         String?
@@ -1507,10 +1539,12 @@ model ClaimMail {
 
   emailMessage EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
   claim        InsuranceClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+  incident     Incident?       @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   reviewedBy   User?           @relation("ClaimMailReviewer", fields: [reviewedById], references: [id])
 
   @@index([disposition, dismissed])
   @@index([createdAt])
+  @@index([incidentId])
   @@map("claim_mail")
 }
 
@@ -1627,6 +1661,7 @@ model User {
   timelineActions     ClaimTimeline[]     @relation("TimelineActor")
   reviewedClaimMail   ClaimMail[]         @relation("ClaimMailReviewer")
   createdOrderDiscounts OrderDiscount[]   @relation("OrderDiscountCreator")
+  createdIncidents      Incident[]        @relation("IncidentCreator")
   // HR back-relations. employee is the 0-or-1 Employee row for staff
   // who happen to also have an HQ login — most do. reviewedHrMail is
   // every HR triage decision this user stamped. Access to HR data
@@ -2137,6 +2172,7 @@ model Order {
   subRentals   SubRental[]
   followUps    QuoteFollowUp[]
   discounts    OrderDiscount[]
+  incidents    Incident[]
   jobId        String          @map("job_id")
   jobContactId String?         @map("job_contact_id")
 
@@ -3606,4 +3642,83 @@ model HrAttachment {
   @@index([employeeId, createdAt(sort: Desc)])
   @@index([hrEmailId])
   @@map("hr_attachments")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHASE INCIDENTS — hub between claim-mail, claims, and L&D billing
+// ═══════════════════════════════════════════════════════════════
+//
+// Strategic frame: an incident's recovery paths in preference order
+// are CARRIER CLAIM → BILL RENTER → ABSORB. The carrier-required
+// floor that used to gate auto-drafted claims now lives on the
+// "Upgrade to claim" action against an Incident, where it belongs.
+//
+// One incident can produce multiple claims (multi-carrier, joint
+// renter+driver claims). Status reflects current posture, not a
+// terminal — an incident can move through several (e.g.
+// OPEN → CLAIM_FILED → BILLED_RENTER as the carrier pays a portion
+// and we bill the renter for the deductible delta).
+//
+// Connections in this build are ADDITIVE — every existing
+// InsuranceClaim / DamageItem / ClaimMail / ClaimDocument row keeps
+// its prior shape; the new incidentId FKs are nullable and forward-
+// only.
+
+enum IncidentSource {
+  EMAIL              // claim-mail "Open incident report"
+  RETURN_INSPECTION  // captured during the L&D return-check (future
+                     //   bridge; not auto-created in this phase)
+  MANUAL             // dispatcher / rep clicks "+ New incident"
+}
+
+enum IncidentStatus {
+  OPEN
+  CLAIM_FILED        // ≥1 InsuranceClaim with incidentId set
+  BILLED_RENTER      // ≥1 DamageItem with incidentId set + BILL_NOW
+  RESOLVED           // carrier + renter recovery complete
+  WRITTEN_OFF        // explicitly absorbed
+}
+
+model Incident {
+  id             String         @id @default(uuid())
+  // SR-INC-NNNN. Generated by nextIncidentNumber() via the
+  // sr_incident_number_seq Postgres sequence (created in a follow-up
+  // raw SQL after db push, same pattern as sr_claim_number_seq).
+  incidentNumber String         @unique @map("incident_number")
+  source         IncidentSource
+  status         IncidentStatus @default(OPEN)
+
+  // The Order / Asset / Company connection. All nullable so the
+  // earliest possible Incident (an email arrives without enough info
+  // to match an Order yet) still creates cleanly. The triage UI nags
+  // when an Incident has been OPEN > N hours without an Order link.
+  orderId   String? @map("order_id")
+  assetId   String? @map("asset_id")
+  companyId String? @map("company_id")
+
+  description String    @db.Text
+  // When the underlying loss occurred (if known). Distinct from
+  // createdAt which is when the row landed in HQ. Carrier claims
+  // require this; the upgrade-to-claim form forces it then.
+  occurredAt  DateTime? @map("occurred_at") @db.Date
+
+  createdById String? @map("created_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation("IncidentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  claims      InsuranceClaim[]
+  claimMail   ClaimMail[]
+  documents   ClaimDocument[]
+  damageItems DamageItem[]
+
+  @@index([status])
+  @@index([orderId])
+  @@index([createdAt(sort: Desc)])
+  @@map("sr_incidents")
 }

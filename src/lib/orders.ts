@@ -104,6 +104,20 @@ export async function nextClaimNumber(): Promise<string> {
   return `SR-CLM-${String(num).padStart(4, "0")}`;
 }
 
+/**
+ * Mint the next SR-INC-NNNN incident number. Backed by the Postgres
+ * sequence sr_incident_number_seq (created out-of-band, same pattern
+ * as sr_claim_number_seq + sr_order_number_seq). Safe under concurrent
+ * Incident creates — nextval is atomic.
+ */
+export async function nextIncidentNumber(): Promise<string> {
+  const result = await prisma.$queryRaw<{ nextval: bigint }[]>`
+    SELECT nextval('sr_incident_number_seq')
+  `;
+  const num = Number(result[0].nextval);
+  return `SR-INC-${String(num).padStart(4, "0")}`;
+}
+
 export function computeWeeklyRate(
   dailyRate: number,
   type: "VEHICLE" | "EQUIPMENT" | "EXPENDABLE" | "LABOR" | "FEE" | "DISCOUNT"
