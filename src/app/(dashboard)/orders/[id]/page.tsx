@@ -11,6 +11,7 @@ import { shouldReview } from "@/lib/email/reviewGate";
 import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
+import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus } from "@prisma/client";
@@ -507,6 +508,8 @@ export default function OrderDetailPage() {
   // RecipientLine warning, creates a JobContact + optional PortalAccess
   // in a single POST.
   const [addContactOpen, setAddContactOpen] = useState(false);
+  // "Change dates" deliberate-action modal (push-dates flow).
+  const [pushDatesOpen, setPushDatesOpen] = useState(false);
   const [addContactBusy, setAddContactBusy] = useState(false);
   const [addContactErr, setAddContactErr] = useState<string>("");
   const [addEmail, setAddEmail] = useState("");
@@ -1317,7 +1320,22 @@ export default function OrderDetailPage() {
         <div className="grid grid-cols-4 gap-6 text-sm">
           <div><span className="text-lt-fg3">Company</span><p className="text-lt-fg mt-0.5">{order.company.name}</p></div>
           <div><span className="text-lt-fg3">Agent</span><p className="text-lt-fg mt-0.5">{order.agent.name}</p></div>
-          <div><span className="text-lt-fg3">Dates</span><p className="text-lt-fg mt-0.5">{fmtDate(order.startDate)} - {fmtDate(order.endDate)}</p></div>
+          <div>
+            <span className="text-lt-fg3">Dates</span>
+            <p className="text-lt-fg mt-0.5">
+              {fmtDate(order.startDate)} - {fmtDate(order.endDate)}
+              {order.startDate && order.endDate && (
+                <button
+                  type="button"
+                  onClick={() => setPushDatesOpen(true)}
+                  className="ml-2 text-xs text-amber-500 hover:text-amber-400"
+                  title="Move the entire order range — preview cascade first"
+                >
+                  Change…
+                </button>
+              )}
+            </p>
+          </div>
           <div><span className="text-lt-fg3">Linked Booking</span><p className="text-lt-fg mt-0.5">
             {order.booking ? <a href={`/jobs/${order.booking.id}`} className="text-lt-fg hover:text-black">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
           </p></div>
@@ -2468,6 +2486,17 @@ export default function OrderDetailPage() {
       )}
 
       <LineItemUndoToast toast={lineItemUndoToast} />
+
+      {pushDatesOpen && order.startDate && order.endDate && (
+        <PushDatesModal
+          orderId={order.id}
+          currentStartDate={order.startDate}
+          currentEndDate={order.endDate}
+          postBooking={!["DRAFT", "QUOTE_SENT", "APPROVED"].includes(order.status)}
+          onClose={() => setPushDatesOpen(false)}
+          onChanged={() => { fetchOrder(); }}
+        />
+      )}
       </div>
     </div>
   );
