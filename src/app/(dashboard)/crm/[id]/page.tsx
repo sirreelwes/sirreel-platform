@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -121,6 +122,8 @@ export default function CompanyDetailPage() {
   // covers the editable Company columns the PUT route accepts; the
   // Discount profile group hangs off the bottom.
   const [editing, setEditing] = useState(false);
+  // Quick-log outreach modal (pre-linked to this company).
+  const [showLogOutreach, setShowLogOutreach] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -611,12 +614,20 @@ export default function CompanyDetailPage() {
                 <p className="text-lt-fg2 text-sm">{company.industry.replace(/_/g, ' ')}</p>
               </div>
               <div className="text-right flex flex-col items-end gap-2">
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs text-lt-fg hover:text-black"
-                >
-                  Edit
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowLogOutreach(true)}
+                    className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded"
+                  >
+                    + Log outreach
+                  </button>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="text-xs text-lt-fg hover:text-black"
+                  >
+                    Edit
+                  </button>
+                </div>
                 <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
                 <p className="text-sm text-lt-fg2">{company.totalBookings} bookings | {company.orders.length} orders</p>
               </div>
@@ -941,6 +952,13 @@ export default function CompanyDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {showLogOutreach && (
+        <OutreachQuickLogModal
+          presetCompany={{ id: company.id, name: company.name }}
+          onClose={() => setShowLogOutreach(false)}
+          onSaved={() => { fetchCompany(); }}
+        />
       )}
       </div>
     </div>

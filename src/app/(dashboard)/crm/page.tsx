@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { ClientBadge } from "@/lib/crm/clientBadges";
 import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
+import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -242,6 +243,8 @@ export default function CRMPage() {
 
   // Add contact modal
   const [showAddContact, setShowAddContact] = useState(false);
+  // Quick-log outreach modal (Oliver's outside-sales flow).
+  const [showLogOutreach, setShowLogOutreach] = useState(false);
   const [cFirst, setCFirst] = useState("");
   const [cLast, setCLast] = useState("");
   const [cEmail, setCEmail] = useState("");
@@ -426,13 +429,17 @@ export default function CRMPage() {
       )}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-lt-fg">Clients</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowLogOutreach(true)}
+            className="min-h-[2.5rem] px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors">
+            + Log outreach
+          </button>
           <button onClick={() => setShowAddContact(true)}
-            className="px-4 py-2 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
+            className="min-h-[2.5rem] px-4 py-2 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
             + Add Contact
           </button>
           <button onClick={() => setShowAdd(true)}
-            className="px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
+            className="min-h-[2.5rem] px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
             + Add Company
           </button>
         </div>
@@ -862,6 +869,16 @@ export default function CRMPage() {
             </div>
           </div>
         </div>
+      )}
+      {showLogOutreach && (
+        <OutreachQuickLogModal
+          onClose={() => setShowLogOutreach(false)}
+          onSaved={() => {
+            // Refresh population stats so the FOLLOW-UPS DUE card
+            // picks up any newly-logged follow-up immediately.
+            fetchStats();
+          }}
+        />
       )}
       </div>
     </div>

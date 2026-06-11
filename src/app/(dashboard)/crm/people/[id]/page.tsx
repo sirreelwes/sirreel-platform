@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import { formatPhoneDashed } from "@/lib/format/phone";
+import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -248,6 +249,8 @@ export default function PersonDetailPage() {
 
   // Edit state
   const [editing, setEditing] = useState(false);
+  // Quick-log outreach modal (pre-linked to this person).
+  const [showLogOutreach, setShowLogOutreach] = useState(false);
   const [form, setForm] = useState<Partial<PersonDetail>>({});
 
   // Activity form
@@ -528,6 +531,7 @@ export default function PersonDetailPage() {
           <div className="text-right ml-6 flex flex-col items-end gap-2">
             {!editing && (
               <div className="flex gap-2">
+                <button onClick={() => setShowLogOutreach(true)} className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded">+ Log outreach</button>
                 <button onClick={() => setEditing(true)} className="text-xs text-lt-fg hover:text-black">Edit</button>
                 <button onClick={deleteContact} className="text-xs text-chip-bad-fg hover:opacity-70">Delete</button>
               </div>
@@ -783,6 +787,18 @@ export default function PersonDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {showLogOutreach && (
+        <OutreachQuickLogModal
+          presetPerson={{
+            id: person.id,
+            firstName: person.firstName,
+            lastName: person.lastName,
+            email: person.email,
+          }}
+          onClose={() => setShowLogOutreach(false)}
+          onSaved={() => { fetchPerson(); }}
+        />
       )}
       </div>
     </div>
