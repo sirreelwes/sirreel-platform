@@ -343,7 +343,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // RentalWorks billing was off-ramped in Phase 5. The route
   // /dispatch/rentalworks stays accessible by deep-link for any
   // straggler legacy reconciliation work, just not surfaced in nav.
-  if (perms.claims) admin.push({ id: 'claims', label: 'Claims', icon: '', href: '/claims' });
+  // Phase Incidents — nav label renamed Claims → Incidents. The
+  // /claims route stays alive (redirects to /incidents); deep links
+  // to /claims/[id] keep resolving against the claim detail page.
+  // claims-perm gates incidents identically — the same people who see
+  // claims today see incidents tomorrow.
+  if (perms.claims) admin.push({ id: 'incidents', label: 'Incidents', icon: '', href: '/incidents' });
   if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
   // HR nav entry. Gated on the hardcoded allowlist (Wes + Dani) +
   // HR_ALLOWLIST env override — NOT on role. Other ADMINs see no HR
