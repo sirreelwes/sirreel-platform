@@ -28,5 +28,7 @@ scripts/*
 !scripts/backfillRoutingHeaders.ts
 !scripts/_loadProdEnv.ts
 !scripts/seed-hr-employees.ts
+!scripts/backfillThreadIncidents.ts
 .env.local.bak
 .gcp-service-account.json
+.e2e-scratch/

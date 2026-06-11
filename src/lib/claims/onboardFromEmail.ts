@@ -259,6 +259,30 @@ async function recordClaimMail(args: {
   const parseValue = args.parse == null
     ? (await import('@prisma/client')).Prisma.JsonNull
     : (args.parse as unknown as Prisma.InputJsonValue)
+
+  // Thread-level auto-link: if the caller didn't pass an explicit
+  // incidentId AND another ClaimMail row on the same Gmail thread is
+  // already linked to an Incident, inherit that link. One thread =
+  // one incident contract, enforced live so new mail arriving on an
+  // existing incident's thread doesn't surface as an unattached row.
+  let effectiveIncidentId = args.incidentId ?? null
+  if (effectiveIncidentId == null) {
+    const email = await prisma.emailMessage.findUnique({
+      where: { id: args.emailMessageId },
+      select: { threadId: true },
+    })
+    if (email?.threadId) {
+      const sibling = await prisma.claimMail.findFirst({
+        where: {
+          emailMessage: { threadId: email.threadId },
+          incidentId: { not: null },
+        },
+        select: { incidentId: true },
+      })
+      if (sibling?.incidentId) effectiveIncidentId = sibling.incidentId
+    }
+  }
+
   const row = await prisma.claimMail.upsert({
     where: { emailMessageId: args.emailMessageId },
     create: {
@@ -267,7 +291,7 @@ async function recordClaimMail(args: {
       disposition: args.disposition,
       parse: parseValue,
       claimId: args.claimId,
-      incidentId: args.incidentId ?? null,
+      incidentId: effectiveIncidentId,
       reason: args.reason,
     },
     update: {
@@ -275,9 +299,10 @@ async function recordClaimMail(args: {
       parse: parseValue,
       claimId: args.claimId,
       // Only stamp incidentId on update when the caller is providing
-      // one — preserves any incident link a NEEDS_REVIEW row got from
-      // a prior "Open incident report" click against a stale parse.
-      ...(args.incidentId !== undefined && { incidentId: args.incidentId }),
+      // one OR when thread-level inheritance found one — preserves any
+      // incident link an existing row already has when neither path
+      // resolved to a value.
+      ...(effectiveIncidentId !== null && { incidentId: effectiveIncidentId }),
       reason: args.reason,
     },
     select: { id: true },

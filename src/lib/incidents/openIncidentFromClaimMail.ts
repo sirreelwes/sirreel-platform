@@ -55,6 +55,12 @@ export async function openIncidentFromClaimMail(args: {
           subject: true,
           sentAt: true,
           fromAddress: true,
+          // Local thread id (EmailThread row). All inbound mail Pub/Sub
+          // ingests under the same Gmail conversation shares this id —
+          // it's how we propagate the incident across sibling triage
+          // rows (commit 2 of the UX follow-up). Nullable on
+          // EmailMessage so we defensively guard.
+          threadId: true,
         },
       },
     },
@@ -65,9 +71,52 @@ export async function openIncidentFromClaimMail(args: {
       where: { id: existing.incidentId },
       select: { id: true, incidentNumber: true },
     })
-    if (already) return { incidentId: already.id, incidentNumber: already.incidentNumber, created: false }
+    if (already) {
+      // Even on idempotent re-call, propagate the link to any sibling
+      // ClaimMail rows on the same thread that arrived after the
+      // initial open (or weren't covered by the live ingest path
+      // before this fix).
+      await propagateToThread({
+        incidentId: already.id,
+        threadId: existing.emailMessage.threadId,
+        selfClaimMailId: claimMailId,
+      })
+      return { incidentId: already.id, incidentNumber: already.incidentNumber, created: false }
+    }
     // Dangling FK (rare; SetNull on Incident delete should have cleared
     // it). Fall through and mint a fresh one.
+  }
+
+  // ── Thread pre-check: if any sibling ClaimMail row on this Gmail
+  // thread already has an incident linked, reuse it instead of
+  // minting a fresh one. One thread = one incident.
+  if (existing.emailMessage.threadId) {
+    const siblingWithIncident = await prisma.claimMail.findFirst({
+      where: {
+        emailMessage: { threadId: existing.emailMessage.threadId },
+        incidentId: { not: null },
+        id: { not: claimMailId },
+      },
+      select: { incidentId: true, incident: { select: { id: true, incidentNumber: true } } },
+    })
+    if (siblingWithIncident?.incident) {
+      // Stamp this row + propagate to any remaining siblings that
+      // arrived between the original open and now.
+      await prisma.claimMail.update({
+        where: { id: claimMailId },
+        data: { incidentId: siblingWithIncident.incident.id },
+      })
+      await propagateToThread({
+        incidentId: siblingWithIncident.incident.id,
+        threadId: existing.emailMessage.threadId,
+        selfClaimMailId: claimMailId,
+      })
+      return {
+        incidentId: siblingWithIncident.incident.id,
+        incidentNumber: siblingWithIncident.incident.incidentNumber,
+        created: false,
+      }
+    }
   }
 
   const parse = (existing.parse ?? null) as unknown as ParsedClaim | null
@@ -98,6 +147,11 @@ export async function openIncidentFromClaimMail(args: {
   const occurredAt = parse?.dateOfLoss
     ? new Date(`${parse.dateOfLoss}T00:00:00.000Z`)
     : null
+
+  // Pull the threadId outside the transaction — the propagate helper
+  // runs after commit so the incident row is visible to the sibling
+  // update.
+  const threadId = existing.emailMessage.threadId
 
   const incidentNumber = await nextIncidentNumber()
   const incident = await prisma.$transaction(async (tx) => {
@@ -141,7 +195,44 @@ export async function openIncidentFromClaimMail(args: {
     return created
   })
 
+  // After the mint commits: propagate the link to every other
+  // ClaimMail row that lives on the same Gmail thread. One thread =
+  // one incident.
+  await propagateToThread({
+    incidentId: incident.id,
+    threadId,
+    selfClaimMailId: claimMailId,
+  })
+
   return { incidentId: incident.id, incidentNumber: incident.incidentNumber, created: true }
+}
+
+/**
+ * Link every ClaimMail row on the same Gmail thread (via
+ * EmailMessage.threadId) to the given Incident — except the row we
+ * just stamped, which is excluded by selfClaimMailId.
+ *
+ * No-op when threadId is null (rare; EmailMessage.threadId can be
+ * null when Gmail returned no thread context, e.g. some forwarded
+ * mail). Idempotent: rows already pointing at the same incident are
+ * unaffected; rows pointing at a different incident (the "two manual
+ * clicks on the same thread before this fix" data) are left alone —
+ * we don't merge concurrent incidents.
+ */
+async function propagateToThread(args: {
+  incidentId: string
+  threadId: string | null
+  selfClaimMailId: string
+}): Promise<void> {
+  if (!args.threadId) return
+  await prisma.claimMail.updateMany({
+    where: {
+      emailMessage: { threadId: args.threadId },
+      incidentId: null,
+      id: { not: args.selfClaimMailId },
+    },
+    data: { incidentId: args.incidentId },
+  })
 }
 
 /**
