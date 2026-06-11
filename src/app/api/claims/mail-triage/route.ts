@@ -79,6 +79,19 @@ export async function GET(req: NextRequest) {
           filedAgainst: true,
         },
       },
+      // Phase Incidents — surface the Incident link so the widget can
+      // render "View incident SR-INC-NNNN" for any row that's already
+      // been opened (either via the action button OR via the DRAFTED
+      // auto-create path OR via thread-level back-link from a sibling
+      // row on the same Gmail thread).
+      incidentId: true,
+      incident: {
+        select: {
+          id: true,
+          incidentNumber: true,
+          status: true,
+        },
+      },
     },
   })
 

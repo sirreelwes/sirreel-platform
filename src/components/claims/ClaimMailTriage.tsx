@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 
 type Disposition = 'DRAFTED' | 'ATTACHED' | 'NEEDS_REVIEW' | 'IGNORED'
 
@@ -48,6 +49,13 @@ interface ClaimMailRow {
     attachmentCount: number
   }
   claim: { id: string; claimNumber: string; status: string; filedAgainst: string } | null
+  // Phase Incidents — when set, the widget renders "View incident
+  // SR-INC-NNNN" instead of the action button. Both manual "Open
+  // incident report" clicks and the DRAFTED auto-create path populate
+  // this (and STEP 2 of the UX follow-up — thread-level link — back-
+  // fills sibling rows on the same Gmail thread).
+  incidentId: string | null
+  incident: { id: string; incidentNumber: string; status: string } | null
 }
 
 const CHIP: Record<Disposition, string> = {
@@ -90,9 +98,12 @@ export function ClaimMailTriage({ onIncidentOpened }: {
   const [collapsed, setCollapsed] = useState(false)
   // Per-row pending state for the open-incident POST.
   const [pendingId, setPendingId] = useState<string | null>(null)
-  // Per-row success banner ("Incident SR-INC-0007 opened") shown
-  // inline until the row's incidentId comes back through a refresh.
-  const [lastOpened, setLastOpened] = useState<{ [claimMailId: string]: string }>({})
+  // Per-row "just opened" cache so the action click can render an
+  // SR-INC-NNNN Link immediately, without waiting for the refresh
+  // round-trip to populate row.incident. Keys are ClaimMail.id;
+  // values carry both id (for the link target) and incidentNumber
+  // (for the label).
+  const [lastOpened, setLastOpened] = useState<{ [claimMailId: string]: { id: string; incidentNumber: string } }>({})
 
   const load = useCallback(async () => {
     setError(null)
@@ -194,7 +205,10 @@ export function ClaimMailTriage({ onIncidentOpened }: {
                     setError(data?.error || `HTTP ${res.status}`)
                     return
                   }
-                  setLastOpened((m) => ({ ...m, [r.id]: data.incident.incidentNumber }))
+                  setLastOpened((m) => ({
+                    ...m,
+                    [r.id]: { id: data.incident.incidentId, incidentNumber: data.incident.incidentNumber },
+                  }))
                   onIncidentOpened?.(data.incident.incidentId, data.incident.incidentNumber)
                   // Refresh the list so the row's claim/incident link
                   // shows through; the inline lastOpened banner stays
@@ -219,7 +233,7 @@ export function ClaimMailTriage({ onIncidentOpened }: {
 function TriageRow({ row, pending, justOpened, onOpenIncident, onDismiss }: {
   row: ClaimMailRow
   pending: boolean
-  justOpened: string | null
+  justOpened: { id: string; incidentNumber: string } | null
   onOpenIncident: () => void
   onDismiss: () => void
 }) {
@@ -277,10 +291,27 @@ function TriageRow({ row, pending, justOpened, onOpenIncident, onDismiss }: {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {justOpened ? (
-          <span className="text-xs text-chip-good-fg bg-chip-good-bg px-2 py-1 rounded font-mono">
-            {justOpened} opened
-          </span>
+        {/* Precedence: persisted incident link (from prior session OR
+            thread-level back-link from a sibling row) → just-opened
+            chip (this session) → action button. All three render as
+            an SR-INC-NNNN link to /incidents/[id] except the action
+            button which fires the POST + flips to the persisted state
+            on success. */}
+        {row.incident ? (
+          <Link
+            href={`/incidents/${row.incident.id}`}
+            className="text-xs px-2.5 py-1 rounded border border-chip-good-fg/30 bg-chip-good-bg text-chip-good-fg hover:bg-chip-good-fg hover:text-white font-mono transition-colors"
+            title="Open the incident"
+          >
+            View {row.incident.incidentNumber}
+          </Link>
+        ) : justOpened ? (
+          <Link
+            href={`/incidents/${justOpened.id}`}
+            className="text-xs px-2.5 py-1 rounded border border-chip-good-fg/30 bg-chip-good-bg text-chip-good-fg hover:bg-chip-good-fg hover:text-white font-mono transition-colors"
+          >
+            View {justOpened.incidentNumber}
+          </Link>
         ) : (needsReview || muted) && (
           <button
             type="button"
@@ -291,7 +322,7 @@ function TriageRow({ row, pending, justOpened, onOpenIncident, onDismiss }: {
             {pending ? 'Opening…' : 'Open incident report'}
           </button>
         )}
-        {!isLinked && !justOpened && (
+        {!isLinked && !justOpened && !row.incident && (
           <button
             type="button"
             onClick={onDismiss}
