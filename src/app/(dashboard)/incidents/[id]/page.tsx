@@ -132,7 +132,17 @@ export default function IncidentDetailPage() {
           </div>
           <p className="text-sm text-lt-fg mt-4 whitespace-pre-wrap">{incident.description}</p>
           <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
-            <Field label="Client">{incident.company?.name ?? '—'}</Field>
+            <Field label="Client">
+              {incident.company ? (
+                incident.company.name
+              ) : (
+                <LinkCompanyAffordance
+                  incidentId={id}
+                  parsedName={readParsedClient(incident)}
+                  onLinked={load}
+                />
+              )}
+            </Field>
             <Field label="Order">
               {incident.order ? (
                 <Link href={`/orders/${incident.order.id}`} className="font-mono text-lt-fg hover:text-black hover:underline">
@@ -446,5 +456,149 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
       <span className="text-xs text-lt-fg2">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
+  )
+}
+
+// ── Link-company affordance (parsed name + searchable picker) ────
+// Renders inline in the Client field of the profile card when the
+// incident has no companyId yet. The parsed name is sourced from the
+// originating ClaimMail row's Sonnet parse — when present, it's the
+// label the rep sees so they know what to search for. No auto-create
+// path: the picker only links to existing CRM companies.
+
+function readParsedClient(incident: IncidentDetail): string | null {
+  for (const cm of incident.claimMail) {
+    if (cm.parse && typeof cm.parse === 'object') {
+      const name = (cm.parse as Record<string, unknown>).clientCompanyName
+      if (typeof name === 'string' && name.trim().length > 0) return name.trim()
+    }
+  }
+  return null
+}
+
+interface CompanyHit {
+  id: string
+  name: string
+}
+
+function LinkCompanyAffordance({
+  incidentId, parsedName, onLinked,
+}: {
+  incidentId: string
+  parsedName: string | null
+  onLinked: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState(parsedName ?? '')
+  const [hits, setHits] = useState<CompanyHit[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Search whenever the query changes — debounced via a small setTimeout
+  // so the typeahead doesn't fire on every keystroke.
+  useEffect(() => {
+    if (!open) return
+    const q = query.trim()
+    if (q.length < 2) { setHits([]); return }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/crm/companies?search=${encodeURIComponent(q)}`)
+        if (!res.ok) return
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        const arr: CompanyHit[] = Array.isArray(data?.companies) ? data.companies : []
+        setHits(arr.slice(0, 8).map((c) => ({ id: c.id, name: c.name })))
+      } catch { /* empty state */ }
+    }, 220)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [open, query])
+
+  const link = async (companyId: string) => {
+    setBusy(true); setError(null)
+    try {
+      const res = await fetch(`/api/incidents/${incidentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data?.error || `HTTP ${res.status}`); setBusy(false); return }
+      setOpen(false)
+      onLinked()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed')
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="text-sm">
+        {parsedName ? (
+          <>
+            <span className="italic text-lt-fg2">"{parsedName}"</span>
+            <span className="ml-2 text-[10px] uppercase tracking-wider text-lt-fg3">parsed · unlinked</span>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="ml-3 text-xs text-lt-fg2 hover:text-lt-fg underline-offset-2 hover:underline"
+            >
+              Link company
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="text-xs text-lt-fg2 hover:text-lt-fg underline-offset-2 hover:underline"
+          >
+            + Link company
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-sm space-y-1.5">
+      <input
+        type="text"
+        autoFocus
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search existing companies…"
+        className="w-full px-2 py-1.5 border border-lt-hairline rounded text-sm"
+      />
+      {hits.length > 0 && (
+        <ul className="border border-lt-hairline rounded bg-lt-card max-h-[200px] overflow-y-auto divide-y divide-lt-hairline">
+          {hits.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => link(c.id)}
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-lt-inner disabled:opacity-50"
+              >
+                {c.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hits.length === 0 && query.trim().length >= 2 && !busy && (
+        <div className="text-xs text-lt-fg3 italic">
+          No matches. Companies can only be linked from the CRM — create one there first if needed.
+        </div>
+      )}
+      {error && <div className="text-xs text-chip-bad-fg">{error}</div>}
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-xs text-lt-fg3 hover:text-lt-fg2"
+      >
+        Cancel
+      </button>
+    </div>
   )
 }
