@@ -34,6 +34,7 @@ import {
   COLD_SOLICITATION_KEYWORDS,
   PRODUCTION_TITLE_TOKENS,
   KNOWN_VENDOR_DOMAINS,
+  OWN_COMPANY_PATTERN,
   SIRREEL_DOMAIN,
 } from './captureConstants'
 import type { ExtractedMessage } from '@/lib/ai/messageExtractor'
@@ -139,6 +140,17 @@ export function classifyForCapture(input: ClassifyInput): VerdictResult {
     return {
       verdict: 'SKIPPED',
       reason: `known vendor / service-provider domain (${domain})`,
+      signals: [],
+      parsed,
+    }
+  }
+  // Haiku parsed our own company name into parsedCompanyString — almost
+  // always a staff-signature leak or thread-reply mention, never a real
+  // production lead.
+  if (parsed.companyString && OWN_COMPANY_PATTERN.test(parsed.companyString)) {
+    return {
+      verdict: 'SKIPPED',
+      reason: `parsed company is SirReel itself (self-mention leak: "${parsed.companyString}")`,
       signals: [],
       parsed,
     }

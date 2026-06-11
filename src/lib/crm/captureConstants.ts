@@ -166,3 +166,15 @@ export const KNOWN_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
   'athosinsurance.com',
   'considine.com',
 ])
+
+// Pattern matching SirReel's own company name in any reasonable
+// spelling. When Haiku parses `parsedCompanyString` as us — usually
+// because the sender's signature mentions SirReel in a thread reply
+// or because a staff forward leaked the SirReel signature into the
+// body — the capture is meaningless self-noise. Hard-skip these
+// before legitimacy runs. 90 such captures surfaced in the 12-month
+// backfill (most populous unmatched "company" string).
+//
+// Match is case-insensitive substring on the parsedCompanyString.
+// Tight enough — "SirReel" is unique enough that any hit is us.
+export const OWN_COMPANY_PATTERN = /sir\s?reel/i
