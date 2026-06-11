@@ -74,10 +74,20 @@ export async function GET() {
   const companiesWithOrders = orderRollup.length
   const neverOrderedCount = Math.max(0, totalCompanies - companiesWithOrders)
 
-  // 5) Follow-up-due count — Activity rows that are pending today.
-  const followUpDueCount = await prisma.activity.count({
-    where: { completed: false, dueDate: { lte: now, not: null } },
-  })
+  // 5) Follow-up-due count — aggregates open follow-ups across BOTH
+  // the legacy Activity model AND the new OutreachActivity model
+  // (Oliver's outside-sales flow). One unified number so the
+  // FOLLOW-UPS DUE card on /crm is the source of truth regardless of
+  // which surface logged the follow-up.
+  const [activityFollowUps, outreachFollowUps] = await Promise.all([
+    prisma.activity.count({
+      where: { completed: false, dueDate: { lte: now, not: null } },
+    }),
+    prisma.outreachActivity.count({
+      where: { followUpDone: false, followUpAt: { lte: now, not: null } },
+    }),
+  ])
+  const followUpDueCount = activityFollowUps + outreachFollowUps
 
   return NextResponse.json({
     topClientSpendCutoff,

@@ -23,6 +23,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
         orderBy: { createdAt: "desc" },
         take: 30,
       },
+      outreachActivities: {
+        select: {
+          id: true,
+          type: true,
+          notes: true,
+          occurredAt: true,
+          followUpAt: true,
+          followUpDone: true,
+          createdBy: { select: { id: true, name: true } },
+          person: { select: { id: true, firstName: true, lastName: true } },
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 100,
+      },
     },
   });
   if (!company) return NextResponse.json({ error: "Not found" }, { status: 404 });

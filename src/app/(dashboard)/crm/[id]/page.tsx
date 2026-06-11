@@ -11,6 +11,17 @@ type Activity = {
   agent: { id: string; name: string };
 };
 
+type OutreachActivityRow = {
+  id: string;
+  type: 'VISIT' | 'CALL' | 'EMAIL' | 'TEXT' | 'EVENT' | 'DROP_IN';
+  notes: string;
+  occurredAt: string;
+  followUpAt: string | null;
+  followUpDone: boolean;
+  createdBy: { id: string; name: string };
+  person: { id: string; firstName: string; lastName: string } | null;
+};
+
 // Server-derived (timeline-merge feature). Outbound emails matched
 // to this company via affiliated-person email / thread / companyId.
 type OutboundEmail = {
@@ -54,6 +65,7 @@ type CompanyDetail = {
     person: { id: string; firstName: string; lastName: string; email: string; phone: string | null; role: string } }[];
   orders: { id: string; orderNumber: string; status: string; total: string; description: string | null; startDate: string | null; createdAt: string }[];
   activities: Activity[];
+  outreachActivities: OutreachActivityRow[];
   outboundEmails: OutboundEmail[];
 };
 
@@ -835,6 +847,7 @@ export default function CompanyDetailPage() {
               // chip and an "auto" hint so reps know it wasn't manually logged.
               const timeline = [
                 ...company.activities.map((a) => ({ kind: 'activity' as const, at: a.createdAt, row: a })),
+                ...(company.outreachActivities ?? []).map((o) => ({ kind: 'outreach' as const, at: o.occurredAt, row: o })),
                 ...company.outboundEmails.map((e) => ({ kind: 'email' as const, at: e.sentAt, row: e })),
               ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
               if (timeline.length === 0) {
@@ -843,7 +856,25 @@ export default function CompanyDetailPage() {
               return (
                 <div className="space-y-3">
                   {timeline.map((item) =>
-                    item.kind === 'activity' ? (
+                    item.kind === 'outreach' ? (
+                      <div key={`o-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">
+                            OUTREACH · {item.row.type.replace('_', ' ')}
+                          </span>
+                          <span className="text-[10px] text-lt-fg3">{item.row.createdBy.name}</span>
+                          <span className="text-[10px] text-lt-fg3">{fmtDate(item.row.occurredAt)}</span>
+                          {item.row.person && (
+                            <span className="text-[10px] text-lt-fg2">| {item.row.person.firstName} {item.row.person.lastName}</span>
+                          )}
+                          {item.row.followUpAt && !item.row.followUpDone && (
+                            <span className="text-[10px] text-chip-warn-fg ml-auto">Follow up {fmtDate(item.row.followUpAt)}</span>
+                          )}
+                          {item.row.followUpDone && <span className="text-[10px] text-chip-good-fg ml-auto">Done</span>}
+                        </div>
+                        <p className="text-xs text-lt-fg2 whitespace-pre-wrap break-words">{item.row.notes}</p>
+                      </div>
+                    ) : item.kind === 'activity' ? (
                       <div key={`a-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${

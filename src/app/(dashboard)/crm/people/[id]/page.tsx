@@ -36,6 +36,17 @@ function fromHeaderDisplay(header: string): string {
   return header.trim();
 }
 
+type OutreachActivityRow = {
+  id: string;
+  type: 'VISIT' | 'CALL' | 'EMAIL' | 'TEXT' | 'EVENT' | 'DROP_IN';
+  notes: string;
+  occurredAt: string;
+  followUpAt: string | null;
+  followUpDone: boolean;
+  createdBy: { id: string; name: string };
+  company: { id: string; name: string } | null;
+};
+
 type Affiliation = {
   id: string;
   productionName: string | null;
@@ -98,6 +109,7 @@ type PersonDetail = {
   lastKnownProject: string | null;
   affiliations: Affiliation[];
   activities: Activity[];
+  outreachActivities: OutreachActivityRow[];
   outboundEmails: OutboundEmail[];
   jobContacts: JobContactRow[];
   orderContacts: OrderContactRow[];
@@ -668,13 +680,16 @@ export default function PersonDetailPage() {
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <h2 className="text-base font-semibold text-lt-fg mb-3">Activity History</h2>
             {(() => {
-              // Merge manually-logged activities with auto-derived
-              // outbound emails into one time-sorted timeline. Emails
-              // are read-only (no Complete/Done affordance). Sort key
-              // is createdAt for activities, sentAt for emails — both
-              // ISO strings, so a plain string compare works desc.
+              // Merge manually-logged activities + outreach + auto-
+              // derived outbound emails into one time-sorted timeline.
+              // Outreach rows (Oliver's field-rep log) carry a typed
+              // channel chip and inherit the Done affordance from the
+              // followUpAt/followUpDone columns. Sort key is occurredAt
+              // for outreach, createdAt for activities, sentAt for
+              // emails — all ISO strings so a string compare works.
               const timeline = [
                 ...person.activities.map((a) => ({ kind: 'activity' as const, at: a.createdAt, row: a })),
+                ...(person.outreachActivities ?? []).map((o) => ({ kind: 'outreach' as const, at: o.occurredAt, row: o })),
                 ...person.outboundEmails.map((e) => ({ kind: 'email' as const, at: e.sentAt, row: e })),
               ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
               if (timeline.length === 0) {
@@ -683,7 +698,25 @@ export default function PersonDetailPage() {
               return (
                 <div className="space-y-3">
                   {timeline.map((item) =>
-                    item.kind === 'activity' ? (
+                    item.kind === 'outreach' ? (
+                      <div key={`o-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-chip-good-bg text-chip-good-fg">
+                            OUTREACH · {item.row.type.replace('_', ' ')}
+                          </span>
+                          <span className="text-[10px] text-lt-fg3">{item.row.createdBy.name}</span>
+                          <span className="text-[10px] text-lt-fg3">{fmtDate(item.row.occurredAt)}</span>
+                          {item.row.company && <span className="text-[10px] text-lt-fg2">| {item.row.company.name}</span>}
+                          {item.row.followUpAt && !item.row.followUpDone && (
+                            <span className="text-[10px] text-chip-warn-fg ml-auto">
+                              Follow up {fmtDate(item.row.followUpAt)}
+                            </span>
+                          )}
+                          {item.row.followUpDone && <span className="text-[10px] text-chip-good-fg ml-auto">Done</span>}
+                        </div>
+                        <p className="text-xs text-lt-fg2 whitespace-pre-wrap break-words">{item.row.notes}</p>
+                      </div>
+                    ) : item.kind === 'activity' ? (
                       <div key={`a-${item.row.id}`} className="border-b border-lt-hairline/50 pb-3 last:border-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${

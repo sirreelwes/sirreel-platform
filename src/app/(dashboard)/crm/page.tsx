@@ -7,6 +7,7 @@ import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { ClientBadge } from "@/lib/crm/clientBadges";
 import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
+import { FollowUpsDueModal } from "@/components/crm/FollowUpsDueModal";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -245,6 +246,8 @@ export default function CRMPage() {
   const [showAddContact, setShowAddContact] = useState(false);
   // Quick-log outreach modal (Oliver's outside-sales flow).
   const [showLogOutreach, setShowLogOutreach] = useState(false);
+  // Follow-ups due drill-down (FOLLOW-UPS DUE card click).
+  const [showFollowUpsDue, setShowFollowUpsDue] = useState(false);
   const [cFirst, setCFirst] = useState("");
   const [cLast, setCLast] = useState("");
   const [cEmail, setCEmail] = useState("");
@@ -459,16 +462,20 @@ export default function CRMPage() {
             : null
         }
         onPick={(next) => {
+          // Follow-ups: open the drill-down modal regardless of
+          // previous segment filter state. Drill-down is the primary
+          // surface for due follow-ups (Done + Log outreach in one
+          // tap); the segment filter stays untouched here.
+          if (next === 'followups') {
+            setShowFollowUpsDue(true);
+            return;
+          }
           if (next === segmentFilter) {
             setSegmentFilter(null);
             return;
           }
           setSegmentFilter(next);
-          // Route to the tab whose list will surface the filter.
-          // Follow-ups + people-side filters live on the People tab;
-          // company-side filters (quiet, discount) on Companies.
-          if (next === 'followups') setTab('people');
-          else if (next === 'quiet' || next === 'discount') setTab('companies');
+          if (next === 'quiet' || next === 'discount') setTab('companies');
         }}
       />
 
@@ -878,6 +885,12 @@ export default function CRMPage() {
             // picks up any newly-logged follow-up immediately.
             fetchStats();
           }}
+        />
+      )}
+      {showFollowUpsDue && (
+        <FollowUpsDueModal
+          onClose={() => setShowFollowUpsDue(false)}
+          onChanged={() => { fetchStats(); }}
         />
       )}
       </div>
