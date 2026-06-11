@@ -68,7 +68,14 @@ export const COLD_SOLICITATION_KEYWORDS: readonly string[] = [
 // Production-identity title tokens. Substring match against the
 // extracted title field, case-insensitive. ONE match → production
 // signal "a" (role title present).
+//
+// Coverage philosophy: every below-the-line department that touches
+// vehicles/gear on a SirReel job is in scope. Wardrobe / HMU / art /
+// props / locations / set dec are production roles even though they
+// rarely say "production" in their titles — they are exactly the
+// people booking us.
 export const PRODUCTION_TITLE_TOKENS: readonly string[] = [
+  // Producing
   'producer',
   'production manager',
   'production coordinator',
@@ -78,23 +85,6 @@ export const PRODUCTION_TITLE_TOKENS: readonly string[] = [
   'unit production manager',
   'line producer',
   'executive producer',
-  'transportation coordinator',
-  'transpo coordinator',
-  'transpo captain',
-  'location manager',
-  'location scout',
-  'art director',
-  'art coordinator',
-  'production designer',
-  'gaffer',
-  'key grip',
-  'best boy',
-  'dp ',
-  'director of photography',
-  'cinematographer',
-  '1st ad',
-  '2nd ad',
-  'assistant director',
   'showrunner',
   'producer/director',
   'co-producer',
@@ -102,4 +92,77 @@ export const PRODUCTION_TITLE_TOKENS: readonly string[] = [
   'segment producer',
   'field producer',
   'commercial producer',
+  // Camera / lighting / grip
+  'gaffer',
+  'key grip',
+  'best boy',
+  'dp ',
+  'director of photography',
+  'cinematographer',
+  // AD / direction
+  '1st ad',
+  '2nd ad',
+  'assistant director',
+  // Art department
+  'art director',
+  'art coordinator',
+  'art department',
+  'art dept',
+  'production designer',
+  'set decorator',
+  'set decoration',
+  'set dec',
+  'leadman',
+  'leadperson',
+  'on-set dresser',
+  'on set dresser',
+  // Props
+  'props master',
+  'prop master',
+  'props coordinator',
+  'prop coordinator',
+  'props',
+  // Locations
+  'location manager',
+  'location scout',
+  'locations coordinator',
+  'location coordinator',
+  'assistant location manager',
+  // Transpo
+  'transportation coordinator',
+  'transpo coordinator',
+  'transpo captain',
+  // Wardrobe / costume
+  'wardrobe stylist',
+  'wardrobe supervisor',
+  'wardrobe',
+  'costume designer',
+  'costume supervisor',
+  'stylist',
+  // HMU
+  'hmu',
+  'hair stylist',
+  'hair and makeup',
+  'hair / makeup',
+  'hair/makeup',
+  'makeup artist',
+  'make-up artist',
+  'makeup',
+  'make-up',
+  'mua',
+  'hair',
 ]
+
+// Hard-skip vendor / service-provider domains. ANY sender on this
+// list → SKIPPED before legitimacy tests run. Add domains here as
+// false-positive captures surface — the AI signal can't reliably
+// tell our own service vendors from production contacts when they
+// happen to mention a company name.
+//
+// Seed list (2026-06-11 calibration findings):
+//   - athosinsurance.com    — SirReel's insurance broker
+//   - considine.com         — Considine & Considine CPA
+export const KNOWN_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
+  'athosinsurance.com',
+  'considine.com',
+])

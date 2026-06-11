@@ -33,6 +33,7 @@ import {
   HARD_SKIP_SENDER_PATTERNS,
   COLD_SOLICITATION_KEYWORDS,
   PRODUCTION_TITLE_TOKENS,
+  KNOWN_VENDOR_DOMAINS,
   SIRREEL_DOMAIN,
 } from './captureConstants'
 import type { ExtractedMessage } from '@/lib/ai/messageExtractor'
@@ -126,6 +127,18 @@ export function classifyForCapture(input: ClassifyInput): VerdictResult {
     return {
       verdict: 'SKIPPED',
       reason: 'sender is @sirreel.com (internal mail / staff forward)',
+      signals: [],
+      parsed,
+    }
+  }
+  // Known vendor / service-provider domains — our insurance broker,
+  // CPA, etc. They show up in these inboxes constantly and the AI
+  // signal can't reliably distinguish them from production contacts
+  // when they reference a company name. Hard-skip before legitimacy.
+  if (KNOWN_VENDOR_DOMAINS.has(domain)) {
+    return {
+      verdict: 'SKIPPED',
+      reason: `known vendor / service-provider domain (${domain})`,
       signals: [],
       parsed,
     }
