@@ -56,6 +56,7 @@ import {
   forEachInboxAttachment,
   type GmailAttachmentMeta,
 } from '@/lib/email/persistGmailAttachments'
+import { preCreateIncidentForDraftedClaim } from '@/lib/incidents/openIncidentFromClaimMail'
 
 const TEXT_MIN_CHARS = 30
 const TEXT_MAX_CHARS = 200_000
@@ -70,6 +71,10 @@ export interface OnboardOutcome {
   documentId?: string
   attachmentsAttached?: number
   claimMailId?: string
+  // Phase Incidents — set when the DRAFTED auto-create path minted an
+  // Incident parent alongside the claim. Future ATTACHED paths may also
+  // set this when the existing claim's incident is linked retroactively.
+  incidentId?: string
 }
 
 export async function onboardFromEmail(emailMessageId: string): Promise<OnboardOutcome> {
@@ -199,6 +204,7 @@ async function runOnboard(emailMessageId: string): Promise<OnboardOutcome> {
       const claimMailId = await recordClaimMail({
         emailMessageId: msg.id, inbox,
         disposition: 'DRAFTED', parse: parsed, claimId: outcome.claimId ?? null,
+        incidentId: outcome.incidentId ?? null,
         reason: `auto-drafted against ${company.name}`,
       })
       return { ...outcome, claimMailId }
@@ -242,6 +248,11 @@ async function recordClaimMail(args: {
   parse: ParsedClaim | null
   claimId: string | null
   reason: string | null
+  // Phase Incidents — DRAFTED path now mints an Incident first and
+  // passes its id here so ClaimMail.incidentId mirrors the link.
+  // Null on ATTACHED-via-sibling + NEEDS_REVIEW + IGNORED until the
+  // user (or a later step) creates the Incident explicitly.
+  incidentId?: string | null
 }): Promise<string> {
   // Prisma's Json columns reject `null` as an InputJsonValue at the type
   // level — use the sentinel `Prisma.JsonNull` for explicit DB nulls.
@@ -256,12 +267,17 @@ async function recordClaimMail(args: {
       disposition: args.disposition,
       parse: parseValue,
       claimId: args.claimId,
+      incidentId: args.incidentId ?? null,
       reason: args.reason,
     },
     update: {
       disposition: args.disposition,
       parse: parseValue,
       claimId: args.claimId,
+      // Only stamp incidentId on update when the caller is providing
+      // one — preserves any incident link a NEEDS_REVIEW row got from
+      // a prior "Open incident report" click against a stale parse.
+      ...(args.incidentId !== undefined && { incidentId: args.incidentId }),
       reason: args.reason,
     },
     select: { id: true },
@@ -438,10 +454,26 @@ async function createDraft(args: {
   const fileUrl = await uploadText({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
 
   const created = await prisma.$transaction(async (tx) => {
+    // Phase Incidents: every NEW auto-drafted claim gets an Incident
+    // parent created in the same transaction. The Incident is the hub
+    // record; the InsuranceClaim hangs off it via incidentId. This
+    // mirrors the manual flow ("Open incident report" then "Upgrade
+    // to claim") even though we're skipping the human review step on
+    // the auto-draft path. Forward-only: historical claims without an
+    // Incident parent are not backfilled.
+    const incident = await preCreateIncidentForDraftedClaim({
+      tx,
+      parsed,
+      companyId: company.id,
+      msgSubject: msg.subject,
+      msgId: msg.id,
+      createdById: null,
+    })
     const claim = await tx.insuranceClaim.create({
       data: {
         claimNumber,
         companyId: company.id,
+        incidentId: incident.id,
         status: 'DRAFT',
         filedAgainst: parsed.carrierName ?? 'Unknown carrier',
         adjusterName: parsed.adjusterName,
@@ -496,7 +528,7 @@ async function createDraft(args: {
       data: { claimId: claim.id },
     })
 
-    return { claim, doc }
+    return { claim, doc, incidentId: incident.id }
   })
 
   const attachmentsAttached = await persistAttachments({
@@ -514,5 +546,6 @@ async function createDraft(args: {
     claimNumber: created.claim.claimNumber,
     documentId: created.doc.id,
     attachmentsAttached,
+    incidentId: created.incidentId,
   }
 }

@@ -156,7 +156,11 @@ export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
-  const [prefillClaimMailId, setPrefillClaimMailId] = useState<string | null>(null)
+  // prefillClaimMailId was the bridge from triage → NewClaimModal in
+  // the pre-Incidents era. The widget now mints an Incident server-
+  // side and never opens the modal; the page-header "+ New claim"
+  // button retains the modal for legacy manual create until STEP 3
+  // routes that flow through an Incident first.
 
   const load = useCallback(async () => {
     setError(null)
@@ -247,14 +251,19 @@ export default function ClaimsPage() {
           </div>
         )}
 
-        <ClaimMailTriage
-          onOpenPrefill={(id) => { setPrefillClaimMailId(id); setShowNew(true) }}
-        />
+        {/* Phase Incidents: triage actions now mint an Incident server-
+            side via POST /api/claims/mail-triage/[id]/open-incident
+            instead of opening the New-claim modal directly. The widget
+            shows the new SR-INC-NNNN inline on success; click-through
+            to the incident detail page lands in STEP 4. Refresh the
+            claims list on success so any newly-linked claim (the
+            DRAFTED auto-create path also mints an Incident) reflects
+            the link. */}
+        <ClaimMailTriage onIncidentOpened={() => load()} />
 
         {showNew && (
           <NewClaimModal
-            onClose={() => { setShowNew(false); setPrefillClaimMailId(null) }}
-            prefillFromClaimMailId={prefillClaimMailId ?? undefined}
+            onClose={() => setShowNew(false)}
           />
         )}
 

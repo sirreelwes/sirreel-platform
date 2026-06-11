@@ -77,12 +77,22 @@ function trim(s: string | null | undefined, n: number): string {
   return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s
 }
 
-export function ClaimMailTriage({ onOpenPrefill }: {
-  onOpenPrefill: (claimMailId: string) => void
+export function ClaimMailTriage({ onIncidentOpened }: {
+  // Phase Incidents — replaces the prior onOpenPrefill prop. The widget
+  // no longer opens NewClaimModal directly; instead it POSTs the
+  // open-incident action and refreshes. Parent can pass this callback
+  // to route the user to the new incident's detail page (STEP 4) or
+  // just trigger an outer reload.
+  onIncidentOpened?: (incidentId: string, incidentNumber: string) => void
 }) {
   const [rows, setRows] = useState<ClaimMailRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  // Per-row pending state for the open-incident POST.
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  // Per-row success banner ("Incident SR-INC-0007 opened") shown
+  // inline until the row's incidentId comes back through a refresh.
+  const [lastOpened, setLastOpened] = useState<{ [claimMailId: string]: string }>({})
 
   const load = useCallback(async () => {
     setError(null)
@@ -170,7 +180,33 @@ export function ClaimMailTriage({ onOpenPrefill }: {
             <TriageRow
               key={r.id}
               row={r}
-              onCreate={() => onOpenPrefill(r.id)}
+              pending={pendingId === r.id}
+              justOpened={lastOpened[r.id] ?? null}
+              onOpenIncident={async () => {
+                setPendingId(r.id)
+                setError(null)
+                try {
+                  const res = await fetch(`/api/claims/mail-triage/${r.id}/open-incident`, {
+                    method: 'POST',
+                  })
+                  const data = await res.json().catch(() => ({}))
+                  if (!res.ok || !data?.incident) {
+                    setError(data?.error || `HTTP ${res.status}`)
+                    return
+                  }
+                  setLastOpened((m) => ({ ...m, [r.id]: data.incident.incidentNumber }))
+                  onIncidentOpened?.(data.incident.incidentId, data.incident.incidentNumber)
+                  // Refresh the list so the row's claim/incident link
+                  // shows through; the inline lastOpened banner stays
+                  // until the next refresh in case the user wants to
+                  // confirm visually before clicking through.
+                  load()
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'open-incident failed')
+                } finally {
+                  setPendingId(null)
+                }
+              }}
               onDismiss={() => dismiss(r.id)}
             />
           ))}
@@ -180,9 +216,11 @@ export function ClaimMailTriage({ onOpenPrefill }: {
   )
 }
 
-function TriageRow({ row, onCreate, onDismiss }: {
+function TriageRow({ row, pending, justOpened, onOpenIncident, onDismiss }: {
   row: ClaimMailRow
-  onCreate: () => void
+  pending: boolean
+  justOpened: string | null
+  onOpenIncident: () => void
   onDismiss: () => void
 }) {
   const { disposition, parse, claim, emailMessage: em } = row
@@ -239,16 +277,21 @@ function TriageRow({ row, onCreate, onDismiss }: {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {(needsReview || muted) && (
+        {justOpened ? (
+          <span className="text-xs text-chip-good-fg bg-chip-good-bg px-2 py-1 rounded font-mono">
+            {justOpened} opened
+          </span>
+        ) : (needsReview || muted) && (
           <button
             type="button"
-            onClick={onCreate}
-            className="text-xs px-2.5 py-1 rounded border border-lt-fg/30 bg-lt-card hover:bg-lt-fg hover:text-white text-lt-fg transition-colors"
+            onClick={onOpenIncident}
+            disabled={pending}
+            className="text-xs px-2.5 py-1 rounded border border-lt-fg/30 bg-lt-card hover:bg-lt-fg hover:text-white text-lt-fg transition-colors disabled:opacity-50"
           >
-            Create claim
+            {pending ? 'Opening…' : 'Open incident report'}
           </button>
         )}
-        {!isLinked && (
+        {!isLinked && !justOpened && (
           <button
             type="button"
             onClick={onDismiss}
