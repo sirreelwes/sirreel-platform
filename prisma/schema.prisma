@@ -342,6 +342,7 @@ model Company {
   coiChecks       CoiCheck[]
   inquiries       Inquiry[]
   inquiryCaptures InquiryCapture[] @relation("CaptureCompany")
+  outreachActivities OutreachActivity[] @relation("CompanyOutreach")
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -425,6 +426,7 @@ model Person {
   portalAccesses   PortalAccess[] @relation("PortalAccessContact")
   personSessions   PersonSession[]
   inquiryCaptures  InquiryCapture[] @relation("CaptureContact")
+  outreachActivities OutreachActivity[] @relation("PersonOutreach")
 
   @@map("people")
 }
@@ -1695,6 +1697,7 @@ model User {
   employee            Employee?           @relation("EmployeeUserLink")
   reviewedHrMail      HrMail[]            @relation("HrMailReviewer")
   resolvedInquiryCaptures InquiryCapture[] @relation("CaptureResolver")
+  outreachActivitiesLogged OutreachActivity[] @relation("OutreachCreator")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -2675,6 +2678,54 @@ enum ActivityType {
   MEETING
   FOLLOW_UP
   BOOKING_NOTE
+}
+
+// OutreachActivity — field-rep outreach log (Oliver's outside-sales
+// flow). Separate from the legacy Activity model on purpose: this is
+// "I had a touchpoint with this contact" with a typed channel and an
+// optional follow-up, mobile-first. The FOLLOW-UPS DUE card on /crm
+// aggregates open follow-ups from BOTH this model AND the existing
+// Activity model so neither stream is lost. App-layer constraint:
+// at least one of personId / companyId must be set on insert.
+enum OutreachType {
+  VISIT     // in-person visit to set / studio / office
+  CALL      // phone call
+  EMAIL     // outbound email logged manually (NOT auto-synced Gmail)
+  TEXT      // SMS
+  EVENT     // mixer, wrap party, industry event
+  DROP_IN   // unscheduled drop-by (lobby / craft services / etc.)
+}
+
+model OutreachActivity {
+  id           String       @id @default(uuid())
+  type         OutreachType
+  personId     String?      @map("person_id")
+  companyId    String?      @map("company_id")
+  notes        String       @db.Text
+  occurredAt   DateTime     @default(now()) @map("occurred_at")
+
+  // Optional follow-up — when set, this row counts toward the
+  // FOLLOW-UPS DUE card until followUpDone flips true. Indexed on
+  // (followUpDone, followUpAt) so the count query is cheap.
+  followUpAt   DateTime?    @map("follow_up_at")
+  followUpDone Boolean      @default(false) @map("follow_up_done")
+
+  // The rep who logged this. Drives the "My outreach" filter (sales
+  // reps see their own + their due follow-ups; admins see all).
+  createdById  String       @map("created_by_id")
+  createdBy    User         @relation("OutreachCreator", fields: [createdById], references: [id])
+
+  person       Person?      @relation("PersonOutreach", fields: [personId], references: [id], onDelete: SetNull)
+  company      Company?     @relation("CompanyOutreach", fields: [companyId], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt      @map("updated_at")
+
+  @@index([followUpDone, followUpAt])
+  @@index([createdById, occurredAt(sort: Desc)])
+  @@index([personId, occurredAt(sort: Desc)])
+  @@index([companyId, occurredAt(sort: Desc)])
+  @@map("sr_outreach_activities")
 }
 
 model Activity {
