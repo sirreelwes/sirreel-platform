@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { flatTotalToDepartmentDiscount } from '@/lib/orders/discountedTotals'
 
 const DEPT_LABELS: Record<string, string> = {
   VEHICLES: 'Trucking',
@@ -278,32 +279,53 @@ function DeptDiscountForm({
   lineSubtotal: number
   onSubmit: (args: { type: Type; value: number; label: string }) => void
 }) {
-  const [type, setType] = useState<Type>('PERCENT')
+  const [mode, setMode] = useState<'PERCENT' | 'FIXED' | 'FLAT'>('PERCENT')
   const [value, setValue] = useState('')
   const [label, setLabel] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
+  // Live preview of the implied FIXED discount in FLAT mode. Department
+  // subtotals are pre-tax so the conversion is just deptSubtotal − target.
+  const flatPreview = useMemo(() => {
+    if (mode !== 'FLAT') return null
+    const n = Number(value)
+    if (!Number.isFinite(n) || n < 0) return null
+    return flatTotalToDepartmentDiscount({ deptSubtotal: lineSubtotal, target: n })
+  }, [mode, value, lineSubtotal])
+
   const submit = () => {
     const n = Number(value)
+    if (mode === 'FLAT') {
+      // Target subtotal entered. Reject above the current dept subtotal
+      // (would imply a negative discount) and below zero.
+      if (!Number.isFinite(n) || n < 0) { setErr('target must be ≥ 0'); return }
+      if (n >= lineSubtotal) { setErr(`target must be below dept subtotal ${fmt(lineSubtotal)}`); return }
+      if (flatPreview == null || flatPreview <= 0) { setErr('implied discount is zero or negative'); return }
+      setErr(null)
+      const finalLabel = label.trim() || `Flat ${fmt(n)} dept total`
+      onSubmit({ type: 'FIXED', value: flatPreview, label: finalLabel })
+      return
+    }
     if (!Number.isFinite(n) || n <= 0) { setErr('value must be > 0'); return }
-    if (type === 'PERCENT' && n > 100) { setErr('percent ≤ 100'); return }
-    if (type === 'FIXED' && n > lineSubtotal) { setErr(`cannot exceed dept subtotal ${fmt(lineSubtotal)}`); return }
+    if (mode === 'PERCENT' && n > 100) { setErr('percent ≤ 100'); return }
+    if (mode === 'FIXED' && n > lineSubtotal) { setErr(`cannot exceed dept subtotal ${fmt(lineSubtotal)}`); return }
     setErr(null)
-    onSubmit({ type, value: n, label: label.trim() })
+    onSubmit({ type: mode, value: n, label: label.trim() })
   }
 
   return (
-    <div className="mt-1 mb-2 pl-3 pr-1 py-2 bg-lt-inner/40 rounded text-xs">
+    <div className="mt-1 mb-2 pl-3 pr-1 py-2 bg-lt-inner/40 rounded text-xs space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex border border-lt-hairline rounded overflow-hidden">
-          <button onClick={() => setType('PERCENT')} className={`px-2 py-1 ${type === 'PERCENT' ? 'bg-lt-fg text-white' : 'bg-lt-card text-lt-fg2'}`}>%</button>
-          <button onClick={() => setType('FIXED')} className={`px-2 py-1 ${type === 'FIXED' ? 'bg-lt-fg text-white' : 'bg-lt-card text-lt-fg2'}`}>$</button>
+          <button onClick={() => setMode('PERCENT')} className={`px-2 py-1 ${mode === 'PERCENT' ? 'bg-lt-fg text-white' : 'bg-lt-card text-lt-fg2'}`}>%</button>
+          <button onClick={() => setMode('FIXED')} className={`px-2 py-1 ${mode === 'FIXED' ? 'bg-lt-fg text-white' : 'bg-lt-card text-lt-fg2'}`}>$</button>
+          <button onClick={() => setMode('FLAT')} className={`px-2 py-1 ${mode === 'FLAT' ? 'bg-lt-fg text-white' : 'bg-lt-card text-lt-fg2'}`} title="Set the department subtotal directly; we compute the discount">Flat total</button>
         </div>
         <input
           type="number" step="0.01" min="0"
           value={value} onChange={(e) => setValue(e.target.value)}
-          placeholder={type === 'PERCENT' ? '10' : '50.00'}
-          className="w-24 px-2 py-1 border border-lt-hairline rounded font-mono"
+          placeholder={mode === 'PERCENT' ? '10' : mode === 'FIXED' ? '50.00' : 'Target dept subtotal'}
+          className="w-32 px-2 py-1 border border-lt-hairline rounded font-mono"
         />
         <input
           type="text" value={label} onChange={(e) => setLabel(e.target.value)}
@@ -317,7 +339,13 @@ function DeptDiscountForm({
           {pending ? 'Saving…' : 'Apply'}
         </button>
       </div>
-      {err && <div className="mt-1 text-chip-bad-fg">{err}</div>}
+      {mode === 'FLAT' && flatPreview != null && flatPreview > 0 && (
+        <div className="text-lt-fg2">
+          Will store as a FIXED dept discount of <span className="font-mono text-lt-fg">{fmt(flatPreview)}</span>.
+          Not live-pinned — adding items to this department later will move its subtotal visibly.
+        </div>
+      )}
+      {err && <div className="text-chip-bad-fg">{err}</div>}
     </div>
   )
 }

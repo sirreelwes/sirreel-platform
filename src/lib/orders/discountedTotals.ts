@@ -222,6 +222,28 @@ export function flatTotalToOrderDiscount(args: {
 }
 
 /**
+ * Convert a flat-total target into the equivalent FIXED-value
+ * DEPARTMENT-scope discount. Department subtotals are pre-tax (tax
+ * is applied once at the order grain), so the math is just:
+ *
+ *   target = deptSubtotal - deptDiscount
+ *   → deptDiscount = deptSubtotal - target
+ *
+ * No tax factor. Same not-pinned semantics as the order-scope flat
+ * total — adding items to this department later moves its subtotal
+ * visibly. Caller is responsible for the clamp / reject guard rails
+ * (target must be ≥ 0 and < deptSubtotal); this helper does the math
+ * only and may return a negative value if the target is above
+ * deptSubtotal.
+ */
+export function flatTotalToDepartmentDiscount(args: {
+  deptSubtotal: number
+  target: number
+}): number {
+  return round2(args.deptSubtotal - args.target)
+}
+
+/**
  * Self-check called by tests + the integration boundary: with ZERO
  * discounts, computeOrderTotals must match the legacy `subtotal × rate`
  * math exactly. If this ever returns false, the totals are about to
