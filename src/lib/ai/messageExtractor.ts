@@ -373,5 +373,19 @@ export async function runMessageExtractionForId(emailMessageId: string): Promise
       extractionConfidence: extracted.confidence,
     },
   })
+
+  // CRM auto-capture follow-up. captureFromEmail gates internally —
+  // only sales inboxes (info@/jose@/oliver@) actually persist a
+  // capture row; everything else short-circuits with status='skipped'
+  // without touching the DB. Fire-and-forget so an Anthropic / DB
+  // hiccup here never propagates back into the extraction return.
+  // Dynamic import to avoid pulling the CRM module graph into the
+  // extractor's cold-start cost on every email.
+  void import('@/lib/crm/captureFromEmail')
+    .then(({ captureFromEmail }) => captureFromEmail(email.id))
+    .catch((err) =>
+      console.warn('[messageExtractor] captureFromEmail follow-up failed:', email.id, err instanceof Error ? err.message : err),
+    )
+
   return true
 }
