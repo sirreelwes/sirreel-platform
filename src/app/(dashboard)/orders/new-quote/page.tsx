@@ -34,7 +34,7 @@ const DEPARTMENTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'GE', 'EXPENDABLES', 'PRO_SUPPLIES', 'ART',
 ];
 
-type CatalogType = 'INVENTORY' | 'ASSET_CATEGORY';
+type CatalogType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE';
 
 interface ResolvedItem {
   description: string;
@@ -54,6 +54,21 @@ interface ResolvedItem {
   // Transient UI-only flag set when an auto-reset fires so we can show
   // the inline note. Cleared on the next user-initiated edit.
   rateTypeAutoResetNote?: string | null;
+  // Package grouping. When a Package is picked from the combobox,
+  // one header line + N member lines share a packageInstanceId
+  // (minted client-side at pick-time, persisted on save). The
+  // header carries the package's pricePerDay; member lines render
+  // with rate=0 and "included" on the invoice PDF. packageId points
+  // back at the template for analytics.
+  packageInstanceId?: string | null;
+  packageId?: string | null;
+  isPackageHeader?: boolean;
+  isPackageMember?: boolean;
+  // Set on the header when members have been added / removed / qty-
+  // edited relative to the template — surfaces an amber dot + tooltip
+  // ("Package contents modified — verify pricing"). Pricing math is
+  // unchanged; this is a soft warning for the rep.
+  isPackageModified?: boolean;
 }
 
 interface ParsedTop {
@@ -173,6 +188,16 @@ interface CatalogSearchResult {
   department: LineItemDepartment;
   dailyRate: number;
   weeklyRate: number;
+  // PACKAGE only — the member items the parent expands into rows.
+  items?: {
+    inventoryItemId: string;
+    name: string;
+    code: string;
+    qty: number;
+    dailyRate: number;
+    weeklyRate: number;
+    department: LineItemDepartment;
+  }[];
 }
 
 // pickRate is used when applying a catalog match to seed the line's rate.
@@ -721,9 +746,56 @@ function NewQuotePageInner() {
   };
 
   const updateItem = (idx: number, patch: Partial<ResolvedItem>) => {
-    setItems((prev) =>
-      prev.map((it, i) => {
-        if (i !== idx) return it;
+    setItems((prev) => {
+      const target = prev[idx];
+      if (!target) return prev;
+
+      // Header-driven cascade: when a package header's pickupDate /
+      // returnDate / billableDays changes, all members in the same
+      // packageInstance inherit. Availability depends on member dates
+      // staying in sync; reps shouldn't have to walk each row.
+      const headerCascadeFields = (['pickupDate', 'returnDate', 'billableDays'] as const)
+        .filter((f) => patch[f] !== undefined && patch[f] !== target[f])
+      if (target.isPackageHeader && target.packageInstanceId && headerCascadeFields.length > 0) {
+        return prev.map((it) => {
+          if (it === target) return applyRowPatch(it, patch)
+          if (it.packageInstanceId === target.packageInstanceId && it.isPackageMember) {
+            const memberPatch: Partial<ResolvedItem> = {}
+            for (const f of headerCascadeFields) {
+              memberPatch[f] = patch[f] as never
+            }
+            return { ...it, ...memberPatch }
+          }
+          return it
+        })
+      }
+
+      // Member-driven modification: any structural edit to a member
+      // (qty / description / rate) flags the header as modified so
+      // the rep sees the amber dot. Date changes on a member are
+      // allowed without flagging — the spec scopes the warning to
+      // contents (qty / membership / pricing).
+      const memberStructuralEdit =
+        target.isPackageMember &&
+        target.packageInstanceId &&
+        (patch.quantity !== undefined || patch.description !== undefined || patch.rate !== undefined)
+      if (memberStructuralEdit) {
+        return prev.map((it) => {
+          if (it === target) return applyRowPatch(it, patch)
+          if (it.packageInstanceId === target.packageInstanceId && it.isPackageHeader) {
+            return { ...it, isPackageModified: true }
+          }
+          return it
+        })
+      }
+
+      return prev.map((it, i) => (i === idx ? applyRowPatch(it, patch) : it))
+    });
+  };
+
+  // Pulled out so the header-cascade and member-edit paths can reuse
+  // the same rateType-normalization logic.
+  function applyRowPatch(it: ResolvedItem, patch: Partial<ResolvedItem>): ResolvedItem {
         const next: ResolvedItem = { ...it, ...patch };
 
         // Department change: normalize rateType to keep stored data consistent.
@@ -779,9 +851,7 @@ function NewQuotePageInner() {
           next.rateTypeAutoResetNote = null;
         }
         return next;
-      }),
-    );
-  };
+  }
 
   // Frictionless remove + undo toast. We snapshot the item AND its
   // index so the undo restores it exactly where it was (otherwise
@@ -790,6 +860,53 @@ function NewQuotePageInner() {
     setItems((prev) => {
       const removed = prev[idx];
       if (!removed) return prev;
+      // Package header deletion cascades — confirm with the rep
+      // first. The members share packageInstanceId; we snapshot
+      // them all so undo restores the entire bundle.
+      if (removed.isPackageHeader && removed.packageInstanceId) {
+        const ok = confirm('Remove entire package? All member lines will be removed too.');
+        if (!ok) return prev;
+        const instanceId = removed.packageInstanceId;
+        const removedBundle = prev
+          .map((it, i) => ({ it, i }))
+          .filter(({ it }) => it.packageInstanceId === instanceId);
+        const next = prev.filter((it) => it.packageInstanceId !== instanceId);
+        setUndoToast({
+          label: `${removed.description || '(package)'} (${removedBundle.length} lines)`,
+          onUndo: () => {
+            setItems((current) => {
+              const restored = [...current];
+              // Re-insert at the lowest original index.
+              const insertAt = Math.min(removedBundle[0].i, restored.length);
+              restored.splice(insertAt, 0, ...removedBundle.map((b) => b.it));
+              return restored;
+            });
+          },
+          onDismiss: () => setUndoToast(null),
+        });
+        return next;
+      }
+      // Member-line deletion flags the header as modified.
+      if (removed.isPackageMember && removed.packageInstanceId) {
+        const instanceId = removed.packageInstanceId;
+        const next = prev.filter((_, i) => i !== idx).map((it) =>
+          it.packageInstanceId === instanceId && it.isPackageHeader
+            ? { ...it, isPackageModified: true }
+            : it,
+        );
+        setUndoToast({
+          label: removed.description || '(line item)',
+          onUndo: () => {
+            setItems((current) => {
+              const restored = [...current];
+              restored.splice(Math.min(idx, restored.length), 0, removed);
+              return restored;
+            });
+          },
+          onDismiss: () => setUndoToast(null),
+        });
+        return next;
+      }
       const next = prev.filter((_, i) => i !== idx);
       setUndoToast({
         label: removed.description || '(line item)',
@@ -906,6 +1023,68 @@ function NewQuotePageInner() {
     }
   }, [pendingFocusIdx, items.length]);
 
+  // Package pick: replace the current row with a HEADER carrying the
+  // package's pricePerDay + insert MEMBER rows after it (rate=0,
+  // shared packageInstanceId). Members render indented under the
+  // header. Header price drives the order math; members are $0.
+  const handlePickPackage = useCallback((
+    targetIdx: number,
+    hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit,
+  ) => {
+    if (!hit.items || hit.items.length === 0) return;
+    const instanceId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    setItems((prev) => {
+      const target = prev[targetIdx];
+      if (!target) return prev;
+      const pickup = target.pickupDate;
+      const ret = target.returnDate;
+      const days = target.billableDays;
+      const header: ResolvedItem = {
+        ...target,
+        description: hit.name,
+        catalogProductId: hit.id,
+        catalogType: 'PACKAGE',
+        department: hit.department as LineItemDepartment,
+        rate: hit.dailyRate,
+        quantity: 1,
+        matchedProduct: { id: hit.id, type: 'PACKAGE', name: hit.name },
+        matchSource: 'AI',
+        packageInstanceId: instanceId,
+        packageId: hit.id,
+        isPackageHeader: true,
+        isPackageMember: false,
+        isPackageModified: false,
+      };
+      const members: ResolvedItem[] = hit.items!.map((m) => ({
+        description: m.name,
+        quantity: m.qty,
+        catalogProductId: m.inventoryItemId,
+        catalogType: 'INVENTORY',
+        department: m.department as LineItemDepartment,
+        qualifier: null,
+        rateType: 'DAILY',
+        pickupDate: pickup,
+        returnDate: ret,
+        billableDays: days,
+        rate: 0,
+        matchedProduct: { id: m.inventoryItemId, type: 'INVENTORY', name: m.name },
+        matchSource: 'AI',
+        warnings: [],
+        packageInstanceId: instanceId,
+        packageId: hit.id,
+        isPackageHeader: false,
+        isPackageMember: true,
+        isPackageModified: false,
+      }));
+      const next = [...prev];
+      next.splice(targetIdx, 1, header, ...members);
+      return next;
+    });
+  }, []);
+
   const handleRowCommit = useCallback((committedIdx: number) => {
     const committed = items[committedIdx];
     if (!committed) return;
@@ -1001,10 +1180,17 @@ function NewQuotePageInner() {
       // the rep arrowed past (auto-append leaves trailing empty
       // rows). Discard before save so they never reach the DB / PDF
       // / totals. By emptiness, not position — a blank mid-list gets
-      // swept too.
+      // swept too. Package members are exempt — they always have
+      // a description from the template AND a catalog binding so
+      // they survive this filter naturally, but the explicit check
+      // documents the contract.
       const beforeCount = items.length;
       const cleanItems = items.filter(
-        (it) => it.description.trim().length > 0 || it.catalogProductId != null,
+        (it) =>
+          it.isPackageMember ||
+          it.isPackageHeader ||
+          it.description.trim().length > 0 ||
+          it.catalogProductId != null,
       );
       if (cleanItems.length !== beforeCount) {
         setItems(cleanItems);
@@ -1151,19 +1337,27 @@ function NewQuotePageInner() {
       // existing job we attached to or the newly-created one.
       const jobId: string = existingJobId ?? order.createdJobId ?? order.jobId;
 
-      // Add line items (already pruned of trailing empty rows)
+      // Add line items (already pruned of trailing empty rows).
+      // Package metadata (instanceId / header flag / packageId / modified
+      // flag) ride along on each row — the API stores them verbatim so
+      // member grouping survives a page reload.
       for (const it of itemsForSave) {
         const liType = it.catalogType === 'ASSET_CATEGORY'
           ? 'VEHICLE'
-          : it.department === 'EXPENDABLES'
-            ? 'EXPENDABLE'
-            : 'EQUIPMENT';
+          : it.catalogType === 'PACKAGE'
+            ? 'EQUIPMENT' // package header is treated as equipment for lane routing
+            : it.department === 'EXPENDABLES'
+              ? 'EXPENDABLE'
+              : 'EQUIPMENT';
         await fetch(`/api/orders/${order.id}/line-items`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: liType,
             description: it.description,
+            // Header rows don't carry an inventoryItemId (the catalog
+            // type is PACKAGE); only INVENTORY-typed children + true
+            // inventory matches do.
             inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
             assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,
             department: it.department,
@@ -1174,6 +1368,10 @@ function NewQuotePageInner() {
             pickupDate: it.pickupDate,
             returnDate: it.returnDate,
             billableDays: it.billableDays,
+            packageInstanceId: it.packageInstanceId ?? null,
+            packageId: it.packageId ?? null,
+            isPackageHeader: !!it.isPackageHeader,
+            isPackageModified: !!it.isPackageModified,
           }),
         });
       }
@@ -1606,6 +1804,7 @@ function NewQuotePageInner() {
                 onDelete={removeItem}
                 onBulkApply={setBulkForDept}
                 onCommit={handleRowCommit}
+                onPickPackage={handlePickPackage}
                 registerDescriptionRef={registerDescriptionRef}
               />
             );
@@ -1703,7 +1902,7 @@ function NewQuotePageInner() {
 const TABLE_GRID = 'grid-cols-[64px_minmax(220px,1fr)_96px_136px_136px_120px_104px_36px]';
 
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onBulkApply, onCommit, registerDescriptionRef,
+  department, rows, onChange, onDelete, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
 }: {
   department: LineItemDepartment;
   rows: { it: ResolvedItem; idx: number }[];
@@ -1714,6 +1913,7 @@ function DepartmentGroup({
     patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
   ) => void;
   onCommit?: (idx: number) => void;
+  onPickPackage?: (idx: number, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   registerDescriptionRef?: (idx: number) => (el: HTMLInputElement | null) => void;
 }) {
   const [bulkPickup, setBulkPickup] = useState('');
@@ -1824,6 +2024,7 @@ function DepartmentGroup({
             onChange={onChange}
             onDelete={onDelete}
             onCommit={onCommit}
+            onPickPackage={onPickPackage}
             descriptionRef={registerDescriptionRef?.(idx)}
           />
         ))}
@@ -1840,7 +2041,7 @@ function DepartmentGroup({
 }
 
 function LineItemRow({
-  item, idx, onChange, onDelete, onCommit, descriptionRef,
+  item, idx, onChange, onDelete, onCommit, onPickPackage, descriptionRef,
 }: {
   item: ResolvedItem;
   idx: number;
@@ -1849,6 +2050,9 @@ function LineItemRow({
   /** Parent-level commit: auto-append empty row + focus its
    *  description input when this row's combobox emits commit. */
   onCommit?: (idx: number) => void;
+  /** Package pick handler — escapes the per-row patch to insert
+   *  header + member rows at the parent level. */
+  onPickPackage?: (idx: number, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   /** Ref the parent passes for the row's description input so the
    *  next-row auto-append can move focus. */
   descriptionRef?: React.Ref<HTMLInputElement>;
@@ -1884,6 +2088,12 @@ function LineItemRow({
     : [];
 
   const applyMatch = (m: CatalogSearchResult) => {
+    // Package picks escape to the parent — they're not a single-row
+    // patch, they insert a header + N member rows.
+    if (m.type === 'PACKAGE' && onPickPackage) {
+      onPickPackage(idx, m as unknown as import('@/components/orders/LineItemDescriptionCombobox').CatalogHit);
+      return;
+    }
     onChange(idx, {
       description: m.name,
       catalogProductId: m.id,
@@ -1903,8 +2113,11 @@ function LineItemRow({
 
   const dash = <span className="text-lt-fg3">—</span>;
 
+  const isMember = !!item.isPackageMember;
+  const isHeader = !!item.isPackageHeader;
+
   return (
-    <div className="px-3 py-2 hover:bg-lt-card/30">
+    <div className={`px-3 py-2 hover:bg-lt-card/30 ${isMember ? 'bg-violet-50/30 pl-8' : ''}`}>
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
         {/* QTY */}
         <input
@@ -1915,6 +2128,29 @@ function LineItemRow({
 
         {/* DESCRIPTION column — combobox + quiet status pill */}
         <div className="space-y-1 min-w-0">
+          {isHeader && (
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 border border-violet-200">
+                PKG · header
+              </span>
+              {item.isPackageModified && (
+                <span
+                  className="inline-flex items-center text-[10px] text-amber-700"
+                  title="Package contents modified — verify pricing"
+                >
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1" />
+                  contents modified — verify pricing
+                </span>
+              )}
+            </div>
+          )}
+          {isMember && (
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-violet-600">
+                ↳ member
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <div className="flex-1 min-w-0">
               <LineItemDescriptionCombobox

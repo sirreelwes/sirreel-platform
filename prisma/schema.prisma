@@ -2072,6 +2072,7 @@ model InventoryItem {
 
   category   InventoryCategory? @relation(fields: [categoryId], references: [id])
   lineItems  OrderLineItem[]
+  packageItems PackageItem[]
   subRentals SubRental[]
   location   Location           @default(LANKERSHIM)
 
@@ -2441,6 +2442,22 @@ model OrderLineItem {
   // used to invent extra line items.
   qualifier       String?            @db.Text
   notes           String?            @db.Text
+
+  // Package grouping. When a package is selected on a line, one
+  // header line + N member lines share a single `packageInstanceId`
+  // (cuid minted at add-time). The header carries the package price;
+  // member lines render with $0 and "included" in the invoice PDF.
+  // `isPackageHeader` distinguishes the two; `isPackageModified`
+  // surfaces an amber "contents modified — verify pricing" dot when
+  // a member has been added / removed / qty-edited relative to the
+  // template. Date cascades from header to members happen at edit
+  // time in the UI.
+  packageInstanceId  String?  @map("package_instance_id")
+  isPackageHeader    Boolean  @default(false) @map("is_package_header")
+  isPackageModified  Boolean  @default(false) @map("is_package_modified")
+  packageId          String?  @map("package_id")
+  package            Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
@@ -2452,7 +2469,49 @@ model OrderLineItem {
   // and STAGE lines stay null.
   pickListItem  PickListItem?
 
+  @@index([packageInstanceId])
   @@map("sr_order_line_items")
+}
+
+// Package — a curated bundle of inventory items sold at a single
+// per-day price. Built in /admin/packages, surfaced in the line-
+// item description combobox with a PKG badge, and expanded to a
+// header line + member lines on the order.
+//
+// Pricing is independent of the OrderDiscount system: the header
+// carries the bundle price, members are $0; order- and department-
+// level discounts apply on top exactly as they do for à-la-carte
+// rows.
+model Package {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  department  LineItemDepartment
+  pricePerDay Decimal       @default(0) @map("price_per_day") @db.Decimal(10, 2)
+  active      Boolean       @default(true)
+  items       PackageItem[]
+  // Back-relation for line-items minted from this package. Helps
+  // analytics ("how many times has the X package been quoted?")
+  // without forcing the OrderLineItem write path to carry it as a
+  // required FK.
+  orderLineItems OrderLineItem[]
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([active, name])
+  @@map("sr_packages")
+}
+
+model PackageItem {
+  id          String  @id @default(cuid())
+  packageId   String  @map("package_id")
+  package     Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  inventoryItemId String  @map("inventory_item_id")
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  qty         Int     @default(1)
+
+  @@index([packageId])
+  @@map("sr_package_items")
 }
 
 // First-class discounts on an order. Two scopes:

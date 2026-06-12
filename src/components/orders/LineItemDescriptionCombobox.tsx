@@ -24,7 +24,17 @@
 
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ForwardedRef, type KeyboardEvent } from 'react'
 
-export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY'
+export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE'
+
+export interface CatalogHitPackageMember {
+  inventoryItemId: string
+  name: string
+  code: string
+  qty: number
+  dailyRate: number
+  weeklyRate: number
+  department: string
+}
 
 export interface CatalogHit {
   id: string
@@ -33,6 +43,10 @@ export interface CatalogHit {
   department: string
   dailyRate: number
   weeklyRate: number
+  /** Present only when type === 'PACKAGE'. Lists the inventory
+   *  members that should be inserted as $0 child rows under the
+   *  header. */
+  items?: CatalogHitPackageMember[]
 }
 
 export interface CatalogBinding {
@@ -65,6 +79,10 @@ export interface LineItemDescriptionComboboxProps {
    *  — useful inside the order-detail modal which has its own
    *  status pills. Defaults to false. */
   hideCustomChip?: boolean
+  /** Restrict search results by type — defaults to all. The admin
+   *  package builder uses `['INVENTORY']` so the picker doesn't show
+   *  asset categories or other packages while building. */
+  types?: CatalogHitType[]
 }
 
 const DEBOUNCE_MS = 200
@@ -77,7 +95,7 @@ function LineItemDescriptionComboboxInner(
 ) {
   const {
     value, onChange, onPickCatalog, catalogBinding, onClearCatalog, onCommit,
-    placeholder, autoFocus, className, hideCustomChip,
+    placeholder, autoFocus, className, hideCustomChip, types,
   } = props
 
   const [results, setResults] = useState<CatalogHit[]>([])
@@ -115,7 +133,8 @@ function LineItemDescriptionComboboxInner(
     const handle = setTimeout(async () => {
       lastQueryRef.current = trimmed
       try {
-        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10`)
+        const typesQuery = types && types.length > 0 ? `&types=${encodeURIComponent(types.join(','))}` : ''
+        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10${typesQuery}`)
         if (!res.ok) {
           if (!cancelled) { setResults([]); setOpen(false) }
           return
@@ -135,6 +154,7 @@ function LineItemDescriptionComboboxInner(
       }
     }, DEBOUNCE_MS)
     return () => { cancelled = true; clearTimeout(handle) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, dismissed])
 
   const handleFocus = () => {
@@ -290,10 +310,20 @@ function LineItemDescriptionComboboxInner(
               }`}
             >
               <div className="flex-1 min-w-0">
-                <div className="text-lt-fg font-medium whitespace-normal break-words">{r.name}</div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {r.type === 'PACKAGE' && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 border border-violet-200">
+                      PKG
+                    </span>
+                  )}
+                  <div className="text-lt-fg font-medium whitespace-normal break-words">{r.name}</div>
+                </div>
                 <div className="text-[11px] text-lt-fg3 whitespace-normal">
                   {r.department.replace(/_/g, ' ')}
                   {r.type === 'ASSET_CATEGORY' && <span className="ml-1 text-amber-700">· category</span>}
+                  {r.type === 'PACKAGE' && r.items && (
+                    <span className="ml-1 text-violet-700">· {r.items.length} item{r.items.length === 1 ? '' : 's'}</span>
+                  )}
                 </div>
               </div>
               <div className="text-xs font-mono text-lt-fg2 shrink-0 pt-0.5">{FORMAT_USD(r.dailyRate)}/d</div>

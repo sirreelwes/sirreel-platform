@@ -28,6 +28,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       type, description, inventoryItemId, assetCategoryId,
       startDate, endDate, rateType = "DAILY", rate, quantity = 1, notes,
       department, qualifier, billableDays, pickupDate, returnDate,
+      // Package metadata. Headers carry packageId + isPackageHeader=true;
+      // members share packageInstanceId. The line-total math is unchanged —
+      // header rate drives the price; members come through as rate=0.
+      packageInstanceId, packageId, isPackageHeader, isPackageModified,
     } = body;
 
     if (!type || !description || rate === undefined) {
@@ -125,6 +129,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         notes: notes || null,
         department: resolvedDepartment,
         ...(qualifier !== undefined ? { qualifier: qualifier || null } : {}),
+        packageInstanceId: packageInstanceId || null,
+        packageId: packageId || null,
+        isPackageHeader: !!isPackageHeader,
+        isPackageModified: !!isPackageModified,
       },
       include: {
         inventoryItem: { select: { id: true, code: true, description: true } },

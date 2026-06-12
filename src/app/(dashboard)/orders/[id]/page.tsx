@@ -1421,6 +1421,28 @@ export default function OrderDetailPage() {
                         }
                         return
                       }
+                      if (hit.type === 'PACKAGE') {
+                        // Package picks bypass the modal entirely —
+                        // expand to header + members via the batch
+                        // endpoint, refresh the order, close the form.
+                        ;(async () => {
+                          try {
+                            const res = await fetch(`/api/orders/${orderId}/line-items/from-package`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ packageId: hit.id }),
+                            })
+                            if (res.ok) {
+                              await fetchOrder()
+                              setShowAddForm(false)
+                              resetForm()
+                            }
+                          } catch (err) {
+                            console.warn('[orders] package expand failed:', err)
+                          }
+                        })()
+                        return
+                      }
                       // Map combobox hit back into the modal's
                       // existing InvItem shape that selectInventoryItem
                       // expects.

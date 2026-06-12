@@ -41,6 +41,11 @@ export interface InvoiceLineSnapshotEntry {
   unitPrice: number
   amount: number
   kind: InvoiceLineKind
+  /** Package grouping (optional). Header rows render normally with
+   *  their unitPrice + amount; member rows are indented and render
+   *  "included" in the unit-price + amount columns. */
+  isPackageHeader?: boolean
+  isPackageMember?: boolean
 }
 
 export interface InvoiceCompanyForRender {
@@ -507,20 +512,29 @@ export function InvoiceDocument({
         </View>
 
         {/* ── Line items ───────────────────────────────────────── */}
-        {lines.map((line, i) => (
-          <View key={i} style={[styles.row, i % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
-            <View style={styles.colDesc}>
-              <Text>{line.description}</Text>
-              {line.category && <Text style={styles.cellCat}>{line.category}</Text>}
-              {line.kind !== 'RENTAL_LINE' && (
-                <Text style={styles.cellKindBadge}>{line.kind.replace('_', ' ')}</Text>
-              )}
+        {lines.map((line, i) => {
+          const isMember = !!line.isPackageMember
+          return (
+            <View key={i} style={[styles.row, i % 2 === 1 ? styles.rowAlt : {}]} wrap={false}>
+              <View style={styles.colDesc}>
+                <Text style={isMember ? { paddingLeft: 14, color: '#555' } : undefined}>
+                  {isMember ? `· ${line.description}` : line.description}
+                </Text>
+                {line.category && <Text style={styles.cellCat}>{line.category}</Text>}
+                {line.kind !== 'RENTAL_LINE' && (
+                  <Text style={styles.cellKindBadge}>{line.kind.replace('_', ' ')}</Text>
+                )}
+              </View>
+              <Text style={styles.colQty}>{line.qty}</Text>
+              <Text style={isMember ? [styles.colRate, { color: '#888', fontStyle: 'italic' }] : styles.colRate}>
+                {isMember ? 'included' : fmtUsd(line.unitPrice)}
+              </Text>
+              <Text style={isMember ? [styles.colAmt, { color: '#888', fontStyle: 'italic' }] : styles.colAmt}>
+                {isMember ? '—' : fmtUsd(line.amount)}
+              </Text>
             </View>
-            <Text style={styles.colQty}>{line.qty}</Text>
-            <Text style={styles.colRate}>{fmtUsd(line.unitPrice)}</Text>
-            <Text style={styles.colAmt}>{fmtUsd(line.amount)}</Text>
-          </View>
-        ))}
+          )
+        })}
 
         {/* ── Totals (kept together; never split across pages) ── */}
         <View style={styles.totals} wrap={false}>

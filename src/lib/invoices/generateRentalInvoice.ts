@@ -135,6 +135,11 @@ export async function generateRentalInvoice(args: {
     unitPrice: Number(li.rate),
     amount: Number(li.lineTotal),
     kind: 'RENTAL_LINE' as const,
+    // Package metadata flows through to the PDF renderer. Members
+    // render indented with "included"; headers render normally with
+    // their unitPrice + amount.
+    isPackageHeader: !!li.isPackageHeader,
+    isPackageMember: !!(li.packageInstanceId && !li.isPackageHeader),
   }))
 
   const liveSubtotal = rentalLines.reduce((s, l) => s + l.amount, 0)
