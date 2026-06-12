@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { ThankYousToSendWidget } from '@/components/orders/ThankYousToSendWidget';
 
 function fDate(ds: string): string {
   if (!ds) return '';
@@ -201,6 +202,11 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
               </div>
             )}
           </div>
+
+          {/* Thank-yous to send — SUGGESTED rows scoped to this rep's
+              own orders. Click a row → compose view with photo slot
+              and review-before-send gate. */}
+          <ThankYousToSendWidget scope="mine" />
         </div>
       </div>
     </div>

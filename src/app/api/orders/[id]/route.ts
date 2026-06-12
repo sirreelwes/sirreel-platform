@@ -200,6 +200,28 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Thank-you suggestion trigger. Mints a SUGGESTED row when the
+    // order's lifecycle transitions to RETURNED. Idempotent via the
+    // unique orderId FK — a RETURNED → not-RETURNED → RETURNED bounce
+    // does not double-mint. Never auto-sends; the human reviews and
+    // sends through the standard preview/send gate.
+    if (
+      status !== undefined
+      && priorStatus !== null
+      && status !== priorStatus
+      && status === 'RETURNED'
+    ) {
+      try {
+        await prisma.thankYouSuggestion.upsert({
+          where: { orderId: id },
+          create: { orderId: id },
+          update: {},
+        });
+      } catch (err) {
+        console.error('[orders/PUT] thank-you suggestion mint failed:', err);
+      }
+    }
+
     return NextResponse.json(order);
   } catch (error) {
     console.error("Update order error:", error);
