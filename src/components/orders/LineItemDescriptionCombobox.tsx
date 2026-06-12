@@ -91,9 +91,18 @@ function LineItemDescriptionComboboxInner(
   useImperativeHandle(forwardedRef, () => inputRef.current as HTMLInputElement)
   const listboxId = useId()
   const lastQueryRef = useRef('')
+  // Hard close-flag that locks the dropdown shut until the rep types
+  // again. Belt-and-suspenders next to `dismissed` (state) — fixes a
+  // post-pick race where an in-flight fetch's response could re-open
+  // the dropdown a frame after pick(). Set true in pick(); cleared on
+  // the next keystroke. Ref + state both: ref blocks the response
+  // handler from re-opening within the same paint, state blocks the
+  // debounce-fetch effect on subsequent renders.
+  const justPickedRef = useRef(false)
 
   // Debounced fetch.
   useEffect(() => {
+    if (justPickedRef.current) return
     if (dismissed) return
     const trimmed = value.trim()
     if (trimmed.length < 2) {
@@ -113,6 +122,7 @@ function LineItemDescriptionComboboxInner(
         }
         const data = await res.json()
         if (cancelled) return
+        if (justPickedRef.current) return
         if (lastQueryRef.current !== trimmed) return
         const hits = (data.results ?? []) as CatalogHit[]
         setResults(hits)
@@ -127,11 +137,18 @@ function LineItemDescriptionComboboxInner(
     return () => { cancelled = true; clearTimeout(handle) }
   }, [value, dismissed])
 
-  // Reset dismissed flag when input gains focus + value changes
-  // again — letting the rep open the dropdown again after Esc.
-  const handleFocus = () => { setDismissed(false) }
+  const handleFocus = () => {
+    // Refocus alone does NOT reopen the dropdown — opening requires
+    // a fresh keystroke. Closes the post-pick race where the input
+    // retains focus (preventDefault on the dropdown click) and the
+    // focus event would otherwise clear `dismissed` and let the
+    // effect re-fetch.
+  }
 
   const handleChange = (next: string) => {
+    // Keystrokes are the only path back into the open state. Both
+    // flags reset so the debounced fetch effect can run again.
+    justPickedRef.current = false
     onChange(next)
     setDismissed(false)
     // Only auto-unbind when the rep deletes the description
@@ -144,10 +161,14 @@ function LineItemDescriptionComboboxInner(
   }
 
   const pick = useCallback((hit: CatalogHit) => {
+    // Slam the dropdown shut FIRST, before parent state propagates,
+    // so any in-flight fetch response sees justPickedRef and bails.
+    justPickedRef.current = true
+    setOpen(false)
+    setResults([])
+    setDismissed(true)
     onPickCatalog(hit)
     onChange(hit.name)
-    setOpen(false)
-    setDismissed(true)
   }, [onPickCatalog, onChange])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -244,7 +265,14 @@ function LineItemDescriptionComboboxInner(
         <ul
           id={listboxId}
           role="listbox"
-          className="absolute z-30 left-0 right-0 top-full mt-1 bg-lt-card border border-lt-hairline rounded shadow-lg max-h-72 overflow-auto"
+          // Size to content: at least as wide as the input, grows up
+          // to ~480px so long item names render in full. White-space
+          // on each row name wraps instead of ellipsizing — keeps
+          // "Caravan Canopy 10x10 EZ-Up — Black" readable end-to-
+          // end. Inline styles for the sizing trio so tailwind's
+          // arbitrary-value class isn't required.
+          style={{ minWidth: '100%', width: 'max-content', maxWidth: '480px' }}
+          className="absolute z-30 left-0 top-full mt-1 bg-lt-card border border-lt-hairline rounded shadow-lg max-h-72 overflow-auto"
         >
           {results.map((r, idx) => (
             <li
@@ -257,18 +285,18 @@ function LineItemDescriptionComboboxInner(
                 pick(r)
                 onCommit?.()
               }}
-              className={`flex items-center justify-between gap-3 px-3 py-2 text-sm cursor-pointer ${
+              className={`flex items-start justify-between gap-3 px-3 py-2 text-sm cursor-pointer ${
                 idx === highlight ? 'bg-amber-50' : 'bg-lt-card hover:bg-lt-inner/60'
               }`}
             >
               <div className="flex-1 min-w-0">
-                <div className="text-lt-fg font-medium truncate">{r.name}</div>
-                <div className="text-[11px] text-lt-fg3">
+                <div className="text-lt-fg font-medium whitespace-normal break-words">{r.name}</div>
+                <div className="text-[11px] text-lt-fg3 whitespace-normal">
                   {r.department.replace(/_/g, ' ')}
                   {r.type === 'ASSET_CATEGORY' && <span className="ml-1 text-amber-700">· category</span>}
                 </div>
               </div>
-              <div className="text-xs font-mono text-lt-fg2 shrink-0">{FORMAT_USD(r.dailyRate)}/d</div>
+              <div className="text-xs font-mono text-lt-fg2 shrink-0 pt-0.5">{FORMAT_USD(r.dailyRate)}/d</div>
             </li>
           ))}
         </ul>
