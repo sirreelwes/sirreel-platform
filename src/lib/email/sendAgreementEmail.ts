@@ -14,6 +14,11 @@ export type EmailResult =
 export interface EmailPayload {
   to: string[]
   cc?: string[]
+  /** Reply-To header. Used by the thank-you flow to route replies
+   * back to the salesperson on the job (their direct watched inbox)
+   * instead of notifications@. Optional — when unset, replies fall
+   * back to the From: address. */
+  replyTo?: string
   subject: string
   html: string
   /** Plain-text alternative. Email clients with HTML disabled (and some
@@ -52,6 +57,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       from: SEND_FROM,
       to: payload.to,
       cc: payload.cc,
+      replyTo: payload.replyTo,
       subject: payload.subject,
       html: payload.html,
       text: payload.text,
