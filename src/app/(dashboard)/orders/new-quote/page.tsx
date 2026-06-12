@@ -1,12 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
+import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
 import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
 
 const PRODUCTION_TYPES: ProductionType[] = [
@@ -876,6 +877,77 @@ function NewQuotePageInner() {
     ]);
   };
 
+  // ─── Auto-append + focus management for the combobox flow ───────
+  // Refs map indexed by row position in the `items` array. Combobox
+  // registers its underlying input ref on mount; we use it to focus
+  // either the next existing row (same dept) or a freshly appended
+  // blank row after commit. `pendingFocusIdx` is the "next idx I want
+  // to focus once it's rendered" — the effect below applies it.
+  const descriptionRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const [pendingFocusIdx, setPendingFocusIdx] = useState<number | null>(null);
+
+  const registerDescriptionRef = useCallback((idx: number) => (el: HTMLInputElement | null) => {
+    if (el) descriptionRefs.current.set(idx, el);
+    else descriptionRefs.current.delete(idx);
+  }, []);
+
+  useEffect(() => {
+    if (pendingFocusIdx == null) return;
+    const el = descriptionRefs.current.get(pendingFocusIdx);
+    if (el) {
+      // Defer to next microtask so layout has settled.
+      requestAnimationFrame(() => {
+        el.focus();
+        // Position cursor at end for fast continuous entry.
+        const v = el.value;
+        el.setSelectionRange(v.length, v.length);
+      });
+      setPendingFocusIdx(null);
+    }
+  }, [pendingFocusIdx, items.length]);
+
+  const handleRowCommit = useCallback((committedIdx: number) => {
+    const committed = items[committedIdx];
+    if (!committed) return;
+    // Look for the next existing row in the same department.
+    const sameDept = items
+      .map((it, i) => ({ it, i }))
+      .filter((r) => r.it.department === committed.department);
+    const positionInDept = sameDept.findIndex((r) => r.i === committedIdx);
+    const nextSameDept = sameDept[positionInDept + 1];
+    if (nextSameDept) {
+      setPendingFocusIdx(nextSameDept.i);
+      return;
+    }
+    // Append a fresh blank row in the same department + focus its
+    // combobox. The new row's index is items.length at the moment
+    // setItems fires.
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const pickup = editing.startDate || today;
+    const ret = editing.endDate || tomorrow;
+    setItems((prev) => [
+      ...prev,
+      {
+        description: '',
+        quantity: 1,
+        catalogProductId: null,
+        catalogType: null,
+        department: committed.department,
+        qualifier: null,
+        rateType: 'DAILY',
+        pickupDate: pickup,
+        returnDate: ret,
+        billableDays: 1,
+        rate: 0,
+        matchedProduct: null,
+        matchSource: null,
+        warnings: [],
+      },
+    ]);
+    setPendingFocusIdx(items.length);
+  }, [items, editing.startDate, editing.endDate]);
+
   const orderTotal = useMemo(() => {
     const lineSum = items.reduce(
       (sum, it) =>
@@ -924,6 +996,28 @@ function NewQuotePageInner() {
     if (!canCreate) return;
     setCreating(true);
     try {
+      // Empty-row prune. A row is "workspace" when it has neither a
+      // typed description nor a catalog binding — those are blanks
+      // the rep arrowed past (auto-append leaves trailing empty
+      // rows). Discard before save so they never reach the DB / PDF
+      // / totals. By emptiness, not position — a blank mid-list gets
+      // swept too.
+      const beforeCount = items.length;
+      const cleanItems = items.filter(
+        (it) => it.description.trim().length > 0 || it.catalogProductId != null,
+      );
+      if (cleanItems.length !== beforeCount) {
+        setItems(cleanItems);
+      }
+      if (cleanItems.length === 0) {
+        alert('Add at least one line item before creating the quote.');
+        setCreating(false);
+        return;
+      }
+      // The rest of the save flow reads from `items` directly; swap
+      // the closure copy here so the prune is in effect for this
+      // call.
+      const itemsForSave = cleanItems;
       let companyId: string;
       let inlineJob: {
         name: string;
@@ -1057,8 +1151,8 @@ function NewQuotePageInner() {
       // existing job we attached to or the newly-created one.
       const jobId: string = existingJobId ?? order.createdJobId ?? order.jobId;
 
-      // Add line items
-      for (const it of items) {
+      // Add line items (already pruned of trailing empty rows)
+      for (const it of itemsForSave) {
         const liType = it.catalogType === 'ASSET_CATEGORY'
           ? 'VEHICLE'
           : it.department === 'EXPENDABLES'
@@ -1511,6 +1605,8 @@ function NewQuotePageInner() {
                 onChange={updateItem}
                 onDelete={removeItem}
                 onBulkApply={setBulkForDept}
+                onCommit={handleRowCommit}
+                registerDescriptionRef={registerDescriptionRef}
               />
             );
           })
@@ -1607,7 +1703,7 @@ function NewQuotePageInner() {
 const TABLE_GRID = 'grid-cols-[64px_minmax(220px,1fr)_96px_136px_136px_120px_104px_36px]';
 
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onBulkApply,
+  department, rows, onChange, onDelete, onBulkApply, onCommit, registerDescriptionRef,
 }: {
   department: LineItemDepartment;
   rows: { it: ResolvedItem; idx: number }[];
@@ -1617,6 +1713,8 @@ function DepartmentGroup({
     dept: LineItemDepartment,
     patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
   ) => void;
+  onCommit?: (idx: number) => void;
+  registerDescriptionRef?: (idx: number) => (el: HTMLInputElement | null) => void;
 }) {
   const [bulkPickup, setBulkPickup] = useState('');
   const [bulkReturn, setBulkReturn] = useState('');
@@ -1719,7 +1817,15 @@ function DepartmentGroup({
       {/* Line item rows */}
       <div className="divide-y divide-lt-hairline/60">
         {rows.map(({ it, idx }) => (
-          <LineItemRow key={idx} item={it} idx={idx} onChange={onChange} onDelete={onDelete} />
+          <LineItemRow
+            key={idx}
+            item={it}
+            idx={idx}
+            onChange={onChange}
+            onDelete={onDelete}
+            onCommit={onCommit}
+            descriptionRef={registerDescriptionRef?.(idx)}
+          />
         ))}
       </div>
 
@@ -1734,33 +1840,19 @@ function DepartmentGroup({
 }
 
 function LineItemRow({
-  item, idx, onChange, onDelete,
+  item, idx, onChange, onDelete, onCommit, descriptionRef,
 }: {
   item: ResolvedItem;
   idx: number;
   onChange: (idx: number, patch: Partial<ResolvedItem>) => void;
   onDelete: (idx: number) => void;
+  /** Parent-level commit: auto-append empty row + focus its
+   *  description input when this row's combobox emits commit. */
+  onCommit?: (idx: number) => void;
+  /** Ref the parent passes for the row's description input so the
+   *  next-row auto-append can move focus. */
+  descriptionRef?: React.Ref<HTMLInputElement>;
 }) {
-  const [showOverride, setShowOverride] = useState(item.catalogProductId == null);
-  const [searchQ, setSearchQ] = useState('');
-  const [searchResults, setSearchResults] = useState<CatalogSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  useEffect(() => {
-    if (searchQ.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const t = setTimeout(() => {
-      setSearching(true);
-      fetch(`/api/catalog/search?q=${encodeURIComponent(searchQ)}&limit=10`)
-        .then((r) => r.json())
-        .then((d) => setSearchResults(d.results || []))
-        .catch(() => setSearchResults([]))
-        .finally(() => setSearching(false));
-    }, 200);
-    return () => clearTimeout(t);
-  }, [searchQ]);
 
   const total = computeLineTotal({
     quantity: item.quantity,
@@ -1793,6 +1885,7 @@ function LineItemRow({
 
   const applyMatch = (m: CatalogSearchResult) => {
     onChange(idx, {
+      description: m.name,
       catalogProductId: m.id,
       catalogType: m.type,
       department: m.department,
@@ -1800,9 +1893,6 @@ function LineItemRow({
       matchedProduct: { id: m.id, type: m.type, name: m.name },
       matchSource: 'AI',
     });
-    setShowOverride(false);
-    setSearchQ('');
-    setSearchResults([]);
   };
 
   // Stages discount text — only shown for WEEKLY/MONTHLY since DAILY (and
@@ -1823,16 +1913,32 @@ function LineItemRow({
           className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
         />
 
-        {/* DESCRIPTION column — vertical stack */}
+        {/* DESCRIPTION column — combobox + quiet status pill */}
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={item.description}
-              onChange={(e) => onChange(idx, { description: e.target.value })}
-              placeholder="New line item"
-              className="flex-1 min-w-0 bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-semibold placeholder:text-lt-fg3 placeholder:italic placeholder:font-normal focus:outline-none focus:border-lt-hairline"
-            />
+            <div className="flex-1 min-w-0">
+              <LineItemDescriptionCombobox
+                value={item.description}
+                onChange={(next) => onChange(idx, { description: next })}
+                onPickCatalog={(hit) => applyMatch(hit as CatalogSearchResult)}
+                catalogBinding={
+                  item.catalogProductId && item.matchedProduct
+                    ? { id: item.catalogProductId, type: item.matchedProduct.type, name: item.matchedProduct.name }
+                    : null
+                }
+                onClearCatalog={() =>
+                  onChange(idx, {
+                    catalogProductId: null,
+                    catalogType: null,
+                    matchedProduct: null,
+                    matchSource: null,
+                  })
+                }
+                onCommit={() => onCommit?.(idx)}
+                ref={descriptionRef}
+                placeholder="New line item — type to search inventory"
+              />
+            </div>
             <span
               className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${DEPT_BADGE[item.department]}`}
               title={DEPARTMENT_LABEL[item.department]}
@@ -1842,58 +1948,6 @@ function LineItemRow({
           </div>
           {item.qualifier && (
             <div className="text-[11px] text-lt-fg2 italic">— {item.qualifier}</div>
-          )}
-          {matched ? (
-            <div className="flex items-center gap-2 text-[10px]">
-              <span className="bg-chip-good-bg text-chip-good-fg px-1.5 py-0.5 rounded font-semibold">
-                ✓ Matched: {item.matchedProduct?.name}
-              </span>
-              <button
-                onClick={() => setShowOverride((s) => !s)}
-                className="text-lt-fg3 hover:text-lt-fg underline decoration-dotted"
-              >
-                Change match
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-[10px]">
-              <span className="bg-chip-warn-bg text-chip-warn-fg px-1.5 py-0.5 rounded font-semibold">
-                ⚠ No catalog match
-              </span>
-              <button
-                onClick={() => setShowOverride((s) => !s)}
-                className="text-lt-fg3 hover:text-lt-fg underline decoration-dotted"
-              >
-                Pick one
-              </button>
-            </div>
-          )}
-          {showOverride && (
-            <div className="p-2 border border-lt-hairline rounded bg-lt-card">
-              <input
-                type="text"
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                placeholder="Search the catalog…"
-                className="w-full bg-lt-inner border border-lt-hairline rounded px-2 py-1 text-[12px] text-lt-fg focus:outline-none focus:border-lt-hairline"
-              />
-              {searching && <div className="text-[11px] text-lt-fg3 mt-1">Searching…</div>}
-              {searchResults.length > 0 && (
-                <div className="mt-1.5 max-h-44 overflow-y-auto space-y-0.5">
-                  {searchResults.map((r) => (
-                    <button
-                      key={`${r.type}-${r.id}`}
-                      onClick={() => applyMatch(r)}
-                      className="block w-full text-left px-2 py-1 hover:bg-lt-inner rounded text-[11px] text-lt-fg2"
-                    >
-                      <span className="text-lt-fg3">[{r.type === 'INVENTORY' ? 'Inv' : 'Fleet'}]</span>{' '}
-                      {r.name}
-                      <span className="text-lt-fg3 ml-2">· {DEPARTMENT_LABEL[r.department]}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           )}
         </div>
 

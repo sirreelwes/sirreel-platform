@@ -12,6 +12,7 @@ import { LineItemRowActions } from "@/components/lineItems/LineItemRowActions";
 import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lineItems/LineItemUndoToast";
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
+import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus } from "@prisma/client";
@@ -1403,23 +1404,47 @@ export default function OrderDetailPage() {
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}
                   </select>
                 ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
-                  <div className="relative">
-                    <input type="text" value={invSearch} onChange={(e) => setInvSearch(e.target.value)}
-                      onFocus={() => invResults.length > 0 && setShowInvDropdown(true)}
-                      placeholder="Type to search inventory..."
-                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
-                    {showInvDropdown && invResults.length > 0 && (
-                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-lt-inner border border-lt-hairline rounded-lg shadow-xl max-h-[200px] overflow-y-auto">
-                        {invResults.map((item) => (
-                          <button key={item.id} onClick={() => selectInventoryItem(item)}
-                            className="w-full px-3 py-2 text-left hover:bg-lt-inner text-sm text-lt-fg flex justify-between">
-                            <span className="font-mono">{item.code}</span>
-                            <span className="text-lt-fg2 text-xs">{item.category.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <LineItemDescriptionCombobox
+                    value={invSearch}
+                    onChange={(next) => setInvSearch(next)}
+                    onPickCatalog={(hit) => {
+                      if (hit.type === 'ASSET_CATEGORY') {
+                        // Modal type is EQUIPMENT/EXPENDABLE; if rep
+                        // picks a vehicle category, flip the type and
+                        // let selectAssetCategory handle binding.
+                        const cat = assetCats.find((c) => c.id === hit.id)
+                        if (cat) {
+                          setLiType('VEHICLE')
+                          setLiAssetCatId(cat.id)
+                          selectAssetCategory(cat)
+                          setInvSearch(cat.name)
+                        }
+                        return
+                      }
+                      // Map combobox hit back into the modal's
+                      // existing InvItem shape that selectInventoryItem
+                      // expects.
+                      selectInventoryItem({
+                        id: hit.id,
+                        code: hit.name,
+                        description: hit.name,
+                        dailyRate: String(hit.dailyRate),
+                        weeklyRate: hit.weeklyRate ? String(hit.weeklyRate) : null,
+                        category: { id: '', name: hit.department.replace(/_/g, ' ') },
+                      })
+                      setInvSearch(hit.name)
+                    }}
+                    catalogBinding={
+                      liInvItemId
+                        ? { id: liInvItemId, type: 'INVENTORY', name: invSearch }
+                        : null
+                    }
+                    onClearCatalog={() => {
+                      setLiInvItemId('')
+                    }}
+                    placeholder="Type to search inventory..."
+                    hideCustomChip
+                  />
                 ) : (
                   <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)} placeholder="e.g. Day Player Grip, Delivery Fee..."
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />

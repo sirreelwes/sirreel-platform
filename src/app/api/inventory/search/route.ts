@@ -11,12 +11,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items: [] });
   }
 
+  // Token-based matching. Split the query on whitespace, AND each token
+  // against (code OR description) — order doesn't matter, every token
+  // must hit SOMEWHERE in either field. "6' Table" → "6' Folding Table"
+  // (both "6'" and "Table" appear), "sandbag" → "25 LB. SANDBAG"
+  // (case-insensitive contains).
+  //
+  // Single-token queries collapse to the same single OR clause the old
+  // path used; no regression on existing call sites.
+  const tokens = q.trim().split(/\s+/).filter(Boolean);
   const where: Record<string, unknown> = {
     isActive: true,
-    OR: [
-      { code: { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
-    ],
+    AND: tokens.map((t) => ({
+      OR: [
+        { code: { contains: t, mode: "insensitive" } },
+        { description: { contains: t, mode: "insensitive" } },
+      ],
+    })),
   };
 
   if (categorySlug) {

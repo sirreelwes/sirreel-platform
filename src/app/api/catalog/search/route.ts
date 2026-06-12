@@ -16,15 +16,27 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(20, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)))
   if (!q) return NextResponse.json({ results: [] })
 
+  // Token-based matching across BOTH catalog tables. Every whitespace-
+  // separated token must hit SOMEWHERE in (code OR description OR
+  // aliases) for inventory, or (name OR slug OR aliases) for asset
+  // category. Order-insensitive — "6' Table" finds "6' Folding Table",
+  // "Studio Lankershim" finds "Lankershim Studio A", etc. Single-token
+  // queries are equivalent to the prior OR clause; no regression on
+  // existing call sites.
+  const tokens = q.split(/\s+/).filter(Boolean)
+  const lower = (t: string) => t.toLowerCase()
+
   const [invItems, assetCats] = await Promise.all([
     prisma.inventoryItem.findMany({
       where: {
         isActive: true,
-        OR: [
-          { code: { contains: q, mode: 'insensitive' } },
-          { description: { contains: q, mode: 'insensitive' } },
-          { aliases: { has: q.toLowerCase() } },
-        ],
+        AND: tokens.map((t) => ({
+          OR: [
+            { code: { contains: t, mode: 'insensitive' as const } },
+            { description: { contains: t, mode: 'insensitive' as const } },
+            { aliases: { has: lower(t) } },
+          ],
+        })),
       },
       select: {
         id: true, code: true, description: true,
@@ -35,11 +47,13 @@ export async function GET(req: NextRequest) {
     }),
     prisma.assetCategory.findMany({
       where: {
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { slug: { contains: q, mode: 'insensitive' } },
-          { aliases: { has: q.toLowerCase() } },
-        ],
+        AND: tokens.map((t) => ({
+          OR: [
+            { name: { contains: t, mode: 'insensitive' as const } },
+            { slug: { contains: t, mode: 'insensitive' as const } },
+            { aliases: { has: lower(t) } },
+          ],
+        })),
       },
       select: {
         id: true, name: true,
