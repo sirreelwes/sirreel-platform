@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -294,7 +294,13 @@ const STATUS_ACTIONS: Record<string, StatusAction[]> = {
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const orderId = params.id as string;
+  // ?send=1 — set by new-quote's "Send quote" finishing-move CTA. The
+  // detail page loads, hydrates the order, then auto-opens the review
+  // gate against the TSX welcome+quote template. One continuous motion
+  // from new-quote → preview → send.
+  const autoOpenSend = searchParams?.get('send') === '1';
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -430,6 +436,9 @@ export default function OrderDetailPage() {
   const [emailReviewTarget, setEmailReviewTarget] = useState<EmailReviewTarget | null>(null);
   const [sendQuoteFlash, setSendQuoteFlash] = useState<string | null>(null);
   const [lineItemUndoToast, setLineItemUndoToast] = useState<LineItemUndoToastState | null>(null);
+  // One-shot guard so the ?send=1 auto-open fires once per page load,
+  // not on every re-render or refresh.
+  const [autoSendHandled, setAutoSendHandled] = useState(false);
 
   const fmt = (n: string | number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
@@ -569,6 +578,25 @@ export default function OrderDetailPage() {
       setAssetCats(data.assetCategories || []);
     });
   }, [fetchOrder]);
+
+  // Auto-open the email-review gate when arriving from new-quote's
+  // "Send quote →" finishing-move CTA (`?send=1`). Order must be
+  // hydrated (the modal needs the orderId) and the guard must be
+  // unset. After firing once, scrub the query so a hard refresh
+  // doesn't re-open the modal.
+  useEffect(() => {
+    if (!autoOpenSend) return;
+    if (autoSendHandled) return;
+    if (!order || !orderId) return;
+    setAutoSendHandled(true);
+    setEmailReviewTarget({ kind: 'quote', orderId });
+    // Replace URL so future renders don't see ?send=1.
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('send');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [autoOpenSend, autoSendHandled, order, orderId]);
 
   const fetchAgreement = useCallback(async () => {
     const res = await fetch(`/api/orders/${orderId}/agreement`);

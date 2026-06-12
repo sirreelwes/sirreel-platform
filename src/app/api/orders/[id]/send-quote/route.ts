@@ -26,7 +26,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
@@ -132,25 +131,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? ranked.filter((r) => r.email !== primary.email && ccOverride.includes(r.email))
     : ranked.slice(1)
 
-  // ── Fetch the PDF buffer ─────────────────────────────────
-  let pdfBuffer: Buffer
-  try {
-    const blob = await getBlob(order.quotePdfKey, { access: 'private' })
-    if (!blob || blob.statusCode !== 200 || !blob.stream) {
-      return bad(500, 'quote PDF blob not retrievable — regenerate first')
-    }
-    const chunks: Buffer[] = []
-    const reader = blob.stream.getReader()
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      if (value) chunks.push(Buffer.from(value))
-    }
-    pdfBuffer = Buffer.concat(chunks)
-  } catch (err) {
-    console.error('[send-quote] blob fetch failed:', err)
-    return bad(500, 'failed to fetch quote PDF')
-  }
+  // Quote PDF is no longer attached — the TSX welcome template's
+  // primary CTA links to the portal job page where "Download quote
+  // PDF" is one click away. Smaller email = better deliverability
+  // and a less intimidating first touch from a new sales contact.
+  // The blob still exists; the portal page proxies it through the
+  // auth-gated /api/portal/job/{slug}/quote-pdf route (or wherever
+  // the portal page links it).
 
   // ── Refresh or mint the portal magic-link token ──────────
   // One PortalAccess row per (orderId, contactId) — refresh expiresAt
@@ -175,14 +162,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
   if (!final.ok) return bad(final.status, final.error)
 
-  const filename = `Quote-${order.orderNumber}.pdf`
   const emailResult = await sendAgreementEmail({
     to: [primary.email],
     cc: others.length > 0 ? others.map((o) => o.email) : undefined,
     subject: final.subject,
     html: final.html,
     text: final.text,
-    attachments: [{ filename, content: pdfBuffer }],
     label: `send-quote:${order.orderNumber}`,
   })
 

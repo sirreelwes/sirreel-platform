@@ -19,10 +19,9 @@
  *     passes it in; the rendered HTML carries the live link.
  */
 
-import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
-import { buildQuoteSendEmail } from '@/lib/email/templates/quoteSend'
+import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 
 export interface AttachmentMeta {
@@ -66,9 +65,9 @@ export interface ComposeQuoteEmailArgs {
   /** Pass null for preview (renders no portal button). Pass a fully
    *  tokenized URL for send. */
   portalUrl: string | null
-  /** Skip attachment-metadata HEAD probe. Send path doesn't need the
-   *  filename pre-known (it just builds Quote-{orderNumber}.pdf); the
-   *  preview path uses the metadata. Default true. */
+  /** @deprecated kept for back-compat with the send route's old
+   *  call site; the email no longer carries an attachment, so this
+   *  flag is a no-op. Removed in a future cleanup. */
   includeAttachmentMeta?: boolean
   /** Person.id to use as the primary recipient instead of the
    *  canonical rank-0 pick. Backs the modal's "Change recipient"
@@ -87,10 +86,14 @@ export async function composeQuoteEmail(
       id: true,
       orderNumber: true,
       status: true,
+      startDate: true,
+      endDate: true,
+      subtotal: true,
+      total: true,
       quotePdfKey: true,
       quotePdfUrl: true,
       portalSlug: true,
-      agent: { select: { name: true, email: true } },
+      agent: { select: { name: true, email: true, phone: true } },
       job: {
         select: {
           name: true,
@@ -145,31 +148,31 @@ export async function composeQuoteEmail(
     alternatives = ranked.filter((_, i) => i !== idx)
   }
 
+  // Quote PDF is NO LONGER an email attachment. Per the unified
+  // new-quote → send-as-finishing-move flow, the portal page exposes
+  // a "Download quote PDF" affordance once the client clicks in.
+  // Smaller email → better deliverability + a less intimidating first
+  // touch. The attachments array stays in the response shape for
+  // API back-compat; it's just empty.
   const attachments: AttachmentMeta[] = []
-  if (args.includeAttachmentMeta !== false) {
-    // Best-effort filename + size. If the HEAD probe fails the preview
-    // just shows the filename without a size — never block on it.
-    const filename = `Quote-${order.orderNumber}.pdf`
-    let sizeBytes: number | undefined
-    try {
-      const head = await getBlob(order.quotePdfKey, { access: 'private' })
-      // Blob size lives on head.blob.size when the call succeeds (statusCode=200);
-      // 304s return null. Either way we treat absent as "unknown size".
-      sizeBytes = head?.statusCode === 200 ? head.blob.size : undefined
-    } catch {
-      sizeBytes = undefined
-    }
-    attachments.push({ filename, mimeType: 'application/pdf', sizeBytes })
-  }
 
-  const { subject, html, text } = buildQuoteSendEmail({
-    firstName: to.name.split(' ')[0] || 'there',
-    orderNumber: order.orderNumber,
-    jobName: order.job?.name ?? 'your production',
+  const { subject, html, text } = buildTsxWelcomeEmail({
+    mode: 'welcome-with-quote',
+    clientFirstName: to.name.split(' ')[0] || null,
+    clientFullName: to.name || null,
     agentName: order.agent.name || 'SirReel',
     agentEmail: order.agent.email,
-    portalUrl: args.portalUrl,
-    customMessage: args.message ?? null,
+    agentPhone: order.agent.phone,
+    personalNote: args.message?.trim() || null,
+    quote: {
+      orderNumber: order.orderNumber,
+      jobName: order.job?.name ?? 'your production',
+      startDate: order.startDate ? order.startDate.toISOString() : null,
+      endDate: order.endDate ? order.endDate.toISOString() : null,
+      subtotal: order.subtotal != null ? Number(order.subtotal) : null,
+      total: Number(order.total),
+      portalUrl: args.portalUrl,
+    },
   })
 
   return {

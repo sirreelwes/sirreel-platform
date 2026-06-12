@@ -191,13 +191,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await req.json();
-  const { firstName, lastName, email, phone, mobile, role, tier, assignedAgentId } = body;
+  const { firstName, lastName, email, phone, mobile, role, tier, assignedAgentId, source } = body;
   if (!firstName || !lastName || !email) {
     return NextResponse.json({ error: "firstName, lastName, email required" }, { status: 400 });
   }
 
   const person = await prisma.person.create({
-    data: { firstName, lastName, email, phone, mobile, role, tier, assignedAgentId },
+    data: {
+      firstName, lastName, email, phone, mobile, role, tier, assignedAgentId,
+      // Free-form provenance tag — the new-quote inline create stamps
+      // "phone_inquiry" for off-email leads; the capture pipeline
+      // stamps "email_capture"; manual /crm adds leave it null.
+      source: typeof source === 'string' && source.trim() ? source.trim() : null,
+    },
   });
   return NextResponse.json(person, { status: 201 });
 }

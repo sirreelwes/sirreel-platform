@@ -912,10 +912,13 @@ function NewQuotePageInner() {
   //   draft    — go straight to the new Order's detail page
   //   preview  — open the PDF in a new tab and then land on detail page
   //   download — trigger a file download via ?download=1 and land on detail page
-  // All three persist as quoteStatus=DRAFT (schema default). The detail
+  // All persist as quoteStatus=DRAFT (schema default). The detail
   // page is the canonical place to iterate; preview/download navigate
-  // there afterward so the agent never edits in two places.
-  type CreateAction = 'draft' | 'preview' | 'download';
+  // there afterward so the agent never edits in two places. `send`
+  // is the finishing move — same create flow, then lands on the
+  // detail page with ?send=1 which auto-opens the existing review
+  // gate against the TSX welcome+quote template.
+  type CreateAction = 'draft' | 'preview' | 'download' | 'send';
 
   const createQuote = async (action: CreateAction = 'draft') => {
     if (!canCreate) return;
@@ -975,6 +978,13 @@ function NewQuotePageInner() {
             const parts = trimmed.split(/\s+/);
             const firstName = parts[0] || c.email.split('@')[0];
             const lastName = parts.slice(1).join(' ') || '(unknown)';
+            // Phone-inquiry quick-add rows have no email-parse provenance
+            // (the rep just typed them in). Tag those at create time so
+            // the CRM stats strip + capture review can distinguish them
+            // from email-derived contacts later.
+            const sourceTag = c.source === 'header' && c.confidence === 'high' && !c.existing_person_id && !c.candidate_person_id && (c.title == null)
+              ? 'phone_inquiry'
+              : 'new_quote';
             try {
               const personRes = await fetch('/api/crm/people', {
                 method: 'POST',
@@ -984,6 +994,7 @@ function NewQuotePageInner() {
                   lastName,
                   email: c.email,
                   phone: c.phone || undefined,
+                  source: sourceTag,
                 }),
               });
               if (personRes.ok) {
@@ -1137,7 +1148,7 @@ function NewQuotePageInner() {
       // restoration on a future /orders/new-quote visit.
       clearDraftState(inquiryId);
 
-      router.push(`/orders/${order.id}`);
+      router.push(action === 'send' ? `/orders/${order.id}?send=1` : `/orders/${order.id}`);
     } finally {
       setCreating(false);
     }
@@ -1563,10 +1574,18 @@ function NewQuotePageInner() {
           <button
             onClick={() => createQuote('draft')}
             disabled={!canCreate || creating}
-            className="px-5 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner text-white text-sm font-bold rounded-lg"
+            className="px-5 py-2 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
             title="Save as draft and open the order detail page"
           >
             {creating ? 'Saving Draft…' : 'Save Draft'}
+          </button>
+          <button
+            onClick={() => createQuote('send')}
+            disabled={!canCreate || creating}
+            className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg"
+            title="Create the quote, generate the PDF, then open the TSX welcome+quote review gate"
+          >
+            {creating ? 'Saving…' : 'Send quote →'}
           </button>
         </div>
       </div>
@@ -2059,22 +2078,65 @@ function PeopleSection({
   contacts: ResolvedContact[];
   setContacts: React.Dispatch<React.SetStateAction<ResolvedContact[]>>;
 }) {
-  if (contacts.length === 0) return null;
-
   const updateContact = (idx: number, patch: Partial<ResolvedContact>) => {
     setContacts((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
   };
 
+  // Quick-add affordance for phone-inquiry clients who weren't on
+  // any parsed email. Appends a blank-but-include=true row that the
+  // rep fills in inline. The save handler will mint the Person via
+  // POST /api/crm/people (with source="phone_inquiry") because the
+  // row has match_status='new' and no existing_person_id.
+  const addBlankContact = () => {
+    setContacts((prev) => [
+      ...prev,
+      {
+        name: '',
+        email: '',
+        title: null,
+        phone: null,
+        company: null,
+        suggested_role: null,
+        source: 'header',
+        confidence: 'high',
+        match_status: 'new',
+        existing_person_id: null,
+        candidate_person_id: null,
+        include: true,
+        role: 'PRODUCER',
+      },
+    ]);
+  };
+
   const includedCount = contacts.filter((c) => c.include).length;
+  const emptyContacts = contacts.length === 0;
 
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-sm font-bold text-lt-fg">
-          People on this thread ({includedCount} of {contacts.length} selected)
+          {emptyContacts
+            ? 'Client contact'
+            : `People on this thread (${includedCount} of ${contacts.length} selected)`}
         </h2>
-        <p className="text-[11px] text-lt-fg3">Will associate with the new Job on save</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[11px] text-lt-fg3">Will associate with the new Job on save</p>
+          <button
+            type="button"
+            onClick={addBlankContact}
+            className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 underline"
+          >
+            + Quick add contact
+          </button>
+        </div>
       </div>
+      {emptyContacts && (
+        <p className="text-[12px] text-lt-fg3">
+          No contacts attached yet. <span className="text-lt-fg2">+ Quick add contact</span> above
+          for phone-inquiry clients who aren&apos;t in CRM yet — name, email, phone, role. Source is logged as
+          <span className="font-mono text-lt-fg2"> phone_inquiry</span>.
+        </p>
+      )}
       <div className="space-y-2">
         {contacts.map((c, idx) => {
           const badge = MATCH_BADGE[c.match_status];
