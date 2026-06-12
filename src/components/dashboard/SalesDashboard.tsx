@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { ThankYousToSendWidget } from '@/components/orders/ThankYousToSendWidget';
+import { WeeklyCandidWidget } from '@/components/orders/WeeklyCandidWidget';
 
 function fDate(ds: string): string {
   if (!ds) return '';
@@ -202,6 +203,13 @@ export default function SalesDashboard({ agentName }: { agentName: string }) {
               </div>
             )}
           </div>
+
+          {/* Weekly candid — prompts the rep for a fresh in-the-
+              warehouse photo each week; that photo becomes the
+              default for any thank-you they send this week (rep can
+              still take a fresh one in the compose view if a
+              particular client deserves it). */}
+          <WeeklyCandidWidget />
 
           {/* Thank-yous to send — SUGGESTED rows scoped to this rep's
               own orders. Click a row → compose view with photo slot

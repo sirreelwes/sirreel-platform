@@ -35,6 +35,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({})) as {
     personalNote?: string | null
     photoDocumentId?: string | null
+    photoCaption?: string | null
+    /** When set, render with the agent's weekly candid URL directly
+     *  (skips the OrderDocument lookup). */
+    photoUrlOverride?: string | null
   }
 
   const order = await prisma.order.findUnique({
@@ -51,11 +55,15 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
   if (!order.agent) return NextResponse.json({ error: 'order has no agent' }, { status: 422 })
 
-  // Resolve the photo: explicit photoDocumentId wins; fall back to
-  // the suggestion's pinned photoDocumentId; fall back to the most
-  // recent JOB_PHOTO uploaded to this order.
+  // Resolve the photo: photoUrlOverride wins (weekly-candid path,
+  // not an OrderDocument), then explicit photoDocumentId, then the
+  // suggestion's pinned photoDocumentId, then the most recent
+  // JOB_PHOTO uploaded to this order.
   let photoUrl: string | null = null
-  if (body.photoDocumentId) {
+  if (body.photoUrlOverride) {
+    photoUrl = body.photoUrlOverride
+  }
+  if (!photoUrl && body.photoDocumentId) {
     const doc = await prisma.orderDocument.findUnique({
       where: { id: body.photoDocumentId },
       select: { fileUrl: true, orderId: true },
@@ -91,6 +99,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     agentEmail: order.agent.email,
     agentPhone: order.agent.phone,
     photoUrl,
+    photoCaption: body.photoCaption ?? null,
     personalNote: body.personalNote ?? null,
   })
 

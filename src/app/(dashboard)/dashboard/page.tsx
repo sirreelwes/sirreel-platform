@@ -8,6 +8,7 @@ import CollectionsDashboard from '@/components/dashboard/CollectionsDashboard';
 import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWidget';
 import DaniDashboard from '@/components/dashboard/DaniDashboard';
 import { ThankYousToSendWidget } from '@/components/orders/ThankYousToSendWidget';
+import { WeeklyCandidWidget } from '@/components/orders/WeeklyCandidWidget';
 
 const ADMIN_DASHBOARD_USERS = ['Wes', 'Dani Novoa'];
 const SALES_USERS = ['Jose Pacheco', 'Oliver Carlson'];
@@ -503,6 +504,11 @@ function AdminDashboard({ userName }: { userName: string }) {
       </div>
 
       <div className="mb-4"><CollectionsReportWidget /></div>
+
+      {/* Weekly candid for Wes too — same prompt + storage as the
+          sales reps; gives admin a reference fresh shot for any
+          thank-you the team needs backstopped. */}
+      <div className="mb-4"><WeeklyCandidWidget /></div>
 
       {/* Thank-yous to send — admin view sees ALL suggested rows across
           every rep so Wes can chase or backstop. Rows expire visually

@@ -49,6 +49,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => ({})) as {
     personalNote?: string | null
     photoDocumentId?: string | null
+    photoCaption?: string | null
+    photoUrlOverride?: string | null
     to?: string
   }
 
@@ -76,11 +78,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   const to = body.to?.trim() || order.jobContact?.email
   if (!to) return NextResponse.json({ error: 'no recipient (jobContact has no email and no override supplied)' }, { status: 422 })
 
-  // Resolve photo URL — explicit photoDocumentId wins, then pinned,
-  // then latest JOB_PHOTO on the order.
-  let photoDocumentId: string | null = body.photoDocumentId ?? order.thankYouSuggestion.photoDocumentId
-  let photoUrl: string | null = null
-  if (photoDocumentId) {
+  // Resolve photo URL. Priority:
+  //   1) photoUrlOverride (weekly-candid path, not an OrderDocument)
+  //   2) explicit photoDocumentId (rep picked an order JOB_PHOTO)
+  //   3) suggestion's pinned photoDocumentId
+  //   4) latest JOB_PHOTO uploaded to this order
+  let photoDocumentId: string | null = body.photoUrlOverride
+    ? null
+    : (body.photoDocumentId ?? order.thankYouSuggestion.photoDocumentId)
+  let photoUrl: string | null = body.photoUrlOverride ?? null
+  if (!photoUrl && photoDocumentId) {
     const doc = await prisma.orderDocument.findUnique({
       where: { id: photoDocumentId },
       select: { fileUrl: true, orderId: true },
@@ -88,7 +95,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (doc && doc.orderId === id) photoUrl = doc.fileUrl
     else photoDocumentId = null
   }
-  if (!photoUrl) {
+  if (!photoUrl && !body.photoUrlOverride) {
     const latest = await prisma.orderDocument.findFirst({
       where: { orderId: id, type: 'JOB_PHOTO' },
       orderBy: { createdAt: 'desc' },
@@ -113,6 +120,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     agentEmail: order.agent.email,
     agentPhone: order.agent.phone,
     photoUrl,
+    photoCaption: body.photoCaption ?? null,
     personalNote: body.personalNote ?? null,
   })
 

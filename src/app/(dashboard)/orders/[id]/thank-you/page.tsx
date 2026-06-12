@@ -66,7 +66,14 @@ export default function ThankYouComposePage() {
   const [item, setItem] = useState<SuggestionResp | null>(null)
   const [docs, setDocs] = useState<OrderDocRow[]>([])
   const [personalNote, setPersonalNote] = useState('')
+  const [photoCaption, setPhotoCaption] = useState('')
+  // Three photo sources: the rep's weekly candid (default when it
+  // exists), a JOB_PHOTO uploaded to this order by the warehouse
+  // team, or none. "Take new photo" uploads to the weekly candid
+  // and switches to that source.
+  const [photoSource, setPhotoSource] = useState<'weekly' | 'order' | 'none'>('weekly')
   const [pickedPhotoId, setPickedPhotoId] = useState<string | null>(null)
+  const [weeklyCandid, setWeeklyCandid] = useState<{ fileUrl: string; capturedAt: string; isThisWeek: boolean; ageDays: number | null } | null>(null)
   const [preview, setPreview] = useState<PreviewResp | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -75,7 +82,8 @@ export default function ThankYouComposePage() {
   const [dismissing, setDismissing] = useState(false)
   const [dismissReason, setDismissReason] = useState('')
   const [showDismiss, setShowDismiss] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const orderFileInputRef = useRef<HTMLInputElement | null>(null)
+  const weeklyFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadItem = useCallback(async () => {
     try {
@@ -104,18 +112,56 @@ export default function ThankYouComposePage() {
     }
   }, [orderId])
 
-  useEffect(() => { loadItem(); loadDocs() }, [loadItem, loadDocs])
+  const loadWeeklyCandid = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users/me/weekly-candid')
+      const data = await res.json()
+      if (res.ok && data.current) {
+        setWeeklyCandid({
+          fileUrl: data.current.fileUrl,
+          capturedAt: data.current.capturedAt,
+          isThisWeek: !!data.isThisWeek,
+          ageDays: data.ageDays,
+        })
+      } else {
+        setWeeklyCandid(null)
+        // Fall back to 'order' if there's no weekly candid AND the
+        // order has JOB_PHOTOs; otherwise 'none'.
+        setPhotoSource((cur) => (cur === 'weekly' ? 'none' : cur))
+      }
+    } catch {
+      /* swallow */
+    }
+  }, [])
+
+  useEffect(() => { loadItem(); loadDocs(); loadWeeklyCandid() }, [loadItem, loadDocs, loadWeeklyCandid])
+
+  // Build the photo payload that goes to preview/send. Weekly =
+  // pass the candid's fileUrl as override; order = use pickedPhotoId;
+  // none = clear both.
+  const photoPayload = useCallback((): { photoUrlOverride: string | null; photoDocumentId: string | null } => {
+    if (photoSource === 'weekly' && weeklyCandid) {
+      return { photoUrlOverride: weeklyCandid.fileUrl, photoDocumentId: null }
+    }
+    if (photoSource === 'order' && pickedPhotoId) {
+      return { photoUrlOverride: null, photoDocumentId: pickedPhotoId }
+    }
+    return { photoUrlOverride: null, photoDocumentId: null }
+  }, [photoSource, weeklyCandid, pickedPhotoId])
 
   const runPreview = useCallback(async () => {
     setLoadingPreview(true)
     setErr(null)
     try {
+      const { photoUrlOverride, photoDocumentId } = photoPayload()
       const res = await fetch(`/api/orders/${orderId}/thank-you/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personalNote: personalNote.trim() || null,
-          photoDocumentId: pickedPhotoId,
+          photoCaption: photoCaption.trim() || null,
+          photoUrlOverride,
+          photoDocumentId,
         }),
       })
       const data = await res.json()
@@ -129,9 +175,38 @@ export default function ThankYouComposePage() {
     } finally {
       setLoadingPreview(false)
     }
-  }, [orderId, personalNote, pickedPhotoId])
+  }, [orderId, personalNote, photoCaption, photoPayload])
 
-  const uploadPhoto = async (file: File) => {
+  // Upload to the rep's WEEKLY CANDID slot. Used when the rep taps
+  // "Take a new photo right now" — the freshest shot becomes the
+  // week's candid (and the default for any subsequent thank-yous
+  // this week). Source switches to 'weekly' automatically so the
+  // preview reflects the new shot.
+  const uploadWeeklyPhoto = async (file: File) => {
+    setUploading(true)
+    setErr(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/users/me/weekly-candid', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        setErr(data?.error || `upload HTTP ${res.status}`)
+        return
+      }
+      await loadWeeklyCandid()
+      setPhotoSource('weekly')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Upload to the ORDER'S JOB_PHOTO list (warehouse-team flow — they
+  // shoot a candid for a specific job and attach to the order, separate
+  // from the rep's weekly candid).
+  const uploadOrderPhoto = async (file: File) => {
     setUploading(true)
     setErr(null)
     try {
@@ -145,19 +220,14 @@ export default function ThankYouComposePage() {
         setErr(data?.error || `upload HTTP ${res.status}`)
         return
       }
-      // Pick the freshly-uploaded photo and refresh the doc list.
       setPickedPhotoId((data as OrderDocRow).id)
+      setPhotoSource('order')
       await loadDocs()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'upload failed')
     } finally {
       setUploading(false)
     }
-  }
-
-  const onFile = (f: File | null) => {
-    if (!f) return
-    uploadPhoto(f)
   }
 
   const send = async () => {
@@ -169,12 +239,15 @@ export default function ThankYouComposePage() {
     setSending(true)
     setErr(null)
     try {
+      const { photoUrlOverride, photoDocumentId } = photoPayload()
       const res = await fetch(`/api/orders/${orderId}/thank-you/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personalNote: personalNote.trim() || null,
-          photoDocumentId: pickedPhotoId,
+          photoCaption: photoCaption.trim() || null,
+          photoUrlOverride,
+          photoDocumentId,
         }),
       })
       const data = await res.json()
@@ -249,51 +322,152 @@ export default function ThankYouComposePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Compose */}
         <div className="space-y-4">
-          {/* Photo */}
+          {/* Photo source picker — three modes:
+              · weekly:  use the rep's "candid of the week" (default)
+              · order:   use a JOB_PHOTO uploaded to this order
+              · none:    send without a photo
+              Plus "Take a new photo right now" → uploads to the
+              weekly candid slot and auto-switches to that source. */}
           <section className="bg-white border border-gray-200 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-2">Photo</h2>
-            <p className="text-xs text-gray-500 mb-3">Strongly encouraged. Warehouse team can shoot on phones; clients love the candid.</p>
-            {docs.filter((d) => d.type === 'JOB_PHOTO').length > 0 && (
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                {docs.filter((d) => d.type === 'JOB_PHOTO').map((d) => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setPickedPhotoId(d.id === pickedPhotoId ? null : d.id)}
-                    className={`relative aspect-square overflow-hidden rounded border-2 ${
-                      pickedPhotoId === d.id ? 'border-amber-500' : 'border-transparent hover:border-gray-300'
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={d.fileUrl} alt={d.title} className="w-full h-full object-cover" />
-                    {pickedPhotoId === d.id && (
-                      <span className="absolute top-1 right-1 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded">PICKED</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Photo</h2>
+
+            <div className="space-y-2 mb-3">
+              {/* Weekly candid */}
+              <label className={`flex items-start gap-3 p-3 rounded border ${photoSource === 'weekly' ? 'border-amber-500 bg-amber-50/40' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="photoSource"
+                  checked={photoSource === 'weekly'}
+                  onChange={() => setPhotoSource('weekly')}
+                  disabled={!weeklyCandid}
+                  className="mt-1"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-900 font-medium">My weekly candid</div>
+                  {weeklyCandid ? (
+                    <div className="flex items-center gap-3 mt-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={weeklyCandid.fileUrl} alt="weekly candid" className="w-16 h-16 object-cover rounded border border-gray-200" />
+                      <div className="text-xs text-gray-600">
+                        {weeklyCandid.isThisWeek
+                          ? 'Set for this week.'
+                          : `Captured ${weeklyCandid.ageDays ?? '?'}d ago — consider a fresh one.`}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500 mt-1">
+                      No weekly candid uploaded yet. Take one below or set one on the dashboard widget.
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Order JOB_PHOTOs */}
+              {docs.filter((d) => d.type === 'JOB_PHOTO').length > 0 && (
+                <label className={`flex items-start gap-3 p-3 rounded border ${photoSource === 'order' ? 'border-amber-500 bg-amber-50/40' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <input
+                    type="radio"
+                    name="photoSource"
+                    checked={photoSource === 'order'}
+                    onChange={() => setPhotoSource('order')}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-900 font-medium">A photo from this order</div>
+                    <div className="text-xs text-gray-500 mt-1 mb-2">Uploaded by the warehouse team for this specific job.</div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {docs.filter((d) => d.type === 'JOB_PHOTO').map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setPickedPhotoId(d.id); setPhotoSource('order') }}
+                          className={`relative aspect-square overflow-hidden rounded border-2 ${
+                            pickedPhotoId === d.id ? 'border-amber-500' : 'border-transparent hover:border-gray-300'
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={d.fileUrl} alt={d.title} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </label>
+              )}
+
+              {/* No photo */}
+              <label className={`flex items-start gap-3 p-3 rounded border ${photoSource === 'none' ? 'border-amber-500 bg-amber-50/40' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="photoSource"
+                  checked={photoSource === 'none'}
+                  onChange={() => setPhotoSource('none')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="text-sm text-gray-900 font-medium">No photo</div>
+                  <div className="text-xs text-gray-500 mt-1">Clients still get a warm thank-you, but the candid is what makes it land.</div>
+                </div>
+              </label>
+            </div>
+
+            {/* Take-a-new-photo-right-now */}
             <input
-              ref={fileInputRef}
+              ref={weeklyFileInputRef}
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadWeeklyPhoto(f); e.target.value = '' }}
               className="hidden"
             />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => weeklyFileInputRef.current?.click()}
               disabled={uploading}
-              className="w-full min-h-[3rem] bg-gray-100 hover:bg-gray-200 border border-gray-300 border-dashed rounded text-sm text-gray-700 disabled:opacity-50"
+              className="w-full min-h-[3rem] bg-gray-900 hover:bg-black text-white text-sm font-medium rounded disabled:opacity-50"
+              title="Becomes your weekly candid AND the photo on this thank-you"
             >
-              {uploading ? 'Uploading…' : (docs.length > 0 ? '+ Upload another photo' : '+ Take or upload a photo')}
+              {uploading ? 'Uploading…' : '+ Take a new candid right now'}
             </button>
-            {pickedPhotoId === null && (
-              <p className="text-xs text-gray-500 mt-2">
-                Sending without a photo — clients still get a warm thank-you, but a candid lands much better.
-              </p>
-            )}
+            <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">
+              Replaces your weekly candid · aim for SirReel sign, warehouse crew, fleet, or gear in the background · candid feels better than posed.
+            </p>
+
+            {/* Caption */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-900">Photo caption (optional)</span>
+                <span className="block text-xs text-gray-500 mt-0.5 mb-2">Renders centered under the photo. Leave blank — most candids speak for themselves.</span>
+                <input
+                  value={photoCaption}
+                  onChange={(e) => setPhotoCaption(e.target.value)}
+                  placeholder="e.g. The whole crew on wrap day."
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </label>
+            </div>
+
+            {/* Separate uploader for ORDER-scoped JOB_PHOTOs (warehouse-team
+                path, not the rep's weekly candid). Hidden behind a small
+                affordance since most reps will use weekly + new. */}
+            <details className="mt-3">
+              <summary className="text-xs text-gray-500 cursor-pointer">Upload a photo just for this order</summary>
+              <input
+                ref={orderFileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadOrderPhoto(f); e.target.value = '' }}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => orderFileInputRef.current?.click()}
+                disabled={uploading}
+                className="mt-2 w-full min-h-[2.5rem] bg-gray-100 hover:bg-gray-200 border border-gray-300 border-dashed rounded text-sm text-gray-700 disabled:opacity-50"
+              >
+                + Upload an order-specific photo
+              </button>
+            </details>
           </section>
 
           {/* Personal note */}

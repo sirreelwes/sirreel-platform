@@ -44,6 +44,12 @@ export interface ThankYouTemplateInput {
   /** Hosted Blob URL of the candid (or null when the rep is sending
    *  without a photo — the slot collapses gracefully). */
   photoUrl: string | null
+  /** Caption rendered directly under the candid. DEFAULT is no
+   *  caption — the slot stays empty unless the rep types one in on
+   *  the compose page. The rep often wants the photo to speak for
+   *  itself; the template no longer assumes a canned "moment from
+   *  your shoot" line. */
+  photoCaption: string | null
   /** Optional single-line addition the rep types above the templated
    *  body. Already-escaped before reaching here is fine; we re-escape
    *  to be safe. */
@@ -85,6 +91,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
   const middle = `If anything came up at wrap that we didn't catch, hit reply and let me know directly. We track every job like this so the next one's easier.`
   const closer = `Looking forward to the next show.`
 
+  const safeCaption = input.photoCaption?.trim() ? escapeHtml(input.photoCaption.trim()) : null
   const photoBlock = input.photoUrl
     ? `
       <tr>
@@ -94,7 +101,9 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
             alt="From your shoot with SirReel"
             style="display: block; width: 100%; max-width: 536px; height: auto; border-radius: 12px; border: 1px solid #e5e7eb;"
           />
-          <p style="font-size: 12px; color: ${MUTED}; margin: 8px 0 0; text-align: center; font-style: italic;">A moment from your shoot.</p>
+          ${safeCaption
+            ? `<p style="font-size: 12px; color: ${MUTED}; margin: 8px 0 0; text-align: center; font-style: italic;">${safeCaption}</p>`
+            : ''}
         </td>
       </tr>`
     : ''
@@ -108,14 +117,35 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
       </tr>`
     : ''
 
-  const signOff = safeAgentTitle
-    ? `${safeAgentName}<br/><span style="color: ${MUTED}; font-size: 13px;">${safeAgentTitle}, SirReel</span>`
-    : `${safeAgentName}<br/><span style="color: ${MUTED}; font-size: 13px;">SirReel</span>`
+  // Sign-off: the rep's name + "Team SirReel" — the warm "you and
+  // the whole crew" feel rather than a corporate department line.
+  // The displayTitle is intentionally NOT used here.
+  const signOff = `${safeAgentName}<br/><span style="color: ${MUTED}; font-size: 14px;">&amp; Team SirReel</span>`
 
   const wrap = fmtDate(input.wrapDate)
   const orderLine = wrap
     ? `Order ${escapeHtml(input.orderNumber)} · Wrapped ${escapeHtml(wrap)}`
     : `Order ${escapeHtml(input.orderNumber)}`
+
+  // TSX tagline — "T S X - T H E  S I R R E E L  E X P E R I E N C E"
+  // with letters that are lowercase in the natural casing rendered as
+  // smaller capitals (mimics small-caps without relying on
+  // `font-variant-caps`, which Gmail and Outlook don't honor
+  // reliably). Big letters mirror the natural uppercases in TSX +
+  // The + SirReel + Experience.
+  const bigCap = (c: string) => `<span style="font-size:13px;">${c}</span>`
+  const smCap  = (c: string) => `<span style="font-size:10px;">${c}</span>`
+  const wordGap = '<span style="display:inline-block;width:10px;">&nbsp;</span>'
+  const dashGap = `<span style="font-size:11px;color:rgba(212,165,71,0.6);margin:0 6px;">&ndash;</span>`
+  const tsxTagline = [
+    bigCap('T'), bigCap('S'), bigCap('X'),
+    dashGap,
+    bigCap('T'), smCap('H'), smCap('E'),
+    wordGap,
+    bigCap('S'), smCap('I'), smCap('R'), bigCap('R'), smCap('E'), smCap('E'), smCap('L'),
+    wordGap,
+    bigCap('E'), smCap('X'), smCap('P'), smCap('E'), smCap('R'), smCap('I'), smCap('E'), smCap('N'), smCap('C'), smCap('E'),
+  ].join('')
 
   const html = `<!doctype html>
 <html>
@@ -130,12 +160,52 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
       <td align="center" style="padding: 24px 12px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
-            <td style="background-color: ${HEADER_BG}; padding: 20px 32px; text-align: left;">
-              <img
-                src="https://hq.sirreel.com/sirreel-logo-white.png"
-                alt="SirReel"
-                style="height: 28px; width: auto; display: block;"
-              />
+            <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
+              <!--
+                Two-column header: logo left, "Thank you" badge right.
+                Cursive on a -12deg tilt so it reads like a stamped
+                badge. Outlook desktop strips CSS transforms and may
+                fall back to Comic-Sans-ish for cursive — accept that;
+                Gmail web/mobile, Apple Mail, iOS Mail render the
+                intended look. Font stack ordered: a script-y fallback
+                Apple devices ship (Snell Roundhand), then web-safe
+                cursives (Brush Script MT, Lucida Handwriting), then
+                generic cursive. Gold (${ACCENT}) matches the brand
+                accent already used in the personal-note bar below.
+              -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td valign="middle" align="left" style="width: 60%;">
+                    <img
+                      src="https://hq.sirreel.com/sirreel-logo-white.png"
+                      alt="SirReel"
+                      style="height: 28px; width: auto; display: block;"
+                    />
+                  </td>
+                  <td valign="middle" align="right" style="width: 40%;">
+                    <!--
+                      Right-side badge sized to roughly match the
+                      SirReel logo's horizontal footprint. 35° tilt
+                      keeps the "stamped on" feel without the larger
+                      grade-overflow look — neat, badge-like.
+                    -->
+                    <span style="
+                      display: inline-block;
+                      font-family: 'Bradley Hand ITC', 'Bradley Hand', 'Segoe Print', 'Marker Felt', 'Comic Sans MS', cursive;
+                      font-size: 22px;
+                      font-weight: 700;
+                      color: ${ACCENT};
+                      transform: rotate(-20deg);
+                      -webkit-transform: rotate(-20deg);
+                      -ms-transform: rotate(-20deg);
+                      text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+                      line-height: 1;
+                      padding: 0 4px;
+                      white-space: nowrap;
+                    ">Thank you!</span>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
@@ -161,12 +231,41 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
             </td>
           </tr>
           <tr>
-            <td style="border-top: 1px solid #e5e7eb; padding: 16px 32px;">
+            <td style="padding: 18px 32px 0;">
+              <!-- Upper gold rule — frames the TSX tagline together
+                   with the lower rule below. -->
+              <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 8px 32px 6px;">
+              <!-- TSX tagline. Modern thin sans, widely letter-
+                   spaced, all-caps with small-caps for letters that
+                   are lowercase in natural casing. -->
+              <p style="
+                font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif;
+                font-weight: 300;
+                letter-spacing: 0.32em;
+                color: ${ACCENT};
+                margin: 0;
+                line-height: 1.4;
+              ">${tsxTagline}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 32px 0;">
+              <!-- Gold separator under the tagline. div used instead
+                   of <hr> for consistent rendering across clients. -->
+              <div style="height: 1px; line-height: 1px; font-size: 0; background-color: ${ACCENT};">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 32px 18px;">
               <p style="font-size: 11px; color: ${MUTED}; margin: 0; line-height: 1.4;">
                 ${orderLine}
               </p>
               <p style="font-size: 11px; color: ${MUTED}; margin: 4px 0 0; line-height: 1.4;">
-                SirReel Production Vehicles, Inc. · 8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335
+                8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335
               </p>
             </td>
           </tr>
@@ -185,9 +284,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
   const textCloser = `Looking forward to the next show.`
   const textNote = input.personalNote?.trim() ? `\n\n${input.personalNote.trim()}\n` : ''
   const textPhotoNote = input.photoUrl ? `\n\n[Photo from your shoot — view in HTML version]` : ''
-  const textSignOff = input.agentDisplayTitle
-    ? `${input.agentName}\n${input.agentDisplayTitle}, SirReel`
-    : `${input.agentName}\nSirReel`
+  const textSignOff = `${input.agentName}\n& Team SirReel`
   const textPhone = input.agentPhone ? `\n${input.agentPhone}` : ''
   const text = [
     textGreeting,
@@ -202,9 +299,10 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     '',
     `— ${textSignOff}${textPhone}`,
     '',
+    'TSX — The SirReel Experience',
     '---',
     `${orderLine}`,
-    `SirReel Production Vehicles, Inc. · 8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335`,
+    `8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335`,
   ].filter((s) => s !== null).join('\n')
 
   return { subject, html, text }

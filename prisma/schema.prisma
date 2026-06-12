@@ -1699,6 +1699,7 @@ model User {
   resolvedInquiryCaptures InquiryCapture[] @relation("CaptureResolver")
   outreachActivitiesLogged OutreachActivity[] @relation("OutreachCreator")
   orderDocumentsUploaded   OrderDocument[]    @relation("OrderDocumentUploader")
+  weeklyCandids            AgentWeeklyCandid[]
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -2319,6 +2320,38 @@ model ThankYouSuggestion {
 
   @@index([status, createdAt(sort: Desc)])
   @@map("sr_thank_you_suggestions")
+}
+
+// AgentWeeklyCandid — the rep's "candid of the week" photo for the
+// thank-you flow. Intent: a fresh, in-the-moment shot from the
+// warehouse / fleet bay / a guy holding a piece of gear, with the
+// SirReel sign in the frame when possible. Replaces the polished
+// stock-photo feel with something that says "we did this for you
+// THIS week". A new row is created each time the rep uploads; the
+// current candid is the most recent row, but history is preserved
+// for audit (and so a rep can re-pick last week's candid if they
+// forgot to upload this week).
+//
+// fileUrl is the hosted Blob URL — must be publicly fetchable for
+// email <img> embedding to work (see uploadOrderDocument's note on
+// the private-blob-store gap).
+model AgentWeeklyCandid {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  fileUrl     String   @map("file_url")
+  blobKey     String?  @map("blob_key")
+  mimeType    String?  @map("mime_type")
+  sizeBytes   Int?     @map("size_bytes")
+  // Monday of the calendar week this candid covers (Pacific time at
+  // upload). Drives the "show me this week's candid" lookup.
+  weekStartDate DateTime @map("week_start_date") @db.Date
+  capturedAt  DateTime @default(now()) @map("captured_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, weekStartDate(sort: Desc)])
+  @@index([userId, capturedAt(sort: Desc)])
+  @@map("sr_agent_weekly_candids")
 }
 
 enum FollowUpStage {
