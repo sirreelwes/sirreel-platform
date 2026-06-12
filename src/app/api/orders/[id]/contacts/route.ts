@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 import type { JobRole } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!existingAccess && order.portalSlug) {
       const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
       portalAccessId = issued.portalAccessId
-      portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
+      portalUrl = portalJobUrl(order.portalSlug, issued.token)
 
       const tpl = buildPortalInviteEmail({
         firstName: person.firstName,

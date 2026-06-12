@@ -6,6 +6,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -366,7 +367,7 @@ export async function GET(req: NextRequest) {
           }
         : null,
       legacyPaperworkPortalUrl: paperworkPortal
-        ? `https://hq.sirreel.com/portal/${paperworkPortal.token}`
+        ? portalTokenUrl(paperworkPortal.token)
         : null,
       // Vehicles assigned to this order via the booking. Each entry carries
       // make/model/plate + registration + BIT links/expiries. Internal-only

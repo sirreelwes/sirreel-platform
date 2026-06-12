@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink, revokeJobMagicLink } from '@/lib/portal/jobMagicLink'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const issued = await issueJobMagicLink({ orderId: order.id, contactId: contact.id })
-  const url = `https://hq.sirreel.com/portal/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
+  const url = `${portalTokenUrl(order.portalSlug)}?token=${encodeURIComponent(issued.token)}`
   return NextResponse.json({
     ok: true,
     portalAccessId: issued.portalAccessId,

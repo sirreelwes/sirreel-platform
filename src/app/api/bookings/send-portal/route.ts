@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
+import { portalTokenUrl, clientTokenUrl } from '@/lib/portal/portalUrl'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
@@ -34,8 +35,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com'}/portal/${request!.token}`
-    const clientUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com'}/client/${request!.token}`
+    const portalUrl = portalTokenUrl(request!.token)
+    const clientUrl = clientTokenUrl(request!.token)
 
     return NextResponse.json({ 
       ok: true, 

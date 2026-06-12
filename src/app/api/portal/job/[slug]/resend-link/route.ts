@@ -38,10 +38,9 @@ import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
-
-const PORTAL_HOST = 'https://hq.sirreel.com'
 
 export async function POST(req: NextRequest, { params }: { params: { slug: string } }) {
   // Always respond OK; do all work inside try so failures don't leak.
@@ -128,13 +127,14 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     }
 
     if (!contactId || !recipientEmail) return ok()
+    if (!order.portalSlug) return ok()
 
     // Refresh-or-issue keeps the one-row policy: if a PortalAccess
     // existed in Step 1, this refreshes its expiresAt. If we fell
     // through to Step 2, this mints a new row for the canonical
     // contact.
     const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId })
-    const portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
+    const portalUrl = portalJobUrl(order.portalSlug, link.token)
 
     const projectName = order.job?.name || order.orderNumber
     const tpl = buildPortalInviteEmail({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,7 +126,7 @@ export async function POST(
   const recipientEmail = order.jobContact?.email
   let emailResult: EmailResult | null = null
   if (recipientEmail) {
-    const portalUrl = portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null
+    const portalUrl = portalToken ? portalTokenUrl(portalToken) : null
     const firstName = order.jobContact?.firstName || 'there'
     const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
@@ -166,7 +167,7 @@ export async function POST(
     ok: true,
     status: 'NEGOTIATED_READY',
     documentToSignUrl: agreement.contractReview.counterPdfUrl,
-    portalUrl: portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null,
+    portalUrl: portalToken ? portalTokenUrl(portalToken) : null,
     emailResult,
     recipientEmail,
   })

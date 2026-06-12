@@ -14,7 +14,10 @@
  * (absolute URLs because email clients can't resolve relative paths).
  */
 
-const HOST = 'https://hq.sirreel.com'
+// Logos are static assets served by Vercel from /public. They resolve
+// from either hostname (same project), but we use the portal host so
+// every URL the client sees in this email lives on tsx.sirreel.com.
+const HOST = process.env.PORTAL_BASE_URL || 'https://tsx.sirreel.com'
 const ABSOLUTE_LOGO_URL_WHITE = `${HOST}/sirreel-logo-white.png`
 const ABSOLUTE_S_MARK_URL_WHITE = `${HOST}/s-logo-white.png`
 const SUPPLY_URL = `${HOST}/order/supplies`

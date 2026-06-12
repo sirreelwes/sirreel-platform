@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { RECOVERABLE_AGREEMENT_STATES } from '@/lib/portal/agreementStatus'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -110,7 +111,7 @@ export async function GET(
   return NextResponse.json({
     agreement,
     portalToken,
-    portalUrl: portalToken ? `https://hq.sirreel.com/portal/${portalToken}` : null,
+    portalUrl: portalToken ? portalTokenUrl(portalToken) : null,
     standingAgreement,
   })
 }

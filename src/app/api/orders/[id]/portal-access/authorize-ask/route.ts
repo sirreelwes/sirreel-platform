@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { signAuthorizeToken } from '@/lib/portal/authorizeToken'
 import { sendCadenceEmail } from '@/lib/email/sendCadenceEmail'
 import { ADD_CONTACT_AUTHORIZATION_TEMPLATE } from '@/lib/email/templates/cadenceTemplates'
+import { portalAuthorizeUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,9 +72,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     newFirstName: newFirstName || undefined,
     newLastName: newLastName || undefined,
   })
-  const base = 'https://hq.sirreel.com/api/portal/authorize'
-  const approveLink = `${base}/${encodeURIComponent(token)}?action=approve`
-  const declineLink = `${base}/${encodeURIComponent(token)}?action=decline`
+  const approveLink = portalAuthorizeUrl(token, 'approve')
+  const declineLink = portalAuthorizeUrl(token, 'decline')
 
   const newContactName = [newFirstName, newLastName].filter(Boolean).join(' ') || newEmail
   const result = await sendCadenceEmail({

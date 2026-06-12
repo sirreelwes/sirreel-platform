@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,7 +75,7 @@ export async function POST(
     )
   }
 
-  const portalUrl = `https://hq.sirreel.com/portal/${paperwork.token}`
+  const portalUrl = portalTokenUrl(paperwork.token)
   const firstName = order.jobContact?.firstName || 'there'
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">

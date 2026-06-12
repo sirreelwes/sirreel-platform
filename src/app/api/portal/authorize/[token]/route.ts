@@ -4,6 +4,7 @@ import { verifyAuthorizeToken } from '@/lib/portal/authorizeToken'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,10 +80,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   })
   let portalUrl: string
   if (existingAccess) {
-    portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}`
+    portalUrl = portalJobUrl(order.portalSlug)
   } else {
     const issued = await issueJobMagicLink({ orderId: order.id, contactId: newPerson.id })
-    portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
+    portalUrl = portalJobUrl(order.portalSlug, issued.token)
   }
 
   const jobLabel = order.job?.name || order.company?.name || ''

@@ -5,6 +5,7 @@ import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   })
 
   const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
-  const portalUrl = `https://hq.sirreel.com/portal/job/${order.portalSlug}?token=${encodeURIComponent(issued.token)}`
+  const portalUrl = portalJobUrl(order.portalSlug, issued.token)
 
   const jobLabel = order.job?.name || order.company?.name || ''
   const tpl = buildPortalInviteEmail({

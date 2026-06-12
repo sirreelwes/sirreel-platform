@@ -34,8 +34,7 @@ import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { rankRecipients } from '@/lib/email/recipients'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
-
-const PORTAL_HOST = 'https://hq.sirreel.com'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -160,7 +159,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (order.portalSlug) {
     try {
       const link = await refreshOrIssueJobMagicLink({ orderId: order.id, contactId: primary.id })
-      portalUrl = `${PORTAL_HOST}/portal/job/${order.portalSlug}?token=${encodeURIComponent(link.token)}`
+      portalUrl = portalJobUrl(order.portalSlug, link.token)
     } catch (err) {
       console.warn('[send-quote] portal-link mint failed:', err)
     }

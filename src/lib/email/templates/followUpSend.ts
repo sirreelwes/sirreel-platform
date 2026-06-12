@@ -23,7 +23,9 @@
 
 import type { CadenceStage } from '@/lib/sales/quoteCadence'
 
-const HOST = 'https://hq.sirreel.com'
+// See quoteSend.ts for the rationale on routing the email asset URLs
+// through the portal host.
+const HOST = process.env.PORTAL_BASE_URL || 'https://tsx.sirreel.com'
 const ABSOLUTE_LOGO_URL_WHITE = `${HOST}/sirreel-logo-white.png`
 const ABSOLUTE_S_MARK_URL_WHITE = `${HOST}/s-logo-white.png`
 const SUPPLY_URL = `${HOST}/order/supplies`

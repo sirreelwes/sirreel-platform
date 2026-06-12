@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { CadenceState, LostReason } from '@prisma/client'
 import type { CadenceTemplateContext } from '@/lib/email/templates/cadenceTemplates'
+import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
-const PORTAL_BASE = 'https://hq.sirreel.com/portal'
 const AFTER_HOURS_LINE = '(888) 477-7335'
 
 export interface CadenceOrderContext {
@@ -105,7 +105,7 @@ function fmtTime(d: Date | null | undefined): string {
  * fills in everything that's derivable from order-level data.
  */
 export function buildTemplateContext(ctx: CadenceOrderContext): CadenceTemplateContext {
-  const portalLink = ctx.order.portalSlug ? `${PORTAL_BASE}/${ctx.order.portalSlug}` : ''
+  const portalLink = ctx.order.portalSlug ? portalTokenUrl(ctx.order.portalSlug) : ''
   return {
     firstName: ctx.jobContact?.firstName || '',
     companyName: ctx.company.name,

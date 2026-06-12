@@ -36,8 +36,7 @@ import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { renderCadenceTemplate } from '@/lib/email/templates/renderCadenceTemplate'
-
-const PORTAL_HOST = 'https://hq.sirreel.com'
+import { portalJobUrl, portalSignInUrl } from '@/lib/portal/portalUrl'
 
 export type SendInvoiceResult =
   | {
@@ -155,7 +154,7 @@ export async function sendInvoice(args: {
         orderId: invoice.order.id,
         contactId: primary.id,
       })
-      portalUrl = `${PORTAL_HOST}/portal/job/${invoice.order.portalSlug}?token=${encodeURIComponent(link.token)}`
+      portalUrl = portalJobUrl(invoice.order.portalSlug!, link.token)
     } catch (err) {
       console.warn('[sendInvoice] portal-link mint failed:', err)
     }
@@ -169,7 +168,7 @@ export async function sendInvoice(args: {
     jobName: invoice.order.job?.name ?? invoice.order.orderNumber,
     invoiceAmount: fmtUsd(Number(invoice.total)),
     invoiceDueDate: fmtDate(invoice.dueDate),
-    portalLink: portalUrl ?? `${PORTAL_HOST}/portal`,
+    portalLink: portalUrl ?? portalSignInUrl(),
     repName: 'Ana DeAngelis',
     repPhone: '888.477.7335',
     repEmail: 'ana@sirreel.com',

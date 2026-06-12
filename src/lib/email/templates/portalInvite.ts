@@ -40,7 +40,7 @@ export interface PortalInviteEmailInput {
   firstName: string
   /** "Project Atlas" / "Big Studio Q3" — whatever the client calls the job. */
   projectName: string
-  /** Full magic-link URL with token (e.g. https://hq.sirreel.com/portal/job/<slug>?token=...). */
+  /** Full magic-link URL with token (e.g. https://tsx.sirreel.com/portal/job/<slug>?token=...). */
   portalLink: string
   /** Rep name as it should appear in the sign-off. */
   repName: string

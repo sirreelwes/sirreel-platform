@@ -33,8 +33,7 @@ import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { composeFollowUpEmail } from '@/lib/email/preview/composeFollowUpEmail'
 import { CADENCE_STAGES, type CadenceStage } from '@/lib/sales/quoteCadence'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
-
-const PORTAL_HOST = 'https://hq.sirreel.com'
+import { portalJobUrl } from '@/lib/portal/portalUrl'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -97,7 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         orderId: params.id,
         contactId: preliminary.to.id,
       })
-      portalUrl = `${PORTAL_HOST}/portal/job/${orderSlug.portalSlug}?token=${encodeURIComponent(link.token)}`
+      portalUrl = portalJobUrl(orderSlug.portalSlug, link.token)
     } catch (err) {
       console.warn('[follow-up send] portal-link mint failed:', err)
     }
