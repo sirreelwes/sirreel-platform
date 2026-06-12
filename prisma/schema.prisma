@@ -1698,6 +1698,7 @@ model User {
   reviewedHrMail      HrMail[]            @relation("HrMailReviewer")
   resolvedInquiryCaptures InquiryCapture[] @relation("CaptureResolver")
   outreachActivitiesLogged OutreachActivity[] @relation("OutreachCreator")
+  orderDocumentsUploaded   OrderDocument[]    @relation("OrderDocumentUploader")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -2223,11 +2224,101 @@ model Order {
   // Phase 2 warehouse lane: zero-or-one PickList per Order, created at
   // book time iff the order has ≥1 WAREHOUSE-lane line item.
   pickList           PickList?
+  // Typed document attachments — JOB_PHOTO candids from the warehouse
+  // team currently; expand the OrderDocType enum when new use cases
+  // surface. Cascade-deletes with the order.
+  documents          OrderDocument[]
+  // 0-or-1 thank-you suggestion (created on RETURNED transition).
+  // @unique on the FK so a RETURNED → not-RETURNED → RETURNED bounce
+  // doesn't mint duplicates; the upsert is idempotent.
+  thankYouSuggestion ThankYouSuggestion?
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
   @@index([cadenceState])
   @@map("sr_orders")
+}
+
+// OrderDocument — typed file attachments on an order. Mirrors the
+// ClaimDocument / HrAttachment pattern (Vercel Blob storage, type
+// enum, optional uploader audit). Today the only consumer is the
+// post-job thank-you flow's JOB_PHOTO candid; the OTHER bucket lets
+// us absorb miscellaneous order-attached files without churning the
+// enum.
+//
+// fileUrl is the hosted HTTPS Blob URL. Per the shared upload helper
+// at src/lib/orders/uploadOrderDocument.ts, the URL is public by
+// knowledge (Vercel Blob's effective access for `put()` calls) —
+// safe to embed as an <img src> in client-facing emails (Gmail
+// blocks base64 data: URIs, hosted URLs are the only reliable path).
+enum OrderDocType {
+  JOB_PHOTO
+  OTHER
+}
+
+model OrderDocument {
+  id           String       @id @default(uuid())
+  orderId      String       @map("order_id")
+  type         OrderDocType
+  title        String
+  fileUrl      String       @map("file_url")
+  blobKey      String?      @map("blob_key")
+  mimeType     String?      @map("mime_type")
+  sizeBytes    Int?         @map("size_bytes")
+  uploadedById String?      @map("uploaded_by_id")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  order        Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedBy   User? @relation("OrderDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  thankYouAsPhoto ThankYouSuggestion[] @relation("ThankYouPhoto")
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@index([type, createdAt(sort: Desc)])
+  @@map("sr_order_documents")
+}
+
+// ThankYouSuggestion — created on Order.status transition to RETURNED.
+// One per Order (FK is @unique). Status is SUGGESTED until the rep
+// sends or dismisses; on send we stamp sentAt + sentToEmail for the
+// audit. Visual expiry (>14 days old → grayed in the queue widget)
+// is computed off createdAt at render time; no cron required.
+//
+// photoDocumentId is optional — the spec is photo-encouraged-not-
+// required because the warehouse team is who shoots candids on
+// phones, and dispatch can't always wait. personalNote is the rep's
+// optional single-line addition above the templated body.
+enum ThankYouStatus {
+  SUGGESTED
+  SENT
+  DISMISSED
+}
+
+model ThankYouSuggestion {
+  id              String         @id @default(uuid())
+  orderId         String         @unique @map("order_id")
+  status          ThankYouStatus @default(SUGGESTED)
+  photoDocumentId String?        @map("photo_document_id")
+  personalNote    String?        @map("personal_note") @db.Text
+  sentAt          DateTime?      @map("sent_at")
+  sentToEmail     String?        @map("sent_to_email")
+  // The agent who hit Send. Nullable — auto-dismiss flows could set
+  // status without a user (none today, but the column doesn't fight
+  // future-Wes for it).
+  sentById        String?        @map("sent_by_id")
+  // Free-text reason captured when status = DISMISSED. Drives the
+  // "why we didn't thank this client" audit when reviewing the queue.
+  dismissedReason String?        @map("dismissed_reason") @db.Text
+  dismissedAt     DateTime?      @map("dismissed_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  photoDocument   OrderDocument? @relation("ThankYouPhoto", fields: [photoDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("sr_thank_you_suggestions")
 }
 
 enum FollowUpStage {
