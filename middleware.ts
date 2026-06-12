@@ -65,12 +65,25 @@ function isLocalHost(host: string): boolean {
   return false
 }
 
+function tagged(res: NextResponse, host: string, action: string): NextResponse {
+  // Debug header so the host-routing decision is observable in
+  // response headers (vs invisible inside the closed Vercel runtime).
+  // Cheap and harmless on prod — clients never inspect headers.
+  res.headers.set('x-mw-host', host || 'unknown')
+  res.headers.set('x-mw-action', action)
+  // Disable CDN caching so the middleware decision is always live.
+  // Without this, Vercel's edge serves PRERENDER cache for static
+  // pages and bypasses middleware on subsequent hits.
+  res.headers.set('cache-control', 'private, no-store, max-age=0, must-revalidate')
+  return res
+}
+
 export function middleware(req: NextRequest): NextResponse {
   const host = (req.headers.get('host') || '').toLowerCase()
   const pathname = req.nextUrl.pathname
 
   // Local / preview — no host routing.
-  if (isLocalHost(host)) return NextResponse.next()
+  if (isLocalHost(host)) return tagged(NextResponse.next(), host, 'pass:local')
 
   // ── tsx.sirreel.com (client portal) ───────────────────────────
   if (host === PORTAL_HOST) {
@@ -79,17 +92,17 @@ export function middleware(req: NextRequest): NextResponse {
     if (pathname === '/' || pathname === '') {
       const url = req.nextUrl.clone()
       url.pathname = PORTAL_ROOT_DESTINATION
-      return NextResponse.redirect(url, 307)
+      return tagged(NextResponse.redirect(url, 307), host, 'tsx:root-redirect')
     }
     // Allow-list portal + utility paths.
     const allowed = PORTAL_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
-    if (allowed) return NextResponse.next()
+    if (allowed) return tagged(NextResponse.next(), host, 'tsx:allow')
     // Everything else (staff dashboard / admin / crm / orders / etc.)
     // → 404. Critical: a client must NEVER see a staff login on tsx.
-    return new NextResponse('Not found', {
+    return tagged(new NextResponse('Not found', {
       status: 404,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
-    })
+    }), host, 'tsx:block-404')
   }
 
   // ── hq.sirreel.com (staff dashboard) ──────────────────────────
@@ -112,27 +125,37 @@ export function middleware(req: NextRequest): NextResponse {
       url.host = PORTAL_HOST
       url.protocol = 'https:'
       url.port = ''
-      return NextResponse.redirect(url, 308)
+      return tagged(NextResponse.redirect(url, 308), host, 'hq:portal-redirect')
     }
-    return NextResponse.next()
+    return tagged(NextResponse.next(), host, 'hq:pass')
   }
 
   // Unknown host — pass through (defensive default; could 404 here
   // but we don't want to surprise anyone hitting the project via a
   // future hostname before we've thought about it).
-  return NextResponse.next()
+  return tagged(NextResponse.next(), host, 'pass:unknown-host')
 }
 
 /**
- * Match every request. The middleware itself short-circuits hosts
- * it doesn't care about — letting Next handle the matcher means
- * fewer surprises when new path prefixes appear.
+ * Match every non-internal request. The middleware itself short-
+ * circuits hosts it doesn't care about — letting Next handle the
+ * matcher this broadly means fewer surprises when new path prefixes
+ * appear.
+ *
+ * Note: the matcher format requires path-to-regexp syntax. Earlier
+ * version used a single negative-lookahead pattern that worked
+ * locally but produced confusing edge-cache behavior on Vercel for
+ * statically-rendered pages — the SSG output was served from the
+ * PRERENDER cache without re-running middleware. The explicit
+ * regex array below makes the intent unambiguous to Next's compiler
+ * and avoids the lookahead path through which Vercel was bypassing
+ * middleware for pre-rendered static routes.
  */
 export const config = {
   matcher: [
-    // Exclude only the Next image optimizer + the static directory's
-    // image MIME paths from middleware processing. Everything else
-    // goes through.
-    '/((?!_next/image|_next/static|_vercel/insights).*)',
+    // Match every path. The internal exclusions handled by the
+    // function body via early-returns are cheaper than complex
+    // matcher regexes and easier to read.
+    '/:path*',
   ],
 }
