@@ -256,9 +256,20 @@ export async function generateRentalInvoice(args: {
   }
   const orderRow = order.discounts.find((x) => x.scope === 'ORDER')
   if (orderRow && postDeptSubtotal > 0) {
-    const raw = orderRow.type === 'PERCENT'
-      ? postDeptSubtotal * (Number(orderRow.value) / 100)
-      : Number(orderRow.value)
+    // FLAT_TOTAL is live-pinned to the target grand total — derive the
+    // implied discount from the current post-dept subtotal so the
+    // invoice's order-discount line stays in lockstep with what
+    // computeOrderTotals returns elsewhere. Clamped at 0 (margin guard).
+    let raw: number
+    if (orderRow.type === 'FLAT_TOTAL') {
+      const taxRate = Number(order.taxRate)
+      const preTaxFromTarget = Number(orderRow.value) / (1 + taxRate)
+      raw = postDeptSubtotal - preTaxFromTarget
+    } else if (orderRow.type === 'PERCENT') {
+      raw = postDeptSubtotal * (Number(orderRow.value) / 100)
+    } else {
+      raw = Number(orderRow.value)
+    }
     const amount = round2(Math.max(0, Math.min(raw, postDeptSubtotal)))
     if (amount > 0) {
       discountLines.push({ label: orderRow.label || 'Order discount', amount })

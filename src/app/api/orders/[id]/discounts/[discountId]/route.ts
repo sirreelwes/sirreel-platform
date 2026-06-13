@@ -19,7 +19,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED']
+const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED', 'FLAT_TOTAL']
 
 type Params = { params: Promise<{ id: string; discountId: string }> }
 
@@ -53,7 +53,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const data: Record<string, unknown> = {}
   if (body.type !== undefined) {
     if (typeof body.type !== 'string' || !(VALID_TYPES as string[]).includes(body.type)) {
-      return NextResponse.json({ error: 'type must be PERCENT or FIXED' }, { status: 400 })
+      return NextResponse.json({ error: 'type must be PERCENT, FIXED, or FLAT_TOTAL' }, { status: 400 })
+    }
+    // Scope is immutable on PATCH; a DEPARTMENT-scope row can't switch
+    // to FLAT_TOTAL (live-pinned target grand total is order-grain).
+    if (body.type === 'FLAT_TOTAL' && existing.scope !== 'ORDER') {
+      return NextResponse.json(
+        { error: 'FLAT_TOTAL discount is ORDER scope only' },
+        { status: 400 },
+      )
     }
     data.type = body.type as DiscountType
   }

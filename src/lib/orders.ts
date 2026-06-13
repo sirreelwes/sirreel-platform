@@ -145,6 +145,26 @@ export function rentalDays(start: Date, end: Date): number {
 // — or any future external write that bypasses the API — converge to
 // the correct number the next time anything touches the Order.
 export async function recalcOrderTotals(orderId: string) {
+  // ── Locked-order guard. Once an order reaches INVOICED or CLOSED its
+  // totals are committed to a Payment/Invoice paper trail and must not
+  // shift just because a downstream edit (or the new FLAT_TOTAL live
+  // derivation) triggered a recalc. Bail before any writes so the
+  // persisted subtotal/tax/total stay byte-identical to what was
+  // invoiced. New / open orders fall through and recompute normally.
+  const lockCheck = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { status: true, subtotal: true, taxAmount: true, total: true, taxRate: true },
+  });
+  if (lockCheck && (lockCheck.status === 'INVOICED' || lockCheck.status === 'CLOSED')) {
+    return {
+      subtotal: Number(lockCheck.subtotal),
+      taxAmount: Number(lockCheck.taxAmount),
+      total: Number(lockCheck.total),
+      breakdown: null,
+      locked: true as const,
+    };
+  }
+
   // ── Line-total convergence pass — same contract as before:
   // recompute each row's lineTotal from (quantity × rate × days × kind)
   // semantics; persist only if it drifted. Historical rows + any future

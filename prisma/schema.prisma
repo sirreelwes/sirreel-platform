@@ -1943,6 +1943,13 @@ enum DiscountScope {
 enum DiscountType {
   PERCENT
   FIXED
+  // FLAT_TOTAL — ORDER-scope only. `value` stores the TARGET GRAND
+  // TOTAL the user entered (e.g. 2500.00), not a derived discount
+  // dollar amount. The applied discount is computed live in
+  // computeOrderTotals as (discountedSubtotal − target/(1+taxRate)),
+  // clamped at 0 — so the order total stays pinned to the target as
+  // line items/dates shift. See src/lib/orders/discountedTotals.ts.
+  FLAT_TOTAL
 }
 
 // Phase 1 lifecycle / book-time line routing. Set on each OrderLineItem

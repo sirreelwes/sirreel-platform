@@ -32,6 +32,7 @@ scripts/*
 !scripts/replayHrEmailById.ts
 !scripts/backfillCrmCapture.ts
 !scripts/verifyDkimDomain.ts
+!scripts/migrateLegacyFlatTotal.ts
 .env.local.bak
 .gcp-service-account.json
 .e2e-scratch/

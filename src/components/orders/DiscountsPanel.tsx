@@ -40,7 +40,7 @@ const DEPT_LABELS: Record<string, string> = {
 }
 
 type Scope = 'ORDER' | 'DEPARTMENT'
-type Type = 'PERCENT' | 'FIXED'
+type Type = 'PERCENT' | 'FIXED' | 'FLAT_TOTAL'
 
 interface DiscountRow {
   id: string
@@ -66,6 +66,8 @@ interface Breakdown {
   discountedSubtotal: number
   orderDiscount: number
   orderDiscountLabel: string | null
+  flatTotalClamped: boolean
+  flatTotalTarget: number | null
   preTaxSubtotal: number
   taxRate: number
   taxAmount: number
@@ -232,7 +234,17 @@ export function DiscountsPanel({
           {existingOrderDiscount ? (
             <div className="flex items-center gap-2 text-xs">
               <span className="text-chip-bad-fg font-mono">
-                −{fmt(data.breakdown.orderDiscount)} ({existingOrderDiscount.type === 'PERCENT' ? `${existingOrderDiscount.value}%` : fmt(existingOrderDiscount.value)})
+                {/* PERCENT shows N%; FIXED shows the stored dollar amount;
+                    FLAT_TOTAL shows the target total — the displayed
+                    derived discount (breakdown.orderDiscount) updates
+                    live as line items / dates shift. */}
+                −{fmt(data.breakdown.orderDiscount)} ({
+                  existingOrderDiscount.type === 'PERCENT'
+                    ? `${existingOrderDiscount.value}%`
+                    : existingOrderDiscount.type === 'FLAT_TOTAL'
+                      ? `→ ${fmt(existingOrderDiscount.value)} total`
+                      : fmt(existingOrderDiscount.value)
+                })
               </span>
               {existingOrderDiscount.label && existingOrderDiscount.label !== 'Discount' && (
                 <span className="text-lt-fg3 italic">"{existingOrderDiscount.label}"</span>
@@ -264,6 +276,17 @@ export function DiscountsPanel({
             currentTotal={data.breakdown.total}
             onSubmit={(value, type, label) => post({ scope: 'ORDER', type, value, label })}
           />
+        )}
+        {/* FLAT_TOTAL clamp warning — surfaces when the current subtotal
+            dropped below the flat target so the implied discount would
+            be negative. We clamp at $0 (no silent markup); the rep needs
+            to either bump line items back up, lower the flat target, or
+            switch off flat-total mode. */}
+        {data.breakdown.flatTotalClamped && data.breakdown.flatTotalTarget != null && (
+          <div className="mt-2 text-xs px-2 py-1.5 rounded border border-amber-300 bg-amber-50 text-amber-900">
+            Subtotal ({fmt(data.breakdown.discountedSubtotal)}) is below the flat target
+            ({fmt(data.breakdown.flatTotalTarget)}) — discount clamped to $0.
+          </div>
         )}
       </div>
     </div>
@@ -392,13 +415,15 @@ function OrderDiscountForm({
       onSubmit(n, 'FIXED', label.trim())
       return
     }
-    // FLAT — n is the target grand total
+    // FLAT — n is the target grand total. Submit as FLAT_TOTAL so the
+    // discount is derived live from the order's current discountedSubtotal
+    // every render (target stays pinned as line items / dates shift).
     if (n <= 0) { setErr('target must be > 0'); return }
     if (n >= currentTotal) { setErr(`target must be below current total ${fmt(currentTotal)}`); return }
     if (flatPreview == null || flatPreview <= 0) { setErr('implied discount is zero or negative'); return }
     setErr(null)
     const finalLabel = label.trim() || `Flat ${fmt(n)} total`
-    onSubmit(flatPreview, 'FIXED', finalLabel)
+    onSubmit(n, 'FLAT_TOTAL', finalLabel)
   }
 
   return (
@@ -429,8 +454,10 @@ function OrderDiscountForm({
       </div>
       {mode === 'FLAT' && flatPreview != null && flatPreview > 0 && (
         <div className="text-lt-fg2">
-          Will store as a FIXED discount of <span className="font-mono text-lt-fg">{fmt(flatPreview)}</span>.
-          Not live-pinned — later edits will move the total visibly.
+          Today's implied discount: <span className="font-mono text-lt-fg">{fmt(flatPreview)}</span>.
+          Live-pinned to the target — adding/removing line items or
+          changing dates will move the discount automatically so the
+          total stays at <span className="font-mono text-lt-fg">{fmt(Number(value))}</span>.
         </div>
       )}
       {err && <div className="text-chip-bad-fg">{err}</div>}

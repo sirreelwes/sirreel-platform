@@ -89,6 +89,13 @@ export interface TotalsBreakdown {
   orderDiscount: number
   /** Label of the applied ORDER-scope discount, or null when none. */
   orderDiscountLabel: string | null
+  /** True iff the ORDER discount is a FLAT_TOTAL whose target is at or
+   *  above the current discountedSubtotal — discount clamped to 0 so the
+   *  order is never silently marked up. UI surfaces an amber warning. */
+  flatTotalClamped: boolean
+  /** For FLAT_TOTAL: the target grand total the user entered (echoed for
+   *  the UI warning). Null for PERCENT / FIXED. */
+  flatTotalTarget: number | null
   /** discountedSubtotal - orderDiscount. The base tax is computed on. */
   preTaxSubtotal: number
   /** Echoed for downstream renderers; same value the caller passed in. */
@@ -172,12 +179,37 @@ export function computeOrderTotals(args: {
   const discountedSubtotal = round2(rawSubtotal - departmentDiscountSum)
   let orderDiscount = 0
   let orderDiscountLabel: string | null = null
+  let flatTotalClamped = false
+  let flatTotalTarget: number | null = null
   if (orderDiscountRow) {
     const v = numberOf(orderDiscountRow.value)
-    const calc = orderDiscountRow.type === 'PERCENT'
-      ? discountedSubtotal * (v / 100)
-      : v
-    orderDiscount = round2(clampNonNeg(calc, Math.max(0, discountedSubtotal)))
+    if (orderDiscountRow.type === 'FLAT_TOTAL') {
+      // FLAT_TOTAL — `value` is the TARGET GRAND TOTAL the user entered.
+      // Derive the discount live so the order total stays pinned to the
+      // target as lines / dates shift. Inverse of the post-discount math:
+      //   total      = (discountedSubtotal − orderDiscount) × (1 + taxRate)
+      //   →  orderDiscount = discountedSubtotal − target / (1 + taxRate)
+      // No persisted dollar amount — `value` is the target.
+      flatTotalTarget = round2(v)
+      const preTaxFromTarget = v / (1 + taxRate)
+      const rawDiscount = round2(discountedSubtotal - preTaxFromTarget)
+      // CLAMP RULE — margin guardrail. If subtotal dropped below the
+      // flat target, the implied discount would go negative (a silent
+      // markup through the discount field). Clamp at $0 and surface
+      // flatTotalClamped so the UI can warn. Flip this single
+      // conditional if policy ever changes to "allow markup".
+      if (rawDiscount < 0) {
+        orderDiscount = 0
+        flatTotalClamped = true
+      } else {
+        orderDiscount = round2(clampNonNeg(rawDiscount, Math.max(0, discountedSubtotal)))
+      }
+    } else {
+      const calc = orderDiscountRow.type === 'PERCENT'
+        ? discountedSubtotal * (v / 100)
+        : v
+      orderDiscount = round2(clampNonNeg(calc, Math.max(0, discountedSubtotal)))
+    }
     orderDiscountLabel = orderDiscountRow.label
   }
 
@@ -192,6 +224,8 @@ export function computeOrderTotals(args: {
     discountedSubtotal,
     orderDiscount,
     orderDiscountLabel,
+    flatTotalClamped,
+    flatTotalTarget,
     preTaxSubtotal,
     taxRate,
     taxAmount,

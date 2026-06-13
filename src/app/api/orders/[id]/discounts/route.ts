@@ -30,7 +30,7 @@ import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 export const dynamic = 'force-dynamic'
 
 const VALID_SCOPES: DiscountScope[] = ['ORDER', 'DEPARTMENT']
-const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED']
+const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED', 'FLAT_TOTAL']
 const VALID_DEPTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'PRO_SUPPLIES', 'EXPENDABLES', 'GE', 'ART',
 ]
@@ -113,6 +113,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   if (type === 'PERCENT' && valueNum > 100) {
     return NextResponse.json({ error: 'percent value must be ≤ 100' }, { status: 400 })
+  }
+  // FLAT_TOTAL is the live-pinned target grand total — only meaningful
+  // at the ORDER scope. Department-scope flat-total still funnels into
+  // FIXED at the form layer (deptSubtotal is pre-tax, conversion is
+  // exact, no markup risk on later edits — same not-pinned semantics).
+  if (type === 'FLAT_TOTAL' && scope !== 'ORDER') {
+    return NextResponse.json(
+      { error: 'FLAT_TOTAL discount is ORDER scope only' },
+      { status: 400 },
+    )
   }
 
   let departmentKey: LineItemDepartment | null = null

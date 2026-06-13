@@ -104,7 +104,10 @@ export interface QuoteJobForRender {
 export interface QuoteDiscountInput {
   scope: 'ORDER' | 'DEPARTMENT'
   departmentKey: Department | null
-  type: 'PERCENT' | 'FIXED'
+  /** FLAT_TOTAL is ORDER-scope only — `value` is the target grand total,
+   *  not a derived discount. The renderer feeds this straight through
+   *  to computeOrderTotals, which does the live derivation. */
+  type: 'PERCENT' | 'FIXED' | 'FLAT_TOTAL'
   value: number
   label: string
 }
