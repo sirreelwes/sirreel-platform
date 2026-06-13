@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
+import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } from '@/components/shared/CompanyPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
@@ -346,6 +347,11 @@ function NewQuotePageInner() {
   const [editing, setEditing] = useState<ParsedTop>({});
   const [clientCandidates, setClientCandidates] = useState<ClientCandidate[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
+  // Type-ahead Company picker (STEP 1B). Coexists with the legacy
+  // selectedClientId string for now — the picker is the rep-facing
+  // input, selectedClientId is what the save/jobs-fetch flow reads.
+  // A sync effect below keeps them aligned.
+  const [companyPick, setCompanyPick] = useState<CompanyPickerValue>(EMPTY_COMPANY_PICKER_VALUE);
   const [contacts, setContacts] = useState<ResolvedContact[]>([]);
 
   // (Hoisted before the history-fetch effect + leadContact memo so
@@ -356,6 +362,38 @@ function NewQuotePageInner() {
   const [confirmedLeadPersonIdEarly, setConfirmedLeadPersonIdEarly] = useState<string | null>(null);
   const confirmedLeadPersonId = confirmedLeadPersonIdEarly;
   const setConfirmedLeadPersonId = setConfirmedLeadPersonIdEarly;
+
+  // CompanyPicker → selectedClientId sync (STEP 1B). The picker's
+  // three modes map cleanly:
+  //   selected_existing  → selectedClientId = companyId
+  //   creating_new       → selectedClientId = '__new__'
+  //   searching          → selectedClientId = ''
+  useEffect(() => {
+    if (companyPick.mode === 'selected_existing' && companyPick.companyId) {
+      setSelectedClientId(companyPick.companyId);
+    } else if (companyPick.mode === 'creating_new') {
+      setSelectedClientId('__new__');
+    } else {
+      setSelectedClientId('');
+    }
+  }, [companyPick]);
+
+  // Seed the picker from extracted state — when AI extracted a name
+  // and we have fuzzy hits, default the picker to the first hit.
+  // When there are no hits but the AI extracted a name, the rep can
+  // still type or use the lead's affiliations.
+  useEffect(() => {
+    if (companyPick.mode !== 'searching') return;
+    if (clientCandidates.length === 1 && selectedClientId === clientCandidates[0].id) {
+      // The legacy auto-select already set selectedClientId; reflect
+      // it into the picker so the green pill renders.
+      const m = clientCandidates[0];
+      setCompanyPick({
+        companyId: m.id, name: m.name, mode: 'selected_existing',
+        tier: m.tier, coiOnFile: m.coiOnFile,
+      });
+    }
+  }, [clientCandidates, selectedClientId, companyPick.mode]);
 
   // History fetch — only fires for an `existing` anchored lead. A
   // `possible_match` doesn't pre-fetch (would be wrong if the rep
@@ -1307,21 +1345,64 @@ function NewQuotePageInner() {
         // picker dropped it (shouldn't happen — every Job has a co).
         companyId = job.company?.id ?? selectedClientId;
       } else {
-        // Resolve / create company
+        // Resolve / create company. Source the create-name from the
+        // CompanyPicker when in creating_new mode (STEP 1B) — the
+        // legacy fallback to parsed.clientName covers older save paths
+        // that haven't gone through the picker yet.
         let finalClientId = selectedClientId;
-        if (selectedClientId === '__new__' && parsed?.clientName) {
+        const createName =
+          companyPick.mode === 'creating_new' ? companyPick.name :
+          (selectedClientId === '__new__' ? parsed?.clientName ?? null : null);
+        if (selectedClientId === '__new__' && createName) {
           const coRes = await fetch('/api/crm/companies', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: parsed.clientName,
+              name: createName,
               tier: 'NEW',
               billingEmail: parsed?.contactEmail || null,
             }),
           });
-          if (!coRes.ok) { alert('Failed to create new company'); setCreating(false); return; }
-          const co = await coRes.json();
-          finalClientId = co.id;
+          // Surface the dupe-guard near-match response (STEP 1B). The
+          // API returns 409 with `existing` when a normalized-key
+          // collision is detected; we ask the rep to confirm, and
+          // either re-submit with allowNearMatch=true OR adopt the
+          // existing row. Never silent-create through a near-match.
+          if (coRes.status === 409) {
+            const data = await coRes.json().catch(() => ({}));
+            const existing = data?.existing as { id: string; name: string } | undefined;
+            if (existing) {
+              const pick = confirm(
+                `A company with a similar name already exists: "${existing.name}".\n\n` +
+                `OK = use the existing company\n` +
+                `Cancel = create "${createName}" anyway (confirm intentional)`,
+              );
+              if (pick) {
+                finalClientId = existing.id;
+              } else {
+                const retry = await fetch('/api/crm/companies', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    name: createName,
+                    tier: 'NEW',
+                    billingEmail: parsed?.contactEmail || null,
+                    allowNearMatch: true,
+                  }),
+                });
+                if (!retry.ok) { alert('Failed to create new company'); setCreating(false); return; }
+                const co = await retry.json();
+                finalClientId = co.id;
+              }
+            } else {
+              alert('Failed to create new company'); setCreating(false); return;
+            }
+          } else if (!coRes.ok) {
+            alert('Failed to create new company'); setCreating(false); return;
+          } else {
+            const co = await coRes.json();
+            finalClientId = co.id;
+          }
         }
         companyId = finalClientId;
 
@@ -1758,93 +1839,56 @@ function NewQuotePageInner() {
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
           <div>
             <label className="block text-xs text-lt-fg3 mb-1">Client Company</label>
-            {clientCandidates.length > 0 ? (
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg"
-              >
-                <option value="">— Select a match —</option>
-                {clientCandidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.tier !== 'STANDARD' ? `(${c.tier})` : ''} {c.coiOnFile ? '| COI' : ''}
-                  </option>
-                ))}
-                {parsed?.clientName && (
-                  <option value="__new__">+ Create new company: {parsed.clientName}</option>
-                )}
-              </select>
-            ) : inquiry?.company ? (
+            {/* (STEP 1B) Type-ahead with create + normalized-key dupe
+                guard. The picker ranks the recognized lead's
+                recently-touched companies first via recentCompanyIds.
+                The same companyNameKey() runs server-side at create
+                time so a "Rema Films" + existing "Rema Films LLC"
+                collision surfaces before a dupe lands. */}
+            {inquiry?.company ? (
               <div className="text-sm text-lt-fg2">{inquiry.company.name}</div>
-            ) : leadPersonHistory && leadPersonHistory.suggestedCompanies.length > 0 ? (
-              // (STEP 1A) Person-first replacement of the "No client
-              // extracted" dead-end. When the recognized lead has
-              // company affiliations or a domain match, surface those
-              // as a pick list instead of dumping the rep into /crm.
-              <div className="space-y-1">
-                <div className="text-[11px] text-lt-fg3">
-                  No company in this email — pick one of {leadPersonHistory.person.name.split(' ')[0] || 'their'} known companies:
-                </div>
-                <div className="space-y-1">
-                  {leadPersonHistory.suggestedCompanies.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSelectedClientId(s.id)}
-                      className="w-full text-left px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg hover:border-chip-good-fg/50"
-                    >
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-[11px] text-lt-fg3">{s.reason}</div>
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedClientId('__new__')}
-                  className="w-full text-left text-[11px] px-3 py-1.5 text-lt-fg2 hover:text-lt-fg"
-                >
-                  + None of these — create new company
-                </button>
-              </div>
             ) : (
-              <div className="text-sm text-chip-warn-fg bg-chip-warn-bg border border-chip-warn-fg/30 rounded-lg p-3">
-                No client extracted.{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Snapshot the post-parse state to sessionStorage so
-                    // it's restored when the user returns from /crm.
-                    // Without this, the page remounts and Review Quote
-                    // re-renders as the pre-parse input page.
-                    saveDraftState(inquiry?.id ?? null, {
-                      parsed,
-                      items,
-                      editing,
-                      selectedClientId,
-                      contacts,
-                      emailText,
-                      job,
-                      candidateJobs,
-                      discountAmount,
-                      discountLabel,
-                      newJobProductionType,
-                      newJobProductionTypeProfileId,
-                      newJobNotes,
-                    });
-                    const params = new URLSearchParams();
-                    params.set('selectForQuote', '1');
-                    if (inquiry?.id) params.set('inquiryId', inquiry.id);
-                    router.push(`/crm?${params.toString()}`);
-                  }}
-                  className="underline font-semibold text-chip-warn-fg hover:opacity-80"
-                >
-                  Pick one in CRM
-                </button>
-                .
+              <div className="space-y-2">
+                {/* Lead's suggested companies as one-tap picks ABOVE
+                    the picker (STEP 1A integration). The picker
+                    itself ranks the same companies first via
+                    recentCompanyIds — these buttons are the
+                    can't-miss-it variant for the case where the rep
+                    hasn't typed anything yet. */}
+                {leadPersonHistory && leadPersonHistory.suggestedCompanies.length > 0 && companyPick.mode === 'searching' && (
+                  <div className="space-y-1">
+                    <div className="text-[11px] text-lt-fg3">
+                      {leadPersonHistory.person.name.split(' ')[0] || 'Their'} known companies:
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {leadPersonHistory.suggestedCompanies.slice(0, 5).map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setCompanyPick({
+                            companyId: s.id, name: s.name, mode: 'selected_existing',
+                            tier: s.tier, coiOnFile: null,
+                          })}
+                          title={s.reason}
+                          className="text-xs px-2 py-1 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg hover:border-chip-good-fg/50"
+                        >
+                          {s.name}
+                          <span className="ml-1 text-lt-fg3 text-[10px]">{s.reason}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <CompanyPicker
+                  value={companyPick}
+                  onChange={setCompanyPick}
+                  recentCompanyIds={leadPersonHistory?.suggestedCompanies.map((c) => c.id) ?? []}
+                  placeholder={parsed?.clientName ? `e.g. ${parsed.clientName}` : 'Search companies or type a new name…'}
+                />
+                {parsed?.clientName && companyPick.mode === 'searching' && (
+                  <p className="text-xs text-lt-fg3">AI extracted: <span className="text-lt-fg2">{parsed.clientName}</span></p>
+                )}
               </div>
-            )}
-            {parsed?.clientName && (
-              <p className="text-xs text-lt-fg3 mt-1">AI extracted: <span className="text-lt-fg2">{parsed.clientName}</span></p>
             )}
           </div>
           {/* Unified Job control — replaces the prior free-text

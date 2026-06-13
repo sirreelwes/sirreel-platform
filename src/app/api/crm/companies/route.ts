@@ -6,6 +6,7 @@ import {
   fetchPopulationTopClientCutoff,
   QUIET_DAYS,
 } from "@/lib/crm/clientBadges";
+import { companyNameKey } from "@/lib/companies/normalize";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -127,6 +128,39 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { name, website, industry, tier, billingEmail, defaultAgentId } = body;
   if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
+
+  // Normalized-key dupe guard (STEP 1B) — the create-time analog of
+  // the email-normalize root-cause fix. We compute the normalized
+  // form ("Rema Films LLC" → "rema films") and scan existing
+  // companies for a match before inserting. If a near-match exists,
+  // we return it as a 409 with the existing row so the caller can
+  // surface it to the human ("Did you mean X?") — never auto-merge.
+  // The caller can override by passing `allowNearMatch: true` if the
+  // human explicitly confirms the name collision is intentional.
+  const allowNearMatch = body?.allowNearMatch === true;
+  if (!allowNearMatch) {
+    const targetKey = companyNameKey(name);
+    if (targetKey) {
+      // Walk every Company name — cheap at our scale (~hundreds of
+      // rows). At thousands we'd add a generated/normalized column
+      // and index; not warranted yet.
+      const all = await prisma.company.findMany({
+        select: { id: true, name: true, tier: true, billingEmail: true },
+      });
+      const collision = all.find((c) => companyNameKey(c.name) === targetKey);
+      if (collision) {
+        return NextResponse.json(
+          {
+            error: 'near_match',
+            message: `A company with a similar name already exists: "${collision.name}". Confirm or use the existing one.`,
+            existing: collision,
+            normalizedKey: targetKey,
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
 
   const company = await prisma.company.create({
     data: { name, website, industry, tier, billingEmail, defaultAgentId },
