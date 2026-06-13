@@ -35,12 +35,55 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { normalizeEmail } from './email'
 
+/** Reviewer-overridable fields surfaced by the /admin/dedup UI when
+ *  survivor and loser both hold non-null-but-different values. The
+ *  default merge rule is "survivor wins, fill nulls from loser"; these
+ *  let the reviewer flip individual fields without editing the
+ *  survivor afterward. Whatever the reviewer picks lands on the
+ *  survivor's Person row inside the merge transaction. */
+export interface MergeFieldOverrides {
+  firstName?: string
+  lastName?: string
+  phone?: string | null
+  mobile?: string | null
+  role?:
+    | 'UPM' | 'PRODUCER' | 'LINE_PRODUCER' | 'PRODUCTION_COORDINATOR'
+    | 'PRODUCTION_SUPERVISOR' | 'TRANSPORTATION_COORDINATOR'
+    | 'ART_COORDINATOR' | 'COORDINATOR' | 'OWNER' | 'OTHER'
+  tier?: 'VIP' | 'PREFERRED' | 'STANDARD' | 'NEW'
+  rawTitle?: string | null
+  lastKnownProject?: string | null
+  notes?: string | null
+}
+
 export interface MergePersonsInput {
   survivorId: string
   loserId: string
   /** User id performing the merge — stamped on PersonMerge.mergedById
    *  for audit. */
   mergedById: string
+  /** Reviewer's pick of which email becomes the survivor's canonical
+   *  email. Must be either the survivor's or the loser's existing
+   *  email (case-insensitive match). The OTHER address always becomes
+   *  a PersonEmailAlias so future inbound mail to it still resolves
+   *  to the survivor. Default: survivor's current email lowercased
+   *  (covers the canary case + every common situation).
+   *
+   *  Example: survivor has refs but holds "Wes@sirreel.com"; loser
+   *  holds the clean "wes@sirreel.com". Reviewer passes
+   *  canonicalEmail="wes@sirreel.com" → survivor's email becomes
+   *  "wes@sirreel.com", the old "Wes@sirreel.com" becomes the alias
+   *  (de-facto a no-op since the case-only diff). For the more useful
+   *  Sonia case — survivor email "hello@remafilms.com", loser email
+   *  "sonia.sanchez@remafilms.com" — the reviewer can pick the
+   *  personal address as canonical even though the generic one had
+   *  more refs. */
+  canonicalEmail?: string
+  /** Per-field overrides surfaced by the /admin/dedup conflict UI.
+   *  Optional; omitted fields use the survivor's existing value
+   *  (with null-fill from loser still applied via the existing
+   *  enrich-not-overwrite rule for null fields). */
+  fieldOverrides?: MergeFieldOverrides
 }
 
 /** Discrimated structure for one entry in PersonMerge.repointLog.
@@ -73,7 +116,7 @@ const REPOINT_TABLES = [
 ] as const
 
 export async function mergePersons(input: MergePersonsInput): Promise<MergePersonsResult> {
-  const { survivorId, loserId, mergedById } = input
+  const { survivorId, loserId, mergedById, canonicalEmail, fieldOverrides } = input
   if (survivorId === loserId) {
     throw new Error('mergePersons: survivor and loser are the same id')
   }
@@ -105,10 +148,29 @@ export async function mergePersons(input: MergePersonsInput): Promise<MergePerso
   // straightforward JSON unpack — no field-by-field guessing.
   const loserSnapshot: Record<string, unknown> = { ...loser }
 
-  // Normalized emails. We use these throughout.
+  // Normalized emails — survivor's current, loser's, and the picked
+  // canonical (defaults to survivor's). The reviewer can pick the
+  // loser's email as canonical; the email NOT chosen becomes an alias
+  // (unless it's a case-only duplicate of the canonical one).
   const survivorEmailLower = normalizeEmail(survivor.email)
   const loserEmailLower = normalizeEmail(loser.email)
-  const aliasNeeded = loserEmailLower !== survivorEmailLower
+  const canonicalLower = canonicalEmail
+    ? normalizeEmail(canonicalEmail)
+    : survivorEmailLower
+  if (canonicalLower !== survivorEmailLower && canonicalLower !== loserEmailLower) {
+    throw new Error(
+      `mergePersons: canonicalEmail "${canonicalEmail}" must match the survivor's ` +
+      `or loser's existing email (case-insensitive)`,
+    )
+  }
+  // Which other email needs to become an alias? The one the reviewer
+  // DIDN'T pick. Skipped when both normalize to the same string
+  // (canary case).
+  const aliasEmail =
+    canonicalLower === survivorEmailLower
+      ? (loserEmailLower !== canonicalLower ? loserEmailLower : null)
+      : (survivorEmailLower !== canonicalLower ? survivorEmailLower : null)
+  const aliasNeeded = aliasEmail != null
 
   const repointLog: RepointEntry[] = []
   const repointCounts: Record<string, number> = {}
@@ -303,18 +365,60 @@ export async function mergePersons(input: MergePersonsInput): Promise<MergePerso
     repointCounts['people/worksWithId'] = wwBefore.length
 
     // ── 6) Delete the loser row FIRST. This frees up the loser's
-    //       email value so step 7 can safely lowercase the survivor
-    //       without colliding on Person.email's @unique (the canary
-    //       case: survivor "Wes@" can't become "wes@" while the loser
-    //       still owns "wes@" — Postgres rejects the unique).
+    //       email value so step 7 can safely set the survivor's
+    //       email to the canonical pick without colliding on
+    //       Person.email's @unique (the canary case: survivor "Wes@"
+    //       can't become "wes@" while the loser still owns "wes@").
     await tx.person.delete({ where: { id: loserId } })
 
-    // ── 7) Normalize survivor's email to lowercase (root cause fix).
-    //       Safe now that the loser row is gone.
-    if (survivor.email !== survivorEmailLower) {
+    // ── 7) Apply reviewer overrides + canonical email + null-fill
+    //       from loser. One Person.update writes them all.
+    const survivorUpdate: Record<string, unknown> = {}
+    if (survivor.email !== canonicalLower) {
+      survivorUpdate.email = canonicalLower
+    }
+    // Reviewer overrides — explicit values from the conflict UI.
+    // Null is a valid choice (e.g. "clear the phone"); undefined
+    // means "no override, leave the existing column alone".
+    if (fieldOverrides) {
+      for (const k of [
+        'firstName', 'lastName', 'phone', 'mobile',
+        'role', 'tier', 'rawTitle', 'lastKnownProject', 'notes',
+      ] as const) {
+        if (fieldOverrides[k] !== undefined) {
+          survivorUpdate[k] = fieldOverrides[k]
+        }
+      }
+    }
+    // Null-fill from loser — only for columns the reviewer didn't
+    // explicitly override AND where survivor's current value is null.
+    // Mirrors the enrich-not-overwrite rule already used by the
+    // capture pipeline.
+    const nullFillCandidates: Array<keyof typeof loser> = [
+      'phone', 'mobile', 'rawTitle', 'lastKnownProject',
+      'assignedAgentId', 'planyoUserId', 'lastBookingAt',
+      'sourceMessageId', 'source', 'worksWithId',
+    ]
+    for (const k of nullFillCandidates) {
+      if (k in survivorUpdate) continue
+      const survivorVal = (survivor as Record<string, unknown>)[k]
+      const loserVal = (loser as Record<string, unknown>)[k]
+      if ((survivorVal == null || survivorVal === '') && loserVal != null && loserVal !== '') {
+        survivorUpdate[k] = loserVal
+      }
+    }
+    // Accumulator sums — historical totalSpend / totalBookings from
+    // both rows. (Note: this is the *Person* denorm, separate from
+    // Affiliation.totalSpend which is summed by step 3.)
+    const survivorSpend = Number(survivor.totalSpend)
+    const loserSpend = Number(loser.totalSpend)
+    if (loserSpend !== 0) survivorUpdate.totalSpend = survivorSpend + loserSpend
+    if (loser.totalBookings !== 0) survivorUpdate.totalBookings = survivor.totalBookings + loser.totalBookings
+
+    if (Object.keys(survivorUpdate).length > 0) {
       await tx.person.update({
         where: { id: survivorId },
-        data: { email: survivorEmailLower },
+        data: survivorUpdate,
       })
     }
 
@@ -336,11 +440,11 @@ export async function mergePersons(input: MergePersonsInput): Promise<MergePerso
     })
     mergeId = mergeRow.id
 
-    if (aliasNeeded) {
+    if (aliasNeeded && aliasEmail) {
       const alias = await tx.personEmailAlias.create({
         data: {
           personId: survivorId,
-          email: loserEmailLower,
+          email: aliasEmail,
           mergeId,
         },
         select: { id: true },

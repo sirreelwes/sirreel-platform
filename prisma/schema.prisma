@@ -407,6 +407,12 @@ model Person {
   // from this contact. Single string, not a history — the review
   // widget surfaces "last seen on" as a sales prompt.
   lastKnownProject String?  @map("last_known_project")
+  // /admin/dedup "Not a dupe — shared office line" button stamps
+  // this on every member of the cluster. The cluster API filters
+  // out persons with this flag set so suppressed clusters drop
+  // from the default queue. Nullable so a reviewer can un-suppress
+  // by setting it back to null (no separate column needed).
+  dedupSuppressedAt DateTime? @map("dedup_suppressed_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
