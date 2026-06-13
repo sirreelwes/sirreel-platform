@@ -59,7 +59,13 @@ type Order = {
   createdAt: string;
   company: { id: string; name: string };
   agent: { id: string; name: string };
-  booking: { id: string; bookingNumber: string; jobName: string; productionName: string | null } | null;
+  booking: {
+    id: string;
+    bookingNumber: string;
+    jobName: string;
+    productionName: string | null;
+    _count: { paperworkRequests: number };
+  } | null;
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
   job: { id: string; jobCode: string; name: string; jobContacts: JobContactRow[] } | null;
   lineItems: LineItem[];
@@ -386,6 +392,11 @@ export default function OrderDetailPage() {
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [agreementBusy, setAgreementBusy] = useState(false);
   const [agreementMsg, setAgreementMsg] = useState<string>("");
+  // Separate from agreementMsg so the prominent failure banner stays
+  // visible (with explicit dismiss) instead of being lost in the small
+  // info-strip text. Jose's report — "click Resend, see nothing" — was
+  // because the 409 response landed in agreementMsg's quiet style.
+  const [portalLinkError, setPortalLinkError] = useState<string | null>(null);
   // Standing-agreement context — when set, this order's
   // SignedAgreement was auto-pointed at the Company's negotiated PDF
   // by ensureSignedAgreementForOrder. Drives the banner above the
@@ -909,13 +920,16 @@ export default function OrderDetailPage() {
   const resendPortalLink = async () => {
     setAgreementBusy(true);
     setAgreementMsg("");
+    setPortalLinkError(null);
     try {
       const r = await fetch(`/api/orders/${orderId}/agreement/resend-link`, { method: "POST" });
       const data = await r.json().catch(() => ({}));
       if (data.portalUrl) setPortalUrl(data.portalUrl);
       if (!r.ok) {
+        // Route failures to the prominent banner — agreementMsg is a
+        // tiny info strip and was being missed entirely.
         const portalSuffix = data.portalUrl ? ` Portal URL: ${data.portalUrl}` : "";
-        setAgreementMsg((data.error || "Resend failed") + portalSuffix);
+        setPortalLinkError((data.error || "Resend failed") + portalSuffix);
         return;
       }
       setAgreementMsg(`Portal link emailed to ${data.recipient}.`);
@@ -1219,6 +1233,25 @@ export default function OrderDetailPage() {
 
   const actions = STATUS_ACTIONS[order.status] || [];
   const isEditable = ["DRAFT", "QUOTE_SENT"].includes(order.status);
+
+  // Portal-link preconditions — derived from the order payload so the
+  // "Resend portal link" button is disabled BEFORE the rep clicks
+  // (rather than 4xx'ing after). Mirror of the endpoint's gates:
+  //   1. !order.bookingId → 409 "Order has no booking …"
+  //   2. paperworkRequests.count === 0 → 409 "No paperwork request …"
+  //   3. !recipient email → 400 "No valid recipient …"
+  // Tooltip surfaces the first missing requirement.
+  const portalLinkPrecondition: { ok: true } | { ok: false; reason: string } = (() => {
+    if (!order.booking) return { ok: false, reason: 'Needs a booking before a portal link can be sent.' };
+    if ((order.booking._count?.paperworkRequests ?? 0) === 0) {
+      return { ok: false, reason: 'No paperwork request yet — send the rental agreement first to mint a portal token.' };
+    }
+    const recipient = order.jobContact?.email
+      || order.job?.jobContacts?.[0]?.person?.email
+      || null;
+    if (!recipient) return { ok: false, reason: 'No contact email on file — add a job contact with a valid email.' };
+    return { ok: true };
+  })();
   const recipients = computeRecipients(order);
   const noRecipient = !recipients.primary;
 
@@ -2228,8 +2261,9 @@ export default function OrderDetailPage() {
             )}
             <button
               onClick={resendPortalLink}
-              disabled={agreementBusy}
-              className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 text-lt-fg text-sm font-semibold rounded-lg"
+              disabled={agreementBusy || !portalLinkPrecondition.ok}
+              title={portalLinkPrecondition.ok ? undefined : portalLinkPrecondition.reason}
+              className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline disabled:opacity-50 disabled:cursor-not-allowed text-lt-fg text-sm font-semibold rounded-lg"
             >
               Resend portal link
             </button>
@@ -2262,6 +2296,28 @@ export default function OrderDetailPage() {
           {agreementMsg && (
             <div className="text-xs text-lt-fg2 bg-lt-inner border border-lt-hairline rounded-lg p-2">
               {agreementMsg}
+            </div>
+          )}
+          {/* Prominent failure banner — distinct from the quiet
+              agreementMsg strip above. Resend-link 4xx errors are the
+              most common confusion point ("I clicked, nothing
+              happened") so the rep gets a red-bordered, dismissible
+              alert at the BOTTOM of the agreement section where their
+              eye is already focused after the button click. */}
+          {portalLinkError && (
+            <div className="bg-chip-bad-bg border border-chip-bad-fg/40 rounded-lg p-3 flex items-start justify-between gap-3">
+              <div className="text-sm text-chip-bad-fg">
+                <div className="font-semibold mb-0.5">Portal link not sent</div>
+                <div className="text-xs">{portalLinkError}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPortalLinkError(null)}
+                className="text-chip-bad-fg hover:opacity-70 text-lg leading-none -mt-1"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
             </div>
           )}
         </div>

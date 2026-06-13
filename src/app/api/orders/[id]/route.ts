@@ -18,7 +18,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
     include: {
       company: true,
       agent: { select: { id: true, name: true, email: true } },
-      booking: { select: { id: true, bookingNumber: true, jobName: true, productionName: true } },
+      booking: {
+        select: {
+          id: true, bookingNumber: true, jobName: true, productionName: true,
+          // Drives the "Resend portal link" button's pre-flight enabled
+          // state on the order detail page. Endpoint-side gates already
+          // 409 when paperworkRequests is empty; surfacing the count
+          // here lets the UI disable the button + show a tooltip
+          // BEFORE the rep clicks (rather than after the fact).
+          _count: { select: { paperworkRequests: true } },
+        },
+      },
       jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
       // Job's full contact roster — drives the "Will send to" recipient
       // display + multi-recipient tooltip on the Order detail page.
