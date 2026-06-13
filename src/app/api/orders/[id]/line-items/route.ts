@@ -77,13 +77,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
-    // Resolve billable days: prefer client-supplied billableDays
-    // (explicit override), else compute from the resolved pickup→return
-    // window. Net: added items inherit the order's billable days by
-    // default — matches original quote items.
-    let days: number;
+    // Resolve billable days. (STEP 1C) NULL is now a valid persisted
+    // state — "dates TBD, rate-card line." Rules:
+    //   - explicit positive number from client → use it
+    //   - explicit null from client AND no committed dates → persist NULL
+    //   - everything else (missing, 0, no value but dates present) →
+    //     fall back to computeRentalDays from the resolved window,
+    //     preserving the existing "added items inherit the order's
+    //     billable days" behavior.
+    let days: number | null;
     if (billableDays != null && Number(billableDays) > 0) {
       days = Math.floor(Number(billableDays));
+    } else if (billableDays === null && !pickupDate && !returnDate) {
+      days = null;
     } else {
       days = computeRentalDays(pickupResolved, returnResolved);
     }
@@ -106,6 +112,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // computeLineTotal returns 0 when days is NULL — see billing.ts.
     const lineTotal = computeLineTotal({
       quantity: Number(quantity),
       rate: Number(rate),

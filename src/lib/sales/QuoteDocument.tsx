@@ -73,7 +73,12 @@ export interface QuoteLineItem {
   rateType: 'DAILY' | 'WEEKLY' | 'FLAT'
   pickupDate: Date | string
   returnDate: Date | string
-  billableDays: number
+  /** NULL = explicitly undated (STEP 1C). The PDF renders the days
+   *  cell as "TBD" and the line total as the per-day rate prefixed
+   *  with "/day"; the per-line and order-level totals reflect $0 for
+   *  this line. The Send Quote validator should block firm-total
+   *  sends when any non-EXPENDABLE line carries null. */
+  billableDays: number | null
   lineTotal: number
   isDiscount?: boolean
 }
@@ -208,6 +213,11 @@ function computeLineTotal(item: QuoteLineItem): number {
   if (item.isDiscount || item.rateType === 'FLAT') {
     return item.quantity * item.rate
   }
+  // (STEP 1C) NULL = undated rate-card line — contributes $0 to the
+  // PDF's per-line and order totals. The cell shows the per-day rate
+  // instead; the Send Quote validator ensures we never emit a firm
+  // total off this state.
+  if (item.billableDays == null) return 0
   return item.quantity * item.billableDays * item.rate
 }
 
@@ -599,9 +609,13 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                     )}
                   </View>
                   <Text style={styles.colQty}>{item.quantity}</Text>
-                  <Text style={styles.colDays}>{item.billableDays}</Text>
+                  <Text style={styles.colDays}>{item.billableDays ?? 'TBD'}</Text>
                   <Text style={styles.colRate}>{fmtMoney(item.rate)}{rateUnit(item.rateType)}</Text>
-                  <Text style={styles.colTotal}>{fmtMoney(computeLineTotal(item))}</Text>
+                  <Text style={styles.colTotal}>
+                    {item.billableDays == null
+                      ? `${fmtMoney(item.rate)}/day`
+                      : fmtMoney(computeLineTotal(item))}
+                  </Text>
                 </View>
               )
             })}
@@ -660,10 +674,26 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
             })),
             taxRate: props.taxRate,
           })
+          // (STEP 1C) When any non-discount line has null billableDays,
+          // this is an explicit rate-card quote — dates are TBD and the
+          // firm total reflects only the dated lines. Surface a banner
+          // so the client doesn't read the displayed total as final.
+          const undatedLineCount = props.lineItems.filter(
+            (l) => !l.isDiscount && l.billableDays == null
+          ).length
+          const isRateCardQuote = undatedLineCount > 0
           return (
             <View style={styles.totals}>
+              {isRateCardQuote && (
+                <View style={styles.totalsRow}>
+                  <Text style={[styles.totalsLabel, { color: '#b45309', fontSize: 9 }]}>
+                    DATES TBD — RATE CARD ({undatedLineCount} line{undatedLineCount === 1 ? '' : 's'} priced /day)
+                  </Text>
+                  <Text style={styles.totalsValue}> </Text>
+                </View>
+              )}
               <View style={styles.totalsRow}>
-                <Text style={styles.totalsLabel}>Subtotal</Text>
+                <Text style={styles.totalsLabel}>{isRateCardQuote ? 'Subtotal (dated lines)' : 'Subtotal'}</Text>
                 <Text style={styles.totalsValue}>{fmtMoney(breakdown.rawSubtotal)}</Text>
               </View>
               {/* Order-scope discount line — sits between Subtotal and

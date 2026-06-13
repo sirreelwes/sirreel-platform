@@ -89,7 +89,10 @@ interface DecimalLike { toNumber(): number }
 export interface BillingInput {
   quantity: number
   rate: number | DecimalLike
-  billableDays: number
+  /** NULL = explicitly undated / rate-card line. computeLineTotal()
+   *  returns 0 (no firm total) in that case — never silently uses 1.
+   *  EXPENDABLES (PURCHASE model) ignore this field regardless. */
+  billableDays: number | null
   rateType: RateType
   department: LineItemDepartment
 }
@@ -134,6 +137,14 @@ export function computeLineTotal(item: BillingInput): number {
     return item.quantity * rate
   }
 
+  // (STEP 1C) NULL billableDays = explicitly undated rate-card line.
+  // Return 0 firmly rather than silently multiplying by 1. The UI is
+  // responsible for surfacing "$X/day · total on dates" instead of
+  // "$0.00"; the Send Quote validator blocks committing this state as
+  // a firm total. Distinguishing null from 0 matters — 0 is a
+  // negotiated freebie (rep set it), null is "dates TBD."
+  if (item.billableDays == null) return 0
+
   let multiplier = 1.0
   if (rules.model === 'PERCENT_DISCOUNT') {
     if (item.rateType === 'WEEKLY') multiplier = rules.weekly
@@ -166,6 +177,17 @@ export function billingBreakdown(item: BillingInput): string {
 
   if (rules.model === 'PURCHASE') {
     return `${item.quantity} × ${fmtMoney(rate)} = ${fmtMoney(total)}`
+  }
+
+  // (STEP 1C) Undated line — surface per-day economics, never a fake
+  // computed total. Same pattern across the three rate models.
+  if (item.billableDays == null) {
+    if (rules.model === 'PERCENT_DISCOUNT' && (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY')) {
+      const pct = item.rateType === 'WEEKLY' ? rules.weekly : rules.monthly
+      const label = item.rateType === 'WEEKLY' ? 'weekly' : 'monthly'
+      return `${item.quantity} × ${fmtMoney(rate)} × ${Math.round(pct * 100)}% (${label}) / day · total on dates`
+    }
+    return `${item.quantity} × ${fmtMoney(rate)} / day · total on dates`
   }
 
   if (rules.model === 'PERCENT_DISCOUNT' && (item.rateType === 'WEEKLY' || item.rateType === 'MONTHLY')) {

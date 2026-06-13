@@ -46,9 +46,13 @@ interface ResolvedItem {
   department: LineItemDepartment;
   qualifier: string | null;
   rateType: RateType;
-  pickupDate: string;  // ISO YYYY-MM-DD
-  returnDate: string;  // ISO YYYY-MM-DD
-  billableDays: number;
+  pickupDate: string;  // ISO YYYY-MM-DD — empty string = TBD
+  returnDate: string;  // ISO YYYY-MM-DD — empty string = TBD
+  /** NULL = dates TBD; the line is a rate-card price-per-day until
+   *  the rep commits dates. Math returns 0 in this state; UI renders
+   *  "$X/day · total on dates" instead of a fake 1-day total.
+   *  See computeLineTotal() in src/lib/orders/billing.ts. */
+  billableDays: number | null;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null;
@@ -1084,20 +1088,17 @@ function NewQuotePageInner() {
   };
 
   const addBlankItem = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    const pickup = editing.startDate || today;
-    const ret = editing.endDate || tomorrow;
+    // (STEP 1C) No more today/tomorrow defaults. When the editing-level
+    // dates are unset, the new row stays explicitly TBD (empty date
+    // strings, null billableDays). Math renders "$X/day · total on
+    // dates" instead of a guessed 1-day total. When the editing-level
+    // dates ARE set, inherit them — that's the rep's intent for the
+    // whole quote.
+    const pickup = editing.startDate || '';
+    const ret = editing.endDate || '';
     setItems((prev) => [
       ...prev,
       {
-        // Empty so the rep's typed name is the only thing that ever
-        // lands in the saved row. "New line item" now renders as the
-        // input's HTML placeholder (greyed prompt) — never as a real
-        // value the user has to delete before typing. Prior behavior
-        // (hardcoded value) made "New line item" the actual saved
-        // description whenever a rep moved past the row without
-        // selecting + clearing it.
         description: '',
         quantity: 1,
         catalogProductId: null,
@@ -1107,7 +1108,9 @@ function NewQuotePageInner() {
         rateType: 'DAILY',
         pickupDate: pickup,
         returnDate: ret,
-        billableDays: 1,
+        // null when both dates are unset; will become a computed value
+        // when the rep commits dates. Never silently 1.
+        billableDays: pickup && ret ? null : null,
         rate: 0,
         matchedProduct: null,
         matchSource: null,
@@ -1221,12 +1224,10 @@ function NewQuotePageInner() {
       return;
     }
     // Append a fresh blank row in the same department + focus its
-    // combobox. The new row's index is items.length at the moment
-    // setItems fires.
-    const today = new Date().toISOString().slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    const pickup = editing.startDate || today;
-    const ret = editing.endDate || tomorrow;
+    // combobox. (STEP 1C) No today/tomorrow defaults — TBD until the
+    // rep commits dates.
+    const pickup = editing.startDate || '';
+    const ret = editing.endDate || '';
     setItems((prev) => [
       ...prev,
       {
@@ -1239,7 +1240,7 @@ function NewQuotePageInner() {
         rateType: 'DAILY',
         pickupDate: pickup,
         returnDate: ret,
-        billableDays: 1,
+        billableDays: null,
         rate: 0,
         matchedProduct: null,
         matchSource: null,
@@ -2490,9 +2491,22 @@ function LineItemRow({
           <div className="text-center text-sm self-center">{dash}</div>
         ) : (
           <div className="space-y-1">
+            {/* (STEP 1C) null = TBD. Empty input is the null state;
+                typing a number commits a value; clearing it reverts
+                to null. Placeholder "TBD" makes the undated state
+                obvious before the rep commits dates. */}
             <input
-              type="number" min={1} step={1} value={item.billableDays}
-              onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
+              type="number" min={1} step={1}
+              value={item.billableDays ?? ''}
+              placeholder="TBD"
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                if (raw === '') {
+                  onChange(idx, { billableDays: null });
+                } else {
+                  onChange(idx, { billableDays: Math.max(1, Number(raw) || 1) });
+                }
+              }}
               className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-sm text-lt-fg font-mono text-center"
             />
             {showToggle && (
@@ -2528,9 +2542,18 @@ function LineItemRow({
           </div>
         )}
 
-        {/* TOTAL */}
+        {/* TOTAL — (STEP 1C) null billableDays renders per-day
+            economics, never a fake 1-day total. EXPENDABLES are
+            purchase-grain so they always show qty × rate. */}
         <div className="text-right text-sm font-mono text-chip-good-fg self-center pt-1">
-          {fmtMoney(total)}
+          {isExpendable || item.billableDays != null ? (
+            fmtMoney(total)
+          ) : (
+            <div className="flex flex-col items-end leading-tight">
+              <span>{fmtMoney(item.rate)}/day</span>
+              <span className="text-[10px] text-lt-fg3">total on dates</span>
+            </div>
+          )}
         </div>
 
         {/* ACTIONS — new-quote keeps its bespoke kebab with the

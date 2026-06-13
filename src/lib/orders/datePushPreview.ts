@@ -45,7 +45,10 @@ export interface PreviewLineItem {
   endDate: Date | null
   pickupDate: Date
   returnDate: Date
-  billableDays: number
+  /** NULL = explicitly undated rate-card line (STEP 1C). The push-dates
+   *  flow leaves these alone — there's no shift math when there are
+   *  no committed billable days yet. */
+  billableDays: number | null
   lineTotal: number
 }
 
@@ -53,8 +56,8 @@ export interface ProjectedLineItem extends PreviewLineItem {
   /** Action taken for this item during projection. */
   classification: 'inherited' | 'custom_shifted' | 'custom_kept'
   /** Old → new billable day delta. */
-  billableDaysOld: number
-  billableDaysNew: number
+  billableDaysOld: number | null
+  billableDaysNew: number | null
   /** Old → new lineTotal delta. */
   lineTotalOld: number
   lineTotalNew: number

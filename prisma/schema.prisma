@@ -2578,7 +2578,17 @@ model OrderLineItem {
   // departments this typically differs from (returnDate - pickupDate)
   // because of the weekly cap; the rep can edit it freely. Stored in
   // the `days` column for backward compat.
-  billableDays    Int                @default(1) @map("days")
+  //
+  // **Nullable (STEP 1C)**: a quote may legitimately have dates TBD —
+  // a "rate-card" quote where the line shows "$X/day · total on dates"
+  // instead of a computed total. NULL means "explicitly undated; do
+  // NOT compute a firm total." All existing rows are non-null (the
+  // schema kept the @default(1) which lands on legacy writes and the
+  // RW import). computeLineTotal() returns 0 on NULL and the UI
+  // surfaces the per-day rate. Sending a firm-total quote is blocked
+  // when any non-EXPENDABLE line has NULL billableDays — see the
+  // Send Quote validator.
+  billableDays    Int?               @default(1) @map("days")
   lineTotal       Decimal            @db.Decimal(12, 2)
   // Phase 2: AI-extracted client modifier preserved verbatim (e.g.
   // "no surveillance kits"). Displayed in italics in the builder; never
