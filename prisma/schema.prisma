@@ -1792,6 +1792,7 @@ model User {
   weeklyCandids            AgentWeeklyCandid[]
   personMergesPerformed    PersonMerge[]      @relation("PersonMergeOperator")
   personMergesReversed     PersonMerge[]      @relation("PersonMergeReverser")
+  rateChangesApplied       RateChangeLog[]    @relation("RateChangeApplier")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]
@@ -2121,6 +2122,48 @@ model InventoryLocation {
   @@map("inventory_locations")
 }
 
+// Per-rate-change audit row. One entry per InventoryItem mutation
+// triggered by the RW rate gap-fill script (or future automated rate
+// sources). Lets "where did this rate come from?" be a one-SELECT
+// answer, and gives us a clean rollback target if a bad batch lands.
+//
+// Kept off the generic AuditLog model on purpose — money columns
+// deserve a typed column shape, not Json blobs, so the query for
+// "show me this item's rate history" is the trivial sorted scan a
+// human triager will actually run.
+enum RateChangeSource {
+  RW_GAP_FILL       // scripts/rw-rate-gap-fill.ts (the May/June 2026 first run)
+  MANUAL            // operator edit via admin UI (future)
+  ROLLBACK          // reverting a prior change (future)
+}
+
+model RateChangeLog {
+  id              String           @id @default(uuid())
+  inventoryItemId String           @map("inventory_item_id")
+  oldDailyRate    Decimal          @map("old_daily_rate") @db.Decimal(10, 2)
+  newDailyRate    Decimal          @map("new_daily_rate") @db.Decimal(10, 2)
+  oldWeeklyRate   Decimal          @map("old_weekly_rate") @db.Decimal(10, 2)
+  newWeeklyRate   Decimal          @map("new_weekly_rate") @db.Decimal(10, 2)
+  source          RateChangeSource
+  // Snapshot of the RW InventoryId at apply time when source = RW_GAP_FILL.
+  // Captured even when the matching method WASN'T rwId-exact — so a
+  // name-match fill records which RW master the rate actually came from.
+  rwIdSource      String?          @map("rw_id_source")
+  // Match method recorded for human review of the audit trail.
+  // Mirrors the gap-fill script's bucket labels: 'rwId', 'code',
+  // 'name', 'tokens'. Null for non-RW sources.
+  matchMethod     String?          @map("match_method")
+  appliedAt       DateTime         @default(now()) @map("applied_at")
+  appliedById     String?          @map("applied_by_id")
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  appliedBy     User?         @relation("RateChangeApplier", fields: [appliedById], references: [id])
+
+  @@index([inventoryItemId, appliedAt(sort: Desc)])
+  @@index([source, appliedAt(sort: Desc)])
+  @@map("rate_change_log")
+}
+
 model InventoryItem {
   id              String              @id @default(uuid())
   // Nullable since the May 2026 RW import — auto-created rows from RW
@@ -2173,6 +2216,7 @@ model InventoryItem {
   lineItems  OrderLineItem[]
   packageItems PackageItem[]
   subRentals SubRental[]
+  rateChanges RateChangeLog[]
   location   Location           @default(LANKERSHIM)
 
   // New editable-location FK. Coexists with the legacy enum during transition;
