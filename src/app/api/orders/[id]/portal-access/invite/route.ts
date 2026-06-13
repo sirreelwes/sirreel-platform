@@ -6,6 +6,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     firstName?: unknown
     lastName?: unknown
   }
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '')
   const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
   const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : ''
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -64,23 +65,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Order has no portal slug' }, { status: 409 })
   }
 
-  // Find-or-create Person. Email is unique on the model, so upsert by email.
-  const person = await prisma.person.upsert({
-    where: { email },
-    create: {
-      email,
-      firstName: firstName || email.split('@')[0],
-      lastName: lastName || '—',
-    },
-    update:
-      firstName || lastName
-        ? {
-            firstName: firstName || undefined,
-            lastName: lastName || undefined,
-          }
-        : {},
+  // Find-or-create Person via the alias-aware resolver — if the given
+  // email was merged into a survivor previously, we want the survivor's
+  // row back, not a fresh Person.
+  const existingPerson = await resolvePersonByEmail(email, {
     select: { id: true, firstName: true, lastName: true, email: true },
-  })
+  }) as { id: string; firstName: string; lastName: string; email: string } | null
+  let person: { id: string; firstName: string; lastName: string; email: string }
+  if (existingPerson) {
+    if (firstName || lastName) {
+      person = await prisma.person.update({
+        where: { id: existingPerson.id },
+        data: {
+          firstName: firstName || undefined,
+          lastName: lastName || undefined,
+        },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      })
+    } else {
+      person = existingPerson
+    }
+  } else {
+    person = await prisma.person.create({
+      data: {
+        email,
+        firstName: firstName || email.split('@')[0],
+        lastName: lastName || '—',
+      },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    })
+  }
 
   const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
   const portalUrl = portalJobUrl(order.portalSlug, issued.token)

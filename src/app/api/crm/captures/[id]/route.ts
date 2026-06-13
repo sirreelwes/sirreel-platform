@@ -26,6 +26,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma, CaptureResolution, CaptureVerdict, PersonRole } from '@prisma/client'
 import { mapTitleToRole } from '@/lib/crm/roleMapping'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -207,15 +208,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!p?.firstName?.trim() || !p?.lastName?.trim() || !p?.email?.trim()) {
       return NextResponse.json({ error: 'firstName, lastName, email required' }, { status: 400 })
     }
-    const emailLower = p.email.trim().toLowerCase()
+    const emailLower = normalizeEmail(p.email)
     const role: PersonRole = isValidRole(p.role)
       ? p.role
       : mapTitleToRole(p.rawTitle ?? capture.parsedTitle ?? null)
 
-    const existing = await prisma.person.findFirst({
-      where: { email: { equals: emailLower, mode: 'insensitive' } },
+    // Alias-aware: a merged-loser email resolves to the survivor here.
+    const existing = await resolvePersonByEmail(emailLower, {
       select: { id: true, phone: true, mobile: true, rawTitle: true, lastKnownProject: true, role: true },
-    })
+    }) as { id: string; phone: string | null; mobile: string | null; rawTitle: string | null; lastKnownProject: string | null; role: PersonRole } | null
 
     let personId: string
     if (existing) {

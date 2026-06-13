@@ -5,6 +5,7 @@ import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,12 +65,19 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   }
 
   // Approve path: find-or-create the new Person and mint access.
-  const newFirst = payload.newFirstName || payload.newEmail.split('@')[0]
+  // This was the original site of the "Wes@" vs "wes@" dupe — the
+  // magic-link flow stored "Wes@", the capture pipeline already had
+  // "wes@", and Person.email's @unique didn't catch the case split.
+  // Normalize on write + go through the alias-aware resolver so an
+  // already-merged loser email lands on the survivor.
+  const newEmail = normalizeEmail(payload.newEmail)
+  const newFirst = payload.newFirstName || newEmail.split('@')[0]
   const newLast = payload.newLastName || '—'
-  const newPerson = await prisma.person.upsert({
-    where: { email: payload.newEmail },
-    create: { email: payload.newEmail, firstName: newFirst, lastName: newLast },
-    update: {},
+  const existingPerson = await resolvePersonByEmail(newEmail, {
+    select: { id: true, firstName: true, lastName: true, email: true },
+  }) as { id: string; firstName: string; lastName: string; email: string } | null
+  const newPerson = existingPerson ?? await prisma.person.create({
+    data: { email: newEmail, firstName: newFirst, lastName: newLast },
     select: { id: true, firstName: true, lastName: true, email: true },
   })
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { normalizeEmail } from "@/lib/people/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -184,7 +185,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const data: Record<string, unknown> = {};
   if (firstName !== undefined) data.firstName = firstName;
   if (lastName !== undefined) data.lastName = lastName;
-  if (email !== undefined) data.email = email.toLowerCase();
+  if (email !== undefined) data.email = normalizeEmail(email);
   if (phone !== undefined) data.phone = phone || null;
   if (mobile !== undefined) data.mobile = mobile || null;
   if (role !== undefined) data.role = role;

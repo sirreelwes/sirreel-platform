@@ -28,6 +28,7 @@ import { prisma } from '@/lib/prisma'
 import { Prisma, CaptureVerdict, CaptureResolution, PersonRole } from '@prisma/client'
 import { SALES_CAPTURE_INBOXES } from './captureConstants'
 import { classifyForCapture, type VerdictResult, type ParsedPayload } from './classifyForCapture'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 import { mapTitleToRole } from './roleMapping'
 import type { ExtractedMessage } from '@/lib/ai/messageExtractor'
 
@@ -105,11 +106,14 @@ async function captureNewOrEnrich(args: {
     // Defensive: classifier should always set this from fromAddress.
     throw new Error('captureNewOrEnrich: missing parsed.email')
   }
-  const emailLower = parsed.email.toLowerCase()
+  const emailLower = normalizeEmail(parsed.email)
   const role = mapTitleToRole(parsed.title)
 
-  const existing = await prisma.person.findFirst({
-    where: { email: { equals: emailLower, mode: 'insensitive' } },
+  // Alias-aware lookup: if this sender's email was minted onto a
+  // PersonEmailAlias by a past merge, the survivor's Person row
+  // resolves here. Without this, the loser's old address re-mints a
+  // fresh Person on the next inbound and undoes the merge.
+  const existing = await resolvePersonByEmail(emailLower, {
     select: {
       id: true,
       phone: true,
@@ -118,7 +122,7 @@ async function captureNewOrEnrich(args: {
       lastKnownProject: true,
       role: true,
     },
-  })
+  }) as { id: string; phone: string | null; mobile: string | null; rawTitle: string | null; lastKnownProject: string | null; role: PersonRole } | null
 
   if (existing) {
     const log: Record<string, EnrichmentChange> = {}

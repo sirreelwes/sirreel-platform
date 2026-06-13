@@ -427,8 +427,92 @@ model Person {
   personSessions   PersonSession[]
   inquiryCaptures  InquiryCapture[] @relation("CaptureContact")
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
+  emailAliases     PersonEmailAlias[] @relation("PersonAliases")
+  // Reverse side of PersonMerge — every merge where THIS person was the
+  // survivor. Loser rows are deleted at merge time (their snapshot lives
+  // on PersonMerge), so there's no loser-side back-relation to model.
+  mergesAsSurvivor PersonMerge[]      @relation("MergeSurvivor")
 
   @@map("people")
+}
+
+// Email aliases that route to a Person — populated when a duplicate
+// Person row is merged in. The loser's email lands here so the next
+// inbound capture / classifier lookup case-insensitively resolves to
+// the survivor instead of re-minting the dupe. Every email→Person
+// resolution path MUST consult this table; see
+// src/lib/people/resolveByEmail.ts for the single shared helper.
+//
+// Values are stored lowercase (write-path responsibility). The
+// @unique enforces global single-ownership: an alias can only point
+// at one survivor at a time, no chains. If the survivor is itself
+// merged later, the alias rows repoint to the new survivor.
+model PersonEmailAlias {
+  id        String   @id @default(uuid())
+  personId  String   @map("person_id")
+  email     String   @unique
+  // The PersonMerge that minted this alias. Cascades the alias row
+  // away if the merge is reversed.
+  mergeId   String?  @map("merge_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  person Person       @relation("PersonAliases", fields: [personId], references: [id], onDelete: Cascade)
+  merge  PersonMerge? @relation("MergeAliases", fields: [mergeId], references: [id], onDelete: SetNull)
+
+  @@index([personId])
+  @@map("person_email_aliases")
+}
+
+// Audit + reversal source-of-truth for every Person merge. Loser
+// row is HARD-DELETED at merge time — the snapshot here is the
+// only way back. Reversal recreates the loser row from this JSON
+// blob (original id preserved), walks repointLog in reverse, then
+// stamps reversedAt. Reversal failures stay on the row (reversalErrors)
+// for human triage.
+//
+// See src/lib/people/mergePersons.ts for the merge primitive and
+// src/lib/people/reverseMerge.ts for the reverse primitive.
+model PersonMerge {
+  id              String   @id @default(uuid())
+  survivorId      String   @map("survivor_id")
+  // Survivor's email at merge time, before the lowercase
+  // normalization that the merge primitive runs as part of its
+  // root-cause fix. Reversal restores this so the loser's pre-merge
+  // email (which may differ ONLY in case from the survivor's
+  // normalized form — the canary case) can come back without
+  // colliding on Person.email's @unique.
+  survivorEmailBeforeMerge String? @map("survivor_email_before_merge")
+  // Snapshot of the loser Person at merge time — full field set so
+  // reversal is a JSON unpack, not a guess. Schema is loose
+  // intentionally: if Person gains fields, older PersonMerge rows
+  // remain valid (extra fields land as null on the restored loser).
+  loserSnapshot   Json     @map("loser_snapshot")
+  // Per-FK repoint log. Each entry: { table, op: 'repoint'|'delete'|'sum',
+  //   loserId, survivorId, affectedIds: [...], details: {...} }.
+  // Reversal walks this in reverse and inverts each op.
+  repointLog      Json     @map("repoint_log")
+  // PersonEmailAlias rows minted by this merge — deleted on reversal.
+  // Indirect (FK on PersonEmailAlias.mergeId) so the list is
+  // discoverable even if this array drifts; kept here for cheap audit.
+  aliasIds        String[] @map("alias_ids")
+
+  mergedAt        DateTime @default(now()) @map("merged_at")
+  mergedById      String   @map("merged_by_id")
+  reversedAt      DateTime? @map("reversed_at")
+  reversedById    String?   @map("reversed_by_id")
+  // Populated when reversal hits a conflict (e.g. survivor row was
+  // edited downstream and the loser's old refs can't cleanly come
+  // back). Reversal aborts; this row stays in place; human triage.
+  reversalErrors  Json?     @map("reversal_errors")
+
+  survivor   Person             @relation("MergeSurvivor", fields: [survivorId], references: [id])
+  mergedBy   User               @relation("PersonMergeOperator", fields: [mergedById], references: [id])
+  reversedBy User?              @relation("PersonMergeReverser", fields: [reversedById], references: [id])
+  aliases    PersonEmailAlias[] @relation("MergeAliases")
+
+  @@index([survivorId])
+  @@index([mergedAt])
+  @@map("person_merges")
 }
 
 model Affiliation {
@@ -1700,6 +1784,8 @@ model User {
   outreachActivitiesLogged OutreachActivity[] @relation("OutreachCreator")
   orderDocumentsUploaded   OrderDocument[]    @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
+  personMergesPerformed    PersonMerge[]      @relation("PersonMergeOperator")
+  personMergesReversed     PersonMerge[]      @relation("PersonMergeReverser")
   aiOverrides         AiDecision[]        @relation("AiOverrider")
   auditActions        AuditLog[]
   accounts            Account[]

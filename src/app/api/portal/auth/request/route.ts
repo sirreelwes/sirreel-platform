@@ -18,6 +18,7 @@ import {
   generatePersonMagicLinkToken,
 } from '@/lib/portal/personSession'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,19 +42,20 @@ function portalBaseUrl(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as { email?: unknown } | null
-  const email = body && isPlausibleEmail(body.email) ? body.email.trim().toLowerCase() : null
+  const email = body && isPlausibleEmail(body.email) ? normalizeEmail(body.email) : null
 
   // Always return neutral. Skip even the DB lookup on malformed email
   // so a probe with `email=garbage` gets the same answer as a miss.
   if (!email) return neutralResponse()
 
-  // Case-insensitive email lookup. Person.email is unique, stored as
-  // entered (no lowercase column). Use a case-insensitive contains on
-  // an exact-length input — Prisma's ilike via `equals` + `mode`.
-  const person = await prisma.person.findFirst({
-    where: { email: { equals: email, mode: 'insensitive' }, isActive: true },
-    select: { id: true, email: true, firstName: true },
-  })
+  // Alias-aware lookup — a merged loser's email still issues a magic
+  // link, but to the SURVIVOR's Person row. Without this, a client
+  // whose old address was deduped would silently bounce off the
+  // neutral response and lose portal access.
+  const resolved = await resolvePersonByEmail(email, {
+    select: { id: true, email: true, firstName: true, isActive: true },
+  }) as { id: string; email: string; firstName: string; isActive: boolean } | null
+  const person = resolved && resolved.isActive ? resolved : null
 
   if (!person) {
     // Person missing — do nothing further, return neutral. No email,

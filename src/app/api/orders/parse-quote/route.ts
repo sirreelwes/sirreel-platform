@@ -490,16 +490,38 @@ function splitName(full: string): { firstName: string; lastName: string } {
 // duplicate.
 async function enrichContacts(contacts: AiContact[]): Promise<ResolvedContact[]> {
   if (contacts.length === 0) return []
-  const emails = contacts.map((c) => c.email)
+  const emails = contacts.map((c) => c.email.trim().toLowerCase())
   const exact = await prisma.person.findMany({
     where: { email: { in: emails, mode: 'insensitive' } },
     select: { id: true, email: true, firstName: true, lastName: true },
   })
   const byEmail = new Map(exact.map((p) => [p.email.toLowerCase(), p]))
+  // Alias-aware: any email that didn't hit Person.email directly may
+  // still resolve via a merged-loser alias. Fold those into byEmail
+  // keyed by the alias address (not the survivor's canonical email)
+  // so the per-contact lookup below finds them.
+  const missed = emails.filter((e) => !byEmail.has(e))
+  if (missed.length > 0) {
+    const aliases = await prisma.personEmailAlias.findMany({
+      where: { email: { in: missed, mode: 'insensitive' } },
+      select: { email: true, personId: true },
+    })
+    if (aliases.length > 0) {
+      const survivors = await prisma.person.findMany({
+        where: { id: { in: aliases.map((a) => a.personId) } },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      })
+      const survivorById = new Map(survivors.map((s) => [s.id, s]))
+      for (const a of aliases) {
+        const survivor = survivorById.get(a.personId)
+        if (survivor) byEmail.set(a.email.toLowerCase(), survivor)
+      }
+    }
+  }
 
   const out: ResolvedContact[] = []
   for (const c of contacts) {
-    const match = byEmail.get(c.email)
+    const match = byEmail.get(c.email.trim().toLowerCase())
     if (match) {
       out.push({ ...c, match_status: 'existing', existing_person_id: match.id, candidate_person_id: null })
       continue

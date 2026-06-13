@@ -6,6 +6,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import type { JobRole } from '@prisma/client'
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     role?: unknown
     grantPortalAccess?: unknown
   }
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '')
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
   }
@@ -78,23 +79,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Order is not linked to a job — cannot add contact' }, { status: 409 })
   }
 
-  // Step 1: find-or-create Person
-  const person = await prisma.person.upsert({
-    where: { email },
-    create: {
-      email,
-      firstName: firstName || email.split('@')[0],
-      lastName: lastName || '—',
-    },
-    update:
-      firstName || lastName
-        ? {
-            firstName: firstName || undefined,
-            lastName: lastName || undefined,
-          }
-        : {},
+  // Step 1: find-or-create Person via the alias-aware resolver so a
+  // merged loser's email lands on the survivor, not a fresh row.
+  const existingPerson = await resolvePersonByEmail(email, {
     select: { id: true, firstName: true, lastName: true, email: true },
-  })
+  }) as { id: string; firstName: string; lastName: string; email: string } | null
+  let person: { id: string; firstName: string; lastName: string; email: string }
+  if (existingPerson) {
+    if (firstName || lastName) {
+      person = await prisma.person.update({
+        where: { id: existingPerson.id },
+        data: {
+          firstName: firstName || undefined,
+          lastName: lastName || undefined,
+        },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      })
+    } else {
+      person = existingPerson
+    }
+  } else {
+    person = await prisma.person.create({
+      data: {
+        email,
+        firstName: firstName || email.split('@')[0],
+        lastName: lastName || '—',
+      },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    })
+  }
 
   // Step 2: find-or-create JobContact (unique on jobId+personId+role)
   const existingJobContact = await prisma.jobContact.findUnique({

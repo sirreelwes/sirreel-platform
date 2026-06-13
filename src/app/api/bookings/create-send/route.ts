@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { portalTokenUrl, clientTokenUrl } from '@/lib/portal/portalUrl';
 import { randomUUID } from 'crypto';
+import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email';
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession();
@@ -59,16 +60,21 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      const existingPerson = await prisma.person.findFirst({ where: { email: personEmail } });
+      const normalizedEmail = normalizeEmail(personEmail);
+      // Alias-aware lookup — a merged loser's email resolves to the
+      // survivor rather than re-minting a fresh Person here.
+      const existingPerson = await resolvePersonByEmail(normalizedEmail, {
+        select: { id: true },
+      }) as { id: string } | null;
       if (existingPerson) {
         pId = existingPerson.id;
       } else {
-        const nameParts = (personName || personEmail).split(' ');
+        const nameParts = (personName || normalizedEmail).split(' ');
         const person = await prisma.person.create({
           data: {
-            firstName: nameParts[0] || personEmail,
+            firstName: nameParts[0] || normalizedEmail,
             lastName: nameParts.slice(1).join(' ') || '',
-            email: personEmail,
+            email: normalizedEmail,
             phone: normalizedPhone || null,
           },
         });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff, type ClientBadge } from "@/lib/crm/clientBadges";
+import { normalizeEmail } from "@/lib/people/email";
 
 // PersonRole enum mirrored locally for runtime validation of the
 // ?role= query param. Postgres rejects unknown enum values but we
@@ -198,7 +199,13 @@ export async function POST(req: NextRequest) {
 
   const person = await prisma.person.create({
     data: {
-      firstName, lastName, email, phone, mobile, role, tier, assignedAgentId,
+      firstName, lastName,
+      // Lowercase + trim at the boundary. The original case-variant
+      // dupe ("Wes@" vs "wes@") slipped past Person.email's @unique
+      // because Postgres indexes are case-sensitive. See
+      // src/lib/people/email.ts.
+      email: normalizeEmail(email),
+      phone, mobile, role, tier, assignedAgentId,
       // Free-form provenance tag — the new-quote inline create stamps
       // "phone_inquiry" for off-email leads; the capture pipeline
       // stamps "email_capture"; manual /crm adds leave it null.
