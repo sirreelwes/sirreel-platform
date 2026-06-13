@@ -348,9 +348,91 @@ function NewQuotePageInner() {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [contacts, setContacts] = useState<ResolvedContact[]>([]);
 
+  // (Hoisted before the history-fetch effect + leadContact memo so
+  // they can read it without TDZ.)
+  // confirmedLeadPersonId is the rep's explicit decision when the
+  // automatic detection isn't enough — either confirming a
+  // possible_match or overriding to a different person.
+  const [confirmedLeadPersonIdEarly, setConfirmedLeadPersonIdEarly] = useState<string | null>(null);
+  const confirmedLeadPersonId = confirmedLeadPersonIdEarly;
+  const setConfirmedLeadPersonId = setConfirmedLeadPersonIdEarly;
+
+  // History fetch — only fires for an `existing` anchored lead. A
+  // `possible_match` doesn't pre-fetch (would be wrong if the rep
+  // overrides). When the rep confirms a possible_match, this re-runs
+  // with the now-existing id.
+  useEffect(() => {
+    // Compute the eligible person id inside the effect so the deps
+    // can stay minimal (contacts + confirmedLeadPersonId only).
+    let personId: string | null = null;
+    if (confirmedLeadPersonId) {
+      personId = confirmedLeadPersonId;
+    } else {
+      const ex = contacts.find((c) => c.match_status === 'existing' && c.existing_person_id);
+      if (ex) personId = ex.existing_person_id;
+    }
+    if (!personId) { setLeadPersonHistory(null); return; }
+    let cancelled = false;
+    setLeadHistoryLoading(true);
+    fetch(`/api/crm/people/${personId}/history`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data) setLeadPersonHistory(data as PersonHistory);
+      })
+      .finally(() => { if (!cancelled) setLeadHistoryLoading(false); })
+    return () => { cancelled = true; };
+  }, [contacts, confirmedLeadPersonId]);
+
+  // Lead-person detection — derived from the parsed contacts payload.
+  // Returns the strongest signal:
+  //   1. confirmed = the rep explicitly picked someone (overrides automatic anchor)
+  //   2. existing  = highest-confidence match found via resolvePersonByEmail
+  //   3. possible_match = surface as "Is this X?", does NOT auto-anchor
+  //   4. new = falls through to the existing PeopleSection quick-add path
+  // possible_match only becomes the lead AFTER explicit confirm.
+  const leadContact = useMemo(() => {
+    if (contacts.length === 0) return null;
+    const confirmed = confirmedLeadPersonId
+      ? contacts.find((c) => c.existing_person_id === confirmedLeadPersonId || c.candidate_person_id === confirmedLeadPersonId)
+      : null;
+    if (confirmed) return { contact: confirmed, status: 'existing' as const };
+    const existing = contacts.find((c) => c.match_status === 'existing' && c.existing_person_id);
+    if (existing) return { contact: existing, status: 'existing' as const };
+    const possible = contacts.find((c) => c.match_status === 'possible_match' && c.candidate_person_id);
+    if (possible) return { contact: possible, status: 'possible_match' as const };
+    const fresh = contacts.find((c) => c.match_status === 'new' && c.email);
+    if (fresh) return { contact: fresh, status: 'new' as const };
+    return null;
+  }, [contacts, confirmedLeadPersonId]);
+
   const [creating, setCreating] = useState(false);
   const [discountAmount, setDiscountAmount] = useState('');
   const [discountLabel, setDiscountLabel] = useState('');
+
+  // Person-first anchor (STEP 1A) — leads the Review Quote when the
+  // AI-extracted contacts include an `existing` match. Possible_match
+  // is surfaced as "Is this X?" without auto-binding (sender could be
+  // an assistant or a shared address). `new` falls through to the
+  // existing PeopleSection quick-add. Live history pulled via
+  // /api/crm/people/[id]/history — uses _count(), NOT the stale
+  // denorms on Person.
+  interface PersonHistory {
+    person: {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+      rawTitle: string | null;
+      lastKnownProject: string | null;
+      counts: { priorOrders: number; jobContacts: number; bookings: number; referredBookings: number };
+    };
+    recentOrders: { id: string; orderNumber: string; companyName: string | null; jobName: string | null; createdAt: string }[];
+    suggestedCompanies: { id: string; name: string; tier: string; reason: string }[];
+  }
+  const [leadPersonHistory, setLeadPersonHistory] = useState<PersonHistory | null>(null);
+  const [leadHistoryLoading, setLeadHistoryLoading] = useState(false);
+  // confirmedLeadPersonId — see the early-hoisted declaration above.
 
   // Explicit "+ Create new Job" fields. The pre-Phase-5 flow inferred
   // these silently — productionType defaulted to OTHER, notes were a
@@ -1563,6 +1645,114 @@ function NewQuotePageInner() {
         </p>
       </div>
 
+      {/* Recognized lead (STEP 1A) — promotes the inbound sender from
+          the secondary contacts list to the form anchor. Three states
+          honored:
+            existing       → green strip with live history counts.
+            possible_match → amber "Is this X?" prompt with confirm /
+                             override / not-this-person buttons. Does
+                             NOT auto-anchor — sender could be an
+                             assistant or a shared address.
+            new            → quiet hint; the existing PeopleSection
+                             quick-add stays the primary path. */}
+      {leadContact && leadContact.status === 'existing' && (
+        <div className="bg-chip-good-bg border border-chip-good-fg/30 rounded-xl p-4 space-y-2">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-wider text-chip-good-fg font-bold">Recognized</div>
+              <div className="text-base font-semibold text-lt-fg mt-0.5">
+                {leadPersonHistory?.person.name || leadContact.contact.name}
+              </div>
+              <div className="text-xs text-lt-fg2">
+                {leadContact.contact.email}
+                {leadPersonHistory?.person.rawTitle && <span> · {leadPersonHistory.person.rawTitle}</span>}
+                {!leadPersonHistory?.person.rawTitle && leadContact.contact.title && <span> · {leadContact.contact.title}</span>}
+              </div>
+            </div>
+            {leadHistoryLoading ? (
+              <div className="text-[11px] text-lt-fg3">loading history…</div>
+            ) : leadPersonHistory ? (
+              <div className="text-[11px] text-lt-fg2 text-right">
+                <div>
+                  <span className="font-mono font-semibold text-chip-good-fg">{leadPersonHistory.person.counts.priorOrders}</span> prior orders
+                </div>
+                {leadPersonHistory.person.lastKnownProject && (
+                  <div className="italic">last: {leadPersonHistory.person.lastKnownProject}</div>
+                )}
+                {leadPersonHistory.recentOrders[0] && (
+                  <div className="text-lt-fg3">
+                    most recent: {leadPersonHistory.recentOrders[0].orderNumber}
+                    {leadPersonHistory.recentOrders[0].companyName && ` · ${leadPersonHistory.recentOrders[0].companyName}`}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+          {leadPersonHistory && leadPersonHistory.suggestedCompanies.length > 0 && clientCandidates.length === 0 && !selectedClientId && (
+            <div className="text-[11px] text-lt-fg2 pt-2 border-t border-chip-good-fg/30">
+              <span className="text-lt-fg3">Suggest as Client Company:</span>{' '}
+              {leadPersonHistory.suggestedCompanies.slice(0, 4).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSelectedClientId(s.id)}
+                  className="inline-flex items-center px-2 py-0.5 mr-1 mb-1 rounded border border-chip-good-fg/40 hover:bg-chip-good-fg/10 text-lt-fg"
+                  title={s.reason}
+                >
+                  {s.name}
+                  <span className="ml-1 text-lt-fg3 text-[10px]">{s.reason}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {leadContact && leadContact.status === 'possible_match' && (
+        <div className="bg-chip-warn-bg border border-chip-warn-fg/30 rounded-xl p-4 space-y-2">
+          <div className="text-[10px] uppercase tracking-wider text-chip-warn-fg font-bold">Possible match</div>
+          <div className="text-sm text-lt-fg">
+            Is this <span className="font-semibold">{leadContact.contact.name}</span>?
+            <span className="text-xs text-lt-fg2 ml-2">
+              ({leadContact.contact.email}) — same first + last name as someone we know.
+              The sender could be them, or an assistant on their behalf. Your call.
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const cid = leadContact.contact.candidate_person_id;
+                if (cid) setConfirmedLeadPersonId(cid);
+              }}
+              className="text-xs px-3 py-1 bg-chip-good-fg text-white rounded hover:opacity-90"
+            >
+              Confirm — it's them
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Mark this row as a new-person decision so it falls
+                // out of the lead bucket and lands in the existing
+                // PeopleSection's quick-add flow.
+                setContacts((prev) => prev.map((c) =>
+                  c === leadContact.contact ? { ...c, decision: 'create_new', match_status: 'new', candidate_person_id: null } : c,
+                ));
+              }}
+              className="text-xs px-3 py-1 border border-lt-hairline rounded hover:bg-lt-card text-lt-fg2"
+            >
+              Different person — create new
+            </button>
+          </div>
+        </div>
+      )}
+      {leadContact && leadContact.status === 'new' && (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-3 text-xs text-lt-fg2">
+          New contact: <span className="font-semibold text-lt-fg">{leadContact.contact.name || leadContact.contact.email}</span>
+          {leadContact.contact.email && <span className="text-lt-fg3"> · {leadContact.contact.email}</span>}
+          <span className="text-lt-fg3 ml-2">— will be created with the order. Edit in the contacts panel below.</span>
+        </div>
+      )}
+
       {/* Header context — editable client/dates extracted by the AI. */}
       {(
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
@@ -1586,6 +1776,36 @@ function NewQuotePageInner() {
               </select>
             ) : inquiry?.company ? (
               <div className="text-sm text-lt-fg2">{inquiry.company.name}</div>
+            ) : leadPersonHistory && leadPersonHistory.suggestedCompanies.length > 0 ? (
+              // (STEP 1A) Person-first replacement of the "No client
+              // extracted" dead-end. When the recognized lead has
+              // company affiliations or a domain match, surface those
+              // as a pick list instead of dumping the rep into /crm.
+              <div className="space-y-1">
+                <div className="text-[11px] text-lt-fg3">
+                  No company in this email — pick one of {leadPersonHistory.person.name.split(' ')[0] || 'their'} known companies:
+                </div>
+                <div className="space-y-1">
+                  {leadPersonHistory.suggestedCompanies.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSelectedClientId(s.id)}
+                      className="w-full text-left px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg hover:border-chip-good-fg/50"
+                    >
+                      <div className="font-medium">{s.name}</div>
+                      <div className="text-[11px] text-lt-fg3">{s.reason}</div>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClientId('__new__')}
+                  className="w-full text-left text-[11px] px-3 py-1.5 text-lt-fg2 hover:text-lt-fg"
+                >
+                  + None of these — create new company
+                </button>
+              </div>
             ) : (
               <div className="text-sm text-chip-warn-fg bg-chip-warn-bg border border-chip-warn-fg/30 rounded-lg p-3">
                 No client extracted.{' '}
