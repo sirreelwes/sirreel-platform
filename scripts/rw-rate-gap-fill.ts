@@ -41,13 +41,31 @@
  * retroactively CANNOT move any existing order/quote/invoice total.
  */
 
-import { writeFileSync, mkdirSync } from 'fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs'
 import path from 'path'
 import { prisma } from '../src/lib/prisma'
-import { fetchAllItems, groupItemsToMasters, type RwMaster } from '../src/lib/rentalworks/client'
+import { fetchAllItems, groupItemsToMasters, type RwItem, type RwMaster } from '../src/lib/rentalworks/client'
 import type { LineItemDepartment } from '@prisma/client'
 
 const APPLY = process.argv.includes('--apply')
+
+// ─────────────────────────────────────────────────────────────────────
+// Cache I/O — RW token validity is unpredictable (server doesn't enforce
+// the JWT exp claim; we've seen the same token bytes flip 401→200→401
+// without warning). The preflight pull caches the raw RwItem[] response
+// to a timestamped file so the apply pass can read from disk instead of
+// re-hitting RW. Pass `--cache=<path>` to load from cache instead of
+// pulling live.
+//
+//   First run (live, also caches):
+//     npx tsx scripts/rw-rate-gap-fill.ts
+//     → tmp/rw-items-raw-<ISO timestamp>.json
+//
+//   Apply pass (replay from cache, no RW call):
+//     npx tsx scripts/rw-rate-gap-fill.ts --apply --cache=tmp/rw-items-raw-…json
+// ─────────────────────────────────────────────────────────────────────
+const CACHE_ARG = process.argv.find((a) => a.startsWith('--cache='))
+const CACHE_INPUT = CACHE_ARG ? CACHE_ARG.slice('--cache='.length) : null
 
 // ─────────────────────────────────────────────────────────────────────
 // Normalization — identical to scripts/rw-catalog-import.ts so the two
@@ -143,13 +161,35 @@ async function main() {
   console.log(`RW rate gap-fill — ${APPLY ? '🚀 APPLY MODE (will write to DB)' : 'PREFLIGHT only (no writes)'}`)
   console.log()
 
-  // 1. Pull RW masters
-  console.log('Pulling RW /api/v1/item …')
-  const items = await fetchAllItems({
-    pageSize: 200,
-    onPage: (p, tp, fetched, total) =>
-      console.log(`  page ${p}/${tp} — ${fetched}/${total} items`),
-  })
+  // 1. Pull RW masters (live) OR read from cache file
+  let items: RwItem[]
+  if (CACHE_INPUT) {
+    if (!existsSync(CACHE_INPUT)) {
+      console.error(`Cache file not found: ${CACHE_INPUT}`)
+      process.exit(1)
+    }
+    console.log(`Reading RW items from cache: ${CACHE_INPUT}`)
+    const raw = JSON.parse(readFileSync(CACHE_INPUT, 'utf-8')) as { fetchedAt: string; items: RwItem[] }
+    items = raw.items
+    console.log(`  cache fetchedAt: ${raw.fetchedAt}`)
+    console.log(`  ${items.length} physical items loaded from disk`)
+  } else {
+    console.log('Pulling RW /api/v1/item …')
+    items = await fetchAllItems({
+      pageSize: 200,
+      onPage: (p, tp, fetched, total) =>
+        console.log(`  page ${p}/${tp} — ${fetched}/${total} items`),
+    })
+    // Cache the raw pull immediately — before any classification work.
+    // If the token reverts to 401 mid-script run, we've at least got
+    // disk persistence to recover from.
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const cachePath = path.join(process.cwd(), `tmp/rw-items-raw-${ts}.json`)
+    mkdirSync(path.dirname(cachePath), { recursive: true })
+    writeFileSync(cachePath, JSON.stringify({ fetchedAt: new Date().toISOString(), items }))
+    console.log(`  raw RW response cached to: ${cachePath}`)
+    console.log(`  to apply against this cache (no re-pull): npx tsx scripts/rw-rate-gap-fill.ts --apply --cache=${cachePath}`)
+  }
   const masters = groupItemsToMasters(items)
   console.log(`  ${items.length} physical items → ${masters.length} masters`)
 
