@@ -68,6 +68,33 @@ const CACHE_ARG = process.argv.find((a) => a.startsWith('--cache='))
 const CACHE_INPUT = CACHE_ARG ? CACHE_ARG.slice('--cache='.length) : null
 
 // ─────────────────────────────────────────────────────────────────────
+// CSV file-input mode — RW UI grid export. DISTINCT from --cache.
+//
+//   --cache=<path>   replays a prior LIVE RW pull (JSON, RwItem[] shape).
+//   --csv=<path>     reads an RW admin-UI grid export (Excel "Save as CSV"
+//                    or RW's "Export to CSV"). Each CSV row is one MASTER
+//                    (the UI exports at master grain, not per-unit), so
+//                    the groupItemsToMasters step is skipped.
+//
+// This mode exists because RW's API session validity is flapping
+// unpredictably (verified live: same token bytes returned 200 then 401
+// six minutes later). The CSV path lets Wes pull the data from the RW
+// UI in one human-driven export and feed it to the same matching /
+// preflight / conflict-log / audit / --apply pipeline as the API path.
+//
+// Run:
+//   npx tsx scripts/rw-rate-gap-fill.ts --csv=tmp/rw-inventory-export.csv
+//   npx tsx scripts/rw-rate-gap-fill.ts --csv=tmp/rw-inventory-export.csv --apply
+// ─────────────────────────────────────────────────────────────────────
+const CSV_ARG = process.argv.find((a) => a.startsWith('--csv='))
+const CSV_INPUT = CSV_ARG ? CSV_ARG.slice('--csv='.length) : null
+
+if (CACHE_INPUT && CSV_INPUT) {
+  console.error('Pass at most ONE of --cache=<path> or --csv=<path>, not both.')
+  process.exit(1)
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Normalization — identical to scripts/rw-catalog-import.ts so the two
 // scripts can't drift their match logic. Kept as private copies rather
 // than imported because rw-catalog-import.ts has them inline; lifting
@@ -97,6 +124,193 @@ function tokenSetKey(s: string): string {
 function fmtMoney(n: number | null): string {
   if (n == null) return '—'
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CSV reader — minimal, no external dep.
+//
+// Handles: quoted fields with commas, escaped double-quotes (""), CRLF
+// or LF line endings, optional BOM. Doesn't handle multi-line cells
+// (newlines inside fields) — RW grid exports don't contain those for
+// the columns we care about.
+//
+// HEADER MATCHING is lenient: normalize each header to lowercase +
+// strip non-alphanumeric, then look up against alias sets. So "Daily
+// Rate", "Daily_Rate", "DAILY-RATE", "Daily$Rate" all match.
+//
+// EXPECTED COLUMN HEADERS (any one alias per field works):
+//
+//   ICode (REQUIRED — the crosswalk key)
+//     aliases: ICode | Item Code | Code | Inventory Code | Asset Code
+//
+//   Description (REQUIRED — drives name + token fallback matching)
+//     aliases: Description | Item Description | Name | Item Name
+//
+//   DailyRate (REQUIRED — the whole point)
+//     aliases: Daily Rate | DailyRate | Daily | Rate Daily | Day Rate
+//
+//   WeeklyRate (RECOMMENDED — combobox display consistency)
+//     aliases: Weekly Rate | WeeklyRate | Weekly | Rate Weekly | Week Rate
+//
+//   InventoryId (OPTIONAL — sets HQ.rwId on apply when present)
+//     aliases: InventoryId | Inventory ID | Master ID | Master Inventory ID
+//
+//   MonthlyRate, Inactive, Category, Manufacturer — ignored if present.
+//
+// Money parse strips '$', commas, whitespace. Empty / non-numeric → 0.
+// ─────────────────────────────────────────────────────────────────────
+
+interface CsvRow {
+  [key: string]: string
+}
+
+function parseCsvLine(line: string): string[] {
+  // State machine for one CSV record.
+  const out: string[] = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++ }
+        else { inQuotes = false }
+      } else {
+        cur += c
+      }
+    } else {
+      if (c === '"') inQuotes = true
+      else if (c === ',') { out.push(cur); cur = '' }
+      else cur += c
+    }
+  }
+  out.push(cur)
+  return out
+}
+
+function readCsv(text: string): CsvRow[] {
+  // Strip UTF-8 BOM if present.
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
+  const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
+  if (lines.length < 2) return []
+  const headers = parseCsvLine(lines[0])
+  const rows: CsvRow[] = []
+  for (let i = 1; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i])
+    const row: CsvRow = {}
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = fields[j] ?? ''
+    }
+    rows.push(row)
+  }
+  return rows
+}
+
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function findColumn(headers: string[], aliases: string[]): string | null {
+  const aliasSet = new Set(aliases.map(normalizeHeader))
+  for (const h of headers) {
+    if (aliasSet.has(normalizeHeader(h))) return h
+  }
+  return null
+}
+
+function parseMoney(s: string | undefined | null): number {
+  if (!s) return 0
+  const cleaned = s.replace(/[$,\s]/g, '')
+  const n = parseFloat(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Convert one CSV row into the RwMaster shape used by the matching
+ * pipeline. RW UI grids export at the master grain (one row per
+ * master), so we skip groupItemsToMasters. InventoryId is optional;
+ * when missing, ICode becomes the only crosswalk anchor.
+ */
+function csvRowToMaster(
+  row: CsvRow,
+  cols: { iCode: string; description: string; daily: string; weekly: string | null; invId: string | null },
+): RwMaster | null {
+  const iCode = (row[cols.iCode] ?? '').trim()
+  const description = (row[cols.description] ?? '').trim()
+  if (!iCode || !description) return null
+  const dailyRate = parseMoney(row[cols.daily])
+  const weeklyRate = cols.weekly ? parseMoney(row[cols.weekly]) : 0
+  // If InventoryId column is absent, fall back to ICode as the
+  // "master" id. Means HQ.rwId stamping for code-only-matched rows
+  // uses the ICode value — which is still a stable anchor as long
+  // as RW doesn't reissue ICodes.
+  const rwInventoryId = cols.invId ? ((row[cols.invId] ?? '').trim() || iCode) : iCode
+  return {
+    rwInventoryId,
+    iCode,
+    description,
+    manufacturer: null,
+    model: null,
+    categoryRwId: null,
+    category: null,
+    subCategory: null,
+    inventoryType: null,
+    dimensions: null,
+    unitValue: 0,
+    replacementCost: 0,
+    dailyRate,
+    weeklyRate,
+    monthlyRate: 0,
+    qtyActive: 1,
+    qtyTotal: 1,
+    notes: null,
+  }
+}
+
+function loadMastersFromCsv(csvPath: string): RwMaster[] {
+  const text = readFileSync(csvPath, 'utf-8')
+  const rows = readCsv(text)
+  if (rows.length === 0) {
+    console.error(`CSV at ${csvPath} has no data rows.`)
+    process.exit(1)
+  }
+  const headers = Object.keys(rows[0])
+  const iCodeCol       = findColumn(headers, ['ICode', 'Item Code', 'Code', 'Inventory Code', 'Asset Code'])
+  const descriptionCol = findColumn(headers, ['Description', 'Item Description', 'Name', 'Item Name'])
+  const dailyCol       = findColumn(headers, ['Daily Rate', 'DailyRate', 'Daily', 'Rate Daily', 'Day Rate'])
+  const weeklyCol      = findColumn(headers, ['Weekly Rate', 'WeeklyRate', 'Weekly', 'Rate Weekly', 'Week Rate'])
+  const invIdCol       = findColumn(headers, ['InventoryId', 'Inventory ID', 'Master ID', 'Master Inventory ID'])
+
+  const missing: string[] = []
+  if (!iCodeCol) missing.push('ICode (or Item Code / Code / Inventory Code / Asset Code)')
+  if (!descriptionCol) missing.push('Description (or Item Description / Name / Item Name)')
+  if (!dailyCol) missing.push('Daily Rate (or DailyRate / Daily / Rate Daily / Day Rate)')
+  if (missing.length > 0) {
+    console.error('CSV missing required column(s):')
+    for (const m of missing) console.error(`  - ${m}`)
+    console.error('Headers found:', headers.join(' | '))
+    process.exit(1)
+  }
+  if (!weeklyCol) {
+    console.warn('Note: no Weekly Rate column found. Weekly rates will fill as $0.')
+  }
+  if (!invIdCol) {
+    console.warn('Note: no InventoryId column found. Will use ICode as the rwId crosswalk anchor.')
+  }
+
+  const cols = {
+    iCode: iCodeCol!, description: descriptionCol!, daily: dailyCol!,
+    weekly: weeklyCol, invId: invIdCol,
+  }
+  const masters: RwMaster[] = []
+  let dropped = 0
+  for (const r of rows) {
+    const m = csvRowToMaster(r, cols)
+    if (m) masters.push(m)
+    else dropped++
+  }
+  if (dropped > 0) console.warn(`  ${dropped} CSV row(s) dropped (missing ICode or Description)`)
+  return masters
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -161,21 +375,33 @@ async function main() {
   console.log(`RW rate gap-fill — ${APPLY ? '🚀 APPLY MODE (will write to DB)' : 'PREFLIGHT only (no writes)'}`)
   console.log()
 
-  // 1. Pull RW masters (live) OR read from cache file
-  let items: RwItem[]
-  if (CACHE_INPUT) {
+  // 1. Load RW masters from one of three sources:
+  //    (a) --csv=<path>   → RW UI grid export (already at master grain)
+  //    (b) --cache=<path> → prior live RW pull (JSON RwItem[], per-unit)
+  //    (c) default        → live RW /api/v1/item pull (caches on success)
+  let masters: RwMaster[]
+  if (CSV_INPUT) {
+    if (!existsSync(CSV_INPUT)) {
+      console.error(`CSV file not found: ${CSV_INPUT}`)
+      process.exit(1)
+    }
+    console.log(`Reading RW masters from CSV: ${CSV_INPUT}`)
+    masters = loadMastersFromCsv(CSV_INPUT)
+    console.log(`  ${masters.length} masters loaded from CSV`)
+  } else if (CACHE_INPUT) {
     if (!existsSync(CACHE_INPUT)) {
       console.error(`Cache file not found: ${CACHE_INPUT}`)
       process.exit(1)
     }
     console.log(`Reading RW items from cache: ${CACHE_INPUT}`)
     const raw = JSON.parse(readFileSync(CACHE_INPUT, 'utf-8')) as { fetchedAt: string; items: RwItem[] }
-    items = raw.items
     console.log(`  cache fetchedAt: ${raw.fetchedAt}`)
-    console.log(`  ${items.length} physical items loaded from disk`)
+    console.log(`  ${raw.items.length} physical items loaded from disk`)
+    masters = groupItemsToMasters(raw.items)
+    console.log(`  → ${masters.length} masters`)
   } else {
     console.log('Pulling RW /api/v1/item …')
-    items = await fetchAllItems({
+    const items = await fetchAllItems({
       pageSize: 200,
       onPage: (p, tp, fetched, total) =>
         console.log(`  page ${p}/${tp} — ${fetched}/${total} items`),
@@ -189,9 +415,9 @@ async function main() {
     writeFileSync(cachePath, JSON.stringify({ fetchedAt: new Date().toISOString(), items }))
     console.log(`  raw RW response cached to: ${cachePath}`)
     console.log(`  to apply against this cache (no re-pull): npx tsx scripts/rw-rate-gap-fill.ts --apply --cache=${cachePath}`)
+    masters = groupItemsToMasters(items)
+    console.log(`  ${items.length} physical items → ${masters.length} masters`)
   }
-  const masters = groupItemsToMasters(items)
-  console.log(`  ${items.length} physical items → ${masters.length} masters`)
 
   // 2. Build RW lookup indexes
   const rwById = new Map<string, RwMaster>()
