@@ -1902,7 +1902,7 @@ function NewQuotePageInner() {
 // Shared grid template for the dept-group "table" — header row, line item
 // rows, and subtotal row all use this so columns align vertically.
 //   QTY · DESCRIPTION · PRICE/DAY · PICKUP · RETURN · DAYS · TOTAL · ACTIONS
-const TABLE_GRID = 'grid-cols-[64px_minmax(220px,1fr)_96px_136px_136px_120px_104px_36px]';
+const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_36px]';
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
@@ -2012,7 +2012,7 @@ function DepartmentGroup({
         <div>{isExpendable ? 'Price' : 'Price/day'}</div>
         <div>{isExpendable ? '' : 'Pickup'}</div>
         <div>{isExpendable ? '' : 'Return'}</div>
-        <div>{isExpendable ? '' : 'Billable days'}</div>
+        <div className="text-center">{isExpendable ? '' : 'Days'}</div>
         <div className="text-right">Total</div>
         <div></div>
       </div>
@@ -2229,7 +2229,7 @@ function LineItemRow({
             <input
               type="number" min={1} step={1} value={item.billableDays}
               onChange={(e) => onChange(idx, { billableDays: Math.max(1, Number(e.target.value) || 1) })}
-              className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
+              className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-sm text-lt-fg font-mono text-center"
             />
             {showToggle && (
               <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
