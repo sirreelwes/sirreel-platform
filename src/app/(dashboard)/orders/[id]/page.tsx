@@ -13,6 +13,7 @@ import { LineItemUndoToast, type LineItemUndoToastState } from "@/components/lin
 import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/DiscountsPanel";
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus } from "@prisma/client";
@@ -1522,9 +1523,14 @@ export default function OrderDetailPage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-lt-fg3 mb-1">Rate ($)</label>
-                <input type="number" step="0.01" value={liRate} onChange={(e) => setLiRate(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
+                <label className="block text-xs text-lt-fg3 mb-1">Rate</label>
+                <CurrencyInput
+                  value={Number(liRate) || 0}
+                  onChange={(next) => setLiRate(next === 0 ? '' : String(next))}
+                  min={0}
+                  inputClassName="px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
+                  ariaLabel="Rate"
+                />
               </div>
               <div className="col-span-1">
                 <label className="block text-xs text-lt-fg3 mb-1">Days</label>
@@ -1597,9 +1603,17 @@ export default function OrderDetailPage() {
                   {editingLineId === li.id ? (
                     <>
                       <td className="px-4 py-2">
-                        <input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)}
-                          className="w-24 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-right font-mono" />
-                        <span className="text-lt-fg3 text-xs ml-1">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                        <div className="flex items-center gap-1">
+                          <CurrencyInput
+                            value={Number(editRate) || 0}
+                            onChange={(next) => setEditRate(next === 0 ? '' : String(next))}
+                            min={0}
+                            className="w-24"
+                            inputClassName="px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-right font-mono"
+                            ariaLabel="Edit rate"
+                          />
+                          <span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-center">
                         <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
@@ -2857,17 +2871,17 @@ function PaymentsPanel({
         >
           <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Amount
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              max={balanceDue + 1000}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder={balanceDue.toFixed(2)}
-              required
-              className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
-            />
+            <div className="mt-1">
+              <CurrencyInput
+                value={Number(amount) || 0}
+                onChange={(next) => setAmount(next === 0 ? '' : String(next))}
+                min={0.01}
+                max={balanceDue + 1000}
+                placeholder={balanceDue.toFixed(2)}
+                inputClassName="px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
+                ariaLabel="Payment amount"
+              />
+            </div>
           </label>
           <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Method

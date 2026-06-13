@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
 
 type Department =
   | 'COMMUNICATIONS' | 'PRO_SUPPLIES' | 'ART' | 'VEHICLES' | 'GE' | 'STAGES' | 'EXPENDABLES'
@@ -340,14 +341,13 @@ export default function AdminPackagesPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
                     <span className="text-xs text-lt-fg3 mb-1 block">Price per day</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
+                    <CurrencyInput
+                      value={Number(price) || 0}
+                      onChange={(next) => setPrice(next === 0 ? '' : String(next))}
+                      min={0}
                       placeholder="0.00"
-                      className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg font-mono"
+                      inputClassName="px-3 py-2 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg font-mono"
+                      ariaLabel="Package price per day"
                     />
                   </label>
                   <div className="bg-lt-inner border border-lt-hairline rounded p-3 flex flex-col justify-center">

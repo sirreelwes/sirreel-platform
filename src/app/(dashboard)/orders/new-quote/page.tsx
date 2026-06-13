@@ -8,6 +8,7 @@ import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/compon
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
 import { LineItemDescriptionCombobox } from '@/components/orders/LineItemDescriptionCombobox';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
 
 const PRODUCTION_TYPES: ProductionType[] = [
@@ -220,7 +221,8 @@ const DEPT_BADGE: Record<LineItemDepartment, string> = {
 
 function fmtMoney(n: number) {
   return new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD', maximumFractionDigits: 0,
+    style: 'currency', currency: 'USD',
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n);
 }
 
@@ -1827,11 +1829,12 @@ function NewQuotePageInner() {
           </div>
           <div>
             <label className="block text-xs text-lt-fg3 mb-1">Amount (negative)</label>
-            <input
-              type="number" step="0.01" value={discountAmount}
-              onChange={(e) => setDiscountAmount(e.target.value)}
-              placeholder="-500"
-              className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
+            <CurrencyInput
+              value={Number(discountAmount) || 0}
+              onChange={(next) => setDiscountAmount(next === 0 ? '' : String(next))}
+              placeholder="-500.00"
+              inputClassName="px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg font-mono"
+              ariaLabel="Discount amount"
             />
           </div>
         </div>
@@ -2188,10 +2191,12 @@ function LineItemRow({
         </div>
 
         {/* PRICE/DAY */}
-        <input
-          type="number" step="0.50" min={0} value={item.rate}
-          onChange={(e) => onChange(idx, { rate: Number(e.target.value) || 0 })}
-          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
+        <CurrencyInput
+          value={item.rate}
+          onChange={(next) => onChange(idx, { rate: next })}
+          min={0}
+          inputClassName="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
+          ariaLabel="Price per day"
         />
 
         {/* PICKUP */}
