@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
+import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -148,6 +149,42 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
 
     const totals = await recalcOrderTotals(orderId);
+
+    // AuditLog (#5) — fires only when the order is BOOKED+ (the
+    // helper gates on status; pre-commitment DRAFT/QUOTE_SENT churn
+    // is intentionally not logged). Non-fatal — a failed audit
+    // doesn't block a successful add. ipAddress + operator id come
+    // from the request + session.
+    const parentOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (parentOrder) {
+      const operatorId = await resolveOperatorId(session.user.email);
+      await auditLineItemEdit({
+        orderId,
+        orderStatus: parentOrder.status,
+        action: 'order.line_item_added',
+        oldValues: null,
+        newValues: {
+          lineItemId: lineItem.id,
+          description: lineItem.description,
+          department: lineItem.department,
+          quantity: lineItem.quantity,
+          rate: lineItem.rate.toString(),
+          billableDays: lineItem.billableDays,
+          rateType: lineItem.rateType,
+          lineTotal: lineItem.lineTotal.toString(),
+          inventoryItemId: lineItem.inventoryItemId,
+          assetCategoryId: lineItem.assetCategoryId,
+          packageHeader: !!lineItem.isPackageHeader,
+          packageMember: !!(lineItem.packageInstanceId && !lineItem.isPackageHeader),
+        },
+        userId: operatorId,
+        ipAddress: extractIp(req),
+      });
+    }
+
     return NextResponse.json({ lineItem, totals }, { status: 201 });
   } catch (error) {
     console.error("Add line item error:", error);

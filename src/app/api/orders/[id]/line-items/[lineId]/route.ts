@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
+import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -78,6 +79,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
+    // (#5 AuditLog) Capture pre-update snapshot when the order is
+    // post-APPROVED. Cheap read — only fires for committed-state
+    // orders. For DRAFT/QUOTE_SENT the snapshot is skipped entirely.
+    const parentOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    const preUpdate = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT' && parentOrder.status !== 'APPROVED'
+      ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
+      : null;
+
     const lineItem = await prisma.orderLineItem.update({
       where: { id: lineId },
       data,
@@ -88,6 +100,39 @@ export async function PUT(req: NextRequest, { params }: Params) {
     });
 
     const totals = await recalcOrderTotals(orderId);
+
+    if (parentOrder && preUpdate) {
+      const operatorId = await resolveOperatorId(session.user.email);
+      // Build a compact diff so the AuditLog row is grep-friendly
+      // ("show me every line where rate changed last month"). Each
+      // field is logged only when it actually changed.
+      const diff: Record<string, { from: unknown; to: unknown }> = {};
+      const fields: Array<keyof typeof preUpdate> = [
+        'description', 'department', 'quantity', 'rate',
+        'billableDays', 'rateType', 'lineTotal',
+        'inventoryItemId', 'assetCategoryId', 'qualifier',
+        'pickupDate', 'returnDate',
+      ];
+      for (const f of fields) {
+        const a = preUpdate[f];
+        const b = (lineItem as unknown as Record<string, unknown>)[f as string];
+        const aStr = a == null ? null : (typeof a === 'object' && 'toString' in (a as object)) ? (a as { toString: () => string }).toString() : a;
+        const bStr = b == null ? null : (typeof b === 'object' && 'toString' in (b as object)) ? (b as { toString: () => string }).toString() : b;
+        if (JSON.stringify(aStr) !== JSON.stringify(bStr)) {
+          diff[f as string] = { from: aStr as unknown, to: bStr as unknown };
+        }
+      }
+      await auditLineItemEdit({
+        orderId,
+        orderStatus: parentOrder.status,
+        action: 'order.line_item_updated',
+        oldValues: { lineItemId: lineId, ...diff },
+        newValues: { lineItemId: lineId, changedFields: Object.keys(diff) },
+        userId: operatorId,
+        ipAddress: extractIp(req),
+      });
+    }
+
     return NextResponse.json({ lineItem, totals });
   } catch (error) {
     console.error("Update line item error:", error);
@@ -96,14 +141,58 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   const session = await getServerSession();
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id: orderId, lineId } = await params;
 
+  // (#5 AuditLog) Snapshot the row + parent status BEFORE the
+  // cascade-delete fires. Once `orderLineItem.delete` runs, the row
+  // is gone and we can't reconstruct what was removed.
+  const parentOrder = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { status: true },
+  });
+  const preDelete = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT' && parentOrder.status !== 'APPROVED'
+    ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
+    : null;
+
   await prisma.orderLineItem.delete({ where: { id: lineId } });
   const totals = await recalcOrderTotals(orderId);
+
+  if (parentOrder && preDelete) {
+    const operatorId = await resolveOperatorId(session.user.email);
+    await auditLineItemEdit({
+      orderId,
+      orderStatus: parentOrder.status,
+      action: 'order.line_item_removed',
+      oldValues: {
+        lineItemId: lineId,
+        description: preDelete.description,
+        department: preDelete.department,
+        quantity: preDelete.quantity,
+        rate: preDelete.rate.toString(),
+        billableDays: preDelete.billableDays,
+        rateType: preDelete.rateType,
+        lineTotal: preDelete.lineTotal.toString(),
+        inventoryItemId: preDelete.inventoryItemId,
+        assetCategoryId: preDelete.assetCategoryId,
+        packageHeader: !!preDelete.isPackageHeader,
+        packageMember: !!(preDelete.packageInstanceId && !preDelete.isPackageHeader),
+        // Capture pickStatus so the LATE-STAGE-DELETE case (line was
+        // already PICKED) is grep-able after the fact. The schema's
+        // onDelete cascade currently loses this; the audit row is
+        // the only place it survives.
+        pickStatus: preDelete.pickStatus,
+        fulfillmentLane: preDelete.fulfillmentLane,
+      },
+      newValues: null,
+      userId: operatorId,
+      ipAddress: extractIp(req),
+    });
+  }
+
   return NextResponse.json({ success: true, totals });
 }
