@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
+import { readPickListItemForDelete, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -150,16 +151,93 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
   const { id: orderId, lineId } = await params;
 
+  // (#3b) Confirmation flag for the already-picked physical-pull
+  // case. DELETE allows a JSON body; older clients that send no body
+  // get `confirmedPicked: false` which is the safe default. Frontend
+  // re-submits with `{ confirmedPicked: true }` after the rep
+  // acknowledges the physical-stock-return consequence.
+  let confirmedPicked = false;
+  try {
+    const body = await req.json().catch(() => null);
+    if (body && typeof body === 'object' && (body as { confirmedPicked?: unknown }).confirmedPicked === true) {
+      confirmedPicked = true;
+    }
+  } catch {
+    /* no body — treat as not confirmed */
+  }
+
   // (#5 AuditLog) Snapshot the row + parent status BEFORE the
-  // cascade-delete fires. Once `orderLineItem.delete` runs, the row
-  // is gone and we can't reconstruct what was removed.
+  // cascade-delete fires. Always read the row regardless of status
+  // (#3b) — we need the pickStatus to decide whether confirmation
+  // is required, even for DRAFT/QUOTE_SENT orders that would
+  // otherwise skip the audit branch.
   const parentOrder = await prisma.order.findUnique({
     where: { id: orderId },
     select: { status: true },
   });
+  const lineRow = await prisma.orderLineItem.findUnique({
+    where: { id: lineId },
+    select: {
+      id: true, description: true, department: true, quantity: true,
+      rate: true, billableDays: true, rateType: true, lineTotal: true,
+      inventoryItemId: true, assetCategoryId: true,
+      isPackageHeader: true, packageInstanceId: true,
+      pickStatus: true, fulfillmentLane: true,
+    },
+  });
+  if (!lineRow) {
+    return NextResponse.json({ error: 'line item not found' }, { status: 404 });
+  }
+
+  // (#3b) PickList side — pre-read the PickListItem so we have the
+  // picker stamp metadata before any delete fires. Determines whether
+  // confirmation is required.
+  const pickListItemSnapshot = await readPickListItemForDelete(prisma, lineId);
+  const alreadyPicked =
+    lineRow.pickStatus === 'PICKED' ||
+    lineRow.pickStatus === 'STAGED' ||
+    lineRow.pickStatus === 'LOADED';
+
+  if (alreadyPicked && !confirmedPicked) {
+    return NextResponse.json(
+      {
+        requiresConfirmation: true,
+        reason: 'already_picked',
+        pickStatus: lineRow.pickStatus,
+        physicalAction: 'return_to_stock',
+        message:
+          `This item was already ${(lineRow.pickStatus || '').toLowerCase()} — deleting it removes it from the order. ` +
+          `Return the physical item to stock before confirming.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  // The audit-snapshot subset (mirrors step 1's existing payload).
+  // Only kept for the BOOKED+/post-APPROVED branch; DRAFT/QUOTE_SENT
+  // skip the audit emit per the existing helper.
   const preDelete = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT'
-    ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
+    ? lineRow
     : null;
+
+  // (#3b) Explicit PickList side delete BEFORE the OrderLineItem
+  // delete, replacing the silent onDelete: Cascade. Captures the
+  // un-pick AuditLog row when relevant, then removes the PickListItem.
+  // The OrderLineItem.delete below would have cascade-deleted the
+  // PickListItem anyway — by pre-deleting we control the order of
+  // events and surface the picker-stamp loss in AuditLog.
+  let pickRecompute: { pickListRecomputed: 'unchanged' | 'cancelled_empty' | 'none' } = { pickListRecomputed: 'none' };
+  if (pickListItemSnapshot) {
+    const operatorIdForUnpick = await resolveOperatorId(session.user.email);
+    pickRecompute = await syncPickListOnLineDelete(prisma, {
+      orderId,
+      orderLineItemId: lineId,
+      pickListItem: pickListItemSnapshot,
+      pickStatusAtDelete: lineRow.pickStatus,
+      userId: operatorIdForUnpick,
+      ipAddress: extractIp(req),
+    });
+  }
 
   await prisma.orderLineItem.delete({ where: { id: lineId } });
   const totals = await recalcOrderTotals(orderId);
@@ -196,5 +274,16 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     });
   }
 
-  return NextResponse.json({ success: true, totals });
+  return NextResponse.json({
+    success: true,
+    totals,
+    // (#3b) Surface what happened on the warehouse side so the UI
+    // can render a toast — e.g. "Item returned to stock; pick list
+    // updated" vs the silent before.
+    pickList: {
+      action: pickListItemSnapshot ? 'pick_list_item_removed' : 'no_pick_list_side',
+      recomputed: pickRecompute.pickListRecomputed,
+      wasPicked: alreadyPicked,
+    },
+  });
 }

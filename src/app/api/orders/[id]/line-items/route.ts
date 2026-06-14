@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
+import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -148,6 +149,21 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     });
 
+    // (#3a) PickList sync — fires regardless of order status. Reuses
+    // bookOrder's routeDepartment so the lane/pickStatus assignment
+    // is byte-identical to what the original book transition stamps.
+    // For WAREHOUSE-routed lines, ensures a PickListItem exists; for
+    // FLEET/STAGE, only stamps the lane. Three timing cases all
+    // collapsed to "append no matter what" — even a sandbag added
+    // after the list is LOADED gets a PENDING_PICK item appended for
+    // the warehouse team to handle physically. The PickList state
+    // is preserved — we never silently rewind to PICKING.
+    const pickSync = await syncPickListOnLineAdd(prisma, {
+      orderId,
+      orderLineItemId: lineItem.id,
+      department: resolvedDepartment,
+    });
+
     const totals = await recalcOrderTotals(orderId);
 
     // AuditLog (#5) — fires only when the order is BOOKED+ (the
@@ -179,6 +195,11 @@ export async function POST(req: NextRequest, { params }: Params) {
           assetCategoryId: lineItem.assetCategoryId,
           packageHeader: !!lineItem.isPackageHeader,
           packageMember: !!(lineItem.packageInstanceId && !lineItem.isPackageHeader),
+          // (#3a) Record the PickList sync outcome on the audit row
+          // so "what happened on the warehouse side?" is one query.
+          fulfillmentLane: pickSync.lane,
+          pickStatus: pickSync.pickStatus,
+          pickListAction: pickSync.pickListAction,
         },
         userId: operatorId,
         ipAddress: extractIp(req),
