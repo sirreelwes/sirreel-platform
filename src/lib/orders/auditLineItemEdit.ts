@@ -28,12 +28,18 @@ import { prisma } from '@/lib/prisma'
  * this set indicates the order has reached a committed state and an
  * edit needs to leave a trail.
  *
- * Excludes DRAFT, QUOTE_SENT (pre-commitment quote churn — no audit),
- * CANCELLED (terminal, edits shouldn't reach the endpoint), and
- * APPROVED (the gate ratification puts the audit threshold at "after
- * APPROVED" — BOOKED and beyond).
+ * APPROVED is INCLUDED (Phase 1 step 2) — kills the "audited island"
+ * gap and matches the rest of the codebase's treatment of APPROVED
+ * as a committed pre-book state (dates/apply path, postBooking UI
+ * gate, jobs-rollup). The semantic: APPROVED means "client signed the
+ * rental agreement," so edits from this moment onward deviate from
+ * what they signed and MUST leave a paper trail.
+ *
+ * Excludes DRAFT, QUOTE_SENT (pre-commitment quote churn — no audit)
+ * and CANCELLED (terminal, edits shouldn't reach the endpoint).
  */
 const AUDITED_STATUSES: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
+  'APPROVED',
   'BOOKED',
   'LOADED_READY',
   'ON_JOB',

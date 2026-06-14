@@ -86,7 +86,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       where: { id: orderId },
       select: { status: true },
     });
-    const preUpdate = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT' && parentOrder.status !== 'APPROVED'
+    // APPROVED now joins the audited set (kill the island — matches
+    // the rest of the codebase's "client has signed" semantic).
+    const preUpdate = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT'
       ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
       : null;
 
@@ -155,7 +157,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     where: { id: orderId },
     select: { status: true },
   });
-  const preDelete = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT' && parentOrder.status !== 'APPROVED'
+  const preDelete = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT'
     ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
     : null;
 

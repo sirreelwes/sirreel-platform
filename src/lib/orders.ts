@@ -216,6 +216,35 @@ export async function recalcOrderTotals(orderId: string) {
     taxRate,
   });
 
+  // (Phase 1 step 2 / #1 billing basis, path A) Booked snapshot
+  // tracking: once the order has been BOOKED, mirror the live totals
+  // into the booked* columns on every subsequent recalc UNTIL the
+  // order is INVOICED. This makes a post-BOOKED line edit (sandbag
+  // added at pickup, etc.) flow through to the invoice generator's
+  // anchor instead of being reversed by an ADJUSTMENT line.
+  //
+  // Mutation window: BOOKED, LOADED_READY, ON_JOB, RETURNED, LD_CHECK.
+  // INVOICED + CLOSED bail at the top of this function (locked-order
+  // guard). CANCELLED is terminal; edits shouldn't reach here, but
+  // we exclude it explicitly so a defensive recompute can't move a
+  // cancelled order's booked snapshot. APPROVED orders haven't been
+  // booked yet (bookedSubtotal stays null), so the mutation only
+  // fires once `bookedAt` is non-null — schema invariant.
+  //
+  // Historical record: AuditLog rows from `bookOrder` (action
+  // 'order.booked') and from the Phase 1 step 1 line-item edits
+  // ('order.line_item_added/_updated/_removed') preserve every
+  // intermediate state. The booked* columns become "the order's
+  // current locked-in commitment value," not the at-book historical
+  // value.
+  const isPostBookedMutable = lockCheck && (
+    lockCheck.status === 'BOOKED' ||
+    lockCheck.status === 'LOADED_READY' ||
+    lockCheck.status === 'ON_JOB' ||
+    lockCheck.status === 'RETURNED' ||
+    lockCheck.status === 'LD_CHECK'
+  );
+
   await prisma.order.update({
     where: { id: orderId },
     data: {
@@ -227,6 +256,13 @@ export async function recalcOrderTotals(orderId: string) {
       subtotal: breakdown.rawSubtotal,
       taxAmount: breakdown.taxAmount,
       total: breakdown.total,
+      ...(isPostBookedMutable
+        ? {
+            bookedSubtotal: breakdown.rawSubtotal,
+            bookedTaxAmount: breakdown.taxAmount,
+            bookedTotal: breakdown.total,
+          }
+        : {}),
     },
   });
 
