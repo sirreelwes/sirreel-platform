@@ -6,6 +6,7 @@ import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
+import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -40,6 +41,48 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json(
         { error: "type, description, and rate are required" },
         { status: 400 }
+      );
+    }
+
+    // (Phase 1 step 4) Backend per-dept editability gate. Mirrors the
+    // UI rule from src/lib/orders/editability.ts — single source of
+    // truth. Post-BOOKED orders reject VEHICLES/STAGES adds until
+    // Phase 2's holds-sync lands. Pre-BOOKED orders allow all depts.
+    const orderForGate = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!orderForGate) {
+      return NextResponse.json({ error: "order not found" }, { status: 404 });
+    }
+    // Determine the department this line will land in. If the caller
+    // didn't pass `department` but did pass an inventoryItemId or
+    // assetCategoryId, we need to lift the catalog-side default for
+    // the gate check to be correct. Mirrors the resolve logic below.
+    let gateDepartment: LineItemDepartment = (department as LineItemDepartment) || 'PRO_SUPPLIES';
+    if (!department) {
+      if (inventoryItemId) {
+        const inv = await prisma.inventoryItem.findUnique({
+          where: { id: inventoryItemId }, select: { department: true },
+        });
+        if (inv) gateDepartment = inv.department;
+      } else if (assetCategoryId) {
+        const ac = await prisma.assetCategory.findUnique({
+          where: { id: assetCategoryId }, select: { department: true },
+        });
+        if (ac) gateDepartment = ac.department;
+      }
+    }
+    if (!isLineItemEditable(orderForGate.status, gateDepartment)) {
+      const reason = lineEditLockReason(orderForGate.status, gateDepartment);
+      return NextResponse.json(
+        {
+          error: 'line edit not permitted',
+          reason: reason ?? 'edit not permitted in current order state',
+          orderStatus: orderForGate.status,
+          department: gateDepartment,
+        },
+        { status: 409 },
       );
     }
 

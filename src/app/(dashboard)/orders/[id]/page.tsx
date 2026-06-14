@@ -16,7 +16,14 @@ import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescrip
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
-import type { AgreementStatus } from "@prisma/client";
+import type { AgreementStatus, OrderStatus } from "@prisma/client";
+import {
+  isOrderEditable as isOrderEditableFn,
+  isMoneyEditable as isMoneyEditableFn,
+  isLineItemEditable as isLineItemEditableFn,
+  lineEditLockReason as lineEditLockReasonFn,
+  addableDepartments as addableDeptsForStatus,
+} from "@/lib/orders/editability";
 
 type LineItem = {
   id: string;
@@ -34,6 +41,10 @@ type LineItem = {
   // Phase 1 lifecycle routing — set at book time.
   fulfillmentLane: 'FLEET' | 'WAREHOUSE' | 'STAGE' | null;
   pickStatus: 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null;
+  // (Phase 1 step 4) Department drives the per-row lock check for
+  // the post-BOOKED gate. Always present on rows from the GET; the
+  // string union mirrors LineItemDepartment from Prisma.
+  department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART';
   inventoryItem: { id: string; code: string; description: string } | null;
   assetCategory: { id: string; name: string } | null;
 };
@@ -1155,11 +1166,22 @@ export default function OrderDetailPage() {
       const n = Number(typedDays);
       if (Number.isFinite(n) && n > 0) body.billableDays = n;
     }
-    await fetch(`/api/orders/${orderId}/line-items`, {
+    const res = await fetch(`/api/orders/${orderId}/line-items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    // (Phase 1 step 4) Surface the backend's per-dept rejection
+    // clearly. The 409 carries a `reason` string from
+    // lineEditLockReason() — the rep needs to see WHY, not a silent
+    // failure (same lesson as Jose's portal button).
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg = data?.reason || data?.error || `Failed to add line (HTTP ${res.status})`;
+      alert(msg);
+      setAdding(false);
+      return;
+    }
     resetForm(); setAdding(false); fetchOrder();
   };
 
@@ -1232,7 +1254,16 @@ export default function OrderDetailPage() {
   }
 
   const actions = STATUS_ACTIONS[order.status] || [];
-  const isEditable = ["DRAFT", "QUOTE_SENT"].includes(order.status);
+  // (Phase 1 step 4) Gate widened to the full editable lifecycle.
+  // Hold-tracked departments (VEHICLES, STAGES) are locked PER-ROW
+  // post-BOOKED via lineEditLockReason from the same helper — UI
+  // and API never drift. Discounts read isMoneyEditable below.
+  const isEditable = isOrderEditableFn(order.status as OrderStatus);
+  const isMoneyEditableForOrder = isMoneyEditableFn(order.status as OrderStatus);
+  // POST_BOOKED_STATUSES — drives the per-dept add-form filter +
+  // the locked-row indicator on the existing VEHICLES/STAGES rows.
+  const isPostBookedRestricted = ["BOOKED", "LOADED_READY", "ON_JOB", "RETURNED", "LD_CHECK"].includes(order.status);
+  const addableDeptsForOrder = addableDeptsForStatus(order.status as OrderStatus);
 
   // Portal-link preconditions — derived from the order payload so the
   // "Resend portal link" button is disabled BEFORE the rep clicks
@@ -1419,12 +1450,27 @@ export default function OrderDetailPage() {
 
         {showAddForm && isEditable && (
           <div className="px-6 py-4 bg-lt-inner/50 border-b border-lt-hairline space-y-4">
+            {/* (Phase 1 step 4) Post-BOOKED add-restriction notice.
+                Visible whenever the rep is adding to a BOOKED-or-later
+                order so they know upfront WHY VEHICLE isn't in the
+                Type dropdown. Mirrors the locked-row indicator on
+                existing vehicle/stage lines. */}
+            {isPostBookedRestricted && (
+              <div className="bg-chip-warn-bg border border-chip-warn-fg/30 rounded-lg p-2.5 text-xs text-chip-warn-fg flex items-start gap-2">
+                <span>🔒</span>
+                <span>
+                  <span className="font-semibold">Vehicle &amp; stage adds coming next release.</span>
+                  {' '}You can add supplies, G&amp;E, expendables, communications, and art lines now.
+                  Stage or vehicle items will be rejected on save with a clear error.
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Type</label>
                 <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
-                  {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {LINE_TYPES.filter((t) => !(isPostBookedRestricted && t === 'VEHICLE')).map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="col-span-5">
@@ -1672,24 +1718,51 @@ export default function OrderDetailPage() {
                       <td className="px-4 py-3 text-center text-lt-fg2">{li.days ?? "--"}</td>
                       <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
-                        {isEditable && (
-                          <button
-                            onClick={() => startEditLine(li)}
-                            className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
-                          >
-                            Edit
-                          </button>
-                        )}
-                        <span className="inline-block align-middle">
-                          <LineItemRowActions
-                            onRemove={() => { void deleteLineItem(li); }}
-                            editability={{
-                              canEdit: isEditable,
-                              lockedReason:
-                                'Order is past QUOTE_SENT — line items can\u2019t be edited directly. Re-quote or void to make changes.',
-                            }}
-                          />
-                        </span>
+                        {(() => {
+                          // (Phase 1 step 4) Per-row lock check — VEHICLES /
+                          // STAGES on post-BOOKED orders stay locked until
+                          // Phase 2's holds-sync lands. Reason text comes
+                          // from the same helper as the backend gate so UI
+                          // and API can't drift on the message either.
+                          const lineEditable = isLineItemEditableFn(
+                            order.status as OrderStatus,
+                            li.department,
+                          );
+                          const lockReason = lineEditLockReasonFn(
+                            order.status as OrderStatus,
+                            li.department,
+                          ) ?? 'Order is past QUOTE_SENT — line items can\u2019t be edited directly. Re-quote or void to make changes.';
+                          return (
+                            <>
+                              {lineEditable ? (
+                                <button
+                                  onClick={() => startEditLine(li)}
+                                  className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
+                                >
+                                  Edit
+                                </button>
+                              ) : (
+                                isPostBookedRestricted && (li.department === 'VEHICLES' || li.department === 'STAGES') && (
+                                  <span
+                                    className="text-[10px] text-lt-fg3 mr-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-lt-hairline"
+                                    title={lockReason}
+                                  >
+                                    🔒 {li.department === 'VEHICLES' ? 'Vehicle' : 'Stage'} — edits coming next release
+                                  </span>
+                                )
+                              )}
+                              <span className="inline-block align-middle">
+                                <LineItemRowActions
+                                  onRemove={() => { void deleteLineItem(li); }}
+                                  editability={{
+                                    canEdit: lineEditable,
+                                    lockedReason: lockReason,
+                                  }}
+                                />
+                              </span>
+                            </>
+                          );
+                        })()}
                       </td>
                     </>
                   )}
@@ -1705,7 +1778,11 @@ export default function OrderDetailPage() {
             line-item editability rule. */}
         <DiscountsPanel
           orderId={orderId}
-          isEditable={isEditable}
+          // Discounts are money-only — no hold/pick consequence. Use the
+          // wider money-editable gate so reps can still adjust totals
+          // post-BOOKED. Step 2's bookedTotal-tracks-live ensures the
+          // change flows through to the invoice.
+          isEditable={isMoneyEditableForOrder}
           data={discountsData}
           onChange={fetchOrder}
         />

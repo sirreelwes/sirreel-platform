@@ -26,6 +26,8 @@ import type { DiscountScope, DiscountType, LineItemDepartment } from '@prisma/cl
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
+import { auditLineItemEdit, extractIp, resolveOperatorId } from '@/lib/orders/auditLineItemEdit'
+import { isMoneyEditable } from '@/lib/orders/editability'
 
 export const dynamic = 'force-dynamic'
 
@@ -139,8 +141,24 @@ export async function POST(req: NextRequest, { params }: Params) {
     ? body.label.trim().slice(0, 200)
     : 'Discount'
 
-  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true } })
+  const order = await prisma.order.findUnique({
+    where: { id: orderId }, select: { id: true, status: true },
+  })
   if (!order) return NextResponse.json({ error: 'order not found' }, { status: 404 })
+
+  // (Phase 1 step 4) Gate money edits to the editable lifecycle
+  // window. Same widened set as line items — INVOICED / CLOSED /
+  // CANCELLED reject; everything else allows.
+  if (!isMoneyEditable(order.status)) {
+    return NextResponse.json(
+      {
+        error: 'discount edit not permitted',
+        reason: `order is ${order.status} — locked to reopen/credit only`,
+        orderStatus: order.status,
+      },
+      { status: 409 },
+    )
+  }
 
   // ── App-layer uniqueness: max one ORDER, max one per departmentKey.
   const existingDup = await prisma.orderDiscount.findFirst({
@@ -174,6 +192,29 @@ export async function POST(req: NextRequest, { params }: Params) {
   })
   // Cascade to Order.subtotal/taxAmount/total via the discount-aware util.
   await recalcOrderTotals(orderId)
+
+  // (Phase 1 step 4) Discount audit — same gate as line-item audits.
+  // A money change after the client signed must leave a trail.
+  // Action `order.discount_added` mirrors the line-item shape so
+  // grep-ability stays uniform across the AuditLog stream.
+  await auditLineItemEdit({
+    orderId,
+    orderStatus: order.status,
+    // Reusing the helper's action shape via a discount-flavored value;
+    // the helper's union is updated to accept all five strings.
+    action: 'order.discount_added',
+    oldValues: null,
+    newValues: {
+      discountId: created.id,
+      scope: created.scope,
+      departmentKey: created.departmentKey,
+      type: created.type,
+      value: created.value.toString(),
+      label: created.label,
+    },
+    userId: me.id,
+    ipAddress: extractIp(req),
+  })
 
   return NextResponse.json(
     { ok: true, discount: { ...created, value: Number(created.value) } },

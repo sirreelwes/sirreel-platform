@@ -78,13 +78,24 @@ export function extractIp(req: NextRequest): string | null {
   )
 }
 
+/** Action labels covered by this helper. Line items + (Phase 1
+ *  step 4) order discounts. Same shape for both so the AuditLog
+ *  stream stays uniform across order-edit categories. */
+export type OrderEditAuditAction =
+  | 'order.line_item_added'
+  | 'order.line_item_updated'
+  | 'order.line_item_removed'
+  | 'order.discount_added'
+  | 'order.discount_updated'
+  | 'order.discount_removed'
+
 export interface LineItemAuditPayload {
   orderId: string
   /** Order status AT THE MOMENT OF EDIT. If not in `AUDITED_STATUSES`,
    *  the helper returns early without writing. Callers don't need to
    *  pre-check — pass it through and let the helper gate. */
   orderStatus: OrderStatus
-  action: 'order.line_item_added' | 'order.line_item_updated' | 'order.line_item_removed'
+  action: OrderEditAuditAction
   /** Pre-edit snapshot. For ADDED this is `null`; for UPDATED this is
    *  the line as it was before the patch; for REMOVED this is the
    *  full row that's about to be deleted. */

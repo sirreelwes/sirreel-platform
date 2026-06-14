@@ -16,6 +16,8 @@ import { getServerSession } from 'next-auth'
 import type { DiscountType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
+import { auditLineItemEdit, extractIp } from '@/lib/orders/auditLineItemEdit'
+import { isMoneyEditable } from '@/lib/orders/editability'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +51,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     where: { id: discountId, orderId },
   })
   if (!existing) return NextResponse.json({ error: 'discount not found' }, { status: 404 })
+
+  // (Phase 1 step 4) Money-edit gate — same window as line items
+  // minus the per-dept restriction.
+  const orderForGate = await prisma.order.findUnique({
+    where: { id: orderId }, select: { status: true },
+  })
+  if (!orderForGate || !isMoneyEditable(orderForGate.status)) {
+    return NextResponse.json(
+      {
+        error: 'discount edit not permitted',
+        reason: `order is ${orderForGate?.status} — locked to reopen/credit only`,
+        orderStatus: orderForGate?.status,
+      },
+      { status: 409 },
+    )
+  }
 
   const data: Record<string, unknown> = {}
   if (body.type !== undefined) {
@@ -93,25 +111,79 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   })
   await recalcOrderTotals(orderId)
 
+  // (Phase 1 step 4) Discount-edit audit — same gate as line items.
+  await auditLineItemEdit({
+    orderId,
+    orderStatus: orderForGate.status,
+    action: 'order.discount_updated',
+    oldValues: {
+      discountId: existing.id,
+      type: existing.type,
+      value: existing.value.toString(),
+      label: existing.label,
+    },
+    newValues: {
+      discountId: updated.id,
+      type: updated.type,
+      value: updated.value.toString(),
+      label: updated.label,
+      changedFields: Object.keys(data),
+    },
+    userId: me.id,
+    ipAddress: extractIp(req),
+  })
+
   return NextResponse.json({
     ok: true,
     discount: { ...updated, value: Number(updated.value) },
   })
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   const me = await requireUser()
   if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const { id: orderId, discountId } = await params
+  // Read the full row up front for the audit snapshot.
   const existing = await prisma.orderDiscount.findFirst({
     where: { id: discountId, orderId },
-    select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'discount not found' }, { status: 404 })
 
+  // (Phase 1 step 4) Money-edit gate.
+  const orderForGate = await prisma.order.findUnique({
+    where: { id: orderId }, select: { status: true },
+  })
+  if (!orderForGate || !isMoneyEditable(orderForGate.status)) {
+    return NextResponse.json(
+      {
+        error: 'discount delete not permitted',
+        reason: `order is ${orderForGate?.status} — locked to reopen/credit only`,
+        orderStatus: orderForGate?.status,
+      },
+      { status: 409 },
+    )
+  }
+
   await prisma.orderDiscount.delete({ where: { id: discountId } })
   await recalcOrderTotals(orderId)
+
+  await auditLineItemEdit({
+    orderId,
+    orderStatus: orderForGate.status,
+    action: 'order.discount_removed',
+    oldValues: {
+      discountId: existing.id,
+      scope: existing.scope,
+      departmentKey: existing.departmentKey,
+      type: existing.type,
+      value: existing.value.toString(),
+      label: existing.label,
+    },
+    newValues: null,
+    userId: me.id,
+    ipAddress: extractIp(req),
+  })
 
   return NextResponse.json({ ok: true })
 }

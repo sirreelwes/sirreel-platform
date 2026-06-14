@@ -6,6 +6,7 @@ import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { readPickListItemForDelete, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
+import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -24,6 +25,38 @@ export async function PUT(req: NextRequest, { params }: Params) {
       days: manualDays, billableDays, rentalDays: legacyRentalDays,
       department, qualifier, pickupDate, returnDate,
     } = body;
+
+    // (Phase 1 step 4) Backend per-dept editability gate. Both the
+    // existing department AND the new department (if it's being
+    // changed) must pass the check — moving a line FROM VEHICLES on
+    // a BOOKED order is still a "vehicle edit" and stays locked.
+    const orderForGate = await prisma.order.findUnique({
+      where: { id: orderId }, select: { status: true },
+    });
+    const existingLineForGate = await prisma.orderLineItem.findUnique({
+      where: { id: lineId }, select: { department: true },
+    });
+    if (!orderForGate || !existingLineForGate) {
+      return NextResponse.json({ error: "order or line item not found" }, { status: 404 });
+    }
+    const currentDept = existingLineForGate.department;
+    const nextDept = (department as LineItemDepartment | undefined) ?? currentDept;
+    if (
+      !isLineItemEditable(orderForGate.status, currentDept) ||
+      !isLineItemEditable(orderForGate.status, nextDept)
+    ) {
+      const blockedDept = !isLineItemEditable(orderForGate.status, currentDept) ? currentDept : nextDept;
+      const reason = lineEditLockReason(orderForGate.status, blockedDept);
+      return NextResponse.json(
+        {
+          error: 'line edit not permitted',
+          reason: reason ?? 'edit not permitted in current order state',
+          orderStatus: orderForGate.status,
+          department: blockedDept,
+        },
+        { status: 409 },
+      );
+    }
 
     const data: Record<string, unknown> = {};
     if (type !== undefined) data.type = type;
@@ -187,6 +220,22 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   });
   if (!lineRow) {
     return NextResponse.json({ error: 'line item not found' }, { status: 404 });
+  }
+
+  // (Phase 1 step 4) Per-dept editability gate — reject VEHICLES /
+  // STAGES deletes on post-BOOKED orders. Same rule as the POST /
+  // PUT handlers.
+  if (parentOrder && !isLineItemEditable(parentOrder.status, lineRow.department)) {
+    const reason = lineEditLockReason(parentOrder.status, lineRow.department);
+    return NextResponse.json(
+      {
+        error: 'line delete not permitted',
+        reason: reason ?? 'delete not permitted in current order state',
+        orderStatus: parentOrder.status,
+        department: lineRow.department,
+      },
+      { status: 409 },
+    );
   }
 
   // (#3b) PickList side — pre-read the PickListItem so we have the
