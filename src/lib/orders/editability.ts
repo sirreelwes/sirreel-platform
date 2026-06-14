@@ -53,17 +53,20 @@ const POST_BOOKED_STATUSES: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
 ])
 
 /** Departments whose adds/removes affect BookingItem holds and
- *  BookingAssignment availability. Phase 2 wires those up. Until
- *  then, these are locked post-BOOKED to prevent double-book bugs.
+ *  BookingAssignment availability.
  *
- *  Departments NOT in this set route to WAREHOUSE
- *  (PRO_SUPPLIES, GE, EXPENDABLES, COMMUNICATIONS, ART) — no
- *  category-hold table, so Phase 1's PickList sync is the only
- *  propagation they need. */
-const HOLD_TRACKED_DEPTS: ReadonlySet<LineItemDepartment> = new Set<LineItemDepartment>([
-  'VEHICLES',
-  'STAGES',
-])
+ *  Phase 1 closed with `{VEHICLES, STAGES}` locked post-BOOKED.
+ *  Phase 2 lands the holds-sync helper + availability check +
+ *  warn-with-override conflict UI, so this set is now EMPTY — every
+ *  department is editable post-BOOKED. The lock plumbing remains in
+ *  place via this constant so a future "lock category X post-BOOKED"
+ *  policy is a one-line change.
+ *
+ *  Departments that route to WAREHOUSE (PRO_SUPPLIES, GE, EXPENDABLES,
+ *  COMMUNICATIONS, ART) use Phase 1's PickList sync. VEHICLES + STAGES
+ *  use Phase 2's BookingItem sync. The propagation lanes are distinct;
+ *  this set governs only whether the lane runs at all. */
+const HOLD_TRACKED_DEPTS: ReadonlySet<LineItemDepartment> = new Set<LineItemDepartment>()
 
 export function isOrderEditable(status: OrderStatus): boolean {
   return EDITABLE_STATUSES.has(status)

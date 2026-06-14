@@ -7,6 +7,7 @@ import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { readPickListItemForDelete, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
+import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -118,13 +119,89 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // orders. For DRAFT/QUOTE_SENT the snapshot is skipped entirely.
     const parentOrder = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      select: { status: true, bookingId: true, orderNumber: true },
     });
     // APPROVED now joins the audited set (kill the island — matches
     // the rest of the codebase's "client has signed" semantic).
     const preUpdate = parentOrder && parentOrder.status !== 'DRAFT' && parentOrder.status !== 'QUOTE_SENT'
       ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
       : null;
+
+    // (#2 Phase 2) Holds feasibility for VEHICLES / STAGES updates.
+    // Three sub-cases:
+    //   (a) qty change on a hold-tracked line, same category → delta check
+    //   (b) category change between two hold-tracked categories
+    //       → treat as full delete-old + full add-new (both must be feasible)
+    //   (c) dept/category change INTO or OUT OF hold-tracked
+    //       → handled atomically below (add OR delete the hold)
+    // Only blocks on capacityClear=false + no confirmConflict — same
+    // rule as POST. Co-tenancy with room available proceeds silently.
+    const { confirmConflict: confirmConflictBody } = body as { confirmConflict?: unknown };
+    const confirmConflict = confirmConflictBody === true;
+    const fullExisting = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
+    if (!fullExisting) {
+      return NextResponse.json({ error: 'line item not found' }, { status: 404 });
+    }
+    const oldQty = fullExisting.quantity;
+    const oldCategoryId = fullExisting.assetCategoryId;
+    const oldDept = fullExisting.department;
+    const newQty = quantity != null ? Number(quantity) : oldQty;
+    const newCategoryId = assetCategoryId !== undefined ? (assetCategoryId || null) : oldCategoryId;
+    const newDept = (department as LineItemDepartment | undefined) ?? oldDept;
+    const oldIsHold = (oldDept === 'VEHICLES' || oldDept === 'STAGES') && oldCategoryId;
+    const newIsHold = (newDept === 'VEHICLES' || newDept === 'STAGES') && newCategoryId;
+    let holdsAuditNote: string | null = null;
+    let putHoldsCoTenancy: Awaited<ReturnType<typeof checkHoldFeasibility>>['conflicts'] = [];
+    let putHoldsAvailability: Awaited<ReturnType<typeof checkHoldFeasibility>>['availability'] | null = null;
+    if (parentOrder?.bookingId && newIsHold) {
+      // Same-category qty change is the common case — only delta needs
+      // to fit. Category change costs full new qty (the old release is
+      // unconditional, no feasibility math needed).
+      const sameCategory = oldIsHold && oldCategoryId === newCategoryId;
+      const proposedDelta = sameCategory ? (newQty - oldQty) : newQty;
+      if (proposedDelta > 0) {
+        const window = {
+          startDate: fullExisting.pickupDate,
+          endDate: fullExisting.returnDate,
+        };
+        const feas = await checkHoldFeasibility({
+          tx: prisma,
+          categoryId: newCategoryId as string,
+          startDate: window.startDate,
+          endDate: window.endDate,
+          deltaQty: proposedDelta,
+          excludeBookingId: parentOrder.bookingId,
+        });
+        putHoldsCoTenancy = feas.conflicts;
+        putHoldsAvailability = feas.availability;
+        if (!feas.capacityClear && !confirmConflict) {
+          return NextResponse.json(
+            {
+              error: 'over-capacity',
+              requiresConfirmation: true,
+              reason: `Updating quantity to ${newQty} (delta +${proposedDelta}) would exceed available capacity. ${feas.conflicts.length} other booking(s) hold this category in the window.`,
+              category: { id: newCategoryId },
+              deltaQty: proposedDelta,
+              availability: feas.availability,
+              conflicts: feas.conflicts.map((c) => ({
+                bookingNumber: c.bookingNumber,
+                jobName: c.jobName,
+                startDate: c.startDate.toISOString().slice(0, 10),
+                endDate: c.endDate.toISOString().slice(0, 10),
+                quantity: c.quantity,
+                status: c.status,
+              })),
+            },
+            { status: 409 },
+          );
+        }
+        if (!feas.capacityClear && confirmConflict) {
+          const orderLabel = parentOrder.orderNumber;
+          const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
+          holdsAuditNote = `⚠ CAPACITY OVERRIDE on ${orderLabel} (qty change Δ+${proposedDelta}): conflicts with ${conflictList}`;
+        }
+      }
+    }
 
     const lineItem = await prisma.orderLineItem.update({
       where: { id: lineId },
@@ -134,6 +211,81 @@ export async function PUT(req: NextRequest, { params }: Params) {
         assetCategory: { select: { id: true, name: true } },
       },
     });
+
+    // (#2 Phase 2) Hold-side write — fires AFTER the line update so
+    // we don't sync a hold change that the line update then rolls
+    // back. Four cases:
+    //   (1) was hold + still hold + same category → delta update
+    //   (2) was hold + still hold + different category → release old, add new
+    //   (3) was hold + now non-hold → release old
+    //   (4) was non-hold + now hold → add new
+    if (parentOrder?.bookingId) {
+      const sameCategoryHold = oldIsHold && newIsHold && oldCategoryId === newCategoryId;
+      const operatorIdForAudit = await resolveOperatorId(session.user.email);
+      if (sameCategoryHold && newQty !== oldQty) {
+        await syncHoldOnLineUpdate(prisma, {
+          bookingId: parentOrder.bookingId,
+          categoryId: newCategoryId as string,
+          deltaQty: newQty - oldQty,
+          conflictOverrideNote: holdsAuditNote,
+        });
+      } else if (oldIsHold && newIsHold && oldCategoryId !== newCategoryId) {
+        // Category change — release old, add new. Sequential.
+        await syncHoldOnLineDelete(prisma, {
+          bookingId: parentOrder.bookingId,
+          categoryId: oldCategoryId as string,
+          removedQty: oldQty,
+        });
+        await syncHoldOnLineAdd(prisma, {
+          bookingId: parentOrder.bookingId,
+          categoryId: newCategoryId as string,
+          addedQty: newQty,
+          conflictOverrideNote: holdsAuditNote,
+        });
+      } else if (oldIsHold && !newIsHold) {
+        await syncHoldOnLineDelete(prisma, {
+          bookingId: parentOrder.bookingId,
+          categoryId: oldCategoryId as string,
+          removedQty: oldQty,
+        });
+      } else if (!oldIsHold && newIsHold) {
+        await syncHoldOnLineAdd(prisma, {
+          bookingId: parentOrder.bookingId,
+          categoryId: newCategoryId as string,
+          addedQty: newQty,
+          conflictOverrideNote: holdsAuditNote,
+        });
+      }
+      // Dispatch-visible audit row if an override was confirmed.
+      if (holdsAuditNote) {
+        try {
+          await prisma.auditLog.create({
+            data: {
+              userId: operatorIdForAudit,
+              ipAddress: extractIp(req),
+              action: 'booking_item.conflict_override',
+              entityType: 'OrderLineItem',
+              entityId: lineId,
+              oldValues: { conflicts: putHoldsCoTenancy.map((c) => ({
+                bookingNumber: c.bookingNumber,
+                jobName: c.jobName,
+                quantity: c.quantity,
+                status: c.status,
+              })) },
+              newValues: {
+                orderId,
+                orderLineItemId: lineId,
+                deltaQty: newQty - oldQty,
+                newQty,
+                note: holdsAuditNote,
+              },
+            },
+          });
+        } catch (err) {
+          console.error('[holds] override audit failed (PUT):', err instanceof Error ? err.message : err);
+        }
+      }
+    }
 
     const totals = await recalcOrderTotals(orderId);
 
@@ -289,6 +441,28 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   }
 
   await prisma.orderLineItem.delete({ where: { id: lineId } });
+
+  // (#2 Phase 2) Hold side delete — VEHICLES / STAGES only. Decrements
+  // BookingItem.quantity by the deleted line's qty; deletes the row
+  // when qty hits 0 so the schedule view doesn't show a phantom hold.
+  let deleteHoldsResult: Awaited<ReturnType<typeof syncHoldOnLineDelete>> | null = null;
+  if (
+    parentOrder &&
+    (lineRow.department === 'VEHICLES' || lineRow.department === 'STAGES') &&
+    lineRow.assetCategoryId
+  ) {
+    const parentOrderForBooking = await prisma.order.findUnique({
+      where: { id: orderId }, select: { bookingId: true },
+    });
+    if (parentOrderForBooking?.bookingId) {
+      deleteHoldsResult = await syncHoldOnLineDelete(prisma, {
+        bookingId: parentOrderForBooking.bookingId,
+        categoryId: lineRow.assetCategoryId,
+        removedQty: lineRow.quantity,
+      });
+    }
+  }
+
   const totals = await recalcOrderTotals(orderId);
 
   if (parentOrder && preDelete) {
@@ -334,5 +508,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       recomputed: pickRecompute.pickListRecomputed,
       wasPicked: alreadyPicked,
     },
+    // (#2 Phase 2) Holds outcome on delete — null for non-hold lines
+    // or orders with no Booking. quantityAfter=0 → the BookingItem
+    // row was removed; otherwise just decremented.
+    holds: deleteHoldsResult,
   });
 }

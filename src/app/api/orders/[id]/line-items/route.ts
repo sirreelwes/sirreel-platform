@@ -7,6 +7,7 @@ import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
+import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -35,6 +36,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       // members share packageInstanceId. The line-total math is unchanged —
       // header rate drives the price; members come through as rate=0.
       packageInstanceId, packageId, isPackageHeader, isPackageModified,
+      // (Phase 2) Override flag for the loud capacity-conflict 409 on
+      // VEHICLES/STAGES adds. When the rep sees the named-other-bookings
+      // dialog and confirms the override anyway, the UI re-POSTs with
+      // confirmConflict=true. Stamps note + emits AuditLog row so
+      // dispatch sees the override.
+      confirmConflict,
     } = body;
 
     if (!type || !description || rate === undefined) {
@@ -157,6 +164,73 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // (#2 Phase 2) Pre-flight holds feasibility for VEHICLES / STAGES.
+    // Fires BEFORE OrderLineItem.create so a hard-block 409 doesn't
+    // leave an orphan row. Gated on three conditions:
+    //   - department is hold-tracked (VEHICLES or STAGES)
+    //   - the order has a Booking row attached (bookingId non-null)
+    //   - the line specifies an assetCategoryId to hold against
+    // Per ratification: confirm-required ONLY when capacityClear=false
+    // (genuine over-allocation). Co-tenancy WITH room available
+    // proceeds silently — the wide-net `conflicts` list is informational
+    // and surfaces on the success response so the rep sees who they're
+    // sharing the category with, but does NOT block or require confirm.
+    let holdsCoTenancy: Awaited<ReturnType<typeof checkHoldFeasibility>>['conflicts'] = [];
+    let holdsAvailability: Awaited<ReturnType<typeof checkHoldFeasibility>>['availability'] | null = null;
+    let holdsOverrideNote: string | null = null;
+    const isHoldDept = resolvedDepartment === 'VEHICLES' || resolvedDepartment === 'STAGES';
+    const wantsHoldSync = isHoldDept && assetCategoryId;
+    let parentBookingId: string | null = null;
+    if (wantsHoldSync) {
+      const parentOrderForBooking = await prisma.order.findUnique({
+        where: { id: orderId }, select: { bookingId: true, orderNumber: true },
+      });
+      parentBookingId = parentOrderForBooking?.bookingId ?? null;
+      if (parentBookingId) {
+        const feas = await checkHoldFeasibility({
+          tx: prisma,
+          categoryId: assetCategoryId,
+          startDate: pickupResolved,
+          endDate: returnResolved,
+          deltaQty: Number(quantity),
+          excludeBookingId: parentBookingId,
+        });
+        holdsCoTenancy = feas.conflicts;
+        holdsAvailability = feas.availability;
+        if (!feas.capacityClear && confirmConflict !== true) {
+          // Loud confirm-required 409 — capacity gate failed, rep hasn't
+          // overridden yet. Names every conflicting booking so the rep
+          // knows EXACTLY who they'd be stepping on, not just "no room."
+          return NextResponse.json(
+            {
+              error: 'over-capacity',
+              requiresConfirmation: true,
+              reason: `Adding ${quantity} unit(s) would exceed the category's available capacity for ${pickupResolved.toISOString().slice(0,10)}–${returnResolved.toISOString().slice(0,10)}. ${feas.conflicts.length} other booking(s) hold this category in the window.`,
+              category: { id: assetCategoryId },
+              deltaQty: Number(quantity),
+              availability: feas.availability,
+              conflicts: feas.conflicts.map((c) => ({
+                bookingNumber: c.bookingNumber,
+                jobName: c.jobName,
+                startDate: c.startDate.toISOString().slice(0, 10),
+                endDate: c.endDate.toISOString().slice(0, 10),
+                quantity: c.quantity,
+                status: c.status,
+              })),
+            },
+            { status: 409 },
+          );
+        }
+        if (!feas.capacityClear && confirmConflict === true) {
+          // Build the dispatch-visible override note now; stamped on
+          // BookingItem.notes by syncHoldOnLineAdd below.
+          const orderLabel = parentOrderForBooking?.orderNumber ?? orderId;
+          const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
+          holdsOverrideNote = `⚠ CAPACITY OVERRIDE on ${orderLabel} (qty +${quantity}): conflicts with ${conflictList}`;
+        }
+      }
+    }
+
     // computeLineTotal returns 0 when days is NULL — see billing.ts.
     const lineTotal = computeLineTotal({
       quantity: Number(quantity),
@@ -207,6 +281,53 @@ export async function POST(req: NextRequest, { params }: Params) {
       department: resolvedDepartment,
     });
 
+    // (#2 Phase 2) Holds sync — VEHICLES / STAGES only, gated on
+    // Booking + assetCategoryId. Feasibility was checked above; here
+    // we just write the BookingItem. Override note (when set) gets
+    // appended to BookingItem.notes so dispatch's booking-detail view
+    // shows the override without a separate query.
+    let holdsResult: { bookingItemId: string; quantityBefore: number; quantityAfter: number; created: boolean } | null = null;
+    if (wantsHoldSync && parentBookingId && assetCategoryId) {
+      holdsResult = await syncHoldOnLineAdd(prisma, {
+        bookingId: parentBookingId,
+        categoryId: assetCategoryId,
+        addedQty: Number(quantity),
+        conflictOverrideNote: holdsOverrideNote,
+      });
+      // Dispatch-visible AuditLog row when the rep overrode a capacity
+      // conflict. Distinct from the order.line_item_added row — this
+      // lets dispatch filter by `booking_item.conflict_override` and
+      // see every override in one query.
+      if (holdsOverrideNote) {
+        try {
+          await prisma.auditLog.create({
+            data: {
+              userId: (await resolveOperatorId(session.user.email)) ?? null,
+              ipAddress: extractIp(req),
+              action: 'booking_item.conflict_override',
+              entityType: 'BookingItem',
+              entityId: holdsResult.bookingItemId,
+              oldValues: { conflicts: holdsCoTenancy.map((c) => ({
+                bookingNumber: c.bookingNumber,
+                jobName: c.jobName,
+                quantity: c.quantity,
+                status: c.status,
+              })) },
+              newValues: {
+                orderId,
+                orderLineItemId: lineItem.id,
+                quantityBefore: holdsResult.quantityBefore,
+                quantityAfter: holdsResult.quantityAfter,
+                note: holdsOverrideNote,
+              },
+            },
+          });
+        } catch (err) {
+          console.error('[holds] override audit failed:', err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
     const totals = await recalcOrderTotals(orderId);
 
     // AuditLog (#5) — fires only when the order is BOOKED+ (the
@@ -249,7 +370,33 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
     }
 
-    return NextResponse.json({ lineItem, totals }, { status: 201 });
+    return NextResponse.json({
+      lineItem,
+      totals,
+      // (#2 Phase 2) Holds outcome — null when not hold-tracked or no
+      // Booking. coTenancy is informational only — the rep saw who
+      // they share the category with but didn't need to confirm
+      // (capacity was available); when capacity was NOT clear and
+      // the rep confirmed, `overrideStamped` is true.
+      holds: wantsHoldSync && parentBookingId && holdsResult
+        ? {
+            bookingItemId: holdsResult.bookingItemId,
+            quantityBefore: holdsResult.quantityBefore,
+            quantityAfter: holdsResult.quantityAfter,
+            created: holdsResult.created,
+            overrideStamped: holdsOverrideNote != null,
+            coTenancy: holdsCoTenancy.map((c) => ({
+              bookingNumber: c.bookingNumber,
+              jobName: c.jobName,
+              startDate: c.startDate.toISOString().slice(0, 10),
+              endDate: c.endDate.toISOString().slice(0, 10),
+              quantity: c.quantity,
+              status: c.status,
+            })),
+            availability: holdsAvailability,
+          }
+        : null,
+    }, { status: 201 });
   } catch (error) {
     console.error("Add line item error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
