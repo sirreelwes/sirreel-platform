@@ -50,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
       lineItems: {
         include: {
-          inventoryItem: { select: { id: true, code: true, description: true } },
+          inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true } },
           assetCategory: { select: { id: true, name: true, slug: true } },
         },
         orderBy: { sortOrder: "asc" },

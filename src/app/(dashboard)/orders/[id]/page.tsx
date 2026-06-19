@@ -44,7 +44,7 @@ type LineItem = {
   // the post-BOOKED gate. Always present on rows from the GET; the
   // string union mirrors LineItemDepartment from Prisma.
   department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART';
-  inventoryItem: { id: string; code: string; description: string } | null;
+  inventoryItem: { id: string; code: string; description: string; internalFlags: string[] } | null;
   assetCategory: { id: string; name: string } | null;
 };
 
@@ -361,6 +361,22 @@ export default function OrderDetailPage() {
   const [editDays, setEditDays] = useState("");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
+
+  // Package scope modal — opens whenever the rep picks a package from
+  // the combobox, before /from-package is called. Lets the rep
+  // uncheck areas they don't want granted to this client (the
+  // Lankershim Studios — Facility flow). Default: all items checked.
+  // Confirm → POST /from-package with itemIds = the checked subset;
+  // header expands at full Package.pricePerDay regardless of how many
+  // members come out.
+  const [scopeModal, setScopeModal] = useState<{
+    packageId: string;
+    packageName: string;
+    packagePricePerDay: number;
+    items: Array<{ id: string; description: string; code: string; dailyRate: number }>;
+    selected: Set<string>;
+    submitting: boolean;
+  } | null>(null);
 
   // Blind handoff capture — toggles + their instruction text. Local
   // state seeded from the loaded order; dirty until Save is pressed.
@@ -1454,6 +1470,27 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
+      {/* A/V Tech reminder banner — fires whenever any line item on the
+          order references an InventoryItem flagged REQUIRES_AV_TECH
+          (currently: LED Wall Usage). Internal-only reminder, never
+          printed on client-facing PDFs. The client-facing wording lives
+          on the line itself via OrderLineItem.notes (seeded from
+          InventoryItem.clientNote). */}
+      {order.lineItems.some((li) =>
+        li.inventoryItem?.internalFlags?.includes("REQUIRES_AV_TECH"),
+      ) && (
+        <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <span className="text-amber-500 text-xl leading-none">⚠</span>
+          <div className="text-sm text-lt-fg">
+            <div className="font-semibold text-amber-600">A/V Tech required</div>
+            <div className="text-xs text-lt-fg2 mt-0.5">
+              This order includes equipment that requires a qualified A/V Tech on the
+              client&apos;s payroll. Confirm coverage before fleet release.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
@@ -1505,23 +1542,37 @@ export default function OrderDetailPage() {
                         return
                       }
                       if (hit.type === 'PACKAGE') {
-                        // Package picks bypass the modal entirely —
-                        // expand to header + members via the batch
-                        // endpoint, refresh the order, close the form.
+                        // Package picks open the scope modal so the rep
+                        // can grant or withhold individual items before
+                        // they expand onto the order. Default: all
+                        // items checked. Confirm → /from-package with
+                        // itemIds = the selected subset; header still
+                        // expands at full pricePerDay regardless of
+                        // how many members come out.
                         ;(async () => {
                           try {
-                            const res = await fetch(`/api/orders/${orderId}/line-items/from-package`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ packageId: hit.id }),
-                            })
-                            if (res.ok) {
-                              await fetchOrder()
-                              setShowAddForm(false)
-                              resetForm()
+                            const res = await fetch(`/api/admin/packages/${hit.id}`)
+                            if (!res.ok) {
+                              console.warn('[orders] package fetch failed:', res.status)
+                              return
                             }
+                            const pkg = await res.json()
+                            const items = (pkg.items || []).map((it: { id: string; inventoryItem: { code: string; description: string | null; dailyRate: string | number } }) => ({
+                              id: it.id,
+                              description: it.inventoryItem.description || it.inventoryItem.code,
+                              code: it.inventoryItem.code,
+                              dailyRate: Number(it.inventoryItem.dailyRate ?? 0),
+                            }))
+                            setScopeModal({
+                              packageId: pkg.id,
+                              packageName: pkg.name,
+                              packagePricePerDay: Number(pkg.pricePerDay ?? 0),
+                              items,
+                              selected: new Set(items.map((i: { id: string }) => i.id)),
+                              submitting: false,
+                            })
                           } catch (err) {
-                            console.warn('[orders] package expand failed:', err)
+                            console.warn('[orders] package scope-modal open failed:', err)
                           }
                         })()
                         return
@@ -2714,6 +2765,236 @@ export default function OrderDetailPage() {
           onChanged={() => { fetchOrder(); }}
         />
       )}
+
+      {scopeModal && (
+        <PackageScopeModal
+          state={scopeModal}
+          onToggle={(itemId) => {
+            setScopeModal((prev) => {
+              if (!prev) return prev;
+              const next = new Set(prev.selected);
+              if (next.has(itemId)) next.delete(itemId);
+              else next.add(itemId);
+              return { ...prev, selected: next };
+            });
+          }}
+          onToggleAll={(checkAll) => {
+            setScopeModal((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                selected: checkAll ? new Set(prev.items.map((i) => i.id)) : new Set(),
+              };
+            });
+          }}
+          onCancel={() => setScopeModal(null)}
+          onConfirm={async (alsoAddLedWall) => {
+            if (!scopeModal) return;
+            setScopeModal((p) => (p ? { ...p, submitting: true } : p));
+            try {
+              const itemIds = Array.from(scopeModal.selected);
+              if (itemIds.length === 0) {
+                alert("Pick at least one area to grant — or cancel out.");
+                setScopeModal((p) => (p ? { ...p, submitting: false } : p));
+                return;
+              }
+              const res = await fetch(`/api/orders/${orderId}/line-items/from-package`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ packageId: scopeModal.packageId, itemIds }),
+              });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                alert(`Package expand failed: ${body?.error ?? res.status}`);
+                setScopeModal((p) => (p ? { ...p, submitting: false } : p));
+                return;
+              }
+              // LED Wall opt-in — resolve the LANKERSHIM_LED_WALL_USAGE
+              // item by code and POST it as a standalone line. The
+              // hybrid guard explicitly exempts this code, so the add
+              // is the intended +$1,000/day upcharge on top of the
+              // facility package.
+              if (alsoAddLedWall) {
+                const searchRes = await fetch(
+                  `/api/inventory/search?q=${encodeURIComponent("LANKERSHIM_LED_WALL_USAGE")}`,
+                );
+                if (searchRes.ok) {
+                  const { items: hits } = await searchRes.json();
+                  const led = (hits || []).find(
+                    (h: { code: string }) => h.code === "LANKERSHIM_LED_WALL_USAGE",
+                  );
+                  if (led) {
+                    await fetch(`/api/orders/${orderId}/line-items`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "EQUIPMENT",
+                        description: led.description || "LED Wall Usage",
+                        inventoryItemId: led.id,
+                        rateType: "DAILY",
+                        rate: Number(led.dailyRate ?? 1000),
+                        quantity: 1,
+                      }),
+                    });
+                  } else {
+                    console.warn("[orders] LED Wall code not found in catalog — skipping upcharge");
+                  }
+                }
+              }
+              await fetchOrder();
+              setShowAddForm(false);
+              setScopeModal(null);
+            } catch (err) {
+              console.warn("[orders] scope-modal confirm failed:", err);
+              setScopeModal((p) => (p ? { ...p, submitting: false } : p));
+            }
+          }}
+        />
+      )}
+      </div>
+    </div>
+  );
+}
+
+// Package scope modal — used by the order-detail "+ Add Item" combobox
+// when the rep picks a PACKAGE hit. Lets them grant or withhold
+// individual member items before the package expands onto the order.
+// Default: all checked (the common case = grant the whole package).
+// Lankershim Studios — Facility flow: 13 areas listed, rep unchecks
+// the ones the production didn't pay for, header still expands at the
+// flat $3,750/day regardless of selection count.
+function PackageScopeModal({
+  state,
+  onToggle,
+  onToggleAll,
+  onCancel,
+  onConfirm,
+}: {
+  state: {
+    packageId: string;
+    packageName: string;
+    packagePricePerDay: number;
+    items: Array<{ id: string; description: string; code: string; dailyRate: number }>;
+    selected: Set<string>;
+    submitting: boolean;
+  };
+  onToggle: (itemId: string) => void;
+  onToggleAll: (checkAll: boolean) => void;
+  onCancel: () => void;
+  onConfirm: (alsoAddLedWall: boolean) => void | Promise<void>;
+}) {
+  const [alsoAddLedWall, setAlsoAddLedWall] = useState(false);
+  const isLankershim = state.packageName.startsWith("Lankershim Studios");
+  const allChecked = state.selected.size === state.items.length;
+  const noneChecked = state.selected.size === 0;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl w-full max-w-2xl max-h-full overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-lt-hairline flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-lt-fg">{state.packageName}</h3>
+            <p className="text-xs text-lt-fg3 mt-0.5">
+              Flat ${state.packagePricePerDay.toLocaleString()}/day regardless of how many
+              items you grant — uncheck areas the production didn&apos;t pay for.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={state.submitting}
+            className="text-sm text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+          >
+            Close ✕
+          </button>
+        </div>
+
+        <div className="px-6 py-3 border-b border-lt-hairline flex items-center justify-between bg-lt-inner/40">
+          <span className="text-xs text-lt-fg3">
+            {state.selected.size} of {state.items.length} selected
+          </span>
+          <div className="flex gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => onToggleAll(true)}
+              disabled={state.submitting || allChecked}
+              className="text-lt-fg2 hover:text-lt-fg disabled:opacity-40"
+            >
+              Check all
+            </button>
+            <span className="text-lt-fg3">·</span>
+            <button
+              type="button"
+              onClick={() => onToggleAll(false)}
+              disabled={state.submitting || noneChecked}
+              className="text-lt-fg2 hover:text-lt-fg disabled:opacity-40"
+            >
+              Uncheck all
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
+          {state.items.map((it) => {
+            const checked = state.selected.has(it.id);
+            return (
+              <label
+                key={it.id}
+                className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-lt-inner/60 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggle(it.id)}
+                  disabled={state.submitting}
+                  className="h-4 w-4 accent-amber-600"
+                />
+                <span className="text-sm text-lt-fg flex-1">{it.description}</span>
+                <span className="text-[11px] text-lt-fg3 font-mono">{it.code}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        {isLankershim && (
+          <div className="px-6 py-3 border-t border-lt-hairline bg-amber-500/5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={alsoAddLedWall}
+                onChange={(e) => setAlsoAddLedWall(e.target.checked)}
+                disabled={state.submitting}
+                className="h-4 w-4 mt-0.5 accent-amber-600"
+              />
+              <div className="text-sm">
+                <div className="text-lt-fg font-medium">Also add LED Wall Usage</div>
+                <div className="text-xs text-lt-fg3 mt-0.5">
+                  Standalone line on top of the facility package. Requires a qualified
+                  A/V Tech on the client&apos;s payroll — the order detail will flag
+                  this as a sticky reminder.
+                </div>
+              </div>
+            </label>
+          </div>
+        )}
+
+        <div className="px-6 py-4 border-t border-lt-hairline flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={state.submitting}
+            className="px-3 py-1.5 text-sm text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(alsoAddLedWall)}
+            disabled={state.submitting || noneChecked}
+            className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {state.submitting ? "Adding…" : `Add to order (${state.selected.size})`}
+          </button>
+        </div>
       </div>
     </div>
   );

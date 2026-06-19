@@ -93,6 +93,53 @@ export async function POST(req: NextRequest, { params }: Params) {
       );
     }
 
+    // HYBRID GUARD — Lankershim facility double-billing prevention.
+    // If the order already carries the Lankershim Studios Facility
+    // package, refuse to add a standalone LANKERSHIM_* InventoryItem
+    // line à la carte. The areas inside the package scope are already
+    // covered by the $3,750 facility rate; adding the same area
+    // separately at $125 would charge the client twice for one space.
+    //
+    // The guard fires only when:
+    //   1. This is a STANDALONE add (no packageInstanceId — i.e. not
+    //      coming from /from-package expansion), AND
+    //   2. The incoming line references an InventoryItem whose code
+    //      starts with `LANKERSHIM_`, AND
+    //   3. The order already has any line marked isPackageHeader with
+    //      a packageId whose package name starts with "Lankershim
+    //      Studios" (the facility package).
+    //
+    // The LED Wall Usage item (LANKERSHIM_LED_WALL_USAGE) is EXEMPT —
+    // it's not a package member by design, and adding it on top of
+    // the facility package is the intended hybrid (+$1,000 upcharge).
+    if (!packageInstanceId && inventoryItemId) {
+      const inv = await prisma.inventoryItem.findUnique({
+        where: { id: inventoryItemId },
+        select: { code: true, description: true },
+      });
+      if (inv?.code?.startsWith('LANKERSHIM_') && inv.code !== 'LANKERSHIM_LED_WALL_USAGE') {
+        const lankPkgHeader = await prisma.orderLineItem.findFirst({
+          where: {
+            orderId,
+            isPackageHeader: true,
+            package: { name: { startsWith: 'Lankershim Studios' } },
+          },
+          select: { id: true, description: true, package: { select: { name: true } } },
+        });
+        if (lankPkgHeader) {
+          return NextResponse.json(
+            {
+              error: 'duplicate facility billing',
+              reason: `"${inv.description ?? inv.code}" is already covered by the Lankershim Studios facility package on this order — adding it separately would double-bill the client. Scope the area into the package via the existing facility line instead.`,
+              orderLineItemId: lankPkgHeader.id,
+              packageName: lankPkgHeader.package?.name ?? null,
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
     const maxSort = await prisma.orderLineItem.aggregate({
       where: { orderId },
       _max: { sortOrder: true },
@@ -240,6 +287,22 @@ export async function POST(req: NextRequest, { params }: Params) {
       department: resolvedDepartment,
     });
 
+    // Seed the client-facing note from InventoryItem.clientNote when
+    // the caller hasn't passed an explicit notes value. Lets the
+    // catalog carry per-item policy text (e.g. LED Wall A/V Tech
+    // requirement) that prints on every quote/invoice automatically;
+    // rep can still override per-line via the row edit form.
+    let seededNotes: string | null = notes ?? null;
+    if (seededNotes == null && inventoryItemId) {
+      const invForNote = await prisma.inventoryItem.findUnique({
+        where: { id: inventoryItemId },
+        select: { clientNote: true },
+      });
+      if (invForNote?.clientNote && invForNote.clientNote.trim().length > 0) {
+        seededNotes = invForNote.clientNote;
+      }
+    }
+
     const lineItem = await prisma.orderLineItem.create({
       data: {
         orderId, sortOrder, type, description,
@@ -252,7 +315,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         rateType, rate, quantity,
         billableDays: days,
         lineTotal: Math.round(lineTotal * 100) / 100,
-        notes: notes || null,
+        notes: seededNotes,
         department: resolvedDepartment,
         ...(qualifier !== undefined ? { qualifier: qualifier || null } : {}),
         packageInstanceId: packageInstanceId || null,

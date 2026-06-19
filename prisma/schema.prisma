@@ -2209,6 +2209,17 @@ model InventoryItem {
   // Supplies PDF; everything else stays hidden.
   publicVisible   Boolean             @default(false) @map("public_visible")
   isActive        Boolean             @default(true) @map("is_active")
+  // Client-facing note seeded onto OrderLineItem.notes whenever this
+  // InventoryItem is added as a line. Lets the catalog carry policy text
+  // (e.g. "LED wall use requires a qualified A/V Tech on the client's
+  // payroll.") so the same wording prints on every quote/invoice
+  // without per-line config. Editable per-line after the fact.
+  clientNote      String?             @map("client_note")
+  // Admin-only flags that the order detail UI consults to surface
+  // operational reminders (e.g. ["REQUIRES_AV_TECH"] for the LED Wall
+  // Usage item triggers a sticky amber banner). Never printed on
+  // client-facing PDFs.
+  internalFlags   String[]            @default([]) @map("internal_flags")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
