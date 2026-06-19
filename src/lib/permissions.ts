@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { isAllowedHrEmail } from '@/lib/hr/allowlist';
+import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
 // SIRREEL — Role-Based Permissions
@@ -282,7 +283,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // flip between month-view and gantt-view without two tabs. Hidden
   // for salesOnly users — schedule views aren't a sales step.
   if ((perms.calendar || perms.gantt) && !salesOnly) {
-    main.push({ id: 'schedule', label: 'Schedule', icon: '', href: '/gantt' });
+    main.push({ id: 'schedule', label: SCHEDULE_LABEL, icon: '', href: '/gantt' });
   }
   if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
   // Phase 7 consolidation — /bookings retired. Page was titled
