@@ -46,6 +46,12 @@ export interface InvoiceLineSnapshotEntry {
    *  "included" in the unit-price + amount columns. */
   isPackageHeader?: boolean
   isPackageMember?: boolean
+  /** Client-facing small-print under the description — seeded from
+   *  OrderLineItem.notes at issue time (which itself defaults from
+   *  InventoryItem.clientNote when the line was added). Prints as
+   *  italic muted text below the description, matching the existing
+   *  qualifier style. */
+  notes?: string | null
 }
 
 export interface InvoiceCompanyForRender {
@@ -218,6 +224,7 @@ const styles = StyleSheet.create({
   colRate: { width: '17%', fontSize: 9, textAlign: 'right' },
   colAmt:  { width: '20%', fontSize: 9, textAlign: 'right' },
   cellCat: { fontSize: 8, color: C.faint, marginTop: 1 },
+  cellNote: { fontSize: 8, color: C.muted, fontStyle: 'italic', marginTop: 1, lineHeight: 1.3 },
   cellKindBadge: {
     fontSize: 7,
     color: C.amber,
@@ -521,6 +528,9 @@ export function InvoiceDocument({
                   {isMember ? `· ${line.description}` : line.description}
                 </Text>
                 {line.category && <Text style={styles.cellCat}>{line.category}</Text>}
+                {line.notes && line.notes.trim().length > 0 && (
+                  <Text style={styles.cellNote}>{line.notes}</Text>
+                )}
                 {line.kind !== 'RENTAL_LINE' && (
                   <Text style={styles.cellKindBadge}>{line.kind.replace('_', ' ')}</Text>
                 )}

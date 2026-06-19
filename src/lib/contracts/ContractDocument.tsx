@@ -52,12 +52,30 @@ export interface JobForRender {
   primaryContact?: ContactForRender | null
 }
 
+/** Facility access enumeration — one entry per package-member line on
+ *  the order at counter-PDF generation time. Powers the "Facility
+ *  access granted under this agreement" block (Lankershim Studios
+ *  flow): the client sees exactly which areas they've paid for vs.
+ *  which were withheld at scope time, so there's no ambiguity about
+ *  what the agreement covers. Empty/omitted → block is not rendered. */
+export interface GrantedScopeEntry {
+  /** Display label — typically OrderLineItem.description (the area name). */
+  label: string
+  /** Optional second-line annotation (e.g. clientNote for the area). */
+  note?: string | null
+}
+
 export interface ContractDocumentProps {
   company: CompanyForRender | null
   job: JobForRender | null
   aiChanges: AiChange[]
   decisions: DecisionForRender[]
   generatedAt?: Date
+  /** Optional facility-scope block. When provided AND non-empty,
+   *  renders a "Facility access granted under this agreement" section
+   *  above the closing disclaimer. Members of the package expansion
+   *  on the order; populated by the counter-PDF generator. */
+  grantedScope?: { packageName: string; items: GrantedScopeEntry[] } | null
 }
 
 interface ResolvedClause {
@@ -248,6 +266,11 @@ const styles = StyleSheet.create({
   tagCounter: { backgroundColor: C.counterBg, color: C.counterText },
   tagReject: { backgroundColor: C.rejectBg, color: C.rejectText },
   fleetBody: { fontSize: 10, textAlign: 'justify', marginTop: 4 },
+  scopeIntro: { fontSize: 9, color: C.muted, marginBottom: 6 },
+  scopeRow: { flexDirection: 'row', marginBottom: 2 },
+  scopeBullet: { width: 12, fontSize: 10 },
+  scopeLabel: { flex: 1, fontSize: 10 },
+  scopeNote: { fontSize: 8, color: C.muted, fontStyle: 'italic', marginLeft: 12, marginTop: 1 },
   closing: {
     marginTop: 18,
     paddingTop: 8,
@@ -293,6 +316,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
   aiChanges,
   decisions,
   generatedAt,
+  grantedScope,
 }) => {
   const generated = generatedAt || new Date()
   const { byClauseRef, unmapped } = indexChanges(aiChanges, decisions)
@@ -426,6 +450,27 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                 </View>
               )
             })}
+          </View>
+        )}
+
+        {grantedScope && grantedScope.items.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Facility access granted under this agreement</Text>
+            <Text style={styles.scopeIntro}>
+              The {grantedScope.packageName} on this order grants access to the following areas
+              for the rental period. Areas not listed here are not included in this agreement.
+            </Text>
+            {grantedScope.items.map((item, i) => (
+              <View key={i} wrap={false}>
+                <View style={styles.scopeRow}>
+                  <Text style={styles.scopeBullet}>•</Text>
+                  <Text style={styles.scopeLabel}>{item.label}</Text>
+                </View>
+                {item.note && item.note.trim().length > 0 && (
+                  <Text style={styles.scopeNote}>{item.note}</Text>
+                )}
+              </View>
+            ))}
           </View>
         )}
 

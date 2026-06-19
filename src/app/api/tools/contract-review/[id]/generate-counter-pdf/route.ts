@@ -10,6 +10,7 @@ import type {
   CompanyForRender,
   JobForRender,
   ContactForRender,
+  GrantedScopeEntry,
 } from '@/lib/contracts/generateCounterPdf'
 
 export const dynamic = 'force-dynamic'
@@ -129,6 +130,60 @@ export async function POST(
       }
     : null
 
+  // Facility scope block — enumerate the package members from any
+  // order on this job that carries a Lankershim Studios facility
+  // package. Lets the client see exactly which areas the counter
+  // contract grants access to (vs. areas the rep withheld at scope
+  // time). Picks the most recent order with a Lankershim header;
+  // ties decide deterministically by order id.
+  let grantedScope: { packageName: string; items: GrantedScopeEntry[] } | null = null
+  if (review.jobId) {
+    const orderWithLank = await prisma.order.findFirst({
+      where: {
+        jobId: review.jobId,
+        lineItems: {
+          some: {
+            isPackageHeader: true,
+            package: { name: { startsWith: 'Lankershim Studios' } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        lineItems: {
+          where: { packageId: { not: null } },
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            description: true,
+            notes: true,
+            isPackageHeader: true,
+            packageInstanceId: true,
+            package: { select: { name: true } },
+          },
+        },
+      },
+    })
+    if (orderWithLank) {
+      const header = orderWithLank.lineItems.find(
+        (li) => li.isPackageHeader && li.package?.name?.startsWith('Lankershim Studios'),
+      )
+      if (header) {
+        const members = orderWithLank.lineItems.filter(
+          (li) =>
+            !li.isPackageHeader &&
+            li.packageInstanceId &&
+            li.packageInstanceId === header.packageInstanceId,
+        )
+        grantedScope = {
+          packageName: header.package?.name ?? 'Lankershim Studios — Facility',
+          items: members.map((m) => ({ label: m.description, note: m.notes })),
+        }
+      }
+    }
+  }
+
   let pdfBytes: Buffer
   try {
     pdfBytes = await generateCounterPdf({
@@ -137,6 +192,7 @@ export async function POST(
       aiChanges,
       decisions,
       generatedAt: new Date(),
+      grantedScope,
     })
   } catch (err) {
     console.error('[generate-counter-pdf] render error:', err)

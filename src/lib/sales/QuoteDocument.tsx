@@ -81,6 +81,10 @@ export interface QuoteLineItem {
   billableDays: number | null
   lineTotal: number
   isDiscount?: boolean
+  /** Client-facing small-print rendered below the description. Seeded
+   *  at line-add time from InventoryItem.clientNote (e.g. LED Wall
+   *  A/V Tech requirement); same italic style as the qualifier. */
+  notes?: string | null
 }
 
 export interface QuoteCompanyForRender {
@@ -602,6 +606,9 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                   <View style={styles.colDesc}>
                     <Text>{item.description}</Text>
                     {item.qualifier && <Text style={styles.qualifier}>{item.qualifier}</Text>}
+                    {item.notes && item.notes.trim().length > 0 && (
+                      <Text style={styles.qualifier}>{item.notes}</Text>
+                    )}
                     {!sameAsHeaderRange && (
                       <Text style={styles.dateNote}>
                         {fmtDate(item.pickupDate)} – {fmtDate(item.returnDate)}

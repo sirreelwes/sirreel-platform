@@ -6,6 +6,7 @@ import {
   type DecisionForRender,
   type CompanyForRender,
   type JobForRender,
+  type GrantedScopeEntry,
 } from './ContractDocument'
 
 export type {
@@ -15,6 +16,7 @@ export type {
   JobForRender,
   ChangeDecisionValue,
   ContactForRender,
+  GrantedScopeEntry,
 } from './ContractDocument'
 
 export interface RenderArgs {
@@ -23,6 +25,7 @@ export interface RenderArgs {
   aiChanges: AiChange[]
   decisions: DecisionForRender[]
   generatedAt?: Date
+  grantedScope?: { packageName: string; items: GrantedScopeEntry[] } | null
 }
 
 export async function generateCounterPdf(args: RenderArgs): Promise<Buffer> {

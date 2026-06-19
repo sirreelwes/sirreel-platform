@@ -140,6 +140,10 @@ export async function generateRentalInvoice(args: {
     // their unitPrice + amount.
     isPackageHeader: !!li.isPackageHeader,
     isPackageMember: !!(li.packageInstanceId && !li.isPackageHeader),
+    // Snapshot the client-facing note (e.g. LED Wall A/V Tech
+    // requirement, seeded from InventoryItem.clientNote at add time).
+    // Renders italic small-print under the description on the PDF.
+    notes: li.notes,
   }))
 
   const liveSubtotal = rentalLines.reduce((s, l) => s + l.amount, 0)
