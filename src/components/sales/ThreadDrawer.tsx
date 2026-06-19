@@ -99,11 +99,15 @@ interface FollowUpThreadResponse {
 }
 
 /** What /api/orders/[id]/follow-ups/send/preview returns. Used to render
- *  the read-only composed-final preview in the followup-mode footer. */
+ *  the read-only composed-final preview in the followup-mode footer.
+ *  `html` is the actual artifact the client receives (brand-shell, gold
+ *  CTAs, dark hero); `text` is the multipart fallback. The drawer
+ *  defaults to HTML so a reviewer approves what the recipient sees. */
 interface FollowUpPreviewResponse {
   ok: true;
   to: { email: string; name: string };
   subject: string;
+  html: string;
   text: string;
   stage: string;
   isResend: boolean;
@@ -246,6 +250,10 @@ export function ThreadDrawer(props: Props) {
   const [followUpData, setFollowUpData] = useState<FollowUpThreadResponse | null>(null);
   const [preview, setPreview] = useState<FollowUpPreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState('');
+  // Default to the rendered HTML view — the agent reviews what the
+  // recipient will actually see. The text-fallback toggle is there for
+  // the multipart-degradation case the spec covers.
+  const [previewView, setPreviewView] = useState<'html' | 'text'>('html');
   const [sending, setSending] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [sendError, setSendError] = useState('');
@@ -600,10 +608,52 @@ export function ThreadDrawer(props: Props) {
                     <div className="text-[11px] text-red-600">{previewError}</div>
                   ) : preview ? (
                     <>
-                      <div className="text-[12px] font-semibold text-gray-900">{preview.subject}</div>
-                      <pre className="text-[11px] text-gray-700 whitespace-pre-wrap break-words bg-white border border-blue-100 rounded p-2 font-sans">
-                        {preview.text}
-                      </pre>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[12px] font-semibold text-gray-900 truncate">{preview.subject}</div>
+                        <div className="flex items-center gap-0.5 text-[10px] font-semibold flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewView('html')}
+                            className={`px-1.5 py-0.5 rounded ${
+                              previewView === 'html'
+                                ? 'bg-blue-200 text-blue-900'
+                                : 'text-blue-700 hover:bg-blue-100'
+                            }`}
+                            title="Rendered HTML — what the recipient sees"
+                          >
+                            HTML
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewView('text')}
+                            className={`px-1.5 py-0.5 rounded ${
+                              previewView === 'text'
+                                ? 'bg-blue-200 text-blue-900'
+                                : 'text-blue-700 hover:bg-blue-100'
+                            }`}
+                            title="Plain-text fallback (what degraded clients render)"
+                          >
+                            Text
+                          </button>
+                        </div>
+                      </div>
+                      {previewView === 'html' ? (
+                        // sandbox="" → no scripts, no forms, no popups, no same-origin —
+                        // images load fine (no script required). srcDoc injects the
+                        // composed HTML directly; fixed height with internal scroll keeps
+                        // the drawer's outer layout stable.
+                        <iframe
+                          title="Follow-up email preview"
+                          sandbox=""
+                          srcDoc={preview.html}
+                          className="w-full h-[420px] bg-white border border-blue-100 rounded"
+                          aria-label="Rendered follow-up email preview"
+                        />
+                      ) : (
+                        <pre className="text-[11px] text-gray-700 whitespace-pre-wrap break-words bg-white border border-blue-100 rounded p-2 font-sans max-h-[420px] overflow-y-auto">
+                          {preview.text}
+                        </pre>
+                      )}
                       <div className="text-[10px] text-gray-400 italic">
                         Read-only preview. The composer re-renders from the stage template at send time; edits to subject/body are a follow-up change.
                       </div>
