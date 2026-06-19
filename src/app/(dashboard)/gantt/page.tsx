@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
@@ -67,21 +67,38 @@ export default function GanttPage() {
   const totalDays = weeks * 7
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
   const startDate = anchorDate
-  const dates = useMemo(
-    () => Array.from({ length: totalDays }, (_, i) => addDays(startDate, i)),
+  // ── Render-vs-visible windows ────────────────────────────────────
+  // The "visible window" is the [anchorDate, anchorDate + totalDays)
+  // span the operator is currently looking at — what the header
+  // range label, today line, and tier sort agree on. The "rendered
+  // window" is wider: one full visible-window worth of buffer on
+  // each side, so trackpad / drag pan inside the scroll container
+  // has actual DOM to scroll into (without this, the grid is the
+  // exact width of the visible span and overflow-x has nothing to
+  // do — the bug this commit fixes). Near-edge scroll then advances
+  // the anchor by `totalDays` and compensates scrollLeft so the
+  // visual position stays put — continuous pan, no jump.
+  const RENDER_BUFFER_WINDOWS = 1
+  const renderedDays = totalDays * (1 + 2 * RENDER_BUFFER_WINDOWS)
+  const renderedStartDate = useMemo(
+    () => addDays(startDate, -totalDays * RENDER_BUFFER_WINDOWS),
     [startDate, totalDays],
   )
-  const todayOffset = diffDays(startDate, today)
+  const dates = useMemo(
+    () => Array.from({ length: renderedDays }, (_, i) => addDays(renderedStartDate, i)),
+    [renderedStartDate, renderedDays],
+  )
+  const todayOffset = diffDays(renderedStartDate, today)
 
-  // Fetch the timeline for the visible window plus a ±7d buffer so
+  // Fetch the timeline for the RENDERED range plus a ±7d cushion so
   // bars straddling the edge don't pop in/out as the operator pans.
-  // Re-runs whenever the window changes; refreshTimeline() below reads
-  // the same range so post-action refreshes stay in-window.
+  // Re-runs whenever the rendered range shifts; refreshTimeline()
+  // below reads the same range so post-action refreshes stay in-window.
   const fetchRange = useMemo(() => {
-    const from = addDays(startDate, -7)
-    const to = addDays(startDate, totalDays + 7)
+    const from = addDays(renderedStartDate, -7)
+    const to = addDays(renderedStartDate, renderedDays + 7)
     return { from, to }
-  }, [startDate, totalDays])
+  }, [renderedStartDate, renderedDays])
 
   useEffect(() => {
     setLoading(true)
@@ -116,7 +133,11 @@ export default function GanttPage() {
     if (!unit?.assetId || !unit?.categoryId) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const dayIndex = Math.max(0, Math.min(totalDays - 1, Math.floor(x / dayWidth)))
+    // The row's bounding rect spans the full rendered grid (one
+    // buffer worth on each side of the visible window). dayIndex
+    // is the column under the cursor in the rendered grid; clamp
+    // to renderedDays so a stale right-edge click can't index out.
+    const dayIndex = Math.max(0, Math.min(renderedDays - 1, Math.floor(x / dayWidth)))
     const clickedDate = dates[dayIndex]
     const overlap = Array.isArray(unit.bookings) && unit.bookings.some((b: any) => b && b.start <= clickedDate && b.end >= clickedDate)
     setHoldModal({
@@ -164,6 +185,53 @@ export default function GanttPage() {
   function panBackward() { setAnchorDate(addDays(anchorDate, -totalDays)) }
   function panForward()  { setAnchorDate(addDays(anchorDate,  totalDays)) }
   function goToday()     { setAnchorDate(defaultAnchor) }
+
+  // ── Scroll plumbing for trackpad / drag pan ─────────────────────
+  // The rendered grid is 3× the visible span (see RENDER_BUFFER_WINDOWS
+  // above). We position the scroll so the visible window's leftmost
+  // day sits at the start of the body — one buffer worth of past
+  // columns is immediately accessible by scrolling left, one buffer
+  // worth of future by scrolling right. When the operator scrolls
+  // past either edge, advance the anchor by `totalDays` and write
+  // the compensating scrollLeft via `pendingScrollLeft.current` so
+  // the visual position is preserved across the re-render.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  // Set by edge-advance scroll handlers; read by the position effect
+  // below to override the default "snap to visible window" behavior
+  // on re-renders driven by scroll (not by the </>/Today buttons or
+  // a window-size change).
+  const pendingScrollLeft = useRef<number | null>(null)
+
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (pendingScrollLeft.current !== null) {
+      el.scrollLeft = pendingScrollLeft.current
+      pendingScrollLeft.current = null
+      return
+    }
+    // Default: position the visible window at the left of the body.
+    // RENDER_BUFFER_WINDOWS worth of past columns sit to the left in
+    // the scroll buffer, accessible by scrolling backwards.
+    el.scrollLeft = totalDays * RENDER_BUFFER_WINDOWS * dayWidth
+  }, [anchorDate, weeks, totalDays, dayWidth])
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    const maxScroll = el.scrollWidth - el.clientWidth
+    if (maxScroll <= 0) return
+    // 3-column-wide trigger zone at each edge — wide enough to
+    // catch fast trackpad swipes, narrow enough that a normal
+    // mid-grid scroll never trips it.
+    const edge = dayWidth * 3
+    if (el.scrollLeft < edge) {
+      pendingScrollLeft.current = el.scrollLeft + totalDays * dayWidth
+      setAnchorDate(addDays(anchorDate, -totalDays))
+    } else if (el.scrollLeft > maxScroll - edge) {
+      pendingScrollLeft.current = el.scrollLeft - totalDays * dayWidth
+      setAnchorDate(addDays(anchorDate, totalDays))
+    }
+  }
 
   // Range label for the header — "Jun 2 – Jun 29" style, both ends inclusive.
   const visibleEndDate = addDays(startDate, totalDays - 1)
@@ -281,9 +349,15 @@ export default function GanttPage() {
   }
 
   function getBar(start: string, end: string) {
-    const s = Math.max(0, diffDays(startDate, start))
-    const e = Math.min(totalDays - 1, diffDays(startDate, end))
-    if (e < 0 || s >= totalDays) return null
+    // Position bars in the RENDERED range, not the visible range —
+    // a bar that lives in the buffer (off-visible-screen) should
+    // still render so trackpad pan reveals it as the operator
+    // scrolls toward it. The earlier `totalDays` clamp clipped
+    // anything outside the visible span and is what made pan
+    // pointless: nothing existed to scroll into.
+    const s = Math.max(0, diffDays(renderedStartDate, start))
+    const e = Math.min(renderedDays - 1, diffDays(renderedStartDate, end))
+    if (e < 0 || s >= renderedDays) return null
     return { left: s * dayWidth, width: Math.max((e - s + 1) * dayWidth - 2, dayWidth - 2) }
   }
 
@@ -467,10 +541,12 @@ export default function GanttPage() {
           h-6 divider rows, h-10 header — all with box-sizing border-box
           (Tailwind default) so 1px borders are counted in the height. */}
       <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
         className="border border-gray-200 rounded-lg overflow-auto bg-white relative"
         style={{ height: 'calc(100vh - 210px)' }}
       >
-        <div className="flex" style={{ width: 192 + totalDays * dayWidth, minWidth: '100%' }}>
+        <div className="flex" style={{ width: 192 + renderedDays * dayWidth, minWidth: '100%' }}>
           {/* ── LEFT: labels column (sticky left:0) ── */}
           <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200">
             {/* Top-left corner — sticky on both axes */}
@@ -550,7 +626,7 @@ export default function GanttPage() {
           </div>
 
           {/* ── RIGHT: timeline column ── */}
-          <div className="flex-shrink-0" style={{ width: totalDays * dayWidth }}>
+          <div className="flex-shrink-0" style={{ width: renderedDays * dayWidth }}>
             {/* Sticky date header */}
             <div className="flex h-10 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
               {dates.map(ds => {
@@ -570,7 +646,7 @@ export default function GanttPage() {
 
             {/* Rows + today line */}
             <div className="relative">
-              {todayOffset >= 0 && todayOffset < totalDays && (
+              {todayOffset >= 0 && todayOffset < renderedDays && (
                 <div
                   className="absolute top-0 bottom-0 z-[15] pointer-events-none"
                   style={{ left: todayOffset * dayWidth + dayWidth / 2, width: 2, background: '#3b82f6' }}
