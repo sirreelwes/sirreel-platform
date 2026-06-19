@@ -4223,3 +4223,76 @@ model Incident {
   @@index([createdAt(sort: Desc)])
   @@map("sr_incidents")
 }
+
+// ═══════════════════════════════════════
+// PLANYO SYNC — daily Planyo→HQ reconciliation
+// ═══════════════════════════════════════
+
+enum PlanyoSyncOutcome {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED_PULL
+  FAILED_INCOMPLETE
+  FAILED_NETWORK
+  FAILED_SUSPICIOUS_LOW
+  ABORTED_SIGNATURE_MISMATCH
+  REVERTED
+}
+
+enum PlanyoSyncOp {
+  CREATE
+  UPDATE_DATES
+  UPDATE_QTY
+  UPDATE_STATUS
+  RELEASE
+  RELEASE_CANDIDATE
+  FLAG_UNMAPPED
+  LOG_CONFLICT
+  AMBIGUOUS_ABSENT
+  NO_CHANGE
+}
+
+model PlanyoSyncRun {
+  id               String            @id @default(uuid())
+  startedAt        DateTime          @default(now()) @map("started_at")
+  finishedAt       DateTime?         @map("finished_at")
+  windowStart      DateTime          @map("window_start")
+  windowEnd        DateTime          @map("window_end")
+  outcome          PlanyoSyncOutcome @default(RUNNING)
+  reason           String?           @db.Text
+  lastPullCount    Int?              @map("last_pull_count")
+  totalServerCount Int?              @map("total_server_count")
+  createdCount     Int               @default(0) @map("created_count")
+  updatedCount     Int               @default(0) @map("updated_count")
+  releasedCount    Int               @default(0) @map("released_count")
+  unmappedCount    Int               @default(0) @map("unmapped_count")
+  conflictCount    Int               @default(0) @map("conflict_count")
+  absentCount      Int               @default(0) @map("absent_count")
+  noChangeCount    Int               @default(0) @map("no_change_count")
+  dryRun           Boolean           @default(false) @map("dry_run")
+
+  events PlanyoSyncEvent[]
+
+  @@index([startedAt(sort: Desc)])
+  @@map("planyo_sync_runs")
+}
+
+model PlanyoSyncEvent {
+  id                  String       @id @default(uuid())
+  runId               String       @map("run_id")
+  run                 PlanyoSyncRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  op                  PlanyoSyncOp
+  planyoReservationId String?      @map("planyo_reservation_id")
+  planyoCartId        String?      @map("planyo_cart_id")
+  bookingId           String?      @map("booking_id")
+  bookingItemId       String?      @map("booking_item_id")
+  before              Json?
+  after               Json?
+  detail              String?      @db.Text
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  @@index([runId])
+  @@index([planyoReservationId])
+  @@map("planyo_sync_events")
+}

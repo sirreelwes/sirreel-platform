@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
-import { shouldReview } from '@/lib/email/reviewGate';
+import { ThreadDrawer } from '@/components/sales/ThreadDrawer';
 
 type Scope = 'my' | 'team';
 
@@ -49,7 +48,7 @@ function daysSince(iso: string | null) {
 
 export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
   const [items, setItems] = useState<FollowUp[] | null>(null);
-  const [target, setTarget] = useState<EmailReviewTarget | null>(null);
+  const [drawerOrderId, setDrawerOrderId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const load = useCallback(() => {
@@ -87,7 +86,12 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
           const days = daysSince(f.order.sentAt);
           return (
             <li key={f.id} className="py-2.5 flex items-center justify-between gap-3 flex-wrap">
-              <div className="min-w-0 flex-1 space-y-0.5">
+              <button
+                type="button"
+                onClick={() => setDrawerOrderId(f.order.id)}
+                className="min-w-0 flex-1 text-left space-y-0.5 cursor-pointer hover:bg-amber-100/40 -my-1 -mx-2 px-2 py-1 rounded transition-colors"
+                title="Open thread to review the cadence draft before sending"
+              >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-900 truncate">
                     {f.order.job.name}
@@ -102,19 +106,15 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
                   {days != null && <> · sent {days}d ago</>}
                   <> · {fmtMoney(f.order.total)}</>
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => {
-                    if (shouldReview('followup-order')) {
-                      setTarget({ kind: 'followup-order', orderId: f.order.id });
-                    }
-                  }}
-                  disabled={target !== null}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-bold rounded"
-                  title="Review recipient + stage, then send the branded follow-up"
+                  type="button"
+                  onClick={() => setDrawerOrderId(f.order.id)}
+                  className="text-[11px] font-semibold text-amber-900 hover:text-amber-700"
+                  title="Open thread"
                 >
-                  Send follow-up
+                  Open thread →
                 </button>
               </div>
             </li>
@@ -134,15 +134,21 @@ export function FollowUpsDuePanel({ scope }: { scope: Scope }) {
         </div>
       )}
 
-      <EmailReviewModal
-        target={target}
-        onClose={() => setTarget(null)}
+      <ThreadDrawer
+        mode="followup"
+        orderId={drawerOrderId}
+        onClose={() => setDrawerOrderId(null)}
         onSent={(info) => {
-          setTarget(null);
+          setDrawerOrderId(null);
           setFeedback({
             kind: 'ok',
-            text: `Follow-up sent to ${info.recipient} (${info.orderNumber})`,
+            text: `Follow-up sent to ${info.recipient}${info.orderNumber ? ` (${info.orderNumber})` : ''}`,
           });
+          load();
+        }}
+        onSkipped={() => {
+          setDrawerOrderId(null);
+          setFeedback({ kind: 'ok', text: 'Follow-up skipped' });
           load();
         }}
       />

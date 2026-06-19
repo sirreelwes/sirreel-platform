@@ -65,13 +65,71 @@ interface ThreadResponse {
   considered: { inquiryId: string; status: string } | null;
 }
 
-type Props = {
+/** Shape returned by /api/sales/follow-ups/thread. The messages are
+ *  synthesized from the order's EmailDelivery audit (outbound sends only —
+ *  EmailDelivery doesn't store the body, so bodyText/bodyHtml are null).
+ *  Inbound replies aren't reconstructed in this iteration; surfaced as
+ *  "(original quote thread not on file)" when no send-quote audit row
+ *  exists for the order. */
+interface FollowUpThreadResponse {
+  order: {
+    id: string;
+    orderNumber: string;
+    jobName: string | null;
+    quoteSentAt: string | null;
+  };
+  thread: null;
+  messages: ThreadMessage[];
+  originalQuoteFound: boolean;
+  nextDue: {
+    id: string;
+    stage: string;
+    dueAt: string;
+    draftSubject: string;
+    draftBody: string;
+  } | null;
+  /** Inbound messages from the quote's recipient since the quote went
+   *  out — conservative match (sender + timestamp). The drawer renders
+   *  a warning banner above Send when count > 0 so the rep checks
+   *  Gmail before nudging someone who already replied. */
+  replies: {
+    count: number;
+    latest: { subject: string; snippet: string | null; sentAt: string } | null;
+  };
+}
+
+/** What /api/orders/[id]/follow-ups/send/preview returns. Used to render
+ *  the read-only composed-final preview in the followup-mode footer. */
+interface FollowUpPreviewResponse {
+  ok: true;
+  to: { email: string; name: string };
+  subject: string;
+  text: string;
+  stage: string;
+  isResend: boolean;
+}
+
+type InquiryProps = {
+  mode?: 'inquiry';
   emailId: string | null;
   onClose: () => void;
   onCapture?: (emailId: string) => Promise<void> | void;
   onDismiss?: (emailId: string) => Promise<void> | void;
   busy?: boolean;
 };
+
+type FollowUpProps = {
+  mode: 'followup';
+  orderId: string | null;
+  onClose: () => void;
+  /** Fires after a successful Send. Panel reloads its list on this. */
+  onSent?: (info: { recipient: string; orderNumber: string }) => Promise<void> | void;
+  /** Fires after a successful Skip. */
+  onSkipped?: () => Promise<void> | void;
+  busy?: boolean;
+};
+
+type Props = InquiryProps | FollowUpProps;
 
 function fmtWhen(iso: string) {
   const d = new Date(iso);
@@ -175,43 +233,91 @@ function QuickField({ label, value, sub }: { label: string; value: string | null
   );
 }
 
-export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: Props) {
+export function ThreadDrawer(props: Props) {
   const router = useRouter();
+  const mode: 'inquiry' | 'followup' = props.mode ?? 'inquiry';
+  const { onClose, busy } = props;
+  const emailId = props.mode === 'followup' ? null : props.emailId;
+  const orderId = props.mode === 'followup' ? props.orderId : null;
+  // The drawer is "open" whenever either anchor is set.
+  const openKey = mode === 'inquiry' ? emailId : orderId;
+
   const [data, setData] = useState<ThreadResponse | null>(null);
+  const [followUpData, setFollowUpData] = useState<FollowUpThreadResponse | null>(null);
+  const [preview, setPreview] = useState<FollowUpPreviewResponse | null>(null);
+  const [previewError, setPreviewError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Per-message "View raw email" toggle. Keyed by message id so each
-  // message in a multi-message thread can expand independently.
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // Load the thread whenever the drawer's email changes.
+  // Mode-switched loader. Inquiry: emailId → inquiries/thread.
+  // Followup: orderId → follow-ups/thread + a parallel /send/preview
+  // call so the footer can render the composed final read-only.
   useEffect(() => {
-    if (!emailId) {
+    if (mode === 'inquiry') {
+      if (!emailId) {
+        setData(null);
+        setError('');
+        return;
+      }
+      setLoading(true);
       setData(null);
       setError('');
-      return;
-    }
-    setLoading(true);
-    setData(null);
-    setError('');
-    fetch(`/api/sales/inquiries/thread?emailId=${encodeURIComponent(emailId)}`)
-      .then((r) => r.json())
-      .then((d: ThreadResponse | { error: string }) => {
-        if ('error' in d) setError(d.error);
-        else setData(d);
-        setLoading(false);
+      fetch(`/api/sales/inquiries/thread?emailId=${encodeURIComponent(emailId)}`)
+        .then((r) => r.json())
+        .then((d: ThreadResponse | { error: string }) => {
+          if ('error' in d) setError(d.error);
+          else setData(d);
+          setLoading(false);
+        })
+        .catch(() => {
+          setError('Failed to load thread.');
+          setLoading(false);
+        });
+    } else {
+      if (!orderId) {
+        setFollowUpData(null);
+        setPreview(null);
+        setError('');
+        setPreviewError('');
+        return;
+      }
+      setLoading(true);
+      setFollowUpData(null);
+      setPreview(null);
+      setError('');
+      setPreviewError('');
+      setSendError('');
+      const threadReq = fetch(`/api/sales/follow-ups/thread?orderId=${encodeURIComponent(orderId)}`)
+        .then((r) => r.json())
+        .then((d: FollowUpThreadResponse | { error: string }) => {
+          if ('error' in d) setError(d.error);
+          else setFollowUpData(d);
+        })
+        .catch(() => setError('Failed to load thread.'));
+      const previewReq = fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/send/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       })
-      .catch(() => {
-        setError('Failed to load thread.');
-        setLoading(false);
-      });
-  }, [emailId]);
+        .then((r) => r.json())
+        .then((d: FollowUpPreviewResponse | { ok: false; error: string }) => {
+          if ('ok' in d && d.ok) setPreview(d);
+          else if ('error' in d) setPreviewError(d.error);
+        })
+        .catch(() => setPreviewError('Failed to compose preview.'));
+      Promise.all([threadReq, previewReq]).finally(() => setLoading(false));
+    }
+  }, [mode, emailId, orderId]);
 
   // Esc to close.
   useEffect(() => {
-    if (!emailId) return;
+    if (!openKey) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -220,13 +326,11 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [emailId, onClose]);
+  }, [openKey, onClose]);
 
   // Focus trap: keep Tab/Shift+Tab inside the drawer.
   useEffect(() => {
-    if (!emailId) return;
-    // Move initial focus to the close button so screen-readers announce
-    // the dialog and keyboard users start inside it.
+    if (!openKey) return;
     closeBtnRef.current?.focus();
 
     const onTab = (e: KeyboardEvent) => {
@@ -251,19 +355,83 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
     };
     window.addEventListener('keydown', onTab);
     return () => window.removeEventListener('keydown', onTab);
-  }, [emailId]);
+  }, [openKey]);
 
   const goToInquiry = useCallback(() => {
     if (!data?.considered?.inquiryId) return;
     router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(data.considered.inquiryId)}`);
   }, [data, router]);
 
-  if (!emailId) return null;
+  // followup-mode actions
+  const handleSend = useCallback(async () => {
+    if (mode !== 'followup' || !orderId) return;
+    setSending(true);
+    setSendError('');
+    try {
+      const r = await fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const d = (await r.json()) as
+        | { ok: true; recipient: { email: string; name: string }; stage: string }
+        | { ok: false; error: string };
+      if ('ok' in d && d.ok) {
+        if (props.mode === 'followup') {
+          await props.onSent?.({
+            recipient: d.recipient.email,
+            orderNumber: followUpData?.order.orderNumber ?? '',
+          });
+        }
+        onClose();
+      } else {
+        setSendError(('error' in d && d.error) || 'send failed');
+      }
+    } catch (e) {
+      setSendError((e as Error).message || 'send failed');
+    } finally {
+      setSending(false);
+    }
+  }, [mode, orderId, props, followUpData, onClose]);
 
-  const messages = data?.messages || [];
-  const threadSubject = data?.thread?.subject || data?.email?.subject || '(no subject)';
-  const captured = data?.considered?.status === 'NEW' || data?.considered?.status === 'CONVERTED';
-  const dismissed = data?.considered?.status === 'DISMISSED';
+  const handleSkip = useCallback(async () => {
+    if (mode !== 'followup' || !orderId) return;
+    setSkipping(true);
+    setSendError('');
+    try {
+      const r = await fetch(`/api/orders/${encodeURIComponent(orderId)}/follow-ups/skip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const d = (await r.json()) as { ok: true } | { ok: false; error: string };
+      if ('ok' in d && d.ok) {
+        if (props.mode === 'followup') await props.onSkipped?.();
+        onClose();
+      } else {
+        setSendError(('error' in d && d.error) || 'skip failed');
+      }
+    } catch (e) {
+      setSendError((e as Error).message || 'skip failed');
+    } finally {
+      setSkipping(false);
+    }
+  }, [mode, orderId, props, onClose]);
+
+  if (!openKey) return null;
+
+  const messages =
+    mode === 'inquiry' ? data?.messages || [] : followUpData?.messages || [];
+  const threadSubject =
+    mode === 'inquiry'
+      ? data?.thread?.subject || data?.email?.subject || '(no subject)'
+      : followUpData?.order
+        ? `${followUpData.order.orderNumber} — ${followUpData.order.jobName ?? 'follow-up'}`
+        : 'Loading…';
+  const captured =
+    mode === 'inquiry' &&
+    (data?.considered?.status === 'NEW' || data?.considered?.status === 'CONVERTED');
+  const dismissed = mode === 'inquiry' && data?.considered?.status === 'DISMISSED';
   // Header form-type — first inbound message with a detected type wins.
   // Reflects "what kind of thread is this?" prominently above the message list.
   const headerFormType = messages.find((m) =>
@@ -319,6 +487,12 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
           )}
           {error && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-600">{error}</div>
+          )}
+
+          {!loading && !error && mode === 'followup' && followUpData && !followUpData.originalQuoteFound && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
+              Original quote thread not on file. Showing read-only preview of the next cadence stage below.
+            </div>
           )}
 
           {!loading && !error && (
@@ -402,46 +576,130 @@ export function ThreadDrawer({ emailId, onClose, onCapture, onDismiss, busy }: P
                 );
               })}
 
-              {messages.length === 0 && !loading && (
+              {messages.length === 0 && !loading && mode === 'inquiry' && (
                 <div className="text-center py-10 text-gray-400 text-[12px]">No messages on this thread.</div>
+              )}
+
+              {mode === 'followup' && (preview || previewError) && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-blue-100 text-blue-700">Next stage</span>
+                      <span className="text-[11px] font-semibold text-blue-900">
+                        {preview?.stage ?? followUpData?.nextDue?.stage ?? '—'}
+                        {preview?.isResend && <span className="ml-1 text-[10px] text-blue-700">(resend)</span>}
+                      </span>
+                    </div>
+                    {preview?.to && (
+                      <span className="text-[10px] text-gray-500">
+                        to {preview.to.name || preview.to.email} &lt;{preview.to.email}&gt;
+                      </span>
+                    )}
+                  </div>
+                  {previewError ? (
+                    <div className="text-[11px] text-red-600">{previewError}</div>
+                  ) : preview ? (
+                    <>
+                      <div className="text-[12px] font-semibold text-gray-900">{preview.subject}</div>
+                      <pre className="text-[11px] text-gray-700 whitespace-pre-wrap break-words bg-white border border-blue-100 rounded p-2 font-sans">
+                        {preview.text}
+                      </pre>
+                      <div className="text-[10px] text-gray-400 italic">
+                        Read-only preview. The composer re-renders from the stage template at send time; edits to subject/body are a follow-up change.
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-gray-400 italic">Composing preview…</div>
+                  )}
+                </div>
               )}
             </>
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 flex gap-2">
-          {captured ? (
-            <button
-              onClick={goToInquiry}
-              className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[12px] font-bold"
-            >
-              Open Inquiry →
-            </button>
-          ) : (
-            <>
+        {mode === 'inquiry' ? (
+          <div className="p-4 border-t border-gray-100 flex gap-2">
+            {captured ? (
               <button
-                onClick={() => onCapture?.(emailId)}
-                disabled={!onCapture || busy || dismissed}
-                className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-50 text-white text-[12px] font-bold"
+                onClick={goToInquiry}
+                className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[12px] font-bold"
               >
-                {busy ? 'Capturing…' : dismissed ? 'Dismissed' : 'Capture & Quote'}
+                Open Inquiry →
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => emailId && props.mode !== 'followup' && props.onCapture?.(emailId)}
+                  disabled={props.mode === 'followup' || !props.onCapture || busy || dismissed}
+                  className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-50 text-white text-[12px] font-bold"
+                >
+                  {busy ? 'Capturing…' : dismissed ? 'Dismissed' : 'Capture & Quote'}
+                </button>
+                <button
+                  onClick={() => emailId && props.mode !== 'followup' && props.onDismiss?.(emailId)}
+                  disabled={props.mode === 'followup' || !props.onDismiss || busy || dismissed}
+                  className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </>
+            )}
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 border-t border-gray-100 space-y-2">
+            {followUpData && followUpData.replies.count > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+                <div className="text-[11px] font-bold text-amber-900">
+                  ⚠ This contact has sent {followUpData.replies.count} message{followUpData.replies.count === 1 ? '' : 's'} since the quote went out — check Gmail before following up.
+                </div>
+                {followUpData.replies.latest && (
+                  <div className="mt-1.5 text-[10px] text-amber-800">
+                    <span className="font-semibold">Latest:</span>{' '}
+                    {followUpData.replies.latest.subject || '(no subject)'}
+                    <span className="text-amber-700"> · {fmtWhen(followUpData.replies.latest.sentAt)}</span>
+                    {followUpData.replies.latest.snippet && (
+                      <div className="mt-0.5 text-amber-700 italic truncate">
+                        {followUpData.replies.latest.snippet}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {sendError && (
+              <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">{sendError}</div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSend}
+                disabled={!preview || sending || skipping}
+                className="flex-1 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 disabled:opacity-50 text-white text-[12px] font-bold"
+              >
+                {sending ? 'Sending…' : 'Send follow-up'}
               </button>
               <button
-                onClick={() => onDismiss?.(emailId)}
-                disabled={!onDismiss || busy || dismissed}
+                onClick={handleSkip}
+                disabled={sending || skipping}
                 className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200 disabled:opacity-50"
               >
-                Dismiss
+                {skipping ? 'Skipping…' : 'Skip'}
               </button>
-            </>
-          )}
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200"
-          >
-            Close
-          </button>
-        </div>
+              <button
+                onClick={onClose}
+                disabled={sending || skipping}
+                className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200 disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
