@@ -40,6 +40,11 @@ check(normalizePlanyoUnitName('9 (Mid Roof) A', 'Passenger Van'), { normalized: 
 
 console.log('\nPopVan + Camera Cube + DLUX')
 check(normalizePlanyoUnitName('1 (A)', 'PopVan'), { normalized: 'Pop 1' }, '1 (A) → Pop 1')
+// HQ category is one-word "PopVan"; Planyo has been seen using the
+// two-word "Pop Van" spelling for the same resource. Both forms must
+// short-prefix to "Pop" so future Planyo imports don't re-unmatch.
+check(normalizePlanyoUnitName('1 (A)', 'Pop Van'), { normalized: 'Pop 1' }, '1 (A) — two-word "Pop Van" category resolves the same as one-word "PopVan"')
+check(normalizePlanyoUnitName('3', 'Pop Van'), { normalized: 'Pop 3' }, '3 — bare digit under two-word "Pop Van"')
 check(normalizePlanyoUnitName('Camera Cube #1 (A)', 'Camera Cube'), { normalized: 'Cam 1' }, 'Camera Cube #1 (A) → Cam 1 (long → short prefix swap)')
 check(normalizePlanyoUnitName('Camera Cube #2 (A)', 'Camera Cube'), { normalized: 'Cam 2' }, 'Camera Cube #2 (A) → Cam 2')
 check(normalizePlanyoUnitName('DLUX #1 (2Room)', 'DLUX'), { normalized: 'DLUX 1' }, 'DLUX #1 (2Room) → DLUX 1')

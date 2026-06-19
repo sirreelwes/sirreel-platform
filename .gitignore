@@ -36,6 +36,7 @@ scripts/*
 !scripts/lowercasePersonEmails.ts
 !scripts/canaryMergeWes.ts
 !scripts/rw-rate-gap-fill.ts
+!scripts/bind-planyo-backfill-units.ts
 .env.local.bak
 .gcp-service-account.json
 .e2e-scratch/

@@ -35,7 +35,14 @@ const CATEGORY_TO_SHORT: Record<string, string> = {
   'Cargo Van w/ Liftgate': 'Cargo',
   'Cargo Van w/o Liftgate': 'Cargo',
   'Passenger Van': 'Pass',
+  // HQ category name is one-word "PopVan"; Planyo has been observed
+  // (and will continue) to surface the two-word "Pop Van" spelling
+  // for the same resource. Mapping BOTH spellings to "Pop" here so
+  // that callers passing either form get the same short-prefix
+  // behavior. Add new spellings here whenever a Planyo schema drift
+  // re-introduces unmatched Pop units.
   PopVan: 'Pop',
+  'Pop Van': 'Pop',
   'Camera Cube': 'Cam',
   DLUX: 'DLUX',
   // Studios and ProScout / VTR are not number-prefixed in
