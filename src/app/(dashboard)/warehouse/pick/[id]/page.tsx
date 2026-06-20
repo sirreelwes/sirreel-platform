@@ -71,13 +71,6 @@ const STATUS_BADGE: Record<ListStatus, string> = {
   CANCELLED:      'bg-red-900/40 text-red-300 border-red-800',
 }
 
-const LINE_BADGE: Record<LineStatus, string> = {
-  PENDING_PICK: 'bg-zinc-800 text-zinc-300',
-  PICKED:       'bg-amber-900/40 text-amber-300',
-  STAGED:       'bg-blue-900/40 text-blue-300',
-  LOADED:       'bg-emerald-900/40 text-emerald-300',
-}
-
 function fmtDate(d: string | null) {
   if (!d) return '—'
   const dt = new Date(d)
@@ -340,35 +333,89 @@ export default function WarehousePickDetailPage() {
             const status: LineStatus = (li.pickStatus ?? 'PENDING_PICK') as LineStatus
             const canManualPick = picklist.status === 'PICKING' && status === 'PENDING_PICK'
             const isBusy = busyAction === `pick:${i.id}`
+            const isPicked = status !== 'PENDING_PICK'
+            // Catalog name from InventoryItem.description (canonical, the
+            // catalog admin-set "Surveillance Kit"-style name). Fall back
+            // to the OrderLineItem.description (what sales typed) only
+            // when there's no inventory link — kit-only lines, custom
+            // entries, etc.
+            const primaryName = li.inventoryItem?.description || li.description
+            const skuCode = li.inventoryItem?.code ?? null
+            // Whole row dims when picked so remaining pending rows
+            // dominate the scan. The qty chip + name stay legible —
+            // we drop the row opacity, not the text contrast itself.
+            const rowOpacityCls = isPicked ? 'opacity-60' : ''
+            // Qty chip is the dominant scanning column. Amber when
+            // pending (eye-grabbing), emerald when picked (calm done
+            // state). Big number, tiny "Qty" kicker.
+            const qtyChipCls = isPicked
+              ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-300'
+              : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
             return (
-              <div key={i.id} className="p-4 flex items-start gap-3">
+              <div key={i.id} className={`p-5 flex items-center gap-4 sm:gap-5 ${rowOpacityCls}`}>
+                {/* QTY CHIP — dominant left column. Big number, tiny
+                    label, fixed width so the eye scans straight down
+                    the list. */}
+                <div
+                  className={`flex-none w-20 sm:w-24 rounded-xl border flex flex-col items-center justify-center py-3 ${qtyChipCls}`}
+                >
+                  <span className="text-[9px] uppercase tracking-[0.18em] font-bold opacity-70">
+                    Qty
+                  </span>
+                  <span className="text-4xl font-bold leading-none tabular-nums mt-1">
+                    {li.quantity}
+                  </span>
+                </div>
+
+                {/* NAME + SKU stack — name big & white (catalog name),
+                    SKU small mono dim under it for scan-matching. The
+                    legacy "PENDING PICK" pill is gone — the whole
+                    section IS pending until pick happens, so a per-row
+                    pill was duplicative. */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${LINE_BADGE[status]}`}>
-                      {status.replace('_', ' ')}
-                    </span>
-                    <span className="font-mono text-[11px] text-zinc-500">
-                      {li.inventoryItem?.code ?? '—'}
-                    </span>
-                    <span className="text-[11px] text-zinc-500">qty {li.quantity}</span>
-                    {i.pickedBy && status !== 'PENDING_PICK' && (
-                      <span className="text-[11px] text-zinc-500">· {i.pickedBy.name}</span>
-                    )}
+                  <div
+                    className={`text-lg sm:text-xl font-bold leading-tight ${
+                      isPicked ? 'text-zinc-400 line-through decoration-emerald-600/60 decoration-2' : 'text-white'
+                    }`}
+                  >
+                    {primaryName}
                   </div>
-                  <div className="mt-1 text-sm text-zinc-100">{li.description}</div>
-                  {i.scannedCode && (
-                    <div className="mt-0.5 text-[11px] text-zinc-500">scanned {i.scannedCode}</div>
+                  {skuCode && (
+                    <div className="mt-1 font-mono text-xs text-zinc-500 tracking-wide">
+                      {skuCode}
+                    </div>
+                  )}
+                  {isPicked && i.pickedBy && (
+                    <div className="mt-1.5 text-[11px] text-emerald-400 flex items-center gap-1.5">
+                      <span aria-hidden>✓</span>
+                      <span>picked by {i.pickedBy.name}{i.scannedCode ? ` · scanned ${i.scannedCode}` : ''}</span>
+                    </div>
                   )}
                 </div>
+
+                {/* ACTION — large tap target (h ≥ 52px) so a gloved
+                    picker at arm's length can hit it cleanly. Only
+                    rendered while the row is pickable. */}
                 {canManualPick && (
                   <button
                     onClick={() => pickItem(i.id, { manualOverride: true })}
                     disabled={busyAction != null}
                     title={li.inventoryItem ? 'Bypass scan and mark picked' : 'No scannable code on this line'}
-                    className="flex-none text-xs font-semibold border border-zinc-700 text-zinc-200 hover:border-amber-500 hover:text-amber-300 px-3 py-2 rounded-lg disabled:opacity-40"
+                    className="flex-none min-h-[56px] px-5 sm:px-6 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white text-sm sm:text-base font-bold rounded-xl shadow-sm disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                   >
-                    {isBusy ? 'Picking…' : 'Manual ✓'}
+                    {isBusy ? 'Picking…' : 'Mark picked'}
                   </button>
+                )}
+                {/* Picked rows get a calm emerald check in the action
+                    slot so the row's shape stays consistent down the
+                    list (no jitter as items flip pending → picked). */}
+                {isPicked && (
+                  <div
+                    className="flex-none min-h-[56px] px-5 sm:px-6 flex items-center justify-center text-emerald-400"
+                    aria-label="picked"
+                  >
+                    <span className="text-2xl leading-none" aria-hidden>✓</span>
+                  </div>
                 )}
               </div>
             )
