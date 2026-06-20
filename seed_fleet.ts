@@ -93,7 +93,12 @@ async function main() {
     { categoryId: getCat('DLUX'), unitName: 'DLUX 2', year: 2015, make: 'Mercedes-Benz', model: 'Sprinter', mileage: 127044 },
     { categoryId: getCat('DLUX'), unitName: 'DLUX 3', year: 2015, make: 'Mercedes-Benz', model: 'Sprinter', mileage: 100929 },
     { categoryId: getCat('DLUX'), unitName: 'DLUX 4', year: 2015, make: 'Mercedes-Benz', model: 'Sprinter', mileage: 108360 },
-    { categoryId: getCat('ProScout / VTR'), unitName: 'ProScout 1', year: 2015, make: 'Mercedes-Benz', model: 'Sprinter', mileage: 75755 },
+    // ProScout / VTR is seeded by scripts/scheduling-add-missing-assets.ts —
+    // the category has ONE physical unit ("Video Van" per fleet, also known
+    // as "Scout Van" in Planyo). The historical "ProScout 1" seed row was a
+    // duplicate of that same physical truck and was merge-retired on
+    // 2026-06-20; do NOT add it back here. See scripts/merge-proscout-vtr-dup.ts
+    // for the merge audit trail.
   ]
 
   console.log(`Seeding ${assets.length} assets...`)
