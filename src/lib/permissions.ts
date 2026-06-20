@@ -307,6 +307,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // and reached from the Admin section below.
   if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
   if (perms.coverage) main.push({ id: 'coverage', label: 'Coverage', icon: '', href: '/exec/coverage' });
+  // Sales role gets Clients in the main nav (after Orders), flat —
+  // no Admin group for AGENTs. Non-sales roles still get Clients
+  // under the Admin section below (unchanged). The `perms.crm` gate
+  // matches the historical behavior for who sees Clients at all.
+  if (perms.crm && sales) main.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
   sections.push({ label: null, items: main });
 
   // Warehouse — picking floor. Phase 2 ships /warehouse/pick; future
@@ -326,7 +331,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   const isAdminOrManager = user.role === UserRole.ADMIN || user.role === UserRole.MANAGER;
   if (isAdminOrManager) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
   if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
-  if (perms.crm) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
+  // `!sales` guard prevents AGENT from getting Clients in BOTH main
+  // (pushed above) and admin. Other roles unchanged: ADMIN, MANAGER,
+  // FLEET_TECH keep Clients under the Admin section as today.
+  if (perms.crm && !sales) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
   // Phase 7 consolidation — Sub-Rentals nav entry dropped. The
   // /sub-rentals route never existed on disk (dead link). When the
   // feature is built, restore this line with the new route.
@@ -339,7 +347,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // Gated to ADMIN/MANAGER — bookings perm also drives Jobs in
   // main nav, which AGENT needs; can't share that gate here.
   if (isAdminOrManager) admin.push({ id: 'paperwork', label: 'Paperwork tools', icon: '', href: '/admin/paperwork' });
-  if (perms.bookings && !salesOnly) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
+  // Sales-role exclusion (`!sales`) added to keep the Reservations
+  // nav entry as the operator-facing schedule surface for AGENTs.
+  // /scheduling stays reachable by deep link for any old bookmarks.
+  if (perms.bookings && !salesOnly && !sales) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
   // Phase 7 consolidation — RW Linkage nav entry dropped.
   // RentalWorks billing was off-ramped in Phase 5. The route
   // /dispatch/rentalworks stays accessible by deep-link for any
