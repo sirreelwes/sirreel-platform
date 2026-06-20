@@ -55,8 +55,6 @@ export default function GanttPage() {
     endDate: string
     asBackup: boolean
   }>(null)
-  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
-  const [showCategoryPickerForHold, setShowCategoryPickerForHold] = useState(false)
   // Operator-controlled window anchor. Default mirrors the prior
   // behaviour (today-3) so the page renders the same on first load,
   // but ‹ Today › buttons step it forward/back by the current window
@@ -116,14 +114,6 @@ export default function GanttPage() {
       .finally(() => setLoading(false))
   }, [fetchRange.from, fetchRange.to])
 
-  useEffect(() => {
-    if (categories.length > 0) return
-    fetch('/api/scheduling/categories')
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setCategories(d.categories || []) })
-      .catch(() => {})
-  }, [categories.length])
-
   // ── +Hold entry point: row click on an asset → modal pre-filled
   //    with that asset + clicked date. If the clicked date overlaps
   //    an existing booking on that unit, the modal opens in BACKUP
@@ -148,17 +138,6 @@ export default function GanttPage() {
       endDate: clickedDate,
       asBackup: !!overlap,
     })
-  }
-
-  function openCategoryHold(cat: { id: string; name: string }) {
-    setHoldModal({
-      categoryId: cat.id,
-      categoryName: cat.name,
-      startDate: today,
-      endDate: addDays(today, 1),
-      asBackup: false,
-    })
-    setShowCategoryPickerForHold(false)
   }
 
   // ── Refresh the timeline data after an action. Kept inline so the
@@ -486,33 +465,6 @@ export default function GanttPage() {
             {[1,2,3,4].map(w => (
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
             ))}
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowCategoryPickerForHold(v => !v)}
-              className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
-            >
-              + New Hold
-            </button>
-            {showCategoryPickerForHold && categories.length > 0 && (
-              <div
-                className="absolute right-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-lg shadow-lg w-56 max-h-80 overflow-auto"
-                onMouseLeave={() => setShowCategoryPickerForHold(false)}
-              >
-                <div className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                  Pick a category
-                </div>
-                {categories.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => openCategoryHold(c)}
-                    className="block w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50"
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -972,9 +924,9 @@ export default function GanttPage() {
         </div>
       )}
 
-      {/* +Hold modal — native-source only.
-          Opens from an asset-row click (asset-bound) or the
-          "+ New Hold" header button (category-only). */}
+      {/* +Hold modal — opens from an asset-row click only
+          (asset-bound). The category-only entry point now lives on
+          the global "+ New" menu in the dashboard top bar. */}
       {holdModal && (
         <NewHoldModal
           categoryId={holdModal.categoryId}
