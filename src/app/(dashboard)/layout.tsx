@@ -9,6 +9,7 @@ import { getPermissions, getNavItems, getNavSections, isSalesRole } from '@/lib/
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 import { QuickCreateMenu } from '@/components/shell/QuickCreateMenu';
+import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:      'Admin',
@@ -125,13 +126,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div key={si}>
               {section.label ? (
                 <>
-                  <button
-                    onClick={() => setAdminOpen(!adminOpen)}
-                    className="w-full flex items-center justify-between px-3 py-2 mt-3 mb-0.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
-                  >
-                    <span>{section.label}</span>
-                    <span className={`text-[10px] transition-transform ${adminOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                  </button>
+                  {/* Section header row. Layout: [collapsible toggle button (flex-1)]
+                      [optional Admin-only health dot]. The dot is a separate Link
+                      (Click → /admin/health) and sits outside the toggle button
+                      so we don't nest an <a> inside a <button>. Dot visibility is
+                      double-gated: the section must be "Admin", and the operator's
+                      effective role (post view-as) must be ADMIN. */}
+                  <div className="flex items-center mt-3 mb-0.5 pr-1">
+                    <button
+                      onClick={() => setAdminOpen(!adminOpen)}
+                      className="flex-1 flex items-center justify-between px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+                    >
+                      <span>{section.label}</span>
+                      <span className={`text-[10px] transition-transform ${adminOpen ? 'rotate-90' : ''}`}>&#9654;</span>
+                    </button>
+                    {section.label === 'Admin' && role === UserRole.ADMIN && (
+                      <AdminHealthDot />
+                    )}
+                  </div>
                   {adminOpen && section.items.map((item) => {
                     const isActive = activeNav === item.id;
                     return (

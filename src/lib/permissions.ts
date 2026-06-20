@@ -331,6 +331,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   const isAdminOrManager = user.role === UserRole.ADMIN || user.role === UserRole.MANAGER;
   if (isAdminOrManager) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
   if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
+  // Health surface — admin-only. The sidebar's always-visible health
+  // roll-up dot links here too; this nav entry is the canonical
+  // navigation path for non-status traffic (history, manual probe).
+  if (user.role === UserRole.ADMIN) admin.push({ id: 'health', label: 'Health', icon: '', href: '/admin/health' });
   // `!sales` guard prevents AGENT from getting Clients in BOTH main
   // (pushed above) and admin. Other roles unchanged: ADMIN, MANAGER,
   // FLEET_TECH keep Clients under the Admin section as today.
