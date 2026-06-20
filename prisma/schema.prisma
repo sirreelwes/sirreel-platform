@@ -62,6 +62,14 @@ model AssetCategory {
   maxRentalDays  Int                 @default(365) @map("max_rental_days")
   region         Region              @default(LA)
   isPublished    Boolean             @default(true) @map("is_published")
+  // Operator-facing flag for the "+ New Hold" picker on the gantt
+  // /reservations page. Orthogonal to isPublished — that controls
+  // storefront / quote-side visibility; this controls whether the
+  // category is a sensible target for an asset-bound hold in the
+  // operator scheduler. Default true so new categories show up; flip
+  // false on test rigs and any other unit-tracked category that
+  // shouldn't surface in the operator picker.
+  reservableOnGantt Boolean          @default(true) @map("reservable_on_gantt")
   description    String?             @db.Text
   imageUrl       String?             @map("image_url")
   sortOrder      Int                 @default(0) @map("sort_order")
