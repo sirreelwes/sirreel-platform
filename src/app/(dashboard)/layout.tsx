@@ -242,18 +242,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="h-12 px-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-white">
-          <div className="flex gap-1.5">
-            <StatBadge label="Fleet" value="137" />
-            <StatBadge label="Active" value="10" highlight />
-            {perms.bookings && <StatBadge label="Pending" value="2" warn />}
-            <StatBadge label="Maint" value="9" />
-            {perms.seePricing && <StatBadge label="Revenue" value="$46.9K" />}
-          </div>
-          <div className="flex gap-2 items-center">
-            <QuickCreateMenu />
-          </div>
+        {/* Top bar — global chrome across all (dashboard) surfaces.
+            Carries the global "+ New" entry point right-aligned. The
+            left side previously held a row of placeholder KPI badges
+            (Fleet/Active/Pending/Maint/Revenue) wired to hardcoded
+            literals — pulled because the numbers were lies; real KPIs
+            will land on the Dashboard page itself, not the global
+            chrome. StatBadge (below) is intentionally kept for that
+            future use. Height stays h-12 so main content doesn't
+            reflow across every page. */}
+        <header className="h-12 px-4 border-b border-gray-100 flex items-center justify-end flex-shrink-0 bg-white">
+          <QuickCreateMenu />
         </header>
 
         {/* Content + AI */}
