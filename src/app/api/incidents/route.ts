@@ -19,6 +19,7 @@ import {
   parseCarriesCarrierClaimNumber,
   type IncidentStatusLite,
 } from '@/lib/incidents/derive'
+import { resolveDefaultIncidentOwnerId } from '@/lib/incidents/defaultOwner'
 
 export const dynamic = 'force-dynamic'
 
@@ -218,6 +219,9 @@ export async function POST(req: NextRequest) {
   }
 
   const incidentNumber = await nextIncidentNumber()
+  // Phase 4a — default ownership to the claims pod (Ana) on creation.
+  // Resolved by email so a DB-id change doesn't break this path.
+  const defaultOwnerId = await resolveDefaultIncidentOwnerId()
   const incident = await prisma.incident.create({
     data: {
       incidentNumber,
@@ -229,10 +233,12 @@ export async function POST(req: NextRequest) {
       assetId,
       companyId,
       createdById: me.id,
+      assigneeId: defaultOwnerId,
     },
     select: {
       id: true, incidentNumber: true, source: true, status: true,
       description: true, occurredAt: true, createdAt: true,
+      assigneeId: true,
     },
   })
 

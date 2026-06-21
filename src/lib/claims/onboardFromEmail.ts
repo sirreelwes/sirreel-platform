@@ -57,6 +57,7 @@ import {
   type GmailAttachmentMeta,
 } from '@/lib/email/persistGmailAttachments'
 import { preCreateIncidentForDraftedClaim } from '@/lib/incidents/openIncidentFromClaimMail'
+import { resolveDefaultIncidentOwnerId } from '@/lib/incidents/defaultOwner'
 
 const TEXT_MIN_CHARS = 30
 const TEXT_MAX_CHARS = 200_000
@@ -478,6 +479,11 @@ async function createDraft(args: {
   const claimNumber = await nextClaimNumber()
   const fileUrl = await uploadText({ text, claimNumber, gmailMessageId: msg.gmailMessageId })
 
+  // Phase 4a — resolve the claims-pod default owner OUTSIDE the tx so
+  // the in-tx incident.create lands the assigneeId without an extra
+  // round-trip from inside the transaction.
+  const defaultOwnerId = await resolveDefaultIncidentOwnerId()
+
   const created = await prisma.$transaction(async (tx) => {
     // Phase Incidents: every NEW auto-drafted claim gets an Incident
     // parent created in the same transaction. The Incident is the hub
@@ -493,6 +499,7 @@ async function createDraft(args: {
       msgSubject: msg.subject,
       msgId: msg.id,
       createdById: null,
+      assigneeId: defaultOwnerId,
     })
     const claim = await tx.insuranceClaim.create({
       data: {

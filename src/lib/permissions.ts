@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { isAllowedHrEmail } from '@/lib/hr/allowlist';
+import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
@@ -67,9 +68,15 @@ export interface Permissions {
   canProcessCheckout: boolean;
   // "Claims" is the legacy term — these gates power the Incidents
   // worklist edits (severity override, assignee, next-action,
-  // driverName) added in Phase 3 of the claims redesign. Phase 1:
-  // ADMIN-only; Phase 3 widened to ADMIN + MANAGER + AGENT so Hugo's
-  // team + Ana on collections can assign/work incidents.
+  // driverName) added in Phase 3 of the claims redesign.
+  //
+  // Phase 4a tightening: claims pod is ADMIN + email allowlist
+  // (src/lib/claims/allowlist.ts — today: Ana). All other roles read
+  // false from ROLE_PERMISSIONS; getPermissions() post-processes to
+  // widen via the allowlist. Incident CREATION is NOT gated on this
+  // perm (it's session-only), so Hugo's team retains RETURN_INSPECTION
+  // incident creation; only severity/owner/next-action/driver EDITS
+  // narrowed.
   canManageClaims: boolean;
   canSendEmail: boolean;
   canEditCompany: boolean;
@@ -105,7 +112,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     seeMaintCost: true, seeEmailHistory: false,
     canCreateBooking: false, canConfirmBooking: false, canCancelBooking: false,
     canAssignAssets: true, canChangeAssetStatus: true, canCreateMaintenance: true,
-    canManageDrivers: true, canProcessCheckout: true, canManageClaims: true,
+    canManageDrivers: true, canProcessCheckout: true, canManageClaims: false,
     canSendEmail: false, canEditCompany: false, canManageUsers: false,
   },
 
@@ -126,7 +133,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     seeMaintCost: false, seeEmailHistory: true,
     canCreateBooking: true, canConfirmBooking: false, canCancelBooking: false,
     canAssignAssets: false, canChangeAssetStatus: false, canCreateMaintenance: false,
-    canManageDrivers: false, canProcessCheckout: false, canManageClaims: true,
+    canManageDrivers: false, canProcessCheckout: false, canManageClaims: false,
     canSendEmail: true, canEditCompany: false, canManageUsers: false,
   },
 
@@ -221,7 +228,16 @@ export interface PermissionsUser {
 export function getPermissions(input: UserRole | PermissionsUser): Permissions {
   const user: PermissionsUser =
     typeof input === 'string' ? { role: input, salesOnly: false } : input;
-  const base = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.CLIENT;
+  const baseRaw = ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.CLIENT;
+  // Phase 4a — claims-pod widening. ROLE_PERMISSIONS gives canManageClaims
+  // to ADMIN only; the allowlist (src/lib/claims/allowlist.ts) brings in
+  // specific non-admin handlers (Ana today). Single source for both API
+  // gates and nav/UI — see assignable-users route, requireIncidentEditAccess,
+  // and the (future) nav entry.
+  const base: Permissions = {
+    ...baseRaw,
+    canManageClaims: baseRaw.canManageClaims || isAllowedClaimsEmail(user.email),
+  };
   if (!user.salesOnly) return base;
   // Sales-only override: a reduced surface. Keep the rest of the
   // AGENT perms intact (pipeline, crm, seePricing, seeClientNames,

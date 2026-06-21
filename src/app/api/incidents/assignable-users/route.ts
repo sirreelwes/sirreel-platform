@@ -2,8 +2,10 @@
  * GET /api/incidents/assignable-users
  *
  * Users eligible to be the Incident.assignee — the same set that can
- * EDIT incidents (canManageClaims = ADMIN + MANAGER + AGENT). Powers
- * the inline assignee picker on the Incidents list cards.
+ * EDIT incidents (Permissions.canManageClaims). After Phase 4a that's
+ * ADMIN role OR an email on src/lib/claims/allowlist.ts (today:
+ * Wes + Dani + Ana). Powers the inline owner picker on the Incidents
+ * list cards.
  *
  * Auth: any authenticated session can READ the list (the picker is
  * shown to anyone who can see the cards; the PATCH that writes the

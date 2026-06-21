@@ -26,6 +26,7 @@ import type { ParsedClaim } from '@/lib/claims/parsePastedClaim'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { nextIncidentNumber } from '@/lib/orders'
+import { resolveDefaultIncidentOwnerId } from '@/lib/incidents/defaultOwner'
 
 export interface OpenIncidentResult {
   incidentId: string
@@ -154,6 +155,10 @@ export async function openIncidentFromClaimMail(args: {
   const threadId = existing.emailMessage.threadId
 
   const incidentNumber = await nextIncidentNumber()
+  // Phase 4a — default ownership to the claims pod (Ana). Resolved
+  // outside the transaction so the in-tx incident.create is a single
+  // round-trip with the assigneeId already populated.
+  const defaultOwnerId = await resolveDefaultIncidentOwnerId()
   const incident = await prisma.$transaction(async (tx) => {
     const created = await tx.incident.create({
       data: {
@@ -164,6 +169,7 @@ export async function openIncidentFromClaimMail(args: {
         description,
         occurredAt,
         createdById,
+        assigneeId: defaultOwnerId,
       },
       select: { id: true, incidentNumber: true },
     })
@@ -252,8 +258,13 @@ export async function preCreateIncidentForDraftedClaim(args: {
   msgSubject: string | null
   msgId: string
   createdById: string | null
+  /** Phase 4a default owner (claims pod). Resolved by the caller via
+   *  resolveDefaultIncidentOwnerId() OUTSIDE the transaction so we
+   *  don't add a round-trip inside the tx. Null when the configured
+   *  default user isn't found — the incident lands unassigned. */
+  assigneeId: string | null
 }): Promise<{ id: string; incidentNumber: string }> {
-  const { tx, parsed, companyId, msgSubject, msgId, createdById } = args
+  const { tx, parsed, companyId, msgSubject, msgId, createdById, assigneeId } = args
   const description = parsed.lossDescription && parsed.lossDescription.length >= 10
     ? parsed.lossDescription
     : `Auto-drafted from email — subject: "${msgSubject ?? '(no subject)'}". Pending Ana review.`
@@ -270,6 +281,7 @@ export async function preCreateIncidentForDraftedClaim(args: {
       description,
       occurredAt,
       createdById,
+      assigneeId,
     },
     select: { id: true, incidentNumber: true },
   })
