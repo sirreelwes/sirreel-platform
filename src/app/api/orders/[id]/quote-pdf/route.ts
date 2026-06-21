@@ -47,6 +47,11 @@ export async function POST(
     return NextResponse.json({ error: 'Order has no line items' }, { status: 400 })
   }
 
+  // CLIENT-FACING — sub-rental fields (vendor name, vendor cost, PO #,
+  // status, receiveMethod) must NEVER be added to this serializer. The
+  // quote shows the client what they're paying, not where SirReel
+  // sourced it from. Internal sub-rental surfaces read OrderLineItem
+  // .subRentals directly and never come through this DTO.
   const lineItems: QuoteLineItem[] = order.lineItems.map((li) => ({
     department: li.department as Department,
     description: li.description,

@@ -128,6 +128,11 @@ export async function generateRentalInvoice(args: {
   // string is rebuilt from inventoryItem.description OR
   // assetCategory.name as fallback — same context the order detail
   // page shows.
+  // CLIENT-FACING — sub-rental fields (vendor name, vendor cost, PO #,
+  // status, receiveMethod) must NEVER be added to this snapshot. The
+  // invoice mirrors what the client signed, not SirReel's sourcing.
+  // Internal sub-rental surfaces read OrderLineItem.subRentals directly
+  // and never come through this DTO.
   const rentalLines: InvoiceLineSnapshotEntry[] = order.lineItems.map((li) => ({
     description: li.description,
     category: li.inventoryItem?.code ?? li.assetCategory?.name ?? null,

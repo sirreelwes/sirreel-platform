@@ -2640,6 +2640,10 @@ model OrderLineItem {
   // Only WAREHOUSE-lane lines get a PickListItem at book time. FLEET
   // and STAGE lines stay null.
   pickListItem  PickListItem?
+  // Sub-rentals: zero-or-many vendor-sourced fulfillments for this line.
+  // Internal-only — read by /admin and /sub-rentals surfaces, never by
+  // any client-facing serializer (portal, quote PDF, invoice PDF).
+  subRentals    SubRental[]
 
   @@index([packageInstanceId])
   @@map("sr_order_line_items")
@@ -2993,12 +2997,28 @@ enum SubRentalStatus {
   CANCELLED
 }
 
+/// How Hugo's team takes custody of a sub-rented item from the vendor.
+/// PICKUP  = SirReel goes to the vendor to collect.
+/// DELIVERY = vendor drops at SirReel's location.
+/// Drives Phase 2 "receive from vendor" logistics (not built yet).
+enum ReceiveMethod {
+  PICKUP
+  DELIVERY
+}
+
 model SubRental {
-  id              String          @id @default(uuid())
-  orderId         String?         @map("order_id")
-  inventoryItemId String?         @map("inventory_item_id")
-  vendorId        String          @map("vendor_id")
-  status          SubRentalStatus @default(REQUESTED)
+  id                String          @id @default(uuid())
+  orderId           String?         @map("order_id")
+  /// Optional direct link to the OrderLineItem this sub-rental fulfills.
+  /// One line can have multiple sub-rentals (partial fulfillment by qty).
+  /// Internal-only — never read by client-facing serializers.
+  orderLineItemId   String?         @map("order_line_item_id")
+  inventoryItemId   String?         @map("inventory_item_id")
+  vendorId          String          @map("vendor_id")
+  status            SubRentalStatus @default(REQUESTED)
+  /// How Hugo's team takes custody from the vendor — surfaced on the
+  /// returns board in Phase 3. Nullable until set at create time.
+  receiveMethod     ReceiveMethod?  @map("receive_method")
 
   itemDescription String    @map("item_description")
   quantity        Int       @default(1)
@@ -3020,9 +3040,16 @@ model SubRental {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   order         Order?         @relation(fields: [orderId], references: [id])
+  orderLineItem OrderLineItem? @relation(fields: [orderLineItemId], references: [id])
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   vendor        Vendor         @relation(fields: [vendorId], references: [id])
 
+  /// Returns board sort + filter: status × end-date so the "due back
+  /// soonest" view is a single index seek.
+  @@index([status, endDate])
+  /// Per-line lookup for the order-detail UI's "sub-rentals on this
+  /// line" surface.
+  @@index([orderLineItemId])
   @@map("sub_rentals")
 }
 

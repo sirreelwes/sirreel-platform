@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { getPermissions } from "@/lib/permissions";
+import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
@@ -14,6 +17,7 @@ import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/Dis
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { AgreementStatus, OrderStatus } from "@prisma/client";
@@ -314,6 +318,15 @@ export default function OrderDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const orderId = params.id as string;
+  // Session-derived perms — used to gate UX surfaces like the
+  // "Sub-rent…" line action. Server still enforces the same perm on
+  // POST /api/sub-rentals; this is hygiene, not security.
+  const { data: session } = useSession();
+  const sessionRole = ((session?.user as { role?: UserRole } | undefined)?.role) ?? null;
+  const sessionSalesOnly = ((session?.user as { salesOnly?: boolean } | undefined)?.salesOnly) ?? false;
+  const canManageSubRentals = sessionRole
+    ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).subRentals
+    : false;
   // ?send=1 — set by new-quote's "Send quote" finishing-move CTA. The
   // detail page loads, hydrates the order, then auto-opens the review
   // gate against the TSX welcome+quote template. One continuous motion
@@ -475,6 +488,10 @@ export default function OrderDetailPage() {
   const [emailReviewTarget, setEmailReviewTarget] = useState<EmailReviewTarget | null>(null);
   const [sendQuoteFlash, setSendQuoteFlash] = useState<string | null>(null);
   const [lineItemUndoToast, setLineItemUndoToast] = useState<LineItemUndoToastState | null>(null);
+  // Sub-rental modal: opens off the per-line "Sub-rent…" action. Stores
+  // the target line's context (id, qty cap, rate, dates) so the modal
+  // can clamp + pre-fill. Null when closed.
+  const [subRentalLine, setSubRentalLine] = useState<SubRentalLineContext | null>(null);
   // One-shot guard so the ?send=1 auto-open fires once per page load,
   // not on every re-render or refresh.
   const [autoSendHandled, setAutoSendHandled] = useState(false);
@@ -1787,6 +1804,12 @@ export default function OrderDetailPage() {
                             order.status as OrderStatus,
                             li.department,
                           ) ?? 'Order is locked — line items can\u2019t be edited directly. Re-quote or void to make changes.';
+                          // Sub-rent action — internal-only, gated on
+                          // canManageSubRentals (AGENT/MANAGER/ADMIN).
+                          // EQUIPMENT/EXPENDABLE lines only; vehicles
+                          // and discounts/fees aren't sub-rented.
+                          const canSubRent = canManageSubRentals
+                            && (li.type === 'EQUIPMENT' || li.type === 'EXPENDABLE')
                           return (
                             <>
                               {lineEditable && (
@@ -1795,6 +1818,23 @@ export default function OrderDetailPage() {
                                   className="text-lt-fg3 hover:text-lt-fg text-xs mr-2"
                                 >
                                   Edit
+                                </button>
+                              )}
+                              {canSubRent && (
+                                <button
+                                  onClick={() => setSubRentalLine({
+                                    orderId,
+                                    orderLineItemId: li.id,
+                                    description: li.description,
+                                    quantity: li.quantity,
+                                    rate: Number(li.rate),
+                                    pickupDate: li.startDate,
+                                    returnDate: li.endDate,
+                                  })}
+                                  title="Sub-rent this line from a vendor (internal — never on client docs)"
+                                  className="text-lt-fg3 hover:text-amber-600 text-xs mr-2"
+                                >
+                                  Sub-rent…
                                 </button>
                               )}
                               <span className="inline-block align-middle">
@@ -2754,6 +2794,14 @@ export default function OrderDetailPage() {
       )}
 
       <LineItemUndoToast toast={lineItemUndoToast} />
+
+      {subRentalLine && (
+        <SubRentalModal
+          line={subRentalLine}
+          onClose={() => setSubRentalLine(null)}
+          onChanged={() => { /* phase 1: no order-total impact; refresh is internal */ }}
+        />
+      )}
 
       {pushDatesOpen && order.startDate && order.endDate && (
         <PushDatesModal

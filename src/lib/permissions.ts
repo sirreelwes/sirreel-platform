@@ -35,6 +35,12 @@ export interface Permissions {
   // per-action perms (canVoidInvoice, canRecordPayment, etc) land in
   // their own commits.
   billing: boolean;
+  // Sub-rentals — create/edit sub-rental records on order lines and view
+  // the /sub-rentals returns board. Phase 1 gate: AGENT (Jose, Oliver,
+  // Ana on sales/billing) + MANAGER (Hugo) + ADMIN. Phase 2+ receive-
+  // from-vendor + return actions will narrow further to MANAGER+ADMIN
+  // (Hugo's team only).
+  subRentals: boolean;
   tasks: boolean;       // Driver task list
   inspections: boolean; // Driver inspections
 
@@ -71,7 +77,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: true, claims: true,
     reporting: true, ai: true, tasks: true, inspections: true, coverage: true,
-    warehouse: true, billing: true,
+    warehouse: true, billing: true, subRentals: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: true, seeAllBookings: true, seeOtherAgents: true,
@@ -87,7 +93,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: true, billing: false,
+    warehouse: true, billing: false, subRentals: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -108,7 +114,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: false,
     fleet: false, dispatch: false, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
-    warehouse: false, billing: true,
+    warehouse: false, billing: true, subRentals: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -124,7 +130,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: false, billing: false,
+    warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -139,7 +145,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
     fleet: true, dispatch: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
-    warehouse: false, billing: false,
+    warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
@@ -154,7 +160,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: true, inspections: true, coverage: false,
-    warehouse: false, billing: false,
+    warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: false,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -169,7 +175,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
     fleet: false, dispatch: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
-    warehouse: false, billing: false,
+    warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
     seeDriverInfo: false, seePricing: true,
     seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
@@ -339,9 +345,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // (pushed above) and admin. Other roles unchanged: ADMIN, MANAGER,
   // FLEET_TECH keep Clients under the Admin section as today.
   if (perms.crm && !sales) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  // Phase 7 consolidation — Sub-Rentals nav entry dropped. The
-  // /sub-rentals route never existed on disk (dead link). When the
-  // feature is built, restore this line with the new route.
+  // Sub-rentals — internal-only equipment sourced from partner vendors.
+  // Gated on Permissions.subRentals (AGENT + MANAGER + ADMIN in Phase
+  // 1). The page renders the returns board in Phase 3; today it just
+  // lists the GET /api/sub-rentals payload.
+  if (perms.subRentals) admin.push({ id: 'sub-rentals', label: 'Sub-rentals', icon: '', href: '/sub-rentals' });
   if (perms.maintenance && !salesOnly) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
   // Phase 7 consolidation — three paperwork tools (COI Check,
   // Contract Review, Contract History) collapsed into one nav

@@ -335,6 +335,11 @@ export async function GET(req: NextRequest) {
           displayTitle: leadership.displayTitle || defaultDisplayTitleForRole(leadership.role),
         }
       : null,
+    // CLIENT-FACING — sub-rental fields (vendor, vendor*, PO #, status,
+    // receiveMethod) must NEVER be added to this serializer. The client
+    // sees only their own line as they signed it. The internal sub-rental
+    // surfaces read OrderLineItem.subRentals directly and never come
+    // through this DTO.
     lineItems: order.lineItems.map((li) => ({
       id: li.id,
       type: li.type,
