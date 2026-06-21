@@ -2,20 +2,29 @@
  * GET   /api/incidents/[id] — incident detail incl. linked claims +
  *                              documents + damage rows + the original
  *                              ClaimMail parse when source=EMAIL.
- * PATCH /api/incidents/[id] — update description / occurredAt /
- *                              orderId / assetId / companyId / status.
+ *                              Open to any authenticated session.
+ * PATCH /api/incidents/[id] — update description / occurredAt / orderId
+ *                              / assetId / companyId / status / severity
+ *                              (override; null=auto) / assigneeId /
+ *                              nextAction / nextActionDueAt / driverName.
+ *                              Gated to canManageClaims (ADMIN + MANAGER
+ *                              + AGENT) — see Phase 3 of the claims
+ *                              redesign brief.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import type { IncidentStatus } from '@prisma/client'
+import type { IncidentStatus, IncidentSeverity } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { getPermissions } from '@/lib/permissions'
+import { requireIncidentEditAccess } from '@/lib/incidents/auth'
 
 export const dynamic = 'force-dynamic'
 
 const VALID_STATUSES: IncidentStatus[] = [
   'OPEN', 'CLAIM_FILED', 'BILLED_RENTER', 'RESOLVED', 'WRITTEN_OFF',
 ]
+const VALID_SEVERITIES: IncidentSeverity[] = ['LITIGATION', 'ROUTINE']
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -91,11 +100,17 @@ interface PatchBody {
   assetId?: unknown
   companyId?: unknown
   status?: unknown
+  // Phase 3 worklist fields
+  severity?: unknown        // 'LITIGATION' | 'ROUTINE' | null (null clears the override)
+  assigneeId?: unknown      // user id or null
+  nextAction?: unknown      // string or null
+  nextActionDueAt?: unknown // ISO date string or null
+  driverName?: unknown      // string or null
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const me = await requireSession()
-  if (!me) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const gate = await requireIncidentEditAccess()
+  if (gate instanceof NextResponse) return gate
 
   const { id } = await params
   const body = (await req.json().catch(() => ({}))) as PatchBody
@@ -155,13 +170,78 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data.status = body.status as IncidentStatus
   }
 
+  // ── Phase 3 worklist fields ─────────────────────────────────────
+  if (body.severity !== undefined) {
+    if (body.severity === null || body.severity === '') {
+      // Explicit null = clear the override, fall back to derived.
+      data.severity = null
+    } else if (typeof body.severity !== 'string' || !(VALID_SEVERITIES as string[]).includes(body.severity)) {
+      return NextResponse.json({ error: 'severity must be LITIGATION | ROUTINE | null' }, { status: 400 })
+    } else {
+      data.severity = body.severity as IncidentSeverity
+    }
+  }
+  if (body.assigneeId !== undefined) {
+    if (body.assigneeId === null || body.assigneeId === '') {
+      data.assigneeId = null
+    } else if (typeof body.assigneeId !== 'string') {
+      return NextResponse.json({ error: 'assigneeId must be string or null' }, { status: 400 })
+    } else {
+      // Confirm the assignee is themselves a claims-eligible user — we
+      // don't want a UI hiccup that lets the picker land on a fleet tech.
+      const u = await prisma.user.findUnique({
+        where: { id: body.assigneeId },
+        select: { id: true, role: true, email: true, salesOnly: true },
+      })
+      if (!u) return NextResponse.json({ error: 'assignee not found' }, { status: 404 })
+      const perms = getPermissions({ role: u.role, salesOnly: u.salesOnly, email: u.email })
+      if (!perms.canManageClaims) {
+        return NextResponse.json({ error: 'assignee lacks canManageClaims' }, { status: 400 })
+      }
+      data.assigneeId = u.id
+    }
+  }
+  if (body.nextAction !== undefined) {
+    if (body.nextAction === null || body.nextAction === '') data.nextAction = null
+    else if (typeof body.nextAction !== 'string') {
+      return NextResponse.json({ error: 'nextAction must be string or null' }, { status: 400 })
+    } else {
+      data.nextAction = body.nextAction.trim().slice(0, 2_000)
+    }
+  }
+  if (body.nextActionDueAt !== undefined) {
+    if (body.nextActionDueAt === null || body.nextActionDueAt === '') {
+      data.nextActionDueAt = null
+    } else if (typeof body.nextActionDueAt !== 'string') {
+      return NextResponse.json({ error: 'nextActionDueAt must be ISO string or null' }, { status: 400 })
+    } else {
+      const d = new Date(body.nextActionDueAt)
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: 'invalid nextActionDueAt' }, { status: 400 })
+      }
+      data.nextActionDueAt = d
+    }
+  }
+  if (body.driverName !== undefined) {
+    if (body.driverName === null || body.driverName === '') data.driverName = null
+    else if (typeof body.driverName !== 'string') {
+      return NextResponse.json({ error: 'driverName must be string or null' }, { status: 400 })
+    } else {
+      data.driverName = body.driverName.trim().slice(0, 200)
+    }
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
   }
 
   const incident = await prisma.incident.update({
     where: { id }, data,
-    select: { id: true, incidentNumber: true, status: true, updatedAt: true },
+    select: {
+      id: true, incidentNumber: true, status: true, updatedAt: true,
+      severity: true, assigneeId: true, nextAction: true, nextActionDueAt: true, driverName: true,
+      assignee: { select: { id: true, name: true } },
+    },
   }).catch(() => null)
   if (!incident) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({ ok: true, incident })

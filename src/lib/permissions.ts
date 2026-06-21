@@ -65,6 +65,11 @@ export interface Permissions {
   canCreateMaintenance: boolean;
   canManageDrivers: boolean;
   canProcessCheckout: boolean;
+  // "Claims" is the legacy term — these gates power the Incidents
+  // worklist edits (severity override, assignee, next-action,
+  // driverName) added in Phase 3 of the claims redesign. Phase 1:
+  // ADMIN-only; Phase 3 widened to ADMIN + MANAGER + AGENT so Hugo's
+  // team + Ana on collections can assign/work incidents.
   canManageClaims: boolean;
   canSendEmail: boolean;
   canEditCompany: boolean;
@@ -100,7 +105,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     seeMaintCost: true, seeEmailHistory: false,
     canCreateBooking: false, canConfirmBooking: false, canCancelBooking: false,
     canAssignAssets: true, canChangeAssetStatus: true, canCreateMaintenance: true,
-    canManageDrivers: true, canProcessCheckout: true, canManageClaims: false,
+    canManageDrivers: true, canProcessCheckout: true, canManageClaims: true,
     canSendEmail: false, canEditCompany: false, canManageUsers: false,
   },
 
@@ -121,7 +126,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     seeMaintCost: false, seeEmailHistory: true,
     canCreateBooking: true, canConfirmBooking: false, canCancelBooking: false,
     canAssignAssets: false, canChangeAssetStatus: false, canCreateMaintenance: false,
-    canManageDrivers: false, canProcessCheckout: false, canManageClaims: false,
+    canManageDrivers: false, canProcessCheckout: false, canManageClaims: true,
     canSendEmail: true, canEditCompany: false, canManageUsers: false,
   },
 

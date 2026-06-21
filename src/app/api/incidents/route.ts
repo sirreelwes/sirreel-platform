@@ -45,6 +45,17 @@ export async function GET(req: NextRequest) {
       id: true, incidentNumber: true, source: true, status: true,
       description: true, occurredAt: true,
       createdAt: true, updatedAt: true,
+      // Phase 3 worklist columns — stored severity (override; null = auto),
+      // assignee, driver, next-action + due. effectiveSeverity below
+      // collapses `severity ?? derivedSeverity` so the UI can render
+      // the resolved value while still showing an "auto" badge when
+      // the stored value is null.
+      severity: true,
+      assigneeId: true,
+      nextAction: true,
+      nextActionDueAt: true,
+      driverName: true,
+      assignee: { select: { id: true, name: true } },
       company: { select: { id: true, name: true } },
       order:   { select: { id: true, orderNumber: true } },
       asset:   { select: { id: true, unitName: true } },
@@ -118,6 +129,11 @@ export async function GET(req: NextRequest) {
     }
     const totalAttachments = mail.reduce((s, m) => s + (m.emailMessage.attachmentCount || 0), 0)
 
+    // Effective severity collapses stored override + derived. UI keeps
+    // `derivedSeverity` separately so it can show an "auto" badge when
+    // the stored override is null.
+    const effectiveSeverity = inc.severity ?? derivedSeverity
+
     return {
       ...inc,
       // Render numerics as numbers; Prisma already does for Int columns.
@@ -125,6 +141,7 @@ export async function GET(req: NextRequest) {
       // forward-compat and let the UI read [0].
       firstClaim: inc.claims[0] ?? null,
       derivedSeverity,
+      effectiveSeverity,
       recoveryPosture,
       suggestedNextAction,
       messageCount: mail.length,
