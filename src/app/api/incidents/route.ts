@@ -12,6 +12,13 @@ import { getServerSession } from 'next-auth'
 import type { IncidentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { nextIncidentNumber } from '@/lib/orders'
+import {
+  computeDerivedSeverity,
+  computeRecoveryPosture,
+  computeSuggestedNextAction,
+  parseCarriesCarrierClaimNumber,
+  type IncidentStatusLite,
+} from '@/lib/incidents/derive'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,9 +49,91 @@ export async function GET(req: NextRequest) {
       order:   { select: { id: true, orderNumber: true } },
       asset:   { select: { id: true, unitName: true } },
       _count:  { select: { claims: true, damageItems: true, documents: true } },
+      // First child claim for the "carrier: X · claim #Y" key-facts
+      // line on the decision-first card. Most incidents have 0 or 1
+      // claim; multi-claim ones still surface the oldest claim's
+      // identity (the canonical one).
+      claims: {
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+        select: { id: true, claimNumber: true, filedAgainst: true, carrierClaimNumber: true, status: true },
+      },
     },
   })
-  return NextResponse.json({ incidents })
+
+  // Phase 2 enrichment — derived facets. ONE extra query to pull every
+  // linked ClaimMail row for the incidents in this page, then we
+  // group + derive in-process. Cost is O(N_mail + N_incidents); for
+  // the take:200 cap this is a sub-second add.
+  const incidentIds = incidents.map((i) => i.id)
+  const mailRows = incidentIds.length
+    ? await prisma.claimMail.findMany({
+        where: { incidentId: { in: incidentIds } },
+        select: {
+          incidentId: true,
+          parse: true,
+          createdAt: true,
+          emailMessage: {
+            select: { fromAddress: true, sentAt: true, attachmentCount: true },
+          },
+        },
+      })
+    : []
+
+  const mailByIncident = new Map<string, typeof mailRows>()
+  for (const m of mailRows) {
+    if (!m.incidentId) continue
+    const arr = mailByIncident.get(m.incidentId) ?? []
+    arr.push(m)
+    mailByIncident.set(m.incidentId, arr)
+  }
+
+  const enriched = incidents.map((inc) => {
+    const mail = mailByIncident.get(inc.id) ?? []
+    const derivedSeverity = computeDerivedSeverity(
+      mail.map((m) => ({ parse: m.parse, emailMessage: m.emailMessage })),
+    )
+    const recoveryPosture = computeRecoveryPosture(
+      inc.status as IncidentStatusLite,
+      inc._count.claims,
+      inc._count.damageItems,
+    )
+    const parseHasCarrierClaimNumber = mail.some((m) =>
+      parseCarriesCarrierClaimNumber(m.parse),
+    )
+    const suggestedNextAction = computeSuggestedNextAction({
+      status: inc.status as IncidentStatusLite,
+      claimsCount: inc._count.claims,
+      damageItemsCount: inc._count.damageItems,
+      derivedSeverity,
+      parseHasCarrierClaimNumber,
+    })
+
+    // latestActivityAt: max of mail sentAt (best signal) falls back to
+    // incident.updatedAt so cards with zero linked mail still sort.
+    let latestActivityMs = new Date(inc.updatedAt).getTime()
+    for (const m of mail) {
+      const t = new Date(m.emailMessage.sentAt).getTime()
+      if (Number.isFinite(t) && t > latestActivityMs) latestActivityMs = t
+    }
+    const totalAttachments = mail.reduce((s, m) => s + (m.emailMessage.attachmentCount || 0), 0)
+
+    return {
+      ...inc,
+      // Render numerics as numbers; Prisma already does for Int columns.
+      // First-child claim is at most one row; keep the array for shape
+      // forward-compat and let the UI read [0].
+      firstClaim: inc.claims[0] ?? null,
+      derivedSeverity,
+      recoveryPosture,
+      suggestedNextAction,
+      messageCount: mail.length,
+      totalAttachments,
+      latestActivityAt: new Date(latestActivityMs).toISOString(),
+    }
+  })
+
+  return NextResponse.json({ incidents: enriched })
 }
 
 interface CreateBody {

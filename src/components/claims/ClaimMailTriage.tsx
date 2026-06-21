@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { computeDerivedSeverity, type DerivedSeverity } from '@/lib/incidents/derive'
 
 type Disposition = 'DRAFTED' | 'ATTACHED' | 'NEEDS_REVIEW' | 'IGNORED'
 
@@ -351,6 +352,13 @@ function IncidentGroupCard({
   const tone = INCIDENT_STATUS_TONE[group.incidentStatus] ?? 'bg-lt-inner text-lt-fg2'
   const label = INCIDENT_STATUS_LABEL[group.incidentStatus] ?? group.incidentStatus
   const n = group.rows.length
+  // Severity is derived client-side here from the same pure helper
+  // the /api/incidents endpoint uses server-side — keeps the chip in
+  // sync between the triage widget and the Incidents list card.
+  const severity: DerivedSeverity = computeDerivedSeverity(
+    group.rows.map((r) => ({ parse: r.parse, emailMessage: { fromAddress: r.emailMessage.fromAddress } })),
+  )
+  const isLitigation = severity === 'LITIGATION'
   return (
     <div className="border-t border-lt-hairline first:border-t-0">
       <div className="flex items-center gap-2 px-4 py-2.5">
@@ -372,6 +380,14 @@ function IncidentGroupCard({
         <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${tone}`}>
           {label}
         </span>
+        {isLitigation && (
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-chip-bad-bg text-chip-bad-fg"
+            title="Derived from inbound mail: law-firm sender or litigation phrase in parse."
+          >
+            ⚠ Litigation
+          </span>
+        )}
         <span className="text-xs text-lt-fg2">
           {n} {n === 1 ? 'message' : 'messages'}
           {group.latestMs != null && <> · latest {fmtGroupDate(group.latestMs)}</>}
