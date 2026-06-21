@@ -142,11 +142,46 @@ export function ClaimMailTriage({ onIncidentOpened }: {
     }
   }
 
-  const counts = useMemo(() => {
-    if (!rows) return null
-    const c: Record<Disposition, number> = { DRAFTED: 0, ATTACHED: 0, NEEDS_REVIEW: 0, IGNORED: 0 }
-    for (const r of rows) c[r.disposition]++
-    return c
+  // Phase 1 grouping: split rows by whether they already point at an
+  // Incident (server-confirmed `r.incident`). Folded by incident in
+  // section 1; flat triage queue in section 2.
+  //
+  // `lastOpened` (the optimistic just-clicked cache) is deliberately
+  // NOT used for splitting — a row stays in the unassigned section
+  // through one render cycle so the user sees their "View SR-INC-NNNN"
+  // feedback inline, then the next `load()` refresh folds it into the
+  // right group via the server-confirmed `r.incident`.
+  const { incidentGroups, unassigned } = useMemo(() => {
+    const groups = new Map<string, IncidentGroup>()
+    const unassigned: ClaimMailRow[] = []
+    if (!rows) return { incidentGroups: [] as IncidentGroup[], unassigned }
+    for (const r of rows) {
+      if (r.incident?.id) {
+        const key = r.incident.id
+        const existing = groups.get(key)
+        if (existing) {
+          existing.rows.push(r)
+        } else {
+          groups.set(key, {
+            id: r.incident.id,
+            incidentNumber: r.incident.incidentNumber,
+            incidentStatus: r.incident.status,
+            rows: [r],
+          })
+        }
+      } else {
+        unassigned.push(r)
+      }
+    }
+    // Sort groups by latest mail activity (newest first). Use the row
+    // createdAt as the activity signal — that's when HQ landed it.
+    const incidentGroups = Array.from(groups.values()).map((g) => {
+      const latestMs = Math.max(...g.rows.map((r) => new Date(r.createdAt).getTime()))
+      const totalAttachments = g.rows.reduce((s, r) => s + (r.emailMessage.attachmentCount || 0), 0)
+      return { ...g, latestMs, totalAttachments }
+    })
+    incidentGroups.sort((a, b) => b.latestMs - a.latestMs)
+    return { incidentGroups, unassigned }
   }, [rows])
 
   if (rows == null) {
@@ -158,6 +193,35 @@ export function ClaimMailTriage({ onIncidentOpened }: {
   }
   if (rows.length === 0) return null
 
+  // Build the per-row action wiring once so both sections share it
+  // (and TriageRow stays a pure presentational component).
+  const onRowOpenIncident = (rowId: string) => async () => {
+    setPendingId(rowId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/claims/mail-triage/${rowId}/open-incident`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.incident) {
+        setError(data?.error || `HTTP ${res.status}`)
+        return
+      }
+      setLastOpened((m) => ({
+        ...m,
+        [rowId]: { id: data.incident.incidentId, incidentNumber: data.incident.incidentNumber },
+      }))
+      onIncidentOpened?.(data.incident.incidentId, data.incident.incidentNumber)
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'open-incident failed')
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  const messageCount = rows.length
+  const groupCount = incidentGroups.length
+  const unassignedCount = unassigned.length
+
   return (
     <div className="bg-lt-card border border-lt-hairline rounded-xl mb-6">
       <button
@@ -168,14 +232,19 @@ export function ClaimMailTriage({ onIncidentOpened }: {
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-lt-fg">Claim mail</span>
           <span className="text-xs text-lt-fg2">
-            {rows.length} {rows.length === 1 ? 'message' : 'messages'}
-            {counts && counts.NEEDS_REVIEW > 0 && (
+            {groupCount > 0 && (
               <>
-                {' · '}
-                <span className="text-chip-warn-fg font-medium">
-                  {counts.NEEDS_REVIEW} need{counts.NEEDS_REVIEW === 1 ? 's' : ''} review
-                </span>
+                {groupCount} {groupCount === 1 ? 'incident' : 'incidents'}
+                {unassignedCount > 0 ? ' · ' : ''}
               </>
+            )}
+            {unassignedCount > 0 && (
+              <span className={unassignedCount > 0 ? 'text-chip-warn-fg font-medium' : undefined}>
+                {unassignedCount} unassigned message{unassignedCount === 1 ? '' : 's'}
+              </span>
+            )}
+            {groupCount === 0 && unassignedCount === 0 && (
+              <>{messageCount} {messageCount === 1 ? 'message' : 'messages'}</>
             )}
           </span>
         </div>
@@ -183,45 +252,144 @@ export function ClaimMailTriage({ onIncidentOpened }: {
       </button>
 
       {!collapsed && (
-        <div className="border-t border-lt-hairline divide-y divide-lt-hairline">
+        <div className="border-t border-lt-hairline">
           {error && (
             <div className="px-4 py-2 text-xs text-chip-bad-fg bg-chip-bad-bg/30">{error}</div>
           )}
-          {rows.map((r) => (
+
+          {/* Section 1 — grouped by incident */}
+          {incidentGroups.length > 0 && (
+            <div className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">
+              By incident
+            </div>
+          )}
+          {incidentGroups.map((g) => (
+            <IncidentGroupCard
+              key={g.id}
+              group={g}
+              pendingId={pendingId}
+              lastOpened={lastOpened}
+              onOpenIncident={onRowOpenIncident}
+              onDismiss={dismiss}
+            />
+          ))}
+
+          {/* Section 2 — unassigned (the real triage queue) */}
+          {unassigned.length > 0 && (
+            <div className={`px-4 pt-3 pb-1 text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold ${incidentGroups.length > 0 ? 'border-t border-lt-hairline mt-1' : ''}`}>
+              Needs an incident
+            </div>
+          )}
+          {unassigned.length > 0 && (
+            <div className="divide-y divide-lt-hairline">
+              {unassigned.map((r) => (
+                <TriageRow
+                  key={r.id}
+                  row={r}
+                  pending={pendingId === r.id}
+                  justOpened={lastOpened[r.id] ?? null}
+                  onOpenIncident={onRowOpenIncident(r.id)}
+                  onDismiss={() => dismiss(r.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface IncidentGroup {
+  id: string
+  incidentNumber: string
+  incidentStatus: string
+  rows: ClaimMailRow[]
+  latestMs?: number
+  totalAttachments?: number
+}
+
+// Status-pill tone mirrors /incidents/page.tsx so the widget looks
+// like the rest of the surface without importing across modules.
+const INCIDENT_STATUS_TONE: Record<string, string> = {
+  OPEN:          'bg-chip-warn-bg text-chip-warn-fg',
+  CLAIM_FILED:   'bg-chip-neutral-bg text-chip-neutral-fg',
+  BILLED_RENTER: 'bg-chip-neutral-bg text-chip-neutral-fg',
+  RESOLVED:      'bg-chip-good-bg text-chip-good-fg',
+  WRITTEN_OFF:   'bg-lt-inner text-lt-fg3',
+}
+const INCIDENT_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Open', CLAIM_FILED: 'Claim filed', BILLED_RENTER: 'Billed renter',
+  RESOLVED: 'Resolved', WRITTEN_OFF: 'Written off',
+}
+
+function fmtGroupDate(ms: number): string {
+  const d = new Date(ms)
+  const diffMin = (Date.now() - ms) / 60_000
+  if (diffMin < 60) return `${Math.floor(diffMin)}m ago`
+  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function IncidentGroupCard({
+  group,
+  pendingId,
+  lastOpened,
+  onOpenIncident,
+  onDismiss,
+}: {
+  group: IncidentGroup
+  pendingId: string | null
+  lastOpened: { [k: string]: { id: string; incidentNumber: string } }
+  onOpenIncident: (rowId: string) => () => void
+  onDismiss: (rowId: string) => void
+}) {
+  // Collapsed-by-default per spec. Per-card expand state lives here so
+  // each card opens independently; the outer widget toggle still hides
+  // the whole list at once.
+  const [expanded, setExpanded] = useState(false)
+  const tone = INCIDENT_STATUS_TONE[group.incidentStatus] ?? 'bg-lt-inner text-lt-fg2'
+  const label = INCIDENT_STATUS_LABEL[group.incidentStatus] ?? group.incidentStatus
+  const n = group.rows.length
+  return (
+    <div className="border-t border-lt-hairline first:border-t-0">
+      <div className="flex items-center gap-2 px-4 py-2.5">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-lt-fg3 hover:text-lt-fg2 w-4 text-center shrink-0"
+          aria-label={expanded ? 'Collapse' : 'Expand'}
+          title={expanded ? 'Collapse' : 'Expand'}
+        >
+          {expanded ? '▾' : '▸'}
+        </button>
+        <Link
+          href={`/incidents/${group.id}`}
+          className="text-xs font-mono font-semibold text-lt-fg hover:underline underline-offset-2"
+        >
+          {group.incidentNumber}
+        </Link>
+        <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${tone}`}>
+          {label}
+        </span>
+        <span className="text-xs text-lt-fg2">
+          {n} {n === 1 ? 'message' : 'messages'}
+          {group.latestMs != null && <> · latest {fmtGroupDate(group.latestMs)}</>}
+          {group.totalAttachments != null && group.totalAttachments > 0 && (
+            <> · {group.totalAttachments} attachment{group.totalAttachments === 1 ? '' : 's'}</>
+          )}
+        </span>
+      </div>
+      {expanded && (
+        <div className="divide-y divide-lt-hairline border-t border-lt-hairline bg-lt-inner/20">
+          {group.rows.map((r) => (
             <TriageRow
               key={r.id}
               row={r}
               pending={pendingId === r.id}
               justOpened={lastOpened[r.id] ?? null}
-              onOpenIncident={async () => {
-                setPendingId(r.id)
-                setError(null)
-                try {
-                  const res = await fetch(`/api/claims/mail-triage/${r.id}/open-incident`, {
-                    method: 'POST',
-                  })
-                  const data = await res.json().catch(() => ({}))
-                  if (!res.ok || !data?.incident) {
-                    setError(data?.error || `HTTP ${res.status}`)
-                    return
-                  }
-                  setLastOpened((m) => ({
-                    ...m,
-                    [r.id]: { id: data.incident.incidentId, incidentNumber: data.incident.incidentNumber },
-                  }))
-                  onIncidentOpened?.(data.incident.incidentId, data.incident.incidentNumber)
-                  // Refresh the list so the row's claim/incident link
-                  // shows through; the inline lastOpened banner stays
-                  // until the next refresh in case the user wants to
-                  // confirm visually before clicking through.
-                  load()
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : 'open-incident failed')
-                } finally {
-                  setPendingId(null)
-                }
-              }}
-              onDismiss={() => dismiss(r.id)}
+              onOpenIncident={onOpenIncident(r.id)}
+              onDismiss={() => onDismiss(r.id)}
             />
           ))}
         </div>
