@@ -415,11 +415,31 @@ function NewOrderWizardInner() {
         ? { amount: Number(discountAmount), label: discountLabel || null }
         : undefined
 
+      // parse-quote emits catalog matches as catalogProductId + catalogType;
+      // /api/orders/from-parse binds lines via inventoryItemId / assetCategoryId.
+      // Translate here so the catalog linkage (and hold-tracking for
+      // VEHICLES/STAGES) survives the create — without this the matched
+      // product is dropped and every line lands unbound.
+      const itemsPayload = items.map((it) => ({
+        description: it.description,
+        quantity: it.quantity,
+        rate: it.rate,
+        rateType: it.rateType,
+        department: it.department,
+        qualifier: it.qualifier,
+        catalogType: it.catalogType,
+        inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
+        assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,
+        pickupDate: it.pickupDate || null,
+        returnDate: it.returnDate || null,
+        billableDays: it.billableDays,
+      }))
+
       const body = {
         companyDecision,
         jobDecision,
         contactsDecision,
-        items,
+        items: itemsPayload,
         parsed: {
           startDate: startDate || null,
           endDate: endDate || null,
