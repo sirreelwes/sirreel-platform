@@ -39,6 +39,12 @@ const DEPARTMENTS: LineItemDepartment[] = [
 type CatalogType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE';
 
 interface ResolvedItem {
+  /** Stable client-side identifier minted whenever a row enters the
+   *  items array (parse, manual add, package expansion, draft restore).
+   *  Drives the React key and every mutate-by-id handler so deletes,
+   *  inserts, and reorders never trip React reconciliation. Not
+   *  persisted — stripped at save time. */
+  localId: string;
   description: string;
   quantity: number;
   catalogProductId: string | null;
@@ -313,6 +319,23 @@ const RATE_TYPE_LABEL: Record<RateType, string> = {
 };
 function rateTypeLabel(rt: RateType): string {
   return RATE_TYPE_LABEL[rt];
+}
+
+// Stable per-row id. crypto.randomUUID when available; otherwise a
+// time+random fallback that's good enough for in-session uniqueness.
+function newLocalId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `li-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Tag every incoming row with a localId. Parse-API output, sessionStorage
+// drafts, and supply-order cart conversions all flow through here so
+// parsed rows behave identically to manually-added ones.
+type IncomingItem = Omit<ResolvedItem, 'localId'> & { localId?: string };
+function withLocalIds(items: IncomingItem[]): ResolvedItem[] {
+  return items.map((it) => ({ ...it, localId: it.localId ?? newLocalId() }));
 }
 
 export default function NewQuotePage() {
@@ -609,7 +632,7 @@ function NewQuotePageInner() {
     const draft = readDraftState(inquiryId);
     if (!draft) return;
     setParsed(draft.parsed);
-    setItems(draft.items);
+    setItems(withLocalIds(draft.items));
     setEditing(draft.editing);
     setContacts(draft.contacts);
     setEmailText(draft.emailText);
@@ -710,6 +733,7 @@ function NewQuotePageInner() {
           const items: ResolvedItem[] = meta!.cart!.map((line) => {
             const isExpendable = line.type === 'EXPENDABLE';
             return {
+              localId: newLocalId(),
               description: line.name,
               quantity: line.quantity,
               catalogProductId: line.itemId,
@@ -824,7 +848,7 @@ function NewQuotePageInner() {
         notes: data.parsed?.notes,
         ...prev,
       }));
-      setItems(data.items || []);
+      setItems(withLocalIds(data.items || []));
       setClientCandidates(data.clientMatch || []);
       setContacts(hydrateContacts(data.contacts));
       if (data.clientMatch?.length === 1 && !selectedClientId) {
@@ -863,7 +887,7 @@ function NewQuotePageInner() {
       }
       setParsed(parseData.parsed);
       setEditing((prev) => ({ ...prev, ...parseData.parsed }));
-      setItems(parseData.items || []);
+      setItems(withLocalIds(parseData.items || []));
       setClientCandidates(parseData.clientMatch || []);
       setContacts(hydrateContacts(parseData.contacts));
     } finally {
@@ -871,9 +895,9 @@ function NewQuotePageInner() {
     }
   };
 
-  const updateItem = (idx: number, patch: Partial<ResolvedItem>) => {
+  const updateItem = (id: string, patch: Partial<ResolvedItem>) => {
     setItems((prev) => {
-      const target = prev[idx];
+      const target = prev.find((it) => it.localId === id);
       if (!target) return prev;
 
       // Header-driven cascade: when a package header's pickupDate /
@@ -884,7 +908,7 @@ function NewQuotePageInner() {
         .filter((f) => patch[f] !== undefined && patch[f] !== target[f])
       if (target.isPackageHeader && target.packageInstanceId && headerCascadeFields.length > 0) {
         return prev.map((it) => {
-          if (it === target) return applyRowPatch(it, patch)
+          if (it.localId === id) return applyRowPatch(it, patch)
           if (it.packageInstanceId === target.packageInstanceId && it.isPackageMember) {
             const memberPatch: Partial<ResolvedItem> = {}
             for (const f of headerCascadeFields) {
@@ -907,7 +931,7 @@ function NewQuotePageInner() {
         (patch.quantity !== undefined || patch.description !== undefined || patch.rate !== undefined)
       if (memberStructuralEdit) {
         return prev.map((it) => {
-          if (it === target) return applyRowPatch(it, patch)
+          if (it.localId === id) return applyRowPatch(it, patch)
           if (it.packageInstanceId === target.packageInstanceId && it.isPackageHeader) {
             return { ...it, isPackageModified: true }
           }
@@ -915,7 +939,7 @@ function NewQuotePageInner() {
         })
       }
 
-      return prev.map((it, i) => (i === idx ? applyRowPatch(it, patch) : it))
+      return prev.map((it) => (it.localId === id ? applyRowPatch(it, patch) : it))
     });
   };
 
@@ -982,10 +1006,11 @@ function NewQuotePageInner() {
   // Frictionless remove + undo toast. We snapshot the item AND its
   // index so the undo restores it exactly where it was (otherwise
   // sorting / grouping would land it at the end of its department).
-  const removeItem = (idx: number) => {
+  const removeItem = (id: string) => {
     setItems((prev) => {
+      const idx = prev.findIndex((it) => it.localId === id);
+      if (idx < 0) return prev;
       const removed = prev[idx];
-      if (!removed) return prev;
       // Package header deletion cascades — confirm with the rep
       // first. The members share packageInstanceId; we snapshot
       // them all so undo restores the entire bundle.
@@ -1015,7 +1040,7 @@ function NewQuotePageInner() {
       // Member-line deletion flags the header as modified.
       if (removed.isPackageMember && removed.packageInstanceId) {
         const instanceId = removed.packageInstanceId;
-        const next = prev.filter((_, i) => i !== idx).map((it) =>
+        const next = prev.filter((it) => it.localId !== id).map((it) =>
           it.packageInstanceId === instanceId && it.isPackageHeader
             ? { ...it, isPackageModified: true }
             : it,
@@ -1033,7 +1058,7 @@ function NewQuotePageInner() {
         });
         return next;
       }
-      const next = prev.filter((_, i) => i !== idx);
+      const next = prev.filter((it) => it.localId !== id);
       setUndoToast({
         label: removed.description || '(line item)',
         onUndo: () => {
@@ -1087,55 +1112,60 @@ function NewQuotePageInner() {
     );
   };
 
-  const addBlankItem = () => {
-    // (STEP 1C) No more today/tomorrow defaults. When the editing-level
-    // dates are unset, the new row stays explicitly TBD (empty date
-    // strings, null billableDays). Math renders "$X/day · total on
-    // dates" instead of a guessed 1-day total. When the editing-level
-    // dates ARE set, inherit them — that's the rep's intent for the
-    // whole quote.
+  // Append a blank row in `dept`. Dates inherit from the quote-level
+  // window when set, else stay TBD. Returns the new row's localId so
+  // callers (per-category +, manual-add button, commit-then-append)
+  // can park focus on it.
+  const addRowToDept = (dept: LineItemDepartment, opts?: { focus?: boolean }): string => {
     const pickup = editing.startDate || '';
     const ret = editing.endDate || '';
+    const localId = newLocalId();
     setItems((prev) => [
       ...prev,
       {
+        localId,
         description: '',
         quantity: 1,
         catalogProductId: null,
         catalogType: null,
-        department: 'PRO_SUPPLIES',
+        department: dept,
         qualifier: null,
-        rateType: 'DAILY',
+        // EXPENDABLES are purchase-only; everything else defaults daily.
+        rateType: dept === 'EXPENDABLES' ? 'FLAT' : 'DAILY',
         pickupDate: pickup,
         returnDate: ret,
         // null when both dates are unset; will become a computed value
         // when the rep commits dates. Never silently 1.
-        billableDays: pickup && ret ? null : null,
+        billableDays: null,
         rate: 0,
         matchedProduct: null,
         matchSource: null,
         warnings: [],
       },
     ]);
+    if (opts?.focus !== false) setPendingFocusId(localId);
+    return localId;
   };
 
-  // ─── Auto-append + focus management for the combobox flow ───────
-  // Refs map indexed by row position in the `items` array. Combobox
-  // registers its underlying input ref on mount; we use it to focus
-  // either the next existing row (same dept) or a freshly appended
-  // blank row after commit. `pendingFocusIdx` is the "next idx I want
-  // to focus once it's rendered" — the effect below applies it.
-  const descriptionRefs = useRef<Map<number, HTMLInputElement>>(new Map());
-  const [pendingFocusIdx, setPendingFocusIdx] = useState<number | null>(null);
+  const addBlankItem = () => { addRowToDept('PRO_SUPPLIES'); };
 
-  const registerDescriptionRef = useCallback((idx: number) => (el: HTMLInputElement | null) => {
-    if (el) descriptionRefs.current.set(idx, el);
-    else descriptionRefs.current.delete(idx);
+  // ─── Auto-append + focus management for the combobox flow ───────
+  // Refs keyed by row.localId. Combobox registers its underlying input
+  // ref on mount; we use it to focus either the next existing row
+  // (same dept) or a freshly appended blank row after commit.
+  // `pendingFocusId` is the "next row I want to focus once it's
+  // rendered" — the effect below applies it.
+  const descriptionRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+
+  const registerDescriptionRef = useCallback((id: string) => (el: HTMLInputElement | null) => {
+    if (el) descriptionRefs.current.set(id, el);
+    else descriptionRefs.current.delete(id);
   }, []);
 
   useEffect(() => {
-    if (pendingFocusIdx == null) return;
-    const el = descriptionRefs.current.get(pendingFocusIdx);
+    if (pendingFocusId == null) return;
+    const el = descriptionRefs.current.get(pendingFocusId);
     if (el) {
       // Defer to next microtask so layout has settled.
       requestAnimationFrame(() => {
@@ -1144,16 +1174,16 @@ function NewQuotePageInner() {
         const v = el.value;
         el.setSelectionRange(v.length, v.length);
       });
-      setPendingFocusIdx(null);
+      setPendingFocusId(null);
     }
-  }, [pendingFocusIdx, items.length]);
+  }, [pendingFocusId, items.length]);
 
   // Package pick: replace the current row with a HEADER carrying the
   // package's pricePerDay + insert MEMBER rows after it (rate=0,
   // shared packageInstanceId). Members render indented under the
   // header. Header price drives the order math; members are $0.
   const handlePickPackage = useCallback((
-    targetIdx: number,
+    targetId: string,
     hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit,
   ) => {
     if (!hit.items || hit.items.length === 0) return;
@@ -1162,13 +1192,16 @@ function NewQuotePageInner() {
         ? crypto.randomUUID()
         : `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     setItems((prev) => {
+      const targetIdx = prev.findIndex((it) => it.localId === targetId);
+      if (targetIdx < 0) return prev;
       const target = prev[targetIdx];
-      if (!target) return prev;
       const pickup = target.pickupDate;
       const ret = target.returnDate;
       const days = target.billableDays;
       const header: ResolvedItem = {
         ...target,
+        // Header keeps the original row's localId so focus / refs
+        // stay continuous through the in-place replacement.
         description: hit.name,
         catalogProductId: hit.id,
         catalogType: 'PACKAGE',
@@ -1184,6 +1217,7 @@ function NewQuotePageInner() {
         isPackageModified: false,
       };
       const members: ResolvedItem[] = hit.items!.map((m) => ({
+        localId: newLocalId(),
         description: m.name,
         quantity: m.qty,
         catalogProductId: m.inventoryItemId,
@@ -1210,9 +1244,10 @@ function NewQuotePageInner() {
     });
   }, []);
 
-  const handleRowCommit = useCallback((committedIdx: number) => {
+  const handleRowCommit = useCallback((committedId: string) => {
+    const committedIdx = items.findIndex((it) => it.localId === committedId);
+    if (committedIdx < 0) return;
     const committed = items[committedIdx];
-    if (!committed) return;
     // Look for the next existing row in the same department.
     const sameDept = items
       .map((it, i) => ({ it, i }))
@@ -1220,34 +1255,13 @@ function NewQuotePageInner() {
     const positionInDept = sameDept.findIndex((r) => r.i === committedIdx);
     const nextSameDept = sameDept[positionInDept + 1];
     if (nextSameDept) {
-      setPendingFocusIdx(nextSameDept.i);
+      setPendingFocusId(nextSameDept.it.localId);
       return;
     }
     // Append a fresh blank row in the same department + focus its
     // combobox. (STEP 1C) No today/tomorrow defaults — TBD until the
     // rep commits dates.
-    const pickup = editing.startDate || '';
-    const ret = editing.endDate || '';
-    setItems((prev) => [
-      ...prev,
-      {
-        description: '',
-        quantity: 1,
-        catalogProductId: null,
-        catalogType: null,
-        department: committed.department,
-        qualifier: null,
-        rateType: 'DAILY',
-        pickupDate: pickup,
-        returnDate: ret,
-        billableDays: null,
-        rate: 0,
-        matchedProduct: null,
-        matchSource: null,
-        warnings: [],
-      },
-    ]);
-    setPendingFocusIdx(items.length);
+    addRowToDept(committed.department);
   }, [items, editing.startDate, editing.endDate]);
 
   const orderTotal = useMemo(() => {
@@ -2049,8 +2063,8 @@ function NewQuotePageInner() {
       {/* Line items grouped by department */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-lt-fg">Line Items ({items.length})</h2>
-          <button onClick={addBlankItem} className="text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg">
+          <h2 className="text-base font-bold text-lt-fg">Line Items ({items.length})</h2>
+          <button onClick={addBlankItem} className="text-xs font-semibold text-lt-fg2 hover:text-lt-fg">
             + Add line manually
           </button>
         </div>
@@ -2058,9 +2072,7 @@ function NewQuotePageInner() {
           <div className="text-xs text-lt-fg3 text-center py-6">No line items.</div>
         ) : (
           DEPARTMENTS.map((dept) => {
-            const group = items
-              .map((it, idx) => ({ it, idx }))
-              .filter(({ it }) => it.department === dept);
+            const group = items.filter((it) => it.department === dept);
             if (group.length === 0) return null;
             return (
               <DepartmentGroup
@@ -2069,6 +2081,7 @@ function NewQuotePageInner() {
                 rows={group}
                 onChange={updateItem}
                 onDelete={removeItem}
+                onAdd={() => addRowToDept(dept)}
                 onBulkApply={setBulkForDept}
                 onCommit={handleRowCommit}
                 onPickPackage={handlePickPackage}
@@ -2108,8 +2121,8 @@ function NewQuotePageInner() {
       {/* Footer actions */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-sm">
-          <span className="text-lt-fg3">Subtotal:</span>
-          <span className="ml-2 font-mono text-lt-fg text-base">{fmtMoney(orderTotal)}</span>
+          <span className="text-lt-fg3 uppercase tracking-wider text-xs font-semibold">Subtotal</span>
+          <span className="ml-3 tabular-nums text-lt-fg text-2xl font-bold">{fmtMoney(orderTotal)}</span>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -2167,22 +2180,23 @@ function NewQuotePageInner() {
 // Shared grid template for the dept-group "table" — header row, line item
 // rows, and subtotal row all use this so columns align vertically.
 //   QTY · DESCRIPTION · PRICE/DAY · PICKUP · RETURN · DAYS · TOTAL · ACTIONS
-const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_36px]';
+const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_64px]';
 
 function DepartmentGroup({
-  department, rows, onChange, onDelete, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
+  department, rows, onChange, onDelete, onAdd, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
 }: {
   department: LineItemDepartment;
-  rows: { it: ResolvedItem; idx: number }[];
-  onChange: (idx: number, patch: Partial<ResolvedItem>) => void;
-  onDelete: (idx: number) => void;
+  rows: ResolvedItem[];
+  onChange: (id: string, patch: Partial<ResolvedItem>) => void;
+  onDelete: (id: string) => void;
+  onAdd: () => void;
   onBulkApply: (
     dept: LineItemDepartment,
     patch: { pickupDate?: string; returnDate?: string; billableDays?: number },
   ) => void;
-  onCommit?: (idx: number) => void;
-  onPickPackage?: (idx: number, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
-  registerDescriptionRef?: (idx: number) => (el: HTMLInputElement | null) => void;
+  onCommit?: (id: string) => void;
+  onPickPackage?: (id: string, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
+  registerDescriptionRef?: (id: string) => (el: HTMLInputElement | null) => void;
 }) {
   const [bulkPickup, setBulkPickup] = useState('');
   const [bulkReturn, setBulkReturn] = useState('');
@@ -2207,7 +2221,7 @@ function DepartmentGroup({
   };
 
   const subtotal = rows.reduce(
-    (sum, { it }) =>
+    (sum, it) =>
       sum +
       computeLineTotal({
         quantity: it.quantity,
@@ -2224,11 +2238,11 @@ function DepartmentGroup({
       {/* Group header — dept name + count + bulk-set strip */}
       <header className="flex items-center justify-between gap-2 px-3 py-2 bg-lt-card/60 border-b border-lt-hairline rounded-t-lg flex-wrap">
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}>
+          <span className={`text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${DEPT_BADGE[department]}`}>
             {DEPARTMENT_SHORT[department]}
           </span>
-          <span className="text-[11px] text-lt-fg font-semibold">{DEPARTMENT_LABEL[department].toUpperCase()}</span>
-          <span className="text-[10px] text-lt-fg3">· {rows.length} item{rows.length === 1 ? '' : 's'}</span>
+          <span className="text-sm text-lt-fg font-bold">{DEPARTMENT_LABEL[department].toUpperCase()}</span>
+          <span className="text-[11px] text-lt-fg3">· {rows.length} item{rows.length === 1 ? '' : 's'}</span>
         </div>
         {showBulk && (
           <div className="flex items-center gap-1.5 text-[11px]">
@@ -2271,7 +2285,7 @@ function DepartmentGroup({
           groups. EXPENDABLES are consumed/sold (not rented), so Pickup /
           Return / Billable-days don't apply — header labels in those
           columns are suppressed and the row cells render an em-dash. */}
-      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-lt-card/40 border-b border-lt-hairline text-[9px] uppercase tracking-wider text-lt-fg3 font-bold items-center`}>
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-lt-card/40 border-b border-lt-hairline text-[10px] uppercase tracking-wider text-lt-fg3 font-bold items-center`}>
         <div>Qty</div>
         <div>Description</div>
         <div>{isExpendable ? 'Price' : 'Price/day'}</div>
@@ -2284,24 +2298,38 @@ function DepartmentGroup({
 
       {/* Line item rows */}
       <div className="divide-y divide-lt-hairline/60">
-        {rows.map(({ it, idx }) => (
+        {rows.map((it) => (
           <LineItemRow
-            key={idx}
+            key={it.localId}
             item={it}
-            idx={idx}
             onChange={onChange}
             onDelete={onDelete}
             onCommit={onCommit}
             onPickPackage={onPickPackage}
-            descriptionRef={registerDescriptionRef?.(idx)}
+            descriptionRef={registerDescriptionRef?.(it.localId)}
           />
         ))}
       </div>
 
+      {/* Per-category add — drops a blank row defaulted to this
+          department so the rep can extend the group without leaving
+          the section. Pairs with the top "+ Add line manually" which
+          defaults to PRO_SUPPLIES. */}
+      <div className="px-3 py-2 border-t border-lt-hairline bg-lt-card/30">
+        <button
+          type="button"
+          onClick={onAdd}
+          className="text-xs font-semibold text-lt-fg2 hover:text-lt-fg"
+          title={`Add a new ${DEPARTMENT_LABEL[department]} line`}
+        >
+          + Add {DEPARTMENT_LABEL[department]} line
+        </button>
+      </div>
+
       {/* Subtotal row */}
-      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-[11px] text-lt-fg2 items-center`}>
-        <div className="col-span-6 font-semibold uppercase tracking-wider text-[10px]">Subtotal</div>
-        <div className="text-right font-mono text-chip-good-fg text-sm">{fmtMoney(subtotal)}</div>
+      <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-lt-fg2 items-center`}>
+        <div className="col-span-6 font-bold uppercase tracking-wider text-[11px]">Subtotal</div>
+        <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal)}</div>
         <div></div>
       </div>
     </section>
@@ -2309,22 +2337,22 @@ function DepartmentGroup({
 }
 
 function LineItemRow({
-  item, idx, onChange, onDelete, onCommit, onPickPackage, descriptionRef,
+  item, onChange, onDelete, onCommit, onPickPackage, descriptionRef,
 }: {
   item: ResolvedItem;
-  idx: number;
-  onChange: (idx: number, patch: Partial<ResolvedItem>) => void;
-  onDelete: (idx: number) => void;
+  onChange: (id: string, patch: Partial<ResolvedItem>) => void;
+  onDelete: (id: string) => void;
   /** Parent-level commit: auto-append empty row + focus its
    *  description input when this row's combobox emits commit. */
-  onCommit?: (idx: number) => void;
+  onCommit?: (id: string) => void;
   /** Package pick handler — escapes the per-row patch to insert
    *  header + member rows at the parent level. */
-  onPickPackage?: (idx: number, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
+  onPickPackage?: (id: string, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   /** Ref the parent passes for the row's description input so the
    *  next-row auto-append can move focus. */
   descriptionRef?: React.Ref<HTMLInputElement>;
 }) {
+  const id = item.localId;
 
   const total = computeLineTotal({
     quantity: item.quantity,
@@ -2359,10 +2387,10 @@ function LineItemRow({
     // Package picks escape to the parent — they're not a single-row
     // patch, they insert a header + N member rows.
     if (m.type === 'PACKAGE' && onPickPackage) {
-      onPickPackage(idx, m as unknown as import('@/components/orders/LineItemDescriptionCombobox').CatalogHit);
+      onPickPackage(id, m as unknown as import('@/components/orders/LineItemDescriptionCombobox').CatalogHit);
       return;
     }
-    onChange(idx, {
+    onChange(id, {
       description: m.name,
       catalogProductId: m.id,
       catalogType: m.type,
@@ -2387,11 +2415,11 @@ function LineItemRow({
   return (
     <div className={`px-3 py-2 hover:bg-lt-card/30 ${isMember ? 'bg-violet-50/30 pl-8' : ''}`}>
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
-        {/* QTY */}
+        {/* QTY — primary scan target; bigger digit, no extra height */}
         <input
           type="number" min={1} step={1} value={item.quantity}
-          onChange={(e) => onChange(idx, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
+          onChange={(e) => onChange(id, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
         />
 
         {/* DESCRIPTION column — combobox + quiet status pill */}
@@ -2419,48 +2447,41 @@ function LineItemRow({
               </span>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <div className="flex-1 min-w-0">
-              <LineItemDescriptionCombobox
-                value={item.description}
-                onChange={(next) => onChange(idx, { description: next })}
-                onPickCatalog={(hit) => applyMatch(hit as CatalogSearchResult)}
-                catalogBinding={
-                  item.catalogProductId && item.matchedProduct
-                    ? { id: item.catalogProductId, type: item.matchedProduct.type, name: item.matchedProduct.name }
-                    : null
-                }
-                onClearCatalog={() =>
-                  onChange(idx, {
-                    catalogProductId: null,
-                    catalogType: null,
-                    matchedProduct: null,
-                    matchSource: null,
-                  })
-                }
-                onCommit={() => onCommit?.(idx)}
-                ref={descriptionRef}
-                placeholder="New line item — type to search inventory"
-              />
-            </div>
-            <span
-              className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${DEPT_BADGE[item.department]}`}
-              title={DEPARTMENT_LABEL[item.department]}
-            >
-              {DEPARTMENT_SHORT[item.department]}
-            </span>
-          </div>
+          {/* Description combobox — the section header already names
+              the dept, so the per-row dept badge that used to sit here
+              was duplicative chrome. Removed for one calmer focal point. */}
+          <LineItemDescriptionCombobox
+            value={item.description}
+            onChange={(next) => onChange(id, { description: next })}
+            onPickCatalog={(hit) => applyMatch(hit as CatalogSearchResult)}
+            catalogBinding={
+              item.catalogProductId && item.matchedProduct
+                ? { id: item.catalogProductId, type: item.matchedProduct.type, name: item.matchedProduct.name }
+                : null
+            }
+            onClearCatalog={() =>
+              onChange(id, {
+                catalogProductId: null,
+                catalogType: null,
+                matchedProduct: null,
+                matchSource: null,
+              })
+            }
+            onCommit={() => onCommit?.(id)}
+            ref={descriptionRef}
+            placeholder="New line item — type to search inventory"
+          />
           {item.qualifier && (
-            <div className="text-[11px] text-lt-fg2 italic">— {item.qualifier}</div>
+            <div className="text-xs text-lt-fg2 italic">— {item.qualifier}</div>
           )}
         </div>
 
-        {/* PRICE/DAY */}
+        {/* PRICE/DAY — money-grain, bumped for at-a-glance reads */}
         <CurrencyInput
           value={item.rate}
-          onChange={(next) => onChange(idx, { rate: next })}
+          onChange={(next) => onChange(id, { rate: next })}
           min={0}
-          inputClassName="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm text-lt-fg font-mono"
+          inputClassName="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
           ariaLabel="Price per day"
         />
 
@@ -2470,8 +2491,8 @@ function LineItemRow({
         ) : (
           <input
             type="date" value={item.pickupDate}
-            onChange={(e) => onChange(idx, { pickupDate: e.target.value })}
-            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-[11px] text-lt-fg"
+            onChange={(e) => onChange(id, { pickupDate: e.target.value })}
+            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
           />
         )}
 
@@ -2481,8 +2502,8 @@ function LineItemRow({
         ) : (
           <input
             type="date" value={item.returnDate}
-            onChange={(e) => onChange(idx, { returnDate: e.target.value })}
-            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-[11px] text-lt-fg"
+            onChange={(e) => onChange(id, { returnDate: e.target.value })}
+            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
           />
         )}
 
@@ -2502,12 +2523,12 @@ function LineItemRow({
               onChange={(e) => {
                 const raw = e.target.value.trim();
                 if (raw === '') {
-                  onChange(idx, { billableDays: null });
+                  onChange(id, { billableDays: null });
                 } else {
-                  onChange(idx, { billableDays: Math.max(1, Number(raw) || 1) });
+                  onChange(id, { billableDays: Math.max(1, Number(raw) || 1) });
                 }
               }}
-              className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-sm text-lt-fg font-mono text-center"
+              className="w-full bg-lt-card border border-lt-hairline rounded px-1 py-1 text-base font-bold tabular-nums text-lt-fg text-center"
             />
             {showToggle && (
               <div className="flex bg-lt-card border border-lt-hairline rounded p-0.5">
@@ -2522,7 +2543,7 @@ function LineItemRow({
                   return (
                     <button
                       key={rt}
-                      onClick={() => enabled && onChange(idx, { rateType: rt })}
+                      onClick={() => enabled && onChange(id, { rateType: rt })}
                       disabled={!enabled}
                       title={reason}
                       className={`flex-1 px-1 py-0.5 text-[9px] font-semibold rounded ${
@@ -2542,32 +2563,40 @@ function LineItemRow({
           </div>
         )}
 
-        {/* TOTAL — (STEP 1C) null billableDays renders per-day
-            economics, never a fake 1-day total. EXPENDABLES are
-            purchase-grain so they always show qty × rate. */}
-        <div className="text-right text-sm font-mono text-chip-good-fg self-center pt-1">
+        {/* TOTAL — the row's punchline. Bigger and bolder than the
+            inputs feeding it so the eye lands here when scanning down. */}
+        <div className="text-right self-center pt-1">
           {isExpendable || item.billableDays != null ? (
-            fmtMoney(total)
+            <span className="text-lg font-bold tabular-nums text-chip-good-fg">
+              {fmtMoney(total)}
+            </span>
           ) : (
             <div className="flex flex-col items-end leading-tight">
-              <span>{fmtMoney(item.rate)}/day</span>
+              <span className="text-sm font-semibold tabular-nums text-chip-good-fg">
+                {fmtMoney(item.rate)}/day
+              </span>
               <span className="text-[10px] text-lt-fg3">total on dates</span>
             </div>
           )}
         </div>
 
-        {/* ACTIONS — new-quote keeps its bespoke kebab with the
-            inline department-edit select. /orders/[id] uses the shared
-            <LineItemRowActions> with just the standardized
-            "Remove line item" affordance. Same red destructive label
-            on both, same kebab glyph — only this surface adds the
-            inline dept-edit on top. Full extraction lands in a
-            follow-up commit. */}
-        <div className="self-center">
+        {/* ACTIONS — visible × for one-tap removal + the existing kebab
+            for less-common actions (change department). Two affordances
+            so the rep doesn't have to open the menu just to drop a row. */}
+        <div className="self-center flex items-center justify-end gap-0.5">
+          <button
+            type="button"
+            onClick={() => onDelete(id)}
+            className="w-7 h-7 inline-flex items-center justify-center rounded text-lt-fg3 hover:text-chip-bad-fg hover:bg-chip-bad-bg/40 text-xl leading-none"
+            title="Remove line item"
+            aria-label={`Remove ${item.description || 'line item'}`}
+          >
+            ×
+          </button>
           <RowActionsMenu
             currentDepartment={item.department}
-            onChangeDepartment={(d) => onChange(idx, { department: d })}
-            onDelete={() => onDelete(idx)}
+            onChangeDepartment={(d) => onChange(id, { department: d })}
+            onDelete={() => onDelete(id)}
           />
         </div>
       </div>
