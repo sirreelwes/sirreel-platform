@@ -5,7 +5,8 @@ import { getServerSession } from "next-auth";
 import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
-import { readPickListItemForDelete, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
+import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
+import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 
@@ -75,6 +76,40 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (notes !== undefined) data.notes = notes || null;
     if (department !== undefined) data.department = department;
     if (qualifier !== undefined) data.qualifier = qualifier || null;
+
+    // Inverted-range guard. Mirrors the line-items POST: rather than
+    // silently flooring days to 1 via Math.max(1, …) downstream, reject
+    // the write. Resolves the effective pickup/return pair by reading
+    // the existing row when only one side is being patched.
+    if (pickupDate !== undefined || returnDate !== undefined) {
+      const existingForDates = await prisma.orderLineItem.findUnique({
+        where: { id: lineId },
+        select: { pickupDate: true, returnDate: true },
+      });
+      const effectivePickup =
+        pickupDate !== undefined
+          ? (pickupDate ? new Date(pickupDate) : null)
+          : existingForDates?.pickupDate ?? null;
+      const effectiveReturn =
+        returnDate !== undefined
+          ? (returnDate ? new Date(returnDate) : null)
+          : existingForDates?.returnDate ?? null;
+      if (
+        effectivePickup &&
+        effectiveReturn &&
+        effectiveReturn.getTime() < effectivePickup.getTime()
+      ) {
+        return NextResponse.json(
+          {
+            error: 'invalid date range',
+            reason: `Return date (${effectiveReturn.toISOString().slice(0, 10)}) is before pickup date (${effectivePickup.toISOString().slice(0, 10)}).`,
+            pickupDate: effectivePickup.toISOString().slice(0, 10),
+            returnDate: effectiveReturn.toISOString().slice(0, 10),
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     // Accept billableDays going forward, plus legacy rentalDays / days for
     // back-compat with older callers.
@@ -285,6 +320,60 @@ export async function PUT(req: NextRequest, { params }: Params) {
           console.error('[holds] override audit failed (PUT):', err instanceof Error ? err.message : err);
         }
       }
+    }
+
+    // PickList sync on dept change. The holds-sync block above only
+    // covers VEHICLES/STAGES → BookingItem; this block covers the
+    // WAREHOUSE / non-WAREHOUSE boundary so a dept reassignment
+    // doesn't leave an orphan PickListItem (WAREHOUSE → FLEET) or
+    // skip creating one (FLEET → WAREHOUSE). The same syncPickListOn
+    // helpers the POST route uses — single source of truth.
+    if (department !== undefined && oldDept !== newDept) {
+      const oldRouting = routeDepartment(oldDept);
+      const newRouting = routeDepartment(newDept);
+      if (oldRouting.lane === 'WAREHOUSE' && newRouting.lane !== 'WAREHOUSE') {
+        // Leaving the WAREHOUSE lane — drop the PickListItem. The
+        // helper handles the un-pick audit when the item was already
+        // physically picked, and auto-CANCELs the PickList if this
+        // was the last item.
+        const snap = await readPickListItemForDelete(prisma, lineId);
+        const operatorId = await resolveOperatorId(session.user.email);
+        await syncPickListOnLineDelete(prisma, {
+          orderId,
+          orderLineItemId: lineId,
+          pickListItem: snap,
+          pickStatusAtDelete: (fullExisting.pickStatus as 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null) ?? null,
+          userId: operatorId,
+          ipAddress: extractIp(req),
+        });
+        // Update fulfillmentLane/pickStatus on the row. syncPickListOnLineAdd
+        // would have done this for us if the new lane were WAREHOUSE,
+        // but we're going the other direction.
+        await prisma.orderLineItem.update({
+          where: { id: lineId },
+          data: { fulfillmentLane: newRouting.lane, pickStatus: newRouting.pickStatus },
+        });
+      } else if (oldRouting.lane !== 'WAREHOUSE' && newRouting.lane === 'WAREHOUSE') {
+        // Entering the WAREHOUSE lane — create a PickListItem. The
+        // helper also re-stamps fulfillmentLane + pickStatus to match
+        // the new routing, so no separate update needed.
+        await syncPickListOnLineAdd(prisma, {
+          orderId,
+          orderLineItemId: lineId,
+          department: newDept,
+        });
+      } else if (oldRouting.lane !== newRouting.lane) {
+        // Cross-lane transition where neither side is WAREHOUSE (e.g.
+        // FLEET ↔ STAGE). No PickListItem either way; just re-stamp
+        // the lane / pickStatus so the row's spine is honest.
+        await prisma.orderLineItem.update({
+          where: { id: lineId },
+          data: { fulfillmentLane: newRouting.lane, pickStatus: newRouting.pickStatus },
+        });
+      }
+      // Same-lane dept change (e.g. PRO_SUPPLIES → GE both WAREHOUSE)
+      // needs nothing — fulfillmentLane / pickStatus / PickListItem
+      // all stay valid.
     }
 
     const totals = await recalcOrderTotals(orderId);

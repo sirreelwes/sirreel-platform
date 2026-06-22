@@ -176,6 +176,23 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Inverted-range guard. Previously every days helper silently
+    // floored a `return < pickup` window to 1 day, so an order
+    // inheriting bad parent dates wrote billableDays=1 and a wrong
+    // lineTotal with no warning. Reject at the write boundary so the
+    // bad data can't land in the first place.
+    if (returnResolved.getTime() < pickupResolved.getTime()) {
+      return NextResponse.json(
+        {
+          error: 'invalid date range',
+          reason: `Return date (${returnResolved.toISOString().slice(0, 10)}) is before pickup date (${pickupResolved.toISOString().slice(0, 10)}). Fix the order's date range first.`,
+          pickupDate: pickupResolved.toISOString().slice(0, 10),
+          returnDate: returnResolved.toISOString().slice(0, 10),
+        },
+        { status: 400 },
+      );
+    }
+
     // Resolve billable days. (STEP 1C) NULL is now a valid persisted
     // state — "dates TBD, rate-card line." Rules:
     //   - explicit positive number from client → use it

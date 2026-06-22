@@ -140,6 +140,38 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (description !== undefined) data.description = description;
     if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined) data.endDate = endDate ? new Date(endDate) : null;
+
+    // Inverted-range guard. Read the existing row when only one side
+    // is being patched so we validate the EFFECTIVE pair, not just
+    // what the rep typed in this request. Without this, every
+    // downstream line-items helper silently floors to days=1.
+    if (startDate !== undefined || endDate !== undefined) {
+      const existingOrder = await prisma.order.findUnique({
+        where: { id },
+        select: { startDate: true, endDate: true },
+      });
+      const effectiveStart =
+        startDate !== undefined
+          ? (startDate ? new Date(startDate) : null)
+          : existingOrder?.startDate ?? null;
+      const effectiveEnd =
+        endDate !== undefined
+          ? (endDate ? new Date(endDate) : null)
+          : existingOrder?.endDate ?? null;
+      if (
+        effectiveStart &&
+        effectiveEnd &&
+        effectiveEnd.getTime() < effectiveStart.getTime()
+      ) {
+        return NextResponse.json(
+          {
+            error: "invalid date range",
+            reason: `Order end date (${effectiveEnd.toISOString().slice(0, 10)}) is before start date (${effectiveStart.toISOString().slice(0, 10)}).`,
+          },
+          { status: 400 },
+        );
+      }
+    }
     if (taxRate !== undefined) data.taxRate = taxRate;
     if (notes !== undefined) data.notes = notes;
     if (companyId !== undefined) data.companyId = companyId;

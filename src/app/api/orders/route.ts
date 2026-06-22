@@ -118,6 +118,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Inverted-range guard. Without this, the line-items POST
+    // inherits these bogus dates and every line collapses to days=1
+    // via the silent Math.max(1, …) downstream. Fail at the order
+    // boundary so the rep fixes it once.
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      if (
+        Number.isFinite(s.getTime()) &&
+        Number.isFinite(e.getTime()) &&
+        e.getTime() < s.getTime()
+      ) {
+        return NextResponse.json(
+          {
+            error: "invalid date range",
+            reason: `Order end date (${e.toISOString().slice(0, 10)}) is before start date (${s.toISOString().slice(0, 10)}).`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const { order, createdJobId } = await prisma.$transaction(async (tx) => {
       // Order number lives INSIDE the tx now that the per-day counter
       // backs it — a rolled-back order rolls back its number too, so

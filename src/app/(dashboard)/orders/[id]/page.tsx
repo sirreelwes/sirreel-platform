@@ -20,7 +20,7 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
-import type { AgreementStatus, OrderStatus } from "@prisma/client";
+import type { AgreementStatus, LineItemDepartment, OrderStatus } from "@prisma/client";
 import {
   isOrderEditable as isOrderEditableFn,
   isMoneyEditable as isMoneyEditableFn,
@@ -372,6 +372,13 @@ export default function OrderDetailPage() {
   const [editRate, setEditRate] = useState("");
   const [editQty, setEditQty] = useState("");
   const [editDays, setEditDays] = useState("");
+  // Description + department editing — added per the order-builder
+  // edit-model gap: previously the inline editor only covered rate /
+  // qty / days, so a misclassified line (e.g. "ramp for cars and
+  // trucks" landing under VEHICLES) had no UI path to recategorize
+  // without delete+re-add.
+  const [editDesc, setEditDesc] = useState("");
+  const [editDept, setEditDept] = useState<LineItemDepartment | "">("");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
 
@@ -1243,6 +1250,8 @@ export default function OrderDetailPage() {
     setEditRate(String(Number(li.rate)));
     setEditQty(String(li.quantity));
     setEditDays(li.days !== null && li.days !== undefined ? String(li.days) : "");
+    setEditDesc(li.description ?? "");
+    setEditDept(li.department);
   };
 
   const saveEditLine = async (lineId: string) => {
@@ -1251,11 +1260,23 @@ export default function OrderDetailPage() {
       quantity: parseInt(editQty) || 1,
     };
     if (editDays !== "") body.days = parseFloat(editDays);
-    await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
+    const trimmedDesc = editDesc.trim();
+    if (trimmedDesc.length > 0) body.description = trimmedDesc;
+    if (editDept) body.department = editDept;
+    const res = await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      // Inverted-date guard, dept-gate, and capacity conflicts all
+      // surface as non-2xx with a `reason` string — alert is the
+      // simplest "tell the rep what went wrong" path that doesn't
+      // require a toast component on this surface.
+      alert(data.reason || data.error || `Save failed (HTTP ${res.status})`);
+      return;
+    }
     setEditingLineId(null);
     fetchOrder();
   };
@@ -1746,7 +1767,39 @@ export default function OrderDetailPage() {
                       "bg-lt-inner text-lt-fg2"
                     }`}>{li.type}</span>
                   </td>
-                  <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+                  {editingLineId === li.id ? (
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        value={editDesc}
+                        onChange={(e) => setEditDesc(e.target.value)}
+                        placeholder="Line description"
+                        className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+                      />
+                      {/* Department selector — closes the A2 gap on
+                          this surface (was previously API-only).
+                          Server validates the transition + syncs
+                          PickListItem when crossing the WAREHOUSE
+                          boundary, and BookingItem holds when crossing
+                          VEHICLES/STAGES. */}
+                      <select
+                        value={editDept}
+                        onChange={(e) => setEditDept(e.target.value as LineItemDepartment)}
+                        className="mt-1 w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-[11px] text-lt-fg2"
+                        aria-label="Department"
+                      >
+                        <option value="VEHICLES">Vehicles</option>
+                        <option value="COMMUNICATIONS">Communications</option>
+                        <option value="STAGES">Stages</option>
+                        <option value="GE">G&amp;E</option>
+                        <option value="PRO_SUPPLIES">Pro Supplies</option>
+                        <option value="EXPENDABLES">Expendables</option>
+                        <option value="ART">Art</option>
+                      </select>
+                    </td>
+                  ) : (
+                    <td className="px-4 py-3 text-lt-fg">{li.description}</td>
+                  )}
                   <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
                     {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
                   </td>
