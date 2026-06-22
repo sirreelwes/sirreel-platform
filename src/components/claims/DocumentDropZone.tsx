@@ -179,7 +179,7 @@ export function DocumentDropZone({
             const isAiSuggestion = doc.typeSource === 'AI_SUGGESTED'
             return (
               <div key={doc.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-lt-inner/40 rounded text-xs">
-                <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black hover:underline truncate flex-1 min-w-0">
+                <a href={`/api/claims/documents/${doc.id}/download`} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black hover:underline truncate flex-1 min-w-0">
                   {doc.title}
                 </a>
                 <div className="flex items-center gap-2 shrink-0">

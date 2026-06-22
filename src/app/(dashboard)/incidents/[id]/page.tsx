@@ -231,7 +231,7 @@ export default function IncidentDetailPage() {
             <ul className="space-y-1.5">
               {incident.documents.map((d) => (
                 <li key={d.id} className="text-xs">
-                  <a href={d.fileUrl} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black hover:underline">{d.title}</a>
+                  <a href={`/api/claims/documents/${d.id}/download`} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black hover:underline">{d.title}</a>
                   <span className="ml-2 text-[10px] uppercase text-lt-fg3 tracking-wider">{d.type}</span>
                 </li>
               ))}

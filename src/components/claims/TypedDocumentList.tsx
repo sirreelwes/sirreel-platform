@@ -176,7 +176,7 @@ export function TypedDocumentList({
           return (
             <li key={doc.id} className="flex items-center gap-2 text-xs">
               <a
-                href={doc.fileUrl}
+                href={`/api/claims/documents/${doc.id}/download`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-lt-fg hover:text-black underline-offset-2 hover:underline truncate flex-1 min-w-0"

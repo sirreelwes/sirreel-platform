@@ -579,7 +579,7 @@ export default function ClaimDetailPage() {
               )}
               {claim.coiCheck && (
                 <Field label="COI on file">
-                  <a href={claim.coiCheck.fileUrl} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black underline-offset-2 hover:underline">
+                  <a href={`/api/claims/coi/${claim.coiCheck.id}/download`} target="_blank" rel="noreferrer" className="text-lt-fg hover:text-black underline-offset-2 hover:underline">
                     Open ↗
                   </a>
                   {claim.coiCheck.aiRiskLevel && <span className="text-[10px] uppercase tracking-wider text-lt-fg3 ml-2">{claim.coiCheck.aiRiskLevel} risk</span>}
