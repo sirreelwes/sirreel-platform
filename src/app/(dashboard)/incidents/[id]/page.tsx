@@ -23,9 +23,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import {
+  SeverityControl,
+  DriverInline,
+  NextActionRow,
+  RecoveryStepper,
+  type DerivedSeverity,
+  type RecoveryPosture,
+} from '@/components/incidents/IncidentCardControls'
+import { IncidentEmailDrawer } from '@/components/incidents/IncidentEmailDrawer'
 
 type IncidentSource = 'EMAIL' | 'RETURN_INSPECTION' | 'MANUAL'
 type IncidentStatus = 'OPEN' | 'CLAIM_FILED' | 'BILLED_RENTER' | 'RESOLVED' | 'WRITTEN_OFF'
+
+interface AssignableUser { id: string; name: string; role: string }
 
 interface IncidentDetail {
   id: string
@@ -36,6 +47,18 @@ interface IncidentDetail {
   occurredAt: string | null
   createdAt: string
   updatedAt: string
+  // Phase 3 worklist fields
+  severity: DerivedSeverity | null
+  assigneeId: string | null
+  assignee: { id: string; name: string } | null
+  nextAction: string | null
+  nextActionDueAt: string | null
+  driverName: string | null
+  // Phase 4 derived (server-side enrichment)
+  derivedSeverity: DerivedSeverity
+  effectiveSeverity: DerivedSeverity
+  recoveryPosture: RecoveryPosture
+  suggestedNextAction: string
   company: { id: string; name: string } | null
   order: { id: string; orderNumber: string; bookingId: string | null } | null
   asset: { id: string; unitName: string; year: number | null; make: string | null; model: string | null } | null
@@ -51,9 +74,20 @@ interface IncidentDetail {
   documents: Array<{ id: string; title: string; fileUrl: string; type: string }>
   claimMail: Array<{
     id: string;
+    inbox: string | null;
     parse: Record<string, unknown> | null;
     reason: string | null;
-    emailMessage: { id: string; subject: string; fromAddress: string; sentAt: string };
+    emailMessage: {
+      id: string;
+      subject: string;
+      fromAddress: string;
+      sentAt: string;
+      snippet: string | null;
+      attachmentCount: number;
+      gmailMessageId: string;
+      rfc822MessageId: string | null;
+      emailAccount: { emailAddress: string } | null;
+    };
   }>
 }
 
@@ -82,6 +116,15 @@ export default function IncidentDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showBillRenter, setShowBillRenter] = useState(false)
+  // Decision Panel state — assignable users for the owner picker;
+  // single in-flight flag shared across all PATCH-driven edits;
+  // server-side error from the latest patch.
+  const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>([])
+  const [patchBusy, setPatchBusy] = useState(false)
+  const [patchError, setPatchError] = useState<string | null>(null)
+  // Email drawer: which claimMail/email is open. claimMail row carries
+  // the parse + inbox we hand to the drawer without re-fetching.
+  const [openEmailRow, setOpenEmailRow] = useState<IncidentDetail['claimMail'][number] | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -97,6 +140,44 @@ export default function IncidentDetailPage() {
       setLoading(false)
     }
   }, [id])
+
+  // Phase 3/4 — assignable users for the Decision Panel's owner picker.
+  // Lazily loaded once per mount; same endpoint the list page uses.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch('/api/incidents/assignable-users', { cache: 'no-store' })
+        if (!r.ok) return
+        const j = await r.json()
+        if (!cancelled) setAssignableUsers(j.users ?? [])
+      } catch { /* swallow — picker just stays empty */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // Shared PATCH driver. Server enforces requireIncidentEditAccess;
+  // a 403 surfaces as patchError so the panel can show "forbidden"
+  // without leaving the controls in a half-applied state.
+  const patch = useCallback(async (body: Record<string, unknown>) => {
+    setPatchBusy(true); setPatchError(null)
+    try {
+      const r = await fetch(`/api/incidents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setPatchError(j?.error || `HTTP ${r.status}`); return false }
+      await load()
+      return true
+    } catch (e) {
+      setPatchError(e instanceof Error ? e.message : 'patch failed')
+      return false
+    } finally {
+      setPatchBusy(false)
+    }
+  }, [id, load])
 
   useEffect(() => { load() }, [load])
 
@@ -154,6 +235,71 @@ export default function IncidentDetailPage() {
               {incident.asset ? `${incident.asset.unitName}${incident.asset.make ? ` (${incident.asset.make} ${incident.asset.model})` : ''}` : '—'}
             </Field>
           </div>
+        </div>
+
+        {/* Decision Panel — Phase 3/4 worklist controls.
+            Severity (effective + auto badge + escalate/clear), owner
+            picker, recovery stepper, next-action editor, driver inline,
+            company-link affordance (the latter via the existing Field
+            above when company is null).  Same components the list-card
+            uses — no duplication of behavior. */}
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">
+              Decision
+            </span>
+            <SeverityControl
+              effective={incident.effectiveSeverity}
+              stored={incident.severity}
+              busy={patchBusy}
+              onSet={(next) => patch({ severity: next })}
+            />
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold">Owner</span>
+              <select
+                value={incident.assigneeId ?? ''}
+                onChange={(e) => { void patch({ assigneeId: e.target.value || null }) }}
+                disabled={patchBusy}
+                className="text-xs bg-transparent border border-lt-hairline rounded px-1.5 py-0.5 text-lt-fg2 hover:border-lt-fg2"
+              >
+                <option value="">unassigned</option>
+                {assignableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+            <span className="ml-auto">
+              <DriverInline
+                value={incident.driverName}
+                busy={patchBusy}
+                onSave={(v) => patch({ driverName: v })}
+              />
+            </span>
+          </div>
+
+          <RecoveryStepper posture={incident.recoveryPosture} />
+
+          <NextActionRow
+            storedAction={incident.nextAction}
+            storedDueAt={incident.nextActionDueAt}
+            derivedSuggestion={incident.suggestedNextAction}
+            isLitigation={incident.effectiveSeverity === 'LITIGATION'}
+            isOverdue={!!(incident.nextActionDueAt && new Date(incident.nextActionDueAt).getTime() < Date.now())}
+            dueSoon={!!(
+              incident.nextActionDueAt
+              && new Date(incident.nextActionDueAt).getTime() >= Date.now()
+              && (new Date(incident.nextActionDueAt).getTime() - Date.now()) < 48 * 3_600_000
+            )}
+            busy={patchBusy}
+            onSave={(action, dueAt) => patch({ nextAction: action, nextActionDueAt: dueAt })}
+            onClear={() => patch({ nextAction: null, nextActionDueAt: null })}
+          />
+
+          {patchError && (
+            <div className="text-[11px] text-chip-bad-fg bg-chip-bad-bg/30 rounded px-2 py-1">
+              {patchError}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -239,21 +385,72 @@ export default function IncidentDetailPage() {
           )}
         </Section>
 
-        {/* Original email parse (when source=EMAIL) */}
+        {/* Email summary list — replaces the prior raw-JSON parse dump.
+            One row per ClaimMail tied to this incident, sorted by the
+            server (createdAt desc). Click → drawer opens for that single
+            email. Parse fields drive the inline pills; the full body
+            renders lazily inside the drawer. */}
         {incident.claimMail.length > 0 && (
-          <Section title="Originating email">
-            {incident.claimMail.map((cm) => (
-              <div key={cm.id} className="text-xs space-y-1">
-                <div>
-                  <span className="text-lt-fg font-medium">{cm.emailMessage.subject}</span>
-                  <span className="ml-2 text-lt-fg3">from {cm.emailMessage.fromAddress.slice(0, 60)}</span>
-                </div>
-                <div className="text-lt-fg3">{fmtDate(cm.emailMessage.sentAt)}</div>
-                {cm.parse && typeof cm.parse === 'object' && (
-                  <pre className="bg-lt-inner p-2 rounded text-[10px] overflow-x-auto">{JSON.stringify(cm.parse, null, 2).slice(0, 800)}</pre>
-                )}
-              </div>
-            ))}
+          <Section title={`Emails (${incident.claimMail.length})`}>
+            <ul className="space-y-1.5">
+              {incident.claimMail.map((cm) => {
+                const p = cm.parse as Record<string, unknown> | null
+                const carrier = (p?.carrierName as string | null) || null
+                const claimNum = (p?.carrierClaimNumber as string | null) || null
+                const adjuster = (p?.adjusterName as string | null) || null
+                const statusGuess = (p?.statusGuess as string | null) || null
+                const lossDesc = (p?.lossDescription as string | null) || null
+                const m = cm.emailMessage
+                return (
+                  <li key={cm.id}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenEmailRow(cm)}
+                      className="w-full text-left bg-lt-card border border-lt-hairline rounded-lg p-3 hover:bg-lt-inner/40 transition-colors"
+                    >
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-lt-fg truncate">
+                          {m.subject || '(no subject)'}
+                        </span>
+                        <span className="text-[11px] text-lt-fg3 font-mono ml-auto whitespace-nowrap">
+                          {fmtDate(m.sentAt)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-lt-fg3 mt-0.5 truncate">
+                        from {m.fromAddress}
+                      </div>
+                      {lossDesc && (
+                        <div className="text-xs text-lt-fg2 mt-1 line-clamp-2">
+                          {lossDesc}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        {carrier && (
+                          <span className="text-[10px] text-lt-fg2 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5">
+                            {carrier}{claimNum ? <span className="font-mono"> #{claimNum}</span> : null}
+                          </span>
+                        )}
+                        {adjuster && (
+                          <span className="text-[10px] text-lt-fg2 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5">
+                            adj. {adjuster}
+                          </span>
+                        )}
+                        {statusGuess && (
+                          <span className="text-[10px] text-lt-fg2 bg-lt-inner border border-lt-hairline rounded px-1.5 py-0.5">
+                            {statusGuess}
+                          </span>
+                        )}
+                        {m.attachmentCount > 0 && (
+                          <span className="text-[10px] text-lt-fg3">
+                            {m.attachmentCount} attachment{m.attachmentCount === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           </Section>
         )}
 
@@ -270,6 +467,13 @@ export default function IncidentDetailPage() {
           />
         )}
       </div>
+
+      <IncidentEmailDrawer
+        emailId={openEmailRow?.emailMessage.id ?? null}
+        parse={openEmailRow?.parse ?? null}
+        inbox={openEmailRow?.inbox ?? openEmailRow?.emailMessage.emailAccount?.emailAddress ?? null}
+        onClose={() => setOpenEmailRow(null)}
+      />
     </div>
   )
 }

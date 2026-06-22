@@ -18,6 +18,13 @@ import type { IncidentStatus, IncidentSeverity } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getPermissions } from '@/lib/permissions'
 import { requireIncidentEditAccess } from '@/lib/incidents/auth'
+import {
+  computeDerivedSeverity,
+  computeRecoveryPosture,
+  computeSuggestedNextAction,
+  parseCarriesCarrierClaimNumber,
+  type IncidentStatusLite,
+} from '@/lib/incidents/derive'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +55,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
       id: true, incidentNumber: true, source: true, status: true,
       description: true, occurredAt: true,
       createdAt: true, updatedAt: true,
+      // Phase 3 worklist columns + assignee join — same shape as the
+      // LIST endpoint so the detail page can render the Decision Panel.
+      severity: true,
+      assigneeId: true,
+      nextAction: true,
+      nextActionDueAt: true,
+      driverName: true,
+      assignee: { select: { id: true, name: true } },
       company: { select: { id: true, name: true } },
       order:   { select: { id: true, orderNumber: true, jobId: true, bookingId: true } },
       asset:   { select: { id: true, unitName: true, year: true, make: true, model: true } },
@@ -64,9 +79,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
           estimatedRepairCost: true, disposition: true, invoiceId: true,
           claimId: true,
         },
-        // DamageItem has no createdAt column — fall back to ordering
-        // by id which is uuid-based and not chronological. Acceptable
-        // for the detail view; the UI will display them as a flat list.
         orderBy: { id: 'desc' },
       },
       documents: {
@@ -78,19 +90,66 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
       claimMail: {
         select: {
-          id: true, parse: true, reason: true,
+          id: true,
+          // Phase 4: inbox cached on ClaimMail — falls back to the
+          // EmailAccount.emailAddress join below if absent. Drives the
+          // Gmail deep-link's authuser hint in the drawer.
+          inbox: true,
+          parse: true,
+          reason: true,
           emailMessage: {
             select: {
-              id: true, subject: true, fromAddress: true, sentAt: true,
+              id: true,
+              subject: true,
+              fromAddress: true,
+              sentAt: true,
+              snippet: true,
+              attachmentCount: true,
+              gmailMessageId: true,
+              rfc822MessageId: true,
+              emailAccount: { select: { emailAddress: true } },
             },
           },
         },
         orderBy: { createdAt: 'desc' },
       },
+      _count: { select: { claims: true, damageItems: true, documents: true } },
     },
   })
   if (!incident) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json({ incident })
+
+  // Decision-layer enrichment — same derive helpers the LIST endpoint
+  // uses. Read the linked ClaimMail rows' parse + sender to compute
+  // derivedSeverity; everything else is local.
+  const derivedSeverity = computeDerivedSeverity(
+    incident.claimMail.map((m) => ({ parse: m.parse, emailMessage: m.emailMessage })),
+  )
+  const effectiveSeverity = incident.severity ?? derivedSeverity
+  const recoveryPosture = computeRecoveryPosture(
+    incident.status as IncidentStatusLite,
+    incident._count.claims,
+    incident._count.damageItems,
+  )
+  const parseHasCarrierClaimNumber = incident.claimMail.some((m) =>
+    parseCarriesCarrierClaimNumber(m.parse),
+  )
+  const suggestedNextAction = computeSuggestedNextAction({
+    status: incident.status as IncidentStatusLite,
+    claimsCount: incident._count.claims,
+    damageItemsCount: incident._count.damageItems,
+    derivedSeverity,
+    parseHasCarrierClaimNumber,
+  })
+
+  return NextResponse.json({
+    incident: {
+      ...incident,
+      derivedSeverity,
+      effectiveSeverity,
+      recoveryPosture,
+      suggestedNextAction,
+    },
+  })
 }
 
 interface PatchBody {
