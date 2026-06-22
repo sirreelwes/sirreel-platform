@@ -21,6 +21,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 const ACKNOWLEDGEMENT_TEXT =
   'I have read and agree to the Rental Agreement above. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.';
@@ -167,14 +168,41 @@ export default function RentalAgreementSignPage() {
     agreement?.status === 'NEGOTIATED_READY';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F8F7F4]">
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+      {/* TSX dark hero — same shell as /portal/[token] + /portal/account */}
+      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+        <div className="max-w-3xl mx-auto px-6 py-7 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sirreel-logo-white.png"
+            alt="SirReel Studio Services"
+            width={160}
+            style={{ display: 'inline-block', maxWidth: 160, height: 'auto' }}
+          />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div
+            className="mt-3 text-[10px] uppercase font-semibold"
+            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+          >
+            Rental Agreement
+          </div>
+          <h1
+            className="mt-1 text-white text-[24px] font-light italic leading-tight"
+            style={{ fontFamily: TSX_SERIF }}
+          >
+            {isSigned ? 'Signed.' : isRedlinePending ? 'Under review.' : 'Review and sign.'}
+          </h1>
+        </div>
+      </header>
+
       <main className="max-w-3xl mx-auto p-6 space-y-6">
         <div>
           <a href={`/portal/job/${slug}`} className="text-xs text-gray-500 hover:text-gray-900">
             ← Back to Job Page
           </a>
-          <h1 className="text-2xl font-semibold text-gray-900 mt-2">Rental Agreement</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-gray-700 mt-3">
             {isSigned
               ? 'This agreement has been signed.'
               : isRedlinePending
@@ -324,6 +352,24 @@ export default function RentalAgreementSignPage() {
           </div>
         )}
       </main>
+
+      <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
+        <div className="max-w-3xl mx-auto px-6 py-6 text-center">
+          <div
+            className="text-[18px]"
+            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
+          >
+            SirReel
+          </div>
+          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
+            SirReel Studio Services<br />
+            8500 Lankershim Blvd, Sun Valley, CA 91352
+          </p>
+          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
+            After-hours: <a href="tel:8884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

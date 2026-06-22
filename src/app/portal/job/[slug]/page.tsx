@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
 import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
+import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 /**
  * Job Page portal (CRH Phase 3.2). Read-only base layout — header, schedule,
@@ -343,7 +344,42 @@ export default function JobPortalPage() {
   const initials = data.agent.name.split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F8F7F4]">
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+      {/* TSX dark hero — same touchpoint family as the welcome email,
+          /portal/[token], /portal/account, and the sign pages.
+          Compact band: wordmark + gold rule + greeting. The richer
+          status panel (countdown + STATUS_STAGE progress + rep contact)
+          lives in the white card below — that's the page's working
+          surface, the hero is the brand anchor. */}
+      <header className="w-full" style={{ backgroundColor: TSX.dark }}>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-7 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sirreel-logo-white.png"
+            alt="SirReel Studio Services"
+            width={170}
+            style={{ display: 'inline-block', maxWidth: 170, height: 'auto' }}
+          />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div
+            className="mt-3 text-[10px] uppercase font-semibold"
+            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+          >
+            Presents
+          </div>
+          <div className="mt-1 text-white text-[26px] font-light tracking-[5px]">TSX</div>
+          <h1
+            className="mt-4 text-white text-[22px] sm:text-[24px] font-light italic leading-tight"
+            style={{ fontFamily: TSX_SERIF }}
+          >
+            {data.company.name}
+          </h1>
+          <p className="mt-2 text-white/60 text-[13px]">{jobTitle}</p>
+        </div>
+      </header>
+
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5 shadow-sm">
@@ -792,10 +828,26 @@ export default function JobPortalPage() {
           )}
         </section>
 
-        <div className="text-center text-[10px] text-gray-400 py-6">
-          SirReel Studio Rentals · 8500 Lankershim Blvd, Sun Valley, CA 91352
-        </div>
       </main>
+
+      {/* TSX footer — same band the welcome email + /portal/[token] use */}
+      <footer className="mt-4 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 text-center">
+          <div
+            className="text-[18px]"
+            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
+          >
+            SirReel
+          </div>
+          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
+            SirReel Studio Services<br />
+            8500 Lankershim Blvd, Sun Valley, CA 91352
+          </p>
+          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
+            After-hours: <a href="tel:8884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

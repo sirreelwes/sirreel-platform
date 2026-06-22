@@ -6,9 +6,15 @@
  * Single email field, posts to /api/portal/auth/request. The
  * response is neutral by design (we never confirm or deny whether
  * the email matches a Person), so the UI message is also neutral.
+ *
+ * TSX cohesion: dark hero (white wordmark + gold "PRESENTS / TSX"
+ * lockup + serif welcome), light cream body, gold CTA. Matches the
+ * /portal/[token] page so a client who arrives here from any TSX
+ * touchpoint sees the same shell.
  */
 
 import { useState } from 'react'
+import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens'
 
 export default function PortalSignInPage() {
   const [email, setEmail] = useState('')
@@ -36,10 +42,8 @@ export default function PortalSignInPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
       })
-      // Always show success — neutral response surface.
       setSubmitted(true)
     } catch {
-      // Network-level failure only. Don't reveal anything else.
       setSubmitted(true)
     } finally {
       setSubmitting(false)
@@ -47,51 +51,108 @@ export default function PortalSignInPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-4">
-      <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-zinc-900">Sign in</h1>
-        <p className="text-sm text-zinc-600 mt-1">
-          Enter the email address SirReel has on file. We'll send you a sign-in link.
-        </p>
+    <div className="min-h-screen bg-[#F8F7F4] flex flex-col">
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-        {error && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm px-3 py-2">
-            {error}
+      {/* TSX dark hero — mirrors /portal/[token]/page.tsx */}
+      <div className="w-full" style={{ backgroundColor: TSX.dark }}>
+        <div className="max-w-md mx-auto px-5 pt-7 pb-7 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sirreel-logo-white.png"
+            alt="SirReel Studio Services"
+            width={180}
+            style={{ display: 'inline-block', maxWidth: 180, height: 'auto' }}
+          />
+          <div className="mx-auto mt-3" style={{ width: 48, height: 2, backgroundColor: TSX.gold }} />
+          <div
+            className="mt-3 text-[10px] uppercase font-semibold"
+            style={{ color: TSX.gold, letterSpacing: '2.5px' }}
+          >
+            Presents
           </div>
-        )}
-
-        {submitted ? (
-          <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm px-3 py-3">
-            If that email is on file, we've sent a sign-in link. Check your inbox (and spam).
-            The link expires in 30 minutes.
-          </div>
-        ) : (
-          <form onSubmit={submit} className="mt-6 space-y-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-                autoComplete="email"
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={submitting || !email.trim()}
-              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-sm font-semibold rounded-lg"
-            >
-              {submitting ? 'Sending…' : 'Send sign-in link'}
-            </button>
-          </form>
-        )}
+          <div className="mt-1 text-white text-[28px] font-light tracking-[5px]">TSX</div>
+          <h1
+            className="mt-4 text-white text-[24px] font-light italic leading-tight"
+            style={{ fontFamily: TSX_SERIF }}
+          >
+            Sign in to your portal.
+          </h1>
+        </div>
       </div>
+
+      <div className="flex-1 flex items-start justify-center px-4 py-10">
+        <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-8 shadow-sm">
+          <p className="text-sm text-zinc-600">
+            Enter the email address SirReel has on file. We&apos;ll send you a sign-in link.
+          </p>
+
+          {error && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {submitted ? (
+            <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm px-3 py-3">
+              If that email is on file, we&apos;ve sent a sign-in link. Check your inbox (and spam).
+              The link expires in 30 minutes.
+            </div>
+          ) : (
+            <form onSubmit={submit} className="mt-6 space-y-3">
+              <div>
+                <label
+                  className="block text-[10px] font-semibold uppercase mb-1"
+                  style={{ color: '#888', letterSpacing: '1.5px' }}
+                >
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoFocus
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2.5 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none"
+                  style={{ borderColor: '#d4d4d4' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = TSX.gold }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#d4d4d4' }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={submitting || !email.trim()}
+                className="w-full px-4 py-2.5 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: submitting || !email.trim() ? '#bfbfbf' : TSX.gold }}
+                onMouseEnter={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = TSX.goldHover }}
+                onMouseLeave={(e) => { if (!submitting && email.trim()) e.currentTarget.style.backgroundColor = TSX.gold }}
+              >
+                {submitting ? 'Sending…' : 'Send sign-in link'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
+        <div className="max-w-md mx-auto px-5 py-6 text-center">
+          <div
+            className="text-[18px]"
+            style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}
+          >
+            SirReel
+          </div>
+          <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
+            SirReel Studio Services<br />
+            8500 Lankershim Blvd, Sun Valley, CA 91352
+          </p>
+          <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
+            After-hours: <a href="tel:8884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }
