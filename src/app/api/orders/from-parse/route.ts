@@ -183,9 +183,10 @@ export async function POST(req: NextRequest) {
   if (!companyDecision || !jobDecision) {
     return NextResponse.json({ error: 'companyDecision + jobDecision required' }, { status: 400 })
   }
-  if (!Array.isArray(items) || items.length === 0) {
-    return NextResponse.json({ error: 'at least one item required' }, { status: 400 })
-  }
+  // Empty items[] is valid (blank-mode wizard creates an empty DRAFT
+  // and the rep adds lines on /orders/[id]). Just normalize the array
+  // shape so the loop below is a no-op when nothing was parsed.
+  const itemsSafe = Array.isArray(items) ? items : []
 
   // Order date range (inherited by lines that don't specify their own).
   // Inverted-range guard mirrors POST /api/orders.
@@ -343,7 +344,7 @@ export async function POST(req: NextRequest) {
       //    captured as warnings — the line still gets created
       //    without a hold so the rep can resolve on /orders/[id].
       let sortOrder = 0
-      for (const raw of items) {
+      for (const raw of itemsSafe) {
         const quantity = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
         const rateType = (raw.rateType ?? 'DAILY') as RateType
         const rate = Number(raw.rate ?? 0)
