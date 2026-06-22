@@ -46,12 +46,18 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
+  // Draft hygiene (order consolidation Phase A): hide DRAFT rows by
+  // default so abandoned parses don't clutter the operational list.
+  // Toggle reveals them; an explicit status=DRAFT filter overrides
+  // either way (the API gives the rep what they asked for).
+  const [showDrafts, setShowDrafts] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
+    if (showDrafts) params.set("includeDrafts", "1");
     params.set("page", String(page));
     params.set("limit", "25");
 
@@ -60,7 +66,7 @@ export default function OrdersPage() {
     setOrders(data.orders || []);
     setTotal(data.total || 0);
     setLoading(false);
-  }, [search, statusFilter, page]);
+  }, [search, statusFilter, page, showDrafts]);
 
   useEffect(() => {
     fetchOrders();
@@ -121,6 +127,15 @@ export default function OrdersPage() {
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-2 text-xs text-lt-fg2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showDrafts}
+              onChange={(e) => { setShowDrafts(e.target.checked); setPage(1); }}
+              className="h-3.5 w-3.5"
+            />
+            Show drafts
+          </label>
         </div>
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">

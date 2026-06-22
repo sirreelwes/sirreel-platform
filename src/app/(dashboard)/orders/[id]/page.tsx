@@ -1534,7 +1534,20 @@ export default function OrderDetailPage() {
                 <button onClick={cancelOrder} className="px-3 py-2 text-chip-bad-fg hover:opacity-70 text-sm">Cancel</button>
               )}
               {order.status === "DRAFT" && (
-                <button onClick={deleteOrder} className="px-3 py-2 text-lt-fg3 hover:text-chip-bad-fg text-sm">Delete</button>
+                // Draft hygiene (order consolidation Phase A): the
+                // hide-drafts list filter keeps abandoned wizards out
+                // of the operational view, but the rep still needs a
+                // one-tap teardown here. Cascade is wired on the
+                // schema, so this DELETE sweeps lines + pick list
+                // cleanly. Gated server-side via getServerSession +
+                // the status=DRAFT check on the route.
+                <button
+                  onClick={deleteOrder}
+                  title="Delete this draft order — sweeps all line items"
+                  className="px-3 py-2 text-chip-bad-fg hover:bg-chip-bad-bg/20 text-sm font-semibold rounded"
+                >
+                  Delete draft
+                </button>
               )}
             </div>
             {order.status === "DRAFT" && (

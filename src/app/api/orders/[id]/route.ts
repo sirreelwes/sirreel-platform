@@ -273,6 +273,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  // Session-required mutation (CLAUDE.md hard rule). DRAFT delete is
+  // a one-shot teardown used by the order-detail "Delete draft"
+  // button on /orders/[id], so we gate it the same way the rest of
+  // the route does.
+  const session = await getServerSession();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const order = await prisma.order.findUnique({ where: { id } });
@@ -286,6 +295,11 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     );
   }
 
+  // Cascade is wired on the schema: Order.delete sweeps OrderLineItem
+  // (2646), PickList (2790), PickListItem (via PickList 2812 + line
+  // 2813), OrderDiscount (2741), and Booking-side BookingItem rows
+  // ride their own Booking lifecycle (DRAFT orders never have a
+  // Booking attached). No bespoke teardown needed.
   await prisma.order.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

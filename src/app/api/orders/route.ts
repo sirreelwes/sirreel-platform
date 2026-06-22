@@ -21,7 +21,17 @@ export async function GET(req: NextRequest) {
   const scope = await resolveDataScope();
   const where: Record<string, unknown> = { ...orderScopeWhere(scope) };
 
-  if (status) where.status = status;
+  // Draft-hygiene filter (Phase A of order consolidation): the list
+  // hides DRAFT rows by default so abandoned parses from the wizard
+  // don't clutter the operational view. Explicit `status=DRAFT`
+  // still works (the explicit filter wins), as does
+  // `?includeDrafts=1` for the "Show drafts" toggle.
+  const includeDrafts = searchParams.get("includeDrafts") === "1";
+  if (status) {
+    where.status = status;
+  } else if (!includeDrafts) {
+    where.status = { not: "DRAFT" };
+  }
   // Client-opted agentId filter — only honored when it matches the
   // user's scope. For OWN users we already constrained to their id;
   // an explicit agentId param against a different user is ignored to
