@@ -379,6 +379,20 @@ export default function OrderDetailPage() {
   // without delete+re-add.
   const [editDesc, setEditDesc] = useState("");
   const [editDept, setEditDept] = useState<LineItemDepartment | "">("");
+  // Phase 1 catalog re-pick (existing-line inline editor). Mirrors
+  // the binding state new-quote's row uses, so the rep can re-link an
+  // existing line to a different InventoryItem / AssetCategory and
+  // see description / rate / department / type all update in one tap.
+  // Seeded from the line's current binding at startEditLine, written
+  // by applyEditMatch on pick, persisted via saveEditLine.
+  const [editInvItemId, setEditInvItemId] = useState<string | null>(null);
+  const [editAssetCatId, setEditAssetCatId] = useState<string | null>(null);
+  const [editCatalogType, setEditCatalogType] = useState<'INVENTORY' | 'ASSET_CATEGORY' | null>(null);
+  const [editMatchedName, setEditMatchedName] = useState<string | null>(null);
+  // Snapshot the line's rateType at edit-start so applyEditMatch can
+  // pass it to pickRate (daily vs weekly fallback). The inline editor
+  // doesn't expose a rateType toggle — keep the existing value.
+  const [editRateType, setEditRateType] = useState<string>("DAILY");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
 
@@ -1245,6 +1259,15 @@ export default function OrderDetailPage() {
     resetForm(); setAdding(false); fetchOrder();
   };
 
+  // Same rate-fallback math new-quote uses on its row picker. Most
+  // InventoryItem rows have only weekly populated (the catalog
+  // hygiene audit found 508/794 rows with dailyRate=0), so without
+  // this a re-pick to a weekly-only row would land the line at $0.
+  function pickEditRate(p: { dailyRate: number; weeklyRate: number }, rt: string): number {
+    if (rt === 'WEEKLY' || rt === 'MONTHLY') return p.weeklyRate > 0 ? p.weeklyRate : p.dailyRate * 5;
+    return p.dailyRate > 0 ? p.dailyRate : p.weeklyRate / 5;
+  }
+
   const startEditLine = (li: LineItem) => {
     setEditingLineId(li.id);
     setEditRate(String(Number(li.rate)));
@@ -1252,6 +1275,59 @@ export default function OrderDetailPage() {
     setEditDays(li.days !== null && li.days !== undefined ? String(li.days) : "");
     setEditDesc(li.description ?? "");
     setEditDept(li.department);
+    setEditRateType(li.rateType ?? "DAILY");
+    // Catalog binding — seed from whichever side the existing row
+    // points at. Both nullable in the schema; only one can be set at
+    // a time per business rule (handled by the API).
+    if (li.inventoryItem) {
+      setEditInvItemId(li.inventoryItem.id);
+      setEditAssetCatId(null);
+      setEditCatalogType('INVENTORY');
+      setEditMatchedName(li.inventoryItem.description || li.inventoryItem.code);
+    } else if (li.assetCategory) {
+      setEditAssetCatId(li.assetCategory.id);
+      setEditInvItemId(null);
+      setEditCatalogType('ASSET_CATEGORY');
+      setEditMatchedName(li.assetCategory.name);
+    } else {
+      setEditInvItemId(null);
+      setEditAssetCatId(null);
+      setEditCatalogType(null);
+      setEditMatchedName(null);
+    }
+  };
+
+  // Apply a catalog hit to the in-edit row. Mirrors new-quote/page.tsx
+  // applyMatch — writes description, the catalog FK, department, rate
+  // (via pickRate fallback). The line's `type` re-derives from the
+  // hit kind so a VEHICLE asset-cat lands on the FLEET lane and an
+  // INVENTORY row lands EQUIPMENT/EXPENDABLE per its department.
+  // Package hits aren't supported inline (would need row expansion);
+  // we scope them out via the combobox's `types` prop too, this is
+  // just defense.
+  const applyEditMatch = (hit: { id: string; type: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE'; name: string; department: string; dailyRate: number; weeklyRate: number }) => {
+    if (hit.type === 'PACKAGE') {
+      alert('Packages can\u2019t be applied via the inline editor — delete this line and add the package from the catalog.');
+      return;
+    }
+    setEditDesc(hit.name);
+    setEditDept(hit.department as LineItemDepartment);
+    setEditCatalogType(hit.type);
+    setEditMatchedName(hit.name);
+    if (hit.type === 'INVENTORY') {
+      setEditInvItemId(hit.id);
+      setEditAssetCatId(null);
+    } else {
+      setEditAssetCatId(hit.id);
+      setEditInvItemId(null);
+    }
+    const nextRate = pickEditRate(
+      { dailyRate: Number(hit.dailyRate) || 0, weeklyRate: Number(hit.weeklyRate) || 0 },
+      editRateType,
+    );
+    if (Number.isFinite(nextRate) && nextRate > 0) {
+      setEditRate(String(nextRate));
+    }
   };
 
   const saveEditLine = async (lineId: string) => {
@@ -1263,6 +1339,21 @@ export default function OrderDetailPage() {
     const trimmedDesc = editDesc.trim();
     if (trimmedDesc.length > 0) body.description = trimmedDesc;
     if (editDept) body.department = editDept;
+    // Catalog binding — always send explicitly so a clear-binding via
+    // the combobox's onClearCatalog actually clears in the DB. The
+    // PUT route skips fields whose value is `undefined` and accepts
+    // `null` to clear, so we send the resolved state either way.
+    body.inventoryItemId = editInvItemId;
+    body.assetCategoryId = editAssetCatId;
+    // Re-derive line type from the catalog binding so lane routing
+    // (FLEET vs WAREHOUSE) stays honest after a re-pick. The PUT
+    // route's pick-list sync (commit e29761c) keys off dept; this
+    // keeps the row's `type` aligned with what the catalog says.
+    if (editCatalogType === 'ASSET_CATEGORY') {
+      body.type = 'VEHICLE';
+    } else if (editCatalogType === 'INVENTORY') {
+      body.type = editDept === 'EXPENDABLES' ? 'EXPENDABLE' : 'EQUIPMENT';
+    }
     const res = await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -1769,19 +1860,51 @@ export default function OrderDetailPage() {
                   </td>
                   {editingLineId === li.id ? (
                     <td className="px-4 py-2">
-                      <input
-                        type="text"
-                        value={editDesc}
-                        onChange={(e) => setEditDesc(e.target.value)}
-                        placeholder="Line description"
-                        className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
-                      />
-                      {/* Department selector — closes the A2 gap on
-                          this surface (was previously API-only).
-                          Server validates the transition + syncs
-                          PickListItem when crossing the WAREHOUSE
-                          boundary, and BookingItem holds when crossing
-                          VEHICLES/STAGES. */}
+                      {/* Phase 1 catalog re-pick. EQUIPMENT/EXPENDABLE/
+                          VEHICLE rows get the live catalog combobox;
+                          DISCOUNT/FEE stay plain text since they aren't
+                          backed by a catalog product. Picking a hit
+                          writes description / department / catalog FK /
+                          rate via applyEditMatch; clearing the binding
+                          drops the FK without erasing the typed text. */}
+                      {li.type === 'DISCOUNT' || li.type === 'FEE' ? (
+                        <input
+                          type="text"
+                          value={editDesc}
+                          onChange={(e) => setEditDesc(e.target.value)}
+                          placeholder="Line description"
+                          className="w-full px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg"
+                        />
+                      ) : (
+                        <LineItemDescriptionCombobox
+                          value={editDesc}
+                          onChange={(next) => setEditDesc(next)}
+                          onPickCatalog={(hit) => applyEditMatch(hit)}
+                          catalogBinding={(() => {
+                            const bid = editCatalogType === 'INVENTORY' ? editInvItemId
+                              : editCatalogType === 'ASSET_CATEGORY' ? editAssetCatId
+                              : null;
+                            if (!bid || !editCatalogType || !editMatchedName) return null;
+                            return { id: bid, type: editCatalogType, name: editMatchedName };
+                          })()}
+                          onClearCatalog={() => {
+                            setEditInvItemId(null);
+                            setEditAssetCatId(null);
+                            setEditCatalogType(null);
+                            setEditMatchedName(null);
+                          }}
+                          // Packages don't apply inline (would need row
+                          // expansion) — scope them out of the dropdown.
+                          types={['INVENTORY', 'ASSET_CATEGORY']}
+                          placeholder="Search catalog to re-link, or edit description"
+                          hideCustomChip
+                        />
+                      )}
+                      {/* Department selector — manual override on top
+                          of the catalog-derived value. Server's PUT
+                          honors the explicit dept + runs the
+                          pick-list sync when the dept crosses the
+                          WAREHOUSE boundary (commit e29761c). */}
                       <select
                         value={editDept}
                         onChange={(e) => setEditDept(e.target.value as LineItemDepartment)}
