@@ -15,15 +15,22 @@ import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   }
+  // The admin page passes `?includeArchived=1` to see both active and
+  // soft-deleted rows; pickers (sub-rentals + inventory) leave it off
+  // so archived vendors drop out of selection without affecting
+  // historical assignments.
+  const includeArchived = new URL(req.url).searchParams.get('includeArchived') === '1'
   const vendors = await prisma.vendor.findMany({
-    where: { isActive: true },
-    include: { _count: { select: { subRentals: true } } },
-    orderBy: { name: 'asc' },
+    where: includeArchived ? {} : { isActive: true },
+    include: {
+      _count: { select: { subRentals: true, inventoryItems: true } },
+    },
+    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })
   return NextResponse.json({ vendors })
 }

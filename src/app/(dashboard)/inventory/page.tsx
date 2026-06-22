@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { AddItemModal } from "@/components/inventory/AddItemModal";
+import { InventoryDetailModal } from "@/components/inventory/InventoryDetailModal";
 
 type Category = { id: string; name: string; _count: { items: number } };
 type LocationOption = { id: string; name: string; code: string };
@@ -14,6 +15,9 @@ type Item = {
   qtyOwned: number;
   replacementCost: string | null;
   imageUrl: string | null;
+  preferredVendorId: string | null;
+  preferredVendor: { id: string; name: string; website: string | null; isActive: boolean } | null;
+  vendorItemUrl: string | null;
   location: string; // legacy enum value, kept for fallback display
   locationRef: { id: string; name: string; code: string } | null;
   category: { id: string; name: string };
@@ -33,6 +37,9 @@ export default function InventoryPage() {
 
   // Add-item modal
   const [showAdd, setShowAdd] = useState(false);
+  // Per-row detail modal (photo + vendor). Hold the full row so the
+  // modal can read every field without a second fetch.
+  const [detailItem, setDetailItem] = useState<Item | null>(null);
 
   // Bulk operations
   const [showBulk, setShowBulk] = useState(false);
@@ -308,7 +315,55 @@ export default function InventoryPage() {
                     <input type="text" value={editValues.description} onChange={(e) => setEditValues({...editValues, description: e.target.value})}
                       className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white" />
                   ) : (
-                    <span className="text-white">{item.description || item.code}</span>
+                    <div className="flex items-start gap-2">
+                      {/* Thumbnail — small fixed slot so rows align even
+                          when imageUrl is null. Click opens the detail
+                          modal for fast replace/remove. */}
+                      <button
+                        type="button"
+                        onClick={() => setDetailItem(item)}
+                        className="flex-none w-10 h-10 rounded bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-zinc-600 text-[10px] hover:border-amber-500"
+                        title={item.imageUrl ? 'Click for full image' : 'Click to add image'}
+                        aria-label={item.imageUrl ? 'Open image' : 'Add image'}
+                      >
+                        {item.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </button>
+                      <div className="min-w-0">
+                        <div className="text-white truncate">{item.description || item.code}</div>
+                        {(() => {
+                          // Effective reorder URL: per-item override wins,
+                          // else fall back to the vendor's default website.
+                          const reorderUrl = item.vendorItemUrl || item.preferredVendor?.website || null;
+                          if (!item.preferredVendor && !reorderUrl) return null;
+                          return (
+                            <div className="text-[10px] text-zinc-500 truncate mt-0.5">
+                              {item.preferredVendor && (
+                                <span title={item.preferredVendor.name}>{item.preferredVendor.name}</span>
+                              )}
+                              {reorderUrl && (
+                                <>
+                                  {item.preferredVendor && <span className="mx-1">·</span>}
+                                  <a
+                                    href={reorderUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-blue-400 hover:text-blue-300"
+                                  >
+                                    reorder ↗
+                                  </a>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   )}
                 </td>
                 <td className="px-3 py-2 text-xs">
@@ -362,7 +417,14 @@ export default function InventoryPage() {
                     <td className="px-3 py-2 text-right text-white font-mono text-xs">
                       {item.replacementCost && Number(item.replacementCost) > 0 ? fmt(Number(item.replacementCost) * item.qtyOwned) : "--"}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setDetailItem(item)}
+                        className="text-zinc-500 hover:text-amber-400 text-xs mr-2"
+                        title="Photo + vendor"
+                      >
+                        Details
+                      </button>
                       <button onClick={() => startEdit(item)} className="text-zinc-500 hover:text-blue-400 text-xs">Edit</button>
                     </td>
                   </>
@@ -392,6 +454,13 @@ export default function InventoryPage() {
         categories={categories}
         locations={locations}
         defaultCategoryId={categoryId || undefined}
+      />
+
+      <InventoryDetailModal
+        open={detailItem !== null}
+        item={detailItem}
+        onClose={() => setDetailItem(null)}
+        onSaved={() => fetchItems()}
       />
     </div>
   );

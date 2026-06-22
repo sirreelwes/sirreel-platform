@@ -2186,6 +2186,14 @@ model InventoryItem {
   qtyOwned        Int                 @default(0) @map("qty_owned")
   replacementCost Decimal?            @map("replacement_cost") @db.Decimal(10, 2)
   imageUrl        String?             @map("image_url")
+  // Preferred replacement vendor — relational so reorder routing is
+  // consistent across items (same handful of vendors: Amazon, Home
+  // Depot, etc., not free text). `vendorItemUrl` is an item-specific
+  // product/reorder link that overrides Vendor.url for THIS item;
+  // when null we fall back to the vendor's default url.
+  preferredVendorId String?           @map("preferred_vendor_id")
+  preferredVendor   Vendor?           @relation(fields: [preferredVendorId], references: [id])
+  vendorItemUrl     String?           @map("vendor_item_url")
   // Phase 2 sales pipeline. `aliases` are colloquial synonyms ("walkies" →
   // CP200 Radio) handed to the AI extractor as catalog context and used
   // server-side for fallback alias-tokenized matching. `department` is the
@@ -2247,6 +2255,7 @@ model InventoryItem {
   @@index([rwId])
   @@index([needsReview])
   @@index([locationId])
+  @@index([preferredVendorId])
   @@map("inventory_items")
 }
 
@@ -2984,7 +2993,11 @@ model Vendor {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  subRentals SubRental[]
+  subRentals     SubRental[]
+  // Reverse relation: InventoryItems with this vendor as their
+  // preferred reorder source. Same Vendor table feeds both
+  // sub-rentals (Hugo's flow) and the inventory reorder picker.
+  inventoryItems InventoryItem[]
 
   @@map("vendors")
 }

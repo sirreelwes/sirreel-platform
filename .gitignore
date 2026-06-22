@@ -34,6 +34,7 @@ scripts/*
 !scripts/verifyDkimDomain.ts
 !scripts/migrateLegacyFlatTotal.ts
 !scripts/lowercasePersonEmails.ts
+!scripts/seedVendors.ts
 !scripts/canaryMergeWes.ts
 !scripts/rw-rate-gap-fill.ts
 !scripts/bind-planyo-backfill-units.ts

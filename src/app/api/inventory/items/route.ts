@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, type LineItemDepartment } from "@prisma/client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 const VALID_DEPARTMENTS: LineItemDepartment[] = [
   "VEHICLES",
@@ -13,6 +17,12 @@ const VALID_DEPARTMENTS: LineItemDepartment[] = [
 ];
 
 export async function POST(req: NextRequest) {
+  // Auth: any authenticated user — mirrors PUT.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const {
     code,
@@ -93,6 +103,7 @@ export async function GET(req: NextRequest) {
       include: {
         category: { select: { id: true, name: true } },
         locationRef: { select: { id: true, name: true, code: true } },
+        preferredVendor: { select: { id: true, name: true, website: true, isActive: true } },
       },
       orderBy: [{ category: { sortOrder: "asc" } }, { code: "asc" }],
       skip: (page - 1) * limit,
