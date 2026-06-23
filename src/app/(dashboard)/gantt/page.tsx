@@ -609,7 +609,7 @@ export default function GanttPage() {
                   <div
                     key={ds}
                     style={{ width: dayWidth, minWidth: dayWidth }}
-                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-100 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-100/50 text-gray-400' : 'text-gray-500'}`}
+                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-100 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
                   >
                     {fDay(ds)}
                   </div>
@@ -645,7 +645,7 @@ export default function GanttPage() {
                             <div
                               key={ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -681,7 +681,7 @@ export default function GanttPage() {
                             <div
                               key={ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -722,7 +722,7 @@ export default function GanttPage() {
                               <div
                                 key={ds}
                                 style={{ width: dayWidth, minWidth: dayWidth }}
-                                className={`flex-shrink-0 border-r border-gray-200/40 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/30' : ''}`}
+                                className={`flex-shrink-0 border-r border-gray-200/40 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                               />
                             ))}
                           </div>
@@ -761,7 +761,7 @@ export default function GanttPage() {
                         <div
                           key={ds}
                           style={{ width: dayWidth, minWidth: dayWidth }}
-                          className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-50/50' : ''}`}
+                          className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                         />
                       ))}
                     </div>

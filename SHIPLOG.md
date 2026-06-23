@@ -4,6 +4,8 @@ Append-only record of shipped changes. Newest at top. Each entry: SHA, commit su
 
 ## 2026-06-23
 
+- `gantt-weekend-shading` — weekend columns (Sat/Sun) now show a clearly-visible light-grey band on the reservations gantt. Shading already existed but at `bg-gray-50/50` (/`bg-gray-200/30`) it was effectively invisible and inconsistent between row types; unified header + all body row cells to `bg-gray-200/60`. `npx tsc --noEmit` clean.
+
 - `gantt-stabilize` — fix the reservations gantt "panning wildly left↔right" for some operators. Root cause was screen-width, not the mouse: `weeks` is fixed (grid = 3× the 2-week span ≈ 2016px), so on a wide monitor whose scroll container is wider than ~1344px the default `scrollLeft` exceeded `maxScroll`, clamped to the right edge, and tripped the near-edge recenter handler — which wrote `scrollLeft`, fired `onScroll`, recentered again, ping-ponging forever. Narrow/zoomed windows never tripped it. Fix: (1) `handleScroll` now ignores the `onScroll` echo of its OWN programmatic `scrollLeft` writes (read-back compare), breaking the feedback loop in every geometry; (2) widened the render buffer 1→2 windows so the default mid-grid position stays valid on wide monitors. `npx tsc --noEmit` clean.
 
 - `sales-reservations-tab` — Reservations now appears as a left-sidebar tab **directly under Pipeline** for the **whole sales team**. Standard AGENTs already had it at that position; this extends it to restricted `salesOnly` accounts (which the `!salesOnly` guard had been hiding) by pushing the schedule/`/gantt` entry inside the sales Pipeline block and gating the non-sales push with `&& !sales` (single entry, no dup; ADMIN/MANAGER/others unchanged). `npx tsc --noEmit` clean.
