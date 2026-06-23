@@ -57,7 +57,6 @@ export function NewJobModal({
   const [productionType, setProductionType] = useState<string>("OTHER");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [estimatedValue, setEstimatedValue] = useState("");
   const [notes, setNotes] = useState("");
   const [contacts, setContacts] = useState<ContactRow[]>([emptyContactRow("PM", true)]);
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +67,6 @@ export function NewJobModal({
       setProductionType("OTHER");
       setStartDate("");
       setEndDate("");
-      setEstimatedValue("");
       setNotes("");
       setContacts([emptyContactRow("PM", true)]);
       setSubmitting(false);
@@ -130,7 +128,6 @@ export function NewJobModal({
           startDate: startDate || null,
           endDate: endDate || null,
           notes: notes || null,
-          estimatedValue: estimatedValue.trim() === "" ? null : Number(estimatedValue),
           contacts: contacts
             .filter((c) => c.person)
             .map((c) => ({ personId: c.person!.id, role: c.role, isPrimary: c.isPrimary })),
@@ -187,26 +184,6 @@ export function NewJobModal({
               <label className="block text-sm font-medium text-zinc-400 mb-1">Status</label>
               <input type="text" value="QUOTED" disabled className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-800 rounded-lg text-sm text-zinc-500" />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">
-              Estimated Value <span className="text-zinc-600 font-normal">(optional, USD)</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={estimatedValue}
-                onChange={(e) => setEstimatedValue(e.target.value)}
-                placeholder="e.g., 25000"
-                className="w-full pl-7 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-            <p className="text-xs text-zinc-600 mt-1">Used on the pipeline board before any orders exist.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
