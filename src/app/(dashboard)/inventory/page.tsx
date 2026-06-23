@@ -175,7 +175,7 @@ export default function InventoryPage() {
     <div className="p-6 max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Inventory</h1>
+          <h1 className="text-2xl font-semibold text-lt-fg">Inventory</h1>
           <p className="text-sm text-zinc-400 mt-1">
             {total} items | {totalOwned} units owned
             {totalValue > 0 && <span> | Est. value: {fmt(totalValue)}</span>}
