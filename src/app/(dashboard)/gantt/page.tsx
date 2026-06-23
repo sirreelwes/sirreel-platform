@@ -69,14 +69,18 @@ export default function GanttPage() {
   // The "visible window" is the [anchorDate, anchorDate + totalDays)
   // span the operator is currently looking at — what the header
   // range label, today line, and tier sort agree on. The "rendered
-  // window" is wider: one full visible-window worth of buffer on
+  // window" is wider: TWO full visible-windows worth of buffer on
   // each side, so trackpad / drag pan inside the scroll container
   // has actual DOM to scroll into (without this, the grid is the
   // exact width of the visible span and overflow-x has nothing to
-  // do — the bug this commit fixes). Near-edge scroll then advances
-  // the anchor by `totalDays` and compensates scrollLeft so the
-  // visual position stays put — continuous pan, no jump.
-  const RENDER_BUFFER_WINDOWS = 1
+  // do). Two windows (not one) so the default mid-grid scroll
+  // position stays valid even on a wide monitor whose container is
+  // wider than a single visible window — with only one buffer window
+  // the default scrollLeft exceeded maxScroll on wide screens, clamped
+  // to the edge, and tripped the recenter handler into a left↔right
+  // oscillation. Near-edge scroll advances the anchor by `totalDays`
+  // and compensates scrollLeft so the visual position stays put.
+  const RENDER_BUFFER_WINDOWS = 2
   const renderedDays = totalDays * (1 + 2 * RENDER_BUFFER_WINDOWS)
   const renderedStartDate = useMemo(
     () => addDays(startDate, -totalDays * RENDER_BUFFER_WINDOWS),
@@ -180,23 +184,40 @@ export default function GanttPage() {
   // on re-renders driven by scroll (not by the </>/Today buttons or
   // a window-size change).
   const pendingScrollLeft = useRef<number | null>(null)
+  // Records the (clamped) scrollLeft we set programmatically so the
+  // `onScroll` event that write triggers can be recognized and ignored
+  // by handleScroll. Without this, a programmatic write that lands in an
+  // edge zone (e.g. clamped on a wide monitor) re-triggers the recenter,
+  // which writes scrollLeft again → onScroll → … → the wild left↔right
+  // pan operators reported.
+  const lastProgrammaticScrollLeft = useRef<number | null>(null)
 
   useEffect(() => {
     const el = scrollContainerRef.current
     if (!el) return
-    if (pendingScrollLeft.current !== null) {
-      el.scrollLeft = pendingScrollLeft.current
-      pendingScrollLeft.current = null
-      return
-    }
-    // Default: position the visible window at the left of the body.
-    // RENDER_BUFFER_WINDOWS worth of past columns sit to the left in
-    // the scroll buffer, accessible by scrolling backwards.
-    el.scrollLeft = totalDays * RENDER_BUFFER_WINDOWS * dayWidth
+    const target = pendingScrollLeft.current !== null
+      ? pendingScrollLeft.current
+      // Default: position the visible window at the left of the body.
+      // RENDER_BUFFER_WINDOWS worth of past columns sit to the left in
+      // the scroll buffer, accessible by scrolling backwards.
+      : totalDays * RENDER_BUFFER_WINDOWS * dayWidth
+    pendingScrollLeft.current = null
+    el.scrollLeft = target
+    // Read back the value the browser actually applied (it clamps to
+    // [0, maxScroll]); that's what the echoing onScroll will report.
+    lastProgrammaticScrollLeft.current = el.scrollLeft
   }, [anchorDate, weeks, totalDays, dayWidth])
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     const el = e.currentTarget
+    // Ignore scroll events caused by our own programmatic scrollLeft
+    // writes — only react to genuine user pans. Keep ignoring while the
+    // position equals what we set (a single write can echo more than
+    // once); clear once the user actually moves away from it.
+    if (lastProgrammaticScrollLeft.current !== null) {
+      if (Math.abs(el.scrollLeft - lastProgrammaticScrollLeft.current) <= 1) return
+      lastProgrammaticScrollLeft.current = null
+    }
     const maxScroll = el.scrollWidth - el.clientWidth
     if (maxScroll <= 0) return
     // 3-column-wide trigger zone at each edge — wide enough to
