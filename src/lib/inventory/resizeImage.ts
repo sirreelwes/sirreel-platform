@@ -14,16 +14,32 @@ export const ACCEPT_IMAGE = 'image/jpeg,image/png,image/webp,image/heic,image/he
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10 MB — mirrors the upload route cap
 export const MAX_LONG_EDGE = 1600
 
+// Every async step below is bounded by a timeout. `Image` decode and
+// especially `canvas.toBlob` can — on large/odd source images, under
+// memory pressure, or in some HEIC-as-jpeg cases — leave their callback
+// permanently un-fired. With no reject path that left the wrapping promise
+// pending forever, so `uploadInventoryItemImage` never resolved, the
+// caller's `finally` never ran, and the upload spinner hung indefinitely
+// with no error. These caps guarantee the promise always settles.
+const DECODE_TIMEOUT_MS = 20_000
+const ENCODE_TIMEOUT_MS = 20_000
+const UPLOAD_TIMEOUT_MS = 60_000
+
 export async function resizeImage(file: File): Promise<Blob> {
   const url = URL.createObjectURL(file)
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error('image decode failed'))
+      const timer = setTimeout(
+        () => reject(new Error('Image is taking too long to open — try a different photo.')),
+        DECODE_TIMEOUT_MS,
+      )
+      el.onload = () => { clearTimeout(timer); resolve(el) }
+      el.onerror = () => { clearTimeout(timer); reject(new Error('Could not read that image file.')) }
       el.src = url
     })
     const { width, height } = img
+    if (!width || !height) throw new Error('That image appears to be empty or corrupt.')
     const longEdge = Math.max(width, height)
     const scale = longEdge > MAX_LONG_EDGE ? MAX_LONG_EDGE / longEdge : 1
     const w = Math.round(width * scale)
@@ -34,10 +50,21 @@ export async function resizeImage(file: File): Promise<Blob> {
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('canvas not available')
     ctx.drawImage(img, 0, 0, w, h)
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
-    )
-    if (!blob) throw new Error('canvas export failed')
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Image is taking too long to process — try a smaller photo.')),
+        ENCODE_TIMEOUT_MS,
+      )
+      canvas.toBlob(
+        (b) => {
+          clearTimeout(timer)
+          if (b) resolve(b)
+          else reject(new Error('Could not process that image.'))
+        },
+        'image/jpeg',
+        0.85,
+      )
+    })
     return blob
   } finally {
     URL.revokeObjectURL(url)
@@ -58,7 +85,26 @@ export async function uploadInventoryItemImage(itemId: string, file: File): Prom
   const type = RESIZEABLE_MIME.has(file.type) ? 'image/jpeg' : file.type
   const form = new FormData()
   form.append('file', new File([uploadable], filename, { type }))
-  const res = await fetch(`/api/inventory/items/${itemId}/image`, { method: 'POST', body: form })
+
+  // Bound the POST too — a stalled upload would otherwise leave the
+  // caller's spinner spinning forever just like an un-fired toBlob.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`/api/inventory/items/${itemId}/image`, {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error('Upload timed out — check your connection and try again.')
+    }
+    throw err instanceof Error ? err : new Error('Upload failed.')
+  } finally {
+    clearTimeout(timer)
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || `Upload failed (HTTP ${res.status}).`)
   return data.item.imageUrl as string
