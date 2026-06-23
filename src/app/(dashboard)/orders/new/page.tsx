@@ -75,10 +75,14 @@ interface ResolvedItem {
   // Wizard-local only — NOT persisted, NOT sent to from-parse.
   /** Stable per-line id for keys + per-row state updates. */
   localId: string
-  /** Triage flag: the wizard is parsed-intake only, so every line
-   *  starts unconfirmed and must be confirmed (catalog pick or accept-
-   *  as-custom) before the draft can be created. */
+  /** Triage flag: parsed lines start unconfirmed and must be confirmed
+   *  (catalog pick or accept-as-custom) before the draft can be created.
+   *  Agent-added lines are stamped confirmed=true immediately. */
   confirmed: boolean
+  /** How the line ENTERED the wizard: true = came from a parse (must be
+   *  confirmed); false = the agent added it manually (trusted, never
+   *  needs confirmation). */
+  parseOrigin: boolean
   description: string
   quantity: number
   catalogProductId: string | null
@@ -223,7 +227,7 @@ function NewOrderWizardInner() {
   // ── Parse handlers ────────────────────────────────────────────────
   const applyParseResult = useCallback((data: {
     parsed?: ParsedTop
-    items?: Array<Omit<ResolvedItem, 'localId' | 'confirmed'>>
+    items?: Array<Omit<ResolvedItem, 'localId' | 'confirmed' | 'parseOrigin'>>
     clientMatch?: ClientCandidate[]
     contacts?: unknown
   }) => {
@@ -232,7 +236,7 @@ function NewOrderWizardInner() {
     // rep confirms each (catalog pick or accept-as-custom) before Create.
     setItems(
       Array.isArray(data.items)
-        ? data.items.map((it) => ({ ...it, localId: newLocalId(), confirmed: false }))
+        ? data.items.map((it) => ({ ...it, localId: newLocalId(), confirmed: false, parseOrigin: true }))
         : [],
     )
     setClientCandidates(Array.isArray(data.clientMatch) ? data.clientMatch : [])
@@ -404,6 +408,37 @@ function NewOrderWizardInner() {
     matchedProduct: null,
     matchSource: null,
   })
+
+  // Agent-added line. The parser misses things, so the agent fills the
+  // gaps before Create. AGENT-ENTERED → parseOrigin=false, confirmed=true:
+  // trusted, lands straight in "Ready" (never "Confirm these") and never
+  // blocks the gate. Fully editable in place (qty / catalog / dept /
+  // rate / dates); persists through from-parse like any line (FK
+  // optional). Dates seed from the order header so a same-window line
+  // is one click.
+  const addLine = () => {
+    setCreateError('')
+    const newLine: ResolvedItem = {
+      localId: newLocalId(),
+      confirmed: true,
+      parseOrigin: false,
+      description: '',
+      quantity: 1,
+      catalogProductId: null,
+      catalogType: null,
+      department: 'PRO_SUPPLIES',
+      qualifier: null,
+      rateType: 'DAILY',
+      pickupDate: startDate || '',
+      returnDate: endDate || '',
+      billableDays: null,
+      rate: 0,
+      matchedProduct: null,
+      matchSource: null,
+      warnings: [],
+    }
+    setItems((prev) => [...prev, newLine])
+  }
 
   // ── Contact-toggle ────────────────────────────────────────────────
   const toggleContact = (idx: number, include: boolean) => {
@@ -806,7 +841,7 @@ function NewOrderWizardInner() {
 
           {itemsCount === 0 ? (
             <div className="text-xs text-lt-fg3 text-center py-4">
-              No parsed line items. Create the draft and add items on the next page.
+              No parsed line items yet — add lines manually below, or create the draft and add them on the next page.
             </div>
           ) : (
             <div className="space-y-4">
@@ -917,32 +952,102 @@ function NewOrderWizardInner() {
                           <span className="text-[11px] font-mono text-lt-fg2">{fmtMoney(subtotal)}</span>
                         </div>
                         {rows.map((it) => (
-                          <div key={it.localId} className="py-1.5 px-3 grid grid-cols-[36px_1fr_84px_44px_24px] gap-2 items-center text-xs">
-                            <span className="font-mono tabular-nums text-lt-fg">{it.quantity}</span>
-                            <div className="min-w-0 flex items-center gap-1.5">
-                              {it.catalogProductId
-                                ? <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">✓</span>
-                                : <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-lt-inner text-lt-fg3 border border-lt-hairline shrink-0">custom</span>}
-                              <span className="truncate text-lt-fg">{it.description}</span>
+                          it.parseOrigin ? (
+                            // Parsed + confirmed — compact read-only; "edit"
+                            // sends it back to "Confirm these" for re-pick.
+                            <div key={it.localId} className="py-1.5 px-3 grid grid-cols-[36px_1fr_84px_44px_24px] gap-2 items-center text-xs">
+                              <span className="font-mono tabular-nums text-lt-fg">{it.quantity}</span>
+                              <div className="min-w-0 flex items-center gap-1.5">
+                                {it.catalogProductId
+                                  ? <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">✓</span>
+                                  : <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-lt-inner text-lt-fg3 border border-lt-hairline shrink-0">custom</span>}
+                                <span className="truncate text-lt-fg">{it.description}</span>
+                              </div>
+                              <span className="text-right font-mono text-lt-fg2">{fmtMoney(Number(it.rate) || 0)}/d</span>
+                              <button
+                                type="button"
+                                onClick={() => patchItem(it.localId, { confirmed: false })}
+                                className="text-[11px] text-lt-fg3 hover:text-lt-fg underline"
+                                title="Move back to Confirm these"
+                              >
+                                edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(it.localId)}
+                                className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none"
+                                aria-label="Remove line"
+                              >
+                                ×
+                              </button>
                             </div>
-                            <span className="text-right font-mono text-lt-fg2">{fmtMoney(Number(it.rate) || 0)}/d</span>
-                            <button
-                              type="button"
-                              onClick={() => patchItem(it.localId, { confirmed: false })}
-                              className="text-[11px] text-lt-fg3 hover:text-lt-fg underline"
-                              title="Move back to Confirm these"
-                            >
-                              edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => removeItem(it.localId)}
-                              className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none"
-                              aria-label="Remove line"
-                            >
-                              ×
-                            </button>
-                          </div>
+                          ) : (
+                            // Agent-added — trusted, already confirmed; fully
+                            // editable in place (qty / catalog / dept / rate /
+                            // dates). The "added" chip distinguishes it.
+                            <div key={it.localId} className="py-2 px-3 space-y-2 bg-sky-50/40 border-l-2 border-sky-300">
+                              <div className="grid grid-cols-[56px_1fr_24px] gap-2 items-start">
+                                <input
+                                  type="number" min={1} step={1} value={it.quantity}
+                                  onChange={(e) => patchItem(it.localId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                                  className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm font-bold tabular-nums text-lt-fg"
+                                  aria-label="Quantity"
+                                />
+                                <LineItemDescriptionCombobox
+                                  value={it.description}
+                                  onChange={(next) => patchItem(it.localId, { description: next })}
+                                  onPickCatalog={(hit) => applyMatch(it.localId, hit)}
+                                  catalogBinding={
+                                    it.catalogProductId && it.catalogType && it.matchedProduct
+                                      ? { id: it.catalogProductId as string, type: it.catalogType, name: it.matchedProduct.name }
+                                      : null
+                                  }
+                                  onClearCatalog={() => patchItem(it.localId, { catalogProductId: null, catalogType: null, matchedProduct: null, matchSource: null })}
+                                  placeholder="Type to search inventory, or leave as a custom line…"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(it.localId)}
+                                  className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none pt-1"
+                                  aria-label="Remove line"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center pl-[64px]">
+                                <select
+                                  value={it.department}
+                                  onChange={(e) => patchItem(it.localId, { department: e.target.value as LineItemDepartment })}
+                                  className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
+                                  aria-label="Department"
+                                >
+                                  {DEPT_OPTIONS.map((d) => <option key={d} value={d}>{DEPT_LABEL[d]}</option>)}
+                                </select>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-lt-fg3">$</span>
+                                  <input
+                                    type="number" min={0} step="0.01" value={it.rate}
+                                    onChange={(e) => patchItem(it.localId, { rate: Number(e.target.value) || 0 })}
+                                    className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg tabular-nums"
+                                    aria-label="Rate per day"
+                                  />
+                                  <span className="text-[11px] text-lt-fg3">/d</span>
+                                </div>
+                                <input
+                                  type="date" value={it.pickupDate}
+                                  onChange={(e) => patchItem(it.localId, { pickupDate: e.target.value })}
+                                  className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
+                                  aria-label="Pickup date"
+                                />
+                                <input
+                                  type="date" value={it.returnDate}
+                                  onChange={(e) => patchItem(it.localId, { returnDate: e.target.value })}
+                                  className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
+                                  aria-label="Return date"
+                                />
+                              </div>
+                            </div>
+                          )
                         ))}
                       </div>
                     )
@@ -951,6 +1056,18 @@ function NewOrderWizardInner() {
               )}
             </div>
           )}
+
+          {/* + Add line — agent-entered (parseOrigin=false, confirmed=true):
+              trusted, lands straight in "Ready", never blocks the Create
+              gate. Always available, including on a blank wizard. */}
+          <button
+            type="button"
+            onClick={addLine}
+            className="w-full text-xs font-semibold text-lt-fg2 hover:text-lt-fg border border-dashed border-lt-hairline hover:border-lt-fg3 rounded-lg py-2 transition-colors"
+            title="Add a line the parse missed — goes straight to Ready (no confirmation needed)"
+          >
+            + Add line
+          </button>
         </div>
 
         {/* DISCOUNT */}
