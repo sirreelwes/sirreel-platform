@@ -28,6 +28,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { SEND_FROM, sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
+import { orderPhotoProxyUrl } from '@/lib/orders/orderPhotoProxy'
 import { ThankYouStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -86,23 +87,29 @@ export async function POST(req: NextRequest, { params }: Params) {
   let photoDocumentId: string | null = body.photoUrlOverride
     ? null
     : (body.photoDocumentId ?? order.thankYouSuggestion.photoDocumentId)
+  // Order JOB_PHOTOs live in the private blob store, so the email must
+  // embed the PUBLIC-by-uuid proxy URL, not the raw (403) blob URL.
+  // photoUrlOverride is the weekly-candid path (a User candid blob, not
+  // an OrderDocument); that blob is ALSO private and would 403 in the
+  // recipient's inbox — a separate pre-existing gap that needs its own
+  // public proxy, untouched by this order-document fix.
   let photoUrl: string | null = body.photoUrlOverride ?? null
   if (!photoUrl && photoDocumentId) {
     const doc = await prisma.orderDocument.findUnique({
       where: { id: photoDocumentId },
-      select: { fileUrl: true, orderId: true },
+      select: { orderId: true },
     })
-    if (doc && doc.orderId === id) photoUrl = doc.fileUrl
+    if (doc && doc.orderId === id) photoUrl = orderPhotoProxyUrl(photoDocumentId)
     else photoDocumentId = null
   }
   if (!photoUrl && !body.photoUrlOverride) {
     const latest = await prisma.orderDocument.findFirst({
       where: { orderId: id, type: 'JOB_PHOTO' },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, fileUrl: true },
+      select: { id: true },
     })
     if (latest) {
-      photoUrl = latest.fileUrl
+      photoUrl = orderPhotoProxyUrl(latest.id)
       photoDocumentId = latest.id
     }
   }

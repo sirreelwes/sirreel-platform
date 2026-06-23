@@ -59,32 +59,43 @@ export async function POST(req: NextRequest, { params }: Params) {
   const type = typeRaw as OrderDocType
   const title = String(form.get('title') ?? '') || file.name || 'Document'
 
-  const buf = Buffer.from(await file.arrayBuffer())
-  const kindSuffix = type === OrderDocType.JOB_PHOTO ? 'jobphoto' : 'doc'
-  const { fileUrl, blobKey } = await uploadOrderDocument({
-    orderNumber: order.orderNumber,
-    filename: file.name,
-    contentType: file.type || 'application/octet-stream',
-    data: buf,
-    kindSuffix,
-  })
+  // Blob upload + persist. Any failure (e.g. a blob-store config
+  // problem) must surface as a clean, specific error — never a bare 500
+  // that the compose view renders as an opaque "upload failed".
+  try {
+    const buf = Buffer.from(await file.arrayBuffer())
+    const kindSuffix = type === OrderDocType.JOB_PHOTO ? 'jobphoto' : 'doc'
+    const { fileUrl, blobKey } = await uploadOrderDocument({
+      orderNumber: order.orderNumber,
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      data: buf,
+      kindSuffix,
+    })
 
-  const row = await prisma.orderDocument.create({
-    data: {
-      orderId: id,
-      type,
-      title,
-      fileUrl,
-      blobKey,
-      mimeType: file.type || null,
-      sizeBytes: buf.byteLength,
-      uploadedById: user.id,
-    },
-    include: {
-      uploadedBy: { select: { id: true, name: true } },
-    },
-  })
-  return NextResponse.json(row, { status: 201 })
+    const row = await prisma.orderDocument.create({
+      data: {
+        orderId: id,
+        type,
+        title,
+        fileUrl,
+        blobKey,
+        mimeType: file.type || null,
+        sizeBytes: buf.byteLength,
+        uploadedById: user.id,
+      },
+      include: {
+        uploadedBy: { select: { id: true, name: true } },
+      },
+    })
+    return NextResponse.json(row, { status: 201 })
+  } catch (err) {
+    console.error('[orders documents POST] upload failed:', err)
+    return NextResponse.json(
+      { error: 'Document storage upload failed — please retry; if it persists, the blob store may be misconfigured.' },
+      { status: 502 },
+    )
+  }
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {

@@ -21,6 +21,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
+import { orderPhotoProxyUrl } from '@/lib/orders/orderPhotoProxy'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   // not an OrderDocument), then explicit photoDocumentId, then the
   // suggestion's pinned photoDocumentId, then the most recent
   // JOB_PHOTO uploaded to this order.
+  //
+  // Order JOB_PHOTOs are private blobs → the preview/email must use the
+  // PUBLIC-by-uuid proxy URL, never the raw (403) blob URL, so the
+  // preview iframe matches exactly what the client receives.
+  // photoUrlOverride (weekly candid) is a separate private blob with no
+  // public proxy yet — pre-existing gap, untouched here.
   let photoUrl: string | null = null
   if (body.photoUrlOverride) {
     photoUrl = body.photoUrlOverride
@@ -66,24 +73,24 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!photoUrl && body.photoDocumentId) {
     const doc = await prisma.orderDocument.findUnique({
       where: { id: body.photoDocumentId },
-      select: { fileUrl: true, orderId: true },
+      select: { orderId: true },
     })
-    if (doc && doc.orderId === id) photoUrl = doc.fileUrl
+    if (doc && doc.orderId === id) photoUrl = orderPhotoProxyUrl(body.photoDocumentId)
   }
   if (!photoUrl) {
     const suggestion = await prisma.thankYouSuggestion.findUnique({
       where: { orderId: id },
-      select: { photoDocument: { select: { fileUrl: true } } },
+      select: { photoDocumentId: true },
     })
-    photoUrl = suggestion?.photoDocument?.fileUrl ?? null
+    if (suggestion?.photoDocumentId) photoUrl = orderPhotoProxyUrl(suggestion.photoDocumentId)
   }
   if (!photoUrl) {
     const latest = await prisma.orderDocument.findFirst({
       where: { orderId: id, type: 'JOB_PHOTO' },
       orderBy: { createdAt: 'desc' },
-      select: { fileUrl: true },
+      select: { id: true },
     })
-    photoUrl = latest?.fileUrl ?? null
+    if (latest) photoUrl = orderPhotoProxyUrl(latest.id)
   }
 
   const rendered = buildThankYouEmail({

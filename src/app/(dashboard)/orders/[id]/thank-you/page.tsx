@@ -385,8 +385,10 @@ export default function ThankYouComposePage() {
                             pickedPhotoId === d.id ? 'border-amber-500' : 'border-transparent hover:border-gray-300'
                           }`}
                         >
+                          {/* Private blob — load via the public-by-uuid proxy
+                              (raw blob URL 403s). */}
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={d.fileUrl} alt={d.title} className="w-full h-full object-cover" />
+                          <img src={`/api/orders/documents/${d.id}/photo`} alt={d.title} className="w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
