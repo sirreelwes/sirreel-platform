@@ -334,8 +334,11 @@ export default function InventoryPage() {
                         aria-label={item.imageUrl ? 'Open image' : 'Add image'}
                       >
                         {item.imageUrl ? (
+                          // Private blob — must load through the gated
+                          // proxy, not the raw (403) blob URL. Buster
+                          // keyed on imageUrl so a replaced photo refetches.
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={`/api/inventory/items/${item.id}/image?v=${encodeURIComponent(item.imageUrl)}`} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span>—</span>
                         )}

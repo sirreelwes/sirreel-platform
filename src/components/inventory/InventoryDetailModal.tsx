@@ -261,8 +261,10 @@ export function InventoryDetailModal({ open, item, onClose, onSaved }: Inventory
           <div className="flex items-start gap-4">
             <div className="w-40 h-40 bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden flex items-center justify-center text-zinc-600 text-xs">
               {imageUrl ? (
+                // Private blob — served via the gated proxy (raw URL 403s).
+                // Buster keyed on imageUrl so a freshly-replaced photo refetches.
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageUrl} alt={item.description || item.code} className="w-full h-full object-cover" />
+                <img src={`/api/inventory/items/${item.id}/image?v=${encodeURIComponent(imageUrl)}`} alt={item.description || item.code} className="w-full h-full object-cover" />
               ) : (
                 <span>No image</span>
               )}

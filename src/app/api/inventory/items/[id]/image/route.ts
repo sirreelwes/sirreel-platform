@@ -1,4 +1,13 @@
 /**
+ * GET    /api/inventory/items/[id]/image — streams the item's photo
+ *                                          back through the gated
+ *                                          private-blob proxy. The
+ *                                          stored imageUrl points at a
+ *                                          PRIVATE blob (403 on direct
+ *                                          fetch), so `<img src>` MUST
+ *                                          target this route, not the
+ *                                          raw blob URL. 404 when the
+ *                                          item has no photo.
  * POST   /api/inventory/items/[id]/image — multipart upload of one
  *                                          image file. Validates type +
  *                                          size, persists imageUrl,
@@ -13,8 +22,9 @@
  * surface for ops staff; tightening to ADMIN-only would block Hugo and
  * Julian who legitimately maintain rates/qty/photos.
  *
- * Storage: public blob via @vercel/blob (URL knowledge = access). See
- * src/lib/inventory/uploadInventoryImage.ts for the precedent rationale.
+ * Storage: PRIVATE blob via @vercel/blob — see
+ * src/lib/inventory/uploadInventoryImage.ts. Served via the proxy GET
+ * above using the shared streamPrivateBlobAsResponse helper.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,6 +32,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { uploadInventoryImage } from '@/lib/inventory/uploadInventoryImage'
+import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +56,24 @@ async function requireSession() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return null
   return session.user.email
+}
+
+export async function GET(_req: NextRequest, { params }: Params) {
+  const email = await requireSession()
+  if (!email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+
+  const { id } = await params
+  const item = await prisma.inventoryItem.findUnique({
+    where: { id },
+    select: { imageUrl: true, code: true },
+  })
+  if (!item) {
+    return NextResponse.json({ error: 'inventory item not found' }, { status: 404 })
+  }
+  if (!item.imageUrl) {
+    return NextResponse.json({ error: 'no image on file' }, { status: 404 })
+  }
+  return streamPrivateBlobAsResponse({ fileUrl: item.imageUrl, filename: `${item.code}.jpg` })
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -81,21 +110,32 @@ export async function POST(req: NextRequest, { params }: Params) {
     )
   }
 
-  const buf = Buffer.from(await file.arrayBuffer())
-  const { fileUrl } = await uploadInventoryImage({
-    itemId: id,
-    filename: file.name || 'image',
-    contentType: file.type,
-    data: buf,
-  })
+  // Blob upload + persist. Any failure here (e.g. a blob-store config
+  // problem) must surface as a clean, specific error — never a bare
+  // 500 that the modal renders as "Upload failed (HTTP 500)".
+  try {
+    const buf = Buffer.from(await file.arrayBuffer())
+    const { fileUrl } = await uploadInventoryImage({
+      itemId: id,
+      filename: file.name || 'image',
+      contentType: file.type,
+      data: buf,
+    })
 
-  const updated = await prisma.inventoryItem.update({
-    where: { id },
-    data: { imageUrl: fileUrl },
-    select: { id: true, code: true, imageUrl: true },
-  })
+    const updated = await prisma.inventoryItem.update({
+      where: { id },
+      data: { imageUrl: fileUrl },
+      select: { id: true, code: true, imageUrl: true },
+    })
 
-  return NextResponse.json({ ok: true, item: updated })
+    return NextResponse.json({ ok: true, item: updated })
+  } catch (err) {
+    console.error('[inventory image POST] upload failed:', err)
+    return NextResponse.json(
+      { error: 'Image storage upload failed — please retry; if it persists, the blob store may be misconfigured.' },
+      { status: 502 },
+    )
+  }
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {

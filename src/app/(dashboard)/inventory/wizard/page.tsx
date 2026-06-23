@@ -343,8 +343,10 @@ export default function InventoryWizardPage() {
             <div className="space-y-2">
               <div className="w-full aspect-square bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden flex items-center justify-center text-zinc-600 text-xs">
                 {current.imageUrl ? (
+                  // Private blob — load via the gated proxy (raw URL 403s).
+                  // Buster keyed on imageUrl so a replaced photo refetches.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={current.imageUrl} alt={current.description || current.code} className="w-full h-full object-cover" />
+                  <img src={`/api/inventory/items/${current.id}/image?v=${encodeURIComponent(current.imageUrl)}`} alt={current.description || current.code} className="w-full h-full object-cover" />
                 ) : (
                   <span>No photo</span>
                 )}

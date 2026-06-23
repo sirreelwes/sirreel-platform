@@ -1,11 +1,18 @@
 /**
- * Inventory item image upload helper. Mirrors
- * src/lib/orders/uploadOrderDocument.ts — same `access: 'public'`
- * pattern (the returned URL is the only handle to the blob; URL knowledge
- * IS the access gate). Public is right here because inventory thumbs
- * are rendered as plain `<img src>` in lists; a per-image proxy hop
- * would tank list scroll performance for no security benefit (these
- * are pictures of equipment, not COIs).
+ * Inventory item image upload helper.
+ *
+ * The HQ Vercel Blob store is configured PRIVATE — a `put` with
+ * `access: 'public'` throws `BlobError: Cannot use public access on a
+ * private store`, which is what surfaced as a hard 500 on every photo
+ * upload. So we use `access: 'private'` like every other blob writer in
+ * the app (invoices, claims, gmail attachments). The `@vercel/blob`
+ * types only expose the `'public'` literal, hence the cast; the private
+ * store accepts the same call shape.
+ *
+ * Because the store is private, the returned URL 403s on a direct
+ * fetch — it CANNOT be used as a plain `<img src>`. Inventory photos
+ * are served back through the gated proxy `GET /api/inventory/items/
+ * [id]/image`, which streams the blob via `streamPrivateBlobAsResponse`.
  *
  * Key path: `inventory/{yyyy}/{mm}/{uuid}-{itemId}-{filenameSegment}`
  * Callers persist the returned `fileUrl` on `InventoryItem.imageUrl`.
@@ -35,7 +42,9 @@ export async function uploadInventoryImage(args: UploadInventoryImageArgs): Prom
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
   const blobKey = `inventory/${yyyy}/${mm}/${randomUUID()}-${itemId}-${safeInventoryFilenameSegment(filename)}`
   const blob = await put(blobKey, data, {
-    access: 'public',
+    // Store is private (see file header). Cast: the SDK type only
+    // exposes 'public', but the private store accepts the same call.
+    access: 'private' as 'public',
     contentType,
   })
   return { fileUrl: blob.url, blobKey }
