@@ -51,6 +51,7 @@ import {
   EMPTY_JOB_PICKER_VALUE,
   type JobPickerValue,
 } from '@/components/shared/JobPicker'
+import { LineItemDescriptionCombobox, type CatalogHit } from '@/components/orders/LineItemDescriptionCombobox'
 
 // ─────────────────────────────────────────────────────────────────────
 // Shapes (subset of new-quote's — kept loose here since we just relay
@@ -71,6 +72,13 @@ interface ParsedTop {
 }
 
 interface ResolvedItem {
+  // Wizard-local only — NOT persisted, NOT sent to from-parse.
+  /** Stable per-line id for keys + per-row state updates. */
+  localId: string
+  /** Triage flag: the wizard is parsed-intake only, so every line
+   *  starts unconfirmed and must be confirmed (catalog pick or accept-
+   *  as-custom) before the draft can be created. */
+  confirmed: boolean
   description: string
   quantity: number
   catalogProductId: string | null
@@ -121,6 +129,21 @@ const DEPT_LABEL: Record<LineItemDepartment, string> = {
   PRO_SUPPLIES: 'PS',
   EXPENDABLES: 'EXP',
   ART: 'ART',
+}
+const DEPT_OPTIONS = Object.keys(DEPT_LABEL) as LineItemDepartment[]
+
+/** Stable client-side id for wizard line keys + per-row updates. */
+function newLocalId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `li_${Math.random().toString(36).slice(2)}`
+}
+
+/** Derive the row rate from a picked catalog hit, mirroring
+ *  parse-quote's pickRate: catalog data often has only one of
+ *  daily/weekly populated, so fall back via a 5-day work-week. */
+function pickHitRate(hit: { dailyRate: number; weeklyRate: number }, rateType: 'DAILY' | 'WEEKLY'): number {
+  if (rateType === 'WEEKLY') return hit.weeklyRate > 0 ? hit.weeklyRate : hit.dailyRate * 5
+  return hit.dailyRate > 0 ? hit.dailyRate : hit.weeklyRate / 5
 }
 
 function hydrateContacts(api: unknown): WizardContact[] {
@@ -200,12 +223,18 @@ function NewOrderWizardInner() {
   // ── Parse handlers ────────────────────────────────────────────────
   const applyParseResult = useCallback((data: {
     parsed?: ParsedTop
-    items?: ResolvedItem[]
+    items?: Array<Omit<ResolvedItem, 'localId' | 'confirmed'>>
     clientMatch?: ClientCandidate[]
     contacts?: unknown
   }) => {
     setParsed(data.parsed ?? null)
-    setItems(Array.isArray(data.items) ? data.items : [])
+    // Every parsed line lands UNCONFIRMED with a stable localId — the
+    // rep confirms each (catalog pick or accept-as-custom) before Create.
+    setItems(
+      Array.isArray(data.items)
+        ? data.items.map((it) => ({ ...it, localId: newLocalId(), confirmed: false }))
+        : [],
+    )
     setClientCandidates(Array.isArray(data.clientMatch) ? data.clientMatch : [])
     setContacts(hydrateContacts(data.contacts))
     // Seed editable header fields from parse — rep can override before save.
@@ -329,9 +358,52 @@ function NewOrderWizardInner() {
   }, [clientCompanyIdFromUrl])
 
   // ── Item-removal (presentation-only edit allowed per spec) ────────
-  const removeItem = (idx: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== idx))
+  const removeItem = (localId: string) => {
+    setItems((prev) => prev.filter((it) => it.localId !== localId))
   }
+
+  // ── Line-item triage (parsed-intake confirmation) ─────────────────
+  const patchItem = (localId: string, patch: Partial<ResolvedItem>) => {
+    setItems((prev) => prev.map((it) => (it.localId === localId ? { ...it, ...patch } : it)))
+  }
+
+  // Confirm by picking a catalog hit — ports new-quote's applyMatch:
+  // sets the catalog FK + department + rate, KEEPS quantity, and flips
+  // the line to confirmed so it moves into the "Ready" group.
+  const applyMatch = (localId: string, hit: CatalogHit) => {
+    if (hit.type === 'PACKAGE') {
+      // Packages insert a header + N member rows — out of scope for the
+      // create wizard. Confirm as a single item or as custom here, and
+      // add the package on the order detail page after Create.
+      setCreateError('Packages can’t be added in the create wizard — pick a single item or accept as custom, then add the package on the order detail page after Create.')
+      return
+    }
+    setItems((prev) => prev.map((it) => (it.localId === localId ? {
+      ...it,
+      description: hit.name,
+      catalogProductId: hit.id,
+      catalogType: hit.type,
+      department: hit.department as LineItemDepartment,
+      rate: pickHitRate(hit, it.rateType),
+      matchedProduct: { id: hit.id, type: hit.type, name: hit.name },
+      matchSource: 'AI',
+      confirmed: true,
+    } : it)))
+  }
+
+  // Confirm a parser-suggested match as-is (keeps the existing FK).
+  const confirmMatch = (localId: string) => patchItem(localId, { confirmed: true })
+
+  // Accept as a genuine custom line — clears any catalog FK so it
+  // persists through from-parse's proven no-FK path with the typed
+  // description + rep-set department/rate.
+  const acceptCustom = (localId: string) => patchItem(localId, {
+    confirmed: true,
+    catalogProductId: null,
+    catalogType: null,
+    matchedProduct: null,
+    matchSource: null,
+  })
 
   // ── Contact-toggle ────────────────────────────────────────────────
   const toggleContact = (idx: number, include: boolean) => {
@@ -351,7 +423,13 @@ function NewOrderWizardInner() {
   const jobDecided =
     job.mode === 'selected_existing' ||
     (job.mode === 'creating_new' && job.name.trim().length > 0)
-  const canCreate = companyDecided && jobDecided && !creating
+  // Triage: parsed-intake wizard, so every line must be confirmed.
+  // Empty items[] (no parse / blank draft) is vacuously all-confirmed.
+  const unconfirmedItems = items.filter((it) => !it.confirmed)
+  const confirmedItems = items.filter((it) => it.confirmed)
+  const unconfirmedCount = unconfirmedItems.length
+  const allConfirmed = unconfirmedCount === 0
+  const canCreate = companyDecided && jobDecided && allConfirmed && !creating
 
   const createDraft = async () => {
     if (!canCreate) return
@@ -712,44 +790,165 @@ function NewOrderWizardInner() {
           </div>
         )}
 
-        {/* LINE ITEMS preview (presentation-only; remove allowed) */}
-        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-2">
+        {/* LINE ITEMS — parsed-intake triage. Every parsed line must be
+            confirmed (catalog pick or accept-as-custom) before Create. */}
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-sm font-bold text-lt-fg">Line items ({itemsCount})</h2>
-            <p className="text-[11px] text-lt-fg3">Edit / re-pick / add on the order detail page after Create</p>
+            {itemsCount > 0 && (
+              <p className={`text-[11px] font-semibold ${unconfirmedCount > 0 ? 'text-amber-700' : 'text-chip-good-fg'}`}>
+                {unconfirmedCount > 0
+                  ? `${unconfirmedCount} need${unconfirmedCount === 1 ? 's' : ''} confirmation`
+                  : 'All confirmed — ready to create'}
+              </p>
+            )}
           </div>
+
           {itemsCount === 0 ? (
             <div className="text-xs text-lt-fg3 text-center py-4">
               No parsed line items. Create the draft and add items on the next page.
             </div>
           ) : (
-            <div className="divide-y divide-lt-hairline/60">
-              {items.map((it, idx) => (
-                <div key={idx} className="py-1.5 grid grid-cols-[40px_1fr_60px_90px_90px_90px_36px] gap-2 items-start text-xs">
-                  <span className="font-mono tabular-nums text-lt-fg">{it.quantity}</span>
-                  <div className="min-w-0">
-                    <div className="text-lt-fg truncate">{it.description}</div>
-                    {it.qualifier && <div className="text-lt-fg3 italic truncate">— {it.qualifier}</div>}
-                    {it.warnings && it.warnings.length > 0 && (
-                      <div className="text-[10px] text-chip-warn-fg mt-0.5">
-                        {it.warnings.join(' · ')}
-                      </div>
-                    )}
+            <div className="space-y-4">
+              {/* ── Confirm these (unconfirmed, floated to top) ── */}
+              {unconfirmedCount > 0 && (
+                <div className="border border-amber-300 rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-amber-100/70 border-b border-amber-200 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Confirm these ({unconfirmedCount})</span>
+                    <span className="text-[11px] text-amber-700">Pick a catalog match (keeps qty, sets category) or accept as custom</span>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-lt-fg2">{DEPT_LABEL[it.department]}</span>
-                  <span className="text-right font-mono text-lt-fg2">{fmtMoney(Number(it.rate) || 0)}/d</span>
-                  <span className="text-[10px] text-lt-fg3">{it.pickupDate}</span>
-                  <span className="text-[10px] text-lt-fg3">{it.returnDate}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(idx)}
-                    className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none"
-                    aria-label="Remove line"
-                  >
-                    ×
-                  </button>
+                  <div className="divide-y divide-amber-200/70 bg-amber-50/30">
+                    {unconfirmedItems.map((it) => {
+                      const hasMatch = !!(it.catalogProductId && it.matchedProduct)
+                      return (
+                        <div key={it.localId} className="p-3 space-y-2">
+                          <div className="grid grid-cols-[56px_1fr_28px] gap-2 items-start">
+                            <input
+                              type="number" min={1} step={1} value={it.quantity}
+                              onChange={(e) => patchItem(it.localId, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                              className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-sm font-bold tabular-nums text-lt-fg"
+                              aria-label="Quantity"
+                            />
+                            <LineItemDescriptionCombobox
+                              value={it.description}
+                              onChange={(next) => patchItem(it.localId, { description: next })}
+                              onPickCatalog={(hit) => applyMatch(it.localId, hit)}
+                              catalogBinding={
+                                hasMatch && it.catalogType
+                                  ? { id: it.catalogProductId as string, type: it.catalogType, name: it.matchedProduct!.name }
+                                  : null
+                              }
+                              onClearCatalog={() => patchItem(it.localId, { catalogProductId: null, catalogType: null, matchedProduct: null, matchSource: null })}
+                              placeholder="Type to search inventory…"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeItem(it.localId)}
+                              className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none pt-1"
+                              aria-label="Remove line"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          {it.qualifier && <div className="text-[11px] text-lt-fg3 italic pl-[64px]">— {it.qualifier}</div>}
+                          {it.warnings && it.warnings.length > 0 && (
+                            <div className="text-[10px] text-chip-warn-fg pl-[64px]">{it.warnings.join(' · ')}</div>
+                          )}
+                          <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center pl-[64px]">
+                            <select
+                              value={it.department}
+                              onChange={(e) => patchItem(it.localId, { department: e.target.value as LineItemDepartment })}
+                              className="bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg"
+                              aria-label="Department"
+                            >
+                              {DEPT_OPTIONS.map((d) => <option key={d} value={d}>{DEPT_LABEL[d]}</option>)}
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[11px] text-lt-fg3">$</span>
+                              <input
+                                type="number" min={0} step="0.01" value={it.rate}
+                                onChange={(e) => patchItem(it.localId, { rate: Number(e.target.value) || 0 })}
+                                className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-xs text-lt-fg tabular-nums"
+                                aria-label="Rate per day"
+                              />
+                              <span className="text-[11px] text-lt-fg3">/d</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 justify-end">
+                              {hasMatch && (
+                                <button
+                                  type="button"
+                                  onClick={() => confirmMatch(it.localId)}
+                                  className="px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded whitespace-nowrap"
+                                  title={`Confirm catalog match: ${it.matchedProduct!.name}`}
+                                >
+                                  ✓ Confirm match
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => acceptCustom(it.localId)}
+                                className="px-2.5 py-1 text-[11px] font-semibold text-lt-fg2 border border-lt-hairline rounded hover:bg-lt-inner whitespace-nowrap"
+                                title="Keep this as a custom (non-catalog) line"
+                              >
+                                Accept as custom
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* ── Ready (confirmed, grouped by department) ── */}
+              {confirmedItems.length > 0 && (
+                <div className="border border-lt-hairline rounded-lg overflow-hidden">
+                  <div className="px-3 py-2 bg-lt-inner/60 border-b border-lt-hairline">
+                    <span className="text-xs font-bold text-lt-fg uppercase tracking-wider">Ready ({confirmedItems.length})</span>
+                  </div>
+                  {DEPT_OPTIONS.filter((d) => confirmedItems.some((it) => it.department === d)).map((dept) => {
+                    const rows = confirmedItems.filter((it) => it.department === dept)
+                    const subtotal = rows.reduce((s, it) => s + (Number(it.rate) || 0) * (it.quantity || 1) * (it.billableDays ?? 1), 0)
+                    return (
+                      <div key={dept} className="border-b border-lt-hairline/60 last:border-b-0">
+                        <div className="px-3 py-1 bg-lt-card/70 flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-lt-fg2">{DEPT_LABEL[dept]} · {rows.length}</span>
+                          <span className="text-[11px] font-mono text-lt-fg2">{fmtMoney(subtotal)}</span>
+                        </div>
+                        {rows.map((it) => (
+                          <div key={it.localId} className="py-1.5 px-3 grid grid-cols-[36px_1fr_84px_44px_24px] gap-2 items-center text-xs">
+                            <span className="font-mono tabular-nums text-lt-fg">{it.quantity}</span>
+                            <div className="min-w-0 flex items-center gap-1.5">
+                              {it.catalogProductId
+                                ? <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">✓</span>
+                                : <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-lt-inner text-lt-fg3 border border-lt-hairline shrink-0">custom</span>}
+                              <span className="truncate text-lt-fg">{it.description}</span>
+                            </div>
+                            <span className="text-right font-mono text-lt-fg2">{fmtMoney(Number(it.rate) || 0)}/d</span>
+                            <button
+                              type="button"
+                              onClick={() => patchItem(it.localId, { confirmed: false })}
+                              className="text-[11px] text-lt-fg3 hover:text-lt-fg underline"
+                              title="Move back to Confirm these"
+                            >
+                              edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeItem(it.localId)}
+                              className="text-lt-fg3 hover:text-chip-bad-fg text-base leading-none"
+                              aria-label="Remove line"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -792,7 +991,11 @@ function NewOrderWizardInner() {
           <p className="text-[11px] text-lt-fg3">
             {canCreate
               ? 'Ready — creates a DRAFT order and opens it for editing.'
-              : 'Pick a Client Company and a Job to enable.'}
+              : !companyDecided || !jobDecided
+                ? 'Pick a Client Company and a Job to enable.'
+                : unconfirmedCount > 0
+                  ? `${unconfirmedCount} item${unconfirmedCount === 1 ? '' : 's'} need confirmation above.`
+                  : 'Pick a Client Company and a Job to enable.'}
           </p>
           <div className="flex gap-2">
             <button
