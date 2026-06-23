@@ -164,6 +164,17 @@ function LineItemDescriptionComboboxInner(
       if (justPickedRef.current) return
       if (lastQueryRef.current !== trimmed) return
       const hits = (data.results ?? []) as CatalogHit[]
+      // Position the portal in the SAME commit it opens, so the dropdown
+      // is always a positioned, out-of-flow overlay from its first paint
+      // (never a transient un-pinned render). The layout effect below
+      // keeps it pinned on scroll/resize thereafter.
+      if (hits.length > 0) {
+        const el = inputRef.current
+        if (el) {
+          const r = el.getBoundingClientRect()
+          setCoords({ top: r.bottom, left: r.left, width: r.width })
+        }
+      }
       setResults(hits)
       setOpen(hits.length > 0)
       setHighlight(0)
