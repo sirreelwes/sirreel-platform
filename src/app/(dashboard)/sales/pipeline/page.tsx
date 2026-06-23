@@ -6,6 +6,7 @@ import { NewInboundColumn } from '@/components/sales/NewInboundColumn';
 import { NewInquiryModal } from '@/components/sales/NewInquiryModal';
 import { OpenQuotesKanban } from '@/components/sales/OpenQuotesKanban';
 import { ActiveJobsKanban } from '@/components/sales/ActiveJobsKanban';
+import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget';
 import { ProspectsSection } from '@/components/sales/ProspectsSection';
 import { FunnelMetricsStrip } from '@/components/sales/FunnelMetricsStrip';
 import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
@@ -119,6 +120,8 @@ export default function PipelinePage() {
       <SalesSignalsStrip scope={scope} onChange={refreshAll} />
 
       <FollowUpsDuePanel scope={scope} />
+
+      <SalesReservationsWidget />
 
       <NewInboundColumn onChange={refreshAll} />
 
