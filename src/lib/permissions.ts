@@ -328,6 +328,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // remains canonical for triage), but the standalone tab goes
   // away for everyone — agents triage on the Pipeline now.
   if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
+  // Sales agents get Inventory in the MAIN nav (catalog/stock + pricing
+  // reference while building quotes — requested 2026-06-23). ADMIN/MANAGER
+  // keep it under the Admin section below; mirrors the Clients split so
+  // there's no double-entry. The /inventory page already allows any
+  // authenticated user, so this is purely a nav-visibility change.
+  if (sales) main.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
   if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
   // /dispatch now owns the staff dispatch board (Phase 4). The legacy
   // RentalWorks-linkage tool was relocated to /dispatch/rentalworks
