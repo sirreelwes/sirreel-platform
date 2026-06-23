@@ -86,8 +86,11 @@ export async function GET(req: NextRequest) {
   const categoryId = searchParams.get("categoryId");
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "50");
+  // `?archived=1` flips the list to show only archived (soft-deleted)
+  // rows for the Archived view + restore. Default = active only.
+  const archived = searchParams.get("archived") === "1";
 
-  const where: Record<string, unknown> = { isActive: true };
+  const where: Record<string, unknown> = { isActive: !archived };
 
   if (categoryId) where.categoryId = categoryId;
   if (search) {

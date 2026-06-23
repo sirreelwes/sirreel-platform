@@ -17,6 +17,12 @@ function nullableTrim(v: unknown): string | null | undefined {
   return t.length === 0 ? null : t;
 }
 
+const INCLUDE = {
+  category: { select: { id: true, name: true } },
+  locationRef: { select: { id: true, name: true, code: true } },
+  preferredVendor: { select: { id: true, name: true, website: true, isActive: true } },
+} as const;
+
 export async function PUT(req: NextRequest, { params }: Params) {
   // Auth: any authenticated user (inventory is a daily-touch ops
   // surface — Hugo and Julian maintain rates/qty/photos too, not
@@ -39,6 +45,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     categoryId,
     preferredVendorId,
     vendorItemUrl,
+    isActive,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -50,6 +57,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
   if (locationId !== undefined) data.locationId = locationId || null;
   if (categoryId !== undefined) data.categoryId = categoryId || null;
+
+  // Archive / restore via isActive. Archiving stamps archivedAt;
+  // restoring clears it. (The list/catalog/pickers already exclude
+  // isActive=false.)
+  if (isActive !== undefined) {
+    data.isActive = !!isActive;
+    data.archivedAt = isActive ? null : new Date();
+  }
 
   // Preferred vendor — accept string or null. When non-null, validate
   // the vendor exists AND is active so the picker can't be bypassed
@@ -85,20 +100,95 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const vItemUrl = nullableTrim(vendorItemUrl);
   if (vItemUrl !== undefined) data.vendorItemUrl = vItemUrl;
 
+  // Snapshot the current rates so we can audit a MANUAL rate change.
+  const before = await prisma.inventoryItem.findUnique({
+    where: { id },
+    select: { dailyRate: true, weeklyRate: true },
+  });
+  if (!before) {
+    return NextResponse.json({ error: "item not found" }, { status: 404 });
+  }
+  const newDaily = data.dailyRate !== undefined ? (data.dailyRate as number) : Number(before.dailyRate);
+  const newWeekly = data.weeklyRate !== undefined ? (data.weeklyRate as number) : Number(before.weeklyRate);
+  const rateChanged =
+    Number(before.dailyRate) !== newDaily || Number(before.weeklyRate) !== newWeekly;
+
+  // Resolve the acting user for the audit row (best-effort; the log is
+  // non-fatal if the user lookup misses).
+  const appliedBy = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  });
+
   try {
-    const item = await prisma.inventoryItem.update({
-      where: { id },
-      data,
-      include: {
-        category: { select: { id: true, name: true } },
-        locationRef: { select: { id: true, name: true, code: true } },
-        preferredVendor: { select: { id: true, name: true, website: true, isActive: true } },
-      },
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.inventoryItem.update({
+        where: { id },
+        data,
+        include: INCLUDE,
+      });
+      // Price propagation contract: InventoryItem is the live catalog
+      // (catalog/search reads it). Existing OrderLineItems snapshot their
+      // own rate, so they are untouched. We only AUDIT the change here;
+      // future quotes pull the new rate from the item itself.
+      if (rateChanged) {
+        await tx.rateChangeLog.create({
+          data: {
+            inventoryItemId: id,
+            oldDailyRate: before.dailyRate,
+            newDailyRate: newDaily,
+            oldWeeklyRate: before.weeklyRate,
+            newWeeklyRate: newWeekly,
+            source: "MANUAL",
+            appliedById: appliedBy?.id ?? null,
+          },
+        });
+      }
+      return updated;
     });
     return NextResponse.json(item);
   } catch (err) {
     console.error('[inventory PUT] update failed:', err);
     const message = err instanceof Error ? err.message : 'Update failed';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+/**
+ * DELETE — guarded permanent delete. Only allowed when the item is
+ * referenced by ZERO order line items / package items / sub-rentals;
+ * otherwise the caller must archive instead (we return 409 with the
+ * counts). RateChangeLog cascades, so it isn't counted as a blocker.
+ */
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  const { id } = await params;
+
+  const [orderLineItems, packageItems, subRentals] = await Promise.all([
+    prisma.orderLineItem.count({ where: { inventoryItemId: id } }),
+    prisma.packageItem.count({ where: { inventoryItemId: id } }),
+    prisma.subRental.count({ where: { inventoryItemId: id } }),
+  ]);
+  const total = orderLineItems + packageItems + subRentals;
+  if (total > 0) {
+    return NextResponse.json(
+      {
+        error: "referenced",
+        references: { orderLineItems, packageItems, subRentals, total },
+      },
+      { status: 409 },
+    );
+  }
+
+  try {
+    await prisma.inventoryItem.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('[inventory DELETE] failed:', err);
+    const message = err instanceof Error ? err.message : 'Delete failed';
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

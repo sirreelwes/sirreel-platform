@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { AddItemModal } from "@/components/inventory/AddItemModal";
-import { InventoryDetailModal } from "@/components/inventory/InventoryDetailModal";
+import { InventoryItemDrawer, type DrawerItem } from "@/components/inventory/InventoryItemDrawer";
 
 type Category = { id: string; name: string; _count: { items: number } };
 type LocationOption = { id: string; name: string; code: string };
@@ -21,8 +21,29 @@ type Item = {
   vendorItemUrl: string | null;
   location: string; // legacy enum value, kept for fallback display
   locationRef: { id: string; name: string; code: string } | null;
-  category: { id: string; name: string };
+  category: { id: string; name: string } | null;
+  isActive: boolean;
+  archivedAt: string | null;
 };
+
+// Category color-coding — stable per-category palette built only from
+// existing design tokens (no ad-hoc hexes). A hash of the category id
+// picks a {bar, pill} pair so the same category always reads the same.
+const CAT_PALETTE = [
+  { bar: "bg-cadence-booked-bar", pill: "bg-pill-quoted-bg text-pill-quoted-fg" },
+  { bar: "bg-cadence-on-rental-bar", pill: "bg-pill-active-bg text-pill-active-fg" },
+  { bar: "bg-cadence-returning-today-bar", pill: "bg-pill-hold-bg text-pill-hold-fg" },
+  { bar: "bg-cadence-returned-bar", pill: "bg-cadence-returned-bg text-cadence-returned-fg" },
+  { bar: "bg-cadence-invoiced-bar", pill: "bg-cadence-invoiced-bg text-cadence-invoiced-fg" },
+  { bar: "bg-cadence-picking-today-bar", pill: "bg-cadence-picking-today-bg text-cadence-picking-today-fg" },
+  { bar: "bg-chip-bad-fg", pill: "bg-pill-lost-bg text-pill-lost-fg" },
+];
+function catColor(id: string | null) {
+  if (!id) return { bar: "bg-lt-fg3", pill: "bg-chip-neutral-bg text-chip-neutral-fg" };
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return CAT_PALETTE[h % CAT_PALETTE.length];
+}
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([]);
@@ -33,14 +54,11 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [page, setPage] = useState(1);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [showArchived, setShowArchived] = useState(false);
 
-  // Add-item modal
+  // Single editor drawer + add-item modal.
+  const [drawerItem, setDrawerItem] = useState<Item | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  // Per-row detail modal (photo + vendor). Hold the full row so the
-  // modal can read every field without a second fetch.
-  const [detailItem, setDetailItem] = useState<Item | null>(null);
 
   // Bulk operations
   const [showBulk, setShowBulk] = useState(false);
@@ -49,7 +67,6 @@ export default function InventoryPage() {
   const [bulkCatId, setBulkCatId] = useState("");
   const [bulkMsg, setBulkMsg] = useState("");
 
-  // Multi-select for bulk reassignment
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reassignCatId, setReassignCatId] = useState("");
 
@@ -61,6 +78,7 @@ export default function InventoryPage() {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (categoryId) params.set("categoryId", categoryId);
+    if (showArchived) params.set("archived", "1");
     params.set("page", String(page));
     params.set("limit", "50");
 
@@ -71,59 +89,19 @@ export default function InventoryPage() {
     setCategories(data.categories || []);
     setLocations(data.locations || []);
     setLoading(false);
-  }, [search, categoryId, page]);
+  }, [search, categoryId, page, showArchived]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
-
-  const startEdit = (item: Item) => {
-    setEditingId(item.id);
-    setEditValues({
-      dailyRate: String(Number(item.dailyRate)),
-      weeklyRate: String(Number(item.weeklyRate)),
-      qtyOwned: String(item.qtyOwned),
-      replacementCost: item.replacementCost ? String(Number(item.replacementCost)) : "",
-      description: item.description || item.code,
-      locationId: item.locationRef?.id || "",
-      categoryId: item.category.id,
-    });
-  };
-
-  const saveEdit = async (id: string) => {
-    let res: Response;
-    try {
-      res = await fetch(`/api/inventory/items/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editValues),
-      });
-    } catch (err) {
-      alert(`Save failed: ${err instanceof Error ? err.message : "network error"}`);
-      return;
-    }
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      alert(`Save failed: ${data.error || `HTTP ${res.status}`}`);
-      return;
-    }
-    setEditingId(null);
-    fetchItems();
-  };
 
   const applyBulkUpdate = async () => {
     if (!bulkPct) return;
     const catName = bulkCatId ? categories.find(c => c.id === bulkCatId)?.name : "ALL categories";
     const fieldLabel = bulkField === "dailyRate" ? "daily rates" : bulkField === "weeklyRate" ? "weekly rates" : "replacement costs";
     if (!confirm(`Apply ${Number(bulkPct) > 0 ? "+" : ""}${bulkPct}% to ${fieldLabel} for ${catName}?`)) return;
-
     const res = await fetch("/api/inventory/bulk-update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "percentage_change",
-        field: bulkField,
-        percentage: parseFloat(bulkPct),
-        categoryId: bulkCatId || undefined,
-      }),
+      body: JSON.stringify({ action: "percentage_change", field: bulkField, percentage: parseFloat(bulkPct), categoryId: bulkCatId || undefined }),
     });
     const data = await res.json();
     setBulkMsg(data.message || "Updated");
@@ -137,133 +115,98 @@ export default function InventoryPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     setSelected(next);
   };
-
-  const toggleAll = () => {
-    if (selected.size === items.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(items.map(i => i.id)));
-    }
-  };
+  const toggleAll = () => setSelected(selected.size === items.length ? new Set() : new Set(items.map(i => i.id)));
 
   const bulkReassign = async () => {
     if (!reassignCatId || selected.size === 0) return;
     const catName = categories.find(c => c.id === reassignCatId)?.name;
     if (!confirm(`Move ${selected.size} item(s) to ${catName}?`)) return;
-
     await fetch("/api/inventory/bulk-update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "reassign_category",
-        itemIds: Array.from(selected),
-        categoryId: reassignCatId,
-      }),
+      body: JSON.stringify({ action: "reassign_category", itemIds: Array.from(selected), categoryId: reassignCatId }),
     });
     setSelected(new Set());
     setReassignCatId("");
     fetchItems();
   };
 
+  // Header stats — recompute live from the loaded rows (refetch on every
+  // save/archive/delete keeps them current without a full reload).
   const totalOwned = items.reduce((s, i) => s + i.qtyOwned, 0);
-  const totalValue = items.reduce((s, i) => {
-    const rc = i.replacementCost ? Number(i.replacementCost) : 0;
-    return s + rc * i.qtyOwned;
-  }, 0);
+  const totalValue = items.reduce((s, i) => s + (i.replacementCost ? Number(i.replacementCost) : 0) * i.qtyOwned, 0);
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6 max-w-[1600px] mx-auto bg-lt-page min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-lt-fg">Inventory</h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            {total} items | {totalOwned} units owned
-            {totalValue > 0 && <span> | Est. value: {fmt(totalValue)}</span>}
+          <h1 className="text-2xl font-bold text-lt-fg">Inventory{showArchived && <span className="text-chip-bad-fg"> · Archived</span>}</h1>
+          <p className="text-sm text-lt-fg2 mt-1 font-medium">
+            {total} items · {totalOwned} units owned
+            {totalValue > 0 && <span> · Est. value: <span className="text-lt-fg font-bold">{fmt(totalValue)}</span></span>}
           </p>
         </div>
         <div className="flex gap-2">
-        <Link
-          href="/inventory/wizard"
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white transition-colors"
-        >
-          Values &amp; Photos Wizard
-        </Link>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors"
-        >
-          + Add Item
-        </button>
-        <button
-          onClick={() => setShowBulk(!showBulk)}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${showBulk ? "bg-zinc-700 text-zinc-300" : "bg-blue-600 hover:bg-blue-500 text-white"}`}
-        >
-          {showBulk ? "Close Tools" : "Bulk Tools"}
-        </button>
+          <button
+            onClick={() => { setShowArchived(v => !v); setPage(1); setSelected(new Set()); }}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors ${showArchived ? "bg-chip-bad-bg text-chip-bad-fg border-chip-bad-fg/30" : "bg-lt-card text-lt-fg2 border-lt-hairline hover:bg-lt-inner"}`}
+          >
+            {showArchived ? "← Active items" : "Archived"}
+          </button>
+          <Link href="/inventory/wizard" className="px-4 py-2 text-sm font-semibold rounded-lg bg-lt-card hover:bg-lt-inner border border-lt-hairline text-lt-fg transition-colors">
+            Values &amp; Photos Wizard
+          </Link>
+          <button onClick={() => setShowAdd(true)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors">
+            + Add Item
+          </button>
+          <button onClick={() => setShowBulk(!showBulk)} className={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors ${showBulk ? "bg-lt-inner text-lt-fg border-lt-hairline" : "bg-lt-fg hover:bg-black text-white border-lt-fg"}`}>
+            {showBulk ? "Close Tools" : "Bulk Tools"}
+          </button>
         </div>
       </div>
 
       {/* Bulk Tools Panel */}
       {showBulk && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-4 space-y-4">
-          {/* Pricing */}
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 mb-4 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-white mb-3">Adjust Pricing by Percentage</h3>
-            <div className="flex gap-3 items-end">
+            <h3 className="text-sm font-bold text-lt-fg mb-3">Adjust Pricing by Percentage</h3>
+            <div className="flex gap-3 items-end flex-wrap">
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Rate Field</label>
-                <select value={bulkField} onChange={(e) => setBulkField(e.target.value)}
-                  className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                <label className="block text-xs text-lt-fg2 mb-1 font-semibold">Rate Field</label>
+                <select value={bulkField} onChange={(e) => setBulkField(e.target.value)} className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg">
                   <option value="dailyRate">Daily Rate</option>
                   <option value="weeklyRate">Weekly Rate</option>
                   <option value="replacementCost">Replacement Cost</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Category</label>
-                <select value={bulkCatId} onChange={(e) => setBulkCatId(e.target.value)}
-                  className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                <label className="block text-xs text-lt-fg2 mb-1 font-semibold">Category</label>
+                <select value={bulkCatId} onChange={(e) => setBulkCatId(e.target.value)} className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg">
                   <option value="">All Categories</option>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">% Change</label>
-                <input type="number" step="0.1" value={bulkPct} onChange={(e) => setBulkPct(e.target.value)}
-                  placeholder="e.g. 10 or -5"
-                  className="w-32 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500" />
+                <label className="block text-xs text-lt-fg2 mb-1 font-semibold">% Change</label>
+                <input type="number" step="0.1" value={bulkPct} onChange={(e) => setBulkPct(e.target.value)} placeholder="e.g. 10 or -5" className="w-32 px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder-lt-fg3" />
               </div>
-              <button onClick={applyBulkUpdate} disabled={!bulkPct}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors">
-                Apply
-              </button>
+              <button onClick={applyBulkUpdate} disabled={!bulkPct} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg transition-colors">Apply</button>
             </div>
-            {bulkMsg && <p className="text-sm text-emerald-400 mt-2">{bulkMsg}</p>}
+            {bulkMsg && <p className="text-sm text-chip-good-fg mt-2 font-semibold">{bulkMsg}</p>}
           </div>
-
-          {/* Category Reassignment */}
           {selected.size > 0 && (
-            <div className="border-t border-zinc-800 pt-4">
-              <h3 className="text-sm font-semibold text-white mb-3">
-                Reassign {selected.size} Selected Item{selected.size > 1 ? "s" : ""}
-              </h3>
+            <div className="border-t border-lt-hairline pt-4">
+              <h3 className="text-sm font-bold text-lt-fg mb-3">Reassign {selected.size} Selected Item{selected.size > 1 ? "s" : ""}</h3>
               <div className="flex gap-3 items-end">
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Move to Category</label>
-                  <select value={reassignCatId} onChange={(e) => setReassignCatId(e.target.value)}
-                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                  <label className="block text-xs text-lt-fg2 mb-1 font-semibold">Move to Category</label>
+                  <select value={reassignCatId} onChange={(e) => setReassignCatId(e.target.value)} className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg">
                     <option value="">Select category...</option>
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-                <button onClick={bulkReassign} disabled={!reassignCatId}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors">
-                  Move Items
-                </button>
-                <button onClick={() => setSelected(new Set())}
-                  className="px-3 py-2 text-zinc-400 hover:text-white text-sm transition-colors">
-                  Clear Selection
-                </button>
+                <button onClick={bulkReassign} disabled={!reassignCatId} className="px-4 py-2 bg-lt-fg hover:bg-black disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg transition-colors">Move Items</button>
+                <button onClick={() => setSelected(new Set())} className="px-3 py-2 text-lt-fg2 hover:text-lt-fg text-sm">Clear Selection</button>
               </div>
             </div>
           )}
@@ -272,187 +215,92 @@ export default function InventoryPage() {
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
-        <input type="text" placeholder="Search items..." value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="flex-1 max-w-sm px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500" />
+        <input type="text" placeholder="Search items..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="flex-1 max-w-sm px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder-lt-fg3 focus:outline-none focus:border-amber-500" />
         <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
-          className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500">
+          className="px-3 py-2 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg focus:outline-none focus:border-amber-500">
           <option value="">All Categories</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name} ({c._count.items})</option>)}
         </select>
-        {selected.size > 0 && !showBulk && (
-          <span className="text-sm text-blue-400 self-center">{selected.size} selected</span>
-        )}
+        {selected.size > 0 && !showBulk && <span className="text-sm text-amber-700 self-center font-semibold">{selected.size} selected</span>}
       </div>
 
       {/* Table */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+      <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 text-left text-xs uppercase tracking-wide">
+            <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide bg-lt-inner/50">
               <th className="px-3 py-3 w-[40px]">
-                <input type="checkbox" checked={items.length > 0 && selected.size === items.length}
-                  onChange={toggleAll}
-                  className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-blue-600" />
+                <input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleAll} className="w-4 h-4 rounded border-lt-hairline" />
               </th>
-              <th className="px-3 py-3 font-medium">Item</th>
-              <th className="px-3 py-3 font-medium">Category</th>
-              <th className="px-3 py-3 font-medium text-center">Qty</th>
-              <th className="px-3 py-3 font-medium text-right">Daily</th>
-              <th className="px-3 py-3 font-medium text-right">Weekly</th>
-              <th className="px-3 py-3 font-medium text-right">Replacement</th>
-              <th className="px-3 py-3 font-medium">Location</th>
-              <th className="px-3 py-3 font-medium text-right">Total Value</th>
-              <th className="px-3 py-3 font-medium w-[100px]"></th>
+              <th className="px-3 py-3 font-bold">Item</th>
+              <th className="px-3 py-3 font-bold">Category</th>
+              <th className="px-3 py-3 font-bold text-center">Qty</th>
+              <th className="px-3 py-3 font-bold text-right">Daily</th>
+              <th className="px-3 py-3 font-bold text-right">Weekly</th>
+              <th className="px-3 py-3 font-bold text-right">Replacement</th>
+              <th className="px-3 py-3 font-bold">Location</th>
+              <th className="px-3 py-3 font-bold text-right">Total Value</th>
+              <th className="px-3 py-3 font-bold w-[70px]"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-zinc-500">Loading...</td></tr>
+              <tr><td colSpan={10} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-12 text-center text-zinc-500">No items found</td></tr>
-            ) : items.map((item) => (
-              <tr key={item.id} className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 ${selected.has(item.id) ? "bg-blue-900/10" : ""}`}>
-                <td className="px-3 py-2">
-                  <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)}
-                    className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-blue-600" />
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  {editingId === item.id ? (
-                    <input type="text" value={editValues.description} onChange={(e) => setEditValues({...editValues, description: e.target.value})}
-                      className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white" />
-                  ) : (
-                    <div className="flex items-start gap-2">
-                      {/* Thumbnail — small fixed slot so rows align even
-                          when imageUrl is null. Click opens the detail
-                          modal for fast replace/remove. */}
-                      <button
-                        type="button"
-                        onClick={() => setDetailItem(item)}
-                        className="flex-none w-10 h-10 rounded bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-zinc-600 text-[10px] hover:border-amber-500"
-                        title={item.imageUrl ? 'Click for full image' : 'Click to add image'}
-                        aria-label={item.imageUrl ? 'Open image' : 'Add image'}
-                      >
+              <tr><td colSpan={10} className="px-4 py-12 text-center text-lt-fg3">{showArchived ? "No archived items" : "No items found"}</td></tr>
+            ) : items.map((item) => {
+              const cc = catColor(item.category?.id ?? null);
+              const lineTotal = item.replacementCost && Number(item.replacementCost) > 0 ? Number(item.replacementCost) * item.qtyOwned : 0;
+              return (
+                <tr
+                  key={item.id}
+                  onClick={() => setDrawerItem(item)}
+                  className={`border-b border-lt-hairline/70 hover:bg-lt-inner/60 cursor-pointer ${selected.has(item.id) ? "bg-amber-50" : ""}`}
+                >
+                  <td className="px-3 py-2.5 relative" onClick={(e) => e.stopPropagation()}>
+                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${cc.bar}`} aria-hidden />
+                    <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} className="w-4 h-4 rounded border-lt-hairline ml-1" />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex-none w-10 h-10 rounded bg-lt-inner border border-lt-hairline overflow-hidden flex items-center justify-center text-lt-fg3 text-[10px]">
                         {item.imageUrl ? (
-                          // Private blob — must load through the gated
-                          // proxy, not the raw (403) blob URL. Buster
-                          // keyed on imageUrl so a replaced photo refetches.
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={`/api/inventory/items/${item.id}/image?v=${encodeURIComponent(item.imageUrl)}`} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span>—</span>
-                        )}
-                      </button>
+                        ) : <span>—</span>}
+                      </div>
                       <div className="min-w-0">
-                        <div className="text-white truncate">{item.description || item.code}</div>
-                        {(() => {
-                          // Effective reorder URL: per-item override wins,
-                          // else fall back to the vendor's default website.
-                          const reorderUrl = item.vendorItemUrl || item.preferredVendor?.website || null;
-                          if (!item.preferredVendor && !reorderUrl) return null;
-                          return (
-                            <div className="text-[10px] text-zinc-500 truncate mt-0.5">
-                              {item.preferredVendor && (
-                                <span title={item.preferredVendor.name}>{item.preferredVendor.name}</span>
-                              )}
-                              {reorderUrl && (
-                                <>
-                                  {item.preferredVendor && <span className="mx-1">·</span>}
-                                  <a
-                                    href={reorderUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-blue-400 hover:text-blue-300"
-                                  >
-                                    reorder ↗
-                                  </a>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        <div className="text-lt-fg font-semibold truncate">{item.description || item.code}</div>
+                        <div className="text-[11px] text-lt-fg3 font-mono">{item.code}</div>
                       </div>
                     </div>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  {editingId === item.id ? (
-                    <select value={editValues.categoryId} onChange={(e) => setEditValues({...editValues, categoryId: e.target.value})}
-                      className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white">
-                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  ) : (
-                    <span className="text-zinc-400">{item.category.name}</span>
-                  )}
-                </td>
-                {editingId === item.id ? (
-                  <>
-                    <td className="px-3 py-1.5 text-center">
-                      <input type="number" value={editValues.qtyOwned} onChange={(e) => setEditValues({...editValues, qtyOwned: e.target.value})}
-                        className="w-14 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-center" />
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <input type="number" step="0.01" value={editValues.dailyRate} onChange={(e) => setEditValues({...editValues, dailyRate: e.target.value})}
-                        className="w-20 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <input type="number" step="0.01" value={editValues.weeklyRate} onChange={(e) => setEditValues({...editValues, weeklyRate: e.target.value})}
-                        className="w-20 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
-                    </td>
-                    <td className="px-3 py-1.5 text-right">
-                      <input type="number" step="0.01" value={editValues.replacementCost} onChange={(e) => setEditValues({...editValues, replacementCost: e.target.value})}
-                        className="w-24 px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white text-right" />
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <select value={editValues.locationId} onChange={(e) => setEditValues({...editValues, locationId: e.target.value})}
-                        className="w-full px-1 py-0.5 bg-zinc-800 border border-zinc-600 rounded text-xs text-white">
-                        <option value="">--</option>
-                        {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2 text-right text-zinc-500 text-xs">--</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                      <button onClick={() => saveEdit(item.id)} className="text-emerald-400 hover:text-emerald-300 text-xs mr-2">Save</button>
-                      <button onClick={() => setEditingId(null)} className="text-zinc-500 hover:text-zinc-300 text-xs">Cancel</button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-3 py-2 text-center text-zinc-300">{item.qtyOwned}</td>
-                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.dailyRate)}</td>
-                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.weeklyRate)}</td>
-                    <td className="px-3 py-2 text-right text-zinc-300 font-mono text-xs">{fmt(item.replacementCost)}</td>
-                    <td className="px-3 py-2 text-zinc-400 text-xs">{item.locationRef?.name || item.location.replace(/_/g, " ")}</td>
-                    <td className="px-3 py-2 text-right text-white font-mono text-xs">
-                      {item.replacementCost && Number(item.replacementCost) > 0 ? fmt(Number(item.replacementCost) * item.qtyOwned) : "--"}
-                    </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => setDetailItem(item)}
-                        className="text-zinc-500 hover:text-amber-400 text-xs mr-2"
-                        title="Photo + vendor"
-                      >
-                        Details
-                      </button>
-                      <button onClick={() => startEdit(item)} className="text-zinc-500 hover:text-blue-400 text-xs">Edit</button>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${cc.pill}`}>{item.category?.name || "Uncategorized"}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-lt-fg font-semibold tabular-nums">{item.qtyOwned}</td>
+                  <td className="px-3 py-2.5 text-right text-lt-fg font-mono tabular-nums">{fmt(item.dailyRate)}</td>
+                  <td className="px-3 py-2.5 text-right text-lt-fg font-mono tabular-nums">{fmt(item.weeklyRate)}</td>
+                  <td className="px-3 py-2.5 text-right text-lt-fg2 font-mono tabular-nums">{fmt(item.replacementCost)}</td>
+                  <td className="px-3 py-2.5 text-lt-fg2">{item.locationRef?.name || item.location.replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums font-bold text-chip-good-fg">{lineTotal > 0 ? fmt(lineTotal) : <span className="text-lt-fg3 font-normal">--</span>}</td>
+                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setDrawerItem(item)} className="text-amber-700 hover:text-amber-600 text-sm font-semibold">{showArchived ? "View" : "Edit"}</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {total > 50 && (
         <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-zinc-400">Page {page} of {Math.ceil(total / 50)}</p>
+          <p className="text-sm text-lt-fg2">Page {page} of {Math.ceil(total / 50)}</p>
           <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-300 disabled:opacity-40">Prev</button>
-            <button onClick={() => setPage((p) => p + 1)} disabled={page >= Math.ceil(total / 50)}
-              className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-300 disabled:opacity-40">Next</button>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg disabled:opacity-40">Prev</button>
+            <button onClick={() => setPage((p) => p + 1)} disabled={page >= Math.ceil(total / 50)} className="px-3 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg disabled:opacity-40">Next</button>
           </div>
         </div>
       )}
@@ -466,11 +314,15 @@ export default function InventoryPage() {
         defaultCategoryId={categoryId || undefined}
       />
 
-      <InventoryDetailModal
-        open={detailItem !== null}
-        item={detailItem}
-        onClose={() => setDetailItem(null)}
+      <InventoryItemDrawer
+        open={drawerItem !== null}
+        item={drawerItem as DrawerItem | null}
+        categories={categories}
+        locations={locations}
+        onClose={() => setDrawerItem(null)}
         onSaved={() => fetchItems()}
+        onArchived={() => fetchItems()}
+        onDeleted={() => fetchItems()}
       />
     </div>
   );

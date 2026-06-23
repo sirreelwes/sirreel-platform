@@ -2225,7 +2225,12 @@ model InventoryItem {
   // seed flips this for items reconciled against the Production
   // Supplies PDF; everything else stays hidden.
   publicVisible   Boolean             @default(false) @map("public_visible")
+  // Soft-delete: `isActive=false` is the archive state (already the
+  // universal exclude filter on list / catalog / search / pickers).
+  // `archivedAt` records WHEN it was archived for the Archived view +
+  // restore audit; restore flips isActive=true and clears archivedAt.
   isActive        Boolean             @default(true) @map("is_active")
+  archivedAt      DateTime?           @map("archived_at")
   // Client-facing note seeded onto OrderLineItem.notes whenever this
   // InventoryItem is added as a line. Lets the catalog carry policy text
   // (e.g. "LED wall use requires a qualified A/V Tech on the client's
