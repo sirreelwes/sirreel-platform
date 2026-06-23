@@ -3,16 +3,30 @@
 /**
  * Live inventory combobox for the line-item description field.
  *
- * One input, one flow. Typing here drives a debounced query against
- * `/api/catalog/search` and renders a dropdown of inventory items +
- * asset categories matching the entered tokens. Selecting a hit binds
- * the row to the catalog entry and lets the caller pre-fill rate +
- * department. Ignoring the dropdown and continuing to type is the
- * "custom line item" path — a quiet chip replaces the old red
- * "No catalog match" warning. Custom is a valid choice.
+ * One input, one flow. Typing here — OR clicking into a field that
+ * already has text — drives a query against `/api/catalog/search` and
+ * renders a dropdown of inventory items + asset categories matching the
+ * entered tokens. Selecting a hit binds the row to the catalog entry and
+ * lets the caller pre-fill rate + department. Ignoring the dropdown and
+ * continuing to type is the "custom line item" path — a quiet chip
+ * replaces the old red "No catalog match" warning. Custom is valid.
+ *
+ * Re-pick without retype: focusing a field that already holds a
+ * description opens the dropdown seeded with matches for the current
+ * text (so a bound row surfaces its catalog siblings) WITHOUT erasing
+ * anything. The existing text stays the field value until the rep
+ * actually picks a new hit. Typing filters further.
+ *
+ * Positioning: the dropdown is rendered in a PORTAL on `document.body`
+ * with fixed coordinates pinned to the input's bounding rect. Anchoring
+ * to the viewport (not the row) is what keeps it from being clipped or
+ * painted behind sibling rows when many comboboxes stack inside a table
+ * / grid (the per-row line-items editor). Each instance owns its own
+ * open / results / highlight state, so one row's dropdown never appears
+ * on another.
  *
  * Keyboard contract:
- *   ↑ / ↓     — move highlight through the dropdown
+ *   ↑ / ↓     — move highlight through THIS row's dropdown
  *   Enter     — if a hit is highlighted, pick it; otherwise emit
  *               `onCommit` (parent advances to next field / row)
  *   Esc       — dismiss the dropdown, keep the typed text as custom
@@ -22,7 +36,11 @@
  * /api/catalog/search and trusts the result order.
  */
 
-import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ForwardedRef, type KeyboardEvent } from 'react'
+import {
+  forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect,
+  useMemo, useRef, useState, type ForwardedRef, type KeyboardEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE'
 
@@ -86,6 +104,11 @@ export interface LineItemDescriptionComboboxProps {
 }
 
 const DEBOUNCE_MS = 200
+const MIN_QUERY = 2
+// Position before paint on the client; fall back to useEffect on the
+// server so SSR doesn't warn about useLayoutEffect (the dropdown only
+// ever opens post-hydration, so the effect body never runs server-side).
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 const FORMAT_USD = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
@@ -103,6 +126,11 @@ function LineItemDescriptionComboboxInner(
   const [highlight, setHighlight] = useState(0)
   const [dismissed, setDismissed] = useState(false)
   const [loading, setLoading] = useState(false)
+  // Fixed viewport coords for the portalled dropdown, pinned to the
+  // input's rect. Null until the first measure (also keeps the portal
+  // out of SSR — `open` starts false so this branch never runs server-
+  // side).
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Expose the underlying input ref to parent for focus management
   // (new-quote uses this to focus the freshly-appended row).
@@ -110,73 +138,113 @@ function LineItemDescriptionComboboxInner(
   const listboxId = useId()
   const lastQueryRef = useRef('')
   // Hard close-flag that locks the dropdown shut until the rep types
-  // again. Belt-and-suspenders next to `dismissed` (state) — fixes a
-  // post-pick race where an in-flight fetch's response could re-open
-  // the dropdown a frame after pick(). Set true in pick(); cleared on
-  // the next keystroke. Ref + state both: ref blocks the response
-  // handler from re-opening within the same paint, state blocks the
-  // debounce-fetch effect on subsequent renders.
+  // or re-focuses. Belt-and-suspenders next to `dismissed` (state) —
+  // fixes a post-pick race where an in-flight fetch's response could
+  // re-open the dropdown a frame after pick(). Set true in pick();
+  // cleared on the next keystroke OR on blur (so re-focusing a just-
+  // picked row can re-open for another re-pick).
   const justPickedRef = useRef(false)
 
-  // Debounced fetch.
+  // Stable primitive key for the `types` array so the search callback
+  // doesn't get a new identity every render (which would thrash the
+  // debounce effect).
+  const typesKey = types && types.length > 0 ? types.join(',') : ''
+
+  const runSearch = useCallback(async (trimmed: string) => {
+    if (justPickedRef.current) return
+    if (trimmed.length < MIN_QUERY) { setResults([]); setOpen(false); return }
+    lastQueryRef.current = trimmed
+    setLoading(true)
+    try {
+      const typesQuery = typesKey ? `&types=${encodeURIComponent(typesKey)}` : ''
+      const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10${typesQuery}`)
+      if (!res.ok) { setResults([]); setOpen(false); return }
+      const data = await res.json()
+      // A newer query (or a pick) superseded this response — drop it.
+      if (justPickedRef.current) return
+      if (lastQueryRef.current !== trimmed) return
+      const hits = (data.results ?? []) as CatalogHit[]
+      setResults(hits)
+      setOpen(hits.length > 0)
+      setHighlight(0)
+    } catch {
+      setResults([]); setOpen(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [typesKey])
+
+  // Debounced fetch on typing.
   useEffect(() => {
     if (justPickedRef.current) return
     if (dismissed) return
     const trimmed = value.trim()
-    if (trimmed.length < 2) {
+    if (trimmed.length < MIN_QUERY) {
       setResults([])
       setOpen(false)
       return
     }
-    let cancelled = false
-    setLoading(true)
-    const handle = setTimeout(async () => {
-      lastQueryRef.current = trimmed
-      try {
-        const typesQuery = types && types.length > 0 ? `&types=${encodeURIComponent(types.join(','))}` : ''
-        const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10${typesQuery}`)
-        if (!res.ok) {
-          if (!cancelled) { setResults([]); setOpen(false) }
-          return
-        }
-        const data = await res.json()
-        if (cancelled) return
-        if (justPickedRef.current) return
-        if (lastQueryRef.current !== trimmed) return
-        const hits = (data.results ?? []) as CatalogHit[]
-        setResults(hits)
-        setOpen(hits.length > 0)
-        setHighlight(0)
-      } catch {
-        if (!cancelled) { setResults([]); setOpen(false) }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }, DEBOUNCE_MS)
-    return () => { cancelled = true; clearTimeout(handle) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, dismissed])
+    const handle = setTimeout(() => { void runSearch(trimmed) }, DEBOUNCE_MS)
+    return () => clearTimeout(handle)
+  }, [value, dismissed, runSearch])
+
+  // Pin the portalled dropdown to the input while it's open; follow
+  // scroll/resize so it never drifts off the field.
+  const updateCoords = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setCoords({ top: r.bottom, left: r.left, width: r.width })
+  }, [])
+
+  useIsomorphicLayoutEffect(() => {
+    if (!open) return
+    updateCoords()
+    const onMove = () => updateCoords()
+    // capture:true catches scrolls in any nested scroll container, not
+    // just the window.
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
+    return () => {
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
+    }
+  }, [open, updateCoords])
 
   const handleFocus = () => {
-    // Refocus alone does NOT reopen the dropdown — opening requires
-    // a fresh keystroke. Closes the post-pick race where the input
-    // retains focus (preventDefault on the dropdown click) and the
-    // focus event would otherwise clear `dismissed` and let the
-    // effect re-fetch.
+    // Click-to-re-pick: focusing a field that already has text opens
+    // the dropdown seeded with matches for the current value WITHOUT
+    // erasing it. Skipped right after a pick (justPickedRef) so the
+    // act of picking — which leaves the input focused — doesn't bounce
+    // the dropdown back open.
+    if (justPickedRef.current) return
+    if (open) return
+    const trimmed = value.trim()
+    if (trimmed.length < MIN_QUERY) return
+    setDismissed(false)
+    void runSearch(trimmed)
+  }
+
+  const handleBlur = () => {
+    // Leaving the field closes the dropdown and clears the post-pick
+    // lock so a later re-focus can re-open. A dropdown pick uses
+    // mousedown+preventDefault, so it keeps focus and never fires blur.
+    justPickedRef.current = false
+    setOpen(false)
   }
 
   const handleChange = (next: string) => {
-    // Keystrokes are the only path back into the open state. Both
-    // flags reset so the debounced fetch effect can run again.
+    // Keystrokes are a path back into the open state. Both flags reset
+    // so the debounced fetch effect can run again.
     justPickedRef.current = false
     onChange(next)
     setDismissed(false)
-    // Only auto-unbind when the rep deletes the description
-    // entirely. Partial edits (typos, "x5" suffix, etc.) keep the
-    // binding — that mirrors the order-detail modal's longstanding
-    // pattern where the rep can pick a catalog item AND customize
-    // the invoice description. Picking a different item from the
-    // dropdown explicitly replaces the binding.
+    // Only auto-unbind when the rep deletes the description entirely.
+    // Partial edits (typos, "x5" suffix, etc.) keep the binding — that
+    // mirrors the order-detail modal's longstanding pattern where the
+    // rep can pick a catalog item AND customize the invoice
+    // description. Picking a different item from the dropdown
+    // explicitly replaces the binding.
     if (catalogBinding && next.trim().length === 0) onClearCatalog?.()
   }
 
@@ -252,6 +320,7 @@ function LineItemDescriptionComboboxInner(
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         onFocus={handleFocus}
+        onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         autoFocus={autoFocus}
         placeholder={placeholder || 'Start typing to search inventory…'}
@@ -281,18 +350,26 @@ function LineItemDescriptionComboboxInner(
         )}
       </div>
 
-      {open && results.length > 0 && (
+      {/* Dropdown — portalled to <body> with fixed coords pinned to the
+          input, so it floats above every sibling row instead of being
+          clipped by / stacked under the table or grid it lives in. */}
+      {open && results.length > 0 && coords && createPortal(
         <ul
           id={listboxId}
           role="listbox"
-          // Size to content: at least as wide as the input, grows up
-          // to ~480px so long item names render in full. White-space
-          // on each row name wraps instead of ellipsizing — keeps
-          // "Caravan Canopy 10x10 EZ-Up — Black" readable end-to-
-          // end. Inline styles for the sizing trio so tailwind's
-          // arbitrary-value class isn't required.
-          style={{ minWidth: '100%', width: 'max-content', maxWidth: '480px' }}
-          className="absolute z-30 left-0 top-full mt-1 bg-lt-card border border-lt-hairline rounded shadow-lg max-h-72 overflow-auto"
+          // Pinned to the input's viewport rect; grows up to ~480px so
+          // long item names render in full, wrapping rather than
+          // ellipsizing.
+          style={{
+            position: 'fixed',
+            top: coords.top + 4,
+            left: coords.left,
+            minWidth: coords.width,
+            width: 'max-content',
+            maxWidth: '480px',
+            zIndex: 60,
+          }}
+          className="bg-lt-card border border-lt-hairline rounded shadow-lg max-h-72 overflow-auto"
         >
           {results.map((r, idx) => (
             <li
@@ -329,7 +406,8 @@ function LineItemDescriptionComboboxInner(
               <div className="text-xs font-mono text-lt-fg2 shrink-0 pt-0.5">{FORMAT_USD(r.dailyRate)}/d</div>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   )
