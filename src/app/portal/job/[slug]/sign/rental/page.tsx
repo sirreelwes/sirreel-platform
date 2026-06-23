@@ -66,7 +66,9 @@ export default function RentalAgreementSignPage() {
         return;
       }
       setAgreement(a);
-      if (a.documentToSignUrl) setPdfUrl(a.documentToSignUrl);
+      // documentToSignUrl is a PRIVATE blob (403s raw) — load it through the
+      // job-session-gated proxy, which the same-origin iframe cookies into.
+      if (a.documentToSignUrl) setPdfUrl('/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT');
       if (d?.contact?.email && !signerEmail) {
         setSignerEmail(d.contact.email);
         const full = `${d.contact.firstName || ''} ${d.contact.lastName || ''}`.trim();

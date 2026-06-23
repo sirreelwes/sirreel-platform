@@ -81,11 +81,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '-')
     const blobKey = `standing-agreements/${id}/${Date.now()}-${randomUUID()}-${safeName}`
     try {
-      const uploaded = await put(blobKey, buffer, { access: 'public', contentType: file.type })
+      // Store is PRIVATE (see c19e928 / bf9516f): a `public` put throws
+      // `BlobError: Cannot use public access on a private store` against the
+      // prod store → bare 500. Cast because the SDK type only exposes
+      // 'public', but the private store accepts the same call shape.
+      // NOTE: `negotiatedTermsUrl` now points at a PRIVATE blob (403s on a
+      // direct fetch) — its consumers must serve it through a gated proxy.
+      const uploaded = await put(blobKey, buffer, { access: 'private' as 'public', contentType: file.type })
       data.negotiatedTermsUrl = uploaded.url
     } catch (err) {
       console.error('[standing-agreement] blob upload failed:', err)
-      return NextResponse.json({ error: 'Failed to save uploaded file' }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to save uploaded file' }, { status: 502 })
     }
   }
 

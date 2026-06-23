@@ -46,7 +46,9 @@ export default function StageContractSignPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d?.paperwork?.stageContract?.documentToSignUrl) {
-          setPdfUrl(d.paperwork.stageContract.documentToSignUrl);
+          // documentToSignUrl is a PRIVATE blob (403s raw) — load it through
+          // the job-session-gated proxy the same-origin iframe cookies into.
+          setPdfUrl('/api/portal/job/agreement/pdf?type=STAGE_CONTRACT');
         } else {
           setError(d?.paperwork?.stageContract ? 'Stage contract PDF is missing.' : 'No stage contract has been generated for this order yet.');
         }

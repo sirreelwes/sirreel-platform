@@ -154,7 +154,7 @@ export default function NegotiatedAgreementsRegistryPage() {
                           </Link>
                           {r.negotiatedTermsUrl ? (
                             <a
-                              href={r.negotiatedTermsUrl}
+                              href={`/api/crm/companies/${r.id}/standing-agreement/pdf`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-xs text-lt-fg hover:text-black"

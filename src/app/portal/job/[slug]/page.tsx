@@ -537,7 +537,7 @@ export default function JobPortalPage() {
                 {data.paperwork.agreement?.signedAt ? (
                   data.paperwork.agreement.signedDocumentUrl ? (
                     <a
-                      href={data.paperwork.agreement.signedDocumentUrl}
+                      href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT&doc=signed"
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs font-semibold text-amber-700 hover:text-amber-900"
@@ -571,7 +571,7 @@ export default function JobPortalPage() {
                   {data.paperwork.stageContract.signedAt ? (
                     data.paperwork.stageContract.signedDocumentUrl ? (
                       <a
-                        href={data.paperwork.stageContract.signedDocumentUrl}
+                        href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT&doc=signed"
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs font-semibold text-amber-700 hover:text-amber-900"
@@ -582,7 +582,7 @@ export default function JobPortalPage() {
                   ) : data.paperwork.stageContract.documentToSignUrl ? (
                     <div className="flex items-center gap-2 flex-wrap">
                       <a
-                        href={data.paperwork.stageContract.documentToSignUrl}
+                        href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT"
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"

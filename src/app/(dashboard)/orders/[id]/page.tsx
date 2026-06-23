@@ -2565,7 +2565,7 @@ export default function OrderDetailPage() {
             )}
             {agreement.documentToSignUrl && (
               <a
-                href={agreement.documentToSignUrl}
+                href={`/api/orders/${orderId}/agreement/pdf`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
@@ -2575,7 +2575,7 @@ export default function OrderDetailPage() {
             )}
             {agreement.wordDocumentUrl && (
               <a
-                href={agreement.wordDocumentUrl}
+                href={`/api/orders/${orderId}/agreement/pdf?doc=word`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
@@ -2585,7 +2585,7 @@ export default function OrderDetailPage() {
             )}
             {agreement.redlineUploadUrl && (
               <a
-                href={agreement.redlineUploadUrl}
+                href={`/api/orders/${orderId}/agreement/pdf?doc=redline`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-1.5 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-semibold rounded-lg"
@@ -2595,7 +2595,7 @@ export default function OrderDetailPage() {
             )}
             {agreement.signedDocumentUrl && (
               <a
-                href={agreement.signedDocumentUrl}
+                href={`/api/orders/${orderId}/agreement/pdf?doc=signed`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 text-white text-sm font-semibold rounded-lg"

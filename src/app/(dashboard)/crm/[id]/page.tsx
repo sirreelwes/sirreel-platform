@@ -502,7 +502,7 @@ export default function CompanyDetailPage() {
                 />
                 {company.negotiatedTermsUrl && (
                   <a
-                    href={company.negotiatedTermsUrl}
+                    href={`/api/crm/companies/${company.id}/standing-agreement/pdf`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[11px] text-lt-fg hover:text-black mt-1 inline-block"
@@ -698,7 +698,7 @@ export default function CompanyDetailPage() {
                     </div>
                     {company.negotiatedTermsUrl && (
                       <a
-                        href={company.negotiatedTermsUrl}
+                        href={`/api/crm/companies/${company.id}/standing-agreement/pdf`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] text-lt-fg hover:text-black"

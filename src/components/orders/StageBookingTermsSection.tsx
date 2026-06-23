@@ -282,7 +282,7 @@ export function StageBookingTermsSection({
             </button>
             {contract?.documentToSignUrl && (
               <a
-                href={contract.documentToSignUrl}
+                href={`/api/orders/${orderId}/agreement/pdf?type=STAGE_CONTRACT`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-sm text-amber-300 hover:text-amber-200 underline"

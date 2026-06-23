@@ -104,7 +104,9 @@ export async function GET(
           approvedAt: co.negotiatedTermsApprovedAt,
           summary: co.negotiatedTermsSummary,
           reviewDueDate: co.negotiatedTermsReviewDueDate,
-          pdfUrl: co.negotiatedTermsUrl,
+          // negotiatedTermsUrl is a PRIVATE blob (403s raw) — hand the
+          // banner the session-gated proxy path, never the raw URL.
+          pdfUrl: `/api/crm/companies/${co.id}/standing-agreement/pdf`,
         }
       : null
 

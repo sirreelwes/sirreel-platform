@@ -680,7 +680,7 @@ export default function ClientPortal() {
                   </div>
                   {agreementState.documentToSignUrl && (
                     <a
-                      href={agreementState.documentToSignUrl}
+                      href={`/api/portal/${token}/agreement/pdf`}
                       target="_blank"
                       rel="noreferrer"
                       className="block text-center py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-50"
@@ -735,7 +735,7 @@ export default function ClientPortal() {
                       <iframe
                         src={
                           agreementState?.status === 'NEGOTIATED_READY' && agreementState.documentToSignUrl
-                            ? agreementState.documentToSignUrl
+                            ? `/api/portal/${token}/agreement/pdf`
                             : `/api/portal/${token}/contract/download?format=pdf`
                         }
                         className="w-full h-[420px] rounded-xl border border-gray-200 bg-gray-50"

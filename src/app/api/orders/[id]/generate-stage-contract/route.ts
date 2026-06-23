@@ -117,7 +117,20 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   })
 
   const blobKey = `stage-contracts/${order.id}/baseline-${Date.now()}.pdf`
-  const uploaded = await put(blobKey, pdfBuffer, { access: 'public', contentType: PDF_MIME })
+  let uploaded: { url: string }
+  try {
+    // Store is PRIVATE (see c19e928 / bf9516f): a `public` put throws
+    // `BlobError: Cannot use public access on a private store` against the
+    // prod store → bare 500 before any SignedAgreement row is written. Cast
+    // because the SDK type only exposes 'public', but the private store
+    // accepts the same call shape. NOTE: `documentToSignUrl` now points at a
+    // PRIVATE blob (403s on a direct fetch) — its consumers must serve it
+    // through a gated proxy.
+    uploaded = await put(blobKey, pdfBuffer, { access: 'private' as 'public', contentType: PDF_MIME })
+  } catch (err) {
+    console.error('[generate-stage-contract] blob upload failed:', err)
+    return NextResponse.json({ error: 'Failed to store the generated contract PDF' }, { status: 502 })
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const saved = await prisma.signedAgreement.upsert({
