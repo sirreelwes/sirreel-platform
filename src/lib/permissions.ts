@@ -299,6 +299,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   const main: NavItem[] = [];
   if (sales && perms.pipeline) {
     main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
+    // Reservations directly under Pipeline for the whole sales team
+    // (incl. salesOnly accounts). The shared schedule view is a sales
+    // reference while quoting; the non-sales push below stays gated.
+    if (perms.calendar || perms.gantt) {
+      main.push({ id: 'schedule', label: SCHEDULE_LABEL, icon: '', href: '/gantt' });
+    }
   }
   if (!sales) {
     main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
@@ -307,9 +313,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // single "Schedule" nav entry landing on /gantt. Both pages still
   // exist as routes and read the same /api/timeline-native data; the
   // pages cross-link via an in-page view-toggle so the operator can
-  // flip between month-view and gantt-view without two tabs. Hidden
-  // for salesOnly users — schedule views aren't a sales step.
-  if ((perms.calendar || perms.gantt) && !salesOnly) {
+  // flip between month-view and gantt-view without two tabs. Sales
+  // roles get this above (directly under Pipeline); this push is for
+  // everyone else, still hidden for salesOnly non-sales edge cases.
+  if ((perms.calendar || perms.gantt) && !salesOnly && !sales) {
     main.push({ id: 'schedule', label: SCHEDULE_LABEL, icon: '', href: '/gantt' });
   }
   if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
