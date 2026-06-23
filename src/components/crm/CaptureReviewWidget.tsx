@@ -141,6 +141,7 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
   const [counts, setCounts] = useState<Counts | null>(null)
   const [mode, setMode] = useState<Mode>('NEEDS_REVIEW')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   // Thread viewer (slide-over) state.
@@ -251,6 +252,10 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
         setESaving(false)
         return
       }
+      setError(null)
+      // `created === false` → the email already mapped to a CRM contact;
+      // we linked + enriched rather than duplicating.
+      setNotice(data?.created === false ? `${eFirst.trim()} ${eLast.trim()} was already in CRM — linked.` : `Added ${eFirst.trim()} ${eLast.trim()}.`)
       closeEdit()
       load()
       onChanged?.()
@@ -359,6 +364,12 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
           {error && (
             <div className="px-4 py-2 text-xs text-chip-bad-fg bg-chip-bad-bg/30">{error}</div>
           )}
+          {notice && (
+            <div className="px-4 py-2 text-xs text-chip-good-fg bg-chip-good-bg/30 flex items-center justify-between gap-2">
+              <span>{notice}</span>
+              <button type="button" onClick={() => setNotice(null)} className="text-lt-fg3 hover:text-lt-fg">✕</button>
+            </div>
+          )}
 
           {rows == null && (
             <div className="px-4 py-3 text-sm text-lt-fg2">Loading…</div>
@@ -410,7 +421,10 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 w-full max-w-md">
             <h3 className="text-base font-semibold text-lt-fg mb-1">Add contact</h3>
             <p className="text-xs text-lt-fg2 mb-4">
-              Pre-filled from <span className="text-lt-fg">{editing.emailMessage.fromAddress}</span>{' '}
+              {/* The thread-drawer "Add" path passes a capture whose
+                  `emailMessage` is omitted by the detail GET, so guard
+                  the deref and fall back to the parsed sender. */}
+              Pre-filled from <span className="text-lt-fg">{editing.emailMessage?.fromAddress ?? editing.parsedEmail ?? '(unknown sender)'}</span>{' '}
               · {editing.inbox}
             </p>
             <div className="space-y-3">

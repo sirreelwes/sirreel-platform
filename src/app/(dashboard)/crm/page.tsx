@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import type { ClientBadge } from "@/lib/crm/clientBadges";
 import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { FollowUpsDueModal } from "@/components/crm/FollowUpsDueModal";
 
@@ -525,7 +526,9 @@ export default function CRMPage() {
           People list so newly-added contacts surface without a manual
           reload. */}
       {tab === 'people' && (
-        <CaptureReviewWidget onChanged={() => { fetchPeople(); }} />
+        <ErrorBoundary label="email review">
+          <CaptureReviewWidget onChanged={() => { fetchPeople(); }} />
+        </ErrorBoundary>
       )}
 
       {/* Role-stats chip strip — People tab only. Counts come from
@@ -745,9 +748,13 @@ export default function CRMPage() {
                   </td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.role.replace(/_/g, " ")}</td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">
-                    {p.affiliations.length > 0
-                      ? p.affiliations.map(a => a.company.name).join(", ")
-                      : "--"}
+                    {(() => {
+                      // Guard against an affiliation whose company FK didn't
+                      // resolve — a null company.name would white-screen the
+                      // whole tab.
+                      const names = (p.affiliations ?? []).map(a => a.company?.name).filter(Boolean);
+                      return names.length > 0 ? names.join(", ") : "--";
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">
                     <span className="inline-flex items-baseline gap-1.5 flex-wrap">

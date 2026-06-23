@@ -73,6 +73,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
       person: { select: { id: true, firstName: true, lastName: true, email: true } },
       company: { select: { id: true, name: true } },
       emailMessageId: true,
+      // Include the parent email so the thread-drawer "Add contact"
+      // path gets the same CaptureRow shape the list does (the modal
+      // reads emailMessage.fromAddress; omitting it white-screened /crm).
+      emailMessage: { select: { id: true, subject: true, fromAddress: true, sentAt: true } },
       attachedChildren: {
         select: { emailMessageId: true },
       },
@@ -121,6 +125,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       attachedCount: capture.attachedChildren.length,
       person: capture.person,
       company: capture.company,
+      emailMessage: capture.emailMessage,
     },
     messages,
   })
@@ -265,7 +270,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         resolvedAt: now,
       },
     })
-    return NextResponse.json({ ok: true, resolution: CaptureResolution.ADDED, personId })
+    // `created:false` means the email already mapped to a Person (we
+    // linked + enriched instead of duplicating) — the client surfaces
+    // "already in CRM" rather than implying a brand-new row.
+    return NextResponse.json({ ok: true, resolution: CaptureResolution.ADDED, personId, created: !existing })
   }
 
   // ── UNDO ───────────────────────────────────────────────────────
