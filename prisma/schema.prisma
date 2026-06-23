@@ -2144,6 +2144,7 @@ enum RateChangeSource {
   RW_GAP_FILL       // scripts/rw-rate-gap-fill.ts (the May/June 2026 first run)
   MANUAL            // operator edit via admin UI (future)
   ROLLBACK          // reverting a prior change (future)
+  IMPORT_RW         // one-time RW inventory reconcile (2026-06-23 backfill)
 }
 
 model RateChangeLog {
@@ -2180,6 +2181,12 @@ model InventoryItem {
   // hand-curated rows always have one.
   categoryId      String?             @map("category_id")
   code            String              @unique
+  // RentalWorks item number (I-Code), backfilled one-time from RW in the
+  // 2026-06-23 reconcile. Distinct from `code` (HQ's descriptive unique
+  // key) and `rwId` (RW InventoryId / master). Surfaces to the catalog
+  // since the catalog reads InventoryItem. Nullable: only MATCHED rows
+  // get one; never overwritten once set.
+  rwICode         String?             @map("rw_icode")
   description     String?
   dailyRate       Decimal             @default(0) @map("daily_rate") @db.Decimal(10, 2)
   weeklyRate      Decimal             @default(0) @map("weekly_rate") @db.Decimal(10, 2)
