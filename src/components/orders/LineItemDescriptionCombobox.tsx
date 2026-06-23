@@ -368,8 +368,13 @@ function LineItemDescriptionComboboxInner(
             width: 'max-content',
             maxWidth: '480px',
             zIndex: 60,
+            // Explicit SOLID fill (lt-card = #FFFFFF). The panel portals
+            // into <body>, floating over the line-item rows — it must be
+            // fully opaque so nothing behind it bleeds through. Inline so
+            // it can't resolve to a transparent/utility edge case.
+            backgroundColor: '#FFFFFF',
           }}
-          className="bg-lt-card border border-lt-hairline rounded shadow-lg max-h-72 overflow-auto"
+          className="bg-lt-card border border-lt-hairline rounded shadow-xl max-h-72 overflow-auto"
         >
           {results.map((r, idx) => (
             <li
@@ -382,8 +387,12 @@ function LineItemDescriptionComboboxInner(
                 pick(r)
                 onCommit?.()
               }}
+              // Each option keeps its own SOLID fill so the highlight /
+              // hover tint never blends with whatever sits behind the
+              // panel. No alpha (`/60`) — that's what let rows show
+              // through on hover.
               className={`flex items-start justify-between gap-3 px-3 py-2 text-sm cursor-pointer ${
-                idx === highlight ? 'bg-amber-50' : 'bg-lt-card hover:bg-lt-inner/60'
+                idx === highlight ? 'bg-amber-100' : 'bg-white hover:bg-lt-inner'
               }`}
             >
               <div className="flex-1 min-w-0">
