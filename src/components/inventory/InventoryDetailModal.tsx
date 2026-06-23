@@ -26,11 +26,13 @@
  */
 
 import { useEffect, useState } from 'react'
-
-const RESIZEABLE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif'
-const MAX_BYTES = 10 * 1024 * 1024
-const MAX_LONG_EDGE = 1600
+import {
+  resizeImage,
+  RESIZEABLE_MIME,
+  ACCEPT_IMAGE as ACCEPT,
+  MAX_IMAGE_BYTES as MAX_BYTES,
+  MAX_LONG_EDGE,
+} from '@/lib/inventory/resizeImage'
 
 export interface InventoryDetailItem {
   id: string
@@ -53,36 +55,6 @@ interface InventoryDetailModalProps {
   item: InventoryDetailItem | null
   onClose: () => void
   onSaved: () => void
-}
-
-async function resizeImage(file: File): Promise<Blob> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error('image decode failed'))
-      el.src = url
-    })
-    const { width, height } = img
-    const longEdge = Math.max(width, height)
-    const scale = longEdge > MAX_LONG_EDGE ? MAX_LONG_EDGE / longEdge : 1
-    const w = Math.round(width * scale)
-    const h = Math.round(height * scale)
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('canvas not available')
-    ctx.drawImage(img, 0, 0, w, h)
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
-    )
-    if (!blob) throw new Error('canvas export failed')
-    return blob
-  } finally {
-    URL.revokeObjectURL(url)
-  }
 }
 
 export function InventoryDetailModal({ open, item, onClose, onSaved }: InventoryDetailModalProps) {

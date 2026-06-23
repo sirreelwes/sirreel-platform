@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { AddItemModal } from "@/components/inventory/AddItemModal";
 import { InventoryDetailModal } from "@/components/inventory/InventoryDetailModal";
 
@@ -181,6 +182,12 @@ export default function InventoryPage() {
           </p>
         </div>
         <div className="flex gap-2">
+        <Link
+          href="/inventory/wizard"
+          className="px-4 py-2 text-sm font-medium rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white transition-colors"
+        >
+          Values &amp; Photos Wizard
+        </Link>
         <button
           onClick={() => setShowAdd(true)}
           className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors"
