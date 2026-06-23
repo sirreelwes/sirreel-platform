@@ -624,7 +624,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   <p className="text-[13.5px] text-[#5b554b] -mt-1 mb-3.5 max-w-[68ch]">
                     Pick a vehicle class and the window you need it. Reservation requests confirm availability for those dates and come back with a firm quote.
                   </p>
-                  <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+                  <VehicleRail>
                     {vehicles.map((v) => {
                       const slot = cartByItemId.get(v.id)
                       const windows = slot?.lines ?? []
@@ -652,7 +652,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                         />
                       )
                     })}
-                  </div>
+                  </VehicleRail>
                   {vehiclesError && (
                     <div className="mt-2 text-[11px] text-rose-700">
                       Couldn&rsquo;t load vehicles: {vehiclesError}
@@ -1000,6 +1000,55 @@ function ItemCard({
   )
 }
 
+// VehicleRail — single horizontal, pannable row of vehicle cards.
+//
+// Replaces the wrapping grid so the supply catalog below sits one row
+// higher and stays visible without scrolling past a tall grid. The rail
+// scrolls left↔right only (overflow-y hidden), so a vertical wheel/trackpad
+// gesture bubbles up to the page instead of being trapped here; horizontal
+// trackpad / shift-wheel pans the rail. Cream edge-fades cue that more
+// cards sit off-screen and fade in/out with scroll position; a slim gold
+// scrollbar reinforces it on browsers that render one.
+function VehicleRail({ children }: { children: React.ReactNode }) {
+  const railRef = useRef<HTMLDivElement>(null)
+  const [atStart, setAtStart] = useState(true)
+  const [atEnd, setAtEnd] = useState(true)
+  const sync = useCallback(() => {
+    const el = railRef.current
+    if (!el) return
+    const max = el.scrollWidth - el.clientWidth
+    setAtStart(el.scrollLeft <= 1)
+    setAtEnd(el.scrollLeft >= max - 1)
+  }, [])
+  useEffect(() => {
+    const el = railRef.current
+    if (!el) return
+    sync()
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [sync])
+  return (
+    <div className="relative">
+      <div
+        ref={railRef}
+        onScroll={sync}
+        className="flex gap-2 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:thin] [scrollbar-color:#c39a3f_transparent]"
+      >
+        {children}
+      </div>
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#f4f1ea] to-transparent transition-opacity duration-200 ${atStart ? 'opacity-0' : 'opacity-100'}`}
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#f4f1ea] to-transparent transition-opacity duration-200 ${atEnd ? 'opacity-0' : 'opacity-100'}`}
+      />
+    </div>
+  )
+}
+
 // VehicleCard — Featured section tile.
 //
 // Each existing window already in the cart for this vehicle renders
@@ -1050,7 +1099,7 @@ function VehicleCard({
 
   return (
     <div
-      className={`bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
+      className={`w-[210px] shrink-0 bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
         hasWindows ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
       }`}
     >
@@ -1059,19 +1108,19 @@ function VehicleCard({
         <img
           src={vehicle.photoUrl}
           alt={vehicle.name}
-          className="w-full h-[120px] object-cover bg-[#f0eadb]"
+          className="w-full h-[84px] object-cover bg-[#f0eadb]"
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-[120px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
+        <div className="w-full h-[84px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
           <svg width={42} height={42} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
             <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
           </svg>
         </div>
       )}
-      <div className="p-3 flex flex-col gap-2.5 flex-1">
+      <div className="p-2.5 flex flex-col gap-2 flex-1">
         <div className="min-w-0">
-          <div className="font-extrabold text-[15px] leading-[1.2] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <div className="font-extrabold text-[14px] leading-[1.2] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
             {vehicle.name}
           </div>
           {vehicle.subtitle && (
