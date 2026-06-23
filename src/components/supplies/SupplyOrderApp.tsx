@@ -1168,7 +1168,7 @@ function VehicleCard({
                       type="date"
                       value={w.pickupDate}
                       onChange={(e) => onSetWindowDates(w.cartLineId, e.target.value, w.returnDate)}
-                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-1.5 py-1 text-[11px] outline-none focus:border-[#0c0c0d] min-w-0"
                     />
                   </label>
                   <label className="flex flex-col">
@@ -1178,7 +1178,7 @@ function VehicleCard({
                       value={w.returnDate}
                       onChange={(e) => onSetWindowDates(w.cartLineId, w.pickupDate, e.target.value)}
                       min={w.pickupDate || undefined}
-                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                      className="border-[1.5px] border-[#cdc7b9] rounded-md px-1.5 py-1 text-[11px] outline-none focus:border-[#0c0c0d] min-w-0"
                     />
                   </label>
                 </div>
@@ -1211,7 +1211,7 @@ function VehicleCard({
                 type="date"
                 value={pickup}
                 onChange={(e) => setPickup(e.target.value)}
-                className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                className="border-[1.5px] border-[#cdc7b9] rounded-md px-1.5 py-1.5 text-[11px] outline-none focus:border-[#0c0c0d] min-w-0"
               />
             </label>
             <label className="flex flex-col">
@@ -1221,7 +1221,7 @@ function VehicleCard({
                 value={returnD}
                 onChange={(e) => setReturnD(e.target.value)}
                 min={pickup || undefined}
-                className="border-[1.5px] border-[#cdc7b9] rounded-md px-2 py-1.5 text-[12px] outline-none focus:border-[#0c0c0d] min-w-0"
+                className="border-[1.5px] border-[#cdc7b9] rounded-md px-1.5 py-1.5 text-[11px] outline-none focus:border-[#0c0c0d] min-w-0"
               />
             </label>
           </div>
