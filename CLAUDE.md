@@ -70,7 +70,7 @@ Use `python3 - << 'EOF'` heredoc syntax to avoid zsh parsing issues.
 
 ## Git
 - Identity set globally as Wes Bailey / wes@sirreel.com
-- Main branch: `main` (auto-deploys to Vercel)
+- Main branch: `main`. **Pushes to `main` auto-deploy to production** via the Vercel GitHub integration (project `sirreel-fleet` → `hq.sirreel.com`); other branches get preview deploys. Confirmed working — a `git push origin main` triggers the production build on its own. **Do NOT run `vercel deploy --prod`** (or any Vercel CLI deploy) — it's redundant and races the auto-deploy. Just push.
 - Don't commit `.bak.*` files (in .gitignore) or pulled schema reference files
 
 ## Things to Avoid
