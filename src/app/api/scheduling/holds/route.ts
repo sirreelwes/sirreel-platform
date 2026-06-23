@@ -23,6 +23,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { getServerSession } from 'next-auth'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
@@ -218,14 +219,7 @@ export async function POST(req: NextRequest) {
           resolvedJobId = existing.id
           resolvedJobName = existing.name
         } else if (wantsCreate) {
-          const lastJob = await tx.job.findFirst({
-            orderBy: { createdAt: 'desc' },
-            select: { jobCode: true },
-          })
-          const nextNum = lastJob
-            ? parseInt(lastJob.jobCode.replace('SR-JOB-', ''), 10) + 1
-            : 1
-          const jobCode = `SR-JOB-${String(nextNum).padStart(4, '0')}`
+          const jobCode = await nextJobCode(tx)
           const created = await tx.job.create({
             data: {
               jobCode,
@@ -310,8 +304,10 @@ export async function POST(req: NextRequest) {
       )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (attempt < 3 && /Unique constraint.*booking_number/i.test(msg)) {
-        // Retry with a fresh number — the count() result raced us.
+      // Retry on a unique-constraint race for either generated code
+      // (booking_number from count(), or job_code from a concurrent
+      // new-job hold) — the next pass recomputes both from a fresh read.
+      if (attempt < 3 && /Unique constraint/i.test(msg) && /(booking_number|job_code)/i.test(msg)) {
         continue
       }
       console.error('[scheduling/holds] create failed:', msg)

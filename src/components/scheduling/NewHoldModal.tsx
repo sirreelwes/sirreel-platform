@@ -225,9 +225,14 @@ export function NewHoldModal({
         setBufferWarning({ reason: json.reason, availability: json.availability })
         return
       }
-      setHardError(json.reason || json.error || `Request failed (${res.status})`)
+      // Surface the server's real reason (the holds route puts the
+      // underlying message in `detail`); never collapse to a generic
+      // "create failed". Modal stays open + button re-enables (finally).
+      setHardError(
+        `Couldn't create hold — ${json.detail || json.reason || json.error || `HTTP ${res.status}`}`,
+      )
     } catch (e) {
-      setHardError(e instanceof Error ? e.message : String(e))
+      setHardError(`Couldn't create hold — ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSubmitting(false)
     }

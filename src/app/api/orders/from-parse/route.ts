@@ -64,6 +64,7 @@ import { computeLineTotal } from '@/lib/orders/billing'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
+import { nextJobCode } from '@/lib/jobs/nextJobCode'
 
 export const dynamic = 'force-dynamic'
 
@@ -247,17 +248,9 @@ export async function POST(req: NextRequest) {
         jobId = job.id
       } else {
         if (!jobDecision.name?.trim()) throw new Error('new job name required')
-        // Same jobCode-bump pattern as POST /api/orders' inlineJob path.
-        // Race-prone but no worse than the existing flow; lives inside
-        // the tx so a failed Order rolls back the Job.
-        const lastJob = await tx.job.findFirst({
-          orderBy: { createdAt: 'desc' },
-          select: { jobCode: true },
-        })
-        const nextNum = lastJob
-          ? parseInt(lastJob.jobCode.replace('SR-JOB-', ''), 10) + 1
-          : 1
-        const jobCode = `SR-JOB-${String(nextNum).padStart(4, '0')}`
+        // Robust SR-JOB-NNNN generation (ignores malformed codes); lives
+        // inside the tx so a failed Order rolls back the Job.
+        const jobCode = await nextJobCode(tx)
         const created = await tx.job.create({
           data: {
             jobCode,

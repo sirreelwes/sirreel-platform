@@ -13,6 +13,7 @@ import type {
 } from '@prisma/client'
 import { derivePipelineColumn, type PipelineColumn } from '@/lib/sales/pipeline'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
+import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 
@@ -389,15 +390,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Generate next jobCode (SR-JOB-0001 pattern)
-    const lastJob = await prisma.job.findFirst({
-      orderBy: { createdAt: 'desc' },
-      select: { jobCode: true },
-    })
-    const nextNum = lastJob
-      ? parseInt(lastJob.jobCode.replace('SR-JOB-', ''), 10) + 1
-      : 1
-    const jobCode = `SR-JOB-${String(nextNum).padStart(4, '0')}`
+    // Generate next jobCode (SR-JOB-0001 pattern) — robust against
+    // malformed/non-matching codes; see nextJobCode for the why.
+    const jobCode = await nextJobCode(prisma)
 
     const job = await prisma.job.create({
       data: {
