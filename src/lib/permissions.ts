@@ -345,6 +345,7 @@ export function getNavSections(_input: UserRole | PermissionsUser): NavSection[]
     {
       label: 'Admin',
       items: [
+        { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },

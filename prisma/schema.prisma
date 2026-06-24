@@ -3344,6 +3344,8 @@ model Inquiry {
   // Order can satisfy at most one inquiry.
   convertedOrderId   String?       @unique @map("converted_order_id")
   convertedOrder     Order?        @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
+  // COIs dropped via the client upload link before a job exists.
+  coiChecks          CoiCheck[]    @relation("InquiryCoiChecks")
 
   sourceMetadata     Json?         @map("source_metadata")
 
@@ -3722,10 +3724,21 @@ model CoiCheck {
 
   jobId     String?  @map("job_id")
   companyId String?  @map("company_id")
+  // Client-facing COI upload (no-login tokenized drop): may carry a job,
+  // a company, an inquiry, or none of them (lands UNATTACHED for the team
+  // to assign later). All three nullable.
+  inquiryId String?  @map("inquiry_id")
 
-  uploadedById String @map("uploaded_by_id")
+  // Nullable: a no-login client upload has no HQ User behind it; internal
+  // uploads still set this.
+  uploadedById String? @map("uploaded_by_id")
+  // Provenance for client uploads (no User to attribute to).
+  source              String? @map("source") // CLIENT_UPLOAD | INTERNAL
+  clientUploaderName  String? @map("client_uploader_name")
+  clientUploaderEmail String? @map("client_uploader_email")
 
-  aiResponse       Json    @map("ai_response")
+  // Nullable: client uploads skip AI review; the team runs it later.
+  aiResponse       Json?   @map("ai_response")
   aiRiskLevel      String? @map("ai_risk_level")
   aiRecommendation String? @map("ai_recommendation")
 
@@ -3745,7 +3758,8 @@ model CoiCheck {
 
   job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
   company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  uploadedBy      User     @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
+  inquiry         Inquiry? @relation("InquiryCoiChecks", fields: [inquiryId], references: [id], onDelete: SetNull)
+  uploadedBy      User?    @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
   humanDecisionBy User?    @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
   // Phase 5 commit 4 — claims that reference this COI as the policy
   // they were filed against.
@@ -3753,6 +3767,7 @@ model CoiCheck {
 
   @@index([jobId])
   @@index([companyId])
+  @@index([inquiryId])
   @@index([uploadedById])
   @@index([deletedAt])
   @@index([createdAt])
