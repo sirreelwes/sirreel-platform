@@ -5,18 +5,32 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavItems, getNavSections, isSalesRole } from '@/lib/permissions';
+import { getPermissions, getNavSections, isSalesRole } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 import { QuickCreateMenu } from '@/components/shell/QuickCreateMenu';
 import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
+import {
+  TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
+  PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
+  AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
+  CalendarClock, IdCard, Circle, type LucideIcon,
+} from 'lucide-react';
+
+// Maps the `icon` name carried by each NavItem to its lucide component.
+const NAV_ICONS: Record<string, LucideIcon> = {
+  TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
+  PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
+  AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
+  CalendarClock, IdCard,
+};
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:      'Admin',
   MANAGER:    'Manager',
   AGENT:      'Sales',
   FLEET_TECH: 'Fleet',
-  DISPATCHER: 'Dispatch',
+  DISPATCHER: 'Deliveries & Pickups',
   DRIVER:     'Driver',
   CLIENT:     'Client',
 };
@@ -35,14 +49,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (saved) setViewAsRole(saved as UserRole);
     }
   }, []);
-  const [adminOpen, setAdminOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const p = window.location.pathname;
-      return ['/inventory','/crm','/sub-rentals','/maintenance','/tools/','/claims','/incidents','/reporting','/scheduling','/stale-holds','/hr'].some(a => p.startsWith(a));
-    }
-    return false;
-  });
-
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -90,8 +96,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // the HR API is the actual authorization gate.
   const permsUser = { role, salesOnly, email: user.email as string | undefined };
   const perms = getPermissions(permsUser);
-  const navItems = getNavItems(permsUser);
-  const activeNav = navItems.find((n) => pathname.startsWith(n.href))?.id || 'dashboard';
+  const sections = getNavSections(permsUser);
+  // Longest-prefix match → the most specific route wins (so
+  // /fleet/guest-drivers highlights Guest Drivers, not Fleet). Items that
+  // share an href — the cross-listed Deliveries & Pickups — all light up
+  // together by design.
+  const activeHref =
+    sections
+      .flatMap((s) => s.items.map((i) => i.href))
+      .filter((h) => pathname === h || pathname.startsWith(h + '/'))
+      .sort((a, b) => b.length - a.length)[0] ?? null;
 
   // Sales agents work primarily from /sales/pipeline — Dashboard isn't
   // in their nav, and `/` redirects to /dashboard by default. Bounce
@@ -108,100 +122,85 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F6F3]">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col shadow-sm">
-        {/* Logo */}
-        <div className="px-4 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2.5">
-            <img src="/s-logo.jpg" alt="SirReel" className="w-8 h-8 rounded-lg object-cover" />
-            <div>
-              <div className="font-bold text-sm text-gray-900 tracking-tight">SirReel</div>
-              <div className="text-[8px] font-semibold text-gray-400 tracking-[0.15em] uppercase">SirReel HQ</div>
+      <aside className="w-60 flex-shrink-0 bg-[#0b1f3a] text-slate-200 flex flex-col">
+        {/* Brand — recolorable inline 'S' monogram (currentColor → gold) */}
+        <div className="px-4 py-4 border-b border-white/10">
+          <Link href="/" className="flex items-center gap-2.5">
+            <svg viewBox="0 0 32 32" className="w-9 h-9 text-[#c9a24b] flex-shrink-0" aria-hidden="true">
+              <rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor" opacity="0.16" />
+              <rect x="1" y="1" width="30" height="30" rx="9" fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
+              <text x="16" y="23" textAnchor="middle" fontSize="20" fontWeight="800" fill="currentColor" fontFamily="ui-sans-serif, system-ui, -apple-system, sans-serif">S</text>
+            </svg>
+            <div className="leading-tight">
+              <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
+              <div className="text-[8px] font-semibold text-[#c9a24b]/80 tracking-[0.22em] uppercase">SirReel HQ</div>
             </div>
-          </div>
+          </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-3 overflow-y-auto px-2">
-          {getNavSections(permsUser).map((section, si) => (
-            <div key={si}>
-              {section.label ? (
-                <>
-                  {/* Section header row. Layout: [collapsible toggle button (flex-1)]
-                      [optional Admin-only health dot]. The dot is a separate Link
-                      (Click → /admin/health) and sits outside the toggle button
-                      so we don't nest an <a> inside a <button>. Dot visibility is
-                      double-gated: the section must be "Admin", and the operator's
-                      effective role (post view-as) must be ADMIN. */}
-                  <div className="flex items-center mt-3 mb-0.5 pr-1">
-                    <button
-                      onClick={() => setAdminOpen(!adminOpen)}
-                      className="flex-1 flex items-center justify-between px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
-                    >
-                      <span>{section.label}</span>
-                      <span className={`text-[10px] transition-transform ${adminOpen ? 'rotate-90' : ''}`}>&#9654;</span>
-                    </button>
-                    {section.label === 'Admin' && role === UserRole.ADMIN && (
-                      <AdminHealthDot />
+        {/* Navigation — fixed groups, always expanded (no collapse). The
+            body scrolls vertically if the full list runs past the viewport. */}
+        <nav className="flex-1 py-2 overflow-y-auto px-2">
+          {sections.map((section, si) => (
+            <div key={si} className={si === 0 ? 'mt-1' : 'mt-4'}>
+              {/* Static section divider — NOT a toggle. */}
+              <div className="flex items-center justify-between px-3 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a24b]/75">
+                  {section.label}
+                </span>
+                {section.label === 'Admin' && role === UserRole.ADMIN && <AdminHealthDot />}
+              </div>
+              {section.items.map((item) => {
+                const Icon = NAV_ICONS[item.icon] ?? Circle;
+                const isActive = item.href === activeHref;
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg text-[13px] mb-0.5 transition-all duration-150 ${
+                      isActive
+                        ? 'bg-[#c9a24b] text-[#0b1f3a] font-semibold shadow-sm'
+                        : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'
+                    }`}
+                  >
+                    {/* Left accent bar on the active route. */}
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#0b1f3a]" />
                     )}
-                  </div>
-                  {adminOpen && section.items.map((item) => {
-                    const isActive = activeNav === item.id;
-                    return (
-                      <Link
-                        key={item.id}
-                        href={item.href}
-                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] mb-0.5 transition-all ${
-                          isActive
-                            ? 'bg-gray-900 text-white font-semibold'
-                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-                        }`}
-                      >
-                        <span className="text-[13px] font-medium">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </>
-              ) : (
-                section.items.map((item) => {
-                  const isActive = activeNav === item.id;
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] mb-0.5 transition-all ${
-                        isActive
-                          ? 'bg-gray-900 text-white font-semibold'
-                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                    <Icon
+                      size={16}
+                      strokeWidth={2.1}
+                      className={`flex-shrink-0 ${
+                        isActive ? 'text-[#0b1f3a]' : 'text-slate-400 group-hover:text-[#c9a24b] transition-colors'
                       }`}
-                    >
-                      <span className="text-[13px] font-medium">{item.label}</span>
-                    </Link>
-                  );
-                })
-              )}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
             </div>
           ))}
         </nav>
 
         {/* User section */}
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-white/10 p-3">
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(v => !v)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-gray-100 transition-colors"
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/[0.07] transition-colors"
             >
               {user.image ? (
                 <img src={user.image} alt={user.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[11px] font-bold text-gray-600 flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-[#c9a24b] flex items-center justify-center text-[11px] font-bold text-[#0b1f3a] flex-shrink-0">
                   {initials}
                 </div>
               )}
               <div className="text-left flex-1 min-w-0">
-                <div className="text-[12px] font-semibold text-gray-900 truncate">{user.name}</div>
-                <div className="text-[10px] text-gray-400">{ROLE_LABELS[role] || role}</div>
+                <div className="text-[12px] font-semibold text-white truncate">{user.name}</div>
+                <div className="text-[10px] text-[#c9a24b]/80 truncate">{ROLE_LABELS[role] || role}</div>
               </div>
-              <span className="text-[9px] text-gray-400">▼</span>
+              <span className="text-[9px] text-slate-400">▼</span>
             </button>
 
             {showUserMenu && (
@@ -232,7 +231,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <option value="">Admin (default)</option>
                       <option value="MANAGER">Manager</option>
                       <option value="AGENT">Sales Agent</option>
-                      <option value="DISPATCHER">Dispatcher</option>
+                      <option value="DISPATCHER">Deliveries &amp; Pickups</option>
                       <option value="FLEET_TECH">Fleet Tech</option>
                       <option value="DRIVER">Driver</option>
                       <option value="CLIENT">Client</option>

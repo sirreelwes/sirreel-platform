@@ -33,6 +33,7 @@
     "googleapis": "^144.0.0",
     "handlebars": "^4.7.9",
     "html-to-text": "^10.0.0",
+    "lucide-react": "^1.21.0",
     "next": "14.2.20",
     "next-auth": "^4.24.13",
     "pizzip": "^3.2.0",

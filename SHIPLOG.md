@@ -2,6 +2,10 @@
 
 Append-only record of shipped changes. Newest at top. Each entry: SHA, commit subject, why-it-matters one-liner.
 
+## 2026-06-24
+
+- `sidebar-ia-restyle` — restructured the dashboard sidebar into fixed, always-visible groups (Sales & Ops · Fleet · Warehouse · Claims · COO · Admin) with a bold navy/gold treatment: recolorable inline 'S' brand monogram (currentColor→gold), a lucide-react icon per item, small-caps letter-spaced section dividers (static, NOT toggles — removed the old collapsible Admin behavior), and a strong active state (gold-filled row + navy left accent bar). "Dispatch" renamed to "Deliveries & Pickups" everywhere (nav + /dispatch page H1 + DISPATCHER role label) — same route/data; it's cross-listed in BOTH Sales & Ops and Fleet (one shared tool, highlights in both when active via longest-prefix match). New **Guest Drivers** nav entry + stub page (`/fleet/guest-drivers`, "coming soon" — no schema/persistence). IA is now identical for all users (visual + IA only, no role-gating; pages keep their own auth). Added `lucide-react`. `npx tsc --noEmit` clean.
+
 ## 2026-06-23
 
 - `vehicle-rail` — on the /order/supplies form, the "Reserve Vehicles" cards are now a single horizontal, pannable row (new `VehicleRail`: `overflow-x:auto; overflow-y:hidden` so vertical wheel bubbles to the page — no scroll trap) instead of a wrapping `minmax(260px,1fr)` grid. Cards compacted ~30%% (width 260→210, image 120→84, p-3→p-2.5, name 15→14) keeping image/name/rate/reserve-form legible. Cream edge-fades (left when scrolled, right when more off-screen) + slim gold scrollbar cue off-screen cards; brand navy/gold + Archivo tokens kept. Catalog/line-items below now sits a row higher. `npx tsc --noEmit` clean.

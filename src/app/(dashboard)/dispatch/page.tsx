@@ -199,7 +199,7 @@ export default function DispatchPage() {
       <div className="max-w-7xl mx-auto">
       <header className="flex items-baseline justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-lt-fg">Dispatch</h1>
+          <h1 className="text-2xl font-semibold text-lt-fg">Deliveries &amp; Pickups</h1>
           <p className="text-sm text-lt-fg2 mt-0.5">
             As of {fmtDate(data.asOfDate)} · horizon {data.horizonDays} day{data.horizonDays === 1 ? '' : 's'}
           </p>

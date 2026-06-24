@@ -1,5 +1,4 @@
 import { UserRole } from '@prisma/client';
-import { isAllowedHrEmail } from '@/lib/hr/allowlist';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
@@ -286,138 +285,73 @@ export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   return '/dashboard';
 }
 
-export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
-  const user: PermissionsUser =
-    typeof input === 'string' ? { role: input, salesOnly: false } : input;
-  const perms = getPermissions(user);
-  const sections: NavSection[] = [];
-  const sales = isSalesRole(user.role);
-  const salesOnly = user.salesOnly;
-
-  // Main — daily operations. Sales agents get Pipeline at the top and
-  // no Dashboard item; everyone else keeps the historical ordering.
-  const main: NavItem[] = [];
-  if (sales && perms.pipeline) {
-    main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
-    // Reservations directly under Pipeline for the whole sales team
-    // (incl. salesOnly accounts). The shared schedule view is a sales
-    // reference while quoting; the non-sales push below stays gated.
-    if (perms.calendar || perms.gantt) {
-      main.push({ id: 'schedule', label: SCHEDULE_LABEL, icon: '', href: '/gantt' });
-    }
-  }
-  if (!sales) {
-    main.push({ id: 'dashboard', label: 'Dashboard', icon: '', href: '/dashboard' });
-  }
-  // Phase 7 consolidation — Calendar + Timeline collapsed into a
-  // single "Schedule" nav entry landing on /gantt. Both pages still
-  // exist as routes and read the same /api/timeline-native data; the
-  // pages cross-link via an in-page view-toggle so the operator can
-  // flip between month-view and gantt-view without two tabs. Sales
-  // roles get this above (directly under Pipeline); this push is for
-  // everyone else, still hidden for salesOnly non-sales edge cases.
-  if ((perms.calendar || perms.gantt) && !salesOnly && !sales) {
-    main.push({ id: 'schedule', label: SCHEDULE_LABEL, icon: '', href: '/gantt' });
-  }
-  if (perms.bookings) main.push({ id: 'jobs', label: 'Jobs', icon: '', href: '/jobs' });
-  // Phase 7 consolidation — /bookings retired. Page was titled
-  // "Jobs" but read Booking rows (~89/105 Planyo backfill) with
-  // zero linkage to the Phase 1 Order/Job spine. Booking model
-  // stays — used by scheduling, portal flows, claims, etc. The
-  // page + its admin endpoints were removed; deep-linking /bookings
-  // now 404s.
-  if (!sales && perms.pipeline) {
-    main.push({ id: 'pipeline', label: 'Pipeline', icon: '', href: '/sales/pipeline' });
-  }
-  // Phase 6.5b — Inquiries folded into the Sales Pipeline as its
-  // "New inbound" first column. The /inquiries route stays
-  // accessible by deep-link (and the detail page /inquiries/[id]
-  // remains canonical for triage), but the standalone tab goes
-  // away for everyone — agents triage on the Pipeline now.
-  if (perms.seePricing) main.push({ id: 'orders', label: 'Orders', icon: '', href: '/orders' });
-  // Sales agents get Inventory in the MAIN nav (catalog/stock + pricing
-  // reference while building quotes — requested 2026-06-23). ADMIN/MANAGER
-  // keep it under the Admin section below; mirrors the Clients split so
-  // there's no double-entry. The /inventory page already allows any
-  // authenticated user, so this is purely a nav-visibility change.
-  if (sales) main.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
-  if (perms.fleet) main.push({ id: 'fleet', label: 'Fleet', icon: '', href: '/fleet' });
-  // /dispatch now owns the staff dispatch board (Phase 4). The legacy
-  // RentalWorks-linkage tool was relocated to /dispatch/rentalworks
-  // and reached from the Admin section below.
-  if (perms.dispatch) main.push({ id: 'dispatch', label: 'Dispatch', icon: '', href: '/dispatch' });
-  if (perms.coverage) main.push({ id: 'coverage', label: 'Coverage', icon: '', href: '/exec/coverage' });
-  // Sales role gets Clients in the main nav (after Orders), flat —
-  // no Admin group for AGENTs. Non-sales roles still get Clients
-  // under the Admin section below (unchanged). The `perms.crm` gate
-  // matches the historical behavior for who sees Clients at all.
-  if (perms.crm && sales) main.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  sections.push({ label: null, items: main });
-
-  // Warehouse — picking floor. Phase 2 ships /warehouse/pick; future
-  // surfaces (receiving, cycle counts) join the same section.
-  const warehouse: NavItem[] = [];
-  if (perms.warehouse) warehouse.push({ id: 'warehouse-pick', label: 'Pick', icon: '', href: '/warehouse/pick' });
-  if (warehouse.length > 0) sections.push({ label: 'Warehouse', items: warehouse });
-
-  // Admin — management & configuration. SalesOnly users keep only
-  // Clients (CRM). Operational tooling (Inventory, Sub-Rentals,
-  // Maintenance, COI Check, Contract Review, Contract History,
-  // Scheduling, RW Linkage) drops.
-  const admin: NavItem[] = [];
-  // Phase 7 — Inventory gated to ADMIN/MANAGER (catalog admin is
-  // ops/management, not sales/billing). Can't anchor on seePricing
-  // because that perm also gates Orders, which AGENTs need.
-  const isAdminOrManager = user.role === UserRole.ADMIN || user.role === UserRole.MANAGER;
-  if (isAdminOrManager) admin.push({ id: 'inventory', label: 'Inventory', icon: '', href: '/inventory' });
-  if (user.role === UserRole.ADMIN) admin.push({ id: 'locations', label: 'Locations', icon: '', href: '/admin/locations' });
-  // Health surface — admin-only. The sidebar's always-visible health
-  // roll-up dot links here too; this nav entry is the canonical
-  // navigation path for non-status traffic (history, manual probe).
-  if (user.role === UserRole.ADMIN) admin.push({ id: 'health', label: 'Health', icon: '', href: '/admin/health' });
-  // `!sales` guard prevents AGENT from getting Clients in BOTH main
-  // (pushed above) and admin. Other roles unchanged: ADMIN, MANAGER,
-  // FLEET_TECH keep Clients under the Admin section as today.
-  if (perms.crm && !sales) admin.push({ id: 'crm', label: 'Clients', icon: '', href: '/crm' });
-  // Sub-rentals — internal-only equipment sourced from partner vendors.
-  // Gated on Permissions.subRentals (AGENT + MANAGER + ADMIN in Phase
-  // 1). The page renders the returns board in Phase 3; today it just
-  // lists the GET /api/sub-rentals payload.
-  if (perms.subRentals) admin.push({ id: 'sub-rentals', label: 'Sub-rentals', icon: '', href: '/sub-rentals' });
-  if (perms.maintenance && !salesOnly) admin.push({ id: 'maintenance', label: 'Maintenance', icon: '', href: '/maintenance' });
-  // Phase 7 consolidation — three paperwork tools (COI Check,
-  // Contract Review, Contract History) collapsed into one nav
-  // entry landing on a picker page at /admin/paperwork. The
-  // individual /tools/* + /admin/contract-review/history routes
-  // stay accessible and are linked from the picker.
-  // Gated to ADMIN/MANAGER — bookings perm also drives Jobs in
-  // main nav, which AGENT needs; can't share that gate here.
-  if (isAdminOrManager) admin.push({ id: 'paperwork', label: 'Paperwork tools', icon: '', href: '/admin/paperwork' });
-  // Sales-role exclusion (`!sales`) added to keep the Reservations
-  // nav entry as the operator-facing schedule surface for AGENTs.
-  // /scheduling stays reachable by deep link for any old bookmarks.
-  if (perms.bookings && !salesOnly && !sales) admin.push({ id: 'scheduling', label: 'Scheduling', icon: '', href: '/scheduling' });
-  // Phase 7 consolidation — RW Linkage nav entry dropped.
-  // RentalWorks billing was off-ramped in Phase 5. The route
-  // /dispatch/rentalworks stays accessible by deep-link for any
-  // straggler legacy reconciliation work, just not surfaced in nav.
-  // Phase Incidents — nav label renamed Claims → Incidents. The
-  // /claims route stays alive (redirects to /incidents); deep links
-  // to /claims/[id] keep resolving against the claim detail page.
-  // claims-perm gates incidents identically — the same people who see
-  // claims today see incidents tomorrow.
-  if (perms.claims) admin.push({ id: 'incidents', label: 'Incidents', icon: '', href: '/incidents' });
-  if (perms.reporting) admin.push({ id: 'reporting', label: 'Reporting', icon: '', href: '/reporting' });
-  // HR nav entry. Gated on the hardcoded allowlist (Wes + Dani) +
-  // HR_ALLOWLIST env override — NOT on role. Other ADMINs see no HR
-  // entry. Cosmetic only; the page + every HR API route does its own
-  // requireHrAccess() check so a bypass here would still 403.
-  if (user.email && isAllowedHrEmail(user.email)) {
-    admin.push({ id: 'hr', label: 'HR', icon: '', href: '/hr' });
-  }
-  if (admin.length > 0) sections.push({ label: 'Admin', items: admin });
-
-  return sections;
+export function getNavSections(_input: UserRole | PermissionsUser): NavSection[] {
+  // Fixed information architecture — identical for every user. This is a
+  // visual + IA surface only; pages enforce their own authorization, so
+  // there is intentionally NO role-gating here (every tab is visible to
+  // all). Groups are always expanded (the layout renders static section
+  // headers, no collapse). `icon` carries a lucide-react component name
+  // resolved in the layout.
+  //
+  // Deliveries & Pickups (/dispatch) is CROSS-LISTED in both Sales & Ops
+  // and Fleet on purpose — one shared tool (Sales enters what/where/when,
+  // Fleet assigns driver + vehicle). Same href, highlighted in both when
+  // active. Not a duplicate route.
+  return [
+    {
+      label: 'Sales & Ops',
+      items: [
+        { id: 'pipeline', label: 'Pipeline', icon: 'TrendingUp', href: '/sales/pipeline' },
+        { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+        { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+        { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+        { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+        { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+        { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
+        { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+        { id: 'paperwork', label: 'Paperwork tools', icon: 'FileSignature', href: '/admin/paperwork' },
+      ],
+    },
+    {
+      label: 'Fleet',
+      items: [
+        // Cross-listed — SAME route as Sales & Ops above.
+        { id: 'dispatch-fleet', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
+        { id: 'fleet', label: 'Fleet', icon: 'Car', href: '/fleet' },
+        { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
+        { id: 'guest-drivers', label: 'Guest Drivers', icon: 'UserPlus', href: '/fleet/guest-drivers' },
+      ],
+    },
+    {
+      label: 'Warehouse',
+      items: [
+        { id: 'warehouse-pick', label: 'Pick', icon: 'ClipboardList', href: '/warehouse/pick' },
+      ],
+    },
+    {
+      label: 'Claims',
+      items: [
+        { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
+      ],
+    },
+    {
+      label: 'COO',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
+        { id: 'coverage', label: 'Coverage', icon: 'Radar', href: '/exec/coverage' },
+        { id: 'reporting', label: 'Reporting', icon: 'BarChart3', href: '/reporting' },
+      ],
+    },
+    {
+      label: 'Admin',
+      items: [
+        { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
+        { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
+        { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
+        { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
+      ],
+    },
+  ];
 }
 
 // Redact client name for fleet/warehouse roles
