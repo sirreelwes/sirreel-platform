@@ -41,24 +41,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const q = (searchParams.get('q') || '').trim()
 
+  // Visibility gate is always enforced server-side — only client-orderable
+  // items (publicVisible + active + categorized) are ever returned, so an
+  // alias can never surface an internal-only item.
   const where: Record<string, unknown> = {
     publicVisible: true,
     isActive: true,
     categoryId: { not: null },
   }
-  if (q) {
-    where.OR = [
-      { description: { contains: q, mode: 'insensitive' } },
-      { code: { contains: q, mode: 'insensitive' } },
-      { aliases: { has: q.toLowerCase() } },
-    ]
-  }
 
-  const items = await prisma.inventoryItem.findMany({
+  const rows = await prisma.inventoryItem.findMany({
     where,
     select: {
       id: true,
+      code: true,
       description: true,
+      aliases: true,
       dailyRate: true,
       type: true,
       category: {
@@ -70,6 +68,21 @@ export async function GET(req: NextRequest) {
       { description: 'asc' },
     ],
   })
+
+  // Case-insensitive PARTIAL (substring) match across name + aliases +
+  // category. Filtered in-process because Postgres/Prisma can't substring-
+  // match an element inside a String[] (`has` is exact-element only); the
+  // client catalog is ~194 rows so this is trivial. No query → return all.
+  const ql = q.toLowerCase()
+  const items = q
+    ? rows.filter(
+        (it) =>
+          (it.description ?? '').toLowerCase().includes(ql) ||
+          (it.code ?? '').toLowerCase().includes(ql) ||
+          (it.category?.name ?? '').toLowerCase().includes(ql) ||
+          it.aliases.some((a) => a.toLowerCase().includes(ql)),
+      )
+    : rows
 
   // Group by category. Items with a NULL category were excluded
   // server-side by the where clause; the `if (!it.category)` guard

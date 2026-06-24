@@ -28,6 +28,7 @@ export interface DrawerItem {
   id: string
   code: string
   description: string | null
+  aliases?: string[] | null
   dailyRate: string
   weeklyRate: string
   qtyOwned: number
@@ -70,6 +71,9 @@ export function InventoryItemDrawer({
   const [locationId, setLocationId] = useState('')
   const [preferredVendorId, setPreferredVendorId] = useState('')
   const [vendorItemUrl, setVendorItemUrl] = useState('')
+  // Client-facing search aliases — comma-separated in the editor, stored
+  // as a normalized String[] on the item. Internal-only surface.
+  const [aliasesInput, setAliasesInput] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
 
   const [vendors, setVendors] = useState<VendorOption[]>([])
@@ -99,6 +103,7 @@ export function InventoryItemDrawer({
     setLocationId(item.locationRef?.id ?? '')
     setPreferredVendorId(item.preferredVendorId ?? '')
     setVendorItemUrl(item.vendorItemUrl ?? '')
+    setAliasesInput((item.aliases ?? []).join(', '))
     setImageUrl(item.imageUrl)
     setError('')
     setConfirmText('')
@@ -149,6 +154,7 @@ export function InventoryItemDrawer({
         locationId: locationId || null,
         preferredVendorId: preferredVendorId || null,
         vendorItemUrl: vendorItemUrl.trim() || null,
+        aliases: aliasesInput.split(',').map((s) => s.trim()).filter(Boolean),
       })
       onSaved()
       onClose()
@@ -317,6 +323,19 @@ export function InventoryItemDrawer({
           <div>
             <label className={label}>Name</label>
             <input className={field} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={item.code} />
+          </div>
+
+          <div>
+            <label className={label}>Client search aliases</label>
+            <input
+              className={field}
+              value={aliasesInput}
+              onChange={(e) => setAliasesInput(e.target.value)}
+              placeholder="walkies, walkie, handheld"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">
+              Comma-separated informal terms clients search by. Matched on the order form; never shown as the item name.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

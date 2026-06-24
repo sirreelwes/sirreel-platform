@@ -46,9 +46,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
     preferredVendorId,
     vendorItemUrl,
     isActive,
+    aliases,
   } = body;
 
   const data: Record<string, unknown> = {};
+  // Client-facing search aliases (informal synonyms — "walkies", "earpiece").
+  // Normalize to trimmed, lowercased, de-duped tokens so the order-form
+  // search (which lowercases the query) matches consistently.
+  if (aliases !== undefined) {
+    data.aliases = Array.isArray(aliases)
+      ? [...new Set(aliases.map((a: unknown) => String(a).trim().toLowerCase()).filter(Boolean))]
+      : [];
+  }
   if (dailyRate !== undefined) data.dailyRate = parseFloat(dailyRate) || 0;
   if (weeklyRate !== undefined) data.weeklyRate = parseFloat(weeklyRate) || 0;
   if (qtyOwned !== undefined) data.qtyOwned = parseInt(qtyOwned) || 0;
