@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
+import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -421,6 +422,7 @@ export default function JobDetailPage() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+            <CopyCoiLinkButton jobId={job.id} variant="dark" />
           </div>
         </div>
 

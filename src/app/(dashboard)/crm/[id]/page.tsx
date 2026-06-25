@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
+import { CopyCoiLinkButton } from "@/components/coi/CopyCoiLinkButton";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -627,6 +628,7 @@ export default function CompanyDetailPage() {
               </div>
               <div className="text-right flex flex-col items-end gap-2">
                 <div className="flex gap-2">
+                  <CopyCoiLinkButton companyId={company.id} />
                   <button
                     onClick={() => setShowLogOutreach(true)}
                     className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded"
