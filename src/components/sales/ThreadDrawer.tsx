@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FormTypeBadge, type FormType } from './FormTypeBadge';
+import { QuickReplyModal } from './QuickReplyModal';
 
 interface ExtractedMessage {
   contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
@@ -260,6 +261,7 @@ export function ThreadDrawer(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
+  const [showQuickReply, setShowQuickReply] = useState(false);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -686,6 +688,14 @@ export function ThreadDrawer(props: Props) {
                   {busy ? 'Capturing…' : dismissed ? 'Dismissed' : 'Capture & Quote'}
                 </button>
                 <button
+                  onClick={() => setShowQuickReply(true)}
+                  disabled={busy || (data?.messages?.length ?? 0) === 0}
+                  className="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-blue-300 text-white text-[12px] font-bold"
+                  title="Confirm availability and reply — no quote yet"
+                >
+                  Quick Reply
+                </button>
+                <button
                   onClick={() => emailId && props.mode !== 'followup' && props.onDismiss?.(emailId)}
                   disabled={props.mode === 'followup' || !props.onDismiss || busy || dismissed}
                   className="px-4 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-[12px] font-semibold hover:bg-gray-200 disabled:opacity-50"
@@ -751,6 +761,17 @@ export function ThreadDrawer(props: Props) {
           </div>
         )}
       </div>
+
+      {showQuickReply && (
+        <QuickReplyModal
+          emailText={(data?.messages || [])
+            .map((m) => `── ${m.sentAt} · ${(m.direction || '').toUpperCase()} · ${m.fromAddress}\nSubject: ${m.subject}\n${m.bodyText || m.snippet || ''}`)
+            .join('\n\n')}
+          defaultRecipientEmail={data?.messages?.[0]?.fromAddress ?? null}
+          onClose={() => setShowQuickReply(false)}
+          onSent={() => setShowQuickReply(false)}
+        />
+      )}
     </>
   );
 }

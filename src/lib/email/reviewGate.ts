@@ -28,6 +28,7 @@ const REVIEW_REQUIRED: Record<EmailReviewKind, boolean> = {
   quote: true,
   'followup-order': true,
   'followup-job': true,
+  'quick-reply': true,
 }
 
 export function shouldReview(kind: EmailReviewKind): boolean {

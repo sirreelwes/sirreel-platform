@@ -79,6 +79,16 @@ interface CompositionOk {
   isResend?: boolean;
 }
 
+export interface QuickReplyPayload {
+  recipientEmail: string;
+  recipientName: string | null;
+  clientName: string | null;
+  jobName: string | null;
+  pickup: string | null;
+  return: string | null;
+  categories: { id: string; name: string; quantity: number }[];
+}
+
 export type EmailReviewTarget =
   | { kind: 'quote'; orderId: string; message?: string | null }
   | {
@@ -87,7 +97,8 @@ export type EmailReviewTarget =
       stage?: 'STAGE_1' | 'STAGE_2' | 'STAGE_3' | null;
       message?: string | null;
     }
-  | { kind: 'followup-job'; jobId: string; message?: string | null };
+  | { kind: 'followup-job'; jobId: string; message?: string | null }
+  | { kind: 'quick-reply'; payload: QuickReplyPayload; message?: string | null };
 
 interface Props {
   target: EmailReviewTarget | null;
@@ -123,6 +134,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         send: `/api/jobs/${target.jobId}/follow-ups/send`,
         titleKind: 'Follow-up email',
       };
+    case 'quick-reply':
+      return {
+        preview: `/api/sales/quick-reply/preview`,
+        send: `/api/sales/quick-reply/send`,
+        titleKind: 'Quick reply',
+      };
   }
 }
 
@@ -140,6 +157,9 @@ function buildPreviewBody(
   const finalNote = customNote.trim() || (('message' in target && target.message) || '');
   if (finalNote) base.message = finalNote;
   if (target.kind === 'followup-order' && target.stage) base.stage = target.stage;
+  // Quick Reply has no order/job to key off — it carries its parsed payload
+  // (recipient, client/job, dates, requested categories) through the body.
+  if (target.kind === 'quick-reply') base.payload = target.payload;
   return base;
 }
 

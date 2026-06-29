@@ -1,0 +1,231 @@
+'use client';
+
+/**
+ * Quick Reply — a fast availability-confirmation reply for an inbound client
+ * email asking to hold trucks/supplies before a firm quote.
+ *
+ * Reuses the Capture & Quote spine end-to-end:
+ *   1. parse the email via the SAME parser (POST /api/orders/parse-quote)
+ *   2. real per-category availability (POST /api/sales/quick-reply/availability
+ *      → getCategoryAvailability) — the reply text is built FROM these numbers
+ *   3. optional soft holds via the SAME hold path (POST /api/scheduling/holds)
+ *   4. review + send through the SAME gate (EmailReviewModal) — nothing auto-sends
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
+
+interface MatchedProduct { id: string; type: string; name: string }
+interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
+interface Cat { id: string; name: string; quantity: number }
+interface Line { id: string; name: string; requested: number; availableToHold: number; serviceableCount: number; status: 'available' | 'tight' | 'short' }
+
+interface Props {
+  emailText: string;
+  defaultRecipientEmail?: string | null;
+  defaultRecipientName?: string | null;
+  onClose: () => void;
+  onSent?: () => void;
+}
+
+const STATUS_PILL: Record<Line['status'], string> = {
+  available: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  tight: 'bg-amber-50 text-amber-800 border-amber-200',
+  short: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+const STATUS_LABEL: Record<Line['status'], string> = { available: 'Available', tight: 'Tight', short: 'Spoken for' };
+
+export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecipientName, onClose, onSent }: Props) {
+  const [phase, setPhase] = useState<'parsing' | 'ready' | 'error'>('parsing');
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const [clientName, setClientName] = useState<string | null>(null);
+  const [jobName, setJobName] = useState<string | null>(null);
+  const [pickup, setPickup] = useState<string | null>(null);
+  const [ret, setRet] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState<string | null>(null);
+  const [recipientName, setRecipientName] = useState<string | null>(null);
+  const [cats, setCats] = useState<Cat[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [holdable, setHoldable] = useState<{ companyId: string; personId: string } | null>(null);
+
+  const [softHold, setSoftHold] = useState(true);
+  const [holdStatus, setHoldStatus] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<EmailReviewTarget | null>(null);
+
+  const run = useCallback(async () => {
+    setPhase('parsing');
+    setErrMsg(null);
+    try {
+      const pr = await fetch('/api/orders/parse-quote', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: emailText }),
+      });
+      const pj = await pr.json();
+      if (!pr.ok) throw new Error(pj.error || `Parse failed (${pr.status})`);
+
+      const parsed = pj.parsed || {};
+      const items: ParsedItem[] = Array.isArray(pj.items) ? pj.items : [];
+      const assetCats: Cat[] = items
+        .filter((i) => i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct)
+        .map((i) => ({ id: i.matchedProduct!.id, name: i.matchedProduct!.name, quantity: Math.max(1, Math.floor(i.quantity || 1)) }));
+
+      setClientName(parsed.clientName ?? null);
+      setJobName(parsed.productionName ?? null);
+      setPickup(parsed.startDate ?? null);
+      setRet(parsed.endDate ?? null);
+      setRecipientEmail(parsed.contactEmail ?? defaultRecipientEmail ?? null);
+      setRecipientName(parsed.contactName ?? defaultRecipientName ?? null);
+      setCats(assetCats);
+
+      // Soft-hold needs an existing company + person (the parse resolves both
+      // when the client is already in the CRM). Otherwise it's skipped.
+      const companyId: string | null = Array.isArray(pj.clientMatch) && pj.clientMatch[0]?.id ? pj.clientMatch[0].id : null;
+      const contact = Array.isArray(pj.contacts) ? pj.contacts.find((c: { existing_person_id?: string | null }) => c.existing_person_id) : null;
+      const personId: string | null = contact?.existing_person_id ?? null;
+      const canHold = !!companyId && !!personId && assetCats.length > 0 && !!parsed.startDate && !!parsed.endDate;
+      setHoldable(canHold ? { companyId: companyId!, personId: personId! } : null);
+      if (!canHold) setSoftHold(false);
+
+      // Real availability per category.
+      if (assetCats.length > 0) {
+        const ar = await fetch('/api/sales/quick-reply/availability', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categories: assetCats, pickup: parsed.startDate, return: parsed.endDate }),
+        });
+        const aj = await ar.json();
+        if (ar.ok && aj.ok) setLines(aj.lines || []);
+      }
+      setPhase('ready');
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : String(e));
+      setPhase('error');
+    }
+  }, [emailText, defaultRecipientEmail, defaultRecipientName]);
+
+  useEffect(() => { run(); }, [run]);
+
+  const buildPayload = () => ({
+    recipientEmail: recipientEmail!,
+    recipientName,
+    clientName,
+    jobName,
+    pickup,
+    return: ret,
+    categories: cats,
+  });
+
+  const createSoftHolds = async () => {
+    if (!holdable) return;
+    setHoldStatus('Creating soft holds…');
+    let jobId: string | null = null;
+    let created = 0;
+    const label = jobName || clientName || 'Inquiry hold';
+    for (const c of cats) {
+      const line = lines.find((l) => l.id === c.id);
+      const isBackup = !!line && line.status !== 'available'; // tight/short queue behind as backups
+      const body: Record<string, unknown> = {
+        categoryId: c.id, startDate: pickup, endDate: ret, quantity: c.quantity,
+        companyId: holdable.companyId, personId: holdable.personId,
+        jobName: label, bufferDays: 1, bufferOverride: true, isBackup,
+        ...(jobId ? { jobId } : { newJobName: label }),
+        notes: 'Soft hold from Quick Reply — pending client confirmation.',
+      };
+      try {
+        const r = await fetch('/api/scheduling/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const j = await r.json();
+        if (r.ok && j.ok) { created++; if (j.createdJobId) jobId = j.createdJobId; }
+      } catch { /* best-effort; reported in the count */ }
+    }
+    setHoldStatus(`Created ${created} of ${cats.length} soft hold${cats.length === 1 ? '' : 's'} — spoken-for on the gantt.`);
+  };
+
+  const reviewAndSend = async () => {
+    if (!recipientEmail) return;
+    setWorking(true);
+    if (softHold && holdable) await createSoftHolds();
+    setReviewTarget({ kind: 'quick-reply', payload: buildPayload() });
+    setWorking(false);
+  };
+
+  if (reviewTarget) {
+    return (
+      <EmailReviewModal
+        target={reviewTarget}
+        onClose={() => setReviewTarget(null)}
+        onSent={() => { onSent?.(); onClose(); }}
+      />
+    );
+  }
+
+  const fmt = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <header className="flex items-start justify-between px-5 py-3.5 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Quick Reply</h2>
+            <p className="text-[11px] text-gray-400">Confirm availability &amp; reply — no quote yet</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </header>
+
+        <div className="px-5 py-4 space-y-4">
+          {phase === 'parsing' && <div className="text-sm text-gray-500 py-6 text-center">Reading the email…</div>}
+          {phase === 'error' && <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{errMsg}</div>}
+
+          {phase === 'ready' && (
+            <>
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-[12px] text-gray-700 space-y-1">
+                <div><span className="text-gray-400">Client</span> · <span className="font-semibold">{clientName || '—'}</span>{jobName ? <> · {jobName}</> : null}</div>
+                <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
+                <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
+              </div>
+
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1.5">Availability for these dates</div>
+                {lines.length === 0 ? (
+                  <div className="text-[12px] text-gray-500">No specific trucks/categories detected — the reply will ask for their item list.</div>
+                ) : (
+                  <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                    {lines.map((l) => (
+                      <li key={l.id} className="px-3 py-2 flex items-center justify-between text-[12px]">
+                        <span className="text-gray-800 font-medium">{l.name} <span className="text-gray-400">×{l.requested}</span></span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-400 text-[11px]">{l.availableToHold} of {l.serviceableCount} open</span>
+                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_PILL[l.status]}`}>{STATUS_LABEL[l.status]}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <label className={`flex items-start gap-2 text-[12px] ${holdable ? 'text-gray-700' : 'text-gray-400'} ${holdable ? 'cursor-pointer' : 'cursor-not-allowed'} select-none`}>
+                <input type="checkbox" checked={softHold} disabled={!holdable} onChange={(e) => setSoftHold(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                <span>
+                  Create soft holds so these show as spoken-for on the gantt until the client confirms.
+                  {!holdable && <span className="block text-[11px] text-gray-400 mt-0.5">Unavailable — add the client &amp; contact to the CRM first (or no dated categories detected).</span>}
+                </span>
+              </label>
+
+              {holdStatus && <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">{holdStatus}</div>}
+            </>
+          )}
+        </div>
+
+        <footer className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-2 text-gray-500 hover:text-gray-800 text-sm font-medium">Cancel</button>
+          <button
+            onClick={reviewAndSend}
+            disabled={phase !== 'ready' || !recipientEmail || working}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 text-white text-sm font-bold rounded-lg"
+          >
+            {working ? 'Preparing…' : 'Review & send reply →'}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
