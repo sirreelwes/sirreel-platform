@@ -62,6 +62,14 @@ model AssetCategory {
   maxRentalDays  Int                 @default(365) @map("max_rental_days")
   region         Region              @default(LA)
   isPublished    Boolean             @default(true) @map("is_published")
+  // Soft-delete / archive — mirrors InventoryItem. `isActive=false` is the
+  // archived state (hidden from the default Fleet Pricing list + pickers);
+  // `archivedAt` records WHEN for the audit trail. Archive (not hard-delete)
+  // is the only safe option once a category has Asset units / order lines /
+  // rate-change history, so the row survives for those FK references and
+  // existing quotes/invoices stay intact. Restore flips back to true/null.
+  isActive       Boolean             @default(true) @map("is_active")
+  archivedAt     DateTime?           @map("archived_at")
   // Operator-facing flag for the "+ New Hold" picker on the gantt
   // /reservations page. Orthogonal to isPublished — that controls
   // storefront / quote-side visibility; this controls whether the

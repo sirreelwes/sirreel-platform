@@ -54,6 +54,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Archive / restore — mirrors the inventory item soft-delete. isActive=false
+  // stamps archivedAt (the category disappears from the default list but the
+  // row survives for FK references); isActive=true clears it (restore).
+  if (typeof body.isActive === 'boolean') {
+    data.isActive = body.isActive;
+    data.archivedAt = body.isActive ? null : new Date();
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'no editable fields provided' }, { status: 400 });
   }
@@ -117,5 +125,40 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (e?.code === 'P2025') return NextResponse.json({ error: 'not found' }, { status: 404 });
     console.error('[asset-category PATCH] update failed:', e);
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Update failed' }, { status: 400 });
+  }
+}
+
+// DELETE — guarded permanent delete, mirroring the inventory item DELETE.
+// Only allowed when the category is referenced by ZERO Asset units, ZERO
+// order line items, and ZERO rate-change-log rows; otherwise the caller must
+// ARCHIVE instead (PATCH isActive=false) so the row survives for those FK
+// references and existing quotes/invoices stay intact. We never cascade into
+// OrderLineItem — the orderLineItems guard guarantees there are none to touch.
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const gate = await requireAdmin();
+  if (gate instanceof NextResponse) return gate;
+
+  const { id } = await params;
+
+  const [assets, orderLineItems, rateChangeLogs] = await Promise.all([
+    prisma.asset.count({ where: { categoryId: id } }),
+    prisma.orderLineItem.count({ where: { assetCategoryId: id } }),
+    prisma.rateChangeLog.count({ where: { assetCategoryId: id } }),
+  ]);
+  const total = assets + orderLineItems + rateChangeLogs;
+  if (total > 0) {
+    return NextResponse.json(
+      { error: 'referenced', references: { assets, orderLineItems, rateChangeLogs, total } },
+      { status: 409 },
+    );
+  }
+
+  try {
+    await prisma.assetCategory.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    if (e?.code === 'P2025') return NextResponse.json({ error: 'not found' }, { status: 404 });
+    console.error('[asset-category DELETE] failed:', e);
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Delete failed' }, { status: 400 });
   }
 }
