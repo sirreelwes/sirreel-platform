@@ -94,6 +94,7 @@ model AssetCategory {
   assets         Asset[]
   bookingItems   BookingItem[]
   orderLineItems OrderLineItem[]
+  rateChangeLogs RateChangeLog[]
 
   @@index([rwId])
   @@index([needsReview])
@@ -2149,7 +2150,12 @@ enum RateChangeSource {
 
 model RateChangeLog {
   id              String           @id @default(uuid())
-  inventoryItemId String           @map("inventory_item_id")
+  // One of inventoryItemId / assetCategoryId is set per row. Catalog rate
+  // edits stamp inventoryItemId (the original use); fleet CATEGORY rate
+  // edits (Cube Truck, PopVan, …) stamp assetCategoryId. Both nullable so
+  // the same audit table serves both surfaces.
+  inventoryItemId String?          @map("inventory_item_id")
+  assetCategoryId String?          @map("asset_category_id")
   oldDailyRate    Decimal          @map("old_daily_rate") @db.Decimal(10, 2)
   newDailyRate    Decimal          @map("new_daily_rate") @db.Decimal(10, 2)
   oldWeeklyRate   Decimal          @map("old_weekly_rate") @db.Decimal(10, 2)
@@ -2166,10 +2172,12 @@ model RateChangeLog {
   appliedAt       DateTime         @default(now()) @map("applied_at")
   appliedById     String?          @map("applied_by_id")
 
-  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
-  appliedBy     User?         @relation("RateChangeApplier", fields: [appliedById], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  assetCategory AssetCategory? @relation(fields: [assetCategoryId], references: [id], onDelete: Cascade)
+  appliedBy     User?          @relation("RateChangeApplier", fields: [appliedById], references: [id])
 
   @@index([inventoryItemId, appliedAt(sort: Desc)])
+  @@index([assetCategoryId, appliedAt(sort: Desc)])
   @@index([source, appliedAt(sort: Desc)])
   @@map("rate_change_log")
 }
