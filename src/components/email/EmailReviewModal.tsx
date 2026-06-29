@@ -87,6 +87,8 @@ export interface QuickReplyPayload {
   pickup: string | null;
   return: string | null;
   categories: { id: string; name: string; quantity: number }[];
+  /** EmailMessage id of the inbound being replied to — drives CRM capture on send. */
+  inboundEmailMessageId: string | null;
 }
 
 export type EmailReviewTarget =

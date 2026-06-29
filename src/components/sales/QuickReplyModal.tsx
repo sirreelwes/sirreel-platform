@@ -24,6 +24,8 @@ interface Props {
   emailText: string;
   defaultRecipientEmail?: string | null;
   defaultRecipientName?: string | null;
+  /** EmailMessage id of the inbound being replied to — drives CRM capture on send. */
+  inboundEmailMessageId?: string | null;
   onClose: () => void;
   onSent?: () => void;
 }
@@ -35,7 +37,7 @@ const STATUS_PILL: Record<Line['status'], string> = {
 };
 const STATUS_LABEL: Record<Line['status'], string> = { available: 'Available', tight: 'Tight', short: 'Spoken for' };
 
-export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecipientName, onClose, onSent }: Props) {
+export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecipientName, inboundEmailMessageId, onClose, onSent }: Props) {
   const [phase, setPhase] = useState<'parsing' | 'ready' | 'error'>('parsing');
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     pickup,
     return: ret,
     categories: cats,
+    inboundEmailMessageId: inboundEmailMessageId ?? null,
   });
 
   const createSoftHolds = async () => {

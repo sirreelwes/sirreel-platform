@@ -768,6 +768,11 @@ export function ThreadDrawer(props: Props) {
             .map((m) => `── ${m.sentAt} · ${(m.direction || '').toUpperCase()} · ${m.fromAddress}\nSubject: ${m.subject}\n${m.bodyText || m.snippet || ''}`)
             .join('\n\n')}
           defaultRecipientEmail={data?.messages?.[0]?.fromAddress ?? null}
+          inboundEmailMessageId={
+            (data?.messages || []).find((m) => (m.direction || '').toLowerCase() === 'inbound')?.id ??
+            data?.messages?.[0]?.id ??
+            null
+          }
           onClose={() => setShowQuickReply(false)}
           onSent={() => setShowQuickReply(false)}
         />

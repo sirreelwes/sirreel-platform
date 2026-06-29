@@ -176,6 +176,147 @@ async function captureNewOrEnrich(args: {
   return { personId: created.id, resolution: CaptureResolution.AUTO_FILED, enrichmentLog: null }
 }
 
+/**
+ * Outreach capture — the Quick Reply (rep-initiated send) path.
+ *
+ * Unlike `captureFromEmail` (the pubsub ingest path, which gates Person
+ * creation behind AUTO_CAPTURED and never creates a Company), this ALWAYS
+ * files the sender as a Person (by email — the durable entity) AND ensures
+ * the Company exists (match-or-CREATE by name): the rep committed by
+ * replying, so the contact is real history and the person needs a home.
+ * A newly-created company lands the capture as NEEDS_REVIEW for cleanup.
+ * NO Job is created here — a job is a transaction, materialized by the
+ * soft-hold / real-intent path. The parsed company name + job name are
+ * stored on the capture so the review item is one-click to action later.
+ *
+ * Reuses the SAME primitives as captureFromEmail — classifyForCapture
+ * (verdict + parsed payload), captureNewOrEnrich (Person email upsert +
+ * enrichment), findDomainMatchedCompany / findExactNameCompany (Company
+ * match) — plus the from-parse company-create shape ({ name, tier: 'NEW' }).
+ *
+ * Idempotent: Person keyed by email, Company keyed by name, InquiryCapture
+ * keyed by EmailMessage.id — re-running yields exactly one Person + one
+ * Company. Never throws past the caller (best-effort; capture must never
+ * block the reply).
+ */
+export interface OutreachCaptureOutcome extends CaptureOutcome {
+  companyId?: string
+  companyCreated?: boolean
+}
+
+export async function captureOutreachContact(args: {
+  emailMessageId: string
+  /** Company name from the richer parse-quote extraction (preferred over the
+   *  ingest Haiku's companyString when present). */
+  companyNameHint?: string | null
+  /** Job/production name — stored on the capture for one-click action later;
+   *  no Job row is created here. */
+  projectHint?: string | null
+}): Promise<OutreachCaptureOutcome> {
+  try {
+    const email = await prisma.emailMessage.findUnique({
+      where: { id: args.emailMessageId },
+      select: {
+        id: true, fromAddress: true, subject: true, snippet: true, bodyText: true,
+        direction: true, rfc822MessageId: true, extractedData: true, duplicateOfId: true,
+        emailAccount: { select: { emailAddress: true } },
+      },
+    })
+    if (!email) return { status: 'skipped', reason: 'EmailMessage not found' }
+    const inbox = email.emailAccount.emailAddress.toLowerCase()
+    if (!SALES_CAPTURE_INBOXES.has(inbox)) return { status: 'skipped', reason: `inbox ${inbox} not in capture allowlist` }
+    if (email.direction !== 'inbound') return { status: 'skipped', reason: `direction=${email.direction} (capture is INBOUND-only)` }
+    if (email.duplicateOfId) return { status: 'skipped', reason: 'duplicate-of EmailMessage row' }
+
+    // Already fully captured (a prior capture that already filed a Person) →
+    // idempotent no-op. A prior pubsub NEEDS_REVIEW row WITHOUT a person is
+    // upgraded below (the rep's reply makes it real).
+    const prior =
+      (await prisma.inquiryCapture.findUnique({ where: { emailMessageId: email.id }, select: { id: true, personId: true, companyId: true, verdict: true } })) ??
+      (email.rfc822MessageId
+        ? await prisma.inquiryCapture.findFirst({ where: { rfc822MessageId: email.rfc822MessageId }, select: { id: true, personId: true, companyId: true, verdict: true } })
+        : null)
+    if (prior?.personId) {
+      return { status: 'duplicate', reason: 'contact already captured for this email', captureId: prior.id, personId: prior.personId, companyId: prior.companyId ?? undefined, verdict: prior.verdict }
+    }
+
+    const extracted = (email.extractedData as ExtractedMessage | null) ?? null
+    const domain = senderDomain(email.fromAddress)
+    const domainMatchedCompanyId = await findDomainMatchedCompany(domain)
+    const verdict = classifyForCapture({
+      inbox, fromAddress: email.fromAddress, subject: email.subject,
+      bodySnippet: email.snippet ?? email.bodyText ?? null, extracted, domainMatchedCompanyId,
+    })
+    const parsed = verdict.parsed
+    if (!parsed.email) return { status: 'skipped', reason: 'no sender email to file' }
+
+    // PERSON — always file (email match → enrich, else create).
+    const enriched = await captureNewOrEnrich({ parsed, emailMessageId: email.id, inbox })
+
+    // COMPANY — match (domain → exact name), else CREATE (from-parse shape).
+    const companyName = (args.companyNameHint?.trim() || parsed.companyString || '').trim()
+    const exactNameCompanyId = await findExactNameCompany(companyName || null)
+    let companyId: string | null = domainMatchedCompanyId ?? exactNameCompanyId
+    let companyCreated = false
+    if (!companyId && companyName.length >= 3) {
+      const co = await prisma.company.create({ data: { name: companyName, tier: 'NEW' }, select: { id: true } })
+      companyId = co.id
+      companyCreated = true
+    }
+
+    // A new company needs human cleanup → NEEDS_REVIEW; a person filed into a
+    // known/no company is AUTO_CAPTURED.
+    const finalVerdict = companyCreated ? CaptureVerdict.NEEDS_REVIEW : CaptureVerdict.AUTO_CAPTURED
+    const resolution = companyCreated ? CaptureResolution.PENDING : enriched.resolution
+    const project = (args.projectHint?.trim() || parsed.project) ?? null
+
+    const captureData = {
+      inbox,
+      verdict: finalVerdict,
+      verdictReason: companyCreated ? `${verdict.reason} · created company "${companyName}" for review` : verdict.reason,
+      signals: verdict.signals,
+      parsedName: parsed.name,
+      parsedEmail: parsed.email,
+      parsedPhone: parsed.phone,
+      parsedTitle: parsed.title,
+      parsedCompanyString: companyName || parsed.companyString,
+      parsedProject: project,
+      personId: enriched.personId,
+      companyId,
+      resolution,
+      enrichmentLog: enriched.enrichmentLog as unknown as Prisma.InputJsonValue,
+      ...(finalVerdict === CaptureVerdict.AUTO_CAPTURED ? { resolvedAt: new Date() } : {}),
+    }
+
+    let captureId: string
+    if (prior) {
+      // Upgrade an existing (person-less) capture in place — no duplicate row.
+      await prisma.inquiryCapture.update({ where: { id: prior.id }, data: captureData })
+      captureId = prior.id
+    } else {
+      const created = await prisma.inquiryCapture.create({
+        data: { ...captureData, emailMessageId: email.id, rfc822MessageId: email.rfc822MessageId },
+        select: { id: true },
+      })
+      captureId = created.id
+    }
+
+    return {
+      status: finalVerdict === CaptureVerdict.NEEDS_REVIEW ? 'needs_review' : 'auto_captured',
+      reason: captureData.verdictReason,
+      captureId,
+      personId: enriched.personId,
+      companyId: companyId ?? undefined,
+      companyCreated,
+      verdict: finalVerdict,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[crm/captureOutreachContact] error:', args.emailMessageId, msg)
+    return { status: 'skipped', reason: `error: ${msg}` }
+  }
+}
+
 export async function captureFromEmail(emailMessageId: string): Promise<CaptureOutcome> {
   try {
     const email = await prisma.emailMessage.findUnique({

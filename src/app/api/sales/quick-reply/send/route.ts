@@ -10,6 +10,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { computeQuickReplyAvailability, composeQuickReply } from '@/lib/sales/quickReply'
+import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ interface QuickReplyPayload {
   pickup: string | null
   return: string | null
   categories: { id: string; name: string; quantity: number }[]
+  /** EmailMessage id of the inbound being replied to — drives CRM capture. */
+  inboundEmailMessageId?: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -57,5 +60,22 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.reason || 'send failed' }, { status: 502 })
   }
-  return NextResponse.json({ ok: true, recipient: payload.recipientEmail, order: { orderNumber: 'Quick reply' } })
+
+  // CRM capture — BEST-EFFORT, never blocks the reply. The send already
+  // succeeded above; a capture failure is logged and swallowed (and
+  // captureOutreachContact itself never throws past its boundary).
+  let capture: Awaited<ReturnType<typeof captureOutreachContact>> | null = null
+  if (payload.inboundEmailMessageId) {
+    try {
+      capture = await captureOutreachContact({
+        emailMessageId: payload.inboundEmailMessageId,
+        companyNameHint: payload.clientName,
+        projectHint: payload.jobName,
+      })
+    } catch (err) {
+      console.error('[quick-reply send] CRM capture failed (non-blocking):', err)
+    }
+  }
+
+  return NextResponse.json({ ok: true, recipient: payload.recipientEmail, order: { orderNumber: 'Quick reply' }, capture })
 }
