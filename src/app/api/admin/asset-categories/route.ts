@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
       weeklyRate: true,
       isActive: true,
       archivedAt: true,
+      imageUrl: true,
       _count: { select: { assets: true, orderLineItems: true, rateChangeLogs: true } },
     },
   });
@@ -44,6 +45,10 @@ export async function GET(req: NextRequest) {
     weeklyRate: c.weeklyRate != null ? c.weeklyRate.toString() : null,
     isActive: c.isActive,
     archivedAt: c.archivedAt,
+    // Whether a representative image exists. The image itself loads via the
+    // gated proxy GET /api/admin/asset-categories/[id]/image (private blob —
+    // the raw imageUrl is never sent to the client).
+    hasImage: !!c.imageUrl,
     // Reference counts for the guarded delete modal. total > 0 ⇒ archive-only.
     refs: {
       assets: c._count.assets,

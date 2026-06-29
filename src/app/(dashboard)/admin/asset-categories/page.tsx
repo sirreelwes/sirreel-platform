@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { resizeImage, RESIZEABLE_MIME, ACCEPT_IMAGE } from "@/lib/inventory/resizeImage";
 
 type Refs = { assets: number; orderLineItems: number; rateChangeLogs: number; total: number };
 type Category = {
@@ -14,6 +15,7 @@ type Category = {
   weeklyRate: string | null;
   isActive: boolean;
   archivedAt: string | null;
+  hasImage: boolean;
   refs: Refs;
 };
 
@@ -58,6 +60,11 @@ export default function AdminAssetCategoriesPage() {
   const [busy, setBusy] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  // Representative-image state. imgV is a cache-bust token bumped on every
+  // reload so a replaced thumbnail re-fetches through the no-store proxy.
+  const [imgV, setImgV] = useState(0);
+  const [imgBusy, setImgBusy] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     const res = await fetch(`/api/admin/asset-categories${showArchived ? "?includeArchived=1" : ""}`);
@@ -65,9 +72,39 @@ export default function AdminAssetCategoriesPage() {
     if (res.status === 401) { setError("Sign in required."); setLoading(false); return; }
     const data = await res.json();
     setCategories(data.categories || []);
+    setImgV((v) => v + 1);
     setError(null);
     setLoading(false);
   }, [showArchived]);
+
+  // Upload a representative image via the shared private-Blob pipeline
+  // (resize client-side for jpg/png/webp; HEIC passes through). Served back
+  // only via the gated proxy GET — never a raw public Blob URL.
+  const uploadImage = async (catId: string, file: File) => {
+    setImgBusy(catId);
+    try {
+      let body: Blob = file;
+      let name = file.name || "image.jpg";
+      if (RESIZEABLE_MIME.has(file.type)) {
+        try { body = await resizeImage(file); name = "image.jpg"; } catch { body = file; }
+      }
+      const fd = new FormData();
+      fd.append("file", body, name);
+      const res = await fetch(`/api/admin/asset-categories/${catId}/image`, { method: "POST", body: fd });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Upload failed"); return; }
+      await load();
+    } finally { setImgBusy(null); }
+  };
+
+  const removeImage = async (catId: string) => {
+    if (!confirm("Remove this image?")) return;
+    setImgBusy(catId);
+    try {
+      const res = await fetch(`/api/admin/asset-categories/${catId}/image`, { method: "DELETE" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Remove failed"); return; }
+      await load();
+    } finally { setImgBusy(null); }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -202,7 +239,8 @@ export default function AdminAssetCategoriesPage() {
               <DepartmentGroup key={dept} dept={dept} rows={rows}
                 editingId={editingId} editValues={editValues} setEditValues={setEditValues}
                 saving={saving} startEdit={startEdit} saveEdit={saveEdit} cancelEdit={() => setEditingId(null)}
-                openGuard={openGuard} restore={(c) => setActive(c, true)} />
+                openGuard={openGuard} restore={(c) => setActive(c, true)}
+                imgV={imgV} imgBusy={imgBusy} uploadImage={uploadImage} removeImage={removeImage} />
             ))}
           </tbody>
         </table>
@@ -222,8 +260,10 @@ function DepartmentGroup(props: {
   setEditValues: (v: { dailyRate: string; weeklyRate: string }) => void;
   saving: boolean; startEdit: (c: Category) => void; saveEdit: (id: string) => void; cancelEdit: () => void;
   openGuard: (c: Category) => void; restore: (c: Category) => void;
+  imgV: number; imgBusy: string | null;
+  uploadImage: (catId: string, file: File) => void; removeImage: (catId: string) => void;
 }) {
-  const { dept, rows, editingId, editValues, setEditValues, saving, startEdit, saveEdit, cancelEdit, openGuard, restore } = props;
+  const { dept, rows, editingId, editValues, setEditValues, saving, startEdit, saveEdit, cancelEdit, openGuard, restore, imgV, imgBusy, uploadImage, removeImage } = props;
   return (
     <>
       <tr className="bg-lt-inner border-b border-lt-hairline">
@@ -238,12 +278,18 @@ function DepartmentGroup(props: {
         return (
           <tr key={cat.id} className={`border-b border-lt-hairline hover:bg-lt-inner transition-colors ${archived ? "opacity-50" : isTest(cat) ? "opacity-60" : ""}`}>
             <td className="px-4 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-lt-fg font-medium">{cat.name}</span>
-                {archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg2 px-1.5 py-0.5 rounded">Archived</span>}
-                {isTest(cat) && !archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg3 px-1.5 py-0.5 rounded">Test</span>}
+              <div className="flex items-center gap-3">
+                <CategoryThumb cat={cat} imgV={imgV} editing={editing} busy={imgBusy === cat.id}
+                  onUpload={(f) => uploadImage(cat.id, f)} onRemove={() => removeImage(cat.id)} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lt-fg font-medium">{cat.name}</span>
+                    {archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg2 px-1.5 py-0.5 rounded">Archived</span>}
+                    {isTest(cat) && !archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg3 px-1.5 py-0.5 rounded">Test</span>}
+                  </div>
+                  <span className="block text-lt-fg3 font-mono text-[11px]">{cat.slug}</span>
+                </div>
               </div>
-              <span className="block text-lt-fg3 font-mono text-[11px]">{cat.slug}</span>
             </td>
             <td className="px-4 py-2 text-center">
               <span className="inline-block min-w-[1.5rem] text-[11px] font-semibold text-lt-fg2 bg-lt-inner rounded-full px-2 py-0.5 tabular-nums">{cat.refs.assets}</span>
@@ -281,6 +327,41 @@ function DepartmentGroup(props: {
         );
       })}
     </>
+  );
+}
+
+function CategoryThumb({ cat, imgV, editing, busy, onUpload, onRemove }: {
+  cat: Category; imgV: number; editing: boolean; busy: boolean;
+  onUpload: (f: File) => void; onRemove: () => void;
+}) {
+  const inputId = `catimg-${cat.id}`;
+  return (
+    <div className="flex flex-col items-center gap-1 shrink-0">
+      <div className="h-11 w-11 rounded-lg overflow-hidden bg-lt-inner border border-lt-hairline flex items-center justify-center">
+        {cat.hasImage ? (
+          // Loads ONLY through the gated proxy — the raw private blob URL is
+          // never sent to the client. imgV cache-busts a replaced image.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/api/admin/asset-categories/${cat.id}/image?v=${imgV}`} alt={cat.name} className="h-full w-full object-cover" />
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-5 w-5 text-lt-fg3" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+          </svg>
+        )}
+      </div>
+      {editing && (
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <label htmlFor={inputId} className={`cursor-pointer font-semibold ${busy ? "text-lt-fg3" : "text-amber-600 hover:text-amber-700"}`}>
+            {busy ? "…" : cat.hasImage ? "Replace" : "Upload"}
+          </label>
+          <input id={inputId} type="file" accept={ACCEPT_IMAGE} className="hidden" disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.currentTarget.value = ""; }} />
+          {cat.hasImage && !busy && (
+            <button onClick={onRemove} className="text-lt-fg3 hover:text-chip-bad-fg font-medium">Remove</button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
