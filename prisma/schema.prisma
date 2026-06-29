@@ -171,8 +171,33 @@ model Asset {
   incidents          Incident[]
   checkoutRecords    CheckoutRecord[]
   lotChecks          LotCheck[]
+  bitInspections     BitInspection[]
 
   @@map("assets")
+}
+
+// DOT BIT (Biennial Inspection of Terminals) inspection history per vehicle
+// unit (DOT paperwork Phase 1 — data foundation). A unit accumulates many
+// over time; the "current" BIT is the one with the latest inspectionDate.
+// Distinct from the legacy single-slot Asset.bitCertificateUrl /
+// bitCertificateExpiresAt fields (a current-cert pointer the alert cron
+// reads) — this model is the dated, PDF-backed history.
+//
+// pdfBlobKey holds the PRIVATE Vercel Blob URL (access:'private'); the PDF
+// is served only through the gated proxy via streamPrivateBlobAsResponse,
+// never a public CDN URL.
+model BitInspection {
+  id             String   @id @default(uuid())
+  assetId        String   @map("asset_id")
+  inspectionDate DateTime @map("inspection_date") @db.Date
+  pdfBlobKey     String   @map("pdf_blob_key")
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, inspectionDate(sort: Desc)])
+  @@map("bit_inspections")
 }
 
 // ═══════════════════════════════════════

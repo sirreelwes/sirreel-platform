@@ -11,6 +11,9 @@ type Asset = {
   make: string | null;
   model: string | null;
   mileage: number | null;
+  vin: string | null;
+  licensePlate: string | null;
+  latestBitDate: string | null;
   notes: string | null;
   categoryId: string;
   categoryName: string;
@@ -35,6 +38,7 @@ export default function FleetPage() {
   const [filterCat, setFilterCat] = useState('All');
   const [search, setSearch] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [dotAsset, setDotAsset] = useState<Asset | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -137,9 +141,15 @@ export default function FleetPage() {
             return (
               <div key={a.id} className={`grid grid-cols-[1.5fr_110px_100px_1.5fr_90px] gap-2 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors ${isUpdating ? 'opacity-50' : ''}`}>
                 <div>
-                  <div className="text-[12px] font-semibold text-gray-800">{a.unitName}</div>
+                  <button onClick={() => setDotAsset(a)} className="text-[12px] font-semibold text-gray-800 hover:text-blue-600 hover:underline text-left">
+                    {a.unitName}
+                  </button>
                   <div className="text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
-                  {a.mileage && <div className="text-[9px] text-gray-300">{a.mileage.toLocaleString()} mi</div>}
+                  <div className="text-[9px] text-gray-300 flex gap-1.5">
+                    {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
+                    {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
+                    {a.latestBitDate ? <span className="text-emerald-500">BIT {a.latestBitDate.slice(0, 10)}</span> : null}
+                  </div>
                 </div>
 
                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
@@ -182,6 +192,148 @@ export default function FleetPage() {
 
         <div className="px-4 py-2 border-t border-gray-100 text-[10px] text-gray-400">
           {filtered.length} of {totalAssets} units
+        </div>
+      </div>
+
+      {dotAsset && (
+        <UnitDotModal asset={dotAsset} onClose={() => setDotAsset(null)} onSaved={load} />
+      )}
+    </div>
+  );
+}
+
+// VIN sanity: 17 chars, no I/O/Q. Advisory only — never blocks a save.
+const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/i;
+
+function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () => void; onSaved: () => void }) {
+  const [year, setYear] = useState(asset.year != null ? String(asset.year) : '');
+  const [make, setMake] = useState(asset.make ?? '');
+  const [model, setModel] = useState(asset.model ?? '');
+  const [vin, setVin] = useState(asset.vin ?? '');
+  const [plate, setPlate] = useState(asset.licensePlate ?? '');
+  const [savingFields, setSavingFields] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
+
+  type Bit = { id: string; inspectionDate: string; notes: string | null; createdAt: string };
+  const [bits, setBits] = useState<Bit[]>([]);
+  const [bitDate, setBitDate] = useState('');
+  const [bitNotes, setBitNotes] = useState('');
+  const [bitFile, setBitFile] = useState<File | null>(null);
+  const [uploadingBit, setUploadingBit] = useState(false);
+  const [bitError, setBitError] = useState<string | null>(null);
+
+  const loadBits = async () => {
+    const r = await fetch(`/api/fleet/${asset.id}/bit`);
+    if (r.ok) { const d = await r.json(); setBits(d.inspections || []); }
+  };
+  useEffect(() => { loadBits(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const vinWarn = vin.trim().length > 0 && !VIN_RE.test(vin.trim());
+
+  const saveFields = async () => {
+    setSavingFields(true); setSavedMsg(false);
+    const res = await fetch('/api/fleet', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assetId: asset.id, year: year === '' ? null : year, make, model, vin, licensePlate: plate }),
+    });
+    setSavingFields(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Save failed'); return; }
+    setSavedMsg(true);
+    onSaved();
+  };
+
+  const uploadBit = async () => {
+    if (!bitFile || !/^\d{4}-\d{2}-\d{2}$/.test(bitDate)) { setBitError('Pick an inspection date and a PDF.'); return; }
+    setUploadingBit(true); setBitError(null);
+    const fd = new FormData();
+    fd.append('file', bitFile);
+    fd.append('inspectionDate', bitDate);
+    if (bitNotes.trim()) fd.append('notes', bitNotes.trim());
+    const res = await fetch(`/api/fleet/${asset.id}/bit`, { method: 'POST', body: fd });
+    setUploadingBit(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setBitError(d.error || 'Upload failed'); return; }
+    setBitDate(''); setBitNotes(''); setBitFile(null);
+    await loadBits();
+    onSaved();
+  };
+
+  const fieldCls = 'w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:border-gray-400';
+  const labelCls = 'block text-[10px] font-semibold text-gray-500 mb-1';
+  const latest = bits[0]; // already sorted desc by inspectionDate
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <header className="flex items-start justify-between px-5 py-3.5 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{asset.unitName} · DOT</h2>
+            <p className="text-[11px] text-gray-400">{asset.categoryName} — vehicle details &amp; BIT inspections</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </header>
+
+        <div className="px-5 py-4 space-y-5">
+          {/* Vehicle details */}
+          <section>
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">Vehicle details</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelCls}>Year</label><input className={fieldCls} type="number" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2022" /></div>
+              <div><label className={labelCls}>Make</label><input className={fieldCls} value={make} onChange={(e) => setMake(e.target.value)} placeholder="Ford" /></div>
+              <div><label className={labelCls}>Model</label><input className={fieldCls} value={model} onChange={(e) => setModel(e.target.value)} placeholder="Transit" /></div>
+              <div><label className={labelCls}>License plate</label><input className={`${fieldCls} font-mono`} value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="8ABC123" /></div>
+              <div className="col-span-2">
+                <label className={labelCls}>VIN</label>
+                <input className={`${fieldCls} font-mono ${vinWarn ? 'border-amber-400' : ''}`} value={vin} onChange={(e) => setVin(e.target.value)} placeholder="1FTBW2CM5NKA12345" />
+                {vinWarn && <p className="text-[10px] text-amber-600 mt-1">⚠ VINs are usually 17 characters with no I, O, or Q. Saved anyway — double-check if this is a real VIN.</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <button onClick={saveFields} disabled={savingFields} className="px-3 py-1.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[12px] font-semibold rounded-lg">
+                {savingFields ? 'Saving…' : 'Save details'}
+              </button>
+              {savedMsg && <span className="text-[11px] text-emerald-600 font-medium">Saved ✓</span>}
+            </div>
+          </section>
+
+          {/* BIT inspections */}
+          <section className="border-t border-gray-100 pt-4">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">BIT inspections</div>
+            <div className="text-[12px] text-gray-700 mb-2">
+              {latest ? (
+                <span>Latest: <span className="font-semibold">{latest.inspectionDate.slice(0, 10)}</span>
+                  {' · '}
+                  <a href={`/api/fleet/${asset.id}/bit/${latest.id}/pdf`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View PDF</a>
+                </span>
+              ) : <span className="text-gray-400">No BIT on file.</span>}
+            </div>
+
+            {bits.length > 1 && (
+              <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100 mb-3 max-h-32 overflow-y-auto">
+                {bits.map((b) => (
+                  <li key={b.id} className="px-3 py-1.5 text-[11px] flex items-center justify-between">
+                    <span className="text-gray-700 font-medium">{b.inspectionDate.slice(0, 10)}</span>
+                    <span className="flex items-center gap-2">
+                      {b.notes && <span className="text-gray-400 truncate max-w-[180px]">{b.notes}</span>}
+                      <a href={`/api/fleet/${asset.id}/bit/${b.id}/pdf`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">PDF</a>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
+              <div className="text-[10px] font-semibold text-gray-500">Add a BIT inspection</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelCls}>Inspection date</label><input className={fieldCls} type="date" value={bitDate} onChange={(e) => setBitDate(e.target.value)} /></div>
+                <div><label className={labelCls}>PDF scan</label><input type="file" accept="application/pdf" onChange={(e) => setBitFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" /></div>
+              </div>
+              <div><label className={labelCls}>Notes (optional)</label><input className={fieldCls} value={bitNotes} onChange={(e) => setBitNotes(e.target.value)} placeholder="Passed · next due 2026" /></div>
+              {bitError && <p className="text-[11px] text-rose-600">{bitError}</p>}
+              <button onClick={uploadBit} disabled={uploadingBit || !bitFile || !bitDate} className="px-3 py-1.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[12px] font-semibold rounded-lg">
+                {uploadingBit ? 'Uploading…' : 'Upload BIT'}
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>

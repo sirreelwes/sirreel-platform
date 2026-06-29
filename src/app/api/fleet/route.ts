@@ -54,6 +54,14 @@ export async function GET(req: NextRequest) {
       orderBy: { name: 'asc' }
     })
 
+    // Latest BIT inspection date per unit (max inspectionDate) for the DOT
+    // at-a-glance. The PDF itself loads lazily through the gated proxy.
+    const latestBits = await prisma.bitInspection.groupBy({
+      by: ['assetId'],
+      _max: { inspectionDate: true },
+    })
+    const latestBitByAsset = new Map(latestBits.map((b) => [b.assetId, b._max.inspectionDate]))
+
     // Compute status counts
     const statusCounts = await prisma.asset.groupBy({
       by: ['status'],
@@ -72,6 +80,9 @@ export async function GET(req: NextRequest) {
         make: a.make,
         model: a.model,
         mileage: a.mileage,
+        vin: a.vin,
+        licensePlate: a.licensePlate,
+        latestBitDate: latestBitByAsset.get(a.id) ?? null,
         notes: a.notes,
         categoryId: a.categoryId,
         categoryName: a.category.name,
@@ -92,14 +103,31 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const { assetId, status, notes } = await req.json()
+    const body = await req.json()
+    const { assetId, status, notes, year, make, model, vin, licensePlate } = body
     if (!assetId) return NextResponse.json({ error: 'assetId required' }, { status: 400 })
+
+    // DOT vehicle fields. year coerces to int (null clears); strings trim to
+    // null when blank. VIN is stored as-is — validation is advisory only
+    // (warn in the UI), never a hard block, since legacy/odd VINs exist.
+    const trimOrNull = (v: unknown) => {
+      if (v === undefined) return undefined
+      const s = String(v ?? '').trim()
+      return s.length ? s : null
+    }
+    const yearVal =
+      year === undefined ? undefined : year === null || year === '' ? null : Number.isFinite(Number(year)) ? Math.trunc(Number(year)) : undefined
 
     const asset = await prisma.asset.update({
       where: { id: assetId },
       data: {
         ...(status ? { status: status as any } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        ...(yearVal !== undefined ? { year: yearVal } : {}),
+        ...(make !== undefined ? { make: trimOrNull(make) } : {}),
+        ...(model !== undefined ? { model: trimOrNull(model) } : {}),
+        ...(vin !== undefined ? { vin: trimOrNull(vin) } : {}),
+        ...(licensePlate !== undefined ? { licensePlate: trimOrNull(licensePlate) } : {}),
       }
     })
 

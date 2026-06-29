@@ -62,6 +62,15 @@ const STATE_BADGE: Record<UnitState, string> = {
   booked: 'bg-rose-50 text-rose-700 border-rose-200',
 }
 
+// Plain-English labels — keep schema/enum nouns out of user-facing copy.
+const STATE_LABEL: Record<UnitState, string> = { free: 'available', buffer: 'tight', booked: 'booked' }
+const ITEM_STATUS_LABEL: Record<string, string> = {
+  REQUESTED: 'Needs units', ASSIGNED: 'Assigned', SUBSTITUTED: 'Substituted', UNFULFILLED: 'Released',
+}
+const ASSIGN_STATUS_LABEL: Record<string, string> = {
+  ASSIGNED: 'Assigned', CHECKED_OUT: 'Checked out', RETURNED: 'Returned', SWAPPED: 'Swapped',
+}
+
 export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged }: AssignUnitsModalProps) {
   const [data, setData] = useState<PickerData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -164,7 +173,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 <span className="font-semibold text-zinc-900">{Math.max(0, data.summary.availableToHold)}</span>
                 <span className="text-zinc-600">of {data.summary.serviceableCount} units available these dates</span>
                 <span className="ml-auto text-xs text-zinc-500">
-                  free {data.summary.freeCount} · buffer {data.summary.bufferCount} · booked {data.summary.bookedCount}
+                  available {data.summary.freeCount} · tight {data.summary.bufferCount} · booked {data.summary.bookedCount}
                 </span>
               </div>
 
@@ -180,7 +189,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                         : 'bg-zinc-50 text-zinc-700 border-zinc-200'
                     }`}
                   >
-                    {data.bookingItem.status}
+                    {ITEM_STATUS_LABEL[data.bookingItem.status] ?? data.bookingItem.status}
                   </span>
                 </div>
               </div>
@@ -196,7 +205,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                           <span className="ml-2 text-xs text-zinc-500">{a.asset.tier}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs text-zinc-500">{a.status}</span>
+                          <span className="text-xs text-zinc-500">{ASSIGN_STATUS_LABEL[a.status] ?? a.status}</span>
                           {a.status === 'ASSIGNED' && (
                             <button
                               onClick={() => unassign(a.asset.id)}
@@ -215,16 +224,16 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
 
               {data.bookingItem.remaining === 0 ? (
                 <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                  All {data.bookingItem.quantity} slots filled — BookingItem flipped to ASSIGNED.
+                  This hold is fully assigned.
                 </div>
               ) : (
                 <section>
                   <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">
-                    Candidates · sorted by tier (PREMIUM → ECONOMY)
+                    Available units · best first
                   </div>
                   <ul className="divide-y divide-zinc-100 border border-zinc-200 rounded">
                     {data.candidates.length === 0 && (
-                      <li className="px-3 py-3 text-sm text-zinc-500">No candidate units in this category window.</li>
+                      <li className="px-3 py-3 text-sm text-zinc-500">No units available for these dates.</li>
                     )}
                     {data.candidates.map((c) => {
                       const isBooked = c.state === 'booked'
