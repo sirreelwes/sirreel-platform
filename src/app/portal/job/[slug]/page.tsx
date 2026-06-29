@@ -76,6 +76,8 @@ interface PortalData {
   paperwork: {
     quotePdfUrl: string | null;
     quotePdfGeneratedAt: string | null;
+    dotSheetUrl: string | null;
+    dotSheetGeneratedAt: string | null;
     agreement: {
       status: string;
       documentType: string;
@@ -678,6 +680,24 @@ export default function JobPortalPage() {
                   </a>
                 ) : (
                   <span className="text-xs text-gray-500">Your SirReel rep is finalizing the quote.</span>
+                )}
+              </PaperworkRow>
+              <PaperworkRow
+                label="DOT information"
+                status={data.paperwork.dotSheetUrl ? 'Available' : 'Pending'}
+                statusKind={data.paperwork.dotSheetUrl ? 'success' : 'pending'}
+              >
+                {data.paperwork.dotSheetUrl ? (
+                  <a
+                    href={data.paperwork.dotSheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                  >
+                    Download DOT info sheet (PDF)
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-500">Year, make, VIN, plate &amp; latest BIT for your vehicles — your rep will send this.</span>
                 )}
               </PaperworkRow>
               <PaperworkRow label="Order PDF" status="Coming soon" statusKind="pending">

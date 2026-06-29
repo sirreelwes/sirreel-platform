@@ -2399,6 +2399,14 @@ model Order {
   quotePdfKey         String?   @map("quote_pdf_key")
   quotePdfUrl         String?   @map("quote_pdf_url")
   quotePdfGeneratedAt DateTime? @map("quote_pdf_generated_at")
+  // DOT paperwork Phase 2 — the generated per-vehicle DOT info packet (one
+  // page per assigned VEHICLE unit, sourced from Asset DOT fields + the
+  // latest BitInspection). Mirrors the quote-PDF storage pattern; the URL is
+  // a PRIVATE blob, served only through the gated proxy (rep + portal),
+  // never a public CDN URL. Replace-on-regenerate.
+  dotSheetPdfKey         String?   @map("dot_sheet_pdf_key")
+  dotSheetPdfUrl         String?   @map("dot_sheet_pdf_url")
+  dotSheetGeneratedAt    DateTime? @map("dot_sheet_generated_at")
 
   // Blind handoff flags — set on the order when the client picks up
   // their own unit (blindPickup) or returns it themselves (blindReturn)

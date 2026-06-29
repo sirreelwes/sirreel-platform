@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
         total: true,
         quotePdfUrl: true,
         quotePdfGeneratedAt: true,
+        dotSheetGeneratedAt: true,
         bookingId: true,
         jobId: true,
         // Blind handoff — client-facing self-service instructions.
@@ -356,6 +357,10 @@ export async function GET(req: NextRequest) {
     paperwork: {
       quotePdfUrl: order.quotePdfUrl,
       quotePdfGeneratedAt: order.quotePdfGeneratedAt,
+      // DOT info packet — served through the gated portal proxy (never the
+      // raw private-blob URL). Present only once generated.
+      dotSheetUrl: order.dotSheetGeneratedAt ? '/api/portal/job/dot-sheet' : null,
+      dotSheetGeneratedAt: order.dotSheetGeneratedAt,
       agreement: rentalAgreement,
       stageContract,
       coi: latestCoi

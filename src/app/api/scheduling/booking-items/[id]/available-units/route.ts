@@ -83,6 +83,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       })
     : []
 
+  // The order this booking is tied to (if any) — the DOT-sheet action and
+  // the client portal are Order-scoped.
+  const order = await prisma.order.findFirst({ where: { bookingId: bookingItem.booking.id }, select: { id: true } })
+
   return NextResponse.json({
     ok: true,
     bookingItem: {
@@ -93,6 +97,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       remaining: Math.max(0, bookingItem.quantity - bookingItem.assignments.length),
     },
     booking: bookingItem.booking,
+    orderId: order?.id ?? null,
     category: { id: bookingItem.categoryId, ...bookingItem.category },
     currentAssignments,
     candidates,

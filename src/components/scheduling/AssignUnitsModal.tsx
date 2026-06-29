@@ -37,6 +37,7 @@ interface PickerData {
   ok: boolean
   bookingItem: { id: string; quantity: number; status: string; assignedCount: number; remaining: number }
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
+  orderId: string | null
   category: { id: string; name: string; slug: string }
   currentAssignments: CurrentAssignment[]
   candidates: Candidate[]
@@ -71,12 +72,72 @@ const ASSIGN_STATUS_LABEL: Record<string, string> = {
   ASSIGNED: 'Assigned', CHECKED_OUT: 'Checked out', RETURNED: 'Returned', SWAPPED: 'Swapped',
 }
 
+// Category representative image (ad20659) via its existing gated proxy.
+// Graceful placeholder when there's no image or the proxy 403s for the user.
+function CategoryThumb({ categoryId, alt }: { categoryId: string; alt: string }) {
+  const [broken, setBroken] = useState(false)
+  if (broken) {
+    return (
+      <div className="h-12 w-12 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center shrink-0">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 text-zinc-300" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+        </svg>
+      </div>
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/admin/asset-categories/${categoryId}/image`}
+      alt={alt}
+      onError={() => setBroken(true)}
+      className="h-12 w-12 rounded-lg object-cover border border-zinc-200 shrink-0 bg-zinc-50"
+    />
+  )
+}
+
 export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged }: AssignUnitsModalProps) {
   const [data, setData] = useState<PickerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null) // assetId mid-submit
   const [error, setError] = useState<string | null>(null)
   const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string } | null>(null)
+  // DOT paperwork (Phase 2): generate the per-vehicle DOT info packet for the
+  // order's assigned units + publish it to the client portal.
+  type Incomplete = { unitName: string; missing: string[] }
+  const [dotBusy, setDotBusy] = useState(false)
+  const [dotCheck, setDotCheck] = useState<{ unitCount: number; incomplete: Incomplete[] } | null>(null)
+  const [dotResult, setDotResult] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  // Step 1: readiness check (warn BEFORE publishing) — no generation.
+  async function checkDot(orderId: string) {
+    setDotBusy(true); setDotResult(null); setDotCheck(null)
+    try {
+      const res = await fetch(`/api/orders/${orderId}/dot-sheet?check=1`)
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setDotResult({ ok: false, msg: json.error || `Couldn't read DOT data (${res.status})` }); return }
+      setDotCheck({ unitCount: json.unitCount, incomplete: json.incompleteUnits || [] })
+    } catch (e) {
+      setDotResult({ ok: false, msg: e instanceof Error ? e.message : String(e) })
+    } finally { setDotBusy(false) }
+  }
+
+  // Step 2: generate + publish to the client portal.
+  async function sendDotPaperwork(orderId: string) {
+    setDotBusy(true); setDotResult(null)
+    try {
+      const res = await fetch(`/api/orders/${orderId}/dot-sheet`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setDotResult({ ok: false, msg: json.error || `Couldn't build the DOT sheet (${res.status})` }); return }
+      setDotCheck(null)
+      setDotResult({
+        ok: true,
+        msg: `DOT info sheet ready for ${json.unitCount} vehicle${json.unitCount === 1 ? '' : 's'} — the client can now download it from their portal.`,
+      })
+    } catch (e) {
+      setDotResult({ ok: false, msg: e instanceof Error ? e.message : String(e) })
+    } finally { setDotBusy(false) }
+  }
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -152,7 +213,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <header className="flex items-start justify-between px-6 py-4 border-b border-zinc-200">
-          <div>
+          <div className="flex items-start gap-3">
+            {data && <CategoryThumb categoryId={data.category.id} alt={data.category.name} />}
+            <div>
             <h2 className="text-lg font-semibold text-zinc-900">Assign units</h2>
             {data && (
               <p className="text-sm text-zinc-600 mt-0.5">
@@ -160,6 +223,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                 {data.booking.startDate.slice(0, 10)} → {data.booking.endDate.slice(0, 10)}
               </p>
             )}
+            </div>
           </div>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>
         </header>
@@ -285,6 +349,65 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
 
               {error && (
                 <div className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</div>
+              )}
+
+              {/* DOT paperwork — generate the per-vehicle DOT info packet for
+                  this job's assigned vehicles + publish it to the client portal. */}
+              {data.orderId && (
+                <section className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-zinc-800">DOT paperwork</div>
+                    {!dotCheck && (
+                      <button
+                        onClick={() => checkDot(data.orderId!)}
+                        disabled={dotBusy}
+                        className="border border-zinc-300 hover:bg-white disabled:opacity-40 text-zinc-800 text-xs font-semibold px-3 py-1.5 rounded"
+                      >
+                        {dotBusy ? 'Checking…' : 'Send DOT paperwork'}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    Year, make, VIN, plate &amp; latest BIT for the vehicles assigned to this job — published to the client&apos;s portal.
+                  </p>
+
+                  {dotCheck && (
+                    <div className="mt-2 space-y-2">
+                      {dotCheck.unitCount === 0 ? (
+                        <div className="text-xs text-rose-700">No assigned vehicle units on this job yet — assign units first.</div>
+                      ) : dotCheck.incomplete.length > 0 ? (
+                        <div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+                          <div className="font-semibold">Heads up — some vehicles are missing info:</div>
+                          <ul className="mt-1 list-disc list-inside">
+                            {dotCheck.incomplete.map((u) => (
+                              <li key={u.unitName}><span className="font-mono">{u.unitName}</span> — missing {u.missing.join(', ')}</li>
+                            ))}
+                          </ul>
+                          <div className="mt-1">The sheet will show these as &ldquo;Not on file.&rdquo; Send anyway?</div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-emerald-700">{dotCheck.unitCount} vehicle{dotCheck.unitCount === 1 ? '' : 's'} ready — all DOT info on file.</div>
+                      )}
+                      {dotCheck.unitCount > 0 && (
+                        <div className="flex gap-2">
+                          <button onClick={() => sendDotPaperwork(data.orderId!)} disabled={dotBusy} className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded">
+                            {dotBusy ? 'Generating…' : dotCheck.incomplete.length > 0 ? 'Generate & publish anyway' : 'Generate & publish to portal'}
+                          </button>
+                          <button onClick={() => setDotCheck(null)} className="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1.5">Cancel</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {dotResult && (
+                    <div className={`mt-2 rounded border px-2.5 py-2 text-xs ${dotResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-300 bg-rose-50 text-rose-800'}`}>
+                      {dotResult.msg}
+                      {dotResult.ok && (
+                        <> <a href={`/api/orders/${data.orderId}/dot-sheet`} target="_blank" rel="noreferrer" className="font-semibold underline ml-1">Download a copy</a></>
+                      )}
+                    </div>
+                  )}
+                </section>
               )}
             </>
           )}
