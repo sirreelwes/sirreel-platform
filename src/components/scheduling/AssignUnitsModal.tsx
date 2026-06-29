@@ -88,6 +88,29 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
     void refresh()
   }, [refresh])
 
+  async function unassign(assetId: string) {
+    setSubmitting(assetId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/scheduling/booking-items/${bookingItemId}/unassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId }),
+      })
+      const json = await res.json()
+      if (res.ok && json.ok) {
+        await refresh()
+        onChanged?.()
+        return
+      }
+      setError(json.reason || json.error || `Request failed (${res.status})`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
   async function assign(asset: Candidate, bufferOverride: boolean) {
     setSubmitting(asset.assetId)
     setError(null)
@@ -137,12 +160,17 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
 
           {data && (
             <>
+              <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm flex items-center gap-2">
+                <span className="font-semibold text-zinc-900">{Math.max(0, data.summary.availableToHold)}</span>
+                <span className="text-zinc-600">of {data.summary.serviceableCount} units available these dates</span>
+                <span className="ml-auto text-xs text-zinc-500">
+                  free {data.summary.freeCount} · buffer {data.summary.bufferCount} · booked {data.summary.bookedCount}
+                </span>
+              </div>
+
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-zinc-700">
                   <span className="font-semibold">{data.bookingItem.assignedCount}</span> of {data.bookingItem.quantity} assigned
-                </div>
-                <div className="text-zinc-500">
-                  free {data.summary.freeCount} · buffer {data.summary.bufferCount} · booked {data.summary.bookedCount}
                 </div>
                 <div className="ml-auto">
                   <span
@@ -167,7 +195,18 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                           <span className="font-mono text-zinc-900">{a.asset.unitName}</span>
                           <span className="ml-2 text-xs text-zinc-500">{a.asset.tier}</span>
                         </div>
-                        <span className="text-xs text-zinc-500">{a.status}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-zinc-500">{a.status}</span>
+                          {a.status === 'ASSIGNED' && (
+                            <button
+                              onClick={() => unassign(a.asset.id)}
+                              disabled={!!submitting}
+                              className="text-xs font-medium text-rose-600 hover:text-rose-700 disabled:opacity-40"
+                            >
+                              {submitting === a.asset.id ? 'Removing…' : 'Remove'}
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>

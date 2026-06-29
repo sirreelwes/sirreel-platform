@@ -20,6 +20,7 @@ import { useState } from 'react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { ContactPicker, type ContactPickerValue } from '@/components/shared/ContactPicker'
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
+import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 
 interface AvailabilitySummary {
   serviceableCount: number
@@ -32,6 +33,9 @@ interface AvailabilitySummary {
 interface CreatedHold {
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
   bookingItem: { id: string; quantity: number; status: string; holdRank?: number }
+  /** Category department from the holds response — drives whether the
+   *  optional unit-pick drawer opens (asset-bearing VEHICLES / STAGES). */
+  department?: string
   bufferOverrideUsed: boolean
   isBackup?: boolean
   holdRank?: number
@@ -129,6 +133,12 @@ export function NewHoldModal({
   const [submitting, setSubmitting] = useState(false)
   const [hardError, setHardError] = useState<string | null>(null)
   const [bufferWarning, setBufferWarning] = useState<{ reason: string; availability: AvailabilitySummary } | null>(null)
+  // Post-create OPTIONAL unit-pick phase: after an asset-bearing hold is
+  // created with no pre-bound unit, the same modal hands off to the
+  // AssignUnitsModal drawer for an optional specific-unit pick.
+  const [assignPhase, setAssignPhase] = useState<{ bookingItemId: string; hold: CreatedHold } | null>(null)
+
+  const ASSET_BEARING = new Set(['VEHICLES', 'STAGES'])
 
   const datesValid =
     /^\d{4}-\d{2}-\d{2}$/.test(startDateInput) &&
@@ -218,7 +228,16 @@ export function NewHoldModal({
             return
           }
         }
-        onCreated({ ...(json as CreatedHold), assignedAsset })
+        const created = { ...(json as CreatedHold), assignedAsset }
+        // Asset-bearing category, no unit pre-bound → hand off to the
+        // OPTIONAL unit-pick drawer for the new BookingItem. Bulk/supply
+        // categories (no discrete units) and pre-bound holds finish now.
+        const dept = (json as { department?: string }).department
+        if (!asset && dept && ASSET_BEARING.has(dept)) {
+          setAssignPhase({ bookingItemId: created.bookingItem.id, hold: created })
+          return
+        }
+        onCreated(created)
         return
       }
       if (res.status === 409 && json.error === 'buffer-encroachment' && json.needsOverride) {
@@ -236,6 +255,19 @@ export function NewHoldModal({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Optional unit-pick phase — reuse the AssignUnitsModal drawer. Closing it
+  // (with or without a pick) finalizes the hold; the pick is never required.
+  if (assignPhase) {
+    return (
+      <AssignUnitsModal
+        bookingItemId={assignPhase.bookingItemId}
+        bufferDays={bufferDays}
+        onClose={() => onCreated(assignPhase.hold)}
+        onChanged={() => {}}
+      />
+    )
   }
 
   return (

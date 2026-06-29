@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
   // Look up category for the dailyRate default; also confirms it exists.
   const category = await prisma.assetCategory.findUnique({
     where: { id: body.categoryId },
-    select: { id: true, name: true, dailyRate: true },
+    select: { id: true, name: true, dailyRate: true, department: true },
   })
   if (!category) return NextResponse.json({ error: 'category not found' }, { status: 404 })
 
@@ -295,6 +295,9 @@ export async function POST(req: NextRequest) {
           ok: true,
           booking: result.booking,
           bookingItem: result.bookingItem,
+          // Department drives whether the new-hold flow opens the unit-pick
+          // drawer (asset-bearing VEHICLES / STAGES only — not bulk supplies).
+          department: category.department,
           createdJobId: result.createdJobId,
           bufferOverrideUsed: Boolean(body.bufferOverride && qty > availability.freeCount && isPrimary),
           isBackup: !isPrimary,

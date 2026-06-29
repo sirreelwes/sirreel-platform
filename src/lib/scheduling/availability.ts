@@ -150,6 +150,12 @@ export async function getCategoryAvailability(
   startDate: Date,
   endDate: Date,
   bufferDays: number = 1,
+  // EXCLUDE-SELF: when recomputing availability for an EXISTING hold being
+  // edited (the unit-pick drawer reopened from a hold detail view), pass that
+  // BookingItem's id so its OWN assignments + pending REQUESTED qty don't count
+  // against it — otherwise the unit it's already on shows as self-conflicting
+  // and the pooled count is understated by its own demand.
+  excludeBookingItemId?: string | null,
 ): Promise<CategoryAvailability> {
   const category = await prisma.assetCategory.findUnique({
     where: { id: categoryId },
@@ -180,6 +186,8 @@ export async function getCategoryAvailability(
           status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
           startDate: { lte: queryEnd },
           endDate: { gte: queryStart },
+          // Exclude this hold's own assignments when editing it.
+          ...(excludeBookingItemId ? { bookingItemId: { not: excludeBookingItemId } } : {}),
         },
         select: { assetId: true, startDate: true, endDate: true },
       })
@@ -207,6 +215,8 @@ export async function getCategoryAvailability(
       categoryId,
       status: 'REQUESTED',
       holdRank: 1,
+      // Exclude this hold's own pending demand when editing it.
+      ...(excludeBookingItemId ? { id: { not: excludeBookingItemId } } : {}),
       booking: {
         startDate: { lte: endDate },
         endDate: { gte: startDate },

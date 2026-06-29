@@ -45,11 +45,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const url = new URL(_req.url)
   const bufferDays = parseInt(url.searchParams.get('bufferDays') ?? '1', 10) || 1
 
+  // Exclude THIS booking item's own assignments + pending demand so the
+  // unit it's already on isn't counted as a conflict against itself and the
+  // pooled summary reflects true remaining capacity for the edit.
   const availability = await getCategoryAvailability(
     bookingItem.categoryId,
     bookingItem.booking.startDate,
     bookingItem.booking.endDate,
     bufferDays,
+    bookingItem.id,
   )
 
   const assignedAssetIds = new Set(bookingItem.assignments.map((a) => a.assetId))

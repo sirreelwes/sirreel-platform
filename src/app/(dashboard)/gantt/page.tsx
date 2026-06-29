@@ -919,6 +919,14 @@ export default function GanttPage() {
                         </>
                       )}
                     </div>
+                    {selected.bookingItemId && (
+                      <button
+                        onClick={() => { setAssignBookingItemId(selected.bookingItemId); setSelected(null) }}
+                        className="w-full border border-zinc-300 hover:bg-zinc-50 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                      >
+                        Assign / change units
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
