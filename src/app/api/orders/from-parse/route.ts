@@ -59,7 +59,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { ClientTier, JobRole, LineItemDepartment, LineItemType, Prisma, ProductionType, RateType } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { nextOrderNumber, recalcOrderTotals, rentalDays as computeRentalDays } from '@/lib/orders'
+import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/orders'
 import { computeLineTotal } from '@/lib/orders/billing'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
@@ -346,6 +346,7 @@ export async function POST(req: NextRequest) {
         // when bound; else trust the AI-provided dept; PRO_SUPPLIES
         // as final fallback.
         let department: LineItemDepartment = raw.department ?? 'PRO_SUPPLIES'
+        let truckSlug: string | null = null
         if (raw.inventoryItemId) {
           const inv = await tx.inventoryItem.findUnique({
             where: { id: raw.inventoryItemId }, select: { department: true },
@@ -353,9 +354,9 @@ export async function POST(req: NextRequest) {
           if (inv) department = inv.department
         } else if (raw.assetCategoryId) {
           const ac = await tx.assetCategory.findUnique({
-            where: { id: raw.assetCategoryId }, select: { department: true },
+            where: { id: raw.assetCategoryId }, select: { department: true, slug: true },
           })
-          if (ac) department = ac.department
+          if (ac) { department = ac.department; truckSlug = ac.slug }
         }
 
         // Dates — per-line override > order range > today/today.
@@ -386,7 +387,8 @@ export async function POST(req: NextRequest) {
         } else if (raw.billableDays === null && !raw.pickupDate && !raw.returnDate) {
           days = null
         } else {
-          days = computeRentalDays(pickupResolved, returnResolved)
+          // Cube/camera trucks use the half-day-ends + weekly-cap rule.
+          days = estimateRentalDays(pickupResolved, returnResolved, truckSlug)
         }
 
         // Hold pre-flight for VEHICLES/STAGES lines. If the order has

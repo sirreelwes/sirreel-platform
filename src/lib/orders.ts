@@ -132,6 +132,45 @@ export function rentalDays(start: Date, end: Date): number {
   return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)) + 1);
 }
 
+// AssetCategory slugs that bill rental days on the cube/camera-truck rule
+// (see truckRentalDays). Confirmed cube-truck + camera-cube; extend here if
+// more truck categories adopt the rule.
+export const TRUCK_CATEGORY_SLUGS = new Set(["cube-truck", "camera-cube"]);
+
+/**
+ * Billable rental days for cube trucks & camera trucks (client-cost
+ * estimation rule, confirmed 2026-06-25). Let N = calendar days touched
+ * (date-only, inclusive):
+ *   - N=1 (same day, ≤24h) → 1
+ *   - N=2 (today→tomorrow)  → 2  (both days full)
+ *   - N≥3                   → N−1  (first & last day each billed as HALF)
+ * Then a weekly-rate cap of 5 billable days per 7 calendar days:
+ *   truckRentalDays = floor(N/7)*5 + base(N mod 7).
+ * Examples: 1,2,2,3,4,5 for 1–6 days; 7→5, 8→6, 12→9, 14→10.
+ */
+export function truckRentalDays(start: Date, end: Date): number {
+  // Calendar days touched, time-of-day ignored.
+  const p = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const r = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const n = Math.max(1, Math.round((r - p) / 86_400_000) + 1);
+  const base = (k: number): number => (k <= 0 ? 0 : k === 1 ? 1 : k === 2 ? 2 : k - 1);
+  const weeks = Math.floor(n / 7);
+  const rem = n - weeks * 7;
+  return Math.max(1, weeks * 5 + base(rem));
+}
+
+/**
+ * Days for a quote line, picking the rule by category: cube/camera trucks
+ * use truckRentalDays (half-day ends + weekly cap); every other category
+ * keeps the standard inclusive count. Used by the order line-item
+ * estimators when no explicit billableDays override is supplied.
+ */
+export function estimateRentalDays(start: Date, end: Date, categorySlug?: string | null): number {
+  return categorySlug && TRUCK_CATEGORY_SLUGS.has(categorySlug)
+    ? truckRentalDays(start, end)
+    : rentalDays(start, end);
+}
+
 // computeLineTotal moved to src/lib/orders/billing.ts in the May 9 billing
 // fix — totals are now department-aware (CAP_PER_WEEK / PERCENT_DISCOUNT /
 // PURCHASE) instead of the Phase 1 placeholder ceil(days/5). Callers should

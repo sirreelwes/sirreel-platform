@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
+import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
@@ -207,7 +207,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     } else if (billableDays === null && !pickupDate && !returnDate) {
       days = null;
     } else {
-      days = computeRentalDays(pickupResolved, returnResolved);
+      // Cube/camera trucks bill rental days on the half-day-ends + weekly-cap
+      // rule; every other category keeps the standard inclusive count.
+      let truckSlug: string | null = null;
+      if (assetCategoryId) {
+        const acSlug = await prisma.assetCategory.findUnique({
+          where: { id: assetCategoryId }, select: { slug: true },
+        });
+        truckSlug = acSlug?.slug ?? null;
+      }
+      days = estimateRentalDays(pickupResolved, returnResolved, truckSlug);
     }
 
     // Department is required by the new billing rules. If the client

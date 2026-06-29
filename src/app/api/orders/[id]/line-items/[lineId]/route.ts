@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { recalcOrderTotals, rentalDays as computeRentalDays } from "@/lib/orders";
+import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
@@ -134,7 +134,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
         } else if (pickupDate !== undefined || returnDate !== undefined) {
           const p = pickupDate !== undefined ? (pickupDate ? new Date(pickupDate) : existing.pickupDate) : existing.pickupDate;
           const r = returnDate !== undefined ? (returnDate ? new Date(returnDate) : existing.returnDate) : existing.returnDate;
-          if (p && r) effectiveDays = computeRentalDays(p, r);
+          if (p && r) {
+            // Cube/camera trucks use the half-day-ends + weekly-cap rule.
+            const effCatId = assetCategoryId !== undefined ? (assetCategoryId || null) : existing.assetCategoryId;
+            let truckSlug: string | null = null;
+            if (effCatId) {
+              const ac = await prisma.assetCategory.findUnique({ where: { id: effCatId }, select: { slug: true } });
+              truckSlug = ac?.slug ?? null;
+            }
+            effectiveDays = estimateRentalDays(p, r, truckSlug);
+          }
         }
 
         const lineTotal = computeLineTotal({
