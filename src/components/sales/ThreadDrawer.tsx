@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FormTypeBadge, type FormType } from './FormTypeBadge';
 import { QuickReplyModal } from './QuickReplyModal';
+import { buildQuickReplyInputs } from './QuickReplyLauncher';
 
 interface ExtractedMessage {
   contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
@@ -762,21 +763,19 @@ export function ThreadDrawer(props: Props) {
         )}
       </div>
 
-      {showQuickReply && (
-        <QuickReplyModal
-          emailText={(data?.messages || [])
-            .map((m) => `── ${m.sentAt} · ${(m.direction || '').toUpperCase()} · ${m.fromAddress}\nSubject: ${m.subject}\n${m.bodyText || m.snippet || ''}`)
-            .join('\n\n')}
-          defaultRecipientEmail={data?.messages?.[0]?.fromAddress ?? null}
-          inboundEmailMessageId={
-            (data?.messages || []).find((m) => (m.direction || '').toLowerCase() === 'inbound')?.id ??
-            data?.messages?.[0]?.id ??
-            null
-          }
-          onClose={() => setShowQuickReply(false)}
-          onSent={() => setShowQuickReply(false)}
-        />
-      )}
+      {showQuickReply && (() => {
+        // Shared input-building — identical to the Pipeline list row's launch.
+        const qr = buildQuickReplyInputs(data?.messages || []);
+        return (
+          <QuickReplyModal
+            emailText={qr.emailText}
+            defaultRecipientEmail={qr.defaultRecipientEmail}
+            inboundEmailMessageId={qr.inboundEmailMessageId}
+            onClose={() => setShowQuickReply(false)}
+            onSent={() => setShowQuickReply(false)}
+          />
+        );
+      })()}
     </>
   );
 }

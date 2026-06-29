@@ -41,6 +41,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ThreadDrawer } from './ThreadDrawer'
+import { QuickReplyLauncher } from './QuickReplyLauncher'
 import { FormTypeBadge, type FormType } from './FormTypeBadge'
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
 
@@ -139,6 +140,9 @@ export function NewInboundColumn({
   const [suggestions, setSuggestions] = useState<SuggestionRecord[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null)
+  // Quick Reply launched straight from a suggestion row (same modal the
+  // inquiry-mode ThreadDrawer opens — shared launcher, no duplicated logic).
+  const [quickReplyEmailId, setQuickReplyEmailId] = useState<string | null>(null)
   // Add-on triage state. When set, the modal is open against this
   // persistent inquiry; the rep picks an existing Job, then confirm
   // hits POST /api/inquiries/[id]/add-on and redirects to the new
@@ -343,6 +347,7 @@ export function NewInboundColumn({
                     busy={busyId === item.row.emailId}
                     onOpen={() => setDrawerEmailId(item.row.emailId)}
                     onCapture={() => captureSuggestion(item.row.emailId)}
+                    onQuickReply={() => setQuickReplyEmailId(item.row.emailId)}
                     onDismiss={() => dismissSuggestion(item.row.emailId)}
                   />
                 ),
@@ -365,6 +370,14 @@ export function NewInboundColumn({
             setDrawerEmailId(null)
           }}
           busy={busyId === drawerEmailId}
+        />
+      )}
+
+      {quickReplyEmailId && (
+        <QuickReplyLauncher
+          emailId={quickReplyEmailId}
+          onClose={() => setQuickReplyEmailId(null)}
+          onSent={() => { setQuickReplyEmailId(null); load() }}
         />
       )}
 
@@ -617,12 +630,14 @@ function SuggestionCard({
   busy,
   onOpen,
   onCapture,
+  onQuickReply,
   onDismiss,
 }: {
   suggestion: SuggestionRecord
   busy: boolean
   onOpen: () => void
   onCapture: () => void
+  onQuickReply: () => void
   onDismiss: () => void
 }) {
   const contactName = suggestion.person
@@ -675,6 +690,16 @@ function SuggestionCard({
           className="text-xs font-semibold bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg"
         >
           {busy ? '…' : 'Capture & Quote →'}
+        </button>
+        {/* Quick Reply — secondary/outline so Capture & Quote stays primary.
+            Opens the SAME QuickReplyModal as the inquiry-mode ThreadDrawer
+            (suggestion rows open that drawer in inquiry mode). */}
+        <button
+          onClick={onQuickReply}
+          disabled={busy}
+          className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-gray-400 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+        >
+          Quick Reply
         </button>
         <button
           onClick={onDismiss}
