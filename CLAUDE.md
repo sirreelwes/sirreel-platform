@@ -39,6 +39,12 @@ Confirm output is purely additive (no DROP TABLE / DROP COLUMN) before pushing.
 ### Python file edits
 Use `python3 - << 'EOF'` heredoc syntax to avoid zsh parsing issues.
 
+### Verification fixtures & cleanup (live DB safety)
+The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — there is no separate test DB, so "test-looking" rows may be real user activity.
+- Fixtures must be **self-owned**: a dedicated prefix (e.g. `ZZTEST_` / `zz-*`) OR rows created in the same run whose IDs you capture in a variable.
+- Cleanup deletes **by captured ID only**. NEVER `deleteMany` by pattern, shape, name match, or entity scope (e.g. "all RateChangeLog rows for category X").
+- If you can't prove by captured ID that you created a row, leave it and report it. (See SHIPLOG.md "Hard Rules" — origin: a cleanup once destroyed a real rate-change audit row.)
+
 ## Architecture
 
 ### Data Sources of Truth

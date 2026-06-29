@@ -2,6 +2,16 @@
 
 Append-only record of shipped changes. Newest at top. Each entry: SHA, commit subject, why-it-matters one-liner.
 
+## Hard Rules (standing — read before any verification/cleanup against the live DB)
+
+**Self-owned fixtures only.** The dev server and any ad-hoc Prisma scripts hit the SAME Neon DB as production (hq.sirreel.com) — there is no separate test DB. So "test-looking" rows may be real user activity.
+
+1. **Fixtures must be self-owned:** either a dedicated identifiable prefix (e.g. `ZZTEST_` / `zz-*` on name/slug) OR records created in the same run whose IDs are captured in a variable.
+2. **Cleanup deletes by captured ID only.** Only delete rows whose IDs were captured at creation time in the same run. NEVER `deleteMany` by pattern, shape, name match, entity scope (e.g. "all RateChangeLog rows for Cube Truck"), or "looks like a test row."
+3. **No proof, no delete.** If you cannot prove by a captured ID that you created a row, leave it and report it — do not delete it.
+
+Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cube } })` destroyed the real audit row for Wes's live $175→$200 Cube Truck edit (the rate survived; the `RateChangeLog` entry was lost and had to be reconstructed).
+
 ## 2026-06-25
 
 - `coi-copy-link-button` â added a "Copy COI link" button on the company detail page (/crm/[id], in the header action row by the COI status) and the job detail page (/jobs/[id], dark header action column). One click calls the existing authed `GET /api/coi/link?companyId=|jobId=`, copies the returned `/coi/<token>` no-login upload URL to the clipboard, and shows an inline "Link copied ✓" confirmation (mirrors CopyIntakeLinkButton's pattern — no global toast). Failure shows inline "Couldn't generate — retry"; never throws into render; clipboard-blocked fallback prompts the URL. Shared `CopyCoiLinkButton` component with light/dark variants using existing lt-* / zinc design tokens. `npx tsc --noEmit` clean.
