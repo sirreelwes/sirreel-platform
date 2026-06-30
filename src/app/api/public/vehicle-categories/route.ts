@@ -34,8 +34,9 @@ export async function GET() {
       sortOrder: true,
       // Live link to Fleet Pricing — when present, the owned-vehicle rate is
       // read straight from here (never copied), so a Fleet Pricing edit flows
-      // through with no second place to maintain.
-      assetCategory: { select: { dailyRate: true } },
+      // through with no second place to maintain. imageUrl is the fallback
+      // thumbnail source when the row has no photoUrl of its own.
+      assetCategory: { select: { dailyRate: true, imageUrl: true } },
     },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })
@@ -44,12 +45,16 @@ export async function GET() {
     // Linked Fleet Pricing rate WINS; else the row's own fallback dailyRate;
     // null → price-on-quote (the sub-rental trailers).
     const effective = r.assetCategory?.dailyRate ?? r.dailyRate
+    // Thumbnail: prefer the row's own photoUrl, else the linked AssetCategory
+    // image. Both are PRIVATE blobs → expose only the public scoped proxy path
+    // (never the raw URL), and only when an image actually exists.
+    const hasImage = !!(r.photoUrl || r.assetCategory?.imageUrl)
     return {
       id: r.id,
       name: r.name,
       slug: r.slug,
       subtitle: r.subtitle,
-      photoUrl: r.photoUrl,
+      photoUrl: hasImage ? `/api/public/catalog-image/vehicle/${r.id}` : null,
       dailyRate: effective == null ? null : Number(effective),
       sortOrder: r.sortOrder,
     }

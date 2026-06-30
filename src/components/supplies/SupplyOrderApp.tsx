@@ -41,6 +41,8 @@ interface CatalogItem {
   /** Intentional no-charge inclusion (e.g. recycle bins). Shown as
    *  "Included" and NOT orderable — it comes with the order, not a free line. */
   included?: boolean
+  /** Public scoped image-proxy path, or null → placeholder. Never a raw blob URL. */
+  image?: string | null
   type: string
   category: string
 }
@@ -967,6 +969,23 @@ function ItemCard({
         inCart ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
       }`}
     >
+      {/* Thumbnail (public scoped proxy) — fixed box so there's no layout shift;
+          placeholder when the item has no photo. */}
+      {item.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.image}
+          alt={item.name}
+          loading="lazy"
+          className="flex-none w-11 h-11 rounded-[8px] object-cover bg-[#f0eadb] border border-[#e4dfd4]"
+        />
+      ) : (
+        <div className="flex-none w-11 h-11 rounded-[8px] bg-[#f6efdc] border border-[#e9e1cc] flex items-center justify-center">
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+          </svg>
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-[14.5px] leading-[1.22] break-words">
           {item.name}
