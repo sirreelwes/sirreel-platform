@@ -8,7 +8,7 @@ import { OpenQuotesKanban } from '@/components/sales/OpenQuotesKanban';
 import { ActiveJobsKanban } from '@/components/sales/ActiveJobsKanban';
 import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget';
 import { ProspectsSection } from '@/components/sales/ProspectsSection';
-import { FunnelMetricsStrip } from '@/components/sales/FunnelMetricsStrip';
+import { OpenQuotesPanel } from '@/components/sales/OpenQuotesPanel';
 import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
 import { FollowUpsDuePanel } from '@/components/sales/FollowUpsDuePanel';
 import { CopyIntakeLinkButton } from '@/components/intake/CopyIntakeLinkButton';
@@ -115,15 +115,18 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      <FunnelMetricsStrip scope={scope} />
+      {/* New inbound is the most time-sensitive — surfaced first. */}
+      <NewInboundColumn onChange={refreshAll} />
+
+      {/* Open Quotes — every quote sent to a client but not yet booked, with
+          amount + age, stalest first (most at-risk money on top). */}
+      <OpenQuotesPanel scope={scope} />
 
       <SalesSignalsStrip scope={scope} onChange={refreshAll} />
 
       <FollowUpsDuePanel scope={scope} />
 
       <SalesReservationsWidget />
-
-      <NewInboundColumn onChange={refreshAll} />
 
       <OpenQuotesKanban
         jobs={openQuoteJobs.map((j) => ({
