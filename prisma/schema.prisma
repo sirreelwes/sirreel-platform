@@ -99,10 +99,11 @@ model AssetCategory {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assets         Asset[]
-  bookingItems   BookingItem[]
-  orderLineItems OrderLineItem[]
-  rateChangeLogs RateChangeLog[]
+  assets           Asset[]
+  bookingItems     BookingItem[]
+  orderLineItems   OrderLineItem[]
+  rateChangeLogs   RateChangeLog[]
+  vehicleCategories VehicleCategory[]
 
   @@index([rwId])
   @@index([needsReview])
@@ -276,12 +277,22 @@ model VehicleCategory {
   slug       String   @unique
   subtitle   String?
   photoUrl   String?  @map("photo_url")
+  // dailyRate is now a FALLBACK/override only. When assetCategoryId is set,
+  // the public order form reads the price LIVE from the linked
+  // AssetCategory.dailyRate (Fleet Pricing — one source of truth), so owned
+  // vehicles never have a second place to maintain a rate. NULL here +
+  // unlinked = "price on quote" (the sub-rental trailers).
   dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
   sortOrder  Int      @default(0) @map("sort_order")
   active     Boolean  @default(true)
+  // Link to the operational Fleet Pricing category (owned vehicles). NULL for
+  // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
+  assetCategoryId String?       @map("asset_category_id")
+  assetCategory   AssetCategory? @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  @@index([assetCategoryId])
   @@map("vehicle_categories")
 }
 

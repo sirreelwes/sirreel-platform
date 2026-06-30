@@ -32,19 +32,28 @@ export async function GET() {
       photoUrl: true,
       dailyRate: true,
       sortOrder: true,
+      // Live link to Fleet Pricing — when present, the owned-vehicle rate is
+      // read straight from here (never copied), so a Fleet Pricing edit flows
+      // through with no second place to maintain.
+      assetCategory: { select: { dailyRate: true } },
     },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })
 
-  const categories = rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    slug: r.slug,
-    subtitle: r.subtitle,
-    photoUrl: r.photoUrl,
-    dailyRate: r.dailyRate == null ? null : Number(r.dailyRate),
-    sortOrder: r.sortOrder,
-  }))
+  const categories = rows.map((r) => {
+    // Linked Fleet Pricing rate WINS; else the row's own fallback dailyRate;
+    // null → price-on-quote (the sub-rental trailers).
+    const effective = r.assetCategory?.dailyRate ?? r.dailyRate
+    return {
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      subtitle: r.subtitle,
+      photoUrl: r.photoUrl,
+      dailyRate: effective == null ? null : Number(effective),
+      sortOrder: r.sortOrder,
+    }
+  })
 
   return NextResponse.json({
     categories,
