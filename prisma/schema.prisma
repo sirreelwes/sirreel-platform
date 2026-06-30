@@ -2231,6 +2231,12 @@ model InventoryItem {
   description     String?
   dailyRate       Decimal             @default(0) @map("daily_rate") @db.Decimal(10, 2)
   weeklyRate      Decimal             @default(0) @map("weekly_rate") @db.Decimal(10, 2)
+  // Intentional no-charge inclusion (e.g. recycle bins that come with a
+  // basecamp order). Disambiguates a $0 dailyRate: includedFree=true →
+  // public form shows "Included" (not orderable); a $0 with includedFree=false
+  // is a missing price and is HIDDEN from the public form (fail-safe — never
+  // render "FREE"/orderable to a client). Internal/rep views ignore this flag.
+  includedFree    Boolean             @default(false) @map("included_free")
   qtyOwned        Int                 @default(0) @map("qty_owned")
   replacementCost Decimal?            @map("replacement_cost") @db.Decimal(10, 2)
   imageUrl        String?             @map("image_url")

@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       description: true,
       aliases: true,
       dailyRate: true,
+      includedFree: true,
       type: true,
       category: {
         select: { id: true, slug: true, name: true, sortOrder: true },
@@ -92,11 +93,19 @@ export async function GET(req: NextRequest) {
     slug: string
     name: string
     sortOrder: number
-    items: Array<{ id: string; name: string; price: number; type: string; category: string }>
+    items: Array<{ id: string; name: string; price: number; included: boolean; type: string; category: string }>
   }
   const groups = new Map<string, CatGroup>()
   for (const it of items) {
     if (!it.category) continue
+    const price = Number(it.dailyRate)
+    // $0 disambiguation (fail-safe):
+    //   price > 0                         → normal, orderable.
+    //   price === 0 && includedFree       → "Included", not orderable.
+    //   price === 0 && !includedFree      → missing price → HIDE entirely, so
+    //                                       an un-priced item never leaks as
+    //                                       "FREE"/orderable to a client.
+    if (price === 0 && !it.includedFree) continue
     const slot =
       groups.get(it.category.id) ?? {
         id: it.category.id,
@@ -108,7 +117,8 @@ export async function GET(req: NextRequest) {
     slot.items.push({
       id: it.id,
       name: it.description ?? '',
-      price: Number(it.dailyRate),
+      price,
+      included: price === 0 && it.includedFree,
       type: it.type, // EQUIPMENT | EXPENDABLE | … (catalog-side authority)
       category: it.category.slug,
     })

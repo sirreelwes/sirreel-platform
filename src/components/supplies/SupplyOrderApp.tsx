@@ -38,6 +38,9 @@ interface CatalogItem {
   id: string
   name: string
   price: number
+  /** Intentional no-charge inclusion (e.g. recycle bins). Shown as
+   *  "Included" and NOT orderable — it comes with the order, not a free line. */
+  included?: boolean
   type: string
   category: string
 }
@@ -130,7 +133,9 @@ const DELIVERY_OPTIONS: { id: DeliveryMethod; label: string; desc: string }[] = 
 ]
 
 function fmtMoney(n: number): string {
-  if (n === 0) return 'FREE'
+  // Never render "FREE" to a client — a $0 is either an "Included" item
+  // (handled separately) or a price-on-quote line. Bare $0 is the safe floor.
+  if (n === 0) return '$0'
   return '$' + (Number.isInteger(n) ? n.toString() : n.toFixed(2))
 }
 function fmtTotal(n: number): string {
@@ -972,8 +977,8 @@ function ItemCard({
           )}
         </div>
         <div className="font-semibold text-[12.5px] text-[#8b857a] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          {item.price === 0 ? (
-            <span className="text-[#3f7d52] font-extrabold">FREE</span>
+          {item.included ? (
+            <span className="font-bold text-[#a37f2c]">Included with your order</span>
           ) : (
             <>
               <b className="text-[#0c0c0d] font-extrabold text-[14px]">{fmtMoney(item.price)}</b> {unitTxt}
@@ -981,7 +986,13 @@ function ItemCard({
           )}
         </div>
       </div>
-      {inCart ? (
+      {item.included ? (
+        // Intentional no-charge inclusion — comes with the order, not an
+        // orderable free line. No Add button / qty stepper.
+        <span className="flex-none text-[10.5px] font-bold tracking-[0.07em] uppercase text-[#a37f2c] bg-[#f6efdc] rounded-md px-2.5 py-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          Included
+        </span>
+      ) : inCart ? (
         <div className="flex-none flex items-center border-[1.5px] border-[#c39a3f] rounded-[10px] overflow-hidden h-[38px]">
           <button onClick={() => onSetQty(qty - 1)} className="w-[34px] h-full bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
           <span className="min-w-[34px] text-center font-extrabold text-[15px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{qty}</span>
