@@ -38,7 +38,7 @@
  * (passed in as onNewInquiry); this component focuses on the list.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ThreadDrawer } from './ThreadDrawer'
 import { QuickReplyLauncher } from './QuickReplyLauncher'
@@ -149,9 +149,13 @@ export function NewInboundColumn({
   // order. Phase 1b: persistent inquiries only — suggestion cards
   // would need a 2-step capture-then-pick flow that's out of scope.
   const [addOnInquiry, setAddOnInquiry] = useState<PersistentInquiry | null>(null)
+  // Clock time of the last successful list refresh — surfaced as a subtle
+  // "updated HH:MM" so the user can see the auto-refresh is live.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
 
   const load = useCallback(() => {
-    // Both streams in parallel.
+    // Both streams in parallel. We replace state in place (never reset to
+    // null), so a refresh doesn't flash an empty list or reset scroll.
     Promise.all([
       fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
       fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
@@ -161,11 +165,36 @@ export function NewInboundColumn({
       // Same convention as InquiriesSection.
       const sug = (sugData?.newInquiries ?? sugData?.suggestions ?? []) as SuggestionRecord[]
       setSuggestions(sug)
+      setLastUpdatedAt(new Date())
     })
   }, [])
 
   useEffect(() => {
     load()
+  }, [load])
+
+  // Defer auto-refresh while something is in flight so we never clobber an
+  // open modal/drawer or a row action mid-flight. A ref (not a dep) lets the
+  // interval/focus handlers read the latest value without re-subscribing.
+  const blockRefreshRef = useRef(false)
+  blockRefreshRef.current = !!(busyId || drawerEmailId || quickReplyEmailId || addOnInquiry)
+
+  // Auto-refresh: poll every 60s + refetch when the tab regains focus /
+  // becomes visible, so an open or backgrounded tab self-updates as new
+  // inquiries land. Skips while an action is in flight (the action's own
+  // load() or the next tick catches up). load() replaces data in place →
+  // non-disruptive (no scroll reset, no flash).
+  useEffect(() => {
+    const maybeRefresh = () => { if (!blockRefreshRef.current) load() }
+    const onVisibility = () => { if (document.visibilityState === 'visible') maybeRefresh() }
+    const interval = setInterval(maybeRefresh, 60_000)
+    window.addEventListener('focus', maybeRefresh)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', maybeRefresh)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [load])
 
   // Deep-link support: /sales/pipeline?thread=<emailId> opens the
@@ -296,9 +325,16 @@ export function NewInboundColumn({
             Untriaged leads — inquiries (manual, web, Gmail) and inbox suggestions waiting on a capture decision.
           </p>
         </div>
-        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-          {isLoading ? '…' : `${totalCount} pending`}
-        </span>
+        <div className="text-right">
+          <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+            {isLoading ? '…' : `${totalCount} pending`}
+          </span>
+          {lastUpdatedAt && (
+            <span className="block text-[10px] text-gray-400 mt-0.5 normal-case tracking-normal font-normal">
+              Updated {lastUpdatedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · auto-refreshes
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="p-3">
