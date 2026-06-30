@@ -29,6 +29,24 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const STAFF_HOST = 'hq.sirreel.com'
 const PORTAL_HOST = 'tsx.sirreel.com'
+const ORDERS_HOST = 'orders.sirreel.com'
+
+// Paths reachable on the public supply-order host. Root is rewritten to the
+// form; everything else outside this list 404s so no gated/admin surface is
+// ever exposed on orders.sirreel.com. The form is fully public (no auth) and
+// calls only /api/public/* (catalog, vehicle-categories, supply-request).
+const ORDERS_ALLOWED_PREFIXES = [
+  '/order/supplies',   // the public supply form itself (rewrite target + direct hits)
+  '/api/public/',      // catalog / vehicle-categories / supply-request
+  '/_next/',           // Next.js build assets
+  '/_vercel/',         // Vercel insights
+  '/favicon',
+  '/sirreel-logo',
+  '/s-logo',
+  '/full-logo',
+  '/public/',
+  '/api/health',
+]
 
 // Paths that are allowed on the portal host. Everything else 404s.
 // Order matters: most-specific prefixes first.
@@ -36,7 +54,11 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/portal/',          // every client-facing portal page
   '/api/portal/',      // every portal API route
   '/client/',          // legacy /client/[token] route (sibling to /portal/[token])
+  '/client-login',     // client magic-link login page (posts to /api/client/auth)
   '/api/client/',      // legacy client API
+  '/coi/',             // no-login client COI upload (/coi/[token])
+  '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
+  '/api/cardpointe/',  // portal pay-panel CardPointe config (client payment iframe)
   '/intake/',          // public agent-shared intake forms (/intake + /intake/[slug])
   '/api/intake/',      // intake submit
   '/api/public/',      // public supply-request, etc.
@@ -84,6 +106,40 @@ export function middleware(req: NextRequest): NextResponse {
 
   // Local / preview — no host routing.
   if (isLocalHost(host)) return tagged(NextResponse.next(), host, 'pass:local')
+
+  // ── orders.sirreel.com (public supply-order form) ─────────────
+  if (host === ORDERS_HOST) {
+    // Root → render the public supply form WITHOUT login. Rewrite (not
+    // redirect) so the URL stays a clean bare orders.sirreel.com.
+    if (pathname === '/' || pathname === '') {
+      const url = req.nextUrl.clone()
+      url.pathname = '/order/supplies'
+      return tagged(NextResponse.rewrite(url), host, 'orders:root-rewrite')
+    }
+    // Portal paths (e.g. the form header's "Sign in" → /portal/auth/sign-in)
+    // bounce to the canonical portal host — keeps the link working without
+    // exposing portal surfaces on the orders host.
+    if (
+      pathname.startsWith('/portal/') ||
+      pathname.startsWith('/api/portal/') ||
+      pathname.startsWith('/client/') ||
+      pathname.startsWith('/api/client/')
+    ) {
+      const url = req.nextUrl.clone()
+      url.host = PORTAL_HOST
+      url.protocol = 'https:'
+      url.port = ''
+      return tagged(NextResponse.redirect(url, 308), host, 'orders:portal-redirect')
+    }
+    // Allow the form + its public API + assets; 404 everything else so no
+    // gated/admin route is reachable on this host.
+    const allowed = ORDERS_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
+    if (allowed) return tagged(NextResponse.next(), host, 'orders:allow')
+    return tagged(new NextResponse('Not found', {
+      status: 404,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    }), host, 'orders:block-404')
+  }
 
   // ── tsx.sirreel.com (client portal) ───────────────────────────
   if (host === PORTAL_HOST) {

@@ -10,11 +10,14 @@
  *
  * Override with SUPPLY_ORDER_BASE_URL for non-prod (e.g. localhost).
  *
- * ⚠️  DNS: orders.sirreel.com must resolve + serve /order/supplies before
- *     real clients receive these emails. Not yet confirmed live — verify
- *     DNS before the first real send, or set SUPPLY_ORDER_BASE_URL back to
- *     the portal host as a stopgap.
+ * The form is served at the bare ROOT of orders.sirreel.com — the host
+ * middleware rewrites "/" → the public /order/supplies form, so the client-
+ * facing link is a clean `https://orders.sirreel.com` with no path. (The
+ * /order/supplies path still resolves directly, so older emailed links keep
+ * working.)
+ *
+ * ⚠️  DNS: orders.sirreel.com must resolve before real clients receive these
+ *     emails. Confirm it's live (the domain is attached to the sirreel-fleet
+ *     Vercel project) before the first real send.
  */
-const SUPPLY_ORDER_BASE = process.env.SUPPLY_ORDER_BASE_URL || 'https://orders.sirreel.com'
-
-export const SUPPLY_ORDER_URL = `${SUPPLY_ORDER_BASE}/order/supplies`
+export const SUPPLY_ORDER_URL = process.env.SUPPLY_ORDER_BASE_URL || 'https://orders.sirreel.com'
