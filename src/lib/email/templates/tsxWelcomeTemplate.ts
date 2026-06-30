@@ -131,10 +131,19 @@ function rangeLine(start: string | null, end: string | null): string {
 }
 
 export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEmail {
+  // First-name only, from whichever field is present. Always take the first
+  // whitespace token (so a full name passed as clientFirstName still yields
+  // just the first name). Fall back to "there" for empty OR email-looking
+  // input — never render "Hi ," or "Hi <email>,". Capitalize a fully-lowercase
+  // token (colin → Colin) while preserving mixed case (McDonald, O'Brien).
+  const rawName = (input.clientFirstName?.trim() || input.clientFullName?.trim() || '')
+  const firstToken = rawName.split(/\s+/)[0] || ''
   const first =
-    input.clientFirstName?.trim() ||
-    input.clientFullName?.trim()?.split(/\s+/)[0] ||
-    'there'
+    firstToken && !firstToken.includes('@')
+      ? (firstToken === firstToken.toLowerCase()
+          ? firstToken.charAt(0).toUpperCase() + firstToken.slice(1)
+          : firstToken)
+      : 'there'
   const safeFirst = escapeHtml(first)
   const safeAgentName = escapeHtml(input.agentName)
   const safeNote = input.personalNote?.trim() ? escapeHtml(input.personalNote.trim()) : null
@@ -153,7 +162,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
       : `Welcome to TSX — The SirReel Experience`
 
   // [[PLACEHOLDER]] body copy — Wes review.
-  const greeting = `Hey ${safeFirst},`
+  const greeting = `Hi ${safeFirst},`
   const welcomeOpener = `Thanks for reaching out — really glad we get to work on this one with you. <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
@@ -230,7 +239,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         : ''}
       <tr>
         <td align="center" style="padding: 16px 32px 4px;">
-          <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Send your production supply list &rarr;</a>
+          <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Gear and Vehicle Request &rarr;</a>
         </td>
       </tr>`
     : ''
@@ -375,7 +384,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // Plain-text alternative. Mirrors the HTML semantics for clients
   // that strip HTML or for accessibility readers.
   const textParts: string[] = [
-    `Hey ${first},`,
+    `Hi ${first},`,
     '',
     withAvailability
       ? `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`
@@ -397,7 +406,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     if (av!.askForDetails) {
       textParts.push('', `One quick thing for our files — what's the production company and project name for this booking? Just reply with those and I'll get everything set up.`)
     }
-    textParts.push('', `Send your production supply list here: ${av!.suppliesUrl}`)
+    textParts.push('', `Gear and vehicle request: ${av!.suppliesUrl}`)
   }
   if (withQuote) {
     textParts.push(
