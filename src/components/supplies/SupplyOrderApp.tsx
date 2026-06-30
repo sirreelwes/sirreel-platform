@@ -1313,30 +1313,70 @@ function CartSidebar({
             Browse the catalog and tap <em>Add</em>.
           </div>
         ) : (
-          lines.map((l) => {
-            const isRental = l.itemKind === 'VEHICLE' || l.type === 'EQUIPMENT'
-            const days = isRental ? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
-            return (
-              <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-semibold leading-tight truncate">{l.name}</div>
-                  <div className="text-[11.5px] text-[#a8a294] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                    {l.price === 0
-                      ? 'PRICE ON QUOTE'
-                      : `${fmtMoney(l.price)}${isRental ? `/d × ${days}d` : ' ea'}`}
+          (() => {
+            // Same rental predicate as lineEstimate (VEHICLE or EQUIPMENT =
+            // rental ×days; everything else = flat one-time purchase). Partition
+            // so the client immediately sees what's rented vs. bought.
+            const isRentalLine = (l: CartLine) => l.itemKind === 'VEHICLE' || l.type === 'EQUIPMENT'
+            const rentalLines = lines.filter(isRentalLine)
+            const purchaseLines = lines.filter((l) => !isRentalLine(l))
+            const bothGroups = rentalLines.length > 0 && purchaseLines.length > 0
+            const groupSubtotal = (g: CartLine[]) => g.reduce((s, l) => s + lineEstimate(l), 0)
+
+            const renderLine = (l: CartLine) => {
+              const isRental = isRentalLine(l)
+              const days = isRental ? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
+              return (
+                <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-semibold leading-tight truncate">{l.name}</div>
+                    <div className="text-[11.5px] text-[#a8a294] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                      {l.price === 0
+                        ? 'PRICE ON QUOTE'
+                        : `${fmtMoney(l.price)}${isRental ? `/d × ${days}d` : ' ea'}`}
+                    </div>
+                  </div>
+                  <div className="flex items-center border border-[#2e2e30] rounded-lg overflow-hidden h-[30px]">
+                    <button onClick={() => onSetQty(l.cartLineId, l.qty - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
+                    <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.qty}</span>
+                    <button onClick={() => onSetQty(l.cartLineId, l.qty + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
+                  </div>
+                  <div className="font-bold text-[13px] min-w-[54px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                    {fmtTotal(lineEstimate(l))}
                   </div>
                 </div>
-                <div className="flex items-center border border-[#2e2e30] rounded-lg overflow-hidden h-[30px]">
-                  <button onClick={() => onSetQty(l.cartLineId, l.qty - 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">−</button>
-                  <span className="min-w-[26px] text-center font-bold text-[13px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{l.qty}</span>
-                  <button onClick={() => onSetQty(l.cartLineId, l.qty + 1)} className="w-7 h-full bg-[#171717] text-[#c39a3f] text-base font-bold hover:bg-[#222]">+</button>
+              )
+            }
+
+            const group = (label: string, hint: string, g: CartLine[]) => (
+              <div>
+                <div className="flex items-baseline justify-between px-3 pt-2 pb-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8b857a]" style={{ fontFamily: 'Archivo, sans-serif' }}>{label}</span>
+                  <span className="text-[10px] text-[#6f6a60]">{hint}</span>
                 </div>
-                <div className="font-bold text-[13px] min-w-[54px] text-right" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                  {fmtTotal(lineEstimate(l))}
-                </div>
+                {g.map(renderLine)}
+                {/* Per-group subtotal only when BOTH groups exist — with a single
+                    kind it would just duplicate the EST. TOTAL below. */}
+                {bothGroups && (
+                  <div className="flex justify-between px-3 py-1.5 mt-0.5 border-t border-[#242427] text-[12px]">
+                    <span className="text-[#a8a294] font-semibold" style={{ fontFamily: 'Archivo, sans-serif' }}>{label} subtotal</span>
+                    <span className="font-bold text-[#e8e3d7]" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(groupSubtotal(g))}</span>
+                  </div>
+                )}
               </div>
             )
-          })
+
+            return (
+              <>
+                {rentalLines.length > 0 && group('Rental', 'per day × days', rentalLines)}
+                {purchaseLines.length > 0 && (
+                  <div className={rentalLines.length > 0 ? 'mt-2 pt-1.5 border-t-2 border-[#2e2e30]' : ''}>
+                    {group('Expendables · purchased', 'one-time', purchaseLines)}
+                  </div>
+                )}
+              </>
+            )
+          })()
         )}
       </div>
       <div className="px-5 py-5 border-t border-[#242427] bg-[#0a0a0b]">
