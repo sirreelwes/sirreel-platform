@@ -7,9 +7,12 @@
  * a clear next step.
  */
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
+import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
+import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
 
-const HOST = process.env.PORTAL_BASE_URL || 'https://tsx.sirreel.com'
-export const SUPPLIES_URL = `${HOST}/order/supplies`
+// Re-exported for back-compat with existing importers; the canonical home is
+// src/lib/email/supplyUrl.ts (orders.sirreel.com).
+export const SUPPLIES_URL = SUPPLY_ORDER_URL
 
 export interface QuickReplyCategoryInput {
   id: string
@@ -81,53 +84,30 @@ export interface ComposeQuickReplyArgs {
   personalNote?: string | null
 }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
 export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: string; html: string; text: string } {
-  const greetName = (args.recipientName || '').trim().split(/\s+/)[0] || 'there'
   const job = args.jobName || args.clientName || 'your shoot'
   const start = fmtDate(args.pickup)
   const end = fmtDate(args.ret)
   const dateLine = start && end ? `${start} – ${end}` : start ? `starting ${start}` : 'your dates'
-  const bullets = args.lines.map(lineSentence)
+  const lines = args.lines.map(lineSentence)
   const anyTight = args.lines.some((l) => l.status !== 'available')
-  const note = args.personalNote?.trim()
+  const nextStep = anyTight
+    ? `If you can confirm the dates and final list, I'll lock these in and send a firm quote right away.`
+    : `Just say the word and I'll put a firm quote together once you confirm the dates and final supply list.`
 
-  const t: string[] = []
-  t.push(`Hi ${greetName},`, '')
-  t.push(`Thanks for reaching out about ${job} — happy to help get this on the calendar.`, '')
-  if (bullets.length) {
-    t.push(`Here's where availability stands for ${dateLine}:`)
-    for (const b of bullets) t.push(`  • ${b}`)
-  } else {
-    t.push(`Send over the item list whenever it's ready and I'll confirm availability line by line for ${dateLine}.`)
-  }
-  t.push('')
-  t.push(`When you're ready, you can send your production supply list here: ${SUPPLIES_URL}`, '')
-  if (note) t.push(note, '')
-  t.push(
-    anyTight
-      ? `If you can confirm the dates and final list, I'll lock these in and send a firm quote right away.`
-      : `Just say the word and I'll put a firm quote together once you confirm the dates and final supply list.`,
-  )
-  t.push('', `Best,`, args.agentName)
-  const text = t.join('\n')
-
-  const liHtml = bullets.map((b) => `<li style="margin:4px 0;">${esc(b)}</li>`).join('')
-  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#16191d;line-height:1.55;">
-  <p>Hi ${esc(greetName)},</p>
-  <p>Thanks for reaching out about <strong>${esc(job)}</strong> — happy to help get this on the calendar.</p>
-  ${bullets.length
-      ? `<p>Here's where availability stands for <strong>${esc(dateLine)}</strong>:</p><ul style="padding-left:18px;margin:8px 0;">${liHtml}</ul>`
-      : `<p>Send over the item list whenever it's ready and I'll confirm availability line by line for <strong>${esc(dateLine)}</strong>.</p>`}
-  <p>When you're ready, you can send your production supply list here:<br/><a href="${SUPPLIES_URL}" style="color:#b45309;font-weight:600;">${SUPPLIES_URL}</a></p>
-  ${note ? `<p>${esc(note)}</p>` : ''}
-  <p>${anyTight
-      ? `If you can confirm the dates and final list, I'll lock these in and send a firm quote right away.`
-      : `Just say the word and I'll put a firm quote together once you confirm the dates and final supply list.`}</p>
-  <p>Best,<br/>${esc(args.agentName)}</p>
-</div>`
-
-  const subject = `Re: ${job} — availability for ${dateLine}`
-  return { subject, html, text }
+  // Reuse Send Quote's branded shell (buildTsxWelcomeEmail) in 'availability'
+  // mode — one template, both flows. The supply link renders as a styled
+  // button inside the shell; the plain-English availability lines + next-step
+  // are preserved.
+  return buildTsxWelcomeEmail({
+    mode: 'availability',
+    clientFirstName: args.recipientName ?? null,
+    clientFullName: args.recipientName ?? null,
+    agentName: args.agentName,
+    agentEmail: '',
+    agentPhone: null,
+    personalNote: args.personalNote ?? null,
+    quote: null,
+    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep },
+  })
 }

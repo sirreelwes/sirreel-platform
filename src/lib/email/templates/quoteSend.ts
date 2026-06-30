@@ -14,13 +14,17 @@
  * (absolute URLs because email clients can't resolve relative paths).
  */
 
+import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
+
 // Logos are static assets served by Vercel from /public. They resolve
 // from either hostname (same project), but we use the portal host so
-// every URL the client sees in this email lives on tsx.sirreel.com.
+// the logo image URLs in this email live on tsx.sirreel.com.
 const HOST = process.env.PORTAL_BASE_URL || 'https://tsx.sirreel.com'
 const ABSOLUTE_LOGO_URL_WHITE = `${HOST}/sirreel-logo-white.png`
 const ABSOLUTE_S_MARK_URL_WHITE = `${HOST}/s-logo-white.png`
-const SUPPLY_URL = `${HOST}/order/supplies`
+// Supply-order link lives on its own domain (orders.sirreel.com), centralized
+// in src/lib/email/supplyUrl.ts — NOT on the portal host.
+const SUPPLY_URL = SUPPLY_ORDER_URL
 
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'

@@ -22,13 +22,15 @@
  */
 
 import type { CadenceStage } from '@/lib/sales/quoteCadence'
+import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
 
 // See quoteSend.ts for the rationale on routing the email asset URLs
 // through the portal host.
 const HOST = process.env.PORTAL_BASE_URL || 'https://tsx.sirreel.com'
 const ABSOLUTE_LOGO_URL_WHITE = `${HOST}/sirreel-logo-white.png`
 const ABSOLUTE_S_MARK_URL_WHITE = `${HOST}/s-logo-white.png`
-const SUPPLY_URL = `${HOST}/order/supplies`
+// Supply-order link is centralized (orders.sirreel.com) — NOT the portal host.
+const SUPPLY_URL = SUPPLY_ORDER_URL
 
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'

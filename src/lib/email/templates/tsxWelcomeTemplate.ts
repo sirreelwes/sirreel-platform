@@ -42,7 +42,23 @@ const TEXT = '#1f2937'
 const MUTED = '#6b7280'
 const CTA_BG = '#D97706' // amber-600, matches portal page buttons
 
-export type TsxWelcomeMode = 'welcome-only' | 'welcome-with-quote'
+export type TsxWelcomeMode = 'welcome-only' | 'welcome-with-quote' | 'availability'
+
+/** Quick Reply availability-confirmation content, rendered in the SAME brand
+ *  shell as the welcome/quote modes (one template, no fork). */
+export interface TsxAvailabilityBlock {
+  /** Job / production / client label for the opener + subject. */
+  jobName: string
+  /** Human date range, e.g. "August 12 – August 15" or "your dates". */
+  dateRange: string
+  /** Plain-English per-category availability sentences (already computed by
+   *  the caller). Empty → the "send your item list" fallback copy. */
+  lines: string[]
+  /** The production supply-order link (orders.sirreel.com). */
+  suppliesUrl: string
+  /** The closing next-step sentence (firm-quote tee-up). */
+  nextStep: string
+}
 
 export interface TsxWelcomeQuoteBlock {
   /** Order number — surfaces in the snapshot block. */
@@ -76,6 +92,8 @@ export interface TsxWelcomeTemplateInput {
   personalNote: string | null
   /** Required when mode='welcome-with-quote'. Ignored otherwise. */
   quote: TsxWelcomeQuoteBlock | null
+  /** Required when mode='availability'. Ignored otherwise. */
+  availability?: TsxAvailabilityBlock | null
 }
 
 export interface RenderedEmail {
@@ -120,22 +138,29 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const safePhone = input.agentPhone ? escapeHtml(input.agentPhone) : null
 
   const withQuote = input.mode === 'welcome-with-quote' && !!input.quote
+  const withAvailability = input.mode === 'availability' && !!input.availability
   const q = input.quote
+  const av = input.availability
 
   // [[PLACEHOLDER]] subject — Wes review.
-  const subject = withQuote
-    ? `Your TSX quote for ${q!.jobName}`
-    : `Welcome to TSX — The SirReel Experience`
+  const subject = withAvailability
+    ? `Re: ${av!.jobName} — availability for ${av!.dateRange}`
+    : withQuote
+      ? `Your TSX quote for ${q!.jobName}`
+      : `Welcome to TSX — The SirReel Experience`
 
   // [[PLACEHOLDER]] body copy — Wes review.
   const greeting = `Hey ${safeFirst},`
   const welcomeOpener = `Thanks for reaching out — really glad we get to work on this one with you. <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
-  const opener = withQuote ? quoteOpener : welcomeOpener
+  const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
+  const opener = withAvailability ? availabilityOpener : withQuote ? quoteOpener : welcomeOpener
 
-  const closer = withQuote
-    ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
-    : `When you're ready to book something, just send me the details and I'll spin up a quote.`
+  const closer = withAvailability
+    ? escapeHtml(av!.nextStep)
+    : withQuote
+      ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
+      : `When you're ready to book something, just send me the details and I'll spin up a quote.`
 
   const personalNoteBlock = safeNote
     ? `
@@ -175,6 +200,27 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
               </td>
             </tr>
           </table>
+        </td>
+      </tr>`
+    : ''
+
+  // Availability block — plain-English lines + a styled supply-order CTA
+  // button (not a raw URL). Same card/border vocabulary as the quote block.
+  const availabilityBlock = withAvailability
+    ? `
+      <tr>
+        <td style="padding: 8px 32px 4px;">
+          ${av!.lines.length
+            ? `<p style="font-size: 16px; color: ${TEXT}; margin: 0 0 8px; line-height: 1.6;">Here's where availability stands for <strong>${escapeHtml(av!.dateRange)}</strong>:</p>
+               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+                 ${av!.lines.map((l, i) => `<tr><td style="padding: 12px 20px; font-size: 15px; color: ${TEXT}; line-height: 1.5;${i > 0 ? ` border-top: 1px solid #f3f4f6;` : ''}">${escapeHtml(l)}</td></tr>`).join('')}
+               </table>`
+            : `<p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">Send over the item list whenever it's ready and I'll confirm availability line by line for <strong>${escapeHtml(av!.dateRange)}</strong>.</p>`}
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding: 16px 32px 4px;">
+          <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Send your production supply list &rarr;</a>
         </td>
       </tr>`
     : ''
@@ -252,6 +298,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
           </tr>
           ${personalNoteBlock}
           ${quoteBlock}
+          ${availabilityBlock}
           <tr>
             <td style="padding: 16px 32px 4px;">
               <p style="font-size: 16px; color: ${TEXT}; margin: 0 0 24px; line-height: 1.6;">${closer}</p>
@@ -311,12 +358,24 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const textParts: string[] = [
     `Hey ${first},`,
     '',
-    withQuote
-      ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
-      : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
+    withAvailability
+      ? `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`
+      : withQuote
+        ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
+        : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
+  }
+  if (withAvailability) {
+    textParts.push('')
+    if (av!.lines.length) {
+      textParts.push(`Here's where availability stands for ${av!.dateRange}:`)
+      for (const l of av!.lines) textParts.push(`  • ${l}`)
+    } else {
+      textParts.push(`Send over the item list whenever it's ready and I'll confirm availability line by line for ${av!.dateRange}.`)
+    }
+    textParts.push('', `Send your production supply list here: ${av!.suppliesUrl}`)
   }
   if (withQuote) {
     textParts.push(
@@ -334,9 +393,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   }
   textParts.push(
     '',
-    withQuote
-      ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
-      : `When you're ready to book something, just send me the details and I'll spin up a quote.`,
+    withAvailability
+      ? av!.nextStep
+      : withQuote
+        ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
+        : `When you're ready to book something, just send me the details and I'll spin up a quote.`,
     '',
     `— ${input.agentName}`,
     `& Team SirReel`,
