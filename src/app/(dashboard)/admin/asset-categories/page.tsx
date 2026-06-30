@@ -48,7 +48,7 @@ export default function AdminAssetCategoriesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<{ dailyRate: string; weeklyRate: string }>({ dailyRate: "", weeklyRate: "" });
+  const [editValues, setEditValues] = useState<{ name: string; dailyRate: string; weeklyRate: string }>({ name: "", dailyRate: "", weeklyRate: "" });
   const [saving, setSaving] = useState(false);
 
   const [hideTest, setHideTest] = useState(true);
@@ -110,15 +110,16 @@ export default function AdminAssetCategoriesPage() {
 
   const startEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setEditValues({ dailyRate: cat.dailyRate ?? "", weeklyRate: cat.weeklyRate ?? "" });
+    setEditValues({ name: cat.name ?? "", dailyRate: cat.dailyRate ?? "", weeklyRate: cat.weeklyRate ?? "" });
   };
 
   const saveEdit = async (id: string) => {
+    if (editValues.name.trim() === "") { alert("Name can't be empty."); return; }
     setSaving(true);
     const res = await fetch(`/api/admin/asset-categories/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dailyRate: editValues.dailyRate, weeklyRate: editValues.weeklyRate === "" ? null : editValues.weeklyRate }),
+      body: JSON.stringify({ name: editValues.name, dailyRate: editValues.dailyRate, weeklyRate: editValues.weeklyRate === "" ? null : editValues.weeklyRate }),
     });
     setSaving(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Failed to save"); return; }
@@ -256,8 +257,8 @@ export default function AdminAssetCategoriesPage() {
 
 function DepartmentGroup(props: {
   dept: string; rows: Category[];
-  editingId: string | null; editValues: { dailyRate: string; weeklyRate: string };
-  setEditValues: (v: { dailyRate: string; weeklyRate: string }) => void;
+  editingId: string | null; editValues: { name: string; dailyRate: string; weeklyRate: string };
+  setEditValues: (v: { name: string; dailyRate: string; weeklyRate: string }) => void;
   saving: boolean; startEdit: (c: Category) => void; saveEdit: (id: string) => void; cancelEdit: () => void;
   openGuard: (c: Category) => void; restore: (c: Category) => void;
   imgV: number; imgBusy: string | null;
@@ -283,10 +284,21 @@ function DepartmentGroup(props: {
                   onUpload={(f) => uploadImage(cat.id, f)} onRemove={() => removeImage(cat.id)} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-lt-fg font-medium">{cat.name}</span>
+                    {editing ? (
+                      <input
+                        type="text"
+                        value={editValues.name}
+                        onChange={(e) => setEditValues({ ...editValues, name: e.target.value })}
+                        placeholder="Category name"
+                        className="w-56 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-amber-500"
+                      />
+                    ) : (
+                      <span className="text-lt-fg font-medium">{cat.name}</span>
+                    )}
                     {archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg2 px-1.5 py-0.5 rounded">Archived</span>}
                     {isTest(cat) && !archived && <span className="text-[10px] uppercase tracking-wide bg-lt-inner text-lt-fg3 px-1.5 py-0.5 rounded">Test</span>}
                   </div>
+                  {/* Slug is the stable key — display only, never edited on rename. */}
                   <span className="block text-lt-fg3 font-mono text-[11px]">{cat.slug}</span>
                 </div>
               </div>

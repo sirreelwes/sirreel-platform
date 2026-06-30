@@ -33,6 +33,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const data: Record<string, unknown> = {};
 
+  // Display NAME edit. Trimmed, non-empty. The slug is the stable key and is
+  // never touched here. A name change is not a rate change → no RateChangeLog.
+  if (body.name !== undefined) {
+    const n = String(body.name).trim();
+    if (n === '') {
+      return NextResponse.json({ error: 'name must be a non-empty string' }, { status: 400 });
+    }
+    data.name = n;
+  }
+
   if (body.dailyRate !== undefined) {
     const d = parseMoney(body.dailyRate);
     if (d === null) {
@@ -111,6 +121,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             source: 'MANUAL',
             appliedById: gate.user.id,
           },
+        });
+      }
+      // Keep the client-facing order-form name in sync: any VehicleCategory
+      // linked to this AssetCategory adopts the new name so internal + public
+      // stay consistent. updateMany is a no-op when nothing is linked.
+      if (data.name !== undefined) {
+        await tx.vehicleCategory.updateMany({
+          where: { assetCategoryId: id },
+          data: { name: data.name as string },
         });
       }
       return u;
