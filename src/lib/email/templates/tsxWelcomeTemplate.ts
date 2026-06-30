@@ -58,9 +58,10 @@ export interface TsxAvailabilityBlock {
   suppliesUrl: string
   /** The closing next-step sentence (firm-quote tee-up). */
   nextStep: string
-  /** When true, fold a polite request for the production company + project
-   *  name into the reply (used when we don't have them on file). */
-  askForDetails?: boolean
+  /** Fold a request for ONLY the missing field(s) into the reply. Set per
+   *  field so we never ask for something we already have. */
+  askForCompany?: boolean
+  askForJob?: boolean
   /** Rep's own message — REPLACES the templated opener/closer prose while the
    *  greeting, the real availability block + supply CTA, and the sign-off stay
    *  intact. Plain text; newlines become paragraph breaks. */
@@ -243,10 +244,16 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
             : `<p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">Send over the item list whenever it's ready and I'll confirm availability line by line for <strong>${escapeHtml(av!.dateRange)}</strong>.</p>`}
         </td>
       </tr>
-      ${av!.askForDetails
+      ${(av!.askForCompany || av!.askForJob)
         ? `<tr>
         <td style="padding: 14px 32px 0;">
-          <p style="font-size: 15px; color: ${TEXT}; margin: 0; line-height: 1.6; border-left: 3px solid ${ACCENT}; padding-left: 12px;">One quick thing for our files — what's the <strong>production company</strong> and <strong>project name</strong> for this booking? Just reply with those and I'll get everything set up.</p>
+          <p style="font-size: 15px; color: ${TEXT}; margin: 0; line-height: 1.6; border-left: 3px solid ${ACCENT}; padding-left: 12px;">One quick thing for our files — what's the ${
+            av!.askForCompany && av!.askForJob
+              ? '<strong>production company</strong> and <strong>project name</strong>'
+              : av!.askForCompany
+                ? '<strong>production company</strong>'
+                : '<strong>project name</strong>'
+          } for this booking? Just reply with th${av!.askForCompany && av!.askForJob ? 'ose' : 'at'} and I'll get everything set up.</p>
         </td>
       </tr>`
         : ''}
@@ -418,8 +425,15 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     } else {
       textParts.push(`Send over the item list whenever it's ready and I'll confirm availability line by line for ${av!.dateRange}.`)
     }
-    if (av!.askForDetails) {
-      textParts.push('', `One quick thing for our files — what's the production company and project name for this booking? Just reply with those and I'll get everything set up.`)
+    if (av!.askForCompany || av!.askForJob) {
+      const askField =
+        av!.askForCompany && av!.askForJob
+          ? 'production company and project name'
+          : av!.askForCompany
+            ? 'production company'
+            : 'project name'
+      const reply = av!.askForCompany && av!.askForJob ? 'those' : 'that'
+      textParts.push('', `One quick thing for our files — what's the ${askField} for this booking? Just reply with ${reply} and I'll get everything set up.`)
     }
     textParts.push('', `Gear and vehicle request: ${av!.suppliesUrl}`)
   }

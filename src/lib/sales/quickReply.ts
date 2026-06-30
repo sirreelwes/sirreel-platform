@@ -113,6 +113,17 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
     agentPhone: null,
     personalNote: args.personalNote ?? null,
     quote: null,
-    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep, askForDetails: !!args.askForDetails, customBody: args.customMessage ?? null },
+    // Ask only for the field(s) we actually lack (computed from the current,
+    // possibly rep-typed, values) — never ask for a company/job we already have.
+    availability: {
+      jobName: job,
+      dateRange: dateLine,
+      lines,
+      suppliesUrl: SUPPLY_ORDER_URL,
+      nextStep,
+      askForCompany: !!args.askForDetails && !args.clientName?.trim(),
+      askForJob: !!args.askForDetails && !args.jobName?.trim(),
+      customBody: args.customMessage ?? null,
+    },
   })
 }

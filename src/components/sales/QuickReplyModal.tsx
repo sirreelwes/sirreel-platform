@@ -208,10 +208,26 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                     />
                   </div>
                 </div>
-                <label className="flex items-start gap-2 text-[12px] text-gray-700 cursor-pointer select-none">
-                  <input type="checkbox" checked={askForDetails} onChange={(e) => setAskForDetails(e.target.checked)} className="mt-0.5 accent-emerald-600" />
-                  <span>Ask the client for their production company &amp; project name in the reply{!clientName?.trim() && !jobName?.trim() ? <span className="text-gray-400"> — we don&apos;t have these yet</span> : null}</span>
-                </label>
+                {/* Ask only for the field(s) we don't have. Hidden entirely
+                    when both are filled — there's nothing to ask. The label
+                    names exactly what the reply will request. */}
+                {(() => {
+                  const companyMissing = !clientName?.trim();
+                  const jobMissing = !jobName?.trim();
+                  if (!companyMissing && !jobMissing) return null;
+                  const askField =
+                    companyMissing && jobMissing
+                      ? 'production company & project name'
+                      : companyMissing
+                        ? 'production company'
+                        : 'project name';
+                  return (
+                    <label className="flex items-start gap-2 text-[12px] text-gray-700 cursor-pointer select-none">
+                      <input type="checkbox" checked={askForDetails} onChange={(e) => setAskForDetails(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                      <span>Ask the client for their {askField} in the reply<span className="text-gray-400"> — we don&apos;t have {companyMissing && jobMissing ? 'these' : 'this'} yet</span></span>
+                    </label>
+                  );
+                })()}
                 <div className="text-[12px] text-gray-700 pt-0.5 border-t border-gray-200">
                   <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
                   <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
