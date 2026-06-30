@@ -10,6 +10,12 @@ export async function GET(req: NextRequest) {
     const assets = await prisma.asset.findMany({
       where: {
         isActive: true,
+        // Fleet is VEHICLE maintenance only — display filter. Studio/stage
+        // assets (department=STAGES, e.g. the "Studios" category) stay fully
+        // intact in the DB and bookable via the reservations/availability
+        // system; they're just not vehicles, so they don't belong on Fleet.
+        // This is a read-only SELECT filter — zero effect on booking.
+        category: { department: 'VEHICLES' },
         ...(categoryId ? { categoryId } : {}),
         ...(status ? { status: status as any } : {}),
       },
@@ -49,7 +55,7 @@ export async function GET(req: NextRequest) {
     })
 
     const categories = await prisma.assetCategory.findMany({
-      where: { assets: { some: { isActive: true } } },
+      where: { department: 'VEHICLES', assets: { some: { isActive: true } } },
       select: { id: true, name: true, _count: { select: { assets: true } } },
       orderBy: { name: 'asc' }
     })
@@ -62,10 +68,11 @@ export async function GET(req: NextRequest) {
     })
     const latestBitByAsset = new Map(latestBits.map((b) => [b.assetId, b._max.inspectionDate]))
 
-    // Compute status counts
+    // Compute status counts — vehicles only, so the ALL/AVAILABLE/MAINT
+    // tallies match the (vehicle-only) list above.
     const statusCounts = await prisma.asset.groupBy({
       by: ['status'],
-      where: { isActive: true },
+      where: { isActive: true, category: { department: 'VEHICLES' } },
       _count: { id: true }
     })
 
