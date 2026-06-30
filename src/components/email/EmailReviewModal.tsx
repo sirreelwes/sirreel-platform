@@ -87,6 +87,8 @@ export interface QuickReplyPayload {
   pickup: string | null;
   return: string | null;
   categories: { id: string; name: string; quantity: number }[];
+  /** Fold a request for the production company + project name into the reply. */
+  askForDetails: boolean;
   /** EmailMessage id of the inbound being replied to — drives CRM capture on send. */
   inboundEmailMessageId: string | null;
 }

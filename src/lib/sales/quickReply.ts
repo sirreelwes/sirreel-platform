@@ -82,6 +82,8 @@ export interface ComposeQuickReplyArgs {
   lines: QuickReplyLine[]
   agentName: string
   personalNote?: string | null
+  /** Fold a request for the production company + project name into the reply. */
+  askForDetails?: boolean
 }
 
 export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: string; html: string; text: string } {
@@ -108,6 +110,6 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
     agentPhone: null,
     personalNote: args.personalNote ?? null,
     quote: null,
-    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep },
+    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep, askForDetails: !!args.askForDetails },
   })
 }

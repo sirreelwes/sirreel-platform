@@ -52,6 +52,9 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [holdable, setHoldable] = useState<{ companyId: string; personId: string } | null>(null);
 
   const [softHold, setSoftHold] = useState(true);
+  // Fold a request for the prod company + project name into the reply.
+  // Default ON when the parse gave us neither — that's the "missing info" case.
+  const [askForDetails, setAskForDetails] = useState(false);
   const [holdStatus, setHoldStatus] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<EmailReviewTarget | null>(null);
@@ -74,6 +77,9 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
       setClientName(parsed.clientName ?? null);
       setJobName(parsed.productionName ?? null);
+      // Default the "ask the client" toggle ON when we have neither the
+      // production company nor a job name — the reply will request them.
+      setAskForDetails(!(parsed.clientName || parsed.productionName));
       setPickup(parsed.startDate ?? null);
       setRet(parsed.endDate ?? null);
       setRecipientEmail(parsed.contactEmail ?? defaultRecipientEmail ?? null);
@@ -110,11 +116,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const buildPayload = () => ({
     recipientEmail: recipientEmail!,
     recipientName,
-    clientName,
-    jobName,
+    clientName: clientName?.trim() || null,
+    jobName: jobName?.trim() || null,
     pickup,
     return: ret,
     categories: cats,
+    askForDetails,
     inboundEmailMessageId: inboundEmailMessageId ?? null,
   });
 
@@ -180,10 +187,35 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
           {phase === 'ready' && (
             <>
-              <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-[12px] text-gray-700 space-y-1">
-                <div><span className="text-gray-400">Client</span> · <span className="font-semibold">{clientName || '—'}</span>{jobName ? <> · {jobName}</> : null}</div>
-                <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
-                <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2.5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Production company</label>
+                    <input
+                      value={clientName ?? ''}
+                      onChange={(e) => setClientName(e.target.value)}
+                      placeholder="e.g. Golden Heart Films"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Project / job name</label>
+                    <input
+                      value={jobName ?? ''}
+                      onChange={(e) => setJobName(e.target.value)}
+                      placeholder="e.g. Neon Nights"
+                      className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
+                    />
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 text-[12px] text-gray-700 cursor-pointer select-none">
+                  <input type="checkbox" checked={askForDetails} onChange={(e) => setAskForDetails(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                  <span>Ask the client for their production company &amp; project name in the reply{!clientName?.trim() && !jobName?.trim() ? <span className="text-gray-400"> — we don&apos;t have these yet</span> : null}</span>
+                </label>
+                <div className="text-[12px] text-gray-700 pt-0.5 border-t border-gray-200">
+                  <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
+                  <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
+                </div>
               </div>
 
               <div>

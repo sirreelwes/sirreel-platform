@@ -58,6 +58,9 @@ export interface TsxAvailabilityBlock {
   suppliesUrl: string
   /** The closing next-step sentence (firm-quote tee-up). */
   nextStep: string
+  /** When true, fold a polite request for the production company + project
+   *  name into the reply (used when we don't have them on file). */
+  askForDetails?: boolean
 }
 
 export interface TsxWelcomeQuoteBlock {
@@ -218,6 +221,13 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
             : `<p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">Send over the item list whenever it's ready and I'll confirm availability line by line for <strong>${escapeHtml(av!.dateRange)}</strong>.</p>`}
         </td>
       </tr>
+      ${av!.askForDetails
+        ? `<tr>
+        <td style="padding: 14px 32px 0;">
+          <p style="font-size: 15px; color: ${TEXT}; margin: 0; line-height: 1.6; border-left: 3px solid ${ACCENT}; padding-left: 12px;">One quick thing for our files — what's the <strong>production company</strong> and <strong>project name</strong> for this booking? Just reply with those and I'll get everything set up.</p>
+        </td>
+      </tr>`
+        : ''}
       <tr>
         <td align="center" style="padding: 16px 32px 4px;">
           <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Send your production supply list &rarr;</a>
@@ -226,6 +236,30 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     : ''
 
   const signOff = `${safeAgentName}<br/><span style="color: ${MUTED}; font-size: 14px;">&amp; Team SirReel</span>`
+
+  // Header badge ("Welcome!") — shown on welcome/quote emails; suppressed on
+  // the availability (Quick Reply) email, which is a reply, not a welcome. The
+  // logo spans the full header width when the badge is gone.
+  const showHeaderBadge = !withAvailability
+  const headerLogoWidth = showHeaderBadge ? '60%' : '100%'
+  const headerBadgeCell = showHeaderBadge
+    ? `<td valign="middle" align="right" style="width: 40%;">
+                    <span style="
+                      display: inline-block;
+                      font-family: 'Bradley Hand ITC', 'Bradley Hand', 'Segoe Print', 'Marker Felt', 'Comic Sans MS', cursive;
+                      font-size: 22px;
+                      font-weight: 700;
+                      color: ${ACCENT};
+                      transform: rotate(-20deg);
+                      -webkit-transform: rotate(-20deg);
+                      -ms-transform: rotate(-20deg);
+                      text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+                      line-height: 1;
+                      padding: 0 4px;
+                      white-space: nowrap;
+                    ">Welcome!</span>
+                  </td>`
+    : ''
 
   // TSX tagline — identical small-caps treatment as the thank-you
   // template; same widths and offsets so the two emails feel like
@@ -258,34 +292,19 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
             <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
-              <!-- Logo left + "Welcome" badge right. Same treatment
-                   as the thank-you's "Thank you!" badge — Bradley
-                   Hand, 22px, -20° tilt, gold. -->
+              <!-- Logo left + optional hand-script badge on the right
+                   (welcome/quote only; suppressed on the Quick Reply /
+                   availability email). -->
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td valign="middle" align="left" style="width: 60%;">
+                  <td valign="middle" align="left" style="width: ${headerLogoWidth};">
                     <img
                       src="https://hq.sirreel.com/sirreel-logo-white.png"
                       alt="SirReel"
                       style="height: 28px; width: auto; display: block;"
                     />
                   </td>
-                  <td valign="middle" align="right" style="width: 40%;">
-                    <span style="
-                      display: inline-block;
-                      font-family: 'Bradley Hand ITC', 'Bradley Hand', 'Segoe Print', 'Marker Felt', 'Comic Sans MS', cursive;
-                      font-size: 22px;
-                      font-weight: 700;
-                      color: ${ACCENT};
-                      transform: rotate(-20deg);
-                      -webkit-transform: rotate(-20deg);
-                      -ms-transform: rotate(-20deg);
-                      text-shadow: 0 1px 0 rgba(0,0,0,0.25);
-                      line-height: 1;
-                      padding: 0 4px;
-                      white-space: nowrap;
-                    ">Welcome!</span>
-                  </td>
+                  ${headerBadgeCell}
                 </tr>
               </table>
             </td>
@@ -374,6 +393,9 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
       for (const l of av!.lines) textParts.push(`  • ${l}`)
     } else {
       textParts.push(`Send over the item list whenever it's ready and I'll confirm availability line by line for ${av!.dateRange}.`)
+    }
+    if (av!.askForDetails) {
+      textParts.push('', `One quick thing for our files — what's the production company and project name for this booking? Just reply with those and I'll get everything set up.`)
     }
     textParts.push('', `Send your production supply list here: ${av!.suppliesUrl}`)
   }
