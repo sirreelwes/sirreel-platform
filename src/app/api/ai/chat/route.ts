@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-5-20250929',
             max_tokens: 500,
             system: `You are SirReel's AI fleet assistant. Be concise. Today is ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.\n\nFLEET:\n${FLEET_SUMMARY}\n\nBOOKINGS:\n${BOOKINGS_LIST}\n\nMAINTENANCE:\n${MAINT_LIST}`,
             messages: [{ role: 'user', content: message }],

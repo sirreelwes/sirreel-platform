@@ -21,7 +21,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ClaimDocType } from '@prisma/client'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-sonnet-4-5-20250929'
 const MAX_TOKENS = 600
 
 // Vocabulary the classifier picks from. Intentionally narrower than the

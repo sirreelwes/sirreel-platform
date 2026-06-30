@@ -66,7 +66,7 @@ ${mtList || 'None'}`;
   ];
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 600,
     system: systemPrompt,
     messages,
@@ -94,7 +94,7 @@ export async function generateDemandLetter(claimData: {
   policyNumber?: string;
 }) {
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-5-20250929',
     max_tokens: 1500,
     system: `You are a professional demand letter writer for SirReel, a production vehicle rental company in Los Angeles. Write formal, professional demand letters for insurance claims related to vehicle damage. Include specific dollar amounts, dates, and supporting evidence references. Be firm but professional. The letter should be structured with: header, facts of the case, damages breakdown (repair + loss of use), total demand, and a 30-day response deadline.`,
     messages: [
