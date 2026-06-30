@@ -84,6 +84,9 @@ export interface ComposeQuickReplyArgs {
   personalNote?: string | null
   /** Fold a request for the production company + project name into the reply. */
   askForDetails?: boolean
+  /** Rep's own message — replaces the templated prose; the branded shell, the
+   *  real availability block + supply CTA, and the sign-off stay intact. */
+  customMessage?: string | null
 }
 
 export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: string; html: string; text: string } {
@@ -110,6 +113,6 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
     agentPhone: null,
     personalNote: args.personalNote ?? null,
     quote: null,
-    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep, askForDetails: !!args.askForDetails },
+    availability: { jobName: job, dateRange: dateLine, lines, suppliesUrl: SUPPLY_ORDER_URL, nextStep, askForDetails: !!args.askForDetails, customBody: args.customMessage ?? null },
   })
 }

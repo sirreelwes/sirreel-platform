@@ -61,6 +61,10 @@ export interface TsxAvailabilityBlock {
   /** When true, fold a polite request for the production company + project
    *  name into the reply (used when we don't have them on file). */
   askForDetails?: boolean
+  /** Rep's own message — REPLACES the templated opener/closer prose while the
+   *  greeting, the real availability block + supply CTA, and the sign-off stay
+   *  intact. Plain text; newlines become paragraph breaks. */
+  customBody?: string | null
 }
 
 export interface TsxWelcomeQuoteBlock {
@@ -166,10 +170,19 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const welcomeOpener = `Thanks for reaching out — really glad we get to work on this one with you. <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
-  const opener = withAvailability ? availabilityOpener : withQuote ? quoteOpener : welcomeOpener
+  // Custom-message mode: the rep's own prose REPLACES the templated opener (and
+  // the closer is dropped) — but the greeting, availability block + supply CTA,
+  // and sign-off all stay. Plain text → HTML paragraphs.
+  const customBody = withAvailability ? av!.customBody?.trim() || null : null
+  const customBodyHtml = customBody
+    ? customBody.split(/\n{2,}/).map((para) => escapeHtml(para.trim()).replace(/\n/g, '<br/>')).filter(Boolean).join('</p><p style="font-size: 16px; color: ' + TEXT + '; margin: 12px 0 0; line-height: 1.6;">')
+    : null
+  const opener = withAvailability
+    ? (customBodyHtml ?? availabilityOpener)
+    : withQuote ? quoteOpener : welcomeOpener
 
   const closer = withAvailability
-    ? escapeHtml(av!.nextStep)
+    ? (customBody ? '' : escapeHtml(av!.nextStep))
     : withQuote
       ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
       : `When you're ready to book something, just send me the details and I'll spin up a quote.`
@@ -327,11 +340,13 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
           ${personalNoteBlock}
           ${quoteBlock}
           ${availabilityBlock}
-          <tr>
+          ${closer
+            ? `<tr>
             <td style="padding: 16px 32px 4px;">
               <p style="font-size: 16px; color: ${TEXT}; margin: 0 0 24px; line-height: 1.6;">${closer}</p>
             </td>
-          </tr>
+          </tr>`
+            : ''}
           <tr>
             <td style="padding: 0 32px 28px;">
               <p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.5;">
@@ -387,7 +402,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     `Hi ${first},`,
     '',
     withAvailability
-      ? `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`
+      ? (customBody ?? `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`)
       : withQuote
         ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
         : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
@@ -425,7 +440,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   textParts.push(
     '',
     withAvailability
-      ? av!.nextStep
+      ? (customBody ? '' : av!.nextStep)
       : withQuote
         ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
         : `When you're ready to book something, just send me the details and I'll spin up a quote.`,

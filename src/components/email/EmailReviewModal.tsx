@@ -89,6 +89,9 @@ export interface QuickReplyPayload {
   categories: { id: string; name: string; quantity: number }[];
   /** Fold a request for the production company + project name into the reply. */
   askForDetails: boolean;
+  /** Rep's own message (Write-my-own mode) — replaces the templated prose; the
+   *  branded shell + real availability block + supply CTA stay intact. */
+  customMessage?: string | null;
   /** EmailMessage id of the inbound being replied to — drives CRM capture on send. */
   inboundEmailMessageId: string | null;
 }
@@ -151,6 +154,7 @@ function buildPreviewBody(
   target: EmailReviewTarget,
   overrideContactId: string | null,
   customNote: string,
+  customMessage = '',
 ): unknown {
   const base: Record<string, unknown> = {};
   if (overrideContactId) base.overrideContactId = overrideContactId;
@@ -163,7 +167,11 @@ function buildPreviewBody(
   if (target.kind === 'followup-order' && target.stage) base.stage = target.stage;
   // Quick Reply has no order/job to key off — it carries its parsed payload
   // (recipient, client/job, dates, requested categories) through the body.
-  if (target.kind === 'quick-reply') base.payload = target.payload;
+  // In "Write my own" mode the rep's customMessage rides along the payload and
+  // replaces the templated prose (the availability block + shell stay).
+  if (target.kind === 'quick-reply') {
+    base.payload = { ...target.payload, customMessage: customMessage.trim() || null };
+  }
   return base;
 }
 
@@ -171,8 +179,9 @@ function buildSendBody(
   target: EmailReviewTarget,
   overrideContactId: string | null,
   customNote: string,
+  customMessage = '',
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customNote);
+  return buildPreviewBody(target, overrideContactId, customNote, customMessage);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -204,6 +213,16 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
   // flows into the live preview re-fetch.
   const [customNote, setCustomNote] = useState('');
   const debouncedNote = useDebouncedValue(customNote, 350);
+  // "Write my own email" (quick-reply only): the rep's own prose replaces the
+  // templated body; the branded shell + real availability block stay. Debounced
+  // into the live preview re-fetch like the note.
+  const [writeOwn, setWriteOwn] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
+  const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiFlags, setAiFlags] = useState<string[] | null>(null);
+  const [aiPolished, setAiPolished] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const endpoints = useMemo(() => (target ? endpointsFor(target) : null), [target]);
 
@@ -225,7 +244,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
         const res = await fetch(endpoints.preview, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote)),
+          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom)),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.ok === false) {
@@ -244,7 +263,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
         setRefreshing(false);
       }
     },
-    [target, endpoints, overrideContactId, debouncedNote],
+    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom],
   );
 
   // Reset state when target changes (e.g. opening for a different order).
@@ -253,6 +272,11 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
+    setWriteOwn(false);
+    setCustomMessage('');
+    setAiFlags(null);
+    setAiPolished(null);
+    setAiError(null);
     sendInFlightRef.current = false;
     setSendState('idle');
   }, [target]);
@@ -269,7 +293,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     if (!target || preview === null) return;
     void fetchPreview(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overrideContactId, debouncedNote]);
+  }, [overrideContactId, debouncedNote, debouncedCustom]);
 
   if (!target || !endpoints) return null;
 
@@ -289,7 +313,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
       const res = await fetch(endpoints.send, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildSendBody(target, overrideContactId, customNote)),
+        body: JSON.stringify(buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '')),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) {
@@ -313,6 +337,33 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
       setError(err instanceof Error ? err.message : 'Send failed');
       sendInFlightRef.current = false;
       setSendState('idle');
+    }
+  };
+
+  // AI pass over the rep's custom message — server reuses the parse Anthropic
+  // pattern and recomputes the REAL availability so it can catch a
+  // contradiction. Returns flags + a polished rewrite; nothing auto-applies.
+  const runAiReview = async () => {
+    if (target.kind !== 'quick-reply' || !customMessage.trim()) return;
+    setAiBusy(true);
+    setAiError(null);
+    setAiFlags(null);
+    setAiPolished(null);
+    try {
+      const p = target.payload;
+      const res = await fetch('/api/sales/quick-reply/ai-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: customMessage, categories: p.categories, pickup: p.pickup, return: p.return, jobName: p.jobName }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) { setAiError(json?.error || `AI review failed (${res.status})`); return; }
+      setAiFlags(Array.isArray(json.flags) ? json.flags : []);
+      setAiPolished(typeof json.polished === 'string' ? json.polished : null);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'AI review failed');
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -479,6 +530,71 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                 />
               </div>
+
+              {/* Write my own email — quick-reply only. Replaces the templated
+                  prose with the rep's message; the branded shell + the REAL
+                  availability block + supply CTA below stay intact. */}
+              {target.kind === 'quick-reply' && (
+                <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                  <label className="flex items-center gap-2 text-[12px] text-zinc-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={writeOwn}
+                      disabled={sendLocked}
+                      onChange={(e) => { setWriteOwn(e.target.checked); if (!e.target.checked) { setAiFlags(null); setAiPolished(null); setAiError(null); } }}
+                      className="accent-amber-600"
+                    />
+                    <span>Write my own email <span className="text-zinc-500">— your message replaces the standard wording; the availability list &amp; supply link stay.</span></span>
+                  </label>
+                  {writeOwn && (
+                    <div className="mt-2 space-y-2">
+                      <textarea
+                        value={customMessage}
+                        onChange={(e) => setCustomMessage(e.target.value)}
+                        disabled={sendLocked}
+                        rows={5}
+                        maxLength={5000}
+                        placeholder="Write your message to the client. It appears under the greeting, above the real availability block."
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={runAiReview}
+                          disabled={aiBusy || sendLocked || !customMessage.trim()}
+                          className="text-[12px] font-semibold border border-zinc-600 text-zinc-200 hover:border-amber-500 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg"
+                        >
+                          {aiBusy ? 'Reviewing…' : 'Review with AI'}
+                        </button>
+                        <span className="text-[10px] text-zinc-500">Flags risks + offers a polished version. Optional — nothing auto-applies.</span>
+                      </div>
+                      {aiError && <div className="text-[11px] text-rose-300 bg-rose-950/40 border border-rose-900 rounded px-2 py-1">{aiError}</div>}
+                      {aiFlags && (
+                        aiFlags.length > 0 ? (
+                          <div className="text-[11px] text-amber-200 bg-amber-950/30 border border-amber-900 rounded px-2.5 py-1.5">
+                            <div className="font-bold mb-0.5">AI flagged {aiFlags.length} thing{aiFlags.length === 1 ? '' : 's'}:</div>
+                            <ul className="list-disc list-inside space-y-0.5">{aiFlags.map((f, i) => <li key={i}>{f}</li>)}</ul>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-emerald-300 bg-emerald-950/30 border border-emerald-900 rounded px-2.5 py-1.5">AI found no issues — no availability contradictions.</div>
+                        )
+                      )}
+                      {aiPolished && aiPolished.trim() && aiPolished.trim() !== customMessage.trim() && (
+                        <div className="bg-zinc-900 border border-zinc-700 rounded px-2.5 py-2">
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Polished version</div>
+                          <div className="text-[12px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{aiPolished}</div>
+                          <button
+                            onClick={() => { setCustomMessage(aiPolished); setAiPolished(null); }}
+                            disabled={sendLocked}
+                            className="mt-1.5 text-[11px] font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-40"
+                          >
+                            Use this version →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Body iframe — sandbox="" (empty) = strict containment */}
               <div className="bg-white border border-zinc-800 rounded-lg overflow-hidden">

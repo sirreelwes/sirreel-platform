@@ -23,6 +23,7 @@ interface QuickReplyPayload {
   return: string | null
   categories: { id: string; name: string; quantity: number }[]
   askForDetails?: boolean
+  customMessage?: string | null
   /** EmailMessage id of the inbound being replied to — drives CRM capture. */
   inboundEmailMessageId?: string | null
 }
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,
+    customMessage: payload.customMessage ?? null,
   })
 
   const result = await sendAgreementEmail({
