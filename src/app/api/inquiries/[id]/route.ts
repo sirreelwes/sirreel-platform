@@ -17,9 +17,43 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
   })
   if (!inquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Enrich the order-form cart so the new-quote prefill can bind each line to a
+  // real catalog target (additive — other consumers ignore the extra fields):
+  //   - VEHICLE lines carry only a VehicleCategory id; resolve the linked
+  //     AssetCategory id (quotes bind vehicles as catalogType=ASSET_CATEGORY).
+  //   - SUPPLY lines resolve the InventoryItem's department (the cart snapshot
+  //     only stores the display category name, not the line department).
+  // Covers BOTH metadata kinds ('production-order' written by the form today,
+  // and the legacy 'supply-order').
+  let sourceMetadata = inquiry.sourceMetadata as Record<string, unknown> | null
+  const cart = (sourceMetadata?.cart ?? null) as Array<Record<string, unknown>> | null
+  const kind = sourceMetadata?.kind
+  if ((kind === 'production-order' || kind === 'supply-order') && Array.isArray(cart) && cart.length > 0) {
+    const vehicleIds = cart.filter((l) => l.itemKind === 'VEHICLE').map((l) => String(l.itemId))
+    const supplyIds = cart.filter((l) => l.itemKind === 'SUPPLY').map((l) => String(l.itemId))
+    const [vehicles, supplies] = await Promise.all([
+      vehicleIds.length
+        ? prisma.vehicleCategory.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, assetCategoryId: true } })
+        : Promise.resolve([]),
+      supplyIds.length
+        ? prisma.inventoryItem.findMany({ where: { id: { in: supplyIds } }, select: { id: true, department: true } })
+        : Promise.resolve([]),
+    ])
+    const acById = new Map(vehicles.map((v) => [v.id, v.assetCategoryId]))
+    const deptById = new Map(supplies.map((s) => [s.id, s.department]))
+    const enrichedCart = cart.map((l) =>
+      l.itemKind === 'VEHICLE'
+        ? { ...l, assetCategoryId: acById.get(String(l.itemId)) ?? null }
+        : { ...l, department: deptById.get(String(l.itemId)) ?? null },
+    )
+    sourceMetadata = { ...sourceMetadata, cart: enrichedCart }
+  }
+
   return NextResponse.json({
     inquiry: {
       ...inquiry,
+      sourceMetadata,
       estimatedValue: inquiry.estimatedValue == null ? null : Number(inquiry.estimatedValue),
     },
   })

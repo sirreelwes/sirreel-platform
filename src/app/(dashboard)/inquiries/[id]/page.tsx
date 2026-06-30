@@ -178,7 +178,10 @@ export default function InquiryDetailPage() {
   }
 
   const meta = inquiry.sourceMetadata ?? null
-  const isSupplyOrder = meta?.kind === 'supply-order'
+  // Accept BOTH kind strings — the order form writes 'production-order'; older
+  // code expected 'supply-order'. Matching both renders the structured cart for
+  // new and already-submitted order-form inquiries.
+  const isSupplyOrder = meta?.kind === 'production-order' || meta?.kind === 'supply-order'
   const refCode = inquiry.id.slice(0, 8).toUpperCase()
   const cart = isSupplyOrder ? meta?.cart ?? [] : []
   const isClosed = inquiry.status !== 'NEW'

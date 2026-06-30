@@ -177,17 +177,27 @@ interface SupplyOrderInquiryMetadata {
   contact?: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null };
   production?: { companyName?: string | null; jobName?: string | null; poNumber?: string | null; jobNumber?: string | null };
   dates?: { start?: string | null; end?: string | null; rentalDays?: number | null };
+  // Real snapshot stores the window here (the form writes `window`, not `dates`).
+  window?: { start?: string | null; end?: string | null; days?: number | null };
   delivery?: { method?: string | null; address?: string | null };
   cart?: {
+    itemKind?: 'SUPPLY' | 'VEHICLE';
     itemId: string;
     code: string;
     name: string;
     type: string;
     category: string;
     unitPrice: number;
-    quantity: number;
+    // Real snapshot uses `qty`; `quantity` kept optional for forward-compat.
+    qty?: number;
+    quantity?: number;
     days: number | null;
+    pickupDate?: string;
+    returnDate?: string;
     lineTotal: number;
+    // Added by /api/inquiries/[id] enrichment (not stored in the raw snapshot).
+    assetCategoryId?: string | null;
+    department?: string | null;
   }[];
   totals?: { units?: number; amount?: number };
   notes?: string | null;
@@ -691,16 +701,25 @@ function NewQuotePageInner() {
         setInquiry(inq);
 
         const meta = inq.sourceMetadata ?? null;
-        const isSupplyOrder = meta?.kind === 'supply-order' && Array.isArray(meta.cart) && meta.cart.length > 0;
+        // Accept BOTH kind strings: the public order form (/api/public/supply-request)
+        // actually writes 'production-order', while earlier code expected
+        // 'supply-order'. Matching both makes the cart auto-prefill fire for new
+        // AND already-submitted inquiries (which have 'production-order' stored).
+        const isSupplyOrder =
+          (meta?.kind === 'production-order' || meta?.kind === 'supply-order') &&
+          Array.isArray(meta.cart) &&
+          meta.cart.length > 0;
 
         if (isSupplyOrder) {
           // Build the post-parse state directly from the cart snapshot.
           // No AI parse runs; the user lands on the review step.
-          const startISO = (meta!.dates?.start ?? inq.preferredStartDate ?? '').slice(0, 10);
-          const endISO = (meta!.dates?.end ?? inq.preferredEndDate ?? startISO).slice(0, 10);
+          // The real snapshot stores the window under `window`; older shape used
+          // `dates`. Fall back to the inquiry's preferred dates either way.
+          const startISO = (meta!.window?.start ?? meta!.dates?.start ?? inq.preferredStartDate ?? '').slice(0, 10);
+          const endISO = (meta!.window?.end ?? meta!.dates?.end ?? inq.preferredEndDate ?? startISO).slice(0, 10);
           const fallbackProductionName =
             meta!.production?.jobName?.trim() ||
-            inq.title.replace(/^Supply request — /, '');
+            inq.title.replace(/^(Supply|Production) request — /, '');
 
           // Synthetic ParsedTop so the page flips out of the "step 1
           // input" branch. The fields here also drive the
@@ -723,31 +742,53 @@ function NewQuotePageInner() {
             notes: meta!.notes ?? prev.notes,
           }));
 
-          // Cart → ResolvedItem[]. Every cart line carries an
-          // InventoryItem id already (server-validated on submission),
-          // so we bind matchedProduct directly. rateType for
-          // EXPENDABLE lines is FLAT (consumable; qty × rate, no
-          // billable days); EQUIPMENT is DAILY and inherits the
-          // rental window. matchSource=null because no AI/alias
-          // matching ran — the catalog id is canonical.
+          // Cart → ResolvedItem[]. Map each line by its kind to the right
+          // catalog target (no AI/alias matching — the ids are canonical):
+          //   • VEHICLE → quotes bind vehicles as catalogType=ASSET_CATEGORY,
+          //     keyed by the AssetCategory id (resolved server-side from the
+          //     VehicleCategory in /api/inquiries/[id]). DAILY. If no linked
+          //     AssetCategory, leave it unmatched for the rep to resolve.
+          //   • SUPPLY → INVENTORY by InventoryItem id; FLAT for EXPENDABLE
+          //     consumables (qty × rate, no billable days), DAILY for EQUIPMENT.
+          // Reads the ACTUAL cart-snapshot fields (qty, per-line dates).
+          const fallbackStart = startISO || new Date().toISOString().slice(0, 10);
+          const fallbackEnd = endISO || fallbackStart;
           const items: ResolvedItem[] = meta!.cart!.map((line) => {
-            const isExpendable = line.type === 'EXPENDABLE';
-            return {
+            const qty = Math.max(1, Math.floor(line.qty ?? line.quantity ?? 1));
+            const pickupDate = (line.pickupDate ?? fallbackStart).slice(0, 10);
+            const returnDate = (line.returnDate ?? fallbackEnd).slice(0, 10);
+            const base = {
               localId: newLocalId(),
               description: line.name,
-              quantity: line.quantity,
-              catalogProductId: line.itemId,
-              catalogType: 'INVENTORY',
-              department: 'PRO_SUPPLIES',
+              quantity: qty,
               qualifier: null,
-              rateType: isExpendable ? 'FLAT' : 'DAILY',
-              pickupDate: startISO || new Date().toISOString().slice(0, 10),
-              returnDate: endISO || startISO || new Date().toISOString().slice(0, 10),
-              billableDays: isExpendable ? 1 : line.days ?? 1,
+              pickupDate,
+              returnDate,
               rate: line.unitPrice,
-              matchedProduct: { id: line.itemId, type: 'INVENTORY', name: line.name },
               matchSource: null,
               warnings: [],
+            };
+            if (line.itemKind === 'VEHICLE') {
+              const acId = line.assetCategoryId ?? null;
+              return {
+                ...base,
+                catalogProductId: acId,
+                catalogType: acId ? ('ASSET_CATEGORY' as const) : null,
+                department: 'VEHICLES' as const,
+                rateType: 'DAILY' as const,
+                billableDays: line.days ?? 1,
+                matchedProduct: acId ? { id: acId, type: 'ASSET_CATEGORY' as const, name: line.name } : null,
+              };
+            }
+            const isExpendable = line.type === 'EXPENDABLE';
+            return {
+              ...base,
+              catalogProductId: line.itemId,
+              catalogType: 'INVENTORY' as const,
+              department: (line.department ?? 'PRO_SUPPLIES') as ResolvedItem['department'],
+              rateType: isExpendable ? ('FLAT' as const) : ('DAILY' as const),
+              billableDays: isExpendable ? 1 : line.days ?? 1,
+              matchedProduct: { id: line.itemId, type: 'INVENTORY' as const, name: line.name },
             };
           });
           setItems(items);
