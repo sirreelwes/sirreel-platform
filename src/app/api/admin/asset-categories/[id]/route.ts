@@ -101,7 +101,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const newDaily = data.dailyRate !== undefined ? (data.dailyRate as string) : before.dailyRate;
 
   try {
-    const updated = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const u = await tx.assetCategory.update({
         where: { id },
         data,
@@ -123,22 +123,41 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           },
         });
       }
-      // Keep the client-facing order-form name in sync: any VehicleCategory
-      // linked to this AssetCategory adopts the new name so internal + public
-      // stay consistent. updateMany is a no-op when nothing is linked.
+      // Keep the client-facing order-form name in sync ONLY for a genuine
+      // one-to-one link (e.g. ProScout / Video Van). When MULTIPLE
+      // VehicleCategory rows link to one AssetCategory, those are
+      // intentionally distinct client offerings (e.g. Passenger Van →
+      // "12-Passenger Van" + "15-Passenger Van") — forcing them to one name
+      // would collide on VehicleCategory.name's unique constraint, so we leave
+      // them untouched. Zero linked → nothing to sync. The AssetCategory
+      // rename above always succeeds regardless.
+      let linkedCount = 0;
       if (data.name !== undefined) {
-        await tx.vehicleCategory.updateMany({
+        const linked = await tx.vehicleCategory.findMany({
           where: { assetCategoryId: id },
-          data: { name: data.name as string },
+          select: { id: true },
         });
+        linkedCount = linked.length;
+        if (linked.length === 1) {
+          await tx.vehicleCategory.update({
+            where: { id: linked[0].id },
+            data: { name: data.name as string },
+          });
+        }
       }
-      return u;
+      return { u, linkedCount, nameChanged: data.name !== undefined };
     });
 
+    const { u: updated, linkedCount, nameChanged } = result;
     return NextResponse.json({
       ...updated,
       dailyRate: updated.dailyRate.toString(),
       weeklyRate: updated.weeklyRate != null ? updated.weeklyRate.toString() : null,
+      // Tell the caller what happened to the linked order-form entries on a
+      // rename: synced (1) or left unchanged because they're distinct (>1).
+      ...(nameChanged
+        ? { orderFormSync: { linked: linkedCount, synced: linkedCount === 1 } }
+        : {}),
     });
   } catch (e: any) {
     if (e?.code === 'P2025') return NextResponse.json({ error: 'not found' }, { status: 404 });
