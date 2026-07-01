@@ -315,7 +315,7 @@ export function QuickCreateMenu() {
             onClick={onPickNewHold}
             className="w-full text-left px-3 py-2 text-[13px] hover:bg-gray-50 flex flex-col gap-0.5"
           >
-            <span className="font-semibold text-gray-900">New Hold</span>
+            <span className="font-semibold text-gray-900">New Reservation</span>
             <span className="text-[11px] text-gray-500">
               {context.jobCode ? `for ${context.jobCode}` : 'pick category'}
             </span>
