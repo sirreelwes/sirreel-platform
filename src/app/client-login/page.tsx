@@ -33,7 +33,7 @@ export default function ClientLoginPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="bg-[#1f3d5c] px-6 py-8 text-center">
+          <div className="bg-[#1a1a1a] px-6 py-8 text-center">
             <div className="text-white font-bold text-xl">SirReel</div>
             <div className="text-blue-200 text-sm mt-1">Studio Services</div>
           </div>
@@ -72,7 +72,7 @@ export default function ClientLoginPage() {
                     disabled={!email || step === 'sending'}
                     className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${
                       email && step !== 'sending'
-                        ? 'bg-[#1f3d5c] text-white hover:bg-[#2a4f77]'
+                        ? 'bg-[#1a1a1a] text-white hover:bg-[#333333]'
                         : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }`}>
                     {step === 'sending' ? 'Sending...' : 'Send me a link →'}

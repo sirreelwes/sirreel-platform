@@ -68,7 +68,7 @@ function textToHtml(text: string): string {
   // Markdown link → <a>
   const linked = escaped.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_, label, url) => `<a href="${url}" style="color:#1f3d5c;">${label}</a>`,
+    (_, label, url) => `<a href="${url}" style="color:#1a1a1a;">${label}</a>`,
   )
 
   // Bullet detection: line starts with "• " or "- "

@@ -122,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F6F3]">
       {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 bg-[#0b1f3a] text-slate-200 flex flex-col">
+      <aside className="w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex flex-col">
         {/* Brand — recolorable inline 'S' monogram (currentColor → gold) */}
         <div className="px-4 py-4 border-b border-white/10">
           <Link href="/" className="flex items-center gap-2.5">
@@ -159,19 +159,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     href={item.href}
                     className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg text-[13px] mb-0.5 transition-all duration-150 ${
                       isActive
-                        ? 'bg-[#c9a24b] text-[#0b1f3a] font-semibold shadow-sm'
+                        ? 'bg-[#c9a24b] text-[#1a1a1a] font-semibold shadow-sm'
                         : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'
                     }`}
                   >
                     {/* Left accent bar on the active route. */}
                     {isActive && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#0b1f3a]" />
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#1a1a1a]" />
                     )}
                     <Icon
                       size={16}
                       strokeWidth={2.1}
                       className={`flex-shrink-0 ${
-                        isActive ? 'text-[#0b1f3a]' : 'text-slate-400 group-hover:text-[#c9a24b] transition-colors'
+                        isActive ? 'text-[#1a1a1a]' : 'text-slate-400 group-hover:text-[#c9a24b] transition-colors'
                       }`}
                     />
                     <span className="truncate">{item.label}</span>
@@ -192,7 +192,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {user.image ? (
                 <img src={user.image} alt={user.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-[#c9a24b] flex items-center justify-center text-[11px] font-bold text-[#0b1f3a] flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-[#c9a24b] flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] flex-shrink-0">
                   {initials}
                 </div>
               )}

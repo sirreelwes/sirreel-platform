@@ -6,13 +6,13 @@ const config: Config = {
     extend: {
       colors: {
         sirreel: {
-          bg: '#f5f5f7',
+          bg: '#f5f5f5',
           surface: '#ffffff',
-          border: '#e2e2e8',
-          'border-hover': '#ccccdd',
-          text: '#1a1a2e',
-          'text-muted': '#5c5c78',
-          'text-dim': '#8888a0',
+          border: '#e2e2e2',
+          'border-hover': '#cccccc',
+          text: '#1a1a1a',
+          'text-muted': '#5c5c5c',
+          'text-dim': '#8a8a8a',
           accent: '#000000',
         },
         status: { available: '#16a34a', booked: '#4466dd', maintenance: '#dc2626', transit: '#d97706', warehouse: '#7c3aed', retired: '#999999' },

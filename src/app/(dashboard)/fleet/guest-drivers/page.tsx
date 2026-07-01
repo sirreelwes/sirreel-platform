@@ -6,7 +6,7 @@ export default function GuestDriversPage() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="flex flex-col items-center gap-4 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0b1f3a] text-[#c9a24b]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1a1a1a] text-[#c9a24b]">
           <UserPlus size={26} strokeWidth={2} />
         </div>
         <div>

@@ -52,8 +52,8 @@ export const ZELLE_HANDLE_LABEL = 'Zelle® tag:'
 // ── Styles — sized to drop next to the invoice totals block ────────
 
 const C = {
-  ink:    '#1a1a2e',
-  muted:  '#5c5c78',
+  ink:    '#1a1a1a',
+  muted:  '#5c5c5c',
   rule:   '#cccccc',
 }
 

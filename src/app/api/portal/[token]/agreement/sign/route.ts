@@ -96,7 +96,7 @@ async function sendSignedCopies(args: {
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-    <div style="background:#1f3d5c;padding:20px;text-align:center;">
+    <div style="background:#1a1a1a;padding:20px;text-align:center;">
       <div style="color:white;font-size:18px;font-weight:bold;">SirReel HQ</div>
       <div style="color:#bfd7ff;font-size:12px;margin-top:4px;">Signed ${subjectLabel}</div>
     </div>

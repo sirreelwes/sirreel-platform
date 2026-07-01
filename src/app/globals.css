@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f5f5f7;
+  --bg: #f5f5f5;
   --surface: #ffffff;
-  --border: #e2e2e8;
-  --border-hover: #ccccdd;
-  --text: #1a1a2e;
-  --text-muted: #5c5c78;
-  --text-dim: #8888a0;
+  --border: #e2e2e2;
+  --border-hover: #cccccc;
+  --text: #1a1a1a;
+  --text-muted: #5c5c5c;
+  --text-dim: #8a8a8a;
 }
 
 body {
@@ -23,7 +23,7 @@ body {
 ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #aaa; }
 
-input:focus, select:focus, textarea:focus { outline: none; border-color: #aab !important; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #bbb !important; }
 ::selection { background: rgba(0, 0, 0, 0.12); }
 
 @layer components {
@@ -34,10 +34,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #aab !i
     @apply px-4 py-2 font-semibold text-sm rounded-md border transition-colors cursor-pointer;
     background: var(--surface); color: var(--text-muted); border-color: var(--border);
   }
-  .btn-secondary:hover { border-color: var(--border-hover); background: #f8f8fa; }
+  .btn-secondary:hover { border-color: var(--border-hover); background: #f8f8f8; }
   .card { background: var(--surface); border: 1px solid var(--border); @apply rounded-lg p-4; }
   .input { @apply w-full px-3 py-2 rounded-md text-sm outline-none; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
-  .input:focus { border-color: #aab; }
+  .input:focus { border-color: #bbb; }
   .label { @apply block text-[10px] font-semibold uppercase tracking-wider mb-1; color: var(--text-dim); }
   .stat-card { @apply px-3 py-1 rounded-md; background: var(--surface); border: 1px solid var(--border); }
 }

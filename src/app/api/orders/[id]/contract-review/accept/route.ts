@@ -131,7 +131,7 @@ export async function POST(
     const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-    <div style="background:#1f3d5c;padding:20px;text-align:center;">
+    <div style="background:#1a1a1a;padding:20px;text-align:center;">
       <div style="color:white;font-size:18px;font-weight:bold;">SirReel Studio Rentals</div>
       <div style="color:#bfd7ff;font-size:12px;margin-top:4px;">Negotiated agreement ready</div>
     </div>
@@ -145,7 +145,7 @@ export async function POST(
       </table>
       ${portalUrl
         ? `<div style="margin-top:20px;text-align:center;">
-            <a href="${portalUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">Open the paperwork portal &rarr;</a>
+            <a href="${portalUrl}" style="display:inline-block;background:#1a1a1a;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">Open the paperwork portal &rarr;</a>
           </div>`
         : `<p style="margin-top:16px;color:#6b7280;font-size:13px;">Your SirReel account rep will follow up with the signing link shortly.</p>`}
       <p style="margin-top:20px;color:#6b7280;font-size:12px;">If anything looks off, reply to this email and we&rsquo;ll loop the team back in.</p>

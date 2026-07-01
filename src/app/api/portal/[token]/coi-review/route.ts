@@ -122,7 +122,7 @@ function buildEmailHtml(
 <body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
   <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
     
-    <div style="background:#1f3d5c;padding:24px;text-align:center;">
+    <div style="background:#1a1a1a;padding:24px;text-align:center;">
       <div style="color:white;font-size:20px;font-weight:bold;">SirReel HQ</div>
       <div style="color:#bfd7ff;font-size:13px;margin-top:4px;">COI Review Notification</div>
     </div>
@@ -158,7 +158,7 @@ function buildEmailHtml(
       </table>
 
       <div style="margin-top:24px;text-align:center;">
-        <a href="${reviewUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
+        <a href="${reviewUrl}" style="display:inline-block;background:#1a1a1a;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
           Review COI in SirReel HQ →
         </a>
       </div>

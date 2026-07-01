@@ -59,7 +59,7 @@ function ClientDashboardInner() {
         <h2 className="text-lg font-bold text-gray-900 mb-2">Link expired</h2>
         <p className="text-sm text-gray-500 mb-4">{error}</p>
         <button onClick={() => router.push('/client-login')}
-          className="w-full py-3 bg-[#1f3d5c] text-white rounded-xl text-sm font-bold hover:bg-[#2a4f77]">
+          className="w-full py-3 bg-[#1a1a1a] text-white rounded-xl text-sm font-bold hover:bg-[#333333]">
           Request a new link
         </button>
       </div>
@@ -72,7 +72,7 @@ function ClientDashboardInner() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-[#1f3d5c] px-6 py-5">
+      <div className="bg-[#1a1a1a] px-6 py-5">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
             <div className="text-white font-bold text-lg">SirReel</div>
@@ -155,7 +155,7 @@ function ClientDashboardInner() {
 
               {/* Portal link */}
               <a href={`/portal/${selected.portal_token}`}
-                className="block w-full py-3 bg-[#1f3d5c] text-white rounded-xl text-sm font-bold text-center hover:bg-[#2a4f77] transition-colors">
+                className="block w-full py-3 bg-[#1a1a1a] text-white rounded-xl text-sm font-bold text-center hover:bg-[#333333] transition-colors">
                 Open Job Portal →
               </a>
 

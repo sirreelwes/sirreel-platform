@@ -101,7 +101,7 @@ async function emailReviewers(args: {
   const html = `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#f9fafb;margin:0;padding:20px;">
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-    <div style="background:#1f3d5c;padding:20px;text-align:center;">
+    <div style="background:#1a1a1a;padding:20px;text-align:center;">
       <div style="color:white;font-size:18px;font-weight:bold;">SirReel HQ</div>
       <div style="color:#bfd7ff;font-size:12px;margin-top:4px;">Client redline received</div>
     </div>
@@ -113,7 +113,7 @@ async function emailReviewers(args: {
         <tr><td style="padding:4px 0;color:#6b7280;">File</td><td style="padding:4px 0;font-weight:600;">${args.uploadedFilename}</td></tr>
       </table>
       <div style="margin-top:20px;text-align:center;">
-        <a href="${reviewUrl}" style="display:inline-block;background:#1f3d5c;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">Open contract review &rarr;</a>
+        <a href="${reviewUrl}" style="display:inline-block;background:#1a1a1a;color:white;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;">Open contract review &rarr;</a>
       </div>
     </div>
     <div style="padding:14px 20px;background:#f9fafb;text-align:center;font-size:11px;color:#9ca3af;">
