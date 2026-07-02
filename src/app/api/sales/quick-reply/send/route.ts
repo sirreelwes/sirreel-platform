@@ -11,6 +11,7 @@ import { authOptions } from '@/lib/auth'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { computeQuickReplyAvailability, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
+import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,6 +64,22 @@ export async function POST(req: NextRequest) {
   })
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.reason || 'send failed' }, { status: 502 })
+  }
+
+  // Thread + inquiry convergence — BEST-EFFORT. Quick Replies go out via
+  // Resend and never hit Gmail, so record the reply on the inbound's
+  // thread ourselves (thread view completeness) and mark linked open
+  // inquiries responded, attributed to the logged-in agent. Same
+  // mechanism the Gmail ingest reply-detection uses.
+  if (payload.inboundEmailMessageId) {
+    await recordQuickReplyOnThread({
+      inboundEmailMessageId: payload.inboundEmailMessageId,
+      staffEmail: session.user.email,
+      recipientEmail: payload.recipientEmail,
+      subject,
+      bodyText: text ?? null,
+      bodyHtml: html ?? null,
+    })
   }
 
   // CRM capture — BEST-EFFORT, never blocks the reply. The send already

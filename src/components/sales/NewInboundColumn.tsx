@@ -66,6 +66,11 @@ interface PersistentInquiry {
   // When sourceMetadata.kind === 'portal-add-on', the inquiry card shows
   // a "Portal" pill and the add-on modal pre-selects the targeted job.
   sourceMetadata: PortalAddOnMetadata | OtherSourceMetadata | null
+  // First staff reply on the inquiry's thread (Gmail ingest or Quick
+  // Reply). Non-null moves the card into the muted "Responded" block
+  // below the pending list, with "Replied by … · time" attribution.
+  respondedAt: string | null
+  respondedBy: string | null
 }
 
 interface PortalAddOnMetadata {
@@ -122,6 +127,23 @@ function relativeAge(iso: string): string {
 function fmtMoney(n: number | null): string | null {
   if (n == null) return null
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
+// "jose@sirreel.com" → "Jose". Shared inboxes read fine too ("hello@" →
+// "Hello") — good enough for card attribution without a User join.
+function staffFirstName(email: string): string {
+  const local = email.split('@')[0] || email
+  return local.charAt(0).toUpperCase() + local.slice(1)
+}
+
+function repliedAtLabel(iso: string): string {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const sameDay = new Date().toDateString() === d.toDateString()
+  return sameDay
+    ? time
+    : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${time}`
 }
 
 // ─── Component ────────────────────────────────────────────────────
@@ -313,7 +335,13 @@ export function NewInboundColumn({
 
   // ─── Render ────────────────────────────────────────────────────
 
-  const totalCount = (inquiries?.length ?? 0) + (suggestions?.length ?? 0)
+  // Responded inquiries (team already replied on the thread) drop out of
+  // the pending stream into a muted block below — visibly separated, not
+  // hidden, since they're still open leads awaiting capture/convert.
+  const pendingInquiries = (inquiries ?? []).filter((i) => !i.respondedAt)
+  const respondedInquiries = (inquiries ?? []).filter((i) => !!i.respondedAt)
+  const pendingCount = pendingInquiries.length + (suggestions?.length ?? 0)
+  const totalCount = pendingCount + respondedInquiries.length
   const isLoading = inquiries === null || suggestions === null
 
   return (
@@ -327,7 +355,9 @@ export function NewInboundColumn({
         </div>
         <div className="text-right">
           <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-            {isLoading ? '…' : `${totalCount} pending`}
+            {isLoading
+              ? '…'
+              : `${pendingCount} pending${respondedInquiries.length > 0 ? ` · ${respondedInquiries.length} responded` : ''}`}
           </span>
           {lastUpdatedAt && (
             <span className="block text-[10px] text-gray-400 mt-0.5 normal-case tracking-normal font-normal">
@@ -359,7 +389,7 @@ export function NewInboundColumn({
                 | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
                 | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
               const merged: MergedItem[] = [
-                ...(inquiries ?? []).map(
+                ...pendingInquiries.map(
                   (row) => ({ kind: 'persistent' as const, row, sortKey: row.createdAt }),
                 ),
                 ...(suggestions ?? []).map(
@@ -389,6 +419,33 @@ export function NewInboundColumn({
                 ),
               );
             })()}
+
+            {/* Responded — team replied on the thread; still open leads.
+                Muted block below pending, mirroring the pending/muted
+                split the suggested-inquiries stream uses for follow-ups. */}
+            {respondedInquiries.length > 0 && (
+              <>
+                <div className="pt-2 pb-0.5 flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                    Responded
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    team replied — awaiting next step
+                  </span>
+                  <div className="flex-1 border-t border-gray-100" />
+                </div>
+                {respondedInquiries.map((row) => (
+                  <PersistentCard
+                    key={`inq-${row.id}`}
+                    inquiry={row}
+                    busy={busyId === row.id}
+                    onCapture={() => capturePersistent(row.id)}
+                    onAddOn={() => setAddOnInquiry(row)}
+                    onDismiss={() => dismissPersistent(row.id)}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -621,6 +678,12 @@ function PersistentCard({
         {inquiry.company?.name ?? 'No company'}
         {contactName ? <span className="text-gray-400"> · {contactName}</span> : null}
       </div>
+      {inquiry.respondedAt && (
+        <div className="mt-1 text-[11px] font-medium text-emerald-700">
+          Replied by {inquiry.respondedBy ? staffFirstName(inquiry.respondedBy) : 'team'} ·{' '}
+          {repliedAtLabel(inquiry.respondedAt)}
+        </div>
+      )}
       {value && (
         <div className="mt-1 text-[11px] text-gray-500">Est. value {value}</div>
       )}
