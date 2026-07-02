@@ -42,6 +42,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights
   '/favicon',
+  '/apple-touch-icon',
   '/sirreel-logo',
   '/s-logo',
   '/full-logo',
@@ -67,6 +68,7 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights
   '/favicon',          // /favicon.ico + any favicon-* variant
+  '/apple-touch-icon', // home-screen icon (iOS fetches this path directly)
   '/sirreel-logo',     // logos referenced by inline-image emails
   '/s-logo',           // ditto
   '/full-logo',        // ditto
