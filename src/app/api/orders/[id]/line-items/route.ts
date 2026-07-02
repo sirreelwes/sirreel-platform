@@ -8,6 +8,7 @@ import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/au
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -304,10 +305,26 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Sprint 1 — server-side rate resolution. The client-sent `rate` is
+    // an override REQUEST checked against Fleet Pricing/catalog truth;
+    // an override persists on the row (rateOverridden + resolvedRate)
+    // and is audit-logged below. $0 package members / includedFree lines
+    // are not overrides.
+    const rateResolution = await resolveLineRate({
+      inventoryItemId: inventoryItemId || null,
+      assetCategoryId: assetCategoryId || null,
+      rateType: rateType as RateType,
+      clientRate: rate,
+      isPackageMember: !!(packageInstanceId && !isPackageHeader),
+    });
+    if (!rateResolution) {
+      return NextResponse.json({ error: "invalid rate" }, { status: 400 });
+    }
+
     // computeLineTotal returns 0 when days is NULL — see billing.ts.
     const lineTotal = computeLineTotal({
       quantity: Number(quantity),
-      rate: Number(rate),
+      rate: rateResolution.rate.toNumber(),
       billableDays: days,
       rateType: rateType as RateType,
       department: resolvedDepartment,
@@ -338,7 +355,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         endDate: endDate ? new Date(endDate) : null,
         pickupDate: pickupResolved,
         returnDate: returnResolved,
-        rateType, rate, quantity,
+        rateType,
+        rate: rateResolution.rate,
+        resolvedRate: rateResolution.resolvedRate,
+        rateOverridden: rateResolution.rateOverridden,
+        quantity,
         billableDays: days,
         lineTotal: Math.round(lineTotal * 100) / 100,
         notes: seededNotes,
@@ -354,6 +375,24 @@ export async function POST(req: NextRequest, { params }: Params) {
         assetCategory: { select: { id: true, name: true } },
       },
     });
+
+    // Rate-override audit row. Non-fatal (matches the route's other
+    // audit writes) — the durable marker is rateOverridden on the row.
+    if (rateResolution.rateOverridden && rateResolution.resolvedRate) {
+      try {
+        await logRateOverride(prisma, {
+          orderId,
+          orderLineItemId: lineItem.id,
+          resolvedRate: rateResolution.resolvedRate,
+          overrideRate: rateResolution.rate,
+          rateType: rateType as RateType,
+          userId: await resolveOperatorId(session.user.email),
+          ipAddress: extractIp(req),
+        });
+      } catch (err) {
+        console.error('[pricing] rate-override audit failed:', err instanceof Error ? err.message : err);
+      }
+    }
 
     // (#3a) PickList sync — fires regardless of order status. Reuses
     // bookOrder's routeDepartment so the lane/pickStatus assignment

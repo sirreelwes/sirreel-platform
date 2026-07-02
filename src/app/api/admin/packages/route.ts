@@ -15,6 +15,7 @@ import { getServerSession } from 'next-auth'
 import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment } from '@prisma/client'
+import { parseMoney } from '@/lib/pricing/resolveRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,8 +93,9 @@ export async function POST(req: NextRequest) {
   if (!body.department || !VALID_DEPARTMENTS.has(body.department)) {
     return NextResponse.json({ error: 'invalid department' }, { status: 400 })
   }
-  const price = Number(body.pricePerDay)
-  if (!Number.isFinite(price) || price < 0) {
+  // Decimal-safe (audit §7): no Number() into a Decimal column.
+  const price = parseMoney(body.pricePerDay)
+  if (price === null || price.isNegative()) {
     return NextResponse.json({ error: 'pricePerDay must be ≥ 0' }, { status: 400 })
   }
   const items = (body.items ?? []).filter((it) => it.inventoryItemId && it.qty > 0)

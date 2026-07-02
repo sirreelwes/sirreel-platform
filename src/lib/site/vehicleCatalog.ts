@@ -6,6 +6,7 @@
  * price-on-quote. Images go through the existing public proxy.
  */
 import { prisma } from '@/lib/prisma'
+import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
 
 export interface PublicVehicleSpec {
   baseVehicle: string | null
@@ -70,7 +71,7 @@ type Row = {
 }
 
 function shape(r: Row): PublicVehicle {
-  const effective = r.assetCategory?.dailyRate ?? r.dailyRate
+  const effective = pickEffectiveDailyRate(r)
   const hasImage = !!(r.photoUrl || r.assetCategory?.imageUrl)
   return {
     id: r.id,

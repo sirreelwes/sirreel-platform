@@ -18,6 +18,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +45,7 @@ export async function GET() {
   const categories = rows.map((r) => {
     // Linked Fleet Pricing rate WINS; else the row's own fallback dailyRate;
     // null → price-on-quote (the sub-rental trailers).
-    const effective = r.assetCategory?.dailyRate ?? r.dailyRate
+    const effective = pickEffectiveDailyRate(r)
     // Thumbnail: prefer the row's own photoUrl, else the linked AssetCategory
     // image. Both are PRIVATE blobs → expose only the public scoped proxy path
     // (never the raw URL), and only when an image actually exists.

@@ -2688,6 +2688,13 @@ model OrderLineItem {
   endDate         DateTime?          @map("end_date") @db.Date
   rateType        RateType           @default(DAILY)
   rate            Decimal            @db.Decimal(10, 2)
+  // Sprint 1 money integrity: server-resolved Fleet Pricing/catalog rate
+  // at write time (null = nothing to resolve — custom/FLAT/discount lines),
+  // snapshotted at QUOTE_SENT if still null. `rate` above is what the line
+  // bills at; when it differs from resolvedRate the write was a staff
+  // override and rateOverridden flips (AuditLog: order.line_item_rate_override).
+  resolvedRate    Decimal?           @map("resolved_rate") @db.Decimal(10, 2)
+  rateOverridden  Boolean            @default(false) @map("rate_overridden")
   quantity        Int                @default(1)
   // Per-line pickup / return dates. Default to the parent Order's range,
   // but rep can override per line during quote review.
