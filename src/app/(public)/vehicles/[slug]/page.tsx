@@ -2,12 +2,15 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublicVehicleBySlug } from '@/lib/site/vehicleCatalog'
+import VehicleGallery from '@/components/site/VehicleGallery'
 
 /**
  * Public vehicle detail — /vehicles/[slug]. Reads LIVE from VehicleCategory by
- * slug (active only). Hero image via the public proxy, name + tagline, a spec
- * list (missing specs are simply omitted), the live resolved price
- * (price-on-quote when null), and an ORDER CTA into the order form.
+ * slug (client-visible rows only — unpublished/hidden vehicles 404). Photo
+ * gallery via the public proxy (primary hero + tap-to-swap thumbnails), name +
+ * tagline, a spec list (missing specs are simply omitted), feature bullets, the
+ * live resolved price (price-on-quote when null), and an ORDER CTA into the
+ * order form.
  */
 export const dynamic = 'force-dynamic'
 
@@ -56,23 +59,12 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
       </Link>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
-        {/* Hero image */}
-        <div className="rounded-[18px] overflow-hidden border border-[#e4dfd4] bg-white shadow-sm">
-          {v.photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={v.photoUrl}
-              alt={v.name}
-              className="w-full h-[280px] sm:h-[400px] object-cover bg-[#f0eadb]"
-            />
-          ) : (
-            <div className="w-full h-[280px] sm:h-[400px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-              <svg width={90} height={90} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-                <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
-              </svg>
-            </div>
-          )}
-        </div>
+        {/* Photo gallery — primary hero + tap-to-swap thumbnails. */}
+        <VehicleGallery
+          photos={v.photos.map((p) => ({ id: p.id, src: p.src }))}
+          fallbackSrc={v.photoUrl}
+          alt={v.name}
+        />
 
         {/* Right column: name, tagline, price, specs, CTA */}
         <div>
@@ -136,6 +128,23 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
                   </div>
                 ))}
               </dl>
+            </div>
+          )}
+
+          {/* Features — one bullet per stored line. */}
+          {v.features.length > 0 && (
+            <div className="mt-7">
+              <div className="text-[12px] font-semibold tracking-[0.16em] uppercase text-[#8b857a] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Features
+              </div>
+              <ul className="rounded-[14px] border border-[#e4dfd4] bg-white px-5 py-4 space-y-2">
+                {v.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-[15px] text-[#3a362f] leading-relaxed">
+                    <span aria-hidden className="mt-[9px] w-1.5 h-1.5 rounded-full bg-[#c39a3f] shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
