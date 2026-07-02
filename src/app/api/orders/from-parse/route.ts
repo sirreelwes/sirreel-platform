@@ -63,6 +63,7 @@ import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/or
 import { computeLineTotal } from '@/lib/orders/billing'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
+import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 
@@ -340,7 +341,19 @@ export async function POST(req: NextRequest) {
       for (const raw of itemsSafe) {
         const quantity = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
         const rateType = (raw.rateType ?? 'DAILY') as RateType
-        const rate = Number(raw.rate ?? 0)
+        // Sprint 1 — a parsed-PDF rate is an override REQUEST like any
+        // client-sent rate: resolved against catalog truth, divergence
+        // persists flagged + audit-logged (same path as line-items POST).
+        const rr = await resolveLineRate({
+          inventoryItemId: raw.inventoryItemId || null,
+          assetCategoryId: raw.assetCategoryId || null,
+          rateType,
+          clientRate: raw.rate ?? 0,
+          isPackageMember: !!(raw.packageInstanceId && !raw.isPackageHeader),
+        }, tx)
+        if (!rr) {
+          throw new Error(`unparseable rate on parsed line "${raw.description}"`)
+        }
 
         // Dept resolution — mirrors line-items POST. Catalog wins
         // when bound; else trust the AI-provided dept; PRO_SUPPLIES
@@ -434,7 +447,7 @@ export async function POST(req: NextRequest) {
         }
 
         const lineTotal = computeLineTotal({
-          quantity, rate, billableDays: days, rateType, department,
+          quantity, rate: rr.rate.toNumber(), billableDays: days, rateType, department,
         })
 
         const line = await tx.orderLineItem.create({
@@ -448,7 +461,9 @@ export async function POST(req: NextRequest) {
             pickupDate: pickupResolved,
             returnDate: returnResolved,
             rateType,
-            rate,
+            rate: rr.rate,
+            resolvedRate: rr.resolvedRate,
+            rateOverridden: rr.rateOverridden,
             quantity,
             billableDays: days,
             lineTotal: Math.round(lineTotal * 100) / 100,
@@ -462,6 +477,19 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true },
         })
+
+        // Rate-override audit row — inside the tx so it can't outlive a
+        // rolled-back order.
+        if (rr.rateOverridden && rr.resolvedRate) {
+          await logRateOverride(tx, {
+            orderId: order.id,
+            orderLineItemId: line.id,
+            resolvedRate: rr.resolvedRate,
+            overrideRate: rr.rate,
+            rateType,
+            userId: callingUser.id,
+          })
+        }
 
         // Pick-list sync — fires for all lines. WAREHOUSE-routed
         // get a PickListItem (if/when a PickList exists, which only

@@ -3,6 +3,7 @@ import { Prisma, type LineItemDepartment } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseMoney } from "@/lib/pricing/resolveRate";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +56,11 @@ export async function POST(req: NextRequest) {
         categoryId: categoryId || null,
         locationId: locationId || null,
         qtyOwned: qtyOwned != null ? Math.max(0, Math.floor(Number(qtyOwned))) : 0,
-        dailyRate: dailyRate != null && dailyRate !== "" ? parseFloat(dailyRate) || 0 : 0,
-        weeklyRate: weeklyRate != null && weeklyRate !== "" ? parseFloat(weeklyRate) || 0 : 0,
-        replacementCost: replacementCost != null && replacementCost !== "" ? parseFloat(replacementCost) : null,
+        // Decimal-safe money writes (audit §7) — no parseFloat into
+        // Decimal columns; parseMoney cent-rounds via Prisma.Decimal.
+        dailyRate: parseMoney(dailyRate) ?? 0,
+        weeklyRate: parseMoney(weeklyRate) ?? 0,
+        replacementCost: parseMoney(replacementCost),
       },
       include: {
         category: { select: { id: true, name: true } },

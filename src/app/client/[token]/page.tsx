@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd } from '@/lib/contracts/fees';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type PortalStep = 'agreement' | 'lcdw' | 'coi' | 'cc';
@@ -105,7 +106,7 @@ function PaperworkModal({ step, token, onClose, onComplete }: { step: PortalStep
         <div className="p-5">
           <div className="text-sm text-gray-500 mb-4">
             {step === 'agreement' && 'Please read and sign the rental agreement to confirm your booking.'}
-            {step === 'lcdw' && 'Acknowledge the Limited Collision Damage Waiver ($24/day/vehicle).'}
+            {step === 'lcdw' && `Acknowledge the Limited Collision Damage Waiver (${usd(LCDW_DAILY_RATE)}/day/vehicle).`}
             {step === 'coi' && 'Upload your Certificate of Insurance naming SirReel as additional insured.'}
             {step === 'cc' && 'Authorize your credit card for rental charges and deposits.'}
           </div>
@@ -498,11 +499,11 @@ export default function ClientDashboard() {
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
               <span className="text-base mt-0.5">🚫</span>
-              <div><span className="font-semibold text-gray-800">Non-Smoking: </span>All vehicles are non-smoking. A $250/day fee applies for violations, plus cost of repairs.</div>
+              <div><span className="font-semibold text-gray-800">Non-Smoking: </span>All vehicles are non-smoking. A {usd(SMOKING_FEE_PER_DAY)}/day fee applies for violations, plus cost of repairs.</div>
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
               <span className="text-base mt-0.5">⛽</span>
-              <div><span className="font-semibold text-gray-800">Fuel Policy: </span>Vehicles must be returned at the same fuel level they were dispatched. A $10/gallon fee applies for shortfalls.</div>
+              <div><span className="font-semibold text-gray-800">Fuel Policy: </span>Vehicles must be returned at the same fuel level they were dispatched. A {usd(FUEL_PER_GALLON)}/gallon fee applies for shortfalls.</div>
             </div>
             <div className="flex items-start gap-2.5 p-3 bg-gray-50 rounded-xl">
               <span className="text-base mt-0.5">🔖</span>

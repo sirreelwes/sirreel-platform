@@ -14,6 +14,7 @@ import { getServerSession } from 'next-auth'
 import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment } from '@prisma/client'
+import { parseMoney } from '@/lib/pricing/resolveRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,8 +67,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     data.department = body.department as LineItemDepartment
   }
   if (body.pricePerDay !== undefined) {
-    const price = Number(body.pricePerDay)
-    if (!Number.isFinite(price) || price < 0) return NextResponse.json({ error: 'pricePerDay must be ≥ 0' }, { status: 400 })
+    // Decimal-safe (audit §7): no Number() into a Decimal column.
+    const price = parseMoney(body.pricePerDay)
+    if (price === null || price.isNegative()) return NextResponse.json({ error: 'pricePerDay must be ≥ 0' }, { status: 400 })
     data.pricePerDay = price
   }
   if (body.active !== undefined) data.active = !!body.active

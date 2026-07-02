@@ -13,7 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { ReceiveMethod, SubRentalStatus } from '@prisma/client'
+import { Prisma, ReceiveMethod, SubRentalStatus } from '@prisma/client'
+import { parseMoney } from '@/lib/pricing/resolveRate'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 
@@ -74,8 +75,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // If quantity is changing and we're linked to a line, re-clamp +
   // re-derive client*. If not linked, just accept the new qty.
   let newQty = existing.quantity
-  let derivedClientDailyRate: number | null | undefined = undefined
-  let derivedClientTotal: number | null | undefined = undefined
+  // Decimal-safe (audit §7): stay in Prisma.Decimal, no Number() bridge.
+  let derivedClientDailyRate: Prisma.Decimal | null | undefined = undefined
+  let derivedClientTotal: Prisma.Decimal | null | undefined = undefined
   if (typeof body.quantity === 'number') {
     newQty = Math.max(1, Math.floor(body.quantity))
     if (existing.orderLineItemId) {
@@ -90,8 +92,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             { status: 400 },
           )
         }
-        derivedClientDailyRate = Number(line.rate)
-        derivedClientTotal = Number(line.rate) * newQty
+        derivedClientDailyRate = line.rate
+        derivedClientTotal = line.rate.times(newQty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
       }
     }
   }
@@ -105,9 +107,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(typeof body.quantity === 'number' ? { quantity: newQty } : {}),
       ...(body.startDate !== undefined ? { startDate: body.startDate ? new Date(body.startDate) : null } : {}),
       ...(body.endDate !== undefined ? { endDate: body.endDate ? new Date(body.endDate) : null } : {}),
-      ...(body.vendorDailyRate !== undefined ? { vendorDailyRate: body.vendorDailyRate } : {}),
-      ...(body.vendorWeeklyRate !== undefined ? { vendorWeeklyRate: body.vendorWeeklyRate } : {}),
-      ...(body.vendorTotal !== undefined ? { vendorTotal: body.vendorTotal } : {}),
+      ...(body.vendorDailyRate !== undefined ? { vendorDailyRate: parseMoney(body.vendorDailyRate) } : {}),
+      ...(body.vendorWeeklyRate !== undefined ? { vendorWeeklyRate: parseMoney(body.vendorWeeklyRate) } : {}),
+      ...(body.vendorTotal !== undefined ? { vendorTotal: parseMoney(body.vendorTotal) } : {}),
       ...(body.poNumber !== undefined ? { poNumber: body.poNumber } : {}),
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
       ...(body.status !== undefined ? { status: body.status } : {}),

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseMoney } from "@/lib/pricing/resolveRate";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -58,10 +60,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
       ? [...new Set(aliases.map((a: unknown) => String(a).trim().toLowerCase()).filter(Boolean))]
       : [];
   }
-  if (dailyRate !== undefined) data.dailyRate = parseFloat(dailyRate) || 0;
-  if (weeklyRate !== undefined) data.weeklyRate = parseFloat(weeklyRate) || 0;
+  // Decimal-safe money writes (audit §7) — no parseFloat into Decimal
+  // columns; parseMoney cent-rounds via Prisma.Decimal.
+  if (dailyRate !== undefined) data.dailyRate = parseMoney(dailyRate) ?? new Prisma.Decimal(0);
+  if (weeklyRate !== undefined) data.weeklyRate = parseMoney(weeklyRate) ?? new Prisma.Decimal(0);
   if (qtyOwned !== undefined) data.qtyOwned = parseInt(qtyOwned) || 0;
-  if (replacementCost !== undefined) data.replacementCost = replacementCost ? parseFloat(replacementCost) : null;
+  if (replacementCost !== undefined) data.replacementCost = replacementCost ? parseMoney(replacementCost) : null;
   if (description !== undefined) data.description = description;
   if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
   if (locationId !== undefined) data.locationId = locationId || null;
@@ -117,10 +121,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!before) {
     return NextResponse.json({ error: "item not found" }, { status: 404 });
   }
-  const newDaily = data.dailyRate !== undefined ? (data.dailyRate as number) : Number(before.dailyRate);
-  const newWeekly = data.weeklyRate !== undefined ? (data.weeklyRate as number) : Number(before.weeklyRate);
+  const newDaily = data.dailyRate !== undefined ? (data.dailyRate as Prisma.Decimal) : before.dailyRate;
+  const newWeekly = data.weeklyRate !== undefined ? (data.weeklyRate as Prisma.Decimal) : before.weeklyRate;
   const rateChanged =
-    Number(before.dailyRate) !== newDaily || Number(before.weeklyRate) !== newWeekly;
+    !before.dailyRate.equals(newDaily) || !before.weeklyRate.equals(newWeekly);
 
   // Resolve the acting user for the audit row (best-effort; the log is
   // non-fatal if the user lookup misses).

@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
+import { snapshotResolvedRates } from '@/lib/pricing/resolveRate'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { rankRecipients } from '@/lib/email/recipients'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
@@ -194,6 +195,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // ── State transition (DRAFT → QUOTE_SENT) ────────────────
   if (order.status === 'DRAFT') {
+    // Sprint 1 — quote-time rate snapshot: stamp resolvedRate on any line
+    // still missing one so post-quote Fleet Pricing edits can't rewrite
+    // what the client saw. Non-fatal — the email already went out.
+    try {
+      await snapshotResolvedRates(order.id)
+    } catch (err) {
+      console.error('[pricing] quote-time rate snapshot failed:', err instanceof Error ? err.message : err)
+    }
     await prisma.order.update({
       where: { id: order.id },
       data: {

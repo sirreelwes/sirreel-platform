@@ -22,7 +22,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { SubRentalStatus, ReceiveMethod } from '@prisma/client'
+import { Prisma, SubRentalStatus, ReceiveMethod } from '@prisma/client'
+import { parseMoney } from '@/lib/pricing/resolveRate'
 import { authOptions } from '@/lib/auth'
 import { requireSubRentalAccess } from '@/lib/sub-rentals/auth'
 
@@ -98,8 +99,9 @@ export async function POST(req: NextRequest) {
   // and clamp quantity ≤ line.quantity (partial fulfillment is fine,
   // over-allocation is a bug). Also infer orderId from the line so we
   // don't depend on the caller to pass both.
-  let derivedClientDailyRate: number | null = null
-  let derivedClientTotal: number | null = null
+  // Decimal-safe (audit §7): stay in Prisma.Decimal, no Number() bridge.
+  let derivedClientDailyRate: Prisma.Decimal | null = null
+  let derivedClientTotal: Prisma.Decimal | null = null
   let resolvedOrderId: string | null = body.orderId ?? null
   let qty = Math.max(1, Math.floor(body.quantity ?? 1))
 
@@ -118,8 +120,8 @@ export async function POST(req: NextRequest) {
       )
     }
     resolvedOrderId = line.orderId
-    derivedClientDailyRate = Number(line.rate)
-    derivedClientTotal = Number(line.rate) * qty
+    derivedClientDailyRate = line.rate
+    derivedClientTotal = line.rate.times(qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
   }
 
   const subRental = await prisma.subRental.create({
@@ -133,9 +135,9 @@ export async function POST(req: NextRequest) {
       quantity: qty,
       startDate: body.startDate ? new Date(body.startDate) : null,
       endDate: body.endDate ? new Date(body.endDate) : null,
-      vendorDailyRate: body.vendorDailyRate ?? null,
-      vendorWeeklyRate: body.vendorWeeklyRate ?? null,
-      vendorTotal: body.vendorTotal ?? null,
+      vendorDailyRate: parseMoney(body.vendorDailyRate),
+      vendorWeeklyRate: parseMoney(body.vendorWeeklyRate),
+      vendorTotal: parseMoney(body.vendorTotal),
       // Server-derived from the line — never accepted from caller.
       clientDailyRate: derivedClientDailyRate,
       clientWeeklyRate: null,

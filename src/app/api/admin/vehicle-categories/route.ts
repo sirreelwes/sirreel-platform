@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-admin'
+import { pickEffectiveDailyRate } from '@/lib/pricing/resolveRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +38,7 @@ export async function GET() {
   })
 
   const categories = rows.map((r) => {
-    const effective = r.assetCategory?.dailyRate ?? r.dailyRate
+    const effective = pickEffectiveDailyRate(r)
     return {
       id: r.id,
       name: r.name,
