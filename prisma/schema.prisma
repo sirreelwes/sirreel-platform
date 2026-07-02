@@ -899,7 +899,10 @@ model CheckoutRecord {
   id                  String @id @default(uuid())
   bookingAssignmentId String @map("booking_assignment_id")
   assetId             String @map("asset_id")
-  driverId            String @map("driver_id")
+  // Nullable (Sprint 2A): a pre-rental inspection creates the record
+  // before the client's driver is known; the driver attaches at
+  // physical pickup. Relaxed with the table empty — approved 2026-07-02.
+  driverId            String? @map("driver_id")
   checkedOutBy        String @map("checked_out_by") // Fleet team member
 
   // Checkout
@@ -927,7 +930,7 @@ model CheckoutRecord {
   // Relations
   bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
   asset             Asset             @relation(fields: [assetId], references: [id])
-  driver            Driver            @relation(fields: [driverId], references: [id])
+  driver            Driver?           @relation(fields: [driverId], references: [id])
   checkedOutByUser  User              @relation("CheckedOutBy", fields: [checkedOutBy], references: [id])
 
   @@map("checkout_records")
@@ -1076,12 +1079,32 @@ model Inspection {
   bookingAssignment BookingAssignment? @relation("AssignmentInspections", fields: [bookingAssignmentId], references: [id])
   inspectedByUser   User               @relation("InspectedBy", fields: [inspectedBy], references: [id])
   damageItems       DamageItem[]
+  photos            InspectionPhoto[]
 
   // Used in claims
   checkoutClaims InsuranceClaim[] @relation("CheckoutInspection")
   returnClaims   InsuranceClaim[] @relation("ReturnInspection")
 
   @@map("inspections")
+}
+
+// Sprint 2A — multi-photo storage for pre-rental (and later return-side)
+// inspections. Private Vercel Blob; served ONLY via the session-gated
+// /api/fleet/photos/[id] streaming route (streamBlob pattern — internal
+// staff surface, never the client portal).
+model InspectionPhoto {
+  id           String   @id @default(uuid())
+  inspectionId String   @map("inspection_id")
+  fileUrl      String   @map("file_url")
+  filename     String?
+  contentType  String?  @map("content_type")
+  uploadedBy   String?  @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@map("inspection_photos")
 }
 
 enum DamageType {

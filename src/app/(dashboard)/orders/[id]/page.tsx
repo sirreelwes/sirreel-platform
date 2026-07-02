@@ -8,6 +8,7 @@ import type { UserRole } from "@prisma/client";
 import Link from "next/link";
 import { StageBookingTermsSection } from "@/components/orders/StageBookingTermsSection";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
+import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
 import { EmailReviewModal, type EmailReviewTarget } from "@/components/email/EmailReviewModal";
 import { shouldReview } from "@/lib/email/reviewGate";
@@ -2681,6 +2682,11 @@ export default function OrderDetailPage() {
       {['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(order.status) && (
         <LdDispositionPanel orderId={orderId} onChanged={() => Promise.all([fetchOrder(), fetchInvoices()])} />
       )}
+
+      {/* Sprint 2A — pre-rental inspections for the linked booking.
+          Staff-only internal surface; renders nothing when the order
+          has no booking or no inspections. */}
+      <InspectionsPanel orderId={orderId} />
 
       {/* Phase 5 commit 1 — Invoices block. RW billing off-ramp:
           generate a native RENTAL invoice from the booked snapshot. */}
