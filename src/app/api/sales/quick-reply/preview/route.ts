@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
-import { computeQuickReplyAvailability, composeQuickReply } from '@/lib/sales/quickReply'
+import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,14 +36,14 @@ export async function POST(req: NextRequest) {
   }
   const message: string | null = typeof body.message === 'string' ? body.message : null
 
-  const lines = await computeQuickReplyAvailability(payload.categories || [], payload.pickup, payload.return)
+  const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
   const { subject, html, text } = composeQuickReply({
     recipientName: payload.recipientName,
     clientName: payload.clientName,
     jobName: payload.jobName,
     pickup: payload.pickup,
     ret: payload.return,
-    lines,
+    tiering,
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,
@@ -61,5 +61,22 @@ export async function POST(req: NextRequest) {
     attachments: [],
     order: { id: '', orderNumber: 'Quick reply', jobName: payload.jobName ?? null, portalSlug: null },
     portalUrlIsTokenized: false,
+    // Rep-only visibility (EmailReviewModal info strip) — which tier the
+    // draft uses and the per-category utilization behind it. Never rendered
+    // in the client email itself.
+    quickReplyInsight: {
+      tier: tiering.tier,
+      datesParsed: tiering.datesParsed,
+      pickup: payload.pickup ?? null,
+      return: payload.return ?? null,
+      categories: tiering.lines.map((l) => ({
+        id: l.id,
+        name: l.name,
+        requested: l.requested,
+        activeAssets: l.activeAssets,
+        utilization: l.utilization,
+        tight: l.tight,
+      })),
+    },
   })
 }

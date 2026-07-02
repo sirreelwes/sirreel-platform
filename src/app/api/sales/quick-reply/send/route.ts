@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { computeQuickReplyAvailability, composeQuickReply } from '@/lib/sales/quickReply'
+import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 
 export const dynamic = 'force-dynamic'
@@ -39,14 +39,14 @@ export async function POST(req: NextRequest) {
   }
   const message: string | null = typeof body.message === 'string' ? body.message : null
 
-  const lines = await computeQuickReplyAvailability(payload.categories || [], payload.pickup, payload.return)
+  const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
   const { subject, html, text } = composeQuickReply({
     recipientName: payload.recipientName,
     clientName: payload.clientName,
     jobName: payload.jobName,
     pickup: payload.pickup,
     ret: payload.return,
-    lines,
+    tiering,
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,

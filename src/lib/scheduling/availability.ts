@@ -45,8 +45,11 @@
 import { prisma } from '@/lib/prisma'
 import type { AssetTier } from '@prisma/client'
 
-const SERVICEABLE_EXCLUDED_STATUSES = ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN'] as const
-const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
+// Exported so downstream consumers (e.g. src/lib/fleet/utilization.ts) reuse
+// the scheduler's exact notion of "out of service" / "holds inventory"
+// instead of re-deriving their own status sets.
+export const SERVICEABLE_EXCLUDED_STATUSES = ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN'] as const
+export const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
 export type UnitState = 'free' | 'buffer' | 'booked'
 
