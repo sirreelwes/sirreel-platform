@@ -285,6 +285,18 @@ model VehicleCategory {
   dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
   sortOrder  Int      @default(0) @map("sort_order")
   active     Boolean  @default(true)
+  // Structured public-site spec fields (all nullable — a missing spec is
+  // simply omitted from the vehicle detail page). One set per vehicle; edited
+  // in HQ (/admin/vehicle-catalog) and read LIVE by the public /vehicles pages.
+  baseVehicle      String?  @map("base_vehicle")        // e.g. "Ford Transit Cargo"
+  model            String?                              // trim / model designation
+  fuelType         String?  @map("fuel_type")           // e.g. "Gas", "Diesel"
+  lengthFt         Decimal? @map("length_ft") @db.Decimal(6, 2) // overall length in feet
+  heightClearance  String?  @map("height_clearance")    // e.g. "9' 6\""
+  interiorBoxHeight String? @map("interior_box_height") // e.g. "6' 2\""
+  liftGateSpec     String?  @map("lift_gate_spec")      // e.g. "3,000 lb hydraulic"
+  tagline          String?                              // short hero line
+  description      String?                              // longer marketing paragraph
   // Link to the operational Fleet Pricing category (owned vehicles). NULL for
   // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
   assetCategoryId String?       @map("asset_category_id")

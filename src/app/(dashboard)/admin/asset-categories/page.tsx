@@ -201,7 +201,12 @@ export default function AdminAssetCategoriesPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-lt-fg">Fleet Pricing</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-lt-fg">Fleet Pricing</h1>
+          <a href="/admin/vehicle-catalog" className="text-sm font-semibold text-lt-fg2 hover:text-lt-fg">
+            Vehicle Catalog (public specs) →
+          </a>
+        </div>
         <p className="text-sm text-lt-fg2 mt-1 max-w-2xl font-medium">
           Edit the daily / weekly rate for each fleet category. Changing a rate sets the default for{" "}
           <span className="text-lt-fg font-semibold">future</span> quote lines only — existing orders keep the price they were booked at.

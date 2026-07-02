@@ -37,6 +37,7 @@ const ORDERS_HOST = 'orders.sirreel.com'
 // calls only /api/public/* (catalog, vehicle-categories, supply-request).
 const ORDERS_ALLOWED_PREFIXES = [
   '/order/supplies',   // the public supply form itself (rewrite target + direct hits)
+  '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
   '/api/public/',      // catalog / vehicle-categories / supply-request
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights

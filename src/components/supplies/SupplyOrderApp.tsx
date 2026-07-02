@@ -1133,26 +1133,36 @@ function VehicleCard({
         hasWindows ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
       }`}
     >
-      {vehicle.photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={vehicle.photoUrl}
-          alt={vehicle.name}
-          className="w-full h-[84px] object-cover bg-[#f0eadb]"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-[84px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-          <svg width={42} height={42} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-            <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
-          </svg>
-        </div>
-      )}
+      {/* Image + name link to the public vehicle detail page. Scoped to these
+          non-interactive regions only — the Reserve button, date inputs and qty
+          steppers below stay fully clickable (the card root is a div, not an
+          anchor, so there's no nested-anchor hijacking). */}
+      <Link href={`/vehicles/${vehicle.slug}`} className="block" title={`View ${vehicle.name} details`}>
+        {vehicle.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={vehicle.photoUrl}
+            alt={vehicle.name}
+            className="w-full h-[84px] object-cover bg-[#f0eadb]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-[84px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
+            <svg width={42} height={42} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+              <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
+            </svg>
+          </div>
+        )}
+      </Link>
       <div className="p-2.5 flex flex-col gap-2 flex-1">
         <div className="min-w-0">
-          <div className="font-extrabold text-[14px] leading-[1.2] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <Link
+            href={`/vehicles/${vehicle.slug}`}
+            className="font-extrabold text-[14px] leading-[1.2] tracking-tight hover:text-[#a37f2c] transition-colors"
+            style={{ fontFamily: 'Archivo, sans-serif' }}
+          >
             {vehicle.name}
-          </div>
+          </Link>
           {vehicle.subtitle && (
             <div className="text-[12px] text-[#8b857a] mt-0.5 truncate">{vehicle.subtitle}</div>
           )}
