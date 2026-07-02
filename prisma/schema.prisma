@@ -297,15 +297,39 @@ model VehicleCategory {
   liftGateSpec     String?  @map("lift_gate_spec")      // e.g. "3,000 lb hydraulic"
   tagline          String?                              // short hero line
   description      String?                              // longer marketing paragraph
+  // Publish gate for the public site: a vehicle is client-visible only when
+  // published=true AND it has at least one photo (VehicleCategoryPhoto or the
+  // legacy photoUrl). Unpublished rows still appear in HQ admin views.
+  published  Boolean  @default(false)
+  // Public-site feature bullets, one per line (rendered as a list under specs).
+  features   String?
   // Link to the operational Fleet Pricing category (owned vehicles). NULL for
   // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
   assetCategoryId String?       @map("asset_category_id")
   assetCategory   AssetCategory? @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
+  photos     VehicleCategoryPhoto[]
 
   @@index([assetCategoryId])
   @@map("vehicle_categories")
+}
+
+// Gallery photos for a public vehicle page. url points at a PRIVATE blob
+// (uploadPrivateImage) — always served back through a proxy route, never raw.
+// Exactly one photo per vehicle should be isPrimary (enforced in the API, not
+// the schema); ordering is sortOrder asc, createdAt asc.
+model VehicleCategoryPhoto {
+  id                String          @id @default(uuid())
+  vehicleCategoryId String          @map("vehicle_category_id")
+  vehicleCategory   VehicleCategory @relation(fields: [vehicleCategoryId], references: [id], onDelete: Cascade)
+  url               String
+  sortOrder         Int             @default(0) @map("sort_order")
+  isPrimary         Boolean         @default(false) @map("is_primary")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@index([vehicleCategoryId])
+  @@map("vehicle_category_photos")
 }
 
 model Company {
@@ -2688,6 +2712,13 @@ model OrderLineItem {
   endDate         DateTime?          @map("end_date") @db.Date
   rateType        RateType           @default(DAILY)
   rate            Decimal            @db.Decimal(10, 2)
+  // Sprint 1 money integrity: server-resolved Fleet Pricing/catalog rate
+  // at write time (null = nothing to resolve — custom/FLAT/discount lines),
+  // snapshotted at QUOTE_SENT if still null. `rate` above is what the line
+  // bills at; when it differs from resolvedRate the write was a staff
+  // override and rateOverridden flips (AuditLog: order.line_item_rate_override).
+  resolvedRate    Decimal?           @map("resolved_rate") @db.Decimal(10, 2)
+  rateOverridden  Boolean            @default(false) @map("rate_overridden")
   quantity        Int                @default(1)
   // Per-line pickup / return dates. Default to the parent Order's range,
   // but rep can override per line during quote review.

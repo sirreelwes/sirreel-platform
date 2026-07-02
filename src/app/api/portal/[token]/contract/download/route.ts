@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from '@/lib/contracts/fees'
 
 const TERMS = [
   { n: 1, title: 'Indemnity', text: 'Lessee/Renter ("You") agree to defend, indemnify, and hold SirReel Production Vehicles, Inc. dba SirReel Studio Rentals our agents, employees, assignees, suppliers, sub-lessors and sub-renters ("Us" or "We") harmless from and against any and all claims, actions, causes of action, demands, rights, damages of any kind, costs, loss of profit, expenses and compensation whatsoever including court costs and attorneys\' fees, in any way arising from, or in connection with the Vehicles and Equipment rented/leased, including, without limitation, as a result of its use, maintenance, or possession, irrespective of the cause of the Claim, except as the result of our sole negligence or willful act, from the time the Equipment leaves our place of business until the Equipment is returned to us during normal business hours and we sign a written receipt for it.' },
@@ -30,7 +31,7 @@ const TERMS = [
   { n: 26, title: 'Arbitration', text: 'Any controversy or claim arising out of or related to this Agreement will be settled by arbitration in Los Angeles, California, under the auspices of JAMS. The decision and award of the arbitrator will be final and binding.' },
   { n: 27, title: 'Severability', text: 'If any provision of this Agreement is held invalid or unenforceable, the remainder of this Agreement will remain valid and in full force and effect.' },
   { n: 28, title: 'Facsimile Signature', text: 'This Agreement may be executed by facsimile signature and such signature shall be deemed a valid and binding original signature.' },
-  { n: 29, title: 'Non-smoking Policy', text: 'All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the vehicles. A $250 per day fee may be charged in addition to the cost to repair any damaged items if the smoking policy is not observed.' },
+  { n: 29, title: 'Non-smoking Policy', text: `All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the vehicles. A ${usd(SMOKING_FEE_PER_DAY)} per day fee may be charged in addition to the cost to repair any damaged items if the smoking policy is not observed.` },
 ]
 
 function buildHtml(booking: any, format: string) {
@@ -125,11 +126,11 @@ function buildHtml(booking: any, format: string) {
 
   <div class="section-title">Limited Collision Damage Waiver (LCDW)</div>
 
-  <p class="policy-text"><strong>$24.00 per day per vehicle.</strong> The Limited Collision Damage Waiver limits your liability for physical damage to SirReel vehicles during your rental period. By accepting LCDW, you agree to pay $24.00 per day per vehicle rented. You acknowledge that you will be charged $10.00 for each gallon necessary to return the vehicle to the fuel level it went out with.</p>
+  <p class="policy-text"><strong>${usd2(LCDW_DAILY_RATE)} per day per vehicle.</strong> The Limited Collision Damage Waiver limits your liability for physical damage to SirReel vehicles during your rental period. By accepting LCDW, you agree to pay ${usd2(LCDW_DAILY_RATE)} per day per vehicle rented. You acknowledge that you will be charged ${usd2(FUEL_PER_GALLON)} for each gallon necessary to return the vehicle to the fuel level it went out with.</p>
 
   <div style="margin:20px 0;padding:12px;border:1px solid #ccc;">
-    <p style="font-size:11pt;margin:0;"><strong>☐ I accept LCDW</strong> for all fleet vehicle rentals at $24.00/day/vehicle</p>
-    <p style="font-size:11pt;margin:8px 0 0 0;"><strong>☐ I acknowledge</strong> the $10.00/gallon fuel return policy</p>
+    <p style="font-size:11pt;margin:0;"><strong>☐ I accept LCDW</strong> for all fleet vehicle rentals at ${usd2(LCDW_DAILY_RATE)}/day/vehicle</p>
+    <p style="font-size:11pt;margin:8px 0 0 0;"><strong>☐ I acknowledge</strong> the ${usd2(FUEL_PER_GALLON)}/gallon fuel return policy</p>
   </div>
 
   <div class="section-title">Agreement & Signature</div>

@@ -9,6 +9,7 @@ import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDel
 import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 
 type Params = { params: Promise<{ id: string; lineId: string }> };
 
@@ -124,7 +125,46 @@ export async function PUT(req: NextRequest, { params }: Params) {
       const existing = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
       if (existing) {
         const effectiveRateType = (rateType ?? existing.rateType) as RateType;
-        const effectiveRate = Number(rate ?? existing.rate);
+        // Sprint 1 — server-side rate resolution on explicit rate/catalog
+        // edits ONLY. Date/qty-only edits never re-resolve, so a Fleet
+        // Pricing change after QUOTE_SENT can't silently rewrite a line.
+        let effectiveRate = Number(existing.rate);
+        const rateInputsChanged =
+          rate !== undefined || rateType !== undefined ||
+          inventoryItemId !== undefined || assetCategoryId !== undefined;
+        if (rateInputsChanged) {
+          const rr = await resolveLineRate({
+            inventoryItemId: inventoryItemId !== undefined ? (inventoryItemId || null) : existing.inventoryItemId,
+            assetCategoryId: assetCategoryId !== undefined ? (assetCategoryId || null) : existing.assetCategoryId,
+            rateType: effectiveRateType,
+            clientRate: rate !== undefined ? rate : existing.rate,
+            isPackageMember: !!(existing.packageInstanceId && !existing.isPackageHeader),
+          });
+          if (!rr) {
+            return NextResponse.json({ error: "invalid rate" }, { status: 400 });
+          }
+          data.rate = rr.rate;
+          data.resolvedRate = rr.resolvedRate;
+          data.rateOverridden = rr.rateOverridden;
+          effectiveRate = rr.rate.toNumber();
+          // Log only when this edit introduces/changes an override value —
+          // qty edits on an already-overridden line don't re-log.
+          if (rr.rateOverridden && rr.resolvedRate && rate !== undefined && !rr.rate.equals(existing.rate)) {
+            try {
+              await logRateOverride(prisma, {
+                orderId,
+                orderLineItemId: lineId,
+                resolvedRate: rr.resolvedRate,
+                overrideRate: rr.rate,
+                rateType: effectiveRateType,
+                userId: await resolveOperatorId(session.user.email),
+                ipAddress: extractIp(req),
+              });
+            } catch (err) {
+              console.error('[pricing] rate-override audit failed:', err instanceof Error ? err.message : err);
+            }
+          }
+        }
         const effectiveQty = Number(quantity ?? existing.quantity);
         const effectiveDept = (department as LineItemDepartment | undefined) ?? existing.department;
 

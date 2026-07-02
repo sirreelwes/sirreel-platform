@@ -3,9 +3,10 @@ import type { Metadata } from 'next'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 
 /**
- * Public /vehicles landing — the "Vehicles" nav destination. Lists every active
- * VehicleCategory as a card linking to its detail page. Reads LIVE from the
- * same rows the order form shows.
+ * Public /vehicles landing — the "Vehicles" nav destination. Lists every
+ * client-visible VehicleCategory (published + has a photo) as a card linking
+ * to its detail page. Reads LIVE from the same rows the order form shows;
+ * tiles use the primary gallery photo (legacy image fallback) via the proxy.
  */
 export const dynamic = 'force-dynamic'
 

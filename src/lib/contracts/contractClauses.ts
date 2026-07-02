@@ -4,6 +4,8 @@
  * update this file too. Keep clause numbering and substance in lockstep.
  */
 
+import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from './fees'
+
 export interface CanonicalClause {
   ref: string
   title: string
@@ -177,7 +179,7 @@ export const CANONICAL_CLAUSES: CanonicalClause[] = [
   {
     ref: '29',
     title: 'Non-smoking policy',
-    body: 'All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the vehicles. A $250 per day fee may be charged lessee in addition to the cost to repair any damaged items if the smoking policy is not observed.',
+    body: `All vehicles are non-smoking vehicles and lessee is responsible for all damages caused from smoking in or near the vehicles. A ${usd(SMOKING_FEE_PER_DAY)} per day fee may be charged lessee in addition to the cost to repair any damaged items if the smoking policy is not observed.`,
   },
 ]
 
@@ -186,12 +188,12 @@ export const FLEET_AGREEMENT = {
   intro:
     'In addition to the terms above, the following provisions apply specifically to fleet vehicle rentals (Cubes, Vans, Stakebeds, Location Trailers, Trucks & Motorhomes).',
   fuelPolicy:
-    'Lessee acknowledges that they will be charged $10.00 for each gallon necessary to return the vehicle to the fuel level it went out with.',
+    `Lessee acknowledges that they will be charged ${usd2(FUEL_PER_GALLON)} for each gallon necessary to return the vehicle to the fuel level it went out with.`,
 }
 
 export const LCDW_ADDENDUM = {
   title: 'Limited Collision Damage Waiver Addendum',
-  rate: 'Limited Collision Damage Waiver — $24/day/vehicle',
+  rate: `Limited Collision Damage Waiver — ${usd(LCDW_DAILY_RATE)}/day/vehicle`,
   scope:
     'The Limited Collision Damage Waiver is ONLY available for fleet rental vehicles such as: Vehicles (Cubes, Vans, Stakebeds, Location Trailers, Trucks & Motorhomes).',
   note: 'Acceptance/decline of LCDW must be confirmed in writing per fleet vehicle rental.',
