@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 
 function getGmailClient(email: string) {
@@ -86,6 +87,9 @@ async function backfillInbox(email: string, thisYear: number) {
 }
 
 export async function GET() {
+  // Mutating backfill (writes daily_collections) — ADMIN only.
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   try {
     const thisYear = new Date().getFullYear()
     const results: any[] = []

@@ -93,10 +93,21 @@ async function handle() {
   }
 }
 
-export async function POST() {
+// Same CRON_SECRET bearer check as the /api/cron/* routes — the Vercel
+// cron invocation carries `Authorization: Bearer ${CRON_SECRET}`. When the
+// secret is unset (local dev) manual curl is allowed.
+function isAuthorized(req: Request): boolean {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return true // dev: allow manual curl
+  return req.headers.get("authorization") === `Bearer ${secret}`
+}
+
+export async function POST(req: Request) {
+  if (!isAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   return handle()
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  if (!isAuthorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   return handle()
 }

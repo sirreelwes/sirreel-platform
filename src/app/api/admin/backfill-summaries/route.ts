@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireAdmin } from "@/lib/auth-admin"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 
@@ -40,6 +41,8 @@ Just the sentence, no quotes, no punctuation at end.`
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   try {
     const { limit = 1 } = await req.json().catch(() => ({}))
 
@@ -106,6 +109,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   const total = await prisma.emailThread.count()
   const withSummary = await prisma.emailThread.count({ where: { aiSummary: { not: null } } })
   const without = total - withSummary

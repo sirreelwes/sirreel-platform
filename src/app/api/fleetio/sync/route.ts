@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { fetchServiceEntries } from '@/lib/fleetio';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 
 export async function POST() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   try {
     const assets = await prisma.asset.findMany({ select: { id: true, unitName: true } });
     const assetMap = new Map(assets.map(a => [a.unitName.trim(), a.id]));

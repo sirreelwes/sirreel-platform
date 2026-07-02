@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
+  // Debug endpoint (exposes raw_email) — ADMIN only.
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   const date = new URL(req.url).searchParams.get('date')
   if (!date) {
     // Return all dates to verify storage

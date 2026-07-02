@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-admin";
 
 export async function POST(req: NextRequest) {
+  // Bulk price mutation — ADMIN only (raw SQL below must be unreachable
+  // without the role gate).
+  const gate = await requireAdmin();
+  if (gate instanceof NextResponse) return gate;
+
   const body = await req.json();
   const { action, categoryId, percentage, field } = body;
 

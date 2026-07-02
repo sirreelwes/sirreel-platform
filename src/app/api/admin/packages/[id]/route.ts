@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment } from '@prisma/client'
 
@@ -39,10 +40,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  // Pricing mutation — ADMIN only. (GET stays session-level: the order
+  // page's package picker reads it for any signed-in agent.)
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   const { id } = await params
   const body = await req.json().catch(() => null) as {
     name?: string
@@ -104,10 +105,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   const { id } = await params
   await prisma.package.delete({ where: { id } })
   return NextResponse.json({ ok: true })

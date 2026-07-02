@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 function sumPeriod(rows: any[], from: string, to: string) {
@@ -48,6 +50,11 @@ function addDays(dateStr: string, n: number) {
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // Session-level (not requireAdmin): the dashboard collections widget is
+  // used by non-ADMIN staff. See audit report — open question whether this
+  // should be role-restricted further.
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   try {
     // One-time fix for Mar 12 data entry typo ($20,1319.90 should be $20,319.90)
     await prisma.$executeRaw`UPDATE daily_collections SET rentalworks = 20319.90 WHERE rentalworks > 50000`

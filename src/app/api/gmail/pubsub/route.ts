@@ -364,6 +364,34 @@ async function syncInbox(email: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // ── Google Pub/Sub push OIDC verification ─────────────────────
+  // Enforcement activates when PUBSUB_PUSH_SERVICE_ACCOUNT is set AND the
+  // Pub/Sub push subscription is configured to attach an OIDC token.
+  // Until both are configured we log loudly and allow, so ingestion
+  // doesn't go dark before the subscription is reconfigured. 401/403 (not
+  // 200) on auth failure so Pub/Sub retries/deadletters instead of acking.
+  const expectedSa = process.env.PUBSUB_PUSH_SERVICE_ACCOUNT
+  if (expectedSa) {
+    const idToken = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "")
+    if (!idToken) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+    try {
+      const verifier = new google.auth.OAuth2()
+      const ticket = await verifier.verifyIdToken({
+        idToken,
+        audience: process.env.PUBSUB_PUSH_AUDIENCE || undefined,
+      })
+      const payload = ticket.getPayload()
+      const issOk = payload?.iss === "https://accounts.google.com" || payload?.iss === "accounts.google.com"
+      if (!issOk || !payload?.email_verified || payload.email !== expectedSa) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 })
+      }
+    } catch {
+      return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+    }
+  } else {
+    console.warn("[pubsub] PUBSUB_PUSH_SERVICE_ACCOUNT not set — push auth NOT enforced")
+  }
+
   try {
     const body = await req.json()
     const message = body.message

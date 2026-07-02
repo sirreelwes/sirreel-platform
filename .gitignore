@@ -42,3 +42,4 @@ scripts/*
 .env.local.bak
 .gcp-service-account.json
 .e2e-scratch/
+.vercel

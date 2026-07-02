@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 const API_KEY = process.env.PLANYO_API_KEY || ''
 const SITE_ID = process.env.PLANYO_SITE_ID || '36171'
 const BASE = 'https://www.planyo.com/rest/'
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   try {
     const { reservationId, rwOrderNumber, existingNotes } = await req.json()
     if (!reservationId || !rwOrderNumber) {

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 // TODO: Wire up to real Prisma data + Claude API via lib/ai.ts
 // For now, this provides a local fallback that answers from mock data
@@ -35,6 +37,8 @@ Alyssa Benedetto — 3× Cube — Pending — Jose
 Beth Schiffman — 2× Cube — Pending — Jose`;
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   try {
     const { message, role } = await req.json();
     const q = message.toLowerCase();

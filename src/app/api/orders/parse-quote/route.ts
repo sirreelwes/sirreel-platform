@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { LineItemDepartment } from '@prisma/client'
 import {
@@ -552,6 +554,8 @@ async function enrichContacts(contacts: AiContact[]): Promise<ResolvedContact[]>
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   try {
     const body = await req.json()
     const { text } = body

@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
 // Generates recurring/scheduled alerts that don't exist yet
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   const created: string[] = []
 
   const upsertAlert = async (type: string, title: string, body: string, severity: string, link: string | null, expiresAt: Date | null) => {

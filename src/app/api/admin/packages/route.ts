@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { requireAdmin } from '@/lib/auth-admin'
 import { prisma } from '@/lib/prisma'
 import { LineItemDepartment } from '@prisma/client'
 
@@ -74,10 +75,10 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  // Pricing mutation — ADMIN only. (GET stays session-level: the order
+  // page's package picker reads it for any signed-in agent.)
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
   const body = await req.json().catch(() => null) as {
     name?: string
     description?: string | null

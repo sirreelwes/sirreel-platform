@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   const userEmail = new URL(req.url).searchParams.get('user') || ''
 
   const rows = await prisma.$queryRaw<any[]>`
@@ -21,6 +25,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   const { type, title, body, severity, link, expiresAt } = await req.json()
   if (!type || !title) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 

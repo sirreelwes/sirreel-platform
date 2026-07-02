@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { EmailCategory, EmailStatus } from "@prisma/client"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
@@ -36,6 +38,8 @@ function triageEmail(subject: string, snippet: string): { category: EmailCategor
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   try {
     const { email, historyId } = await req.json()
     if (!email || !historyId) return NextResponse.json({ ok: false, error: "Missing email or historyId" }, { status: 400 })
