@@ -123,14 +123,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen overflow-hidden bg-[#F7F6F3]">
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex flex-col">
-        {/* Brand — recolorable inline 'S' monogram (currentColor → gold) */}
+        {/* Brand — real SirReel "S" mark (white transparent PNG on the dark chrome) */}
         <div className="px-4 py-4 border-b border-white/10">
           <Link href="/" className="flex items-center gap-2.5">
-            <svg viewBox="0 0 32 32" className="w-9 h-9 text-[#c9a24b] flex-shrink-0" aria-hidden="true">
-              <rect x="1" y="1" width="30" height="30" rx="9" fill="currentColor" opacity="0.16" />
-              <rect x="1" y="1" width="30" height="30" rx="9" fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" />
-              <text x="16" y="23" textAnchor="middle" fontSize="20" fontWeight="800" fill="currentColor" fontFamily="ui-sans-serif, system-ui, -apple-system, sans-serif">S</text>
-            </svg>
+            <img src="/s-logo-white.png" alt="" aria-hidden="true" className="w-9 h-9 flex-shrink-0 object-contain" />
             <div className="leading-tight">
               <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
               <div className="text-[8px] font-semibold text-[#c9a24b]/80 tracking-[0.22em] uppercase">SirReel HQ</div>
