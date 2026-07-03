@@ -16,6 +16,22 @@ import { BILLING_RULES, computeBillableDays } from '@/lib/orders/billing'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Structured extraction over a long thread can run long — give the
+// function headroom beyond the plan default.
+export const maxDuration = 120
+
+// The model is instructed to return ONLY raw JSON, but occasionally wraps
+// it in ```json fences or a one-line preamble anyway. Slice from the first
+// "{" to the last "}" — fences, preamble, and trailing commentary all fall
+// away; anything without braces is returned as-is so JSON.parse fails
+// loudly and gets logged.
+function extractJsonObject(raw: string): string {
+  const first = raw.indexOf('{')
+  const last = raw.lastIndexOf('}')
+  if (first === -1 || last <= first) return raw.trim()
+  return raw.slice(first, last + 1)
+}
+
 const VALID_DEPARTMENTS: LineItemDepartment[] = [
   'VEHICLES',
   'COMMUNICATIONS',
@@ -573,7 +589,12 @@ export async function POST(req: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 3000,
+      // 3000 was the root cause of "AI response was not valid JSON" on
+      // long documents: a big items+contacts payload exceeds it, the JSON
+      // is cut mid-object, and JSON.parse fails. 8192 fits any realistic
+      // quote; a still-truncated response now fails with a clear message
+      // below instead of the generic JSON error.
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -584,6 +605,18 @@ export async function POST(req: NextRequest) {
     })
 
     const aiText = response.content[0].type === 'text' ? response.content[0].text : ''
+    if (response.stop_reason === 'max_tokens') {
+      // Output truncated — the JSON is guaranteed broken. Fail with a
+      // clear message instead of letting JSON.parse produce the cryptic
+      // "not valid JSON" error.
+      console.error(
+        `[parse-quote] output truncated at max_tokens. Tail: …${aiText.slice(-400)}`
+      )
+      return NextResponse.json(
+        { error: 'This document is too long to parse automatically — paste just the relevant email text, or enter items manually.' },
+        { status: 422 }
+      )
+    }
     let parsed: {
       clientName?: string
       contactName?: string
@@ -599,12 +632,16 @@ export async function POST(req: NextRequest) {
       contacts?: AiContact[]
     }
     try {
-      const cleaned = aiText.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
-      parsed = JSON.parse(cleaned)
+      parsed = JSON.parse(extractJsonObject(aiText))
     } catch {
-      console.error('[parse-quote] JSON parse failed. Raw output:', aiText.slice(0, 1000))
+      // Log head AND tail — truncation and trailing garbage both show at
+      // the end, which the old head-only log never captured.
+      console.error(
+        `[parse-quote] JSON parse failed. stop_reason=${response.stop_reason} len=${aiText.length}\n` +
+        `Head: ${aiText.slice(0, 500)}\nTail: …${aiText.slice(-500)}`
+      )
       return NextResponse.json(
-        { error: 'AI response was not valid JSON', raw: aiText.slice(0, 800) },
+        { error: "Couldn't read this document — try again, paste the email text, or enter items manually." },
         { status: 500 }
       )
     }

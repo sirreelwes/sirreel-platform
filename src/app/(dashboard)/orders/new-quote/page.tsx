@@ -375,6 +375,9 @@ function NewQuotePageInner() {
   const [inquiry, setInquiry] = useState<InquiryRecord | null>(null);
 
   const [inputMode, setInputMode] = useState<'paste' | 'pdf'>('paste');
+  // Server detail for a failed PDF parse — rendered as an inline banner
+  // with one-click fallbacks (Paste Email / manual entry), not an alert().
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [emailText, setEmailText] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -906,13 +909,14 @@ function NewQuotePageInner() {
   const parsePDF = async () => {
     if (!pdfFile) return;
     setParsing(true);
+    setPdfError(null);
     try {
       const fd = new FormData();
       fd.append('file', pdfFile);
       const pdfRes = await fetch('/api/orders/parse-pdf', { method: 'POST', body: fd });
       const pdfData = await pdfRes.json();
       if (!pdfRes.ok) {
-        alert(pdfData.error || 'PDF parse failed');
+        setPdfError(pdfData.error || null);
         return;
       }
       setEmailText(pdfData.text);
@@ -923,7 +927,7 @@ function NewQuotePageInner() {
       });
       const parseData = await parseRes.json();
       if (!parseRes.ok) {
-        alert(parseData.error || 'Parse failed');
+        setPdfError(parseData.error || null);
         return;
       }
       setParsed(parseData.parsed);
@@ -1748,6 +1752,28 @@ function NewQuotePageInner() {
             >
               {parsing ? 'AI is processing PDF…' : 'Upload & Parse'}
             </button>
+            {pdfError !== null && (
+              <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 space-y-2">
+                <p className="text-sm font-medium text-red-800">
+                  Couldn&apos;t read this PDF — try Paste Email or manual entry
+                </p>
+                {pdfError && <p className="text-xs text-red-700">{pdfError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setPdfError(null); setInputMode('paste'); }}
+                    className="px-3 py-1.5 rounded-md bg-white border border-red-300 text-xs font-medium text-red-800 hover:bg-red-100"
+                  >
+                    Paste Email
+                  </button>
+                  <button
+                    onClick={() => { setPdfError(null); addBlankItem(); }}
+                    className="px-3 py-1.5 rounded-md bg-white border border-red-300 text-xs font-medium text-red-800 hover:bg-red-100"
+                  >
+                    Enter manually
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
