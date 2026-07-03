@@ -13,6 +13,7 @@ import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 import { ingestHrEmail, HR_INBOX } from "@/lib/hr/ingestHrEmail"
+import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -338,6 +339,21 @@ async function syncInbox(email: string) {
       const messageId = createdMessage.id
       void runMessageExtractionForId(messageId).catch((err) => {
         console.warn('[pubsub] message extraction failed:', messageId, err instanceof Error ? err.message : err)
+      })
+    }
+
+    // Sales reply detection — a staff-authored message on a thread marks
+    // every open Inquiry originating from that thread as responded
+    // (who/when). Gate is AUTHORSHIP (mirrors the claims bridge), applied
+    // inside the helper; it also excludes the automated notifications@
+    // sender. Awaited (three small queries) so a Vercel termination can't
+    // drop the stamp — idempotent via the respondedAt IS NULL guard, so
+    // cross-inbox duplicate copies of the same sent message are harmless.
+    if (createdMessage && direction === 'OUTBOUND') {
+      await handleIngestedMessageForInquiryReply({
+        threadKeys: [thread.id, gmailThreadId],
+        fromAddress,
+        sentAt,
       })
     }
 

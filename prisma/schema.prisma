@@ -3465,6 +3465,18 @@ model Inquiry {
   // a concurrent double-capture impossible at the DB layer.
   rfc822MessageId    String?       @map("rfc822_message_id")
 
+  // First staff reply on the inquiry's email thread. Deliberately NOT a
+  // status value: a responded inquiry is still an open lead (status stays
+  // NEW until converted/dismissed) — these drive the Pipeline's
+  // "Responded" separation + "Replied by …" attribution. Set by the
+  // Gmail ingest reply-detection hook and by the Quick Reply send route
+  // (both via src/lib/sales/markInquiryResponded.ts); first reply wins,
+  // later staff messages don't overwrite. respondedBy is the staff
+  // mailbox address (e.g. jose@sirreel.com), not a User FK — outbound
+  // mail can come from shared inboxes (hello@, info@) with no User row.
+  respondedAt        DateTime?     @map("responded_at")
+  respondedBy        String?       @map("responded_by")
+
   @@index([status, createdAt])
   @@index([assignedToId])
   @@index([rfc822MessageId])

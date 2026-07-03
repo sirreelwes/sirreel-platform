@@ -11,6 +11,7 @@ import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routing
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
+import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
 
 function getGmailClient(email: string) {
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
@@ -151,6 +152,16 @@ export async function POST(req: NextRequest) {
           void runMessageExtractionForId(created.id).catch((err) =>
             console.warn('[fetch] message extraction failed:', created.id, err instanceof Error ? err.message : err),
           )
+        }
+        // Sales reply detection — same authorship-gated hook as pubsub.
+        // NOTE this route stores the raw Gmail thread id in
+        // EmailMessage.threadId (legacy shape), so that's the thread key.
+        if (direction === 'outbound') {
+          await handleIngestedMessageForInquiryReply({
+            threadKeys: [threadId],
+            fromAddress,
+            sentAt,
+          })
         }
         // claims@ onboarding bridge — same shared gate as pubsub/sync.
         if (shouldOnboardClaimEmail({ inbox: email, fromAddress })) {
