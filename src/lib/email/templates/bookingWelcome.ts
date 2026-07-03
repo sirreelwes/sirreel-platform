@@ -64,18 +64,18 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
   const text = [
-    `Let's get started.`,
+    `Welcome to TSX — The SirReel Experience.`,
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
     `We're excited to take care of your team on ${input.projectName || 'this project'}.`,
     ``,
     `Everything you'll need lives in one place:`,
-    `  ✓ Your project portal — paperwork, schedule, equipment, all in one place`,
+    `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
     `  ✓ Your dedicated rep — me, from estimate to wrap`,
     `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
     ``,
-    `Open your job portal here: ${portalLink}`,
+    `Click here for your TSX portal: ${portalLink}`,
     ``,
     `Your progress saves automatically, so feel free to come back any time.`,
     ``,
@@ -140,8 +140,8 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Title ─────────────────────────────────────────────── -->
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
-              <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;font-weight:400;color:#1a1a1a;">
-                Let&rsquo;s get started.
+              <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
+                Welcome to TSX &mdash; The SirReel Experience.
               </h1>
             </td>
           </tr>
@@ -151,7 +151,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             <td style="padding:24px 36px 12px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
               <p style="margin:0 0 16px;">
-                We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place — your job portal.
+                We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place — your TSX portal.
               </p>
             </td>
           </tr>
@@ -166,7 +166,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                       <tr>
                         <td valign="top" width="32" style="color:${GOLD};font-size:18px;font-weight:bold;padding-top:1px;">&#10003;</td>
                         <td style="font-size:14px;line-height:1.55;color:#333333;">
-                          <strong style="color:#1a1a1a;">Your project portal.</strong>
+                          <strong style="color:#1a1a1a;">Your TSX portal.</strong>
                           Paperwork, schedule, equipment list &mdash; all in one place, saved automatically.
                         </td>
                       </tr>
@@ -210,14 +210,14 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                 Your portal for <strong>${projectName}</strong> is ready.
               </p>
               <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
                 <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Open Your Job Portal</center>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Click here for your TSX portal</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:6px;">
-                Open Your Job Portal
+                Click here for your TSX portal
               </a>
               <!--<![endif]-->
               <p style="margin:18px 0 0;font-size:12px;color:#888888;">
