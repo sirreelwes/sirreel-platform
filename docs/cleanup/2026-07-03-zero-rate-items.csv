@@ -1,0 +1,501 @@
+name,category,id,dailyRate,weeklyRate,includedFree,publicVisible
+#2 GRIP CLIP,Grip Equipment,d30c7cef-7f7b-4c62-9a66-a46fe1d83ea1,0,3,False,False
+#3 GRIP CLIP,Grip Equipment,40127b1a-df65-4496-841c-c3075b045aee,0,4,False,False
+"1 1/4"" SPEEDRAIL CORNER",Production Supplies,9d6895f6-b18d-473f-8d6b-3c469c6f891f,0,7,False,False
+"1"" SQUARE COUPLER",Production Supplies,e27c1a4d-d9be-4c04-986c-99d03ccc959d,0,6,False,False
+"1"" SQUARE EAR",Production Supplies,5b54c6fc-3424-467f-84ab-6235d8b6bfa0,0,7,False,False
+"1""SQUARE CORNER",Production Supplies,09792760-5c5c-45b6-a210-f661ace75dd3,0,5,False,False
+"1' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,95b159ed-a8cf-4c56-b007-f9d060f19438,0,2,False,False
+10' DMX 5-PIN CABLE,Electrical Equipment,c61fc72c-6311-467b-a7b8-5e8827cc99fe,0,8,False,False
+10' DOLLY TRACK SECTION (STEEL),Production Supplies,2ead7827-703c-4355-b4f9-eac660822d5f,0,33,False,False
+"10' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,a2e28a97-cf3c-49e6-9953-5f6e311fddb0,0,11,False,False
+100' DMX 5-PIN CABLE,Electrical Equipment,b4a336d1-cd9a-438f-8b86-a73a856fa069,0,17,False,False
+100A 220V BATES CABLE EXTENSION 25',Electrical Equipment,74dd0bb8-e88d-4c76-bf8e-9bd9bc136b9e,0,17,False,False
+100A 220V BATES CABLE EXTENSION 50',Electrical Equipment,62627b1a-3beb-495f-bfb4-baf7236cdf64,0,22,False,False
+100A BATES CABLE EXTENSION 100',Electrical Equipment,8169611e-583c-4d2e-916e-d05ddf547b32,0,26,False,False
+100A BATES CABLE EXTENSION 25',Electrical Equipment,0993ac73-cd40-4657-9cd7-6628c9299650,0,17,False,False
+100A BATES CABLE EXTENSION 50',Electrical Equipment,69016f85-512c-4ffa-ac10-2f8ede9aca52,0,22,False,False
+SUMO HEAD BI COLOR LED,Lighting Equipment,127dce10-4158-4bc9-b4f3-abe21ae21ef7,0,375,False,False
+FLUOTEC STUDIO 120 HEAD,Lighting Equipment,5ce48035-45fa-46cd-a8fc-a31bb0ce791d,0,0,False,False
+"VEGALUX 300 10"" BI-COLOR",Lighting Equipment,3d23e0b8-1a19-468b-b9cc-e36990bff60d,0,0,False,False
+Dewalt - Flexvolt Charger,Electrical Equipment,52312d52-58f0-40f2-8d80-a290e51ceb08,0,0,False,False
+Dewalt - Flexvolt Charger (Dual),Electrical Equipment,aab55123-a22d-4db1-bf27-005b6f66ecb0,0,0,False,False
+KINO - 4 BANK BALLAST,Lighting Equipment,cecdd5fb-5910-4eb4-aa05-001c35436be4,0,0,False,False
+MINI MOLE HEAD - TYPE 2801 - INKIE,Production Supplies,ef4a6b01-7d7a-4cfa-ba41-68542d7938f1,0,33,False,False
+BABY 2K  MOLE HEAD,Lighting Equipment,96e781a2-de3f-4191-81f2-1261e722d5ea,0,0,False,False
+"2K 8"" JUNIOR MOLE HEAD",Lighting Equipment,dd5cef3c-acf4-4696-9804-a2e5ebec1e2f,0,0,False,False
+MIDGET MOLE 200W HEAD - TYPE 2351,Production Supplies,a3248cc8-3109-4e6a-9b6c-0896073981a7,0,33,False,False
+1K MICKEY MOLE HEAD - TYPE 4081,Lighting Equipment,5034822f-b86c-4c06-81dc-3190f55ff996,0,43,False,False
+MOLEPAR 1K HEAD - TYPE 2271,Lighting Equipment,89a63dd2-c75e-417d-a184-fadd49a3641e,0,43,False,False
+2K MIGHTY MOLE HEAD - TYPE 4091,Lighting Equipment,90b711f4-b87d-4947-a3ee-b28d41582f15,0,0,False,False
+BABY 10K  MOLE HEAD,Lighting Equipment,e1f4ffab-0b6c-4d2a-925b-a903cb26130e,0,0,False,False
+"2K BABY ""ZIP"" SOFTLITE",Lighting Equipment,06d16505-7f07-4180-b7c9-cd8f4bd892e2,0,0,False,False
+1K PARCAN 64,Lighting Equipment,82be49d7-c3ce-4b0c-94f5-c93f54b84352,0,0,False,False
+ARRI SKYPANEL S60/S120 - PSU,Lighting Equipment,2c173baa-37c5-47af-ba26-1d88a05d0829,0,0,False,False
+"QUARTZ SPEED RING 10""",Lighting Equipment,680c8ede-4dc4-48bd-a5d7-9b256f02879a,0,0,False,False
+ARRI 300W HEAD,Lighting Equipment,32bee330-c2ad-41d2-9336-36396d397d37,0,33,False,False
+2K VARIAC (AC) DIMMER,Lighting Equipment,ba566bb4-c659-4534-a347-021d61525c14,0,30,False,False
+"4K BABY ""ZIP"" SOFTLITE",Lighting Equipment,57bae277-2f3f-40f8-a865-b581498e7d1b,0,0,False,False
+KINO FLO IMAGE 87 COMPLETE,Lighting Equipment,fe47baa1-22f0-4bc6-9a31-cc9d7d925364,0,0,False,False
+750W ARRI LITE PLUS OPEN FACE,Lighting Equipment,2dfa3ed8-f6dc-48a7-8834-9ee3b2f72d90,0,43,False,False
+"1K BABY ""ZIP"" SOFTLITE",Lighting Equipment,7b29de40-b157-438d-a00f-d8886ebc48fe,0,0,False,False
+5K SKYPAN OPEN FACE,Lighting Equipment,408f9a32-c63c-46f0-93a0-476249a9e197,0,0,False,False
+ASTERA BOX - ART7 RX/TX,Lighting Equipment,8c481d14-20f3-454c-8c68-543afc1d745c,0,0,False,False
+LITEMAT 2 SERIES 2 COMPLETE,Production Supplies,608a1d25-9724-423e-be93-762ae7ddc210,0,165,False,False
+LITEMAT 4  SERIES 2 COMPLETE,Production Supplies,223ed9bf-4366-4bb7-ac75-6a0d464a6a29,0,200,False,False
+LITEMAT 4 PLUS HYBRID COMPLETE,Production Supplies,e4814f39-acb4-43a3-b693-fb1d62780c05,0,375,False,False
+6K SPACE LIGHT (SOCAPEX) HEAD,Electrical Equipment,368e8668-1405-4c91-9c5d-ca38b6c45f01,0,161,False,False
+STIRRUP HANGER 5' TO 10',Production Supplies,b94b7160-fba2-4b0b-a465-8b3d0bbb1525,0,22,False,False
+STIRRUP HANGER 3' TO 6',Production Supplies,65a4776c-9a82-48d9-a70e-a9eb7a4b7e1f,0,17,False,False
+STIRRUP HANGER 4' TO 8',Production Supplies,6e53377a-696a-491e-9e73-1cdd75d888da,0,19,False,False
+ANTON BAUER - DUAL CHARGER 2702,Electrical Equipment,653a2d22-3df9-4557-903b-3b71bed2bc21,0,0,False,False
+KINO CELEB 200,Lighting Equipment,2737ffad-bca6-417c-a143-fa8d4a09d1b3,0,175,False,False
+300W BETWEENIE HEAD - TYPE 3131,Production Supplies,b80fb3fb-c6c4-42b0-9b07-bfb6203f3c6c,0,33,False,False
+Astera - Titan Charger Case (8-Place),Lighting Equipment,9280a21d-9916-4784-93b8-44bb05b48f6c,0,0,False,False
+Joker 400W Bug Head,Lighting Equipment,304cfce5-4351-424c-a85d-b71ad37af33e,0,0,False,False
+Joker 400W Bug Ballast,Lighting Equipment,e11e1178-baa9-4e51-9296-1acf2c181d6a,0,0,False,False
+Joker 400W Bug - Case,Lighting Equipment,41862b92-7dc1-43f1-bf5c-37571aa78235,0,0,False,False
+KINO FLO IMAGE 80 COMPLETE,Lighting Equipment,bbe8a235-11e0-489b-bedf-012b65f95633,0,0,False,False
+KINO FLO IMAGE 80 - CASE,Lighting Equipment,a3d2d67a-a430-4eaf-ae61-92aceda840a0,0,0,False,False
+6K Barger Baglite 6 Light,Lighting Equipment,a85a76a7-3449-4cda-9adb-039cd3f30e09,0,0,False,False
+Air Scrubber (550 CFM),Production Supplies,c279eb16-91f5-4b8a-aaeb-adf367c6b8d9,0,225,False,False
+ASTRA 1X1 BI-COLOR - LITEPANEL,Lighting Equipment,3808242f-2602-4eed-803e-7ea26c61b1fd,0,250,False,False
+ARRI 150W HEAD,Lighting Equipment,f89e327d-55c6-4194-91cc-b8c1bd9cdb13,0,27,False,False
+ARRILITE 5K HEAD,Lighting Equipment,3ad6d23e-584c-4cd1-8674-9aae7ba44731,0,0,False,False
+650 VARIAC DIMMER,Electrical Equipment,f277412b-2bba-4789-85bb-75457c47fab3,0,0,False,False
+12K DIMMER (DMX),Electrical Equipment,99d80a89-cd32-4921-b74d-a7af0f28062d,0,0,False,False
+1K VARIAC (AC) DIMMER,Lighting Equipment,cc6d9565-6d5b-45d7-a619-f64e1a9b2b91,0,25,False,False
+125/200W LTM PAR HEAD,Lighting Equipment,71509969-14e6-4bb0-b9f8-734fbf673fd3,0,188,False,False
+"QUARTZ SPEED RING 13 1/2""",Lighting Equipment,4f1478dd-ac81-47dc-97fc-ca8cd42db016,0,0,False,False
+"QUARTZ SPEED RING 9""",Lighting Equipment,0da24bdd-587a-49d3-b958-29e3a01a81b4,0,0,False,False
+"QUARTZ SPEED RING 18""",Lighting Equipment,624a1aff-aed5-40b8-8e77-69b85ea5d2de,0,0,False,False
+"VIDEO PRO SPEED RING 7 1/4""",Lighting Equipment,48362aa6-79a0-4315-8f8d-b2acddef632e,0,0,False,False
+"VIDEO PRO SPEED RING 6 1/4""",Lighting Equipment,41a619a9-4772-4a81-bfb2-b5d650ad9e82,0,0,False,False
+"VIDEO PRO SPEED RING 5 1/4""",Lighting Equipment,51781eb7-d97f-421e-933b-398916190f80,0,0,False,False
+KINO- 2 BANK BALLAST,Lighting Equipment,d70093cc-b7e6-4238-9029-72215ac256bc,0,0,False,False
+KINO - 4' SINGLE BANK HEAD,Lighting Equipment,194f1d3e-9f41-4b2a-bfd9-d1499a9daabf,0,0,False,False
+KINO - 4' DOUBLE BANK HEAD,Lighting Equipment,0e70e053-0702-46a0-832f-614b43bf1918,0,0,False,False
+KINO - 4' FOUR BANK HEAD,Lighting Equipment,fe4c81ce-ef98-4122-99cf-36c97cf25478,0,0,False,False
+KINO - 2' SINGLE BANK HEAD,Lighting Equipment,78c7acf1-a752-4f71-a82f-713fb7440cfa,0,0,False,False
+KINO - 2' DOUBLE BANK HEAD,Lighting Equipment,a3e7bb67-e666-43f7-a35d-55f02d051598,0,0,False,False
+KINO - 2' FOUR BANK HEAD,Lighting Equipment,ff5372f4-14d0-4d53-9d27-f9457bd16009,0,0,False,False
+KINO - 4 BANK MEGA BALLAST,Lighting Equipment,6828eddb-4032-4dc0-95e4-3321c26797f9,0,0,False,False
+VEGALUX 200 HEAD TUNGSTEN,Lighting Equipment,c0b1650f-ad6b-465f-a800-0ef7e13306f7,0,0,False,False
+VEGALUX 200 HEAD DAYLIGHT,Lighting Equipment,34f0adfc-7b93-4415-8002-b0479f155fc2,0,0,False,False
+"2K - ""ZIP"" LIGHT EGG CRATE",Lighting Equipment,7a579d05-82db-4731-8a24-fb52c1a1c7c1,0,0,False,False
+"4K ""ZIP"" LIGHT EGGCRATE",Lighting Equipment,fcbbc413-2dc4-4f90-a28e-0b76c4e2e668,0,0,False,False
+"4K ""SMALL"" ZIP SOFTLITE",Lighting Equipment,28f9eadb-59cf-42bc-8725-c58f09f25e45,0,0,False,False
+Milwaukee - Rapid Charger,Electrical Equipment,ec118c4c-fd4f-40dc-8260-2b55ab79c54c,0,0,False,False
+Dewalt - Flexvolt Charger (4 Port),Electrical Equipment,3fd3c15c-8456-45e0-af6b-dc4909cecd5d,0,0,False,False
+10K QUARTZ GLOBE (DTY),Lighting Equipment,b5ebdbbe-575a-475a-a153-36f31c597bfc,0,54,False,False
+10ﬂ C-CLAMP W/JR. RECEIVER,Electrical Equipment,66001f23-c69d-4fbc-9c6c-39c5382a9f0c,0,9,False,False
+10ﬂ C-CLAMP W/PIN,Electrical Equipment,9bd2e0fb-300d-4496-b387-f67273f5bce7,0,9,False,False
+"12"" C-CLAMP W/PIN",Electrical Equipment,2cfedc97-2ea9-442e-8d81-1ae3ce2cd0a9,0,9,False,False
+"12' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,9c40352b-bb6b-45ed-b009-3ce754d8c423,0,13,False,False
+12' X 12' BLACK/WHITE GRIFFOLYN RAG,Grip Equipment,a6a89934-daca-46b9-a3b6-ac0e6728b97f,0,75,False,False
+12' X 12' CHINA (1/2) SILK RAG,Grip Equipment,9085b0e5-008e-4954-b845-6a2bae0b478b,0,75,False,False
+12' X 12' DOUBLE NET RAG,Grip Equipment,3f4ba5b6-bdd3-444f-ae7f-18245f59d28c,0,75,False,False
+12' X 12' FULL GRID RAG,Grip Equipment,8ae6791f-fa5e-43ba-8cf4-b4f83dee8172,0,75,False,False
+12' X 12' LITE (1/2) GRID RAG,Grip Equipment,00107af6-e466-4aca-8724-37b5c9b3c7e3,0,75,False,False
+12' X 12' QUARTER GRID RAG,Grip Equipment,67934def-5af3-4862-9e38-fb2e79a4ffb4,0,75,False,False
+12' X 12' SINGLE NET RAG,Grip Equipment,654097e4-72a2-48c8-bbcf-791dce6a701a,0,75,False,False
+12' X 12' SOLID BLACK RAG,Grip Equipment,af21ab17-98d4-44e1-bf8f-8b5e19a90622,0,75,False,False
+12' X 12' ULTRABOUNCE RAG,Grip Equipment,30c2d8af-d3a8-41e7-a2ff-b581e1715cac,0,75,False,False
+12' X 20' FULL GRID RAG,Grip Equipment,5172cd11-8630-4dec-822b-c6d609fd5d65,0,110,False,False
+12' X 20' LITE (1/2) GRID RAG,Grip Equipment,18f2fbab-ae9d-4fb9-a254-3f15c1baa324,0,110,False,False
+12' X 20' QUARTER GRID RAG,Grip Equipment,faa8451c-d427-4ed7-92d5-f492be4edc78,0,110,False,False
+12' X 20' SOLID BLACK RAG,Grip Equipment,22b5c8ee-1f15-4bd3-b2d9-077e32e3f9a9,0,100,False,False
+12' X 20' ULTRABOUNCE RAG,Grip Equipment,1bfb3bb6-10f0-451c-a065-3a1639310747,0,100,False,False
+12' X 30' SOLID BLACK RAG,Grip Equipment,8866266e-357f-492a-8268-b2a2f658e345,0,150,False,False
+12ﬂ FURNITURE CLAMP,Grip Equipment,93e2f349-8914-4ef9-8571-af789afc4456,0,7,False,False
+150W GLOBE (ESP),Production Supplies,7527c9c4-b987-453a-b7bc-0afc45993bc1,0,6,False,False
+1639 (M) CHIMERA LIGHTBANK - SKYPANEL S60,Lighting Equipment,fa7b443b-da78-4303-8707-424281c715ad,0,85,False,False
+"18 ""X 24""  SILK FLAG",Grip Equipment,fb6ef7ab-47f8-4629-a042-9ed5a9e6775a,0,5,False,False
+"18"" X 24""  CELLO CUCOLORIS",Electrical Equipment,f979a29a-5b0c-430a-ae13-147af6247789,0,5,False,False
+"18"" X 24""  EMPTY FRAMES",Grip Equipment,f48daa4f-53e4-45bf-8f22-bb299d05930e,0,5,False,False
+"18"" X 24""  WOOD CUCOLORIS",Electrical Equipment,91427226-e5b6-4192-a38a-662e0aa9bea5,0,5,False,False
+"18"" X 24"" DOUBLE NET FLAG",Grip Equipment,71a36bb6-6a51-4593-a621-ab30de3f19f2,0,5,False,False
+"18"" X 24"" SINGLE NET FLAG",Grip Equipment,70001fd2-f1a7-42d1-bb22-dcbd7ad8dda2,0,5,False,False
+"18"" X 24"" SOLID FLAG",Grip Equipment,cb3a69d7-0965-4327-9e92-ab4e775219a6,0,5,False,False
+"18"" X 48"" SOLID CUTTER",Grip Equipment,6bc152ae-bd69-4796-83da-4121687c9010,0,10,False,False
+18ﬂ FURNITURE CLAMP,Grip Equipment,bbe88719-bc62-47a3-8150-78fa5a959a95,0,7,False,False
+1K GLOBE (DXW),Lighting Equipment,a045da00-9c00-406f-8d4c-02b524f89931,0,8,False,False
+1K GLOBE (FCM),Lighting Equipment,a8071a2c-a407-48e3-afe8-d59b45e1f637,0,5,False,False
+1K QUARTZ GLOBE (EGT),Lighting Equipment,8b79d498-8c95-4b60-b709-bda6fd7bb879,0,9,False,False
+2 1/2 GOBO HEAD,Grip Equipment,eaa54798-5d1b-4851-9722-3ba157625e77,0,8,False,False
+"2 1/2"" GRIP HEAD",Grip Equipment,f67b545a-eb55-490e-a6ef-c261bb774e86,0,5,False,False
+"2' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,27c2bd2d-9621-4a12-b850-c3c20c87e977,0,3,False,False
+2' X 4' DOUBLE MEAT AX FLAG,Grip Equipment,d0a1f423-dfeb-4ba6-9387-7f87dbbf43f1,0,11,False,False
+2' X 4' WALL SPREADER,Grip Equipment,40f67d68-d47a-45b4-83a9-27cd29bb4266,0,8,False,False
+"20' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,cb988bba-ec8e-4798-8c4c-d3b5de560fde,0,22,False,False
+20' X 20' DOUBLE NET RAG,Grip Equipment,bc7d007c-f7ef-4e8a-8ce4-312a4ae88c44,0,125,False,False
+20' X 20' FULL GRID RAG (NOISY),Grip Equipment,76208f2b-428b-441d-8f6f-5c2306343af8,0,125,False,False
+20' X 20' LITE (1/2) GRID CLOTH RAG,Grip Equipment,d0e287ee-48a5-44f1-adeb-6c912304468a,0,125,False,False
+20' X 20' QUARTER GRID CLOTH RAG,Grip Equipment,5d1d3b35-b29a-49b3-9fe9-80a582075f15,0,125,False,False
+20' X 20' SINGLE NET RAG,Grip Equipment,4a85d3ae-e8c0-4493-aabe-3aa024c6cc41,0,125,False,False
+20' X 20' SOLID BLACK RAG,Grip Equipment,32ebba6b-98e4-4e6f-8f15-2f001615a0eb,0,125,False,False
+20' X 20' ULTRABOUNCE RAG,Grip Equipment,a92ce565-c5df-4bf2-8418-4c5734ad7d73,0,125,False,False
+200 MIDGET BARN DOOR,Lighting Equipment,8f2a925d-002a-4ae8-82d8-70f467891bef,0,6,False,False
+200W GLOBE (FEV),Electrical Equipment,3ee3ade4-ceb4-412b-91ca-91cbb602d42f,0,8,False,False
+"24""  X 60"" SOLID CUTTER",Grip Equipment,be3019bf-eaf2-445f-9819-8c85d51bc4bb,0,10,False,False
+"24"" X 36""  EMPTY FRAMES",Grip Equipment,c802ee10-8220-4c3b-bb94-61ef23fb0f99,0,5.5,False,False
+"24"" X 36""  WOOD CUCOLORIS",Production Supplies,0cb68029-3e76-492c-a549-c9b686304ab9,0,5.5,False,False
+"24"" X 36"" DOUBLE NET FLAG",Grip Equipment,8b1ca495-e78d-40dc-9e05-ef0212d0b3e1,0,5.5,False,False
+"24"" X 36"" SILK FLAG",Grip Equipment,ed35b45b-135b-429e-bb63-e2828f1612e0,0,5.5,False,False
+"24"" X 36"" SINGLE NET FLAG",Grip Equipment,5dd69711-b57e-410c-b034-13ebe38dca30,0,5.5,False,False
+"24"" X 36"" SOLID FLAG",Grip Equipment,605d1daa-596d-46ae-8ca0-7013bb7577cb,0,5.5,False,False
+"24"" X 48"" SINGLE MEAT AXE T-FLAG",Grip Equipment,0a3fce8e-8764-47bd-a7ff-db330f0cd4ae,0,12,False,False
+"24"" X 72"" SOLID CUTTER",Grip Equipment,aa5271f7-e2c4-4a0b-8016-d0965be39a2d,0,15,False,False
+24ﬂ FURNITURE CLAMP,Grip Equipment,e8ce908b-3408-4e7a-8552-3b6eb22145c2,0,8,False,False
+25 LB. SANDBAG,Grip Equipment,6731b7f6-8486-4048-a4f1-fa1ac989c93d,0,9,False,False
+25' Cooling Hose w/bag,Production Supplies,483a06f5-4aa0-43d4-9d3f-a6a7903e2827,0,30,False,False
+25' DMX 5-PIN CABLE,Electrical Equipment,843042f2-8064-4a1a-b68f-877329368a21,0,11,False,False
+25' EDISON CABLE (STINGER),Electrical Equipment,2e0630bd-925b-4a3e-b555-ef51afe30bd0,0,7,False,False
+2K GLOBE (FEY),Lighting Equipment,07b35cab-ae48-4a57-bbc7-07ae590c4338,0,9,False,False
+2K QUARTZ GLOBE (CYX),Lighting Equipment,9d348d8e-0823-44fc-8253-3f4deffd560b,0,13,False,False
+2X4 EAR FITTING,Production Supplies,02de3707-8a0d-4865-a4ce-e101276848e5,0,6,False,False
+3 WIRE 100ft banded,Electrical Equipment,16ca089e-7865-4747-bd33-5b0ade36070c,0,29,False,False
+3' SPANSET,Production Supplies,660e1a75-a307-4bf9-89b1-b0b00dc6e27b,0,7,False,False
+"3' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,d1f265e7-c371-474d-9aac-98fb8ad6076c,0,4,False,False
+300W GLOBE (FKW),Production Supplies,c289b78b-a1b0-4f66-b51e-fd11a061334f,0,8,False,False
+35 LB. SANDBAG,Grip Equipment,f729aecd-6429-414d-9122-5d829c00dbbc,0,12,False,False
+4 WIRE CAMLOK CABLE BANDED 25',Electrical Equipment,874a94e3-ddf6-433b-b7bd-d3ea5e0eff3c,0,20,False,False
+4 WIRE CAMLOK CABLE BANDED 50',Electrical Equipment,f259d8ea-3af0-4bc7-9914-be4a6415f27f,0,43,False,False
+"4""C-CLAMP W/PIN",Electrical Equipment,b0d04b4b-3e43-4f5f-8df8-9211ca3b99fc,0,8,False,False
+4' DOLLY TRACK SECTION (STEEL),Production Supplies,233d54a9-d960-47b8-a91a-848366c5e758,0,22,False,False
+4' Folding Table,Production Supplies,6dfae03c-ac14-4841-9cef-44b019b320f6,0,15,False,False
+"4' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,b42440c2-d107-4870-9efe-c214ced55dbb,0,5,False,False
+4' Table (Fold in Half),Production Supplies,e5407a61-6142-4c8d-bc30-4925c61c32c8,0,15,False,False
+4' Table Linen - Black (Stretch),Production Supplies,ade3f529-042b-441a-aba9-011194b70a15,0,12,False,False
+4' Truck Shelf,Production Supplies,4a9d0b8e-8b1a-4b59-ba5e-da89d8874028,0,12,False,False
+4' X 4' 1/2 GRID RAG,Grip Equipment,441583d1-36be-4dfb-813c-dfcc699deb9d,0,15,False,False
+4' X 4' 1/2 SOFT FROST RAG,Grip Equipment,08ba4020-57d5-4450-8d6a-8ba68279c1fd,0,15,False,False
+4' X 4' BEADBOARD GOLD / WHITE,Production Supplies,7aabd8b4-8188-4b51-9887-099897d4fe15,0,7,False,False
+4' X 4' BEADBOARD SILVER / WHITE,Production Supplies,7832498e-e7f7-4a17-8169-a0a48b44de11,0,7,False,False
+4' X 4' BEADBOARD WHITE / WHITE,Production Supplies,5134abb3-ead1-4614-bca0-2ef0105c6828,0,7,False,False
+4' X 4' BLACK WHITE GRIFF FLAG,Grip Equipment,98bb3df7-5a1f-46ab-a39d-59327f5aaa88,0,11,False,False
+4' X 4' BLEACHED MUSLIN FLAG,Grip Equipment,d3ea64a3-535f-455b-ab3f-d29acbd6d5cd,0,10,False,False
+4' X 4' CELLO CUCOLORIS,Production Supplies,91bb4d2c-1174-4c86-8407-71ffc458c7a7,0,10,False,False
+4' X 4' FULL GRID RAG,Grip Equipment,2b3b76c4-7e73-4f48-83c1-4d512f6f227d,0,15,False,False
+4' X 4' GOLD LEAF,Production Supplies,f3be3e95-2ccc-446f-b926-b016844984e4,0,11,False,False
+4' X 4' POLY SILK RAG,Grip Equipment,02ef591f-7e33-4d30-b34d-eaa942db7520,0,15,False,False
+4' X 4' SILVER LAME RAG,Grip Equipment,ee2093f8-f8b5-4842-959c-865607094851,0,15,False,False
+4' X 4' SILVER LEAF,Production Supplies,1047df8e-31e2-43eb-ad2f-36c639d5f6f8,0,10,False,False
+4' X 4' UNBLEACHED MUSLIN FLAG,Grip Equipment,3409a387-8ead-4f00-9e48-51cc7549bb30,0,10,False,False
+4' X 4' WOOD CUCOLORIS,Production Supplies,06bc075a-f559-43a6-8d7c-5d07b381b456,0,10,False,False
+4' x 8' Crash Pads,Production Supplies,c4bfc88e-6ea9-43b4-aada-d523f6a56ff7,0,90,False,False
+"4' x 8' x 1"" Plywood Rental",Production Supplies,8eeb9258-ad9a-4fc9-a54a-e90ffd6614e4,0,30,False,False
+"4' x 8' x 3/4"" Plywood Rental",Production Supplies,27ba8f78-cc7e-43b0-b572-5ce9b11c3a76,0,30,False,False
+420W GLOBE (EKB),Production Supplies,31a5ad3c-60e3-4705-80a1-fff369d37ca6,0,8,False,False
+"48"" X 48"" DOUBLE NET FLAG",Grip Equipment,0a363293-5236-41a7-bfc1-767bae8ad7bb,0,10,False,False
+"48"" X 48"" EMPTY FRAME",Grip Equipment,6bd2b0a0-cf57-4fa9-8e76-d88a2cb01a8f,0,10,False,False
+"48"" X 48"" SINGLE NET FLAG",Grip Equipment,0480c945-f6ed-406b-8802-456ad2721e7e,0,10,False,False
+"48"" X 48"" ULTRABOUNCE",Grip Equipment,4bb664ea-3297-45e8-b945-0bd77a925a5d,0,10,False,False
+48' X 48' SOLID FLAG,Grip Equipment,28a2fad3-2a0e-4fcf-9f85-bccda1c69c5e,0,10,False,False
+4ﬂ C-CLAMP W/JR. RECEIVER,Electrical Equipment,3315ba3f-1cfa-4c33-9fa9-300e8afb34d4,0,8,False,False
+5 Gallon Gas Can,Production Supplies,d1ba341d-8111-4dc2-950a-10431b9e66b1,0,15,False,False
+5' DMX 5-PIN CABLE,Electrical Equipment,f8ed9397-9d66-40a4-9d58-d3eb75f2d361,0,6,False,False
+"5' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,d9333bc6-fb4e-4061-888f-69601e718832,0,6,False,False
+50' DMX 5-PIN CABLE,Electrical Equipment,e2f1bb8c-a43d-4409-862e-649e5e9dfeef,0,13,False,False
+50' EDISON CABLE (STINGER),Electrical Equipment,5f164f0f-b2e4-4155-8191-7c66760514ad,0,9,False,False
+50' Garden Hose,Production Supplies,44c4d6a4-aebf-4569-8cab-21972d58e9b2,0,22.5,False,False
+575W HPL GLOBE,Production Supplies,d4f77901-ca37-4e95-b807-ee1c414f5ffd,0,7,False,False
+5K QUARTZ GLOBE (DPY),Lighting Equipment,4156c9b9-c4ce-4b38-8188-dfef6ed07229,0,22,False,False
+"6""C-CLAMP W/JR. RECEIVER",Electrical Equipment,b1494a63-5874-4559-bce8-50cdea47dfeb,0,8,False,False
+"6""C-CLAMP W/PIN",Electrical Equipment,7302492c-cf5d-4821-871b-3f0dd43a8d4e,0,8,False,False
+6' Folding Table,Production Supplies,2945bdf5-a0e6-49b1-b214-2d75d762c076,0,18,False,False
+"6' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,633b1376-32a5-4e09-9281-e8ecd519209e,0,7,False,False
+6' Table (Fold In Half),Production Supplies,4d425da8-ff15-48bf-998b-6bdc727b4f3a,0,18,False,False
+6' Table Linen - Black (Event),Production Supplies,a1de0b42-9f5f-44b9-b13f-131834820d6e,0,15,False,False
+6' Table Linen - Black (Regular),Production Supplies,9c88fdad-1d73-45fe-adf7-3eb6ad5d33fc,0,15,False,False
+6' Table Linen - Black (Stretch),Production Supplies,f5c34027-3f3a-4a8d-afff-098df4f99ef7,0,15,False,False
+6' Table Linen - White,Production Supplies,185451fa-f727-45c1-a600-45818bba8cfe,0,15,False,False
+6' Wardrobe Mirror,Production Supplies,bfe88ce9-73bd-4c10-9de3-11cd93ab4c3f,0,37.5,False,False
+6' X 6' 1/2 SOFT FROST RAG,Grip Equipment,f0c0ed14-09b7-4342-a815-eec741c52a25,0,35,False,False
+6' X 6' BLACK/WHITE GRIFF. RAG,Grip Equipment,0ac288e2-2e5c-44e7-9cbc-6ee261e41835,0,35,False,False
+6' X 6' BLEACHED MUSLIN RAG,Grip Equipment,b226ddf7-ac08-4317-9620-911634f92f0d,0,35,False,False
+6' X 6' CHINA SILK RAG,Grip Equipment,fae6d317-d7a4-46b9-a4fe-58ddfb8afe8a,0,35,False,False
+6' X 6' CHROMA GREEN RAG,Grip Equipment,36d3aa37-1eed-41ae-a264-eead1c3e81b9,0,50,False,False
+6' X 6' DIGI GREEN RAG,Grip Equipment,31954dda-a7a9-4494-88bf-c748f79f6029,0,50,False,False
+6' X 6' DOUBLE NET RAG,Grip Equipment,61383714-6897-4acc-89ff-5a4f114c995f,0,35,False,False
+6' X 6' EGGCRATE - 40 DEG. LCD,Production Supplies,996ed7d8-e581-44cb-a40e-055ef1bd1b4b,0,125,False,False
+6' X 6' FULL GRID RAG,Grip Equipment,d5cd6fab-b4cc-4f2c-b298-1ff31cfe1c71,0,35,False,False
+6' X 6' GOLD GRIFFLON RAG,Grip Equipment,95e399d9-2aec-4421-b56c-ac2517369a63,0,40,False,False
+6' X 6' GOLD LAME RAG,Grip Equipment,b397a3d2-d02c-4e3b-9b96-fd8e4d159730,0,40,False,False
+6' X 6' LITE (1/2) GRID RAG,Grip Equipment,ec99ae7c-7cc2-43cc-b184-842990da7c6e,0,35,False,False
+6' X 6' POLY SILK RAG,Grip Equipment,bb8324f3-0111-4466-a4a5-2fcd05e490ab,0,35,False,False
+6' X 6' QUARTER GRID RAG,Grip Equipment,edcd3463-3c20-41e5-867c-761751e570ee,0,35,False,False
+6' X 6' QUARTER SILK RAG,Grip Equipment,3c173ee3-900b-4e61-b567-c4c5967216e2,0,35,False,False
+6' X 6' SILVER & GOLD CHECKER RAG,Grip Equipment,c3481ae7-e539-4583-808c-e802c9411f2a,0,40,False,False
+6' X 6' SILVER GRIFFLON RAG,Grip Equipment,c81c0c9a-6254-49d0-83ec-3795c3c123d2,0,40,False,False
+6' X 6' SILVER LAME RAG,Grip Equipment,0dbdb631-19d3-4d14-90bf-df0c654ec992,0,40,False,False
+6' X 6' SINGLE NET RAG,Grip Equipment,9311fdb1-9ffb-4ea5-b0a8-f511c01fba93,0,35,False,False
+6' X 6' SOLID BLACK RAG,Grip Equipment,4f736400-e976-4590-936d-b82ae632ed79,0,35,False,False
+6' X 6' ULTRABOUNCE RAG,Grip Equipment,c87c1db9-3323-4be7-8baa-76aa04b833fb,0,35,False,False
+6' X 6' UNBLEACHED MUSLIN RAG,Grip Equipment,6e80de49-cf63-4a6f-bab2-e1ad08c338c2,0,35,False,False
+6' X 8' FORREST NET,Grip Equipment,e4cb9d8f-8e1b-41dc-87d8-30e893d94ae9,0,60,False,False
+60A BATES CABLE EXTENSION 25',Electrical Equipment,5160b4fb-40d8-4752-ba73-8a0f31828f2b,0,13,False,False
+60A BATES CABLE EXTENSION 50',Electrical Equipment,a9c27a8c-9238-4cbd-bf28-af44d50c6c61,0,17,False,False
+650W GLOBE (FRK),Lighting Equipment,ffba3be2-1b4f-4c5a-bfb4-5048336b8d4a,0,8,False,False
+750W HPL GLOBE,Production Supplies,7e605027-d9ee-435e-93b3-a56302d43988,0,7,False,False
+"8""C-CLAMP W/PIN",Electrical Equipment,44a30c8a-ddcf-4b6f-bbea-dd860a9fd7f2,0,8,False,False
+8' DOLLY TRACK SECTION (STEEL),Production Supplies,cae7b85e-dd05-4132-9f13-1800b4e65d80,0,27,False,False
+8' Folding Table,Production Supplies,69c539db-12ae-4a3b-87f9-b0d994508d23,0,21,False,False
+"8' SPEEDRAIL PIPE 1-1/4""",Grip Equipment,d376d139-28d0-42c2-b4cc-00dfd35800a1,0,9,False,False
+8' Table Linen - Black (Regular),Production Supplies,3344b3ac-5de4-49d0-b166-ad4c7fb3c5ff,0,18,False,False
+8' Truck Shelf,Production Supplies,daa42164-4efb-419d-93d8-feb9ddfe6154,0,24,False,False
+8' X 12' SOLID BLACK RAG,Grip Equipment,232b956e-43db-4852-b0d7-70f83142ac81,0,54,False,False
+8' X 8' 1/2 SOFT FROST RAG,Grip Equipment,4d40164f-b901-4dd0-8382-4be2a3d6f019,0,45,False,False
+8' X 8' BLEACHED MUSLIN RAG,Grip Equipment,1dd56d7c-eaa1-46d0-99d1-c26a0597a03b,0,45,False,False
+8' X 8' CHINA SILK RAG,Grip Equipment,8f5d1b3e-f8df-4ed4-a593-9f00d3e9ecdf,0,45,False,False
+8' X 8' DOUBLE NET RAG,Grip Equipment,152493e2-642e-491d-b2dc-257ad4a4d9f6,0,45,False,False
+8' X 8' EGGCRATE - 40 DEG. LCD,Production Supplies,a3596362-6814-46fa-a461-1d12cb2fe5fe,0,125,False,False
+8' X 8' GOLD LAME RAG,Grip Equipment,6a58d573-768b-401e-8cdf-e188f0c05701,0,45,False,False
+8' X 8' GRIFFLON RAG,Grip Equipment,9ec58796-d828-4240-bc72-c5061bfe97bf,0,45,False,False
+8' X 8' POLY SILK RAG,Grip Equipment,fe1ac9db-07db-4cbb-865e-cefc3aa94cfb,0,45,False,False
+8' X 8' SILVER GOLD CHECKER RAG,Grip Equipment,cb6fd679-20ab-43c0-9bb8-d80b4a70567e,0,45,False,False
+8' X 8' SILVER LAME RAG,Grip Equipment,b438b1ca-24ad-4fb2-a9a1-ff3a4a2168b7,0,45,False,False
+8' X 8' SINGLE NET RAG,Grip Equipment,feb9ae38-7bf8-4cf1-9c72-f1c8edc8b483,0,45,False,False
+8' X 8' SOLID BLACK RAG,Grip Equipment,1f8eb4f6-1ebc-4ef5-bb79-76633b9cc7d6,0,45,False,False
+8' X 8' ULTRABOUNCE RAG,Grip Equipment,73d9237c-88eb-4793-af01-8f3a4d1a98e7,0,45,False,False
+8' X 8' UNBLEACHED MUSLIN RAG,Grip Equipment,b549f1b8-c6e8-42c9-a252-c12d77883611,0,45,False,False
+8ﬂ C-CLAMP W/JR. RECEIVER,Electrical Equipment,9fbbdad4-5e80-4afb-b0e0-ea57a3c31b60,0,8,False,False
+9 LIGHT FAY HEAD - TYPE 5541,Lighting Equipment,0b8112f7-c677-4181-b84b-c12d7a03176f,0,135,False,False
+9 LIGHT MAXIBRUTE HEAD,Lighting Equipment,f3bc23ea-f0b6-4158-86cf-750ad1927b47,0,200,False,False
+ANTON BAUER  BATTERY,Production Supplies,06a53f3b-7424-4b6a-8103-de49836a7eec,0,50,False,False
+APPLE BOX - FULL,Grip Equipment,1dfbd218-754e-4fcf-8917-7090ea52997e,0,6,False,False
+APPLE BOX - FULL (CHROMA GREEN),Grip Equipment,aecf69e2-f801-4bc1-a4be-4a0737f0d25c,0,24,False,False
+APPLE BOX - HALF,Grip Equipment,13686eac-e044-426e-b413-da341969398d,0,6,False,False
+APPLE BOX - PANCAKE,Grip Equipment,02485604-bdaa-4e17-9611-3769aa97edbf,0,6,False,False
+APPLE BOX - QUARTER,Grip Equipment,7e3e2544-3c26-4ce4-9cef-d8ca9a1441be,0,6,False,False
+ARRI 300W SCRIM (5 PC SET),Lighting Equipment,d82b7f96-4166-4d7f-afad-e47a0bbeaa5e,0,7,False,False
+ARRI SKYPANEL REMOTE,Lighting Equipment,c5480afc-19dc-4b98-a68d-e90c8fd562fc,0,50,False,False
+ARRI SKYPANEL S60 - SNAPGRID 40 DEGREE,Lighting Equipment,3b00a5c8-c2eb-4e83-a9e2-36c4e630fca6,0,50,False,False
+ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE MED,Lighting Equipment,2f9fdceb-1e01-43a4-8991-3cc3115b9b1f,0,100,False,False
+ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE SMALL,Lighting Equipment,726c4a26-60e1-4a70-893d-4f4daca0bda8,0,100,False,False
+ARRI SKYPANEL S60 CONTROL GRID 50 DEGREE SMALL,Lighting Equipment,2d0e1b9f-27c0-448d-ba2a-c588dd3b1c06,0,100,False,False
+ARRI SKYPANEL S60-C MEDIUM/STANDARD DIFFUSION,Lighting Equipment,18c8c3b1-000d-4b14-b130-ad1154e70dd1,0,7,False,False
+BABY BABY 1K SCRIM (5-PIECE SET),Lighting Equipment,aafe6d5a-93dd-48bd-b574-610ff9ade2c1,0,8,False,False
+BABY GRID CLAMPS,Grip Equipment,33dee066-1da7-4b2d-bc3e-3c7fe53383c6,0,3,False,False
+BABY GRID CLAMPS WITH ERARS,Grip Equipment,ad91c0bf-04a5-42a8-a670-ffc4889e22ad,0,3,False,False
+"BABY NAIL-ON PLATE 2""",Production Supplies,0d50b649-c54d-4949-91c4-9b2a118bba2d,0,7,False,False
+BABY OFFSET ARM,Grip Equipment,2e03a02d-3b8d-490b-a48f-ea05e6fbe546,0,9,False,False
+BABY PIPE HANGER - CLAMP,Grip Equipment,09ffa864-7ab8-412a-85de-cd529a5dcc97,0,7,False,False
+"Recycle Bins, 32 gal",Basecamp Basics,0c37d2ff-604a-4073-a250-6f3e07fd60f1,0,0,True,True
+BASSO BLOCK SET - HALF (12 PER SET),Production Supplies,8751b6ea-a7eb-4024-9db5-34cbf29b283f,0,27,False,False
+BEADBOARD CLAMP HOLDER - DUCKBILL,Electrical Equipment,327135f4-3d76-4761-a6ce-c66e4fb4625f,0,7,False,False
+BIG BEN CLAMP,Grip Equipment,0c09783c-d361-48a6-90a1-7b2551dce81b,0,9,False,False
+BOLT ON PIPE CLAMP,Grip Equipment,dbbd0d49-cb29-4689-a4f7-fb42eec92f8b,0,3,False,False
+BOX OF 1 X 3 CRIBBING,Production Supplies,7d6fc6fc-7be7-4180-a415-9edc9a09a641,0,11,False,False
+BOX OF 2 X 4 CRIBBING,Production Supplies,84490611-0875-4e50-8639-d713caad404c,0,11,False,False
+BOX OF 4ﬂ X 4ﬂ CRIBBING,Production Supplies,51bc0eb5-82db-47a9-a54e-a21cd7c7b438,0,11,False,False
+BOX OF WEDGES,Production Supplies,92269789-2d64-400a-a2e7-f103a68e376e,0,12,False,False
+Barricade with Lights,Lighting Equipment,ebe6d800-28ea-4b4f-910b-8da89d5af94e,0,15,False,False
+Bolt Cutter,Grip Equipment,94c183e0-f65a-4517-80ca-0ab181474489,0,30,False,False
+Bose Sound Link Flex (Bluetooth Speaker,Production Supplies,4292bd0b-9db2-4e41-9ccb-10845a7fc695,0,105,False,False
+Bungee Strap,Production Supplies,a0ef7b5d-d243-42af-b2ce-6e1c9d87eda9,0,6,False,False
+Butt Cans,Production Supplies,76523cb7-0af2-4fcc-8e42-181f3e3d6d3b,0,6,False,False
+CAMLOK SOFT 3-FER - (M/FFF),Production Supplies,fa3a3159-2fa3-4915-aecc-688215709b33,0,13,False,False
+CAMLOK SOFT 3-FER GROUND,Production Supplies,b8229977-af64-4e10-926e-ee384249b0ef,0,13,False,False
+CARDELLINI CLAMP CENTER JAW,Electrical Equipment,3a27d44c-ad09-4b4d-810b-9c46f9f865d1,0,13,False,False
+CARDELLINI CLAMP END JAW,Electrical Equipment,ef8df81d-e6bc-44d3-9e95-785000ca7322,0,13,False,False
+CHAIN VISE GRIP,Grip Equipment,2e2a0cfa-895d-4615-b7cf-5033c9aa22e4,0,8,False,False
+CHAIN VISE GRIP W/PIN,Grip Equipment,d9f5d95d-73b3-4c73-bee7-d3b6b02af03d,0,8,False,False
+CUP BLOCK (EACH),Production Supplies,aed8570f-8331-4738-a4e4-58466b3e9fbc,0,2,False,False
+CUP BLOCKS HOLDER (12 PER SET),Production Supplies,3ef7a923-9eb7-42b3-8eab-2e26028feac3,0,11,False,False
+Cal/Fed Osha Board,Production Supplies,9cab27a5-d4ee-4cd1-a18a-a90ed5ceef30,0,36,False,False
+Canopy Tent Sidewall - 10' Black,Production Supplies,493e00a1-9c0a-4c50-97f4-423ef59d0130,0,18,False,False
+Canopy Tent Sidewall - 10' Blue,Production Supplies,d5c0bb78-9a88-44ed-bee2-a4fc2f0e9a52,0,18,False,False
+Canopy Tent Sidewall - 10' White,Production Supplies,5f0ef01e-e8ea-47b7-8d04-6c3e25ead855,0,30,False,False
+Canopy Tent Sidewall - 15' Blue,Production Supplies,bfb292a5-d604-409e-a222-02093f79a1c3,0,18,False,False
+Canopy Tent Sidewall - 15' black,Production Supplies,94fa872f-ed9b-430c-85b2-2cee48e99147,0,18,False,False
+Canopy Tent Sidewall - 8' Black,Production Supplies,69f5ed49-4573-412d-9864-2fa26a04b0bc,0,18,False,False
+Canopy Tent Sidewall - 8' White,Production Supplies,59eae49b-2e0c-4247-a5ad-cf26010a2868,0,18,False,False
+"Caravan Canopy - 10' x 10' Tent, Black",Production Supplies,55ba6e50-2fe0-4cea-bca9-8a84d16d6e16,0,90,False,False
+"Caravan Canopy - 10' x 10' Tent, Blue",Production Supplies,f1bc1fda-32b4-4d8c-83dc-245fb2e93237,0,90,False,False
+"Caravan Canopy - 10' x 10' Tent, White",Production Supplies,14819078-09db-40f0-9844-977f19faa619,0,150,False,False
+"Caravan Canopy - 10' x 15' Tent, Black",Production Supplies,4745fd76-be74-4f31-b06f-24fc3a05bd3f,0,120,False,False
+"Caravan Canopy - 10' x 15' Tent, Blue",Production Supplies,581e2349-addb-4f37-80c2-660183ce80d7,0,120,False,False
+"Caravan Canopy - 10' x 15' Tent, Grey",Production Supplies,4a4a150a-ad67-4700-a7a2-b3bd43ca592d,0,120,False,False
+"Caravan Canopy - 10' x 15' Tent, White",Production Supplies,154e8b87-4088-49e7-bb6a-011d43707346,0,120,False,False
+"Caravan Canopy - 10' x 20' Tent, Black",Production Supplies,51362f97-3021-48cb-98cc-2053ad72aba0,0,165,False,False
+"Caravan Canopy - 10' x 20' Tent, Blue",Production Supplies,3dad7ce7-ee8e-40dc-add5-97ed208b0996,0,165,False,False
+"Caravan Canopy - 8' x '8 Tent, Black",Production Supplies,1de0b106-1c5d-4702-86e2-efa5d5bf6ffe,0,75,False,False
+"Caravan Canopy - 8' x '8 Tent, White",Production Supplies,ccf1e14f-16ee-4ce6-9e84-01ac5d1b3a99,0,75,False,False
+"Chair Rack, Rolling",Production Supplies,fb3d2e59-07f7-4848-a9da-9d62f8a393bd,0,30,False,False
+Clamp Light,Electrical Equipment,9a9a7337-b762-4dcc-acb0-31c8f189456e,0,6,False,False
+"Cone - 18""",Production Supplies,5dae416f-7f9a-436e-bc5e-8e7d4efab131,0,6,False,False
+"Cone - 28""",Production Supplies,a96ac49b-3f4d-469a-833e-748c419726aa,0,9,False,False
+"Cone - 36"" Delineators",Production Supplies,afbce16c-3dd8-4093-9f9c-f3417cce411d,0,15,False,False
+Cooler - 100 QT (Large),Production Supplies,bc16d23d-ebde-453e-a150-df7ee0bfb21c,0,18,False,False
+Cooler - 48 QT (Small),Production Supplies,cc9f3bc1-77be-45b7-b16f-43288f288a86,0,18,False,False
+Cooler - 68 QT (Medium),Production Supplies,bf98686c-8445-4303-8dff-3c285aa6c59e,0,18,False,False
+Cooler - Gatorade,Production Supplies,675ace65-f2e8-4cbd-9d70-ad6f47efc3e9,0,18,False,False
+Corn Broom,Production Supplies,ad647392-1ed1-4cbd-bce9-0f75b08c2cbc,0,12,False,False
+D - Rings,Production Supplies,40d17b1e-fc3f-4898-a4bc-ca07d277121c,0,3,False,False
+DF50 Hazer Fuid,Production Supplies,e205fbab-0eb8-44c2-93e9-2163ccc18077,0,330,False,False
+DIRECTOR'S SHIELD,Production Supplies,7d5ff5ee-415c-46f5-901e-f596a1b250be,0,30,False,False
+DOORWAY DOLLY,Production Supplies,f61178a7-477e-4b52-b54a-a7fb51f6b368,0,150,False,False
+DOT & FINGER BAG,Grip Equipment,1008f08b-8e24-4ab6-ace0-1b65c0e85b00,0,6,False,False
+DROP CEILING CLIP W/PIN - SCISSOR,Grip Equipment,e8fd3822-f474-4469-b7c1-84c00f3c43cf,0,6,False,False
+Director's Chair - Low,Production Supplies,55bf4639-917b-457f-a75e-c8f90418485a,0,9,False,False
+Director's Chair - Tall,Production Supplies,13de05e1-b8e0-4d42-b31b-b5f02d8d1b29,0,12,False,False
+"Director's Chair Cart, Rolling",Production Supplies,4887b682-7768-4f61-a62e-ae1f3254ce78,0,30,False,False
+"Director's Chair Rack, Hanging",Production Supplies,5438a584-72ad-4356-a0f5-608f24f52bbc,0,9,False,False
+Dolly - 2 Wheel Handtruck,Production Supplies,6fd367e5-b0d8-450d-9ef4-fcadf5895a56,0,15,False,False
+Dolly - Furniture (4 Wheel),Production Supplies,3e1edd9f-394d-4589-872c-f880cd16d491,0,15,False,False
+Dust Mop,Production Supplies,db994073-a700-4143-aa89-792e658c3001,0,6,False,False
+Dust Pan,Production Supplies,1b7e4ef7-f056-4afc-b874-ed79c3efc622,0,6,False,False
+ELECTROSTATIC SPRAYER CASE,Production Supplies,70aedd70-0618-4440-be7f-96eee75888f6,0,750,False,False
+Extension Cord - 100',Production Supplies,16c8eb00-cd12-450c-b4fa-3deebda50e1a,0,18,False,False
+Extension Cord - 25',Production Supplies,58a5b1fd-02f7-44d2-a74e-f18650359977,0,12,False,False
+Extension Cord - 50',Production Supplies,46f1aeca-0a77-4d7f-9148-9b9b87ef25d6,0,15,False,False
+FLEX ARM,Grip Equipment,b42eb9de-fd93-42fa-abfc-c8c7a04596f3,0,8,False,False
+FLEX ARM EXTENTION,Grip Equipment,e6e3d23d-3d21-44d6-9431-57a417715845,0,8,False,False
+Fan - Box,Production Supplies,2ad1e28e-ad0f-44ac-a909-80de74dbfc5f,0,18,False,False
+Fan - Metal Utility,Production Supplies,f640d0a7-17ee-4bce-bcc1-08bec9b06d85,0,30,False,False
+Fan - Reel Effects II,Production Supplies,5ba1811c-0e9b-4852-ba10-c908958bbdf8,0,195,False,False
+Fire Extinguisher Rack,Production Supplies,9a8a2260-2834-40aa-9f41-5e36cd0c3e65,0,4.5,False,False
+"First Aid Kit ""50 Person""",Production Supplies,e0855ec2-cdeb-4306-8aed-186d86111564,0,75,False,False
+Fold It Cart,Production Supplies,44c5fa42-29d1-4f7e-8bfd-91013492a4ca,0,75,False,False
+Folding Chairs,Production Supplies,ff3d9336-e96c-4dbf-911f-0c6dc59930ee,0,6,False,False
+Furniture Pads,Production Supplies,234fe866-46aa-4445-a9ba-582d9812bdc4,0,6,False,False
+GATOR GRIP CLAMP W/PIN,Electrical Equipment,a1bc598e-b19d-434b-85bf-bab3d79bfacf,0,4,False,False
+GRID CLAMP W/ BABY RECEIVER,Electrical Equipment,5103bd4a-0b08-41d5-933f-727b96f90524,0,9,False,False
+GRID CLAMP W/EAR,Electrical Equipment,2eb94f96-fcb4-48ec-9db1-70533990db89,0,9,False,False
+GRID CLAMP W/JR. RECEIVER - HORIZONTAL,Electrical Equipment,7647dab6-01be-433f-a096-111ef2eecdec,0,9,False,False
+HAND SANITIZING STATION (40% OFF),Production Supplies,68732c8e-a9cb-46e8-ad52-d60c038bbaf6,0,45,False,False
+HANDWASHING STATION (40% OFF),Production Supplies,f92e713f-0090-461e-be59-603db58e068b,0,171,False,False
+Hand Mics,Production Supplies,6efeceda-ddd9-49af-b6fb-cfd69f27d081,0,9,False,False
+Hard Hats,Production Supplies,c35d0d9c-6ff0-4ff7-bf29-c07a1df72c86,0,7.5,False,False
+Headset w/ Boom Mic,Production Supplies,63f0e166-21e8-4f85-a55d-f1b04fc59eff,0,30,False,False
+Heater - Dish (Electrical),Production Supplies,80f8f92e-9c00-4fc4-b259-ed7758c2454f,0,19.5,False,False
+"Hollywood Director's Chair, Tall",Production Supplies,ec2deea7-0d7a-4592-a23a-0bae617d8db8,0,45,False,False
+Honda 7000 Watt Generator,Electrical Equipment,c664d447-5ff5-4d87-b89e-3b61bdab6d57,0,675,False,False
+"Hudson Sprayer ""Pump""",Production Supplies,63b4e8c0-22d0-42e9-bef9-c983ebf8cc18,0,30,False,False
+Inverter - 250 Watt,Production Supplies,eea2d95b-f65c-4a25-8204-7aaf4844495e,0,30,False,False
+Inverter - 300 Watt,Production Supplies,8dfc4d21-bee5-4a7b-8d6b-211d5ef3987e,0,45,False,False
+Iron,Production Supplies,f70be420-abed-4fa4-ab0d-5dd7c05e7bd4,0,21,False,False
+Ironing Board,Production Supplies,9152f050-b118-4b47-8027-d608fd094b13,0,30,False,False
+JHOOK,Production Supplies,5c98f983-67fa-493a-8537-d55a7153ed6d,0,6,False,False
+JR BOOM ARM,Grip Equipment,ed2986ed-53ab-4c47-aeff-0ba34aeadb85,0,20,False,False
+JR TO BABY ADAPTOR,Production Supplies,ebb215fd-f4cb-4c89-a777-868fadada86d,0,6,False,False
+JR. NAIL-ON PLATE,Production Supplies,49a6e68c-9e55-43ef-adea-7cb00324fae2,0,8,False,False
+JR. OFFSET ARM,Grip Equipment,dbe1da8f-f291-46cb-8725-15e53d43f879,0,9,False,False
+JR. PIPE HANGER - CLAMP,Grip Equipment,d7510484-57cf-4a16-8244-34b6c65ca56a,0,8,False,False
+"LADDER TRUSS BRACKET 1 1/4""",Production Supplies,b5fd38aa-471b-4bf6-ad1f-5dddcd90a7ae,0,8,False,False
+Black Box,,8d432526-d301-4890-9584-914bfafc242d,0,0,False,False
+East Parking,,402b436f-7f2d-4ff0-be8b-e3d87ea1c631,0,0,False,False
+Hospital Set,,b461c1b0-1478-4cbd-b285-2f72dadd9bf8,0,0,False,False
+LED/Volume Stage,,aafd81f6-7ffc-49cc-af01-86281300a4cb,0,0,False,False
+Morgue Set,,39d44c27-34aa-4e81-a751-1e33d250e1d9,0,0,False,False
+North Parking,,4c3c0742-c1a3-4f63-9786-51ed32378d57,0,0,False,False
+Police/Jail Set,,5354e17c-1c00-4841-a9fa-4c5334847d6f,0,0,False,False
+LARGE QUARTZ PLUS CHIMERA BANK (8445),Lighting Equipment,77789f9b-b52e-4f79-8abe-5597b37af74b,0,81,False,False
+LED Flashlight,Lighting Equipment,f5ac78fc-528b-42b0-a743-d2395052178c,0,15,False,False
+LED TUBE POWER ADAPTER TO EDISON - SINGLE,Electrical Equipment,588d0d95-0b7a-426b-821a-edbf3f71116a,0,6,False,False
+LITEPANEL 1X1 CHIMERA BANK (1655) ASTRA,Lighting Equipment,665aada6-212e-4c3d-bc55-6401a1841b58,0,75,False,False
+Laundry Tub/Cart,Production Supplies,8ca06670-6252-47e7-9d10-f0d39aa0132c,0,45,False,False
+Leaf Blower - Battery Powered,Production Supplies,01e013c2-4a50-42f4-9f49-a587f7a659ad,0,75,False,False
+Leaf Blower - Electric (Plug In),Electrical Equipment,4ad71698-1538-4d0d-8d98-52bcf8599ab5,0,45,False,False
+Leaf Blower - Gas,Production Supplies,60554b5a-f68c-492f-a0e9-8997e11aeb89,0,75,False,False
+Leaf Rake,Production Supplies,a4d1b300-19b8-4f96-8bda-857bb5df6c0c,0,9,False,False
+Loco Mat - 3' x 5',Production Supplies,130de7b4-1686-43c7-acd1-ce2b4d34e153,0,15,False,False
+MAFER CLAMP,Grip Equipment,66ff3502-5a6a-403a-abf9-d5e58e5eac6e,0,7,False,False
+MEAT AXE,Grip Equipment,dfdcd0b5-cf07-4721-8e03-3f4fd141da1a,0,11,False,False
+MEDIUM QUARTZ PLUS CHIMERA BANK (8435),Lighting Equipment,6ef35180-89d5-43db-a787-ece88332d681,0,70,False,False
+MEDIUM TARP,Production Supplies,af5d2d92-1784-4812-9dba-6ffcd933791b,0,15,False,False
+MENACE ARM KIT,Grip Equipment,fd63ce32-3105-4923-9b38-4d099fcdf6c9,0,40,False,False
+"MICROPHONE, 3 PIN",Production Supplies,730f0916-31ed-48d5-957a-9c4c1d0eea30,0,15,False,False
+MICROWAVE,Production Supplies,49a100cf-4ffa-4b39-b5d4-e0e4c408fbb5,0,60,False,False
+MIDGET SCRIM (5-PIECE SET),Lighting Equipment,58d85727-0786-41bc-b7ec-56cd8900fbd1,0,7,False,False
+MINI REFRIGERATOR,Production Supplies,d6f399cf-f735-49a7-a3f7-d42a78f9700f,0,90,False,False
+Milk Crate,Production Supplies,e44787de-fdfa-45fa-a845-fedf9eb6d3ac,0,6,False,False
+"Mop, Bucket & Ringer",Production Supplies,34b0aaa1-1e9b-4a22-966a-ba72e937e09e,0,24,False,False
+Motorola CP200d  UHF Radio (Digital),Production Supplies,f7ef9d54-bfdc-4342-92f0-856ecaee0239,0,30,False,False
+"NORMS PIN (5/8"" PIN TO 3/8"" PIN)",Production Supplies,a8e73f06-994f-4f78-8d39-47d083e03c12,0,6,False,False
+Office Trash Can,Production Supplies,8e097fa5-0826-4e3d-b8e3-830e60571c81,0,6,False,False
+PRINTER - HP OFFICE JET PRO 8028e,Production Supplies,ef1126e7-cdff-4c33-87ee-025b238fab5b,0,150,False,False
+PULLY FIXED 1/2,Production Supplies,093b12c4-901c-4ffc-879f-b8fc29b2fb6d,0,12,False,False
+PULLY FIXED 3/8,Production Supplies,9cec3976-0cfc-4a24-bf0b-8309e50e56ce,0,12,False,False
+PULLY SWIVEL 1/2,Production Supplies,c84c7b33-208d-4e8d-9df7-2ba3bc3345bb,0,12,False,False
+PULLY SWIVEL 3/8,Production Supplies,ae7aaa9a-c414-434c-ba3d-f3b5b392c226,0,12,False,False
+PUTTY KNIFE W/PIN,Grip Equipment,d79c4b7f-d54f-446a-b95c-f9f08d31c64a,0,6,False,False
+"Pail, Plastic 5 Gallon",Production Supplies,1d7a81a0-69cc-41fc-999d-09ca7e52f884,0,6,False,False
+Pallet Jack,Production Supplies,ecb620a0-aef0-45f1-a91f-605b300681cd,0,60,False,False
+Personal Folding Table,Production Supplies,227816b6-79ca-4b2e-943f-97af4fb45688,0,12,False,False
+Portable Pop Up Changing Tent,Production Supplies,3e005a28-316f-492a-aa31-f31c0aba2ca9,0,36,False,False
+Power Strip,Production Supplies,d887a1be-4d8c-4cc2-b3ec-3c4fcebbcd14,0,9,False,False
+"Pressure Washer, Plug In",Electrical Equipment,28883004-0341-42c7-9f93-e7dcd18fe618,0,120,False,False
+Pruning Shears,Production Supplies,02b1cc19-03e2-49c5-8540-6ff1f38a2f7b,0,6,False,False
+Push Broom,Production Supplies,cbdd0fe5-650e-4894-8df6-b94d35cb5600,0,12,False,False
+REGULAR 407 1K SCRIM (5-PIECE SET),Lighting Equipment,576ccd7c-be23-4549-b085-fa5a2094de59,0,8,False,False
+Ratchet Straps,Production Supplies,3b0b4ee9-02b7-4200-ac9f-4f29ee49c7b5,0,6,False,False
+Road Sign - Men Working,Production Supplies,8cf36e4a-4e68-49cd-b830-6a8711eb1f9a,0,30,False,False
+Road Sign - Prepare to Stop,Production Supplies,0508d4db-b8d1-4a6b-8167-b7a434ffd6cc,0,30,False,False
+Road Sign - Road Work Ahead,Production Supplies,ae7c2d47-3609-4530-afb6-ab1909d0eb60,0,30,False,False
+Rock Rake,Production Supplies,2b1c284d-7bda-46fa-b18f-4ed674e0ee56,0,9,False,False
+Rolling Wardrobe Rack,Production Supplies,7a9e4fea-a5c6-40e6-904f-7c2f51274f2e,0,30,False,False
+Rosco 1900 Fogger,Production Supplies,2391dbc9-7cb1-496b-bbca-ad2ddf6d9d50,0,150,False,False
+Rubber Maid Cart,Production Supplies,f012e748-1ff1-431e-9833-7b60ed4eccaf,0,60,False,False
+Rubber Mat 3' x 10',Production Supplies,e9531692-68db-4caf-9a34-20cd961bfabc,0,30,False,False
+Rubber Mat 3' x 5',Production Supplies,6d76cc1b-ef11-4176-8c19-782fc5e68ce3,0,15,False,False
+SAFETY CABLE 3' (STEEL),Electrical Equipment,1d90c046-5512-41e4-aa75-e63013a85ba8,0,3,False,False
+SMALL QUARTZ PLUS CHIMERA BANK (8425),Lighting Equipment,0148b791-df29-43c6-8ed4-43579f46ac55,0,59,False,False
+SOCAPEX CABLE 100',Electrical Equipment,c85eeaf8-8a94-41a8-86c1-102499a691e7,0,35,False,False
+SOCAPEX CABLE 25',Electrical Equipment,f2966bdc-56aa-447d-8cab-66c3d7160a17,0,18,False,False
+SOCAPEX CABLE 50',Electrical Equipment,9bd9fce9-3dac-403f-8be7-1ed036906a11,0,26,False,False
+SOLID CHEESEBORO CLAMP (STEEL),Electrical Equipment,53430fab-584c-4802-a032-a5a995a69955,0,9,False,False
+SPEED C-CLAMP 1ﬂ,Electrical Equipment,101e0b88-4e45-45aa-8d6c-5665e1d5213d,0,13,False,False
+SPEED CLIP 1-1/4ﬂ (BLACK),Production Supplies,8c72268c-ade2-4b12-9778-7103cb517112,0,4,False,False
+"SPEEDRAIL COUPLER 1 1/4""",Production Supplies,382dd3e5-473b-43e1-b277-8348d495bfe6,0,6,False,False
+SPEEDRAIL EAR 1 1/4ﬂ,Production Supplies,f81fff22-664e-40fd-a317-69c7f0dd98a9,0,7,False,False
+STAND - MOMBO COMBO,Grip Equipment,6b0137b9-5e82-4657-a554-d05552a5b82b,0,33,False,False
+STEEL DECK LEGS 18inch,Production Supplies,51abf108-b3cb-4ca0-9287-f5d6185274cd,0,3,False,False
+STEEL DECK LEGS 1ft,Production Supplies,24849ff3-d167-452f-9ced-fa001f060753,0,3,False,False
+STEEL DECK LEGS 2ft,Production Supplies,0b05327e-1fa9-446f-aabf-6a6d59d7490a,0,3,False,False
+STEEL DECK LEGS 3ft,Production Supplies,36a506b5-6ffa-472e-8cd6-26e347881210,0,3,False,False
+STEEL DECK LEGS 4ft,Production Supplies,0ad23175-1e50-4d3d-a745-619f72caea75,0,3,False,False
+STEEL DECK LEGS 9inch,Production Supplies,a242532a-7094-454b-b783-99a11de0cb8b,0,3,False,False
+STEEL DECK NUT & BOLT,Production Supplies,5adbd87c-7bb6-4bd2-b1f0-1b3acb00364f,0,0.5,False,False
+SUMO HEAD FEEDER,Production Supplies,cc8e181c-bf05-46c6-89bf-0898d3a85bfa,0,375,False,False
+SUMO LENS 30 DEGREE,Production Supplies,b442f82d-ecb4-49ac-a653-383bb5ab5eca,0,375,False,False
+SUMO LIGHTR SKIRT,Lighting Equipment,5fd291c3-0329-4eb6-ad28-2ba480e05b40,0,375,False,False
+SUMO- BALLAST,Lighting Equipment,bd402947-bd36-44e6-b8f5-c503b84ace2e,0,375,False,False
+SUMO- CHAIN LINK,Production Supplies,7dc90c47-6612-4504-a409-628ecfcf1e22,0,375,False,False
+SUMO- POWER FEEDER,Production Supplies,f1836fb1-d558-4a83-9841-2624dcdb6d0e,0,375,False,False
+SWIVEL CHEESEBORO CLAMP (STEEL),Electrical Equipment,0ecac413-d946-4d46-9cca-a54cfc42989f,0,9,False,False
+Safety Vest,Production Supplies,8f558cda-c2fc-4f1a-a561-ed2fe30eca6a,0,6,False,False
+ShotBags - 20lbs,Production Supplies,64e8bc09-9243-4cc4-b076-0e120fb3b7a6,0,9,False,False
+Shovel - Flat,Production Supplies,23fe1810-b3df-47a3-9cf2-ba6bb4ec75da,0,9,False,False
+Shovel - Snow,Production Supplies,39ed700a-2f1e-44ef-83bd-ad7762455412,0,15,False,False
+Shovel - Spade,Production Supplies,f8b50024-9058-4b56-ae64-9fb2b03f033e,0,9,False,False
+Sledge Hammer 10 lbs,Lighting Equipment,503b1a73-7a26-42dc-ac81-dcd345bd86de,0,18,False,False
+Standard Boom Box,Grip Equipment,930e453e-4a32-4b85-9f7d-36b222bdc658,0,30,False,False
+Stop/Slow Sign - Handheld,Production Supplies,edfea467-1ffb-4179-a667-350d69998645,0,6,False,False
+"Super Shelf, Rolling, 9' 10"" L x 5' H",Production Supplies,4b1320ea-9349-45fb-8630-3f0ed25d9591,0,60,False,False
+"TRIANGULAR TRUSS MAKER 1-1/4""",Production Supplies,4293e8f5-3a50-4cf2-9d17-13639a60776c,0,11,False,False
+"Table Divider - 29.5"" W x 23.5"" H",Production Supplies,87ab36e5-e970-4881-b932-0f90fbcb745a,0,21,False,False
+Tea Kettle (1.7 liter) - Electric,Production Supplies,5eba9922-7f85-41a9-81e8-641464dc00e7,0,30,False,False
+Trash Can (33 gal),Production Supplies,0ca8aac4-eed5-459a-9c8f-d832981e5fa1,0,9,False,False
+Trash Grabber,Production Supplies,a3a4b727-fdc9-4b14-9b8a-f74261c2f916,0,6,False,False
+"UTAH - 6' TABLE LINEN, BLACK",Production Supplies,31e673e3-7929-488a-ab0e-3a88ae8aaef6,0,15,False,False
+UTAH - BOX FAN,Production Supplies,4306c3a3-fc7a-47f2-919c-81f493cfaca0,0,18,False,False
+UTAH - DIRECTOR'S CHAIR CART,Production Supplies,12ad9d75-4ba8-49a0-a77a-28f8effdc08d,0,30,False,False
+UTAH - MOTOROLA CP200 UHF (ANALOG),Production Supplies,a5773551-0a8f-4249-937c-30c63fcfee6c,0,30,False,False
+UTAH - MOTOROLA CP200 UHF (DIGITAL),Production Supplies,7307e12e-f0a9-4341-90b0-26eafe0c3f94,0,30,False,False
+"UTAH - RAMP (2-PC.) ADJUSTABLE LENGTH,",Electrical Equipment,bf8c0de3-c90c-47fe-9a81-220791878b46,0,30,False,False
+UTAH - TABLE TOP MAKE UP MIRROR,Production Supplies,b89b2b8b-d589-45b6-bc44-6d7ebd1e3bc6,0,60,False,False
+UTAH - WET/DRY SHOP VAC,Production Supplies,43294205-8df4-4ef8-b0cb-73ffa0dc239d,0,60,False,False
+"UTAH - WORKLIGHT, DEWALT",Lighting Equipment,327cd095-875e-491c-9c7c-98ee267c7c15,0,75,False,False
+Umbrella - Golf,Production Supplies,637825d6-723e-4634-8099-fb6b1e34958f,0,10.5,False,False
+Utility Tool Rack,Production Supplies,4702f7c2-0776-43ad-a413-8646b6ede287,0,9,False,False
+"Wardrobe Hanger 17"" Clear, Pant w/ Clip - Each",Production Supplies,2ade9d97-d45e-4f83-9bc8-a1767eb4616f,0,1.5,False,False
+"Wardrobe Hanger 17"" Clear, Shirt/Dress - Each",Production Supplies,dddb5dd5-925a-448c-b56c-f867c7cba9cb,0,1.5,False,False
+Water - Dispenser,Production Supplies,500a1a62-eefe-4bb6-965d-c9c864c72ef1,0,36,False,False
+Wet/Dry Shop Vacuum,Production Supplies,ca884d43-b825-4313-9977-e9d269c5821d,0,60,False,False
+"Wireless Internet, MiFi Hotspot (Verizon)",Electrical Equipment,b17ee45b-12aa-4c22-bb13-ec717c96dc67,0,325,False,False
+"Wireless Internet, Mifi Hotspot (AT&T)",Electrical Equipment,a29dca8b-445d-4220-8ed1-7e4287b44217,0,325,False,False
+Worklight - 500 Watt Halogen Double Headed,Lighting Equipment,ce1b6c0c-1697-4e59-b1f1-f29e8bbe7b20,0,45,False,False
+Worklight - Battery Powered Worklight (Dewalt),Lighting Equipment,4bd9be3c-6be3-40fb-9745-e48f936c79c2,0,75,False,False
+Worklight - Battery Powered Worklight PELICAN,Lighting Equipment,53cbb450-d942-4c9a-9083-4bb5dcc07502,0,75,False,False
