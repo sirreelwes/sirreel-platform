@@ -380,8 +380,38 @@ function NewQuotePageInner() {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [emailText, setEmailText] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfDragOver, setPdfDragOver] = useState(false);
+  // Inline rejection for non-PDF drops/picks — the parse endpoint only
+  // accepts application/pdf (it hardcodes the media_type).
+  const [pdfTypeError, setPdfTypeError] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+
+  const acceptPdfFile = useCallback((file: File | null | undefined) => {
+    if (!file) return;
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setPdfTypeError(`"${file.name}" isn't a PDF — the parser only accepts PDF files.`);
+      return;
+    }
+    setPdfTypeError(null);
+    setPdfError(null);
+    setPdfFile(file);
+  }, []);
   const [parsing, setParsing] = useState(false);
   const [parsed, setParsed] = useState<ParsedTop | null>(null);
+
+  // Cmd+V a copied PDF anywhere on the page while the Upload PDF tab is
+  // active — same handler as drop/pick. Text pastes (no files) fall
+  // through untouched so the Paste Email tab is unaffected.
+  useEffect(() => {
+    if (inputMode !== 'pdf' || parsed) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = e.clipboardData?.files?.[0];
+      if (file) acceptPdfFile(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [inputMode, parsed, acceptPdfFile]);
   const [items, setItems] = useState<ResolvedItem[]>([]);
   const [undoToast, setUndoToast] = useState<LineItemUndoToastState | null>(null);
   const [editing, setEditing] = useState<ParsedTop>({});
@@ -1739,12 +1769,46 @@ function NewQuotePageInner() {
         ) : (
           <div className="space-y-3">
             <input
+              ref={pdfInputRef}
               type="file"
               accept="application/pdf"
-              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm text-lt-fg2 file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:bg-lt-inner file:text-lt-fg file:cursor-pointer hover:file:bg-lt-inner"
+              onChange={(e) => { acceptPdfFile(e.target.files?.[0]); e.target.value = ''; }}
+              className="hidden"
             />
-            {pdfFile && <p className="text-sm text-lt-fg2">{pdfFile.name} ({(pdfFile.size / 1024).toFixed(0)} KB)</p>}
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Upload a PDF — drag and drop or click to browse"
+              onClick={() => pdfInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pdfInputRef.current?.click(); } }}
+              onDragOver={(e) => { e.preventDefault(); setPdfDragOver(true); }}
+              onDragLeave={() => setPdfDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setPdfDragOver(false); acceptPdfFile(e.dataTransfer.files?.[0]); }}
+              className={`w-full rounded-lg border-2 border-dashed px-6 py-12 text-center cursor-pointer transition-colors ${
+                pdfDragOver ? 'border-lt-fg bg-lt-inner' : 'border-lt-hairline bg-lt-card hover:border-lt-fg3'
+              }`}
+            >
+              <svg className="mx-auto mb-3 h-8 w-8 text-lt-fg3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              <p className="text-sm font-medium text-lt-fg">Drag &amp; drop a PDF here — or click to browse</p>
+              <p className="mt-1 text-xs text-lt-fg3">You can also paste (&#8984;V) a copied PDF file</p>
+            </div>
+            {pdfTypeError && <p className="text-xs text-red-700">{pdfTypeError}</p>}
+            {pdfFile && (
+              <div className="flex items-center justify-between rounded-lg bg-lt-inner px-4 py-2.5">
+                <p className="min-w-0 truncate text-sm text-lt-fg">
+                  {pdfFile.name} <span className="text-lt-fg3">({(pdfFile.size / 1024).toFixed(0)} KB)</span>
+                </p>
+                <button
+                  onClick={() => { setPdfFile(null); setPdfTypeError(null); }}
+                  aria-label="Remove file"
+                  className="ml-3 shrink-0 text-lg leading-none text-lt-fg3 hover:text-lt-fg"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
             <button
               onClick={parsePDF}
               disabled={!pdfFile || parsing}
