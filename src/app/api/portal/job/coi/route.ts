@@ -10,6 +10,7 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
+import { REVIEW_MODEL_UNPINNED } from '@/lib/ai/models'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
       const isPdf = file.type === 'application/pdf'
       const res = await client.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: REVIEW_MODEL_UNPINNED,
         max_tokens: 1200,
         messages: [
           {

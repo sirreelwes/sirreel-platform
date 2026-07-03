@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
+import { REVIEW_MODEL } from '@/lib/ai/models'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -197,7 +198,7 @@ export async function POST(
     const jobName = request.booking?.jobName || ''
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: REVIEW_MODEL,
       max_tokens: 2000,
       messages: [{
         role: 'user',

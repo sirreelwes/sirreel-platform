@@ -20,8 +20,9 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { ClaimDocType } from '@prisma/client'
+import { PARSING_MODEL } from '@/lib/ai/models'
 
-const MODEL = 'claude-sonnet-4-5-20250929'
+const MODEL = PARSING_MODEL
 const MAX_TOKENS = 600
 
 // Vocabulary the classifier picks from. Intentionally narrower than the

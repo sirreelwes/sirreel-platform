@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { REVIEW_MODEL } from '@/lib/ai/models'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     const mediaType = isPdf ? 'application/pdf' : file.type.includes('png') ? 'image/png' : 'image/jpeg'
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: REVIEW_MODEL,
       max_tokens: 2000,
       messages: [{
         role: 'user',

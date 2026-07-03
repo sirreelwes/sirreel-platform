@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { PARSING_MODEL } from "@/lib/ai/models";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(buffer).toString("base64");
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: PARSING_MODEL,
       // 4096 truncated multi-page docs mid-extraction (silently dropping
       // line items). 8192 covers every real quote doc seen so far; if we
       // still hit the cap we fail loudly below instead of returning a

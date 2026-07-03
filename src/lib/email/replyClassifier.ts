@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { CadenceState, ReplyClassification } from '@prisma/client'
+import { REPLY_CLASSIFIER_MODEL } from '@/lib/ai/models'
 
 /**
  * AI reply classifier — categorises an inbound email reply on an existing
@@ -20,7 +21,7 @@ import type { CadenceState, ReplyClassification } from '@prisma/client'
  *     classifier concern.
  */
 
-const MODEL = 'claude-sonnet-4-5'
+const MODEL = REPLY_CLASSIFIER_MODEL
 const MAX_TOKENS = 600
 
 const SYSTEM_PROMPT = `You are classifying an inbound email reply from a client in the context of an active quote. The client received a quote and has now replied.

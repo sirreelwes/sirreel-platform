@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-admin"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
+import { SUMMARY_MODEL } from "@/lib/ai/models"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -12,7 +13,7 @@ async function generateSummary(
 ): Promise<string> {
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: SUMMARY_MODEL,
       max_tokens: 60,
       messages: [{
         role: "user",

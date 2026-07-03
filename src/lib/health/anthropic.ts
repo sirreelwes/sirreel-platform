@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { AnthropicHealth } from './types'
+import { HEALTH_CHECK_MODEL } from '@/lib/ai/models'
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = HEALTH_CHECK_MODEL
 const DEGRADED_LATENCY_MS = 5000
 
 /**

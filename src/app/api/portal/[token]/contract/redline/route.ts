@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { REVIEW_MODEL } from '@/lib/ai/models'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -82,7 +83,7 @@ export async function POST(
     if (isPdf) {
       // PDF — send directly to Claude
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: REVIEW_MODEL,
         max_tokens: 3000,
         messages: [{
           role: 'user',
@@ -103,7 +104,7 @@ export async function POST(
     } else {
       // Word doc or other — extract text via base64 and send as text
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: REVIEW_MODEL,
         max_tokens: 3000,
         messages: [{
           role: 'user',

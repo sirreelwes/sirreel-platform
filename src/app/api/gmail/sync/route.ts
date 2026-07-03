@@ -11,6 +11,7 @@ import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routing
 import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
+import { SUMMARY_MODEL } from "@/lib/ai/models"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -73,7 +74,7 @@ Write ONE sentence (max 15 words) describing what this email is about. Focus on 
 Just the sentence, no quotes.`
 
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: SUMMARY_MODEL,
       max_tokens: 60,
       messages: [{ role: "user", content: prompt }]
     })

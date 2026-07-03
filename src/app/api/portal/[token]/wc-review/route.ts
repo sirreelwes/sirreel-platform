@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { REVIEW_MODEL } from '@/lib/ai/models'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -64,7 +65,7 @@ export async function POST(
       : { type: 'image' as const, source: { type: 'base64' as const, media_type: mediaType as 'image/png' | 'image/jpeg', data: base64 } }
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: REVIEW_MODEL,
       max_tokens: 1000,
       messages: [{
         role: 'user',

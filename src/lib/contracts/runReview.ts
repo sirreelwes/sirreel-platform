@@ -11,6 +11,7 @@ import {
   detectThirdPartyOnlyIndemnity,
   formatSecondRoundClausesForUserPrompt,
 } from '@/lib/contracts/reviewPrompt'
+import { REVIEW_MODEL_UNPINNED } from '@/lib/ai/models'
 
 const STANDARD_AGREEMENT_PATH = path.join(
   process.cwd(),
@@ -98,7 +99,7 @@ Compare the redlined document against the baseline per your instructions. Output
   ]
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: REVIEW_MODEL_UNPINNED,
     max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: 'user', content }],

@@ -13,6 +13,7 @@ import {
   type CatalogType,
 } from '@/lib/sales/catalogMatcher'
 import { BILLING_RULES, computeBillableDays } from '@/lib/orders/billing'
+import { PARSING_MODEL } from '@/lib/ai/models'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -588,7 +589,7 @@ export async function POST(req: NextRequest) {
     const SYSTEM_PROMPT = buildSystemPrompt(snippet)
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: PARSING_MODEL,
       // 3000 was the root cause of "AI response was not valid JSON" on
       // long documents: a big items+contacts payload exceeds it, the JSON
       // is cut mid-object, and JSON.parse fails. 8192 fits any realistic

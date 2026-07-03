@@ -7,6 +7,7 @@ import {
   QUICK_REPLY_POSITIVE_MESSAGE,
   QUICK_REPLY_NONCOMMITTAL_MESSAGE,
 } from '@/lib/sales/quickReply'
+import { REVIEW_MODEL } from '@/lib/ai/models'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,7 +92,7 @@ Return exactly: {"flags": ["..."], "polished": "..."}`
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: REVIEW_MODEL,
       max_tokens: 1024,
       messages: [{ role: 'user', content: prompt }],
     })

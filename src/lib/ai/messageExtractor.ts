@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
+import { MESSAGE_EXTRACTION_MODEL } from '@/lib/ai/models'
 
 /**
  * Per-message AI extraction — pulls structured fields out of an inbound
@@ -7,7 +8,7 @@ import { prisma } from '@/lib/prisma'
  * of a wall of text (especially useful for Cognito Forms submissions, which
  * arrive as concatenated label+value blobs with no whitespace).
  *
- * Uses Claude Haiku (claude-haiku-4-5-20251001) — extraction is cheap,
+ * Uses Claude Haiku — extraction is cheap,
  * fast, and well within Haiku's capability ceiling. Sonnet would be 5-10x
  * the cost for negligible quality lift on this task.
  *
@@ -20,7 +21,7 @@ import { prisma } from '@/lib/prisma'
  *     raw body instead of Quick Read card".
  */
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = MESSAGE_EXTRACTION_MODEL
 const MAX_TOKENS = 1500
 
 // Editable list of sender domains we know operate as sub-rental vendors —

@@ -18,8 +18,9 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { HrCategory } from '@prisma/client'
+import { INTAKE_PARSING_MODEL } from '@/lib/ai/models'
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = INTAKE_PARSING_MODEL
 const MAX_TOKENS = 800
 
 export interface ParsedHrEmail {

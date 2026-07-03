@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { ASSISTANT_MODEL } from '@/lib/ai/models';
 
 // TODO: Wire up to real Prisma data + Claude API via lib/ai.ts
 // For now, this provides a local fallback that answers from mock data
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-5-20250929',
+            model: ASSISTANT_MODEL,
             max_tokens: 500,
             system: `You are SirReel's AI fleet assistant. Be concise. Today is ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.\n\nFLEET:\n${FLEET_SUMMARY}\n\nBOOKINGS:\n${BOOKINGS_LIST}\n\nMAINTENANCE:\n${MAINT_LIST}`,
             messages: [{ role: 'user', content: message }],
