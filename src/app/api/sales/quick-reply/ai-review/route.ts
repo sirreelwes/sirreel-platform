@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { computeQuickReplyAvailability } from '@/lib/sales/quickReply'
+import {
+  computeQuickReplyTiering,
+  QUICK_REPLY_POSITIVE_MESSAGE,
+  QUICK_REPLY_NONCOMMITTAL_MESSAGE,
+} from '@/lib/sales/quickReply'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,13 +25,17 @@ interface Body {
  *
  * AI pass over the rep's CUSTOM Quick Reply message. Reuses the same
  * server-side Anthropic pattern as the quote parser. We RECOMPUTE the real
- * availability (getCategoryAvailability via computeQuickReplyAvailability) so
- * the model sees the TRUE numbers and can catch a contradiction — e.g. the rep
- * wrote "plenty of cube trucks" but only 1 is available.
+ * fleet-utilization tiering (computeQuickReplyTiering) so the model knows
+ * which tier the reply must hold — e.g. the rep wrote "plenty of cube trucks"
+ * on a non-committal (tight-fleet) inquiry.
+ *
+ * The tier framing matches the templated verbiage exactly: the generated
+ * prose must never state numbers, percentages, or guarantees, and must never
+ * name which categories are tight — that detail is rep-only.
  *
  * Returns BOTH:
- *   - flags:    string[]  — risks (tone, typos, missing supply link, and most
- *                           importantly availability contradictions)
+ *   - flags:    string[]  — risks (tone, typos, and most importantly
+ *                           availability-tier contradictions)
  *   - polished: string    — a cleaned-up rewrite the rep MAY accept (nothing
  *                           auto-applies; the rep stays in control)
  */
@@ -43,18 +51,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'AI service not configured' }, { status: 503 })
   }
 
-  // REAL availability — the ground truth the rep's claims are checked against.
-  const lines = await computeQuickReplyAvailability(body.categories || [], body.pickup ?? null, body.return ?? null)
-  const availabilityFacts = lines.length
-    ? lines
-        .map((l) => `- ${l.name}: requested ${l.requested}, ${l.availableToHold} of ${l.serviceableCount} available for these dates → ${l.status.toUpperCase()}`)
+  // REAL fleet-utilization tiering — the ground truth the rep's claims are
+  // checked against. INTERNAL ONLY: the model uses it to catch contradictions
+  // but must never surface the detail in client-facing prose.
+  const tiering = await computeQuickReplyTiering(body.categories || [], body.pickup ?? null, body.return ?? null)
+  const tierFacts = tiering.lines.length
+    ? tiering.lines
+        .map((l) => `- ${l.name}: ${l.tight ? 'TIGHT (heavily booked or no active units — do not encourage)' : 'OPEN (comfortable availability)'}`)
         .join('\n')
-    : '(no specific categories requested — availability not yet known)'
+    : '(dates or categories could not be determined — availability is unknown; treat as NON-COMMITTAL)'
+  const tierInstruction =
+    tiering.tier === 'positive'
+      ? `POSITIVE — the fleet is comfortably open for these dates. The reply may sound encouraging about availability, in the spirit of: "${QUICK_REPLY_POSITIVE_MESSAGE}"`
+      : `NON-COMMITTAL — the fleet is tight, a category has no active units, or the dates/categories are unknown. The reply must NOT suggest availability looks good; it should warmly ask for job details and defer confirmation to the team, in the spirit of: "${QUICK_REPLY_NONCOMMITTAL_MESSAGE}"`
 
   const prompt = `You are reviewing a sales rep's draft reply to a film/production client who asked about renting trucks and gear from SirReel.
 
-GROUND-TRUTH AVAILABILITY (the real numbers — the rep's message must not contradict these):
-${availabilityFacts}
+Availability replies are TWO-TIER, chosen from live fleet utilization. The required tier for THIS reply is:
+${tierInstruction}
+
+INTERNAL per-category picture (for your contradiction check ONLY — never to be stated or hinted at in client-facing text):
+${tierFacts}
+
+HARD RULES for anything client-facing (the draft and your rewrite):
+- Never state numbers, counts, percentages, or utilization figures.
+- Never guarantee availability or promise specific units.
+- Never name or imply WHICH categories are tight, short, or heavily booked.
 
 THE REP'S DRAFT MESSAGE:
 """
@@ -62,8 +84,8 @@ ${message}
 """
 
 Do two things and return ONLY JSON:
-1. "flags": an array of short, specific issues with the draft. Include tone problems, typos/grammar, anything unprofessional, and — MOST IMPORTANTLY — any AVAILABILITY CONTRADICTION where the draft claims or implies availability that conflicts with the ground-truth above (e.g. saying "plenty" / "lots" / "no problem" about a category that is TIGHT or SHORT). Quote the offending phrase. If there are no issues, return an empty array.
-2. "polished": a cleaned-up rewrite of the rep's message — same intent and voice, fixed grammar/tone, and NOT contradicting the real availability. Keep it concise and warm. Do NOT add an availability list or a sign-off (the email template already adds those). Plain text.
+1. "flags": an array of short, specific issues with the draft. Include tone problems, typos/grammar, anything unprofessional, and — MOST IMPORTANTLY — any TIER CONTRADICTION or HARD-RULE violation: on a NON-COMMITTAL reply, any claim or implication that availability looks good (e.g. "plenty", "lots", "no problem", "we've got you covered"); on ANY reply, stated numbers/percentages, guarantees, or naming which categories are tight. Quote the offending phrase. If there are no issues, return an empty array.
+2. "polished": a cleaned-up rewrite of the rep's message — same intent and voice, fixed grammar/tone, matching the required tier and obeying every hard rule above. Keep it concise and warm. Do NOT add a sign-off (the email template adds one). Plain text.
 
 Return exactly: {"flags": ["..."], "polished": "..."}`
 
@@ -82,7 +104,7 @@ Return exactly: {"flags": ["..."], "polished": "..."}`
       ok: true,
       flags: Array.isArray(parsed.flags) ? parsed.flags.map(String) : [],
       polished: typeof parsed.polished === 'string' ? parsed.polished : message,
-      availability: lines,
+      tiering,
     })
   } catch (err) {
     console.error('[quick-reply ai-review] failed:', err)

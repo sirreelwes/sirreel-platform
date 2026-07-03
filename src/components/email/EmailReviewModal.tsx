@@ -77,6 +77,25 @@ interface CompositionOk {
   // Follow-up only:
   stage?: 'STAGE_1' | 'STAGE_2' | 'STAGE_3';
   isResend?: boolean;
+  // Quick Reply only — rep-facing fleet-utilization detail behind the draft's
+  // availability tier. Never rendered in the client email itself.
+  quickReplyInsight?: QuickReplyInsight;
+}
+
+interface QuickReplyInsight {
+  tier: 'positive' | 'noncommittal';
+  datesParsed: boolean;
+  pickup: string | null;
+  return: string | null;
+  categories: {
+    id: string;
+    name: string;
+    requested: number;
+    activeAssets: number;
+    /** Peak-day committed ÷ active; null when the category has zero active assets. */
+    utilization: number | null;
+    tight: boolean;
+  }[];
 }
 
 export interface QuickReplyPayload {
@@ -189,6 +208,13 @@ function formatSize(bytes: number | undefined): string | null {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function fmtInsightDate(iso: string | null): string | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
 export function EmailReviewModal({ target, onClose, onSent }: Props) {
@@ -595,6 +621,68 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                   )}
                 </div>
               )}
+
+              {/* Quick Reply utilization strip — rep-only visibility into the
+                  fleet math behind the draft's availability tier. The client
+                  email never carries these numbers. */}
+              {preview.quickReplyInsight && (() => {
+                const qi = preview.quickReplyInsight;
+                const start = fmtInsightDate(qi.pickup);
+                const end = fmtInsightDate(qi.return);
+                const dates = start && end ? `${start} – ${end}` : start ? `starting ${start}` : 'not parsed';
+                return (
+                  <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                        Fleet utilization — internal, not shown to client
+                      </div>
+                      <span
+                        className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                          qi.tier === 'positive'
+                            ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900'
+                            : 'bg-amber-950/40 text-amber-300 border-amber-900'
+                        }`}
+                      >
+                        {qi.tier === 'positive' ? 'Positive tier' : 'Non-committal tier'}
+                      </span>
+                    </div>
+                    <div className="text-[12px] text-zinc-300">
+                      <span className="text-zinc-500">Dates</span> · {dates}
+                    </div>
+                    {qi.categories.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {qi.categories.map((c) => (
+                          <span
+                            key={c.id}
+                            className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border ${
+                              c.tight
+                                ? 'bg-rose-950/40 text-rose-300 border-rose-900'
+                                : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+                            }`}
+                            title={
+                              c.utilization === null
+                                ? 'No active units in this category'
+                                : `Peak day: ${Math.round(c.utilization * 100)}% of ${c.activeAssets} active unit${c.activeAssets === 1 ? '' : 's'} committed`
+                            }
+                          >
+                            {c.name}
+                            <span className={c.tight ? 'font-bold' : 'text-zinc-500'}>
+                              {c.utilization === null ? 'no active units' : `${Math.round(c.utilization * 100)}%`}
+                            </span>
+                            {c.tight && <span aria-hidden>⚠</span>}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-[11px] text-zinc-500">
+                        {qi.datesParsed
+                          ? 'No vehicle categories identified — non-committal wording used.'
+                          : 'Dates could not be parsed from the inquiry — non-committal wording used.'}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Body iframe — sandbox="" (empty) = strict containment */}
               <div className="bg-white border border-zinc-800 rounded-lg overflow-hidden">

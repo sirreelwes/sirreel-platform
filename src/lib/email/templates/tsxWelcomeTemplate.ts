@@ -49,22 +49,27 @@ export type TsxWelcomeMode = 'welcome-only' | 'welcome-with-quote' | 'availabili
 export interface TsxAvailabilityBlock {
   /** Job / production / client label for the opener + subject. */
   jobName: string
-  /** Human date range, e.g. "August 12 – August 15" or "your dates". */
-  dateRange: string
-  /** Plain-English per-category availability sentences (already computed by
-   *  the caller). Empty → the "send your item list" fallback copy. */
-  lines: string[]
+  /** Human date range for the subject, e.g. "Aug 12 – Aug 15, 2026". null
+   *  when the inquiry dates couldn't be parsed. */
+  dateRange: string | null
+  /** The two-tier availability sentence picked from live fleet utilization
+   *  (see src/lib/sales/quickReply.ts). This is the ONLY availability
+   *  statement in the email — never counts, percentages, or category names. */
+  availabilityMessage: string
+  /** When true the message REPLACES the templated opener (the non-committal
+   *  tier already opens with its own "Thanks for reaching out"). When false
+   *  (positive tier) the opener stays and the message renders as its own
+   *  paragraph. */
+  messageReplacesOpener?: boolean
   /** The production supply-order link (orders.sirreel.com). */
   suppliesUrl: string
-  /** The closing next-step sentence (firm-quote tee-up). */
-  nextStep: string
   /** Fold a request for ONLY the missing field(s) into the reply. Set per
    *  field so we never ask for something we already have. */
   askForCompany?: boolean
   askForJob?: boolean
-  /** Rep's own message — REPLACES the templated opener/closer prose while the
-   *  greeting, the real availability block + supply CTA, and the sign-off stay
-   *  intact. Plain text; newlines become paragraph breaks. */
+  /** Rep's own message — REPLACES the templated opener prose while the
+   *  greeting, the tier availability message + supply CTA, and the sign-off
+   *  stay intact. Plain text; newlines become paragraph breaks. */
   customBody?: string | null
 }
 
@@ -161,7 +166,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
 
   // [[PLACEHOLDER]] subject — Wes review.
   const subject = withAvailability
-    ? `Re: ${av!.jobName} — availability for ${av!.dateRange}`
+    ? `Re: ${av!.jobName} — availability${av!.dateRange ? ` for ${av!.dateRange}` : ''}`
     : withQuote
       ? `Your TSX quote for ${q!.jobName}`
       : `Welcome to TSX — The SirReel Experience`
@@ -171,19 +176,25 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const welcomeOpener = `Thanks for reaching out — really glad we get to work on this one with you. <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
   const quoteOpener = `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
-  // Custom-message mode: the rep's own prose REPLACES the templated opener (and
-  // the closer is dropped) — but the greeting, availability block + supply CTA,
-  // and sign-off all stay. Plain text → HTML paragraphs.
+  // Custom-message mode: the rep's own prose REPLACES the templated opener —
+  // but the greeting, tier availability message + supply CTA, and sign-off
+  // all stay. Plain text → HTML paragraphs.
   const customBody = withAvailability ? av!.customBody?.trim() || null : null
   const customBodyHtml = customBody
     ? customBody.split(/\n{2,}/).map((para) => escapeHtml(para.trim()).replace(/\n/g, '<br/>')).filter(Boolean).join('</p><p style="font-size: 16px; color: ' + TEXT + '; margin: 12px 0 0; line-height: 1.6;">')
     : null
   const opener = withAvailability
-    ? (customBodyHtml ?? availabilityOpener)
+    ? (customBodyHtml ?? (av!.messageReplacesOpener ? escapeHtml(av!.availabilityMessage) : availabilityOpener))
     : withQuote ? quoteOpener : welcomeOpener
 
+  // Whether the tier message still needs its own paragraph: yes unless it
+  // already served as the opener (non-committal, no custom body). With a
+  // custom body it ALWAYS renders — the rep's prose can't drop the
+  // fleet-derived availability statement.
+  const showAvailabilityMessage = withAvailability && (!!customBody || !av!.messageReplacesOpener)
+
   const closer = withAvailability
-    ? (customBody ? '' : escapeHtml(av!.nextStep))
+    ? '' // the tier message carries its own next step
     : withQuote
       ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
       : `When you're ready to book something, just send me the details and I'll spin up a quote.`
@@ -230,20 +241,18 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
       </tr>`
     : ''
 
-  // Availability block — plain-English lines + a styled supply-order CTA
-  // button (not a raw URL). Same card/border vocabulary as the quote block.
+  // Availability block — the tier message (when not already the opener) + a
+  // styled supply-order CTA button (not a raw URL). No per-category counts —
+  // that detail is rep-only, in EmailReviewModal.
   const availabilityBlock = withAvailability
     ? `
-      <tr>
+      ${showAvailabilityMessage
+        ? `<tr>
         <td style="padding: 8px 32px 4px;">
-          ${av!.lines.length
-            ? `<p style="font-size: 16px; color: ${TEXT}; margin: 0 0 8px; line-height: 1.6;">Here's where availability stands for <strong>${escapeHtml(av!.dateRange)}</strong>:</p>
-               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-                 ${av!.lines.map((l, i) => `<tr><td style="padding: 12px 20px; font-size: 15px; color: ${TEXT}; line-height: 1.5;${i > 0 ? ` border-top: 1px solid #f3f4f6;` : ''}">${escapeHtml(l)}</td></tr>`).join('')}
-               </table>`
-            : `<p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">Send over the item list whenever it's ready and I'll confirm availability line by line for <strong>${escapeHtml(av!.dateRange)}</strong>.</p>`}
+          <p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">${escapeHtml(av!.availabilityMessage)}</p>
         </td>
-      </tr>
+      </tr>`
+        : ''}
       ${(av!.askForCompany || av!.askForJob)
         ? `<tr>
         <td style="padding: 14px 32px 0;">
@@ -409,7 +418,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     `Hi ${first},`,
     '',
     withAvailability
-      ? (customBody ?? `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`)
+      ? (customBody ?? (av!.messageReplacesOpener ? av!.availabilityMessage : `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`))
       : withQuote
         ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
         : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
@@ -418,12 +427,8 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     textParts.push('', input.personalNote.trim())
   }
   if (withAvailability) {
-    textParts.push('')
-    if (av!.lines.length) {
-      textParts.push(`Here's where availability stands for ${av!.dateRange}:`)
-      for (const l of av!.lines) textParts.push(`  • ${l}`)
-    } else {
-      textParts.push(`Send over the item list whenever it's ready and I'll confirm availability line by line for ${av!.dateRange}.`)
+    if (showAvailabilityMessage) {
+      textParts.push('', av!.availabilityMessage)
     }
     if (av!.askForCompany || av!.askForJob) {
       const askField =
@@ -454,7 +459,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   textParts.push(
     '',
     withAvailability
-      ? (customBody ? '' : av!.nextStep)
+      ? '' // the tier message carries its own next step
       : withQuote
         ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
         : `When you're ready to book something, just send me the details and I'll spin up a quote.`,
