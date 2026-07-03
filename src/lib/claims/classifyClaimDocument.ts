@@ -21,6 +21,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ClaimDocType } from '@prisma/client'
 import { PARSING_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 const MODEL = PARSING_MODEL
 const MAX_TOKENS = 600
@@ -170,8 +171,7 @@ export async function classifyClaimDocument(args: {
       messages: [{ role: 'user', content }],
     })
     const raw = res.content[0]?.type === 'text' ? res.content[0].text : ''
-    const stripped = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```\s*$/, '').trim()
-    return coerce(JSON.parse(stripped))
+    return coerce(parseAiJson(raw, { tag: 'classify-claim-document', stopReason: res.stop_reason }))
   } catch (err) {
     console.error('[classify-claim-document] failed for', filename, err instanceof Error ? err.message : err)
     return FALLBACK

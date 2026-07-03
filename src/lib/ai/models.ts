@@ -6,9 +6,6 @@
  * Values are preserved verbatim from each call site (pure refactor,
  * zero behavior change). Known inconsistencies kept as-is pending a
  * decision:
- *  - REVIEW_MODEL vs REVIEW_MODEL_UNPINNED: same purpose class, but two
- *    pin styles. The 'claude-sonnet-4-5' alias resolves to the same
- *    20250929 snapshot today, so they're currently the same model.
  *  - PARSING_MODEL (sonnet-4-5) vs INTAKE_PARSING_MODEL (sonnet-4-6):
  *    similar extraction work on different generations.
  */
@@ -19,11 +16,8 @@ export const PARSING_MODEL = 'claude-sonnet-4-5-20250929'
 /** Newer-generation intake parsing: hr@ email triage, pasted claim-email chains. */
 export const INTAKE_PARSING_MODEL = 'claude-sonnet-4-6'
 
-/** Compliance & contract review: COI check/review, WC review, contract redline, quick-reply AI review. */
+/** Compliance & contract review: COI check/review, WC review, contract redline, contract runReview, portal job COI, quick-reply AI review. */
 export const REVIEW_MODEL = 'claude-sonnet-4-5-20250929'
-
-/** Same review tier via the undated alias (contract runReview, portal job COI). */
-export const REVIEW_MODEL_UNPINNED = 'claude-sonnet-4-5'
 
 /** Inbound reply classification for the cadence engine. */
 export const REPLY_CLASSIFIER_MODEL = 'claude-sonnet-4-5'

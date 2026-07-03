@@ -19,6 +19,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { HrCategory } from '@prisma/client'
 import { INTAKE_PARSING_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 const MODEL = INTAKE_PARSING_MODEL
 const MAX_TOKENS = 800
@@ -123,6 +124,7 @@ export async function parseHrEmail(text: string): Promise<ParsedHrEmail> {
   const truncated = cleaned.slice(0, 100_000)
 
   let raw: string
+  let stopReason: string | null = null
   try {
     const res = await getClient().messages.create({
       model: MODEL,
@@ -132,16 +134,15 @@ export async function parseHrEmail(text: string): Promise<ParsedHrEmail> {
       ],
     })
     raw = res.content[0]?.type === 'text' ? res.content[0].text : ''
+    stopReason = res.stop_reason
   } catch (err) {
     console.error('[hr/parseHrEmail] Anthropic call failed:', err instanceof Error ? err.message : err)
     return FALLBACK
   }
 
-  const stripped = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```\s*$/, '').trim()
   try {
-    return coerce(JSON.parse(stripped))
+    return coerce(parseAiJson(raw, { tag: 'hr/parseHrEmail', stopReason }))
   } catch {
-    console.error('[hr/parseHrEmail] JSON parse failed. Raw (first 400):', raw.slice(0, 400))
     return FALLBACK
   }
 }

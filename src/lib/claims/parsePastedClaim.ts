@@ -20,6 +20,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { INTAKE_PARSING_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 const MODEL = INTAKE_PARSING_MODEL
 const MAX_TOKENS = 2000
@@ -211,6 +212,7 @@ export async function parsePastedClaim(text: string): Promise<ParsedClaim> {
   const truncated = cleaned.slice(0, 100_000)
 
   let rawOut: string
+  let stopReason: string | null = null
   try {
     const res = await getClient().messages.create({
       model: MODEL,
@@ -220,6 +222,7 @@ export async function parsePastedClaim(text: string): Promise<ParsedClaim> {
       ],
     })
     rawOut = res.content[0]?.type === 'text' ? res.content[0].text : ''
+    stopReason = res.stop_reason
   } catch (err) {
     console.error('[parse-pasted-claim] Anthropic call failed:', err instanceof Error ? err.message : err)
     return FALLBACK
@@ -227,17 +230,10 @@ export async function parsePastedClaim(text: string): Promise<ParsedClaim> {
 
   // Strip code fences defensively — Sonnet usually respects the
   // "no fences" instruction but we cost nothing by being safe.
-  const stripped = rawOut
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```\s*$/, '')
-    .trim()
-
   let parsed: unknown
   try {
-    parsed = JSON.parse(stripped)
+    parsed = parseAiJson(rawOut, { tag: 'parse-pasted-claim', stopReason })
   } catch {
-    console.error('[parse-pasted-claim] JSON parse failed. Raw:', rawOut.slice(0, 500))
     return FALLBACK
   }
 

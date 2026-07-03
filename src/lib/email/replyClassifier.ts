@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { CadenceState, ReplyClassification } from '@prisma/client'
 import { REPLY_CLASSIFIER_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 /**
  * AI reply classifier — categorises an inbound email reply on an existing
@@ -114,6 +115,7 @@ export async function classifyReply(input: ClassifyReplyInput): Promise<Classify
   }
   const client = getClient()
   let raw: string
+  let stopReason: string | null = null
   try {
     const res = await client.messages.create({
       model: MODEL,
@@ -122,18 +124,17 @@ export async function classifyReply(input: ClassifyReplyInput): Promise<Classify
       messages: [{ role: 'user', content: buildUserPrompt(input) }],
     })
     raw = res.content[0]?.type === 'text' ? res.content[0].text : ''
+    stopReason = res.stop_reason
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     console.error('[reply-classifier] Anthropic call failed:', reason)
     return fallback(`Anthropic error: ${reason}`)
   }
 
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
   let parsed: { classification?: unknown; confidence?: unknown; reasoning?: unknown }
   try {
-    parsed = JSON.parse(cleaned)
-  } catch (err) {
-    console.error('[reply-classifier] JSON parse failed. Raw:', raw)
+    parsed = parseAiJson(raw, { tag: 'reply-classifier', stopReason })
+  } catch {
     return fallback('JSON parse failed')
   }
 

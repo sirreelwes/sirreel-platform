@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { REVIEW_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     })
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const review = JSON.parse(text.replace(/```json|```/g, '').trim())
+    const review = parseAiJson<any>(text, { tag: 'coi-check', stopReason: response.stop_reason })
 
     // Enforce logic
     const hardItems = [

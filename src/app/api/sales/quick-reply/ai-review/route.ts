@@ -8,6 +8,7 @@ import {
   QUICK_REPLY_NONCOMMITTAL_MESSAGE,
 } from '@/lib/sales/quickReply'
 import { REVIEW_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 export const dynamic = 'force-dynamic'
 
@@ -99,8 +100,12 @@ Return exactly: {"flags": ["..."], "polished": "..."}`
     const text = response.content.find((c) => c.type === 'text')?.type === 'text'
       ? (response.content.find((c) => c.type === 'text') as { text: string }).text
       : ''
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { flags: [], polished: message }
+    let parsed: { flags?: unknown; polished?: unknown }
+    try {
+      parsed = parseAiJson(text, { tag: 'quick-reply-ai-review', stopReason: response.stop_reason })
+    } catch {
+      parsed = { flags: [], polished: message }
+    }
     return NextResponse.json({
       ok: true,
       flags: Array.isArray(parsed.flags) ? parsed.flags.map(String) : [],

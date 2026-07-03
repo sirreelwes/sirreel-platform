@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 import { MESSAGE_EXTRACTION_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 /**
  * Per-message AI extraction — pulls structured fields out of an inbound
@@ -286,6 +287,7 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
   if (!input.bodyText && !input.snippet && !input.bodyHtml) return FALLBACK
 
   let raw: string
+  let stopReason: string | null = null
   try {
     const res = await client.messages.create({
       model: MODEL,
@@ -293,17 +295,16 @@ export async function extractMessageData(input: ExtractMessageInput): Promise<Ex
       messages: [{ role: 'user', content: buildUserPrompt(input) }],
     })
     raw = res.content[0]?.type === 'text' ? res.content[0].text : ''
+    stopReason = res.stop_reason
   } catch (err) {
     console.error('[message-extractor] Anthropic call failed:', err instanceof Error ? err.message : err)
     return FALLBACK
   }
 
-  const cleaned = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
   let parsed: unknown
   try {
-    parsed = JSON.parse(cleaned)
+    parsed = parseAiJson(raw, { tag: 'message-extractor', stopReason })
   } catch {
-    console.error('[message-extractor] JSON parse failed. Raw:', raw.slice(0, 500))
     return FALLBACK
   }
   const extracted = coerceExtracted(parsed)

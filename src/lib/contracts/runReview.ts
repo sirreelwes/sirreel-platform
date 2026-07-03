@@ -11,7 +11,8 @@ import {
   detectThirdPartyOnlyIndemnity,
   formatSecondRoundClausesForUserPrompt,
 } from '@/lib/contracts/reviewPrompt'
-import { REVIEW_MODEL_UNPINNED } from '@/lib/ai/models'
+import { REVIEW_MODEL } from '@/lib/ai/models'
+import { parseAiJson } from '@/lib/ai/extractJson'
 
 const STANDARD_AGREEMENT_PATH = path.join(
   process.cwd(),
@@ -99,20 +100,18 @@ Compare the redlined document against the baseline per your instructions. Output
   ]
 
   const response = await client.messages.create({
-    model: REVIEW_MODEL_UNPINNED,
+    model: REVIEW_MODEL,
     max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: 'user', content }],
   })
 
   const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim()
 
   let review: any
   try {
-    review = JSON.parse(cleaned)
+    review = parseAiJson(text, { tag: 'contract-review', stopReason: response.stop_reason })
   } catch (parseErr) {
-    console.error('[contract-review] JSON parse failed. Raw output:', text)
     return {
       ok: false,
       status: 500,
