@@ -31,8 +31,9 @@ function parseLengthFt(v: unknown): { ok: true; value: string | null } | { ok: f
 
 /**
  * PATCH /api/admin/vehicle-categories/[id] — edit the public-site spec fields
- * of a VehicleCategory (the cards clients see on /vehicles). Whitelist-only:
- * ignores anything not in the spec set (name/slug/price live in Fleet Pricing).
+ * of a VehicleCategory (the cards clients see on /vehicles), plus the publish
+ * toggle and the newline-separated feature bullets. Whitelist-only: ignores
+ * anything not in the editable set (name/slug/price live in Fleet Pricing).
  * These reflect LIVE on the public vehicle pages.
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -62,6 +63,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data.lengthFt = parsed.value
   }
 
+  if (body.published !== undefined) {
+    if (typeof body.published !== 'boolean') {
+      return NextResponse.json({ error: 'published must be a boolean' }, { status: 400 })
+    }
+    data.published = body.published
+  }
+
+  // Feature bullets: newline-separated textarea value. Blank lines are dropped
+  // on render, so store the trimmed block as-is; empty clears (→ null).
+  if (body.features !== undefined) {
+    const s = String(body.features ?? '').trim()
+    data.features = s === '' ? null : s
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'no editable fields provided' }, { status: 400 })
   }
@@ -71,6 +86,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     data,
     select: {
       id: true,
+      published: true,
+      features: true,
       baseVehicle: true,
       model: true,
       fuelType: true,

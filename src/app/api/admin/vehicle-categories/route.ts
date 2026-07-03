@@ -23,6 +23,9 @@ export async function GET() {
       slug: true,
       subtitle: true,
       active: true,
+      published: true,
+      features: true,
+      photoUrl: true,
       dailyRate: true,
       baseVehicle: true,
       model: true,
@@ -33,18 +36,32 @@ export async function GET() {
       liftGateSpec: true,
       tagline: true,
       description: true,
-      assetCategory: { select: { dailyRate: true } },
+      assetCategory: { select: { dailyRate: true, imageUrl: true } },
+      // Editor order = gallery storage order (primary is a badge, not a sort
+      // key here — the public surfaces hoist it to the front themselves).
+      photos: {
+        select: { id: true, sortOrder: true, isPrimary: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      },
     },
   })
 
   const categories = rows.map((r) => {
     const effective = pickEffectiveDailyRate(r)
+    const hasImage = r.photos.length > 0 || !!(r.photoUrl || r.assetCategory?.imageUrl)
     return {
       id: r.id,
       name: r.name,
       slug: r.slug,
       subtitle: r.subtitle,
       active: r.active,
+      published: r.published,
+      // The full public gate — so the editor can show the row's real
+      // client-facing state ("published but photo-less → still hidden").
+      clientVisible: r.active && r.published && hasImage,
+      hasLegacyImage: !!(r.photoUrl || r.assetCategory?.imageUrl),
+      features: r.features,
+      photos: r.photos,
       dailyRate: effective == null ? null : Number(effective),
       baseVehicle: r.baseVehicle,
       model: r.model,

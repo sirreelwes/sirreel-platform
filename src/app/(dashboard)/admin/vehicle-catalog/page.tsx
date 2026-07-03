@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 /**
- * HQ · Vehicle Catalog — edit the public-site SPEC fields of each
- * VehicleCategory (the cards clients see at /vehicles). Name / slug / price are
- * managed in Fleet Pricing; this page owns the marketing/spec copy. Edits
- * reflect LIVE on the public vehicle pages. Reuses the Fleet Pricing inline-edit
- * pattern: one row open at a time, PATCH then refetch (not optimistic).
+ * HQ · Vehicle Catalog — edit the public-site fields of each VehicleCategory
+ * (the cards clients see at /vehicles). Name / slug / price are managed in
+ * Fleet Pricing; this page owns the marketing/spec copy, the photo gallery,
+ * the feature bullets and the publish toggle. Edits reflect LIVE on the public
+ * vehicle pages. Reuses the Fleet Pricing inline-edit pattern: one row open at
+ * a time, PATCH then refetch (not optimistic). Photo actions (upload / primary
+ * / reorder / delete) apply immediately, then refetch.
+ *
+ * Every row shows its real client-facing state: a vehicle is LIVE only when
+ * published AND it has at least one image (gallery photo or legacy image).
  */
+
+type Photo = {
+  id: string;
+  sortOrder: number;
+  isPrimary: boolean;
+};
 
 type Vehicle = {
   id: string;
@@ -16,6 +27,11 @@ type Vehicle = {
   slug: string;
   subtitle: string | null;
   active: boolean;
+  published: boolean;
+  clientVisible: boolean;
+  hasLegacyImage: boolean;
+  features: string | null;
+  photos: Photo[];
   dailyRate: number | null;
   baseVehicle: string | null;
   model: string | null;
@@ -38,11 +54,12 @@ type SpecForm = {
   liftGateSpec: string;
   tagline: string;
   description: string;
+  features: string;
 };
 
 const emptyForm: SpecForm = {
   baseVehicle: "", model: "", fuelType: "", lengthFt: "", heightClearance: "",
-  interiorBoxHeight: "", liftGateSpec: "", tagline: "", description: "",
+  interiorBoxHeight: "", liftGateSpec: "", tagline: "", description: "", features: "",
 };
 
 const toForm = (v: Vehicle): SpecForm => ({
@@ -55,6 +72,7 @@ const toForm = (v: Vehicle): SpecForm => ({
   liftGateSpec: v.liftGateSpec ?? "",
   tagline: v.tagline ?? "",
   description: v.description ?? "",
+  features: v.features ?? "",
 });
 
 const money = (n: number | null) =>
@@ -71,9 +89,10 @@ export default function AdminVehicleCatalogPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<SpecForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/vehicle-categories");
@@ -109,6 +128,82 @@ export default function AdminVehicleCatalogPage() {
     load();
   };
 
+  const togglePublished = async (v: Vehicle) => {
+    setSaving(true);
+    const res = await fetch(`/api/admin/vehicle-categories/${v.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ published: !v.published }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Failed to update publish state");
+      return;
+    }
+    load();
+  };
+
+  // ---- Photo gallery actions (immediate, then refetch) ----
+
+  const uploadPhoto = async (vehicleId: string, file: File) => {
+    setPhotoBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/admin/vehicle-categories/${vehicleId}/photos`, { method: "POST", body: fd });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Upload failed");
+      return;
+    }
+    load();
+  };
+
+  const patchPhoto = async (vehicleId: string, photoId: string, body: Record<string, unknown>) => {
+    setPhotoBusy(true);
+    const res = await fetch(`/api/admin/vehicle-categories/${vehicleId}/photos/${photoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Failed to update photo");
+      return;
+    }
+    load();
+  };
+
+  const movePhoto = async (vehicleId: string, photos: Photo[], index: number, dir: -1 | 1) => {
+    const a = photos[index];
+    const b = photos[index + dir];
+    if (!a || !b) return;
+    // Swap sortOrder with the neighbor (two PATCHes; refetch happens on the 2nd).
+    setPhotoBusy(true);
+    await fetch(`/api/admin/vehicle-categories/${vehicleId}/photos/${a.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sortOrder: b.sortOrder }),
+    });
+    setPhotoBusy(false);
+    await patchPhoto(vehicleId, b.id, { sortOrder: a.sortOrder });
+  };
+
+  const deletePhoto = async (vehicleId: string, photoId: string) => {
+    if (!confirm("Delete this photo?")) return;
+    setPhotoBusy(true);
+    const res = await fetch(`/api/admin/vehicle-categories/${vehicleId}/photos/${photoId}`, { method: "DELETE" });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Failed to delete photo");
+      return;
+    }
+    load();
+  };
+
   const set = (k: keyof SpecForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -134,8 +229,9 @@ export default function AdminVehicleCatalogPage() {
         </a>
       </div>
       <p className="text-sm text-sirreel-text-muted mb-6">
-        Public-site spec copy for each vehicle (shown at <code>/vehicles</code>). Name, slug and price
-        are set in Fleet Pricing. Edits go live on the public pages.
+        Public-site content for each vehicle (shown at <code>/vehicles</code>). Name, slug and price
+        are set in Fleet Pricing. A vehicle is LIVE for clients only when it&rsquo;s published{" "}
+        <b>and</b> has at least one photo. Edits go live on the public pages.
       </p>
 
       {loading && <p className="text-sirreel-text-muted">Loading…</p>}
@@ -156,12 +252,41 @@ export default function AdminVehicleCatalogPage() {
                           Archived
                         </span>
                       )}
+                      {v.clientVisible ? (
+                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                          Live
+                        </span>
+                      ) : (
+                        <span
+                          className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
+                          title={
+                            v.published
+                              ? "Published but has no photo — hidden from clients until a photo is added"
+                              : "Not published — hidden from clients"
+                          }
+                        >
+                          {v.published ? "Hidden · no photo" : "Hidden"}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-sirreel-text-dim mt-0.5">
-                      <code>/{v.slug}</code> · {money(v.dailyRate)} · {filledCount(v)}/9 specs filled
+                      <code>/{v.slug}</code> · {money(v.dailyRate)} · {filledCount(v)}/9 specs filled ·{" "}
+                      {v.photos.length} photo{v.photos.length === 1 ? "" : "s"}
+                      {v.photos.length === 0 && v.hasLegacyImage ? " (legacy image)" : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      onClick={() => togglePublished(v)}
+                      disabled={saving}
+                      className={`text-sm font-semibold rounded-md px-3 py-1.5 border transition-colors disabled:opacity-50 ${
+                        v.published
+                          ? "border-sirreel-border text-sirreel-text-muted hover:text-sirreel-text"
+                          : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500"
+                      }`}
+                    >
+                      {v.published ? "Unpublish" : "Publish"}
+                    </button>
                     <a
                       href={`/vehicles/${v.slug}`}
                       target="_blank"
@@ -175,7 +300,7 @@ export default function AdminVehicleCatalogPage() {
                         onClick={() => startEdit(v)}
                         className="text-sm font-semibold bg-black text-white rounded-md px-3 py-1.5 hover:bg-gray-800"
                       >
-                        Edit specs
+                        Edit
                       </button>
                     )}
                   </div>
@@ -183,6 +308,89 @@ export default function AdminVehicleCatalogPage() {
 
                 {editing && (
                   <div className="border-t border-sirreel-border px-4 py-4">
+                    {/* Photo gallery — actions apply immediately (no Save needed). */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-sirreel-text-muted uppercase tracking-wide">
+                          Photos
+                        </span>
+                        <label className={`text-sm font-semibold rounded-md px-3 py-1.5 border border-sirreel-border cursor-pointer hover:border-sirreel-border-hover ${photoBusy ? "opacity-50 pointer-events-none" : ""}`}>
+                          {photoBusy ? "Working…" : "+ Add photo"}
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadPhoto(v.id, f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {v.photos.length === 0 ? (
+                        <p className="text-sm text-sirreel-text-dim">
+                          No gallery photos yet.
+                          {v.hasLegacyImage
+                            ? " The public site is using the legacy single image; uploaded photos will replace it."
+                            : " This vehicle stays hidden from clients until a photo is added."}
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
+                          {v.photos.map((p, i) => (
+                            <div key={p.id} className="w-[140px] border border-sirreel-border rounded-md overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={`/api/admin/vehicle-categories/${v.id}/photos/${p.id}`}
+                                alt=""
+                                className="w-full h-[92px] object-cover bg-sirreel-surface"
+                              />
+                              <div className="px-1.5 py-1.5 flex flex-col gap-1">
+                                {p.isPrimary ? (
+                                  <span className="text-[11px] font-semibold text-emerald-700">★ Primary</span>
+                                ) : (
+                                  <button
+                                    onClick={() => patchPhoto(v.id, p.id, { isPrimary: true })}
+                                    disabled={photoBusy}
+                                    className="text-[11px] font-semibold text-sirreel-text-muted hover:text-sirreel-text text-left disabled:opacity-50"
+                                  >
+                                    Set primary
+                                  </button>
+                                )}
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => movePhoto(v.id, v.photos, i, -1)}
+                                    disabled={photoBusy || i === 0}
+                                    className="text-[12px] px-1 border border-sirreel-border rounded disabled:opacity-30"
+                                    title="Move earlier"
+                                  >
+                                    ←
+                                  </button>
+                                  <button
+                                    onClick={() => movePhoto(v.id, v.photos, i, 1)}
+                                    disabled={photoBusy || i === v.photos.length - 1}
+                                    className="text-[12px] px-1 border border-sirreel-border rounded disabled:opacity-30"
+                                    title="Move later"
+                                  >
+                                    →
+                                  </button>
+                                  <button
+                                    onClick={() => deletePhoto(v.id, p.id)}
+                                    disabled={photoBusy}
+                                    className="text-[12px] px-1 border border-sirreel-border rounded text-red-600 ml-auto disabled:opacity-30"
+                                    title="Delete photo"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {field("Base vehicle", "baseVehicle", "Ford Transit Cargo")}
                       {field("Model", "model", "350 HD")}
@@ -203,13 +411,25 @@ export default function AdminVehicleCatalogPage() {
                         className="border border-sirreel-border rounded-md px-2.5 py-1.5 text-sm bg-sirreel-surface focus:outline-none focus:border-sirreel-border-hover"
                       />
                     </label>
+                    <label className="flex flex-col gap-1 mt-3">
+                      <span className="text-xs font-semibold text-sirreel-text-muted uppercase tracking-wide">
+                        Features (one per line)
+                      </span>
+                      <textarea
+                        value={form.features}
+                        onChange={set("features")}
+                        rows={5}
+                        placeholder={"Dual sliding doors\nRoof rack\nShore power hookup"}
+                        className="border border-sirreel-border rounded-md px-2.5 py-1.5 text-sm bg-sirreel-surface focus:outline-none focus:border-sirreel-border-hover font-mono"
+                      />
+                    </label>
                     <div className="flex items-center gap-2 mt-4">
                       <button
                         onClick={() => save(v.id)}
                         disabled={saving}
                         className="text-sm font-semibold bg-black text-white rounded-md px-4 py-1.5 hover:bg-gray-800 disabled:opacity-50"
                       >
-                        {saving ? "Saving…" : "Save specs"}
+                        {saving ? "Saving…" : "Save"}
                       </button>
                       <button
                         onClick={cancel}
