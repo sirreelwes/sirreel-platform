@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { list } from '@vercel/blob'
 import type { DamageSeverity, DamageType, VehicleCondition } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
     fuelLevel?: string | null
     notes?: string | null
     damages?: { location?: string; damageType?: string; severity?: string; notes?: string | null }[]
+    // Blob keys returned by /api/fleet/inspections/photos/stage — the
+    // photos already uploaded as they were taken; finalize only links
+    // them, it never receives bytes.
+    stagedPhotos?: { key?: string; filename?: string | null; contentType?: string | null }[]
   } | null
   if (!body?.bookingAssignmentId) {
     return NextResponse.json({ error: 'bookingAssignmentId required' }, { status: 400 })
@@ -129,7 +134,43 @@ export async function POST(req: NextRequest) {
     return { inspectionId: inspection.id, checkoutRecordId: checkout.id }
   })
 
-  return NextResponse.json({ ok: true, ...result, damageCount: damages.length }, { status: 201 })
+  // Attach staged photos AFTER the transaction (blob listing is a network
+  // call). Keys are only honored when they sit under THIS assignment's
+  // staging prefix AND actually exist in the store — the client can't
+  // point a photo row at an arbitrary URL.
+  const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
+  const stagedPrefix = `fleet-inspections/staged/${assignment.id}/`
+  const requested = (body.stagedPhotos ?? [])
+    .filter((p): p is { key: string; filename?: string | null; contentType?: string | null } =>
+      typeof p?.key === 'string' && p.key.startsWith(stagedPrefix))
+    .slice(0, 50)
+  let photosAttached = 0
+  let photosMissing = 0
+  if (requested.length) {
+    const { blobs } = await list({ prefix: stagedPrefix, limit: 1000 })
+    const byPath = new Map(blobs.map((b) => [b.pathname, b]))
+    const rows = []
+    for (const p of requested) {
+      const blob = byPath.get(p.key)
+      if (!blob) { photosMissing++; continue }
+      rows.push({
+        inspectionId: result.inspectionId,
+        fileUrl: blob.url,
+        filename: p.filename?.slice(0, 80) || p.key.split('/').pop() || 'photo',
+        contentType: p.contentType && ALLOWED_PHOTO_TYPES.has(p.contentType) ? p.contentType : null,
+        uploadedBy: auth.userId,
+      })
+    }
+    if (rows.length) {
+      await prisma.inspectionPhoto.createMany({ data: rows })
+      photosAttached = rows.length
+    }
+  }
+
+  return NextResponse.json(
+    { ok: true, ...result, damageCount: damages.length, photosAttached, photosMissing },
+    { status: 201 },
+  )
 }
 
 export async function GET(req: NextRequest) {
