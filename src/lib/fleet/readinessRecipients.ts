@@ -1,15 +1,12 @@
 /**
  * Fleet-readiness reminder recipients (Sprint 2A).
  *
- * TODO(wes): replace the placeholder email with the real fleet
- * distribution (Julian / Chris / dispatch inbox) and set the Slack
- * channel if the digest should land somewhere other than the default
- * SLACK_ALERT_CHANNEL. The cron sends to exactly these values.
+ * The cron sends to exactly these values — but only when the
+ * FLEET_REMINDERS_ENABLED env var is exactly "true"; otherwise the cron
+ * logs the would-be payloads instead of sending (see
+ * api/cron/fleet-readiness).
  */
 
-export const FLEET_READINESS_EMAILS: string[] = [
-  'fleet-readiness-placeholder@sirreel.com', // TODO(wes): real recipients
-]
+export const FLEET_READINESS_EMAILS: string[] = ['fleet@sirreel.com']
 
-/** null → lib/slack.ts falls back to SLACK_ALERT_CHANNEL. */
-export const FLEET_READINESS_SLACK_CHANNEL: string | null = null
+export const FLEET_READINESS_SLACK_CHANNEL: string | null = '#fleet'

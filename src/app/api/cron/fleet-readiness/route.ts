@@ -186,6 +186,31 @@ async function handle(req: NextRequest) {
     })
   }
 
+  // Kill switch: sends are gated on FLEET_REMINDERS_ENABLED being
+  // EXACTLY "true". Anything else (unset, "1", "TRUE") keeps the cron in
+  // dry-run: full selection logic runs, payloads are logged, nothing is
+  // sent and no idempotency marker is written (so flipping the var on
+  // later the same day still sends that day's digest).
+  if (process.env.FLEET_REMINDERS_ENABLED !== 'true') {
+    console.log(
+      '[fleet-readiness DRY-RUN]',
+      JSON.stringify({
+        date: today,
+        counts: { today: dayOf.length, tomorrow: dayBefore.length },
+        slack: { channel: FLEET_READINESS_SLACK_CHANNEL, text: slackText },
+        email: { to: FLEET_READINESS_EMAILS, subject, text: emailText },
+      }),
+    )
+    return NextResponse.json({
+      ok: true,
+      sent: false,
+      disabled: true,
+      reason: 'FLEET_REMINDERS_ENABLED is not "true" — payloads logged, nothing sent',
+      date: today,
+      counts: { today: dayOf.length, tomorrow: dayBefore.length },
+    })
+  }
+
   const slackResult = await postMessage(slackText, {
     channel: FLEET_READINESS_SLACK_CHANNEL || undefined,
   })
