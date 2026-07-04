@@ -30,6 +30,8 @@ import { prisma } from '@/lib/prisma'
 import { postMessage } from '@/lib/slack'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { FLEET_READINESS_EMAILS, FLEET_READINESS_SLACK_CHANNEL } from '@/lib/fleet/readinessRecipients'
+// Selection logic shared with /fleet/today — one query, no drift.
+import { fleetMovementsOn, pacificYmd, ymdToDbDate, type FleetMovement } from '@/lib/fleet/todayBoard'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,70 +44,9 @@ function isAuthorized(req: NextRequest): boolean {
   return (req.headers.get('authorization') || '') === `Bearer ${secret}`
 }
 
-/** YYYY-MM-DD in America/Los_Angeles, offset by N days. */
-function pacificYmd(offsetDays = 0): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(Date.now() + offsetDays * 86_400_000))
-}
+type DepartureLine = FleetMovement
 
-/** BookingAssignment.startDate is @db.Date (UTC-midnight) — match on that. */
-const ymdToDbDate = (ymd: string) => new Date(`${ymd}T00:00:00.000Z`)
-
-interface DepartureLine {
-  assignmentId: string
-  unitName: string
-  category: string
-  bookingNumber: string
-  jobName: string
-  company: string
-  deliveryTime: string | null
-}
-
-async function departuresOn(dbDate: Date): Promise<DepartureLine[]> {
-  const rows = await prisma.bookingAssignment.findMany({
-    where: {
-      status: 'ASSIGNED',
-      startDate: dbDate,
-      bookingItem: {
-        booking: {
-          status: { in: ['CONFIRMED', 'ACTIVE'] },
-          source: { not: 'PLANYO_BACKFILL' },
-        },
-      },
-    },
-    select: {
-      id: true,
-      asset: { select: { unitName: true } },
-      bookingItem: {
-        select: {
-          category: { select: { name: true } },
-          booking: {
-            select: {
-              bookingNumber: true,
-              jobName: true,
-              deliveryTime: true,
-              company: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  })
-  return rows.map((r) => ({
-    assignmentId: r.id,
-    unitName: r.asset.unitName,
-    category: r.bookingItem.category.name,
-    bookingNumber: r.bookingItem.booking.bookingNumber,
-    jobName: r.bookingItem.booking.jobName,
-    company: r.bookingItem.booking.company.name,
-    deliveryTime: r.bookingItem.booking.deliveryTime,
-  }))
-}
+const departuresOn = (dbDate: Date) => fleetMovementsOn(dbDate, 'start')
 
 const inspectionUrl = (assignmentId: string) =>
   `${process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com'}/fleet/inspection/${assignmentId}`

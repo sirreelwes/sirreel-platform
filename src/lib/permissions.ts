@@ -279,19 +279,30 @@ export function isSalesRole(role: UserRole): boolean {
   return role === UserRole.AGENT;
 }
 
+// Roles whose home is the mobile-first /fleet/today board. The layout
+// auto-redirects /dashboard → /fleet/today for these (mirrors the
+// sales-role pattern above) and their nav gets a "Today" entry.
+export function isFleetYardRole(role: UserRole): boolean {
+  return role === UserRole.FLEET_TECH || role === UserRole.DISPATCHER;
+}
+
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
   if (isSalesRole(role)) return '/sales/pipeline';
+  if (isFleetYardRole(role)) return '/fleet/today';
   return '/dashboard';
 }
 
-export function getNavSections(_input: UserRole | PermissionsUser): NavSection[] {
+export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
+  const navRole: UserRole = typeof input === 'string' ? input : input.role;
   // Fixed information architecture — identical for every user. This is a
   // visual + IA surface only; pages enforce their own authorization, so
   // there is intentionally NO role-gating here (every tab is visible to
-  // all). Groups are always expanded (the layout renders static section
-  // headers, no collapse). `icon` carries a lucide-react component name
-  // resolved in the layout.
+  // all). Two narrow exceptions: the HR entry (email allowlist) and the
+  // fleet "Today" entry (yard roles only — it's their mobile home, noise
+  // for everyone else). Groups are always expanded (the layout renders
+  // static section headers, no collapse). `icon` carries a lucide-react
+  // component name resolved in the layout.
   //
   // Deliveries & Pickups (/dispatch) is CROSS-LISTED in both Sales & Ops
   // and Fleet on purpose — one shared tool (Sales enters what/where/when,
@@ -315,6 +326,10 @@ export function getNavSections(_input: UserRole | PermissionsUser): NavSection[]
     {
       label: 'Fleet',
       items: [
+        // Yard roles' mobile home — top of their Fleet group.
+        ...(isFleetYardRole(navRole)
+          ? [{ id: 'fleet-today', label: 'Today', icon: 'Sun', href: '/fleet/today' }]
+          : []),
         // Cross-listed — SAME route as Sales & Ops above.
         { id: 'dispatch-fleet', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'fleet', label: 'Fleet', icon: 'Car', href: '/fleet' },

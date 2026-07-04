@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavSections, isSalesRole } from '@/lib/permissions';
+import { getPermissions, getNavSections, isSalesRole, isFleetYardRole } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 import { QuickCreateMenu } from '@/components/shell/QuickCreateMenu';
@@ -14,7 +14,7 @@ import {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
-  CalendarClock, IdCard, ShieldCheck, DollarSign, Circle, type LucideIcon,
+  CalendarClock, IdCard, ShieldCheck, DollarSign, Sun, Circle, type LucideIcon,
 } from 'lucide-react';
 
 // Maps the `icon` name carried by each NavItem to its lucide component.
@@ -22,7 +22,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
-  CalendarClock, IdCard, ShieldCheck, DollarSign,
+  CalendarClock, IdCard, ShieldCheck, DollarSign, Sun,
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -113,6 +113,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // admin view-as toggle so previewing as AGENT routes correctly.
   if (typeof window !== 'undefined' && isSalesRole(role) && pathname === '/dashboard') {
     router.replace('/sales/pipeline');
+  }
+
+  // Yard roles (FLEET_TECH / DISPATCHER) live on the mobile Fleet Today
+  // board — same pattern: login lands on /dashboard, bounce them to
+  // /fleet/today on any viewport. Respects the admin view-as toggle.
+  if (typeof window !== 'undefined' && isFleetYardRole(role) && pathname === '/dashboard') {
+    router.replace('/fleet/today');
   }
 
   const initials = user.name
