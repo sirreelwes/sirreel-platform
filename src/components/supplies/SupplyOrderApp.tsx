@@ -128,6 +128,18 @@ const EMPTY_FORM: DetailsForm = {
   website: '',
 }
 
+// Role chips on the details form. Full labels — these exact strings
+// flow into contact.role and the CRM capture maps them via
+// mapTitleToRole (Producer/PM/PC/APC→PC/Art Coordinator all bucket
+// 1:1; PRODUCTION_MANAGER added to PersonRole 2026-07-05).
+const ROLE_PRESETS = [
+  'Producer',
+  'Production Manager',
+  'Production Coordinator',
+  'Assistant Production Coordinator',
+  'Art Coordinator',
+] as const
+
 const DELIVERY_OPTIONS: { id: DeliveryMethod; label: string; desc: string }[] = [
   { id: 'will-call', label: 'Will Call Pickup', desc: 'You collect from SirReel' },
   { id: 'sirreel-vehicle', label: 'Load in SirReel Vehicle', desc: 'Loaded into your rental' },
@@ -426,6 +438,10 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // ── Panels (review / details / confirm) ───────────────────────
   const [panel, setPanel] = useState<'none' | 'sheet' | 'details' | 'confirm'>('none')
   const [form, setForm] = useState<DetailsForm>(EMPTY_FORM)
+  // Role chips: form.role stays the single source of truth (payload
+  // unchanged) — this only tracks whether the "Other" text input is
+  // revealed. A preset chip writes its full label into form.role.
+  const [roleOther, setRoleOther] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<{
@@ -1004,7 +1020,52 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             <Field label="Job / Production Name" required value={form.jobName} onChange={(v) => setForm({ ...form, jobName: v })} placeholder="e.g. Juliet — Day 4" />
             <Field label="Company" required value={form.companyName} onChange={(v) => setForm({ ...form, companyName: v })} placeholder="Production company" />
             <Field label="Contact Name" required value={form.contactName} onChange={(v) => setForm({ ...form, contactName: v })} placeholder="Your name" />
-            <Field label="Role / Position" value={form.role} onChange={(v) => setForm({ ...form, role: v })} placeholder="e.g. Production Coordinator" />
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-[11.5px] uppercase tracking-[0.08em] text-[#8b857a] mb-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Role / Position
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ROLE_PRESETS.map((r) => {
+                  const isSel = !roleOther && form.role === r
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => { setRoleOther(false); setForm({ ...form, role: isSel ? '' : r }) }}
+                      className={`border-[1.5px] rounded-full px-3.5 py-2 text-[13px] font-semibold transition-all ${
+                        isSel ? 'border-[#c39a3f] bg-[#fcf8ee] text-[#0c0c0d] shadow-[0_0_0_1px_#c39a3f]' : 'border-[#cdc7b9] bg-white text-[#1a1a1c] hover:border-[#1a1a1c]'
+                      }`}
+                      style={{ fontFamily: 'Archivo, sans-serif' }}
+                    >
+                      {r}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (roleOther) { setRoleOther(false); setForm({ ...form, role: '' }) }
+                    else { setRoleOther(true); setForm({ ...form, role: '' }) }
+                  }}
+                  className={`border-[1.5px] rounded-full px-3.5 py-2 text-[13px] font-semibold transition-all ${
+                    roleOther ? 'border-[#c39a3f] bg-[#fcf8ee] text-[#0c0c0d] shadow-[0_0_0_1px_#c39a3f]' : 'border-[#cdc7b9] bg-white text-[#1a1a1c] hover:border-[#1a1a1c]'
+                  }`}
+                  style={{ fontFamily: 'Archivo, sans-serif' }}
+                >
+                  Other
+                </button>
+              </div>
+              {roleOther && (
+                <input
+                  type="text"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  placeholder="Your role"
+                  autoFocus
+                  className="mt-2 w-full sm:max-w-[320px] border-[1.5px] border-[#cdc7b9] bg-white rounded-lg px-3 py-2.5 text-[15px] outline-none focus:border-[#0c0c0d] focus:shadow-[0_0_0_4px_rgba(12,12,13,0.05)]"
+                />
+              )}
+            </div>
             <Field label="Email" required type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="you@company.com" />
             <Field label="Phone" type="tel" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="(818) 000-0000" />
             <Field label="Pickup / Delivery Date" required type="date" value={form.pickupDate} onChange={(v) => setForm({ ...form, pickupDate: v })} />

@@ -15,6 +15,10 @@ const ORDERED_RULES: ReadonlyArray<{ pattern: RegExp; role: PersonRole }> = [
   // match the specific bucket before falling through.
   { pattern: /\bunit production manager\b|\bupm\b/i, role: PersonRole.UPM },
   { pattern: /\bline producer\b/i, role: PersonRole.LINE_PRODUCER },
+  // After UPM ("unit production manager" is more specific) but before
+  // the generic buckets. Added 2026-07-05 for the public form's role
+  // buttons — bare "PM" is NOT matched (too collision-prone).
+  { pattern: /\bproduction manager\b|\bprod\.? manager\b/i, role: PersonRole.PRODUCTION_MANAGER },
   { pattern: /\bproduction coordinator\b|\bprod\.? coord\.?\b/i, role: PersonRole.PRODUCTION_COORDINATOR },
   { pattern: /\bproduction supervisor\b/i, role: PersonRole.PRODUCTION_SUPERVISOR },
   { pattern: /\btransp(o(rt(ation)?)?)? coordinator\b|\btransp(o)? captain\b/i, role: PersonRole.TRANSPORTATION_COORDINATOR },
