@@ -29,8 +29,8 @@
       "slug": "ladders"
     },
     {
-      "name": "Lights & Power",
-      "slug": "lights-power"
+      "name": "Lighting/Electric",
+      "slug": "lighting-electric"
     },
     {
       "name": "Safety & Traffic",
@@ -557,7 +557,7 @@
     {
       "code": "POW-GENERATOR-2000W",
       "description": "Generator, 2000W",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 60,
       "unit": "day",
       "aliases": [
@@ -569,7 +569,7 @@
     {
       "code": "POW-GENERATOR-3000W",
       "description": "Generator, 3000W",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 80,
       "unit": "day",
       "aliases": [
@@ -581,7 +581,7 @@
     {
       "code": "POW-GENERATOR-6500W",
       "description": "Generator, 6500W",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 200,
       "unit": "day",
       "aliases": [
@@ -593,7 +593,7 @@
     {
       "code": "POW-GENERATOR-7000W",
       "description": "Generator, 7000W",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 225,
       "unit": "day",
       "aliases": [
@@ -605,7 +605,7 @@
     {
       "code": "POW-GAS-CAN-5-GAL",
       "description": "Gas Can, 5-gal",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 5,
       "unit": "day",
       "aliases": []
@@ -613,7 +613,7 @@
     {
       "code": "POW-EXT-CORD-25",
       "description": "Ext. Cord, 25'",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 4,
       "unit": "day",
       "aliases": [
@@ -624,7 +624,7 @@
     {
       "code": "POW-EXT-CORD-50",
       "description": "Ext. Cord, 50'",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 5,
       "unit": "day",
       "aliases": [
@@ -635,7 +635,7 @@
     {
       "code": "POW-EXT-CORD-100",
       "description": "Ext. Cord, 100'",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 6,
       "unit": "day",
       "aliases": [
@@ -646,7 +646,7 @@
     {
       "code": "POW-POWER-STRIP",
       "description": "Power Strip",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 2,
       "unit": "day",
       "aliases": []
@@ -654,7 +654,7 @@
     {
       "code": "POW-POWER-INVERTER-250W",
       "description": "Power Inverter 250w",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 10,
       "unit": "day",
       "aliases": []
@@ -662,7 +662,7 @@
     {
       "code": "POW-WORK-LIGHT-W-STAND",
       "description": "Work Light w/stand",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 15,
       "unit": "day",
       "aliases": []
@@ -670,7 +670,7 @@
     {
       "code": "POW-BATTERY-PWR-WORKLIGHT",
       "description": "Battery Pwr Worklight",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 25,
       "unit": "day",
       "aliases": []
@@ -678,7 +678,7 @@
     {
       "code": "POW-CLAMP-LIGHT",
       "description": "Clamp Light",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 2,
       "unit": "day",
       "aliases": []
@@ -686,7 +686,7 @@
     {
       "code": "POW-FLASHLIGHT-MAG",
       "description": "Flashlight, \"Mag\"",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 4,
       "unit": "day",
       "aliases": []
@@ -694,7 +694,7 @@
     {
       "code": "POW-CABLE-CROSSOVER",
       "description": "Cable Crossover",
-      "categorySlug": "lights-power",
+      "categorySlug": "lighting-electric",
       "rate": 20,
       "unit": "day",
       "aliases": []

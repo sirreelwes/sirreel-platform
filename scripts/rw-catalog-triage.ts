@@ -11,6 +11,12 @@
  * each item's RW.Category. Then map RW.Category → SirReel
  * InventoryCategory + LineItemDepartment via the explicit table below.
  * Items where the mapping is confident clear needsReview=false on apply.
+ *
+ * ⚠️ STALE SLUGS (2026-07-05 category merge): 'lighting-equipment' and
+ * 'electrical-equipment' were merged into 'lighting-electric' (and the
+ * 'Lights & Power' category was retired). This script already ran its
+ * one-off; if it's ever re-run, its slug preflight will fail — update
+ * the mapping table to 'lighting-electric' first.
  */
 
 import { writeFileSync, mkdirSync } from 'fs'
