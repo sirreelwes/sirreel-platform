@@ -6,6 +6,12 @@ import { AddItemModal } from "@/components/inventory/AddItemModal";
 import { InventoryItemDrawer, type DrawerItem } from "@/components/inventory/InventoryItemDrawer";
 
 type Category = { id: string; name: string; _count: { items: number } };
+type InventoryStats = {
+  activeCount: number;
+  dailyTotal: string;
+  weeklyTotal: string;
+  byCategory: { categoryId: string | null; count: number; dailySum: string }[];
+};
 type LocationOption = { id: string; name: string; code: string };
 type Item = {
   id: string;
@@ -50,6 +56,8 @@ export default function InventoryPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<InventoryStats | null>(null);
+  const [statsExpanded, setStatsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -88,6 +96,7 @@ export default function InventoryPage() {
     setTotal(data.total || 0);
     setCategories(data.categories || []);
     setLocations(data.locations || []);
+    setStats(data.stats || null);
     setLoading(false);
   }, [search, categoryId, page, showArchived]);
 
@@ -164,6 +173,52 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {/* Value summary bar — whole-catalog headline (active items only,
+          never scoped by the list filters). Server-aggregated,
+          Decimal-safe strings. Tiles stack on mobile. */}
+      {stats && !showArchived && (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-lt-inner/50 rounded-lg px-4 py-3">
+              <div className="text-xs text-lt-fg3 font-semibold uppercase tracking-wide">Active items</div>
+              <div className="text-xl font-bold text-lt-fg mt-0.5">{stats.activeCount.toLocaleString("en-US")}</div>
+            </div>
+            <div className="bg-lt-inner/50 rounded-lg px-4 py-3">
+              <div className="text-xs text-lt-fg3 font-semibold uppercase tracking-wide">Daily-rate value</div>
+              <div className="text-xl font-bold text-lt-fg mt-0.5">{fmt(stats.dailyTotal)}</div>
+            </div>
+            <div className="bg-lt-inner/50 rounded-lg px-4 py-3">
+              <div className="text-xs text-lt-fg3 font-semibold uppercase tracking-wide">Weekly-rate value</div>
+              <div className="text-xl font-bold text-lt-fg mt-0.5">{fmt(stats.weeklyTotal)}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            {(statsExpanded ? stats.byCategory : stats.byCategory.slice(0, 6)).map((c) => {
+              const name = c.categoryId
+                ? categories.find((cat) => cat.id === c.categoryId)?.name ?? "Unknown"
+                : "(no category)";
+              return (
+                <span
+                  key={c.categoryId ?? "none"}
+                  title={`${c.count} items`}
+                  className={`text-xs px-2 py-1 rounded-md border border-lt-hairline bg-lt-inner/40 text-lt-fg2 ${catColor(c.categoryId).pill}`}
+                >
+                  <span className="font-semibold text-lt-fg">{name}</span> {fmt(c.dailySum)}/day
+                </span>
+              );
+            })}
+            {stats.byCategory.length > 6 && (
+              <button
+                onClick={() => setStatsExpanded((v) => !v)}
+                className="text-xs px-2 py-1 rounded-md border border-lt-hairline text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner transition-colors font-semibold"
+              >
+                {statsExpanded ? "Show less" : `+${stats.byCategory.length - 6} more`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bulk Tools Panel */}
       {showBulk && (

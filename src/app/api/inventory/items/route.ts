@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const [items, total, categories, locations] = await Promise.all([
+  const [items, total, categories, locations, valueByCategory] = await Promise.all([
     prisma.inventoryItem.findMany({
       where,
       include: {
@@ -126,7 +126,37 @@ export async function GET(req: NextRequest) {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: { id: true, name: true, code: true },
     }),
+    // Value summary bar — one aggregate over ACTIVE items only (never
+    // filtered by the list's search/category/archived params: the bar
+    // reads as a whole-catalog headline, not a view of the filter).
+    prisma.inventoryItem.groupBy({
+      by: ["categoryId"],
+      where: { isActive: true },
+      _count: true,
+      _sum: { dailyRate: true, weeklyRate: true },
+    }),
   ]);
 
-  return NextResponse.json({ items, total, page, limit, categories, locations });
+  // Decimal-safe roll-up: sum in Prisma.Decimal, serialize as fixed
+  // strings so money never round-trips through a JS float.
+  const zero = new Prisma.Decimal(0);
+  let activeCount = 0;
+  let dailyTotal = zero;
+  let weeklyTotal = zero;
+  const byCategory = valueByCategory.map((g) => {
+    const daily = g._sum.dailyRate ?? zero;
+    activeCount += g._count;
+    dailyTotal = dailyTotal.add(daily);
+    weeklyTotal = weeklyTotal.add(g._sum.weeklyRate ?? zero);
+    return { categoryId: g.categoryId, count: g._count, dailySum: daily.toFixed(2) };
+  });
+  byCategory.sort((a, b) => Number(b.dailySum) - Number(a.dailySum));
+  const stats = {
+    activeCount,
+    dailyTotal: dailyTotal.toFixed(2),
+    weeklyTotal: weeklyTotal.toFixed(2),
+    byCategory,
+  };
+
+  return NextResponse.json({ items, total, page, limit, categories, locations, stats });
 }
