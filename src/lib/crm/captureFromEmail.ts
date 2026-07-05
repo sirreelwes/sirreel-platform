@@ -26,7 +26,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { Prisma, CaptureVerdict, CaptureResolution, PersonRole } from '@prisma/client'
-import { SALES_CAPTURE_INBOXES } from './captureConstants'
+import { SALES_CAPTURE_INBOXES, FREEMAIL_DOMAINS } from './captureConstants'
 import { classifyForCapture, type VerdictResult, type ParsedPayload } from './classifyForCapture'
 import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 import { mapTitleToRole } from './roleMapping'
@@ -59,12 +59,9 @@ function splitName(full: string | null): { first: string; last: string } {
 async function findDomainMatchedCompany(domain: string): Promise<string | null> {
   if (!domain) return null
   // Skip the freemail jungle — those are never domain-matched.
-  const FREEMAIL = new Set([
-    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
-    'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com',
-    'msn.com', 'live.com', 'comcast.net', 'verizon.net', 'sbcglobal.net',
-  ])
-  if (FREEMAIL.has(domain)) return null
+  // (Shared FREEMAIL_DOMAINS constant — same guard as the person-history
+  // company suggestions.)
+  if (FREEMAIL_DOMAINS.has(domain)) return null
 
   const hits = await prisma.company.findMany({
     where: {

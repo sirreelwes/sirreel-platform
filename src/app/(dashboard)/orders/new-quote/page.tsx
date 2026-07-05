@@ -620,28 +620,29 @@ function NewQuotePageInner() {
         });
         setCandidateJobs(filtered);
 
-        // Strong-match auto-select: exactly one candidate with >50%
-        // date overlap with the AI-extracted range. Only fires when
+        // Evidence-only auto-select: the email must actually reference
+        // the Job — extracted production name equals the Job's name, or
+        // the email text contains its job code. Date overlap alone is a
+        // coincidence, not a reference (it used to auto-attach quotes to
+        // whatever same-window job the customer had). Only fires when
         // the user hasn't already committed to a choice; otherwise we
         // would clobber their explicit pick on every re-fetch.
-        if (filtered.length === 1 && extractedStart != null && extractedEnd != null && job.mode === 'searching') {
-          const only = filtered[0];
-          const start = only.startDate ? new Date(only.startDate).getTime() : null;
-          const end = only.endDate ? new Date(only.endDate).getTime() : start;
-          if (start != null && end != null) {
-            const overlapStart = Math.max(extractedStart, start);
-            const overlapEnd = Math.min(extractedEnd, end);
-            const overlapDays = Math.max(0, (overlapEnd - overlapStart) / 86_400_000);
-            const askedDays = Math.max(1, (extractedEnd - extractedStart) / 86_400_000);
-            if (overlapDays / askedDays > 0.5) {
-              setJob({
-                jobId: only.id,
-                jobCode: only.jobCode,
-                name: only.name,
-                mode: 'selected_existing',
-                company: only.company,
-              });
-            }
+        if (job.mode === 'searching') {
+          const extractedName = (editing.productionName || parsed?.productionName || '').trim().toLowerCase();
+          const emailLower = emailText.toLowerCase();
+          const referenced = filtered.filter((j) =>
+            (extractedName && j.name.trim().toLowerCase() === extractedName) ||
+            (j.jobCode && emailLower.includes(j.jobCode.toLowerCase()))
+          );
+          if (referenced.length === 1) {
+            const only = referenced[0];
+            setJob({
+              jobId: only.id,
+              jobCode: only.jobCode,
+              name: only.name,
+              mode: 'selected_existing',
+              company: only.company,
+            });
           }
         }
       })
@@ -925,9 +926,11 @@ function NewQuotePageInner() {
       setItems(withLocalIds(data.items || []));
       setClientCandidates(data.clientMatch || []);
       setContacts(hydrateContacts(data.contacts));
-      if (data.clientMatch?.length === 1 && !selectedClientId) {
-        setSelectedClientId(data.clientMatch[0].id);
-      }
+      // Evidence-only prefill: name matches from the parsed email render
+      // as tappable candidate chips above the CompanyPicker — never
+      // auto-selected, even when there's exactly one hit. (The old
+      // single-hit auto-select is how a loose fuzzy match silently
+      // became the quote's client.)
       if (!newJobNotes && data.parsed?.notes) {
         setNewJobNotes(data.parsed.notes);
       }
@@ -1995,6 +1998,32 @@ function NewQuotePageInner() {
               <div className="text-sm text-lt-fg2">{inquiry.company.name}</div>
             ) : (
               <div className="space-y-2">
+                {/* Name-evidence candidates from the parsed email
+                    (subject/body/signature company mentions). Tappable
+                    only — evidence-only prefill means even a single
+                    match waits for the rep's tap. */}
+                {clientCandidates.length > 0 && companyPick.mode === 'searching' && (
+                  <div className="space-y-1">
+                    <div className="text-[11px] text-lt-fg3">Matched from email:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {clientCandidates.slice(0, 5).map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setCompanyPick({
+                            companyId: c.id, name: c.name, mode: 'selected_existing',
+                            tier: c.tier, coiOnFile: c.coiOnFile,
+                          })}
+                          title={`name match: "${parsed?.clientName ?? ''}"`}
+                          className="text-xs px-2 py-1 bg-lt-inner border border-chip-good-fg/40 rounded-lg text-lt-fg hover:border-chip-good-fg"
+                        >
+                          {c.name}
+                          <span className="ml-1 text-lt-fg3 text-[10px]">name match</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Lead's suggested companies as one-tap picks ABOVE
                     the picker (STEP 1A integration). The picker
                     itself ranks the same companies first via

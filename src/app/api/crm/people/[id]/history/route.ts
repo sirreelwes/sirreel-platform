@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { FREEMAIL_DOMAINS } from '@/lib/crm/captureConstants'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,7 +82,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // Companies surfaced from the email domain — if the person's email
   // is at @rema-films.com and a Company has website rema-films.com,
   // that's a strong "this is their current shop" suggestion.
-  const emailDomain = person.email.split('@')[1] ?? null
+  //
+  // Freemail guard: @gmail.com and friends are NOT company domains.
+  // Without it, every gmail sender "domain-matched" every company
+  // whose billingEmail happens to be gmail — the same wrong shops
+  // suggested on every parse.
+  const rawDomain = person.email.split('@')[1]?.toLowerCase() ?? null
+  const emailDomain = rawDomain && !FREEMAIL_DOMAINS.has(rawDomain) ? rawDomain : null
   const domainCompanies = emailDomain
     ? await prisma.company.findMany({
         where: {

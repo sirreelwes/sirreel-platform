@@ -153,6 +153,30 @@ export const PRODUCTION_TITLE_TOKENS: readonly string[] = [
   'hair',
 ]
 
+// Freemail / consumer-ISP domains. A sender at one of these is a
+// PERSON, not a company — these domains must never produce a
+// domain-based Company match or suggestion, anywhere (capture,
+// person-history company ranking, quote prefill). A company whose
+// billingEmail happens to be @gmail.com does NOT own gmail.com.
+// Corporate domains keep normal domain-match behavior.
+export const FREEMAIL_DOMAINS: ReadonlySet<string> = new Set([
+  'gmail.com',
+  'yahoo.com',
+  'hotmail.com',
+  'outlook.com',
+  'icloud.com',
+  'aol.com',
+  'me.com',
+  'mac.com',
+  'protonmail.com',
+  'proton.me',
+  'msn.com',
+  'live.com',
+  'comcast.net',
+  'verizon.net',
+  'sbcglobal.net',
+])
+
 // Hard-skip vendor / service-provider domains. ANY sender on this
 // list → SKIPPED before legitimacy tests run. Add domains here as
 // false-positive captures surface — the AI signal can't reliably
