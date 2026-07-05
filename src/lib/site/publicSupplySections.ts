@@ -43,6 +43,22 @@ export const PUBLIC_SUPPLY_SECTIONS: PublicSupplySection[] = [
   // request so internal surfaces group it too. Flag/move audit:
   // docs/cleanup/2026-07-05-client-vip-flags.csv + -category-move.csv.
   { label: 'Client/VIP', slugs: ['client-vip'] },
+  // ── Full-coverage block (2026-07-05): every remaining category with
+  // publicVisible items gets its own section, category display name as
+  // the label, alphabetical after the curated sections above. A
+  // category with zero public items simply renders no section (the
+  // mapper drops empties), so nothing needs pruning here when
+  // visibility changes.
+  { label: 'Climate Controls', slugs: ['climate-controls'] },
+  { label: 'Dollies & Carts', slugs: ['dollies-carts'] },
+  { label: 'Effects', slugs: ['effects'] },
+  { label: 'Expendables', slugs: ['expendables'] },
+  { label: 'Health & Safety', slugs: ['health-safety'] },
+  { label: 'Ladders', slugs: ['ladders'] },
+  { label: 'PPE', slugs: ['ppe'] },
+  { label: 'Safe Sets Equipment', slugs: ['safe-sets-equipment'] },
+  { label: 'Tents & Accessories', slugs: ['tents-accessories'] },
+  { label: 'Vehicle Outfitting', slugs: ['vehicle-outfitting'] },
 ]
 
 // Cross-list rules — name-matched items appear in the listed sections

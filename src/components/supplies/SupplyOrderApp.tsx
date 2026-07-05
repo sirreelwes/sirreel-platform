@@ -33,7 +33,7 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
-import { mapCatalogToSections, rankSearchResults, PUBLIC_SUPPLY_SECTIONS } from '@/lib/site/publicSupplySections'
+import { mapCatalogToSections, rankSearchResults } from '@/lib/site/publicSupplySections'
 
 interface CatalogItem {
   id: string
@@ -690,7 +690,10 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     <span className="flex-1 h-[2px] bg-[#c39a3f] opacity-40" />
                   </div>
                   <div className="flex flex-wrap gap-2 pb-1">
-                    {PUBLIC_SUPPLY_SECTIONS.map((s) => {
+                    {/* Buttons come from the COMPUTED sections, not the
+                        static config — a category whose last public item
+                        is hidden loses its button automatically. */}
+                    {sections.map((s) => {
                       const isActive = s.label === activeCat
                       return (
                         <button
