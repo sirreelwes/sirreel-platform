@@ -589,47 +589,93 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f4f1ea] text-[#0c0c0d]" style={{ fontFamily: '"Hanken Grotesk", Inter, system-ui, sans-serif' }}>
-      {/* ── HEADER ────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black">
-        <div className="max-w-[1480px] mx-auto px-5 h-[68px] flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="font-black text-2xl tracking-tight whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Sir<span className="text-[#c39a3f]">Reel</span>
+      {/* ── COMMAND BAR ──────────────────────────────────────────
+          Sticky dark bar: mark+wordmark · pickup/return dates (THE
+          single source — the details panel shows a read-only summary)
+          · cart summary (count + $, tap = open cart). Two rows under
+          sm so dates keep full-width tap targets at 390px. */}
+      <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white">
+        <div className="max-w-[1480px] mx-auto px-4 sm:px-5">
+          <div className="h-[56px] sm:h-[64px] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-[9px] bg-[#c39a3f] text-[#0c0c0d] font-black text-[19px] inline-flex items-center justify-center flex-none" style={{ fontFamily: 'Archivo, sans-serif' }}>S</span>
+              <span className="font-black text-xl tracking-tight whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Sir<span className="text-[#c39a3f]">Reel</span>
+              </span>
             </div>
-            <div className="hidden sm:block w-px h-6 bg-zinc-700" />
-            <div className="hidden sm:block text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8a294] whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Studio Services
+            {/* dates — center, desktop */}
+            <div className="hidden sm:flex items-center gap-2">
+              <label className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#a8a294]" style={{ fontFamily: 'Archivo, sans-serif' }}>Pickup</span>
+                <input
+                  type="date"
+                  value={form.pickupDate}
+                  onChange={(e) => setForm({ ...form, pickupDate: e.target.value })}
+                  className="bg-white/10 border border-white/20 rounded-lg px-2.5 h-[38px] text-[13px] text-white outline-none focus:border-[#c39a3f] [color-scheme:dark]"
+                />
+              </label>
+              <span className="text-[#6f6a60]">→</span>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#a8a294]" style={{ fontFamily: 'Archivo, sans-serif' }}>Return</span>
+                <input
+                  type="date"
+                  value={form.returnDate}
+                  min={form.pickupDate || undefined}
+                  onChange={(e) => setForm({ ...form, returnDate: e.target.value })}
+                  className="bg-white/10 border border-white/20 rounded-lg px-2.5 h-[38px] text-[13px] text-white outline-none focus:border-[#c39a3f] [color-scheme:dark]"
+                />
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              {signInHref && (
+                <Link
+                  href={signInHref}
+                  aria-label="Sign in"
+                  title="Sign in"
+                  className="hidden sm:inline-flex text-[#a8a294] hover:text-white w-9 h-9 items-center justify-center"
+                >
+                  <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx={12} cy={7} r={4} />
+                  </svg>
+                </Link>
+              )}
+              <button
+                onClick={() => lines.length > 0 && setPanel('sheet')}
+                className="flex items-center gap-2 bg-white text-[#0c0c0d] rounded-full pl-3.5 pr-2 h-[40px] text-[13px] font-bold"
+                style={{ fontFamily: 'Archivo, sans-serif' }}
+                aria-label="Open reservation"
+              >
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx={9} cy={21} r={1} />
+                  <circle cx={20} cy={21} r={1} />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
+                <span className="hidden sm:inline">{totalUnits}</span>
+                <span className="bg-[#0c0c0d] text-[#c39a3f] rounded-full px-2.5 h-[28px] inline-flex items-center text-[12.5px] font-extrabold">
+                  {fmtTotal(totalEstimate)}
+                </span>
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3.5">
-            {signInHref && (
-              <Link
-                href={signInHref}
-                className="flex items-center gap-1.5 text-[#cfc9bd] hover:text-white text-[13px] font-semibold py-2 px-1"
-                style={{ fontFamily: 'Archivo, sans-serif' }}
-              >
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx={12} cy={7} r={4} />
-                </svg>
-                <span className="hidden sm:inline">Sign in</span>
-              </Link>
-            )}
-            <button
-              onClick={() => lines.length > 0 && setPanel('sheet')}
-              className="flex items-center gap-2.5 bg-white text-[#0c0c0d] rounded-full px-4 py-2 text-[13px] font-bold hover:-translate-y-0.5 hover:shadow-lg transition-transform"
-              style={{ fontFamily: 'Archivo, sans-serif' }}
-            >
-              <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx={9} cy={21} r={1} />
-                <circle cx={20} cy={21} r={1} />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-              <span>Reservation</span>
-              <span className="bg-[#c39a3f] text-[#0c0c0d] rounded-full min-w-[20px] h-[20px] inline-flex items-center justify-center text-[11px] px-1.5">
-                {totalUnits}
-              </span>
-            </button>
+          {/* dates — full-width row at 390px */}
+          <div className="sm:hidden pb-2.5 flex items-center gap-2">
+            <input
+              type="date"
+              value={form.pickupDate}
+              onChange={(e) => setForm({ ...form, pickupDate: e.target.value })}
+              aria-label="Pickup date"
+              className="flex-1 min-w-0 bg-white/10 border border-white/20 rounded-lg px-2.5 h-[44px] text-[14px] text-white outline-none focus:border-[#c39a3f] [color-scheme:dark]"
+            />
+            <span className="text-[#6f6a60] flex-none">→</span>
+            <input
+              type="date"
+              value={form.returnDate}
+              min={form.pickupDate || undefined}
+              onChange={(e) => setForm({ ...form, returnDate: e.target.value })}
+              aria-label="Return date"
+              className="flex-1 min-w-0 bg-white/10 border border-white/20 rounded-lg px-2.5 h-[44px] text-[14px] text-white outline-none focus:border-[#c39a3f] [color-scheme:dark]"
+            />
           </div>
         </div>
       </header>
@@ -637,15 +683,12 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       {/* ── HERO ─────────────────────────────────────────────── */}
       {/* Minimal by design (2026-07-05): eyebrow, title, and the
           agent-confirmation line. No blurb, no steps, no side copy. */}
-      <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
-        <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-14 relative">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Production Reservation
-          </div>
-          <h1 className="font-black tracking-tight leading-[0.92] text-[40px] sm:text-[56px] md:text-[68px] lg:text-[76px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+      <section className="bg-[#0c0c0d] text-white border-t border-white/5">
+        <div className="max-w-[1480px] mx-auto px-4 sm:px-5 py-7 sm:py-9">
+          <h1 className="font-black tracking-tight leading-[0.95] text-[30px] sm:text-[42px] md:text-[50px] max-w-[18ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Let&rsquo;s get your gear and vehicles lined up
           </h1>
-          <p className="mt-4 text-[#cfc9bd] text-[15px] leading-relaxed">
+          <p className="mt-2.5 text-[#a8a294] text-[13.5px]">
             Final Pricing and Availability must be confirmed by SirReel Agent
           </p>
 
@@ -653,7 +696,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               (verified). History NEVER renders unverified — the strip
               exists only when the server accepted the session cookie. */}
           {reorder.state === 'anon' && (
-            <div className="mt-7 max-w-[560px]">
+            <div className="mt-5 max-w-[560px]">
               <div className="text-[13px] font-semibold text-[#e8e3d7] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Ordered with us before? Get a magic link to your past orders
               </div>
@@ -682,7 +725,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             </div>
           )}
           {reorder.state === 'verified' && reorder.orders.length > 0 && (
-            <div className="mt-7">
+            <div className="mt-5">
               <div className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f] mb-2.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Your past orders — tap to add to this reservation
               </div>
@@ -723,7 +766,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               it, long item names + the auto-fill catalog grid push the
               page horizontally and clip the chip strip. */}
           <main className="min-w-0">
-            <div className="sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3">
+            <div className="py-4 pb-1">
               <div className="relative">
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b857a" strokeWidth={2.2} strokeLinecap="round" className="absolute left-4 top-1/2 -translate-y-1/2">
                   <circle cx={11} cy={11} r={7} />
@@ -831,10 +874,12 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     </h2>
                     <span className="flex-1 h-[2px] bg-[#c39a3f] opacity-40" />
                   </div>
-                  <div className="flex flex-wrap gap-2 pb-1">
-                    {/* Buttons come from the COMPUTED sections, not the
-                        static config — a category whose last public item
-                        is hidden loses its button automatically. */}
+                  <div className="sticky top-[110px] sm:top-[64px] z-20 bg-[#f4f1ea] py-2 -my-2 flex flex-wrap gap-2">
+                    {/* Sticky under the command bar once the supply area
+                        is scrolled into. Buttons come from the COMPUTED
+                        sections, not the static config — a category whose
+                        last public item is hidden loses its button
+                        automatically. */}
                     {sections.map((s) => {
                       const isActive = s.label === activeCat
                       return (
@@ -870,7 +915,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                       {cat.items.length}
                     </span>
                   </div>
-                  <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(234px, 1fr))' }}>
+                  <div className="bg-white rounded-xl border border-[#e4dfd4] divide-y divide-[#efeada] overflow-hidden">
                     {cat.items.map((it) => {
                       // Across the cart, a single item can appear on
                       // multiple lines with different dates (post-
@@ -932,20 +977,17 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       {/* Mobile cart bar */}
       {lines.length > 0 && (
         <div className="lg:hidden fixed left-0 right-0 bottom-0 z-40 bg-[#0c0c0d] text-white px-5 py-3.5 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.25)]" style={{ paddingBottom: 'calc(13px + env(safe-area-inset-bottom))' }}>
-          <div className="flex flex-col">
-            <div className="font-extrabold text-lg text-[#c39a3f] leading-none" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              {fmtTotal(totalEstimate)}
-            </div>
-            <div className="text-xs text-[#a8a294] mt-1">
-              {totalUnits} item{totalUnits === 1 ? '' : 's'} · est. total
-            </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-bold" style={{ fontFamily: 'Archivo, sans-serif' }}>{totalUnits} item{totalUnits === 1 ? '' : 's'}</span>
+            <span className="text-[#6f6a60]">·</span>
+            <span className="font-extrabold text-lg text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalEstimate)}</span>
           </div>
           <button
             onClick={() => setPanel('sheet')}
-            className="bg-[#c39a3f] text-[#0c0c0d] rounded-lg px-5 py-3 text-sm font-extrabold"
+            className="bg-[#d97706] text-white rounded-lg px-5 py-3 text-sm font-extrabold"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
-            Review reservation →
+            Review →
           </button>
         </div>
       )}
@@ -991,7 +1033,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
           <button
             onClick={() => setPanel('details')}
             disabled={lines.length === 0}
-            className="w-full bg-[#0c0c0d] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-transform hover:-translate-y-0.5 mt-2"
+            className="w-full bg-[#d97706] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-colors hover:bg-[#e2830d] mt-2"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             Continue to details →
@@ -1068,8 +1110,28 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             </div>
             <Field label="Email" required type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="you@company.com" />
             <Field label="Phone" type="tel" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="(818) 000-0000" />
-            <Field label="Pickup / Delivery Date" required type="date" value={form.pickupDate} onChange={(v) => setForm({ ...form, pickupDate: v })} />
-            <Field label="Return Date" type="date" value={form.returnDate} onChange={(v) => setForm({ ...form, returnDate: v })} />
+            {/* Dates live in the top command bar (single source) — this
+                is the read-only confirmation of what was picked there. */}
+            <div className="sm:col-span-2 flex items-center justify-between rounded-lg border-[1.5px] border-[#cdc7b9] bg-white px-3.5 py-3">
+              <div>
+                <div className="font-semibold text-[11.5px] tracking-[0.08em] uppercase text-[#8b857a]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  Dates<span className="text-[#a37f2c] ml-1">*</span>
+                </div>
+                <div className={`text-[15px] font-semibold mt-0.5 ${form.pickupDate ? 'text-[#0c0c0d]' : 'text-[#a3431b]'}`}>
+                  {form.pickupDate
+                    ? `${form.pickupDate}${form.returnDate ? ` → ${form.returnDate}` : ''}`
+                    : 'Pick your dates in the top bar'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPanel('none')}
+                className="text-[12px] font-bold text-[#a37f2c] underline underline-offset-2"
+                style={{ fontFamily: 'Archivo, sans-serif' }}
+              >
+                Edit dates
+              </button>
+            </div>
             <Field label="PO #" value={form.poNumber} onChange={(v) => setForm({ ...form, poNumber: v })} placeholder="Optional" />
             <Field label="Job #" value={form.jobNumber} onChange={(v) => setForm({ ...form, jobNumber: v })} placeholder="Optional" />
           </div>
@@ -1132,7 +1194,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             type="button"
             onClick={() => submitOrder()}
             disabled={!canSubmit || submitting}
-            className="w-full bg-[#c39a3f] text-[#0c0c0d] rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-all hover:-translate-y-0.5 hover:bg-[#d3aa4d]"
+            className="w-full bg-[#d97706] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-colors hover:bg-[#e2830d]"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             {submitting ? 'Submitting…' : 'Submit reservation request →'}
@@ -1196,71 +1258,68 @@ function ItemCard({
   onAdd: () => void
   onSetQty: (q: number) => void
 }) {
+  // Dense pick-list row. The stepper IS the add-to-cart: at qty 0 the
+  // "+" fires onAdd (new cart line at the bar's dates); above 0 both
+  // buttons drive setQty on the existing line. 44px tap targets.
   const isExp = item.type === 'EXPENDABLE'
-  const unitTxt = isExp ? 'each' : '/day'
+  const unitTxt = isExp ? 'ea' : '/day'
   const inCart = qty > 0
   return (
-    <div
-      className={`bg-white rounded-[11px] p-3 pl-3.5 flex items-center gap-2.5 shadow-sm transition-all ${
-        inCart ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
-      }`}
-    >
-      {/* Thumbnail (public scoped proxy) — fixed box so there's no layout shift;
-          placeholder when the item has no photo. */}
+    <div className={`flex items-center gap-3 px-3 sm:px-4 min-h-[56px] py-1.5 ${inCart ? 'bg-[#fcf8ee]' : 'bg-white'}`}>
       {item.image ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={item.image}
-          alt={item.name}
+          alt=""
           loading="lazy"
-          className="flex-none w-11 h-11 rounded-[8px] object-cover bg-[#f0eadb] border border-[#e4dfd4]"
+          className="flex-none w-10 h-10 rounded-[8px] object-cover bg-[#f0eadb]"
         />
       ) : (
-        <div className="flex-none w-11 h-11 rounded-[8px] bg-[#f6efdc] border border-[#e9e1cc] flex items-center justify-center">
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
-            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
-          </svg>
+        <div className="flex-none w-10 h-10 rounded-[8px] bg-[#f6efdc] flex items-center justify-center">
+          <span className="text-[#c39a3f] font-black text-[15px] opacity-70" style={{ fontFamily: 'Archivo, sans-serif' }}>S</span>
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="font-semibold text-[14.5px] leading-[1.22] break-words">
+        <span className="font-semibold text-[14px] leading-[1.25] line-clamp-2 sm:line-clamp-1 sm:truncate block">
           {item.name}
           {isExp && (
-            <span className="inline-block font-bold text-[9.5px] tracking-[0.08em] uppercase text-[#a37f2c] bg-[#f6efdc] rounded px-1.5 py-px ml-2 align-middle" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Expendable
+            <span className="inline-block font-bold text-[9px] tracking-[0.08em] uppercase text-[#a37f2c] ml-1.5 align-middle" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              exp
             </span>
           )}
-        </div>
-        <div className="font-semibold text-[12.5px] text-[#8b857a] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          {item.included ? (
-            <span className="font-bold text-[#a37f2c]">Included with your order</span>
-          ) : (
-            <>
-              <b className="text-[#0c0c0d] font-extrabold text-[14px]">{fmtMoney(item.price)}</b> {unitTxt}
-            </>
-          )}
-        </div>
-      </div>
-      {item.included ? (
-        // Intentional no-charge inclusion — comes with the order, not an
-        // orderable free line. No Add button / qty stepper.
-        <span className="flex-none text-[10.5px] font-bold tracking-[0.07em] uppercase text-[#a37f2c] bg-[#f6efdc] rounded-md px-2.5 py-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          Included
         </span>
-      ) : inCart ? (
-        <div className="flex-none flex items-center border-[1.5px] border-[#c39a3f] rounded-[10px] overflow-hidden h-[38px]">
-          <button onClick={() => onSetQty(qty - 1)} className="w-[34px] h-full bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
-          <span className="min-w-[34px] text-center font-extrabold text-[15px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{qty}</span>
-          <button onClick={() => onSetQty(qty + 1)} className="w-[34px] h-full bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]" aria-label="Increase">+</button>
+      </div>
+      <div className="flex-none text-right text-[13px] font-semibold text-[#8b857a] whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
+        {item.included ? (
+          <span className="font-bold text-[#a37f2c] text-[11px] uppercase tracking-wide">Included</span>
+        ) : (
+          <>
+            <b className="text-[#a37f2c] font-extrabold text-[14px]">{fmtMoney(item.price)}</b>
+            <span className="text-[11px]"> {unitTxt}</span>
+          </>
+        )}
+      </div>
+      {!item.included && (
+        <div className={`flex-none flex items-center rounded-[10px] overflow-hidden border-[1.5px] ${inCart ? 'border-[#c39a3f]' : 'border-[#cdc7b9]'}`}>
+          <button
+            onClick={() => inCart && onSetQty(qty - 1)}
+            disabled={!inCart}
+            className="w-11 h-11 bg-white text-[#a37f2c] text-xl font-bold disabled:text-[#cdc7b9] hover:bg-[#fbf6ea]"
+            aria-label="Decrease quantity"
+          >
+            −
+          </button>
+          <span className={`min-w-[30px] text-center font-extrabold text-[15px] ${inCart ? 'text-[#0c0c0d]' : 'text-[#cdc7b9]'}`} style={{ fontFamily: 'Archivo, sans-serif' }}>
+            {qty}
+          </span>
+          <button
+            onClick={() => (inCart ? onSetQty(qty + 1) : onAdd())}
+            className="w-11 h-11 bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]"
+            aria-label="Increase quantity"
+          >
+            +
+          </button>
         </div>
-      ) : (
-        <button
-          onClick={onAdd}
-          className="flex-none border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[38px] min-w-[62px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform"
-          style={{ fontFamily: 'Archivo, sans-serif' }}
-        >
-          + Add
-        </button>
       )}
     </div>
   )
@@ -1299,7 +1358,8 @@ function VehicleRail({ children }: { children: React.ReactNode }) {
       <div
         ref={railRef}
         onScroll={sync}
-        className="flex gap-2 overflow-x-auto overflow-y-hidden pb-2 [scrollbar-width:thin] [scrollbar-color:#c39a3f_transparent]"
+        className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2 snap-x snap-mandatory xl:grid xl:overflow-visible xl:snap-none xl:pb-0 [scrollbar-width:thin] [scrollbar-color:#c39a3f_transparent]"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
       >
         {children}
       </div>
@@ -1365,7 +1425,7 @@ function VehicleCard({
 
   return (
     <div
-      className={`w-[210px] shrink-0 bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
+      className={`w-[280px] xl:w-auto shrink-0 snap-start bg-white rounded-[16px] overflow-hidden shadow-sm transition-all flex flex-col ${
         hasWindows ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
       }`}
     >
@@ -1379,14 +1439,14 @@ function VehicleCard({
           <img
             src={vehicle.photoUrl}
             alt={vehicle.name}
-            className="w-full h-[84px] object-cover bg-[#f0eadb]"
+            className="w-full aspect-[16/10] object-cover bg-[#f0eadb]"
             loading="lazy"
           />
         ) : (
-          <div className="w-full h-[84px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-            <svg width={42} height={42} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-              <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
-            </svg>
+          // Intentional brand-dark placeholder — big gold S mark, not a
+          // broken-image state.
+          <div className="w-full aspect-[16/10] bg-[#0c0c0d] flex items-center justify-center">
+            <span className="w-14 h-14 rounded-[14px] bg-[#c39a3f] text-[#0c0c0d] font-black text-[32px] inline-flex items-center justify-center opacity-90" style={{ fontFamily: 'Archivo, sans-serif' }}>S</span>
           </div>
         )}
       </Link>
@@ -1394,7 +1454,7 @@ function VehicleCard({
         <div className="min-w-0">
           <Link
             href={`/vehicles/${vehicle.slug}`}
-            className="font-extrabold text-[14px] leading-[1.2] tracking-tight hover:text-[#a37f2c] transition-colors"
+            className="font-extrabold text-[16px] leading-[1.2] tracking-tight hover:text-[#a37f2c] transition-colors"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             {vehicle.name}
@@ -1407,7 +1467,7 @@ function VehicleCard({
               <span className="text-[#a37f2c] font-extrabold">PRICE ON QUOTE</span>
             ) : (
               <>
-                <b className="text-[#0c0c0d] font-extrabold text-[14px]">{fmtMoney(vehicle.dailyRate!)}</b> /day
+                <b className="text-[#a37f2c] font-extrabold text-[15px]">{fmtMoney(vehicle.dailyRate!)}</b> /day
               </>
             )}
           </div>
@@ -1507,12 +1567,12 @@ function VehicleCard({
             className={
               hasWindows
                 ? 'w-full border-[1.5px] border-[#cdc7b9] bg-white text-[#1a1a1c] rounded-[10px] h-[36px] px-3 font-bold text-[12px] tracking-wide hover:border-[#0c0c0d] disabled:opacity-40 disabled:cursor-not-allowed'
-                : 'w-full border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[36px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform disabled:opacity-40 disabled:bg-[#5a5a5c] disabled:translate-y-0 disabled:cursor-not-allowed'
+                : 'w-full border-[1.5px] border-[#d97706] bg-[#d97706] text-white rounded-[10px] h-[44px] px-3 font-extrabold text-[13.5px] tracking-wide hover:bg-[#e2830d] transition-colors disabled:opacity-40 disabled:bg-[#5a5a5c] disabled:border-[#5a5a5c] disabled:cursor-not-allowed'
             }
             style={{ fontFamily: 'Archivo, sans-serif' }}
             title={hasWindows ? 'Reserve another window of this vehicle' : 'Reserve this vehicle'}
           >
-            {hasWindows ? '+ Add window' : '+ Reserve'}
+            {hasWindows ? '+ Add window' : 'Reserve'}
           </button>
         </div>
       </div>
@@ -1637,7 +1697,7 @@ function CartSidebar({
         <button
           onClick={onReview}
           disabled={lines.length === 0}
-          className="w-full bg-[#c39a3f] text-[#0c0c0d] rounded-xl py-4 text-sm font-extrabold tracking-wide hover:-translate-y-0.5 hover:bg-[#d3aa4d] disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-all"
+          className="w-full bg-[#d97706] text-white rounded-xl py-4 text-sm font-extrabold tracking-wide hover:bg-[#e2830d] disabled:bg-[#2a2a2c] disabled:text-[#5a5a5c] disabled:cursor-not-allowed transition-colors"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
           Review &amp; submit →
@@ -1838,9 +1898,10 @@ function Scrim({ show, onClick }: { show: boolean; onClick: () => void }) {
 function SlidePanel({ show, children }: { show: boolean; children: React.ReactNode }) {
   return (
     <div
-      className={`fixed top-0 right-0 bottom-0 z-[60] bg-[#f4f1ea] flex flex-col w-full sm:w-[560px] shadow-[0_30px_70px_rgba(12,12,13,0.28)] transition-transform duration-300 ease-out ${
-        show ? 'translate-x-0' : 'translate-x-full'
-      }`}
+      className={`fixed z-[60] bg-[#f4f1ea] flex flex-col shadow-[0_30px_70px_rgba(12,12,13,0.28)] transition-transform duration-300 ease-out
+        inset-x-0 bottom-0 top-[8vh] rounded-t-[20px]
+        sm:inset-x-auto sm:top-0 sm:right-0 sm:bottom-0 sm:w-[560px] sm:rounded-none
+        ${show ? 'translate-y-0 sm:translate-x-0' : 'translate-y-full sm:translate-y-0 sm:translate-x-full'}`}
     >
       {children}
     </div>
