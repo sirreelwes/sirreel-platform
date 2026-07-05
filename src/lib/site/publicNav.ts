@@ -20,7 +20,10 @@ export interface PublicNavItem {
 }
 
 export const PUBLIC_NAV: PublicNavItem[] = [
-  { label: 'Home', href: '/', live: false },
+  // Home lives at /home — `/` is host-owned by the middleware (orders →
+  // supply form, hq → dashboard); the future sirreel.com branch rewrites
+  // its root to /home.
+  { label: 'Home', href: '/home', live: true },
   { label: 'Studios', href: '/studios', live: false },
   { label: 'Vehicles', href: '/vehicles', live: true },
   { label: 'Equipment', href: '/equipment', live: false },

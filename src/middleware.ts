@@ -30,6 +30,27 @@ import { NextRequest, NextResponse } from 'next/server'
 const STAFF_HOST = 'hq.sirreel.com'
 const PORTAL_HOST = 'tsx.sirreel.com'
 const ORDERS_HOST = 'orders.sirreel.com'
+// Marketing site (apex + www). Inert until DNS points these at Vercel;
+// pre-wired so cutover is a DNS change, not a deploy.
+const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
+
+// Public marketing surface allow-list — Home + the public catalog +
+// the order form + assets. Everything else (staff/portal/admin) 404s.
+const PUBLIC_SITE_ALLOWED_PREFIXES = [
+  '/home',
+  '/vehicles',
+  '/order/supplies',
+  '/api/public/',
+  '/_next/',
+  '/_vercel/',
+  '/favicon',
+  '/apple-touch-icon',
+  '/sirreel-logo',
+  '/s-logo',
+  '/full-logo',
+  '/public/',
+  '/api/health',
+]
 
 // Paths reachable on the public supply-order host. Root is rewritten to the
 // form; everything else outside this list 404s so no gated/admin surface is
@@ -37,6 +58,7 @@ const ORDERS_HOST = 'orders.sirreel.com'
 // calls only /api/public/* (catalog, vehicle-categories, supply-request).
 const ORDERS_ALLOWED_PREFIXES = [
   '/order/supplies',   // the public supply form itself (rewrite target + direct hits)
+  '/home',             // public Home page (linked from the shared public nav)
   '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
   '/api/public/',      // catalog / vehicle-categories / supply-request
   '/_next/',           // Next.js build assets
@@ -109,6 +131,36 @@ export function middleware(req: NextRequest): NextResponse {
 
   // Local / preview — no host routing.
   if (isLocalHost(host)) return tagged(NextResponse.next(), host, 'pass:local')
+
+  // ── sirreel.com / www.sirreel.com (public marketing site) ─────
+  if (PUBLIC_HOSTS.includes(host)) {
+    // Root → the Home page. Rewrite (not redirect) so the URL stays
+    // a clean bare sirreel.com.
+    if (pathname === '/' || pathname === '') {
+      const url = req.nextUrl.clone()
+      url.pathname = '/home'
+      return tagged(NextResponse.rewrite(url), host, 'public:root-rewrite')
+    }
+    // Portal links (order form header "Sign in") bounce to the portal host.
+    if (
+      pathname.startsWith('/portal/') ||
+      pathname.startsWith('/api/portal/') ||
+      pathname.startsWith('/client/') ||
+      pathname.startsWith('/api/client/')
+    ) {
+      const url = req.nextUrl.clone()
+      url.host = PORTAL_HOST
+      url.protocol = 'https:'
+      url.port = ''
+      return tagged(NextResponse.redirect(url, 308), host, 'public:portal-redirect')
+    }
+    const allowed = PUBLIC_SITE_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
+    if (allowed) return tagged(NextResponse.next(), host, 'public:allow')
+    return tagged(new NextResponse('Not found', {
+      status: 404,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    }), host, 'public:block-404')
+  }
 
   // ── orders.sirreel.com (public supply-order form) ─────────────
   if (host === ORDERS_HOST) {
