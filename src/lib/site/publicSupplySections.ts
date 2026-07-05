@@ -75,6 +75,15 @@ export const CROSS_LIST_RULES: CrossListRule[] = [
     match: (name) => /director'?s?\s+chairs?\b/i.test(name) && !/rack/i.test(name),
     sections: ['Basecamp Basics', 'Wardrobe & Makeup'],
   },
+  // Electrical tap adapters read as power gear, not expendables —
+  // whenever any are publicVisible they render under Power and
+  // Lighting instead of Expendables. (As of 2026-07-05 the
+  // Expendables-homed ones — Add A-Plug/Tap, Cube Taps — are NOT
+  // public; this rule is display routing for when they are.)
+  {
+    match: (name) => /add a-?(tap|plug)|^cube taps?\b/i.test(name),
+    sections: ['Power and Lighting'],
+  },
 ]
 
 export interface SectionedItem<T> {
