@@ -38,48 +38,11 @@ export const PUBLIC_SUPPLY_SECTIONS: PublicSupplySection[] = [
   { label: 'Lunch and Crafty', slugs: ['craft-services-catering', 'tables-chairs'] },
   { label: 'Wardrobe & Makeup', slugs: ['wardrobe-makeup'] },
   { label: 'Tools & Cleaning', slugs: ['tools-cleaning'] },
-  // Client/VIP — lounge-furniture gear scattered across categories by
-  // the RW import; membership is item-level (approved list, Wes
-  // 2026-07-05 — see docs/cleanup/2026-07-05-client-vip-flags.csv).
-  {
-    label: 'Client/VIP',
-    slugs: [],
-    itemNames: [
-      'Bar StoolLow Back (BlackLeather)',
-      'Client Lounge, SOLO Line',
-      'Client Lounge, Standard',
-      'POSING STOOL, ROLLING',
-      "Pipe & Drape - BlackVelour - 10'H x 10'W",
-      'Pipe & Drape -Base',
-      "Pipe & Drape -Black Drape 12'wide x 10'Tall",
-      "Pipe & Drape -Black Drape 22'wide x 10'Tall",
-      "Pipe & Drape -Black Drape 8'wide x 8'Tall",
-      "Pipe & Drape -Red Velour -10' H x 10'W",
-      'Pipe & Drape -Spreader',
-      'Pipe & Drape -Upright',
-      'SOFA - COSMOPOLITAN, BLACK 7\' x 35"',
-      'SOLO Line - End Table (Each)',
-      'SOLO Line - Single Chair',
-      'SOLO Line - Sofa',
-      'SOLO Line- CoffeeTable',
-      'SOLO Line- FloorLamp',
-      'SOLO Line- Rug',
-      'SOLO Line- TableLamp (Each)',
-      'Standard 1 Line - Table Lamp',
-      'Standard 1 Line -Coffee Table',
-      'Standard 1 Line -End Table (Each)',
-      'Standard 1 Line -Floor Lamp',
-      'Standard 1 Line -Love Seat',
-      'Standard 1 Line -Single Chair',
-      'Standard 1 Line -Sofa',
-      'Standard 2 Line -Coffee Table',
-      'Standard 2 Line -End Table',
-      'Standard 2 Line -Floor Lamp',
-      'Standard 2 Line -Love Seat',
-      'Standard 2 Line -Sofa',
-      'Standard 2 Line -Table Lamp',
-    ],
-  },
+  // Client/VIP — real InventoryCategory (client-vip, created 2026-07-05).
+  // Originally an item-level list; promoted to a category at Wes's
+  // request so internal surfaces group it too. Flag/move audit:
+  // docs/cleanup/2026-07-05-client-vip-flags.csv + -category-move.csv.
+  { label: 'Client/VIP', slugs: ['client-vip'] },
 ]
 
 // Cross-list rules — name-matched items appear in the listed sections
