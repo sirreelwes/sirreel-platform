@@ -29,3 +29,4 @@ SET_PUBLIC_VISIBLE_FALSE,169a4093-5e32-4d56-8e0f-ea7ce9bfc055,SSE-HAND-WASHING-S
 SET_PUBLIC_VISIBLE_FALSE,ae1bdf06-ead9-47a6-bdaa-481952bfdc95,SSE-STANDING-SANITIZING-STATION,Standing Sanitizing Station,safe-sets-equipment,Wes 2026-07-05 (hide covid-era stock)
 SET_PUBLIC_VISIBLE_FALSE,cd0339c6-a120-4fbd-8c9f-23d1443177bc,SSE-TABLE-DIVIDER,Table Divider,safe-sets-equipment,Wes 2026-07-05 (hide covid-era stock)
 SET_PUBLIC_VISIBLE_FALSE,0b719d02-58c7-471f-b822-644a8295218b,SSE-TABLETOP-SANITIZING-STATION,Tabletop Sanitizing Station,safe-sets-equipment,Wes 2026-07-05 (hide covid-era stock)
+SET_CATEGORY_AND_PUBLIC,7f6a0663-114e-41fd-9ea3-57e8df0b30f2,PPE-SAFETY-GLASSES,Safety Glasses,ppe -> tools-cleaning + publicVisible=true,"Wes 2026-07-05"
