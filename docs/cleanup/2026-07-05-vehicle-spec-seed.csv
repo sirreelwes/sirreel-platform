@@ -1,0 +1,33 @@
+slug,field,before,after
+popvan,tagline,,Production's mobile office solution.
+popvan,fuelType,,Diesel (DEF)
+popvan,features,,"Includes WiFi Hotspot | LED Lighting | 110v Outlets | Recycled Fiber Lining | USB Outlets | Recycled Vinyl Floor Coverings | Rooftop A/C & Heater | Low COV Countertops | Exterior awning — 11' wide, 6'5"" clearance"
+cargo-w-liftgate,lengthFt,22,22.17
+cargo-w-liftgate,heightClearance,"9' 6""","9'3"""
+cargo-w-liftgate,interiorBoxHeight,"6' 2""","79"""
+cargo-w-liftgate,liftGateSpec,"3,000 lb hydraulic","5' W × 6' L, 1,300 lb capacity"
+cargo-w-liftgate,description,"The workhorse for heavier loads — a full cargo box plus a hydraulic lift gate so a two-person crew can move pallets, carts and road cases without a ramp.","Interior cargo 13' L × 79"" H × 69"" W (53"" between wheel wells)"
+video-van-proscout,tagline,,Fully equipped video van.
+video-van-proscout,baseVehicle,,Mercedes Sprinter
+video-van-proscout,fuelType,,Diesel
+video-van-proscout,features,,HD Monitors | VTR Inputs | 13 Passengers (plus driver) | Includes WiFi Hotspot | USB & 110v Outlets | Automatic Side Entry Door | Rear Storage | Central Heat & Air
+camera-cube,tagline,,"Solar powered, shelving, air conditioning"
+camera-cube,baseVehicle,,Ford F550 SuperCube
+camera-cube,fuelType,,Gasoline
+camera-cube,lengthFt,,30
+camera-cube,heightClearance,,"11'6"""
+camera-cube,interiorBoxHeight,,8'
+camera-cube,liftGateSpec,,"Studio lift gate — 5', 2,200 lb"
+camera-cube,features,,Solar Powered 110 Outlets | Solar Powered Battery Charging | Air Conditioning (requires additional power) | LED Lighting | Built-In Shelving | Hardwood Flooring | Side Entry Door | Recycled Materials
+supercube,tagline,,"Dependable, capable, super."
+supercube,baseVehicle,,Ford F550 SuperCube
+supercube,fuelType,,Gasoline
+supercube,lengthFt,,30
+supercube,heightClearance,,"11'6"""
+supercube,interiorBoxHeight,,8'
+supercube,liftGateSpec,,"Studio lift gate — 5', 2,200 lb"
+supercube,description,,"17' box + 3' attic, 8'1"" vehicle width"
+dlux,tagline,,"Solar powered, comfort, convenience"
+dlux,lengthFt,,16
+dlux,heightClearance,,"10'2"""
+dlux,description,,8' wide. (1) All-Gender Restroom + (1) All-Gender Restroom with urinal. Solar powered — A/C requires 110v power.
