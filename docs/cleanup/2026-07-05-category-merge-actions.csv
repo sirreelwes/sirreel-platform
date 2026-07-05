@@ -1,0 +1,159 @@
+action,entity_id,item_code,was_active,detail
+RENAME_CATEGORY,4375ba58-1dd8-4637-8f57-18b85267aca3,,,Lighting Equipment -> Lighting/Electric (slug lighting-equipment -> lighting-electric)
+RETIRE_CATEGORY,91cc1d08-5fd6-44a3-9432-9620f077f338,,,Electrical Equipment isActive=false (empty after repoint)
+RETIRE_CATEGORY,ded40a01-c4a5-4b61-85af-b341d096236c,,,Lights & Power isActive=false (empty after repoint)
+REPOINT_ITEM,f979a29a-5b0c-430a-ae13-147af6247789,"18"" X 24""  CELLO CUCOLORIS",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9e87e624-6e6d-4775-ab76-fef77d6b6fc2,POW-GENERATOR-2000W,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,ecf29c9d-0f4a-4498-9d3c-8f6a543e2f70,POW-GENERATOR-3000W,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0fa9cac9-0136-4586-95b0-f537f054d00d,POW-GENERATOR-6500W,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,679393f2-f436-4ff2-b0a6-2f1e4aae3521,POW-GENERATOR-7000W,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,56ba8fc3-3b97-477a-82a9-a992848a91e8,POW-GAS-CAN-5-GAL,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,35d912ed-6a54-440f-9724-33c6342e0dce,POW-EXT-CORD-25,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,83436de2-3c20-4ef6-aa62-90ea903dbfa3,POW-EXT-CORD-50,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,e4b8ba98-8576-49da-8af3-9ebe8f9881a6,POW-EXT-CORD-100,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,894f261d-dbcd-4205-b4fb-9457ae5e1f55,POW-POWER-STRIP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,87691e8f-3f02-4a26-91a1-6c9e8d2f6004,POW-POWER-INVERTER-250W,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,30f19c87-296a-4e4d-b94f-eaf050e04e53,POW-WORK-LIGHT-W-STAND,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,dd8bbd10-3568-4781-8e30-70e669374eb2,POW-BATTERY-PWR-WORKLIGHT,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,08e0bc63-d12e-4286-9745-1bb42bc1b307,POW-CLAMP-LIGHT,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,17c04ca4-4a0b-479f-be8f-0d901f20842a,POW-FLASHLIGHT-MAG,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,278af72b-0a18-4dbe-b4d4-a67db5a30e08,POW-CABLE-CROSSOVER,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3ee3ade4-ceb4-412b-91ca-91cbb602d42f,200W GLOBE (FEV),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9a9a7337-b762-4dcc-acb0-31c8f189456e,Clamp Light,False,categoryId -> Lighting/Electric
+REPOINT_ITEM,2cae92e6-e4f7-4441-9bcd-f35f780e13a5,100ATO2100,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a45bcb3a-7655-4140-a51d-fbc4e641d384,452323,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,882ce4ee-cfc4-4d1d-8952-6cea8435433b,452430,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,783f00a4-d4f1-4838-83f2-a261616f774b,60ATO260,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d8795000-f3c8-41f7-8e2f-666f59630466,9939600,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,7099eb29-7a3c-4488-9f50-d966c5abeef5,PNA,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,33a582ea-04e4-4647-9aa2-97d3b50de14d,104424,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,4d653483-30d5-4cc5-a264-c91e4f7dfa82,103537,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b1494a63-5874-4559-bce8-50cdea47dfeb,"6""C-CLAMP W/JR. RECEIVER",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,24aa7168-73be-4539-8051-4670f1606654,104425,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2cfedc97-2ea9-442e-8d81-1ae3ce2cd0a9,"12"" C-CLAMP W/PIN",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,44a30c8a-ddcf-4b6f-bbea-dd860a9fd7f2,"8""C-CLAMP W/PIN",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f259d8ea-3af0-4bc7-9914-be4a6415f27f,4 WIRE CAMLOK CABLE BANDED 50',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d4708ab1-465e-4aa6-8bdf-d68a561202d4,102993,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,69016f85-512c-4ffa-ac10-2f8ede9aca52,100A BATES CABLE EXTENSION 50',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,4ad71698-1538-4d0d-8d98-52bcf8599ab5,Leaf Blower - Electric (Plug In),False,categoryId -> Lighting/Electric
+REPOINT_ITEM,62627b1a-3beb-495f-bfb4-baf7236cdf64,100A 220V BATES CABLE EXTENSION 50',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,874a94e3-ddf6-433b-b7bd-d3ea5e0eff3c,4 WIRE CAMLOK CABLE BANDED 25',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f2966bdc-56aa-447d-8cab-66c3d7160a17,SOCAPEX CABLE 25',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,74dd0bb8-e88d-4c76-bf8e-9bd9bc136b9e,100A 220V BATES CABLE EXTENSION 25',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a9c27a8c-9238-4cbd-bf28-af44d50c6c61,60A BATES CABLE EXTENSION 50',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,5160b4fb-40d8-4752-ba73-8a0f31828f2b,60A BATES CABLE EXTENSION 25',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,e2f1bb8c-a43d-4409-862e-649e5e9dfeef,50' DMX 5-PIN CABLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,843042f2-8064-4a1a-b68f-877329368a21,25' DMX 5-PIN CABLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2e0630bd-925b-4a3e-b555-ef51afe30bd0,25' EDISON CABLE (STINGER),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f8ed9397-9d66-40a4-9d58-d3eb75f2d361,5' DMX 5-PIN CABLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f277412b-2bba-4789-85bb-75457c47fab3,104538,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,26b8fe97-615b-4ec9-b8d5-8a0b2dfbd16a,CUBETAPR,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,255a16e9-a4b5-4197-892e-28f5f4a9ad8c,ECOFLOW,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,05025bd1-a933-4066-ad75-fc234de31d87,GLOBUG,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9f28ec60-ba75-4b46-bdd8-96a1987784e6,INSTAGRID,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,39089308-2cd3-4922-bba4-b3cd0b3d4151,NUE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0575c930-8816-441f-b182-ba2c96ced256,WL500DH,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,82fceac9-bb0a-47b7-9f5b-09fb42f720c2,1042SF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,eaf48bc6-b909-4b81-a76b-4c6d911fc937,2436BMF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,778d3dbf-ce6c-4a5f-83a2-129e0cbd104a,2436UBF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d1c366fe-430a-475b-b1d1-eb70ca8f9c50,4848CSF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d65e3fd5-a23c-4b6f-8105-e13da8ae7647,4848QSF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,1ed00d0d-2db7-440f-a954-71c182a611c4,104467,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a1bc598e-b19d-434b-85bf-bab3d79bfacf,GATOR GRIP CLAMP W/PIN,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,1d90c046-5512-41e4-aa75-e63013a85ba8,SAFETY CABLE 3' (STEEL),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c664d447-5ff5-4d87-b89e-3b61bdab6d57,Honda 7000 Watt Generator,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a29dca8b-445d-4220-8ed1-7e4287b44217,"Wireless Internet, Mifi Hotspot (AT&T)",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b17ee45b-12aa-4c22-bb13-ec717c96dc67,"Wireless Internet, MiFi Hotspot (Verizon)",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,368e8668-1405-4c91-9c5d-ca38b6c45f01,104511,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c85eeaf8-8a94-41a8-86c1-102499a691e7,SOCAPEX CABLE 100',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9bd9fce9-3dac-403f-8be7-1ed036906a11,SOCAPEX CABLE 50',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b4a336d1-cd9a-438f-8b86-a73a856fa069,100' DMX 5-PIN CABLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,ef8df81d-e6bc-44d3-9e95-785000ca7322,CARDELLINI CLAMP END JAW,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,101e0b88-4e45-45aa-8d6c-5665e1d5213d,SPEED C-CLAMP 1ﬂ,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,53430fab-584c-4802-a032-a5a995a69955,SOLID CHEESEBORO CLAMP (STEEL),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0ecac413-d946-4d46-9cca-a54cfc42989f,SWIVEL CHEESEBORO CLAMP (STEEL),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,5103bd4a-0b08-41d5-933f-727b96f90524,GRID CLAMP W/ BABY RECEIVER,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2eb94f96-fcb4-48ec-9db1-70533990db89,GRID CLAMP W/EAR,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,66001f23-c69d-4fbc-9c6c-39c5382a9f0c,10ﬂ C-CLAMP W/JR. RECEIVER,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b0d04b4b-3e43-4f5f-8df8-9211ca3b99fc,"4""C-CLAMP W/PIN",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,7302492c-cf5d-4821-871b-3f0dd43a8d4e,"6""C-CLAMP W/PIN",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3315ba3f-1cfa-4c33-9fa9-300e8afb34d4,4ﬂ C-CLAMP W/JR. RECEIVER,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,327135f4-3d76-4761-a6ce-c66e4fb4625f,BEADBOARD CLAMP HOLDER - DUCKBILL,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,588d0d95-0b7a-426b-821a-edbf3f71116a,LED TUBE POWER ADAPTER TO EDISON - SINGLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,91427226-e5b6-4192-a38a-662e0aa9bea5,"18"" X 24""  WOOD CUCOLORIS",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,55fb66dc-ccb9-4f81-a29b-0f031e6cdd10,104533,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,8169611e-583c-4d2e-916e-d05ddf547b32,100A BATES CABLE EXTENSION 100',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0993ac73-cd40-4657-9cd7-6628c9299650,100A BATES CABLE EXTENSION 25',True,categoryId -> Lighting/Electric
+REPOINT_ITEM,7647dab6-01be-433f-a096-111ef2eecdec,GRID CLAMP W/JR. RECEIVER - HORIZONTAL,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,5f164f0f-b2e4-4155-8191-7c66760514ad,50' EDISON CABLE (STINGER),True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c61fc72c-6311-467b-a7b8-5e8827cc99fe,10' DMX 5-PIN CABLE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9fbbdad4-5e80-4afb-b0e0-ea57a3c31b60,8ﬂ C-CLAMP W/JR. RECEIVER,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,653a2d22-3df9-4557-903b-3b71bed2bc21,104517,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,16ca089e-7865-4747-bd33-5b0ade36070c,3 WIRE 100ft banded,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,827f8808-4908-4b9b-8e48-04a8e6e11c4b,459045,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9bd2e0fb-300d-4496-b387-f67273f5bce7,10ﬂ C-CLAMP W/PIN,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,88360f7d-49f7-42f1-8f80-702d9bafbcbb,460625,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3cc41342-1985-4589-b287-55eeb25b5de3,460680,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,27431694-035b-4455-9333-5e51bce92279,ANDROOKIE,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,064185eb-65dd-439d-9079-6946863bb77f,ANMED,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,efd61cd3-f504-4268-aa19-28ab4735d327,APK2,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,28883004-0341-42c7-9f93-e7dcd18fe618,"Pressure Washer, Plug In",True,categoryId -> Lighting/Electric
+REPOINT_ITEM,52312d52-58f0-40f2-8d80-a290e51ceb08,104458,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,83fdff02-98d9-4b7f-ac3b-eb8545256063,CLS60HD,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d28ca2f3-010f-4072-989b-955b313a6be3,CRLS100,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3a27d44c-ad09-4b4d-810b-9c46f9f865d1,CARDELLINI CLAMP CENTER JAW,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,efb1a572-d123-4002-a5ad-af3b656ca45d,CRLS15,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,294278fa-181d-4328-b3f3-0ba1164fd255,CRLS25,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,aab55123-a22d-4db1-bf27-005b6f66ecb0,104459,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,99d80a89-cd32-4921-b74d-a7af0f28062d,104539,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,8e7c473b-eaca-4843-98f6-404a8483882e,CRLS50,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,957ef777-feb6-4167-94cf-be980852e369,CRLS7,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,94a75950-f8e8-48dc-8708-0378296743cf,DMG,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,6de9e358-e1e8-4574-8cbc-1858c4838f58,104544,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,ec118c4c-fd4f-40dc-8260-2b55ab79c54c,104997,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3fd3c15c-8456-45e0-af6b-dc4909cecd5d,105141,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b3d1b6f3-d44f-402c-9d41-6a549b133ea8,104489,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2f00bc3e-b3d3-4966-a28d-6ae0f97a0e74,ORION675,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,399255e0-6881-464f-9d62-8a0b750746a6,S60CSPR,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c6b1e3e7-1d95-4f06-b1bb-75d33e1cad1d,S60PF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,3b38fb78-f9ff-49b5-97ec-55c5a36824e7,104505,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,80d47ee3-196f-4a15-b66b-759555284c04,104504,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,25d7b31b-4642-438c-aad9-1809ac2ca035,104502,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a8dca090-7b98-4052-a686-30f435044741,104503,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c95a79e7-b84b-46b8-9c46-98892c428a55,1000AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f53eddee-1e1c-4f2b-919f-58dcdf9e4a80,1200AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9288daf0-5037-4160-a568-c70b6ac8ee54,1400AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,bdaae350-985b-4ecf-9ac6-f9e41652f573,1600AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,92f13043-08ff-4f13-a457-6bddae4bfde0,1800AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2f0a3bbb-dfe5-4402-820c-8e023d205b95,225AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0c205839-6fb4-4e35-bbd4-9205c18e85b9,350AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,383edbf7-8dd5-40d4-80b8-4e18a8e06b64,400AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b6323f00-9e8a-4c1b-a82f-42d41e8942b9,500AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,4ad536ee-687d-4ae6-ad05-b38e6107d651,600AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b1442838-8b83-4601-8e1f-0d70b4687b16,750AMP,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,5cca3a8f-534b-417b-95fc-f06e57c4e915,MOXION,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,02d25ab5-80e0-41a7-8222-e8790637143a,100AT2100A,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a015c36a-343c-4250-b3a7-97d3c615a7fc,100AT260,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,d7ed3b50-198f-4183-8f6f-da3402ceb1b3,4-0-25,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2bc6712c-42b3-4849-a484-b6b39e6ca5ad,40-50-C,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a51bbac8-dd8d-40dc-95f0-89cee53fbeb0,400ADB,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,01bb8a61-7303-4546-9b55-4b04b6177402,4010C,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,2645530f-3f98-466d-a523-bc6a00389d88,460673,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,7c6d6a16-f074-4770-a543-25b9c126777a,5W10,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,b148c91c-5c69-4704-9a7a-6c5da02c173f,5W50,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,9a50264a-eb3a-49bd-982d-c976e8d14e7e,60260,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,48c1a042-23f0-463c-a2bf-9bc45681c1d7,60TO60,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,6a4363dc-0759-4ae5-9316-18ac31304f31,C2-0-100,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,8f1de32c-fbfc-4bb9-a345-ccc77e1d6c5e,C2-0-25,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,0d9e8e7a-e2b8-415e-8f8b-363517c5fa92,C2-0-50,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,a2182d4f-61f6-4c21-9a64-c6c214545287,DADCOLB,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,c896eafe-1fd1-41ec-8612-a125f37600f2,LUMINAIR,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,1dfeb006-7b46-4667-99c2-267f9cabf76b,SBO,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,69209f6d-cfd4-4893-9660-0f7d26508e99,SFCL,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,e18fb250-aa25-4ffb-8b04-928d00d5cb0b,SMCL,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,f6a2a73b-9300-4cf2-bbd6-ec9a6c32d70b,ST60A,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,401ae9e7-6cbf-40d6-a1e3-5d9961e36300,487085,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,e995bf53-3620-4d85-ae51-c45191065f7b,487086,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,08f22c91-3db6-4687-8741-6d9166bcb52c,HUBBELLF,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,53470c8c-644b-4ab5-8ac7-3c42584044c7,HUBBELLM,True,categoryId -> Lighting/Electric
+REPOINT_ITEM,bf8c0de3-c90c-47fe-9a81-220791878b46,RAMP (2-PC.) ADJUSTABLE LENGTH,True,categoryId -> Lighting/Electric

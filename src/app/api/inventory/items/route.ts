@@ -117,6 +117,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.inventoryItem.count({ where }),
     prisma.inventoryCategory.findMany({
+      where: { isActive: true },
       select: { id: true, name: true, _count: { select: { items: true } } },
       orderBy: { sortOrder: "asc" },
     }),

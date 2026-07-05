@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     }),
     prisma.inventoryCategory.findMany({
+      where: { isActive: true },
       select: { id: true, name: true, slug: true },
       orderBy: { sortOrder: "asc" },
     }),
