@@ -534,7 +534,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
           mb-3.5 ≈ 28px). */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-14 relative">
-          <div className="grid gap-10 md:grid-cols-[1fr_minmax(0,420px)] md:gap-12 items-start">
+          <div>
             <div>
               <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Production Reservation
@@ -542,8 +542,8 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               <h1 className="font-black tracking-tight leading-[0.92] text-[40px] sm:text-[56px] md:text-[68px] lg:text-[76px] max-w-[14ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 Let&rsquo;s get your gear and vehicles lined up
               </h1>
-              <p className="mt-4 max-w-[52ch] text-[#cfc9bd] text-base leading-relaxed">
-                Vehicles, basecamp basics, grip, power, safety, expendables — pick what your production needs and the dates you need it. We&apos;ll confirm availability and come back with a quote.
+              <p className="mt-4 text-[#cfc9bd] text-[15px] leading-relaxed">
+                Final Pricing and Availability must be confirmed by SirReel Agent
               </p>
               <div className="flex flex-wrap gap-7 mt-7">
                 {[
@@ -559,14 +559,6 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   </div>
                 ))}
               </div>
-            </div>
-            <div className="md:pt-7">
-              <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                The Full Fleet
-              </div>
-              <p className="text-[#cfc9bd] text-[15px] leading-relaxed max-w-[44ch]">
-                Cargo vans, supercubes, passenger vans, talent trailers, honeywagons. Add them to the same reservation as your gear.
-              </p>
             </div>
           </div>
         </div>
