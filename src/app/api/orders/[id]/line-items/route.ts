@@ -322,6 +322,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Fee-catalog lines (feeItemId) price from FeeItem.amount instead:
     //   FLAT       — qty × amount            (qty = count, days forced 1)
     //   PER_DAY    — amount × rental days    (qty forced 1, days = order window)
+    //   PER_HOUR   — qty × amount            (qty = hours, days forced 1)
     //   PER_MILE   — qty × amount            (qty = miles, days forced 1)
     //   PER_GALLON — qty × amount            (qty = gallons, days forced 1)
     //   PERCENT    — amount% × percentBase   (qty 1 × 1 day, one-shot)
@@ -365,7 +366,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         if (feeRes.fee.unit === 'PERCENT') effectiveQuantity = 1;
         if (!Number.isFinite(effectiveQuantity) || effectiveQuantity < 1) {
           return NextResponse.json(
-            { error: "invalid fee", reason: "Quantity (count / miles / gallons) must be a positive whole number." },
+            { error: "invalid fee", reason: "Quantity (count / hours / miles / gallons) must be a positive whole number." },
             { status: 400 },
           );
         }

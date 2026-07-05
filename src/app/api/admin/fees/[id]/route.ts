@@ -6,7 +6,7 @@ import type { FeeUnit, Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-const UNITS: FeeUnit[] = ['FLAT', 'PER_DAY', 'PER_MILE', 'PER_GALLON', 'PERCENT']
+const UNITS: FeeUnit[] = ['FLAT', 'PER_DAY', 'PER_HOUR', 'PER_MILE', 'PER_GALLON', 'PERCENT']
 
 type Params = { params: Promise<{ id: string }> }
 

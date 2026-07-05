@@ -1728,7 +1728,7 @@ export default function OrderDetailPage() {
                       {(feeCatalog ?? []).map((f) => (
                         <option key={f.id} value={f.id}>
                           {f.name} — {f.unit === "PERCENT" ? `${Number(f.amount).toFixed(2)}%` : `$${f.amount}`}
-                          {f.unit === "PER_DAY" ? "/day" : f.unit === "PER_MILE" ? "/mile" : f.unit === "PER_GALLON" ? "/gal" : ""}
+                          {f.unit === "PER_DAY" ? "/day" : f.unit === "PER_HOUR" ? "/hr" : f.unit === "PER_MILE" ? "/mile" : f.unit === "PER_GALLON" ? "/gal" : ""}
                         </option>
                       ))}
                     </select>
@@ -1736,6 +1736,7 @@ export default function OrderDetailPage() {
                       <p className="text-[11px] text-lt-fg3">
                         {selectedFee.unit === "FLAT" && "Flat — Qty is the count; bills once, not per day."}
                         {selectedFee.unit === "PER_DAY" && "Per day — bills across the order's rental days automatically."}
+                        {selectedFee.unit === "PER_HOUR" && "Per hour — enter HOURS in the Qty field."}
                         {selectedFee.unit === "PER_MILE" && "Per mile — enter MILES in the Qty field."}
                         {selectedFee.unit === "PER_GALLON" && "Per gallon — enter GALLONS in the Qty field."}
                         {selectedFee.unit === "PERCENT" && `Percent — ${Number(selectedFee.amount).toFixed(2)}% of the base amount below.`}

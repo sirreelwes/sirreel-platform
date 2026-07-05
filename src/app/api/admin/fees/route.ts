@@ -6,7 +6,7 @@ import type { FeeUnit } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-const UNITS: FeeUnit[] = ['FLAT', 'PER_DAY', 'PER_MILE', 'PER_GALLON', 'PERCENT']
+const UNITS: FeeUnit[] = ['FLAT', 'PER_DAY', 'PER_HOUR', 'PER_MILE', 'PER_GALLON', 'PERCENT']
 
 // GET — admin list of ALL fee items (active + archived) with usage
 // counts for the delete guard. Amounts serialize as strings.

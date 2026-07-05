@@ -11,13 +11,14 @@
  * Idempotent: upserts by FeeItem.code — re-running updates amounts/
  * names in place, never duplicates.
  *
- * DELIBERATELY NOT SEEDED (no fitting unit / no source amount):
- *   - Hourly codes (STAGEOT, VREPAIRL, CUBEHRLY, CUBEPERHR, CARGLIFT,
- *     CARGHRL, SOLOG, SPOCG, SR36G) — need a PER_HOUR unit.
- *   - Class A/B labor rates (6 codes) — labor catalog, also hourly.
- *   - CLEANING — no amount in RW.
- *   - GROUNDLIFT ($2.50) — unclear what it is.
- *   - Opening fee / admin % — no source amounts anywhere.
+ * PERMANENT EXCLUSIONS (Wes's rulings, 2026-07-05 — do not revisit):
+ *   - Hourly VEHICLE RENTAL codes (CUBEPERHR, CARGHRL, CARGLIFT,
+ *     CUBEHRLY) — SirReel rents daily only; hourly vehicle rental is
+ *     not a product.
+ *   - Class A/B labor rates (6 codes) — SirReel no longer provides
+ *     drivers. Ever.
+ *   - GROUNDLIFT — eliminated.
+ *   - 10% admin fee — removed from the business.
  */
 
 import { prisma } from '../src/lib/prisma'
@@ -61,6 +62,15 @@ const FEES: SeedFee[] = [
   { code: 'SR36M',      name: 'SR-36 Trailer — Mileage',                   amount: 1.99,  unit: 'PER_MILE', description: 'Qty = miles.' },
   // ── Per-gallon fees ─────────────────────────────────────────────
   { code: 'FUEL',       name: 'Refuel (per gallon)',                       amount: 10,    unit: 'PER_GALLON', description: 'Contract rate — vehicle/generator returned below full. Qty = gallons.' },
+  // ── Per-hour fees (2026-07-05 follow-up — PER_HOUR unit added) ──
+  { code: 'STAGEOT',    name: 'Stage Hourly Overtime',                     amount: 300,   unit: 'PER_HOUR', description: 'Qty = hours.' },
+  { code: 'VREPAIRL',   name: 'Vehicle Repair Hourly Labor',               amount: 115,   unit: 'PER_HOUR', description: 'Qty = hours.' },
+  { code: 'SOLOG',      name: 'SOLO — Generator (per hour)',               amount: 12,    unit: 'PER_HOUR', description: 'Qty = hours.' },
+  { code: 'SPOCG',      name: 'SPOC — Generator (per hour)',               amount: 12,    unit: 'PER_HOUR', description: 'Qty = hours.' },
+  { code: 'SR36G',      name: 'SR-36 — Generator (per hour)',              amount: 12,    unit: 'PER_HOUR', description: 'Qty = hours.' },
+  { code: 'CLEANING',   name: 'Cleaning Fee',                              amount: 75,    unit: 'PER_HOUR', description: 'Damage-dependent — hours entered at billing time.' },
+  // ── Flat (2026-07-05 follow-up) ─────────────────────────────────
+  { code: 'OPENFEE',    name: 'Opening Fee',                               amount: 175,   unit: 'FLAT' },
 ]
 
 async function main() {

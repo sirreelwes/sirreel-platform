@@ -195,7 +195,7 @@ export interface FeeLineResult extends LineRateResult {
     id: string
     name: string
     code: string
-    unit: 'FLAT' | 'PER_DAY' | 'PER_MILE' | 'PER_GALLON' | 'PERCENT'
+    unit: 'FLAT' | 'PER_DAY' | 'PER_HOUR' | 'PER_MILE' | 'PER_GALLON' | 'PERCENT'
     description: string | null
   }
 }
@@ -208,9 +208,10 @@ export interface FeeLineResult extends LineRateResult {
  * rateOverridden and audit-logged by the caller.
  *
  * Unit → per-line rate:
- *   FLAT / PER_DAY / PER_MILE / PER_GALLON — rate IS FeeItem.amount;
- *     the multiplier (count, days, miles, gallons) is the line's
- *     quantity/billableDays, so computeLineTotal stays the only math.
+ *   FLAT / PER_DAY / PER_HOUR / PER_MILE / PER_GALLON — rate IS
+ *     FeeItem.amount; the multiplier (count, days, hours, miles,
+ *     gallons) is the line's quantity/billableDays, so
+ *     computeLineTotal stays the only math.
  *   PERCENT — rate is amount% × percentBase, computed here and billed
  *     as a one-shot (qty=1 × 1 day) line.
  *

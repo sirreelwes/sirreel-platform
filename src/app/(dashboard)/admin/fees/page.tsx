@@ -8,6 +8,7 @@
  * that controls how the order builder prices it:
  *   FLAT       — amount × count
  *   PER_DAY    — amount × the order's rental days
+ *   PER_HOUR   — amount × hours (rep enters hours)
  *   PER_MILE   — amount × miles (rep enters miles)
  *   PER_GALLON — amount × gallons (rep enters gallons)
  *   PERCENT    — amount% of a rep-entered base
@@ -18,11 +19,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-type FeeUnit = 'FLAT' | 'PER_DAY' | 'PER_MILE' | 'PER_GALLON' | 'PERCENT';
+type FeeUnit = 'FLAT' | 'PER_DAY' | 'PER_HOUR' | 'PER_MILE' | 'PER_GALLON' | 'PERCENT';
 
 const UNIT_LABELS: Record<FeeUnit, string> = {
   FLAT: 'Flat',
   PER_DAY: 'Per day',
+  PER_HOUR: 'Per hour',
   PER_MILE: 'Per mile',
   PER_GALLON: 'Per gallon',
   PERCENT: 'Percent',
@@ -31,6 +33,7 @@ const UNIT_LABELS: Record<FeeUnit, string> = {
 const UNIT_HINT: Record<FeeUnit, string> = {
   FLAT: '× count',
   PER_DAY: "× order's rental days",
+  PER_HOUR: '× hours',
   PER_MILE: '× miles',
   PER_GALLON: '× gallons',
   PERCENT: '% of entered base',

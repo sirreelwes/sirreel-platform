@@ -2898,6 +2898,7 @@ model OrderDiscount {
 // How a FeeItem's `amount` is applied when the fee lands on an order:
 //   FLAT       — amount × quantity (quantity = count of the fee, e.g. bags)
 //   PER_DAY    — amount × the order's rental days (LCDW, smoking fee)
+//   PER_HOUR   — amount × hours (rep enters hours as the line quantity)
 //   PER_MILE   — amount × miles (rep enters miles as the line quantity)
 //   PER_GALLON — amount × gallons (refuel)
 //   PERCENT    — amount is a percentage (0–100) of a rep-entered base;
@@ -2905,6 +2906,7 @@ model OrderDiscount {
 enum FeeUnit {
   FLAT
   PER_DAY
+  PER_HOUR
   PER_MILE
   PER_GALLON
   PERCENT
