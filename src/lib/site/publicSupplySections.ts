@@ -22,8 +22,11 @@ export interface PublicSupplySection {
   slugs: string[]
 }
 
+// A slug may appear under MORE THAN ONE section — those items render
+// in every listing section (e.g. tables-chairs shows in both Basecamp
+// Basics and Lunch and Crafty) while keeping one cart identity.
 export const PUBLIC_SUPPLY_SECTIONS: PublicSupplySection[] = [
-  { label: 'Basecamp Basics', slugs: ['basecamp-basics'] },
+  { label: 'Basecamp Basics', slugs: ['basecamp-basics', 'tables-chairs'] },
   { label: 'Power and Lighting', slugs: ['lighting-electric'] },
   { label: 'Safety & Traffic', slugs: ['safety-traffic'] },
   { label: 'Radios & WiFi', slugs: ['communications'] },
@@ -70,18 +73,25 @@ export function mapCatalogToSections<T extends { id: string; name: string; categ
   const sections = new Map<string, Map<string, T>>()
   for (const s of PUBLIC_SUPPLY_SECTIONS) sections.set(s.label, new Map())
 
-  const homeLabelBySlug = new Map<string, string>()
-  for (const s of PUBLIC_SUPPLY_SECTIONS) for (const slug of s.slugs) homeLabelBySlug.set(slug, s.label)
+  // slug → every section that lists it (multi-home cross-listing).
+  const labelsBySlug = new Map<string, string[]>()
+  for (const s of PUBLIC_SUPPLY_SECTIONS) {
+    for (const slug of s.slugs) {
+      labelsBySlug.set(slug, [...(labelsBySlug.get(slug) ?? []), s.label])
+    }
+  }
 
   for (const [slug, items] of bySlug) {
     for (const it of items) {
       const rule = CROSS_LIST_RULES.find((r) => r.match(it.name))
       if (rule) {
+        // Name rules OVERRIDE slug placement entirely.
         for (const label of rule.sections) sections.get(label)?.set(it.id, it)
         continue
       }
-      const home = homeLabelBySlug.get(slug)
-      if (home) sections.get(home)?.set(it.id, it)
+      for (const label of labelsBySlug.get(slug) ?? []) {
+        sections.get(label)?.set(it.id, it)
+      }
     }
   }
 
@@ -91,4 +101,43 @@ export function mapCatalogToSections<T extends { id: string; name: string; categ
       items: [...(sections.get(s.label)?.values() ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
     }))
     .filter((s) => s.items.length > 0)
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Rank search results across the FULL publicVisible catalog — search
+ * ignores section mapping (typing intent beats browse curation), so
+ * items from unmapped categories surface here and are addable.
+ *
+ * Tiering (mirrors the spirit of the internal typeahead: name evidence
+ * outranks weaker matches; the API has already alias/code/category-
+ * filtered the set, so a non-name hit means "matched via alias/code/
+ * category only"):
+ *   0 — name starts with the query        ("Table…" for "table")
+ *   1 — query at a word boundary in name  ("Folding Table")
+ *   2 — query as a substring in name      ("Turntable")
+ *   3 — name doesn't contain it           (alias/code/category match)
+ * Alphabetical within each tier.
+ */
+export function rankSearchResults<T extends { id: string; name: string }>(
+  items: T[],
+  query: string,
+): T[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return items
+  const word = new RegExp(`\\b${escapeRegExp(q)}`, 'i')
+  const tier = (name: string): number => {
+    const n = name.toLowerCase()
+    if (n.startsWith(q)) return 0
+    if (word.test(name)) return 1
+    if (n.includes(q)) return 2
+    return 3
+  }
+  const seen = new Set<string>()
+  return items
+    .filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)))
+    .map((it) => ({ it, t: tier(it.name) }))
+    .sort((a, b) => a.t - b.t || a.it.name.localeCompare(b.it.name))
+    .map((x) => x.it)
 }

@@ -33,7 +33,7 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
-import { mapCatalogToSections, PUBLIC_SUPPLY_SECTIONS } from '@/lib/site/publicSupplySections'
+import { mapCatalogToSections, rankSearchResults, PUBLIC_SUPPLY_SECTIONS } from '@/lib/site/publicSupplySections'
 
 interface CatalogItem {
   id: string
@@ -363,11 +363,33 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     () => (data ? mapCatalogToSections(data.categories) : []),
     [data],
   )
+  // Browse mode: curated sections, optionally narrowed by the active
+  // filter button. Search mode replaces this entirely (below).
   const visibleSections = useMemo(() => {
-    if (debouncedQuery) return sections
     if (activeCat === 'All') return sections
     return sections.filter((s) => s.label === activeCat)
-  }, [sections, debouncedQuery, activeCat])
+  }, [sections, activeCat])
+
+  // Search mode: ONE ranked flat list over EVERY publicVisible item
+  // the API matched — section mapping and the active filter button do
+  // not scope it (typing intent beats browse curation). Items from
+  // unmapped categories surface here and add to cart normally; they
+  // just have no browse section. Ranking in rankSearchResults.
+  const searchResults = useMemo(() => {
+    if (!debouncedQuery || !data) return null
+    return rankSearchResults(data.categories.flatMap((c) => c.items), debouncedQuery)
+  }, [data, debouncedQuery])
+
+  // What the grid actually renders — ranked results while searching,
+  // curated sections otherwise.
+  const displaySections = useMemo(() => {
+    if (debouncedQuery) {
+      return searchResults && searchResults.length > 0
+        ? [{ label: `Results for “${debouncedQuery}”`, items: searchResults }]
+        : []
+    }
+    return visibleSections
+  }, [debouncedQuery, searchResults, visibleSections])
 
   async function submitOrder(e?: FormEvent) {
     e?.preventDefault()
@@ -586,7 +608,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Couldn&apos;t load the catalog: {error}
                 </div>
               )}
-              {!loading && data && visibleSections.length === 0 && (
+              {!loading && data && displaySections.length === 0 && (
                 <div className="py-12 text-center text-[#8b857a]">
                   <b className="block text-lg text-[#1a1a1c] mb-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
                     Nothing matches &ldquo;{debouncedQuery}&rdquo;.
@@ -692,7 +714,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 </div>
               )}
 
-              {visibleSections.map((cat) => (
+              {displaySections.map((cat) => (
                 <section key={cat.label} className="mt-8 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
