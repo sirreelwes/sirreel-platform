@@ -19,6 +19,7 @@ import {
 } from '@/lib/portal/personSession'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
+import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,9 +41,29 @@ function portalBaseUrl(req: NextRequest): string {
   return origin.replace(/\/$/, '')
 }
 
+// `next` must be an INTERNAL path — reject absolute URLs / protocol-
+// relative tricks so the emailed link can never bounce through us to
+// another host. Currently used by the public order form ('/order/…').
+function safeNextPath(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  if (!v.startsWith('/') || v.startsWith('//') || v.includes('\\') || v.includes('://')) return null
+  return v.length <= 200 ? v : null
+}
+
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => null)) as { email?: unknown } | null
+  // Per-IP rate limit (same policy as the public supply endpoint).
+  // Neutral-shaped 429 so the limiter itself doesn't enumerate.
+  const rl = checkRateLimit(`portal-auth-request:${clientIp(req)}`)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, message: 'Too many requests — try again shortly.' },
+      { status: 429 },
+    )
+  }
+
+  const body = (await req.json().catch(() => null)) as { email?: unknown; next?: unknown } | null
   const email = body && isPlausibleEmail(body.email) ? normalizeEmail(body.email) : null
+  const nextPath = safeNextPath(body?.next)
 
   // Always return neutral. Skip even the DB lookup on malformed email
   // so a probe with `email=garbage` gets the same answer as a miss.
@@ -79,7 +100,7 @@ export async function POST(req: NextRequest) {
   })
 
   const baseUrl = portalBaseUrl(req)
-  const link = `${baseUrl}/api/portal/auth/verify?token=${token}`
+  const link = `${baseUrl}/api/portal/auth/verify?token=${token}${nextPath ? `&next=${encodeURIComponent(nextPath)}` : ''}`
 
   // Dev-only: also surface the magic link in the server console so a
   // local Resend misconfig doesn't block testing. Never fires in

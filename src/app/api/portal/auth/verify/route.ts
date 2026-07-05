@@ -22,8 +22,19 @@ function redirectTo(req: NextRequest, path: string): NextResponse {
   return NextResponse.redirect(url)
 }
 
+// Internal-path allowlist for the post-verify redirect (`next` param —
+// carried through from the request endpoint, e.g. the public order
+// form's reorder flow). Anything not a clean same-host path falls back
+// to /portal/account.
+function safeNextPath(v: string | null): string | null {
+  if (!v) return null
+  if (!v.startsWith('/') || v.startsWith('//') || v.includes('\\') || v.includes('://')) return null
+  return v.length <= 200 ? v : null
+}
+
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')?.trim()
+  const nextPath = safeNextPath(req.nextUrl.searchParams.get('next'))
   if (!token) return redirectTo(req, '/portal/auth/sign-in?error=link')
 
   const session = await prisma.personSession.findUnique({
@@ -55,7 +66,7 @@ export async function GET(req: NextRequest) {
   })
 
   const cookieValue = createPersonSessionCookieValue(session.id)
-  const res = redirectTo(req, '/portal/account')
+  const res = redirectTo(req, nextPath ?? '/portal/account')
   res.headers.append('Set-Cookie', buildPersonSessionCookieHeader(cookieValue))
   return res
 }

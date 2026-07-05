@@ -61,6 +61,17 @@ export interface CartLine extends CartLineDisplayInfo {
   qty: number
   pickupDate: string  // YYYY-MM-DD
   returnDate: string  // YYYY-MM-DD
+  // ── Reorder origin tracking (magic-link past-order toggles) ──
+  // ownerOrderId: the past order whose toggle CREATED this line;
+  // undefined = the user created it. associatedOrderIds: every past
+  // order that references this item while toggled on (owner included)
+  // — used to clear associations on toggle-off without removing
+  // user-owned lines. modifiedByUser: any user edit (qty change,
+  // stepper, re-add) flips this; a modified line survives toggle-off
+  // and becomes user-owned.
+  ownerOrderId?: string
+  associatedOrderIds?: string[]
+  modifiedByUser?: boolean
 }
 
 export interface AddToCartArgs extends CartLineDisplayInfo {
@@ -118,7 +129,10 @@ export function useSupplyCart() {
       const next = new Map(prev)
       const existing = next.get(key)
       if (existing) {
-        next.set(key, { ...existing, qty: existing.qty + addQty })
+        // User-driven add on an existing line — a user edit. If the
+        // line came from a past-order toggle it becomes user-modified
+        // (and will survive that order's toggle-off).
+        next.set(key, { ...existing, qty: existing.qty + addQty, modifiedByUser: true })
       } else {
         next.set(key, {
           cartLineId: key,
@@ -144,7 +158,7 @@ export function useSupplyCart() {
       const line = next.get(cartLineId)
       if (!line) return prev
       if (qty <= 0) next.delete(cartLineId)
-      else next.set(cartLineId, { ...line, qty: Math.min(1000, Math.max(1, Math.floor(qty))) })
+      else next.set(cartLineId, { ...line, qty: Math.min(1000, Math.max(1, Math.floor(qty))), modifiedByUser: true })
       return next
     })
   }, [])
@@ -180,6 +194,14 @@ export function useSupplyCart() {
       next.delete(cartLineId)
       return next
     })
+  }, [])
+
+  const mergeOrderLines = useCallback((orderId: string, incoming: AddToCartArgs[]) => {
+    setCart((prev) => applyMergeOrder(prev, orderId, incoming))
+  }, [])
+
+  const unmergeOrder = useCallback((orderId: string) => {
+    setCart((prev) => applyUnmergeOrder(prev, orderId))
   }, [])
 
   const resetCart = useCallback(() => {
@@ -220,8 +242,86 @@ export function useSupplyCart() {
     setQty,
     setDates,
     removeLine,
+    mergeOrderLines,
+    unmergeOrder,
     resetCart,
   }
+}
+
+/**
+ * Toggle a past order ON — merge its lines into the cart (pure; the
+ * hook wraps this in setCart). Exact reorder semantics:
+ *   - item NOT in cart → new line OWNED by `orderId`, order's qty,
+ *     modifiedByUser=false.
+ *   - item ALREADY in cart (any owner) → qty untouched; the line is
+ *     merely ASSOCIATED with `orderId`.
+ */
+export function applyMergeOrder(
+  prev: Map<string, CartLine>,
+  orderId: string,
+  incoming: AddToCartArgs[],
+): Map<string, CartLine> {
+  const next = new Map(prev)
+  for (const args of incoming) {
+    const key = cartLineKey(args.itemKind, args.itemId, args.pickupDate, args.returnDate)
+    const existing = next.get(key)
+    if (existing) {
+      const assoc = new Set(existing.associatedOrderIds ?? [])
+      assoc.add(orderId)
+      next.set(key, { ...existing, associatedOrderIds: [...assoc] })
+    } else {
+      next.set(key, {
+        cartLineId: key,
+        itemKind: args.itemKind,
+        itemId: args.itemId,
+        qty: Math.max(1, Math.floor(args.qty ?? 1)),
+        pickupDate: args.pickupDate,
+        returnDate: args.returnDate,
+        name: args.name,
+        price: args.price,
+        type: args.type,
+        category: args.category,
+        ownerOrderId: orderId,
+        associatedOrderIds: [orderId],
+        modifiedByUser: false,
+      })
+    }
+  }
+  return next
+}
+
+/**
+ * Toggle a past order OFF (pure).
+ *   - lines OWNED by it, never user-modified, no other order attached
+ *     → removed.
+ *   - lines owned by it but ALSO associated with another toggled-on
+ *     order → ownership transfers to that order (the other toggle is
+ *     still ON; its item must not vanish out from under it).
+ *   - lines owned by it but user-modified → kept at the user's qty,
+ *     now user-owned.
+ *   - lines merely associated → association cleared, line untouched.
+ *   - pure user lines → untouched.
+ */
+export function applyUnmergeOrder(
+  prev: Map<string, CartLine>,
+  orderId: string,
+): Map<string, CartLine> {
+  const next = new Map(prev)
+  for (const [key, line] of prev) {
+    const assoc = (line.associatedOrderIds ?? []).filter((id) => id !== orderId)
+    if (line.ownerOrderId === orderId) {
+      if (line.modifiedByUser) {
+        next.set(key, { ...line, ownerOrderId: undefined, associatedOrderIds: assoc })
+      } else if (assoc.length > 0) {
+        next.set(key, { ...line, ownerOrderId: assoc[0], associatedOrderIds: assoc })
+      } else {
+        next.delete(key)
+      }
+    } else if ((line.associatedOrderIds ?? []).includes(orderId)) {
+      next.set(key, { ...line, associatedOrderIds: assoc })
+    }
+  }
+  return next
 }
 
 /** Days inclusive between pickup and return (min 1). */

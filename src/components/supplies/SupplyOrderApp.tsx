@@ -32,7 +32,7 @@ import {
   type FormEvent,
 } from 'react'
 import Link from 'next/link'
-import { useSupplyCart, type CartLine, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
+import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
 import { mapCatalogToSections, rankSearchResults } from '@/lib/site/publicSupplySections'
 
 interface CatalogItem {
@@ -223,6 +223,63 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     }
   }, [])
 
+  // ── Reorder (magic-link past orders) ──────────────────────────
+  // History NEVER renders unverified: /api/public/reorder/history is
+  // 401 without the person-session cookie; 'anon' shows the magic-link
+  // request bar instead. A valid session (30-day cookie from a prior
+  // link click) skips the email step entirely.
+  interface ReorderOrder {
+    id: string
+    orderNumber: string
+    jobName: string
+    startDate: string | null
+    endDate: string | null
+    itemCount: number
+    lines: { itemKind: ItemKind; itemId: string; name: string; qty: number; available: boolean; price: number; type: string; category: string }[]
+  }
+  const [reorder, setReorder] = useState<
+    | { state: 'loading' }
+    | { state: 'anon' }
+    | { state: 'verified'; person: { name: string; email: string; phone: string | null; role: string | null }; orders: ReorderOrder[] }
+  >({ state: 'loading' })
+  const [toggledOrders, setToggledOrders] = useState<Set<string>>(new Set())
+  const [magicEmail, setMagicEmail] = useState('')
+  const [magicMsg, setMagicMsg] = useState<string | null>(null)
+  const [magicSending, setMagicSending] = useState(false)
+  const prefilledRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/public/reorder/history', { cache: 'no-store' })
+      .then(async (r) => {
+        if (cancelled) return
+        if (r.status === 401) { setReorder({ state: 'anon' }); return }
+        if (!r.ok) { setReorder({ state: 'anon' }); return }
+        const d = await r.json()
+        setReorder({ state: 'verified', person: d.person, orders: d.orders ?? [] })
+      })
+      .catch(() => { if (!cancelled) setReorder({ state: 'anon' }) })
+    return () => { cancelled = true }
+  }, [])
+
+  const requestMagicLink = async () => {
+    if (magicSending || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(magicEmail.trim())) return
+    setMagicSending(true)
+    try {
+      const res = await fetch('/api/portal/auth/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: magicEmail.trim(), next: '/order/supplies' }),
+      })
+      const d = await res.json().catch(() => null)
+      setMagicMsg(d?.message ?? "If that email is on file, we've sent a sign-in link.")
+    } catch {
+      setMagicMsg("If that email is on file, we've sent a sign-in link.")
+    } finally {
+      setMagicSending(false)
+    }
+  }
+
   // ── Cart ──────────────────────────────────────────────────────
   const {
     lines,
@@ -234,8 +291,45 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     setQty,
     setDates,
     removeLine,
+    mergeOrderLines,
+    unmergeOrder,
     resetCart,
   } = useSupplyCart()
+
+  // Toggle a past order into/out of the cart. ON merges available
+  // lines (fresh server rates already on the payload; dates default
+  // like any manual add — the old order's dates are NOT copied) and
+  // prefills EMPTY contact fields from the Person on first use.
+  // OFF removes only untouched order-owned lines (see useSupplyCart).
+  const toggleOrder = (order: ReorderOrder) => {
+    const isOn = toggledOrders.has(order.id)
+    if (isOn) {
+      unmergeOrder(order.id)
+      setToggledOrders((prev) => { const n = new Set(prev); n.delete(order.id); return n })
+      return
+    }
+    const dates = defaultDatesForAdd(form)
+    const incoming: AddToCartArgs[] = order.lines
+      .filter((l) => l.available)
+      .map((l) => ({
+        itemKind: l.itemKind, itemId: l.itemId, qty: l.qty,
+        pickupDate: dates.pickupDate, returnDate: dates.returnDate,
+        name: l.name, price: l.price, type: l.type, category: l.category,
+      }))
+    mergeOrderLines(order.id, incoming)
+    setToggledOrders((prev) => new Set(prev).add(order.id))
+    if (!prefilledRef.current && reorder.state === 'verified') {
+      prefilledRef.current = true
+      const p = reorder.person
+      setForm((f) => ({
+        ...f,
+        contactName: f.contactName || p.name,
+        email: f.email || p.email,
+        phone: f.phone || (p.phone ?? ''),
+        role: f.role || (p.role ?? ''),
+      }))
+    }
+  }
 
   // Per-vehicle window helpers — bound to the VehicleCard so each
   // window row addresses its own cart line via the stable
@@ -538,6 +632,69 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
           <p className="mt-4 text-[#cfc9bd] text-[15px] leading-relaxed">
             Final Pricing and Availability must be confirmed by SirReel Agent
           </p>
+
+          {/* ── Reorder: magic-link request (anon) / past-order toggles
+              (verified). History NEVER renders unverified — the strip
+              exists only when the server accepted the session cookie. */}
+          {reorder.state === 'anon' && (
+            <div className="mt-7 max-w-[560px]">
+              <div className="text-[13px] font-semibold text-[#e8e3d7] mb-2" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Ordered with us before? Get a magic link to your past orders
+              </div>
+              {magicMsg ? (
+                <div className="text-[13px] text-[#c39a3f]">{magicMsg}</div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={magicEmail}
+                    onChange={(e) => setMagicEmail(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') requestMagicLink() }}
+                    placeholder="you@company.com"
+                    className="flex-1 min-w-0 bg-white/10 border border-white/20 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder:text-[#a8a294] outline-none focus:border-[#c39a3f]"
+                  />
+                  <button
+                    onClick={requestMagicLink}
+                    disabled={magicSending}
+                    className="flex-none bg-[#c39a3f] text-[#0c0c0d] rounded-lg px-4 py-2.5 text-[13px] font-extrabold disabled:opacity-50"
+                    style={{ fontFamily: 'Archivo, sans-serif' }}
+                  >
+                    {magicSending ? 'Sending…' : 'Send link'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {reorder.state === 'verified' && reorder.orders.length > 0 && (
+            <div className="mt-7">
+              <div className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f] mb-2.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                Your past orders — tap to add to this reservation
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {reorder.orders.map((o) => {
+                  const on = toggledOrders.has(o.id)
+                  const unavailable = o.lines.filter((l) => !l.available).length
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => toggleOrder(o)}
+                      className={`text-left border-[1.5px] rounded-xl px-3.5 py-2.5 transition-all ${
+                        on ? 'border-[#c39a3f] bg-[#c39a3f]/15' : 'border-white/20 bg-white/5 hover:border-white/45'
+                      }`}
+                    >
+                      <div className="text-[13.5px] font-bold text-white" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                        {on ? '✓ ' : '+ '}{o.jobName}
+                      </div>
+                      <div className="text-[11.5px] text-[#a8a294] mt-0.5">
+                        {o.startDate ?? '—'}{o.endDate && o.endDate !== o.startDate ? ` – ${o.endDate}` : ''} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'}
+                        {unavailable > 0 && <span className="text-[#c39a3f]"> · {unavailable} no longer available</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
