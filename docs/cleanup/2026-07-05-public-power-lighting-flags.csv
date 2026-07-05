@@ -1,0 +1,12 @@
+action,hq_id,code,description,daily_rate,approved_by,note
+SET_PUBLIC_VISIBLE_TRUE,63e4b223-8290-4e7c-8226-59396522ef41,100STINGER,100' EDISON CABLE (STINGER),14,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,70bb6a5a-7cbb-4d88-a600-cfe00c618812,15STINGER,15'EDISON CABLE (STINGER),6,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,2e0630bd-925b-4a3e-b555-ef51afe30bd0,25' EDISON CABLE (STINGER),25' EDISON CABLE (STINGER),7,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,5f164f0f-b2e4-4155-8191-7c66760514ad,50' EDISON CABLE (STINGER),50' EDISON CABLE (STINGER),9,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,f9503ee2-df04-46a5-a465-fe3ec997ebfd,50SS,50'SUPER STINGER,60,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,26b8fe97-615b-4ec9-b8d5-8a0b2dfbd16a,CUBETAPR,Cube Tap,1.25,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,255a16e9-a4b5-4197-892e-28f5f4a9ad8c,ECOFLOW,ECOFLOW 3.6K PRO CHARGER POWER STATION,275,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,05025bd1-a933-4066-ad75-fc234de31d87,GLOBUG,Glow Bug Balloon LightwithCart,150,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,f5ac78fc-528b-42b0-a743-d2395052178c,LED Flashlight,LED Flashlight,5,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+SET_PUBLIC_VISIBLE_TRUE,39089308-2cd3-4922-bba4-b3cd0b3d4151,NUE,NUE -SUNCASE 3651 -3600 W/5120 WH INVERTER,125,Wes 2026-07-05,Power and Lighting curation; Instagrid excluded per approval
+EXCLUDED,,,Instagrid-2.1kWh (Output 3.6kW 20A),150,Wes 2026-07-05,approved-all-except ruling

@@ -33,6 +33,7 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
+import { mapCatalogToSections, PUBLIC_SUPPLY_SECTIONS } from '@/lib/site/publicSupplySections'
 
 interface CatalogItem {
   id: string
@@ -353,14 +354,20 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     !!form.deliveryMethod &&
     (form.deliveryMethod !== 'location' || form.deliveryAddress.trim().length > 0)
 
-  // Filtered catalog for current category pill (search overrides
-  // the pill — when q is non-empty the API has already filtered).
-  const visibleCategories = useMemo<CatalogCategory[]>(() => {
-    if (!data) return []
-    if (debouncedQuery) return data.categories
-    if (activeCat === 'All') return data.categories
-    return data.categories.filter((c) => c.name === activeCat)
-  }, [data, debouncedQuery, activeCat])
+  // Curated public sections (lib/site/publicSupplySections) — the
+  // form renders these instead of raw InventoryCategory groups.
+  // Unmapped categories never render publicly. When a text query is
+  // active the API has already filtered items; sections re-map the
+  // filtered result so search hits stay inside the curated framing.
+  const sections = useMemo(
+    () => (data ? mapCatalogToSections(data.categories) : []),
+    [data],
+  )
+  const visibleSections = useMemo(() => {
+    if (debouncedQuery) return sections
+    if (activeCat === 'All') return sections
+    return sections.filter((s) => s.label === activeCat)
+  }, [sections, debouncedQuery, activeCat])
 
   async function submitOrder(e?: FormEvent) {
     e?.preventDefault()
@@ -570,30 +577,6 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   className="w-full border-[1.5px] border-[#cdc7b9] bg-white rounded-xl px-4 py-3.5 pl-[46px] text-base text-[#0c0c0d] outline-none focus:border-[#0c0c0d] focus:shadow-[0_0_0_4px_rgba(12,12,13,0.06)]"
                 />
               </div>
-              {data && (
-                <div className="flex flex-wrap gap-2 pt-3.5 pb-1">
-                  {['All', ...data.categories.map((c) => c.name)].map((c) => {
-                    const isActive = c === activeCat && !debouncedQuery
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => {
-                          setActiveCat(c)
-                          setQuery('')
-                        }}
-                        className={`flex-none border-[1.5px] rounded-full px-4 py-1.5 text-[12.5px] font-semibold tracking-tight whitespace-nowrap transition-all ${
-                          isActive
-                            ? 'bg-[#0c0c0d] text-white border-[#0c0c0d]'
-                            : 'bg-transparent text-[#1a1a1c] border-[#cdc7b9] hover:border-[#0c0c0d]'
-                        }`}
-                        style={{ fontFamily: 'Archivo, sans-serif' }}
-                      >
-                        {c}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
             </div>
 
             {/* catalog grid */}
@@ -603,7 +586,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Couldn&apos;t load the catalog: {error}
                 </div>
               )}
-              {!loading && data && visibleCategories.length === 0 && (
+              {!loading && data && visibleSections.length === 0 && (
                 <div className="py-12 text-center text-[#8b857a]">
                   <b className="block text-lg text-[#1a1a1c] mb-1.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
                     Nothing matches &ldquo;{debouncedQuery}&rdquo;.
@@ -668,11 +651,52 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 </section>
               )}
 
-              {visibleCategories.map((cat) => (
-                <section key={cat.id} className="mt-8 scroll-mt-[200px]">
+              {/* ── SUPPLY SECTIONS ──────────────────────────────
+                  Section header + the 7 curated filter buttons sit
+                  DIRECTLY above the item grid (below vehicles), so
+                  filtering visibly anchors to what it filters. The
+                  buttons list the curated sections from
+                  lib/site/publicSupplySections — not raw categories.
+                  Clicking the active section again clears back to all.
+                  Hidden while searching (query overrides sections). */}
+              {!debouncedQuery && data && (
+                <div className="mt-9">
+                  <div className="flex items-baseline gap-3.5 mb-3.5">
+                    <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                      Production Supplies
+                    </h2>
+                    <span className="flex-1 h-[2px] bg-[#c39a3f] opacity-40" />
+                  </div>
+                  <div className="flex flex-wrap gap-2 pb-1">
+                    {PUBLIC_SUPPLY_SECTIONS.map((s) => {
+                      const isActive = s.label === activeCat
+                      return (
+                        <button
+                          key={s.label}
+                          onClick={() => {
+                            setActiveCat(isActive ? 'All' : s.label)
+                            setQuery('')
+                          }}
+                          className={`flex-none border-[1.5px] rounded-full px-4 py-1.5 text-[12.5px] font-semibold tracking-tight whitespace-nowrap transition-all ${
+                            isActive
+                              ? 'bg-[#0c0c0d] text-white border-[#0c0c0d]'
+                              : 'bg-transparent text-[#1a1a1c] border-[#cdc7b9] hover:border-[#0c0c0d]'
+                          }`}
+                          style={{ fontFamily: 'Archivo, sans-serif' }}
+                        >
+                          {s.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {visibleSections.map((cat) => (
+                <section key={cat.label} className="mt-8 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                      {cat.name}
+                      {cat.label}
                     </h2>
                     <span className="flex-1 h-[2px] bg-[#0c0c0d] opacity-10" />
                     <span className="font-semibold text-[12px] text-[#8b857a] tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>
