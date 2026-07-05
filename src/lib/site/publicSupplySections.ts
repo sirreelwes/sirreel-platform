@@ -20,6 +20,11 @@
 export interface PublicSupplySection {
   label: string
   slugs: string[]
+  /** Item-level membership by EXACT catalog name — for curated
+   *  sections whose gear is scattered across categories (Client/VIP).
+   *  Item-listed items ADD to this section on top of any slug-based
+   *  home; the shared itemId keeps one cart identity. */
+  itemNames?: string[]
 }
 
 // A slug may appear under MORE THAN ONE section — those items render
@@ -33,6 +38,48 @@ export const PUBLIC_SUPPLY_SECTIONS: PublicSupplySection[] = [
   { label: 'Lunch and Crafty', slugs: ['craft-services-catering', 'tables-chairs'] },
   { label: 'Wardrobe & Makeup', slugs: ['wardrobe-makeup'] },
   { label: 'Tools & Cleaning', slugs: ['tools-cleaning'] },
+  // Client/VIP — lounge-furniture gear scattered across categories by
+  // the RW import; membership is item-level (approved list, Wes
+  // 2026-07-05 — see docs/cleanup/2026-07-05-client-vip-flags.csv).
+  {
+    label: 'Client/VIP',
+    slugs: [],
+    itemNames: [
+      'Bar StoolLow Back (BlackLeather)',
+      'Client Lounge, SOLO Line',
+      'Client Lounge, Standard',
+      'POSING STOOL, ROLLING',
+      "Pipe & Drape - BlackVelour - 10'H x 10'W",
+      'Pipe & Drape -Base',
+      "Pipe & Drape -Black Drape 12'wide x 10'Tall",
+      "Pipe & Drape -Black Drape 22'wide x 10'Tall",
+      "Pipe & Drape -Black Drape 8'wide x 8'Tall",
+      "Pipe & Drape -Red Velour -10' H x 10'W",
+      'Pipe & Drape -Spreader',
+      'Pipe & Drape -Upright',
+      'SOFA - COSMOPOLITAN, BLACK 7\' x 35"',
+      'SOLO Line - End Table (Each)',
+      'SOLO Line - Single Chair',
+      'SOLO Line - Sofa',
+      'SOLO Line- CoffeeTable',
+      'SOLO Line- FloorLamp',
+      'SOLO Line- Rug',
+      'SOLO Line- TableLamp (Each)',
+      'Standard 1 Line - Table Lamp',
+      'Standard 1 Line -Coffee Table',
+      'Standard 1 Line -End Table (Each)',
+      'Standard 1 Line -Floor Lamp',
+      'Standard 1 Line -Love Seat',
+      'Standard 1 Line -Single Chair',
+      'Standard 1 Line -Sofa',
+      'Standard 2 Line -Coffee Table',
+      'Standard 2 Line -End Table',
+      'Standard 2 Line -Floor Lamp',
+      'Standard 2 Line -Love Seat',
+      'Standard 2 Line -Sofa',
+      'Standard 2 Line -Table Lamp',
+    ],
+  },
 ]
 
 // Cross-list rules — name-matched items appear in the listed sections
@@ -81,8 +128,20 @@ export function mapCatalogToSections<T extends { id: string; name: string; categ
     }
   }
 
+  // Item-level membership (Client/VIP-style curated lists) — exact
+  // catalog-name match, additive on top of slug/rule placement.
+  const itemNameSections = new Map<string, string[]>()
+  for (const s of PUBLIC_SUPPLY_SECTIONS) {
+    for (const n of s.itemNames ?? []) {
+      itemNameSections.set(n, [...(itemNameSections.get(n) ?? []), s.label])
+    }
+  }
+
   for (const [slug, items] of bySlug) {
     for (const it of items) {
+      for (const label of itemNameSections.get(it.name) ?? []) {
+        sections.get(label)?.set(it.id, it)
+      }
       const rule = CROSS_LIST_RULES.find((r) => r.match(it.name))
       if (rule) {
         // Name rules OVERRIDE slug placement entirely.
