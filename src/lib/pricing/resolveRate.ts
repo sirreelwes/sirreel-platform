@@ -190,6 +190,73 @@ export async function resolveLineRate(
   return { rate: clientDec, resolvedRate: catalogRate, rateOverridden: true }
 }
 
+export interface FeeLineResult extends LineRateResult {
+  fee: {
+    id: string
+    name: string
+    code: string
+    unit: 'FLAT' | 'PER_DAY' | 'PER_MILE' | 'PER_GALLON' | 'PERCENT'
+    description: string | null
+  }
+}
+
+/**
+ * Server-side fee pricing — the FeeItem analogue of resolveLineRate,
+ * same trust model: the client sends the fee id (+ percentBase for
+ * PERCENT fees); the SERVER derives the rate from FeeItem.amount. A
+ * client-sent rate that differs is an override request → stored with
+ * rateOverridden and audit-logged by the caller.
+ *
+ * Unit → per-line rate:
+ *   FLAT / PER_DAY / PER_MILE / PER_GALLON — rate IS FeeItem.amount;
+ *     the multiplier (count, days, miles, gallons) is the line's
+ *     quantity/billableDays, so computeLineTotal stays the only math.
+ *   PERCENT — rate is amount% × percentBase, computed here and billed
+ *     as a one-shot (qty=1 × 1 day) line.
+ *
+ * Returns null when the fee is missing/inactive, PERCENT is missing a
+ * positive base, or clientRate is unparseable — caller 400s.
+ */
+export async function resolveFeeLineRate(
+  input: {
+    feeItemId: string
+    /** Absent/undefined = "use the catalog amount" (no override). */
+    clientRate?: unknown
+    /** Dollar base for PERCENT fees; ignored for other units. */
+    percentBase?: unknown
+  },
+  db: Db = prisma,
+): Promise<FeeLineResult | null> {
+  const fee = await db.feeItem.findUnique({
+    where: { id: input.feeItemId },
+    select: { id: true, name: true, code: true, amount: true, unit: true, description: true, isActive: true },
+  })
+  if (!fee || !fee.isActive) return null
+
+  let resolved: Prisma.Decimal
+  if (fee.unit === 'PERCENT') {
+    const base = parseMoney(input.percentBase)
+    if (base === null || !base.greaterThan(0)) return null
+    resolved = roundCents(base.mul(fee.amount).div(100))
+  } else {
+    resolved = roundCents(fee.amount)
+  }
+
+  const feeShape = {
+    id: fee.id, name: fee.name, code: fee.code,
+    unit: fee.unit, description: fee.description,
+  }
+  if (input.clientRate === undefined || input.clientRate === null || input.clientRate === '') {
+    return { rate: resolved, resolvedRate: resolved, rateOverridden: false, fee: feeShape }
+  }
+  const clientDec = parseMoney(input.clientRate)
+  if (clientDec === null) return null
+  if (clientDec.equals(resolved)) {
+    return { rate: resolved, resolvedRate: resolved, rateOverridden: false, fee: feeShape }
+  }
+  return { rate: clientDec, resolvedRate: resolved, rateOverridden: true, fee: feeShape }
+}
+
 /**
  * Quote-time snapshot (Sprint 1 STEP 3): on the DRAFT → QUOTE_SENT
  * transition, persist resolvedRate on every line that still lacks one so

@@ -87,7 +87,11 @@ export async function generateRentalInvoice(args: {
       agent: true,
       job: true,
       lineItems: {
-        include: { inventoryItem: { select: { code: true, description: true } }, assetCategory: { select: { name: true } } },
+        include: {
+          inventoryItem: { select: { code: true, description: true } },
+          assetCategory: { select: { name: true } },
+          feeItem: { select: { code: true, name: true } },
+        },
         orderBy: { sortOrder: 'asc' },
       },
       invoices: { select: { id: true, type: true, status: true } },
@@ -135,7 +139,11 @@ export async function generateRentalInvoice(args: {
   // and never come through this DTO.
   const rentalLines: InvoiceLineSnapshotEntry[] = order.lineItems.map((li) => ({
     description: li.description,
-    category: li.inventoryItem?.code ?? li.assetCategory?.name ?? null,
+    // Fee-catalog lines label as "FEE · <code>" so charges read
+    // distinctly from gear on the (flat, sortOrder-driven) invoice.
+    category: li.feeItem
+      ? `FEE · ${li.feeItem.code}`
+      : li.inventoryItem?.code ?? li.assetCategory?.name ?? null,
     qty: li.quantity,
     unitPrice: Number(li.rate),
     amount: Number(li.lineTotal),

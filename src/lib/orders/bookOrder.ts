@@ -118,7 +118,7 @@ export async function bookOrder(args: {
           sentAt: true,
           wonAt: true,
           lostAt: true,
-          lineItems: { select: { id: true, department: true } },
+          lineItems: { select: { id: true, department: true, type: true } },
         },
       })
       if (!order) {
@@ -170,6 +170,10 @@ export async function bookOrder(args: {
       }
       const warehouseLineIds: string[] = []
       for (const li of order.lineItems) {
+        // Fee-catalog lines (type=FEE) are money-only — no lane, no
+        // pick list. A "Delivery Fee" must never appear on the
+        // warehouse picking floor.
+        if (li.type === 'FEE') continue
         const routing = routeDepartment(li.department)
         laneCounts[routing.lane] += 1
         await tx.orderLineItem.update({

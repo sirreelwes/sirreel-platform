@@ -8,7 +8,7 @@ import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/au
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
-import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
+import { resolveLineRate, resolveFeeLineRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -43,9 +43,17 @@ export async function POST(req: NextRequest, { params }: Params) {
       // confirmConflict=true. Stamps note + emits AuditLog row so
       // dispatch sees the override.
       confirmConflict,
+      // Fee-catalog add (type=FEE lines). The server prices the line
+      // from FeeItem.amount — the client's `rate` is an override
+      // request, same trust model as catalog lines. `percentBase` is
+      // the dollar base for PERCENT-unit fees.
+      feeItemId,
+      percentBase,
     } = body;
 
-    if (!type || !description || rate === undefined) {
+    // Fee adds derive type/description/rate from the FeeItem — only the
+    // id is mandatory. Everything else keeps the strict contract.
+    if (!feeItemId && (!type || !description || rate === undefined)) {
       return NextResponse.json(
         { error: "type, description, and rate are required" },
         { status: 400 }
@@ -68,7 +76,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // assetCategoryId, we need to lift the catalog-side default for
     // the gate check to be correct. Mirrors the resolve logic below.
     let gateDepartment: LineItemDepartment = (department as LineItemDepartment) || 'PRO_SUPPLIES';
-    if (!department) {
+    if (!department && !feeItemId) {
       if (inventoryItemId) {
         const inv = await prisma.inventoryItem.findUnique({
           where: { id: inventoryItemId }, select: { department: true },
@@ -310,23 +318,78 @@ export async function POST(req: NextRequest, { params }: Params) {
     // an override persists on the row (rateOverridden + resolvedRate)
     // and is audit-logged below. $0 package members / includedFree lines
     // are not overrides.
-    const rateResolution = await resolveLineRate({
-      inventoryItemId: inventoryItemId || null,
-      assetCategoryId: assetCategoryId || null,
-      rateType: rateType as RateType,
-      clientRate: rate,
-      isPackageMember: !!(packageInstanceId && !isPackageHeader),
-    });
+    //
+    // Fee-catalog lines (feeItemId) price from FeeItem.amount instead:
+    //   FLAT       — qty × amount            (qty = count, days forced 1)
+    //   PER_DAY    — amount × rental days    (qty forced 1, days = order window)
+    //   PER_MILE   — qty × amount            (qty = miles, days forced 1)
+    //   PER_GALLON — qty × amount            (qty = gallons, days forced 1)
+    //   PERCENT    — amount% × percentBase   (qty 1 × 1 day, one-shot)
+    // All of it flows through the SAME computeLineTotal below — the fee
+    // just controls which inputs (qty/days/rate) carry the multiplier.
+    let rateResolution: LineRateResult | null;
+    let effectiveType = type;
+    let effectiveDescription = description;
+    let effectiveRateType = rateType as RateType;
+    let effectiveQuantity = Number(quantity);
+    if (feeItemId) {
+      const feeRes = await resolveFeeLineRate({ feeItemId, clientRate: rate, percentBase });
+      if (!feeRes) {
+        return NextResponse.json(
+          { error: "invalid fee", reason: "Fee not found / inactive, bad rate, or missing percent base." },
+          { status: 400 },
+        );
+      }
+      rateResolution = feeRes;
+      effectiveType = 'FEE';
+      resolvedDepartment = 'PRO_SUPPLIES';
+      effectiveDescription = description ||
+        (feeRes.fee.unit === 'PERCENT'
+          ? `${feeRes.fee.name} (${Number(percentBase) ? `on $${Number(percentBase).toFixed(2)}` : 'percent'})`
+          : feeRes.fee.name);
+      if (feeRes.fee.unit === 'PER_DAY') {
+        // Bills across the order's rental days (or an explicit override).
+        effectiveRateType = 'DAILY';
+        effectiveQuantity = 1;
+        if (days == null) {
+          return NextResponse.json(
+            { error: "invalid fee", reason: "A per-day fee needs order dates (or explicit billableDays)." },
+            { status: 400 },
+          );
+        }
+      } else {
+        // One-shot: the multiplier is the quantity (count/miles/gallons),
+        // never the day span the line inherits from the order window.
+        effectiveRateType = 'FLAT';
+        days = 1;
+        if (feeRes.fee.unit === 'PERCENT') effectiveQuantity = 1;
+        if (!Number.isFinite(effectiveQuantity) || effectiveQuantity < 1) {
+          return NextResponse.json(
+            { error: "invalid fee", reason: "Quantity (count / miles / gallons) must be a positive whole number." },
+            { status: 400 },
+          );
+        }
+        effectiveQuantity = Math.floor(effectiveQuantity);
+      }
+    } else {
+      rateResolution = await resolveLineRate({
+        inventoryItemId: inventoryItemId || null,
+        assetCategoryId: assetCategoryId || null,
+        rateType: rateType as RateType,
+        clientRate: rate,
+        isPackageMember: !!(packageInstanceId && !isPackageHeader),
+      });
+    }
     if (!rateResolution) {
       return NextResponse.json({ error: "invalid rate" }, { status: 400 });
     }
 
     // computeLineTotal returns 0 when days is NULL — see billing.ts.
     const lineTotal = computeLineTotal({
-      quantity: Number(quantity),
+      quantity: effectiveQuantity,
       rate: rateResolution.rate.toNumber(),
       billableDays: days,
-      rateType: rateType as RateType,
+      rateType: effectiveRateType,
       department: resolvedDepartment,
     });
 
@@ -348,18 +411,21 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const lineItem = await prisma.orderLineItem.create({
       data: {
-        orderId, sortOrder, type, description,
+        orderId, sortOrder,
+        type: effectiveType,
+        description: effectiveDescription,
         inventoryItemId: inventoryItemId || null,
         assetCategoryId: assetCategoryId || null,
+        feeItemId: feeItemId || null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         pickupDate: pickupResolved,
         returnDate: returnResolved,
-        rateType,
+        rateType: effectiveRateType,
         rate: rateResolution.rate,
         resolvedRate: rateResolution.resolvedRate,
         rateOverridden: rateResolution.rateOverridden,
-        quantity,
+        quantity: effectiveQuantity,
         billableDays: days,
         lineTotal: Math.round(lineTotal * 100) / 100,
         notes: seededNotes,
@@ -373,6 +439,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       include: {
         inventoryItem: { select: { id: true, code: true, description: true } },
         assetCategory: { select: { id: true, name: true } },
+        feeItem: { select: { id: true, code: true, name: true, unit: true } },
       },
     });
 
@@ -385,7 +452,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           orderLineItemId: lineItem.id,
           resolvedRate: rateResolution.resolvedRate,
           overrideRate: rateResolution.rate,
-          rateType: rateType as RateType,
+          rateType: effectiveRateType,
           userId: await resolveOperatorId(session.user.email),
           ipAddress: extractIp(req),
         });
@@ -403,11 +470,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     // after the list is LOADED gets a PENDING_PICK item appended for
     // the warehouse team to handle physically. The PickList state
     // is preserved — we never silently rewind to PICKING.
-    const pickSync = await syncPickListOnLineAdd(prisma, {
-      orderId,
-      orderLineItemId: lineItem.id,
-      department: resolvedDepartment,
-    });
+    // Fee lines are money-only: no fulfillment lane, no PickListItem —
+    // a "Delivery Fee" must never appear on the warehouse picking floor.
+    // (bookOrder skips type=FEE for the same reason.)
+    const pickSync = lineItem.type === 'FEE'
+      ? { lane: null, pickStatus: null, pickListAction: 'skipped-fee' as const }
+      : await syncPickListOnLineAdd(prisma, {
+          orderId,
+          orderLineItemId: lineItem.id,
+          department: resolvedDepartment,
+        });
 
     // (#2 Phase 2) Holds sync — VEHICLES / STAGES only, gated on
     // Booking + assetCategoryId. Feasibility was checked above; here
@@ -485,6 +557,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           lineTotal: lineItem.lineTotal.toString(),
           inventoryItemId: lineItem.inventoryItemId,
           assetCategoryId: lineItem.assetCategoryId,
+          feeItemId: lineItem.feeItemId,
           packageHeader: !!lineItem.isPackageHeader,
           packageMember: !!(lineItem.packageInstanceId && !lineItem.isPackageHeader),
           // (#3a) Record the PickList sync outcome on the audit row

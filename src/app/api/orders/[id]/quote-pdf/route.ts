@@ -65,6 +65,9 @@ export async function POST(
     billableDays: li.billableDays,
     lineTotal: Number(li.lineTotal),
     isDiscount: li.type === 'DISCOUNT',
+    // Fee-catalog lines render in their own "Fees" section (last),
+    // never mixed into the department groups.
+    isFee: li.type === 'FEE',
     // Client-facing note (e.g. LED Wall A/V Tech requirement, seeded
     // from InventoryItem.clientNote at line-add time). Prints italic
     // under the description on the quote PDF.

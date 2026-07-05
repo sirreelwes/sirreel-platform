@@ -396,6 +396,16 @@ export default function OrderDetailPage() {
   const [editRateType, setEditRateType] = useState<string>("DAILY");
   const [liQty, setLiQty] = useState("1");
   const [adding, setAdding] = useState(false);
+  // Fee-catalog picker state (liType === "FEE"). The picker lists
+  // active FeeItems from /api/fees (fetched lazily on first switch to
+  // FEE). liPercentBase is the dollar base for PERCENT-unit fees; the
+  // rate field is prefilled from the fee (editable = override request,
+  // server-audited like catalog rate overrides).
+  const [liFeeId, setLiFeeId] = useState("");
+  const [liPercentBase, setLiPercentBase] = useState("");
+  const [feeCatalog, setFeeCatalog] = useState<
+    { id: string; name: string; code: string; amount: string; unit: string; description: string | null }[] | null
+  >(null);
 
   // Package scope modal — opens whenever the rep picks a package from
   // the combobox, before /from-package is called. Lets the rep
@@ -1191,12 +1201,51 @@ export default function OrderDetailPage() {
     setLiCustomDates(false);
     setLiDays("");
     setLiRateType("DAILY"); setLiRate(""); setLiQty("1");
+    setLiFeeId(""); setLiPercentBase("");
     setInvSearch(""); setInvResults([]);
     lastAutoFilledDescRef.current = "";
   };
 
+  // Lazy fee-catalog fetch — first time the rep flips the add form to
+  // FEE. Cached for the page's lifetime; the admin CRUD is low-churn.
+  useEffect(() => {
+    if (liType !== "FEE" || feeCatalog !== null) return;
+    fetch("/api/fees")
+      .then((r) => (r.ok ? r.json() : { fees: [] }))
+      .then((d) => setFeeCatalog(d.fees ?? []))
+      .catch(() => setFeeCatalog([]));
+  }, [liType, feeCatalog]);
+
+  const selectedFee = feeCatalog?.find((f) => f.id === liFeeId) ?? null;
+
+  const selectFee = (feeId: string) => {
+    setLiFeeId(feeId);
+    const fee = feeCatalog?.find((f) => f.id === feeId);
+    if (!fee) return;
+    setLiDesc(fee.name);
+    setLiQty("1");
+    setLiPercentBase("");
+    // Prefill the billing rate from the catalog amount. PERCENT waits
+    // for the base; the effect below recomputes as the rep types it.
+    setLiRate(fee.unit === "PERCENT" ? "" : fee.amount);
+    setLiRateType(fee.unit === "PER_DAY" ? "DAILY" : "FLAT");
+  };
+
+  // PERCENT fees: recompute the dollar rate as the rep types the base.
+  useEffect(() => {
+    if (!selectedFee || selectedFee.unit !== "PERCENT") return;
+    const base = parseFloat(liPercentBase);
+    if (Number.isFinite(base) && base > 0) {
+      setLiRate((Math.round(base * parseFloat(selectedFee.amount)) / 100).toFixed(2));
+    } else {
+      setLiRate("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liPercentBase, liFeeId]);
+
   const addLineItem = async () => {
     if (!liDesc || !liRate) return;
+    if (liType === "FEE" && liFeeId && selectedFee?.unit === "PERCENT" && !(parseFloat(liPercentBase) > 0)) return;
     setAdding(true);
     // Body shape: only include startDate/endDate when the rep explicitly
     // opted into Custom dates. Otherwise the API inherits from the parent
@@ -1211,6 +1260,12 @@ export default function OrderDetailPage() {
       rate: parseFloat(liRate),
       quantity: parseInt(liQty) || 1,
     };
+    // Fee-catalog add: server prices from FeeItem (rate above is an
+    // override request only when it differs from the catalog amount).
+    if (liType === "FEE" && liFeeId) {
+      body.feeItemId = liFeeId;
+      if (liPercentBase) body.percentBase = parseFloat(liPercentBase);
+    }
     if (liCustomDates) {
       body.startDate = liStartDate || null;
       body.endDate = liEndDate || null;
@@ -1658,9 +1713,43 @@ export default function OrderDetailPage() {
               </div>
               <div className="col-span-5">
                 <label className="block text-xs text-lt-fg3 mb-1">
-                  {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : "Description"}
+                  {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : liType === "FEE" ? "Fee" : "Description"}
                 </label>
-                {liType === "VEHICLE" ? (
+                {liType === "FEE" ? (
+                  <div className="space-y-1">
+                    {/* Fee catalog picker — separate from the equipment
+                        typeahead. The server prices from FeeItem; the
+                        prefilled rate is editable (override → audited). */}
+                    <select value={liFeeId} onChange={(e) => selectFee(e.target.value)}
+                      className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
+                      <option value="">
+                        {feeCatalog === null ? "Loading fees…" : feeCatalog.length === 0 ? "No fees configured (see /admin/fees)" : "Select fee…"}
+                      </option>
+                      {(feeCatalog ?? []).map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name} — {f.unit === "PERCENT" ? `${Number(f.amount).toFixed(2)}%` : `$${f.amount}`}
+                          {f.unit === "PER_DAY" ? "/day" : f.unit === "PER_MILE" ? "/mile" : f.unit === "PER_GALLON" ? "/gal" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedFee && (
+                      <p className="text-[11px] text-lt-fg3">
+                        {selectedFee.unit === "FLAT" && "Flat — Qty is the count; bills once, not per day."}
+                        {selectedFee.unit === "PER_DAY" && "Per day — bills across the order's rental days automatically."}
+                        {selectedFee.unit === "PER_MILE" && "Per mile — enter MILES in the Qty field."}
+                        {selectedFee.unit === "PER_GALLON" && "Per gallon — enter GALLONS in the Qty field."}
+                        {selectedFee.unit === "PERCENT" && `Percent — ${Number(selectedFee.amount).toFixed(2)}% of the base amount below.`}
+                        {selectedFee.description ? ` ${selectedFee.description}` : ""}
+                      </p>
+                    )}
+                    {selectedFee?.unit === "PERCENT" && (
+                      <input type="number" step="0.01" min="0" value={liPercentBase}
+                        onChange={(e) => setLiPercentBase(e.target.value)}
+                        placeholder="Base amount ($) the percentage applies to"
+                        className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
+                    )}
+                  </div>
+                ) : liType === "VEHICLE" ? (
                   <select value={liAssetCatId} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                     <option value="">Select vehicle...</option>

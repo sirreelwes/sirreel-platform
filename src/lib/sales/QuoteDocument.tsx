@@ -81,6 +81,10 @@ export interface QuoteLineItem {
   billableDays: number | null
   lineTotal: number
   isDiscount?: boolean
+  /** type=FEE lines (fee catalog) — rendered in their own "Fees"
+   *  section after the department groups instead of inside
+   *  PRO_SUPPLIES, so charges never mingle with gear. */
+  isFee?: boolean
   /** Client-facing small-print rendered below the description. Seeded
    *  at line-add time from InventoryItem.clientNote (e.g. LED Wall
    *  A/V Tech requirement); same italic style as the qualifier. */
@@ -225,16 +229,26 @@ function computeLineTotal(item: QuoteLineItem): number {
   return item.quantity * item.billableDays * item.rate
 }
 
-function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: Department; items: QuoteLineItem[]; subtotal: number }> {
+// Section key: a real department, or the synthetic FEES bucket that
+// collects type=FEE lines regardless of their storage department.
+type SectionKey = Department | 'FEES'
+
+function sectionLabel(key: SectionKey): string {
+  return key === 'FEES' ? 'Fees' : DEPT_LABELS[key]
+}
+
+function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: SectionKey; items: QuoteLineItem[]; subtotal: number }> {
   const lineItems = items.filter((l) => !l.isDiscount)
   const buckets = new Map<Department, QuoteLineItem[]>()
+  const feeLines: QuoteLineItem[] = []
   for (const it of lineItems) {
+    if (it.isFee) { feeLines.push(it); continue }
     const list = buckets.get(it.department) ?? []
     list.push(it)
     buckets.set(it.department, list)
   }
   // Order departments per DEPT_ORDER; any unexpected departments fall to the end.
-  const ordered: Array<{ dept: Department; items: QuoteLineItem[]; subtotal: number }> = []
+  const ordered: Array<{ dept: SectionKey; items: QuoteLineItem[]; subtotal: number }> = []
   for (const dept of DEPT_ORDER) {
     const list = buckets.get(dept)
     if (list && list.length > 0) {
@@ -246,6 +260,11 @@ function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: Department; it
   for (const [dept, list] of buckets) {
     const subtotal = list.reduce((s, l) => s + computeLineTotal(l), 0)
     ordered.push({ dept, items: list, subtotal })
+  }
+  // Fees always render LAST — charges close the document, after gear.
+  if (feeLines.length > 0) {
+    const subtotal = feeLines.reduce((s, l) => s + computeLineTotal(l), 0)
+    ordered.push({ dept: 'FEES', items: feeLines, subtotal })
   }
   return ordered
 }
@@ -575,7 +594,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
         {grouped.map(({ dept, items, subtotal }) => (
           <View key={dept} wrap={false}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{DEPT_LABELS[dept]}</Text>
+              <Text style={styles.sectionTitle}>{sectionLabel(dept)}</Text>
               <Text style={styles.sectionSub}>{items.length} {items.length === 1 ? 'item' : 'items'}</Text>
             </View>
             <View style={styles.tableHead}>
@@ -627,7 +646,7 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               )
             })}
             <View style={styles.subtotalRow}>
-              <Text style={styles.subtotalLabel}>{DEPT_LABELS[dept]} Subtotal</Text>
+              <Text style={styles.subtotalLabel}>{sectionLabel(dept)} Subtotal</Text>
               <Text style={styles.subtotalValue}>{fmtMoney(subtotal)}</Text>
             </View>
             {/* Department discount line — renders directly under the
