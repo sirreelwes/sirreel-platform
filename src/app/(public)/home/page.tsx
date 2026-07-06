@@ -70,11 +70,11 @@ export default async function PublicHomePage() {
             className="font-black tracking-tight leading-[0.95] text-[44px] sm:text-[64px] md:text-[80px] lg:text-[92px] max-w-[14ch] [text-shadow:0_2px_24px_rgba(0,0,0,0.45)]"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
-            Your gear is already on the truck.
+            Always on the job.
           </h1>
           <div className="w-16 h-[3px] bg-[#c39a3f] mt-8 mb-7" />
           <p className="text-[#e8e3d7] text-[17px] sm:text-[20px] max-w-[52ch] leading-relaxed [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]">
-            Production vehicles, stages, and supplies — staged, strapped, and ready to roll.
+            Gear, Vehicles, Sets and Stages
           </p>
         </div>
       </section>
