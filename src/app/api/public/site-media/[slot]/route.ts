@@ -3,11 +3,12 @@
  * media (poster image + optional loop video), stored in the PRIVATE
  * Vercel Blob store (a direct fetch of the raw blob URL 403s).
  *
- * Deliberately narrow — it resolves ONLY the two designated SiteSetting
- * hero fields and streams them; it can never serve an arbitrary blob:
+ * Deliberately narrow — it resolves ONLY the designated SiteSetting hero
+ * fields and streams them; it can never serve an arbitrary blob:
  *
- *   slot=hero-image → SiteSetting.heroImageUrl
- *   slot=hero-video → SiteSetting.heroVideoUrl
+ *   slot=hero-poster       → SiteSetting.heroPosterUrl
+ *   slot=hero-video        → SiteSetting.heroVideoUrl
+ *   slot=hero-video-mobile → SiteSetting.heroVideoMobileUrl
  *
  * Unlike the private claims/COI proxy, this content is public and
  * cacheable — the hero is on the marketing site — so it streams inline
@@ -23,17 +24,24 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ slot: string }> }
 
+const SLOT_FIELD = {
+  'hero-poster': 'heroPosterUrl',
+  'hero-video': 'heroVideoUrl',
+  'hero-video-mobile': 'heroVideoMobileUrl',
+} as const
+
 export async function GET(_req: NextRequest, { params }: Params) {
   const { slot } = await params
-  if (slot !== 'hero-image' && slot !== 'hero-video') {
+  const field = SLOT_FIELD[slot as keyof typeof SLOT_FIELD]
+  if (!field) {
     return NextResponse.json({ error: 'not found' }, { status: 404 })
   }
 
   const settings = await prisma.siteSetting.findUnique({
     where: { id: 'singleton' },
-    select: { heroImageUrl: true, heroVideoUrl: true },
+    select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true },
   })
-  const fileUrl = slot === 'hero-image' ? settings?.heroImageUrl : settings?.heroVideoUrl
+  const fileUrl = settings?.[field]
   if (!fileUrl) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   let blob

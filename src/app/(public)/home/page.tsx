@@ -14,6 +14,7 @@
 import Link from 'next/link'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { ContactForm } from '@/components/site/ContactForm'
+import { HeroBackground } from '@/components/site/HeroBackground'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import { prisma } from '@/lib/prisma'
 
@@ -29,51 +30,28 @@ export default async function PublicHomePage() {
     getPublicVehicles(),
     prisma.siteSetting.findUnique({
       where: { id: 'singleton' },
-      select: { heroImageUrl: true, heroVideoUrl: true },
+      select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true },
     }),
   ])
-  // Media is served through the public proxy — never the raw private
-  // blob URL. Poster/background = image; loop = video (needs a poster).
-  const hasImage = !!hero?.heroImageUrl
-  const hasVideo = !!hero?.heroVideoUrl
-  const heroImageSrc = hasImage ? '/api/public/site-media/hero-image' : null
-  const heroVideoSrc = hasVideo ? '/api/public/site-media/hero-video' : null
+  // Media is served through the public proxy — never the raw private blob
+  // URL. Poster = required JPG fallback + <video poster>; video = desktop
+  // loop; videoMobile = lighter loop under ~768px (client picks it).
+  const posterSrc = hero?.heroPosterUrl ? '/api/public/site-media/hero-poster' : null
+  const videoSrc = hero?.heroVideoUrl ? '/api/public/site-media/hero-video' : null
+  const videoMobileSrc = hero?.heroVideoMobileUrl ? '/api/public/site-media/hero-video-mobile' : null
 
   return (
     <div>
-      {/* ── 1. HERO — dark, with optional image/video behind a scrim ──
-          Video (if set) autoplays muted+looping over the poster image;
-          on mobile where autoplay may be blocked, the poster shows
-          through. With only an image → static background. With neither →
-          the plain dark band. A ~55% scrim ALWAYS sits over the media so
-          the white Archivo headline stays legible over a bright sky. */}
+      {/* ── 1. HERO — dark, with optional video/poster behind a scrim ──
+          Video (if set) autoplays muted+looping over the poster; on
+          mobile it uses the lighter source when provided, and where
+          autoplay is blocked the poster shows through. With only a poster
+          → static background. With neither → the plain dark band. A ~50%
+          scrim ALWAYS sits over the media so the white Archivo headline
+          stays legible over bright footage. (See HeroBackground.) */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
-        {(heroImageSrc || heroVideoSrc) && (
-          <div aria-hidden className="absolute inset-0 z-0">
-            {heroImageSrc && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={heroImageSrc}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            )}
-            {heroVideoSrc && (
-              <video
-                className="absolute inset-0 w-full h-full object-cover"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                poster={heroImageSrc ?? undefined}
-              >
-                <source src={heroVideoSrc} type="video/mp4" />
-              </video>
-            )}
-            {/* Dark scrim — always, for headline legibility. */}
-            <div className="absolute inset-0 bg-[#0c0c0d]/55" />
-          </div>
+        {(posterSrc || videoSrc) && (
+          <HeroBackground poster={posterSrc} video={videoSrc} videoMobile={videoMobileSrc} />
         )}
         <div className="relative z-10 max-w-[1480px] mx-auto px-5 py-24 sm:py-32">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-5" style={{ fontFamily: 'Archivo, sans-serif' }}>

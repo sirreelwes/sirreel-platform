@@ -4622,13 +4622,16 @@ model PlanyoSyncEvent {
 /// them through the public proxy /api/public/site-media/[slot], never
 /// as a raw blob src.
 model SiteSetting {
-  id           String   @id @default("singleton")
-  /// Poster / background image for the Home hero (private blob URL).
-  heroImageUrl String?  @map("hero_image_url")
-  /// Optional muted-loop MP4 for the Home hero (private blob URL).
-  heroVideoUrl String?  @map("hero_video_url")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default("singleton")
+  /// Required poster / static-background JPG for the Home hero, and the
+  /// <video poster> shown before/if the video plays (private blob URL).
+  heroPosterUrl      String?  @map("hero_poster_url")
+  /// Muted-loop MP4 background for the Home hero (private blob URL).
+  heroVideoUrl       String?  @map("hero_video_url")
+  /// Optional lighter MP4 served under ~768px (private blob URL).
+  heroVideoMobileUrl String?  @map("hero_video_mobile_url")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("sr_site_settings")
 }
