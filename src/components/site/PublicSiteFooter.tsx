@@ -16,16 +16,42 @@ import {
 export function PublicSiteFooter() {
   const year = 2026 // static: Date.now() is unavailable in this runtime; bump on rollover.
 
-  const footerLink = (item: (typeof PUBLIC_NAV)[number]) =>
-    item.live ? (
-      <Link key={item.label} href={item.href} className="text-[#a8a294] hover:text-white transition-colors">
-        {item.label}
-      </Link>
-    ) : (
-      <span key={item.label} className="text-[#6d685e] cursor-not-allowed select-none" title="Coming soon">
-        {item.label}
-      </span>
+  // Footer mirrors the nav's top-level entries. Plain-link entries link
+  // through; dropdown entries surface as a label with their live leaf
+  // items indented beneath (coming-soon and sensitive-request leaves are
+  // omitted here — the footer is a clean sitemap, not the full menu).
+  const footerEntry = (entry: (typeof PUBLIC_NAV)[number]) => {
+    if (!entry.groups) {
+      return (
+        <Link key={entry.label} href={entry.href!} className="text-[#a8a294] hover:text-white transition-colors">
+          {entry.label}
+        </Link>
+      )
+    }
+    const leaves = entry.groups
+      .flatMap((g) => g.items)
+      .filter((it) => it.href && (it.mode === 'order' || it.mode === 'download' || it.mode === 'link'))
+    return (
+      <div key={entry.label}>
+        <div className="text-[#8b857a]">{entry.label}</div>
+        {leaves.length > 0 && (
+          <div className="mt-1.5 flex flex-col gap-1.5 pl-3">
+            {leaves.map((it) =>
+              it.external ? (
+                <a key={it.label} href={it.href} target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
+                  {it.label}
+                </a>
+              ) : (
+                <Link key={it.label} href={it.href!} className="text-[#a8a294] hover:text-white transition-colors">
+                  {it.label}
+                </Link>
+              ),
+            )}
+          </div>
+        )}
+      </div>
     )
+  }
 
   return (
     <footer className="bg-[#0c0c0d] text-[#8b857a] border-t border-white/10">
@@ -62,7 +88,7 @@ export function PublicSiteFooter() {
               Explore
             </div>
             <nav className="flex flex-col gap-2.5 text-[13.5px]" aria-label="Footer">
-              {PUBLIC_NAV.map(footerLink)}
+              {PUBLIC_NAV.map(footerEntry)}
             </nav>
           </div>
 

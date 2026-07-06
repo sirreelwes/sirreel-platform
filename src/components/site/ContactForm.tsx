@@ -6,11 +6,16 @@ import { useState, type FormEvent } from 'react'
  * "Get in Touch" form for the public Home contact band. Posts to
  * /api/public/contact (rate-limited, honeypot, Turnstile-gated) which
  * lands an Inquiry(source WEB_FORM) in the staff pipeline. No auto-reply.
+ *
+ * `defaultMessage` seeds the message box — used by the nav's mode-aware
+ * links (Equipment "Request a quote", Forms "Payment Info & ACH") which
+ * deep-link to /home?prefill=…#contact so the agent sees exactly what
+ * was requested.
  */
-export function ContactForm() {
+export function ContactForm({ defaultMessage = '' }: { defaultMessage?: string }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(defaultMessage)
   const [website, setWebsite] = useState('') // honeypot
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)

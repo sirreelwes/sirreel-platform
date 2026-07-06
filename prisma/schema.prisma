@@ -4630,6 +4630,19 @@ model SiteSetting {
   heroVideoUrl       String?  @map("hero_video_url")
   /// Optional lighter MP4 served under ~768px (private blob URL).
   heroVideoMobileUrl String?  @map("hero_video_mobile_url")
+
+  /// PUBLIC downloadable forms (PDF, private blob URLs) — served via the
+  /// public proxy /api/public/forms/[slot]. Managed at /admin/forms.
+  /// These are the ONLY documents the site ever exposes for download.
+  /// SENSITIVE docs are intentionally absent: ACH / payment info is
+  /// request-only (routed to the contact intake, never a file link), and
+  /// Credit-Card Authorization is CardPointe's domain — SirReel never
+  /// collects, stores, or serves card data, so there is no field for it.
+  formCoiUrl              String? @map("form_coi_url")
+  formW9Url               String? @map("form_w9_url")
+  formRentalAgreementUrl  String? @map("form_rental_agreement_url")
+  formStudioContractUrl   String? @map("form_studio_contract_url")
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

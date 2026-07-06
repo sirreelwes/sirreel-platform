@@ -2,36 +2,132 @@
  * Public site navigation registry — the single source of truth for the
  * SirReel public marketing nav (sirreel.com / orders.sirreel.com).
  *
- * Cinelease-structure shell (2026-07-06): the SirReel wordmark sits
- * centered above the nav row and links to Home, so Home is NOT a nav
- * item. Items with `live: false` render visibly but non-clickable
- * ("coming soon") so the site map shows without dead links or 404s.
- * Flip `live: true` once a page ships.
+ * Cinelease-structure header (2026-07-06): the SirReel wordmark sits
+ * centered in the utility row; the nav row below it carries plain links
+ * and dropdown menus. Dropdown items that aren't built yet render as
+ * non-clickable "coming soon" placeholders (no dead links / 404s).
+ *
+ * MODE AWARENESS — the Equipment and Forms menus deliberately split by
+ * how a client transacts:
+ *   - self-serve  → links to the public order form (/order/supplies)
+ *   - agent-quote → routes to the contact intake with a prefilled
+ *                   subject (agent follows up; NOT a cart item)
+ *   - public doc  → downloads a PDF via the forms proxy
+ *   - sensitive   → request-only via the contact intake; NEVER a file
+ *                   link. Payment info / ACH is request-only. Credit-card
+ *                   authorization is intentionally ABSENT — it lives in
+ *                   CardPointe (future); SirReel never stores card data.
  */
-export interface PublicNavItem {
-  /** Visible label in the nav bar. */
-  label: string
-  /** Route it links to when live. */
-  href: string
-  /** When false, rendered visibly but inactive (not a link). */
-  live: boolean
+
+const ORDER_FORM_HREF = '/order/supplies'
+
+/** Contact-intake prefill link — lands on the Home contact band with the
+ *  message pre-seeded so the agent sees exactly what was requested. */
+export function contactPrefillHref(subject: string): string {
+  return `/home?prefill=${encodeURIComponent(subject)}#contact`
 }
 
-export const PUBLIC_NAV: PublicNavItem[] = [
-  { label: 'Vehicles', href: '/vehicles', live: true },
-  { label: 'Studios', href: '/studios', live: false },
-  { label: 'Supplies & Equipment', href: '/order/supplies', live: true },
-  // Same-page anchor to the Home page's contact band; from any other
-  // public page it navigates to /home and scrolls to #contact.
-  { label: 'Contact', href: '/home#contact', live: true },
+export type NavLeafMode = 'link' | 'order' | 'quote' | 'download' | 'request' | 'coming-soon'
+
+export interface NavLeaf {
+  label: string
+  /** Resolved href for link/order/quote/download/request; omitted for coming-soon. */
+  href?: string
+  mode: NavLeafMode
+  /** download/request open in a new tab / are plain <a> (not client nav). */
+  external?: boolean
+}
+
+export interface NavGroup {
+  /** Optional group heading shown inside the dropdown. */
+  heading?: string
+  items: NavLeaf[]
+}
+
+export interface NavEntry {
+  label: string
+  /** Plain top-level link when set (no dropdown). */
+  href?: string
+  /** Dropdown groups when set (no href). */
+  groups?: NavGroup[]
+}
+
+const comingSoon = (label: string): NavLeaf => ({ label, mode: 'coming-soon' })
+
+export const PUBLIC_NAV: NavEntry[] = [
+  { label: 'Home', href: '/home' },
+
+  {
+    label: 'Studios',
+    groups: [
+      {
+        // Stage pages are a future build — structure ready to link later.
+        items: [
+          comingSoon('Lankershim Stage'),
+          comingSoon('Standing Sets'),
+          comingSoon('LED Wall'),
+        ],
+      },
+    ],
+  },
+
+  { label: 'Vehicles', href: '/vehicles' },
+
+  {
+    label: 'Equipment',
+    groups: [
+      {
+        heading: 'Order online →',
+        items: [
+          { label: 'Production Supplies', href: ORDER_FORM_HREF, mode: 'order' },
+          { label: 'Walkies & Communications', href: ORDER_FORM_HREF, mode: 'order' },
+        ],
+      },
+      {
+        heading: 'Request a quote →',
+        items: [
+          { label: 'Lighting & Electric', href: contactPrefillHref('Equipment quote: Lighting & Electric'), mode: 'quote' },
+          { label: 'Grip Package — 1 Ton', href: contactPrefillHref('Equipment quote: Grip Package (1 Ton)'), mode: 'quote' },
+          { label: 'Grip Package — 3 Ton', href: contactPrefillHref('Equipment quote: Grip Package (3 Ton)'), mode: 'quote' },
+          { label: 'Grip Package — 5 Ton', href: contactPrefillHref('Equipment quote: Grip Package (5 Ton)'), mode: 'quote' },
+        ],
+      },
+    ],
+  },
+
+  {
+    label: 'Forms',
+    groups: [
+      {
+        heading: 'Downloads',
+        items: [
+          { label: 'Sample COI', href: '/api/public/forms/coi', mode: 'download', external: true },
+          { label: 'W-9', href: '/api/public/forms/w9', mode: 'download', external: true },
+          { label: 'Rental Agreement', href: '/api/public/forms/rental-agreement', mode: 'download', external: true },
+          { label: 'Studio Contract', href: '/api/public/forms/studio-contract', mode: 'download', external: true },
+        ],
+      },
+      {
+        heading: 'Billing',
+        items: [
+          // SENSITIVE — request-only, never a public file link.
+          { label: 'Payment Info & ACH', href: contactPrefillHref('Payment info request'), mode: 'request' },
+          // NOTE: Credit-Card Authorization is intentionally NOT listed.
+          // Card authorization is handled in CardPointe (future integration);
+          // SirReel never collects, stores, or serves card data.
+        ],
+      },
+    ],
+  },
+
+  { label: 'Contact', href: '/home#contact' },
 ]
 
 /**
- * The ORDER call-to-action — the gold-outline "Start an Order" button at
- * the nav row's right. Always live; routes to the public order form
- * (/order/supplies, which is also what orders.sirreel.com/ rewrites to).
+ * The ORDER call-to-action — the gold "ORDER →" button in the utility
+ * row (upper-right). Always live; routes to the public order form.
  */
-export const PUBLIC_ORDER_CTA = { label: 'Start an Order', href: '/order/supplies' }
+export const PUBLIC_ORDER_CTA = { label: 'ORDER', href: ORDER_FORM_HREF }
 
 /** Home target for the centered wordmark. */
 export const PUBLIC_HOME_HREF = '/home'
@@ -48,4 +144,15 @@ export const PUBLIC_CONTACT = {
   emailHref: 'mailto:info@sirreel.com',
   address: '8500 Lankershim Blvd, Sun Valley, CA 91352',
   entity: 'SirReel Studio Services',
+} as const
+
+/**
+ * Social links for the utility row. URLs are CONFIGURABLE and currently
+ * UNSET — '#' placeholders render the icons without a live destination.
+ * Fill these in when the handles are confirmed (or lift to SiteSetting /
+ * env later if they need to change without a deploy).
+ */
+export const PUBLIC_SOCIAL = {
+  instagram: '#', // TODO: set SirReel Instagram URL
+  tiktok: '#', // TODO: set SirReel TikTok URL
 } as const

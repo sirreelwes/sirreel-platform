@@ -25,7 +25,14 @@ function fmtRate(n: number | null): string {
   return `$${Number.isInteger(n) ? n : n.toFixed(2)}/day`
 }
 
-export default async function PublicHomePage() {
+export default async function PublicHomePage({
+  searchParams,
+}: {
+  // `?prefill=` seeds the contact form (nav quote / payment-info links
+  // deep-link here). Next 14 passes searchParams as a plain object.
+  searchParams?: { prefill?: string }
+}) {
+  const prefill = typeof searchParams?.prefill === 'string' ? searchParams.prefill.slice(0, 300) : ''
   const [vehicles, hero] = await Promise.all([
     getPublicVehicles(),
     // Hero media is OPTIONAL chrome — never let a settings-fetch failure
@@ -160,7 +167,7 @@ export default async function PublicHomePage() {
                 <span className="text-[#8b857a]">{PUBLIC_CONTACT.address}</span>
               </div>
             </div>
-            <ContactForm />
+            <ContactForm defaultMessage={prefill} />
           </div>
         </div>
       </section>
