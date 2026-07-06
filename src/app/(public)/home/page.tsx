@@ -28,10 +28,19 @@ function fmtRate(n: number | null): string {
 export default async function PublicHomePage() {
   const [vehicles, hero] = await Promise.all([
     getPublicVehicles(),
-    prisma.siteSetting.findUnique({
-      where: { id: 'singleton' },
-      select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true },
-    }),
+    // Hero media is OPTIONAL chrome — never let a settings-fetch failure
+    // (e.g. a schema/Prisma-client mismatch during a deploy window, the
+    // exact cause of the /home 500 after the hero-video release) take
+    // down the whole marketing page. Degrade to null → the dark hero.
+    prisma.siteSetting
+      .findUnique({
+        where: { id: 'singleton' },
+        select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true },
+      })
+      .catch((err) => {
+        console.error('[home] hero settings fetch failed — falling back to dark hero:', err)
+        return null
+      }),
   ])
   // Media is served through the public proxy — never the raw private blob
   // URL. Poster = required JPG fallback + <video poster>; video = desktop
