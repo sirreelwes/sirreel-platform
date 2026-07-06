@@ -9,6 +9,11 @@
  *   slot=hero-poster       → SiteSetting.heroPosterUrl
  *   slot=hero-video        → SiteSetting.heroVideoUrl
  *   slot=hero-video-mobile → SiteSetting.heroVideoMobileUrl
+ *   slot=tile-trucking      → SiteSetting.tileTruckingUrl
+ *   slot=tile-stages        → SiteSetting.tileStagesUrl
+ *   slot=tile-standing-sets → SiteSetting.tileStandingSetsUrl
+ *   slot=tile-led-wall      → SiteSetting.tileLedWallUrl
+ *   slot=tile-supplies      → SiteSetting.tileSuppliesUrl
  *
  * Unlike the private claims/COI proxy, this content is public and
  * cacheable — the hero is on the marketing site — so it streams inline
@@ -28,6 +33,11 @@ const SLOT_FIELD = {
   'hero-poster': 'heroPosterUrl',
   'hero-video': 'heroVideoUrl',
   'hero-video-mobile': 'heroVideoMobileUrl',
+  'tile-trucking': 'tileTruckingUrl',
+  'tile-stages': 'tileStagesUrl',
+  'tile-standing-sets': 'tileStandingSetsUrl',
+  'tile-led-wall': 'tileLedWallUrl',
+  'tile-supplies': 'tileSuppliesUrl',
 } as const
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -39,7 +49,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const settings = await prisma.siteSetting.findUnique({
     where: { id: 'singleton' },
-    select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true },
+    select: {
+      heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true,
+      tileTruckingUrl: true, tileStagesUrl: true, tileStandingSetsUrl: true,
+      tileLedWallUrl: true, tileSuppliesUrl: true,
+    },
   })
   const fileUrl = settings?.[field]
   if (!fileUrl) return NextResponse.json({ error: 'not found' }, { status: 404 })

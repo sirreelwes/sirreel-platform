@@ -101,7 +101,7 @@ export function PublicSiteFooter() {
               <Link href={PUBLIC_ORDER_CTA.href} className="text-[#a8a294] hover:text-white transition-colors">
                 {PUBLIC_ORDER_CTA.label}
               </Link>
-              <Link href="/home#contact" className="text-[#a8a294] hover:text-white transition-colors">
+              <Link href="/contact" className="text-[#a8a294] hover:text-white transition-colors">
                 Contact Us
               </Link>
             </nav>

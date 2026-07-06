@@ -4643,6 +4643,16 @@ model SiteSetting {
   formRentalAgreementUrl  String? @map("form_rental_agreement_url")
   formStudioContractUrl   String? @map("form_studio_contract_url")
 
+  /// Home diagonal service-nav tile images (private blob URLs) — served
+  /// via /api/public/site-media/[slot] and managed at /admin/home-tiles.
+  /// Each is duotone-tinted to its tile color on the Home page; a null
+  /// slot falls back to the solid tile color (graceful empty state).
+  tileTruckingUrl     String? @map("tile_trucking_url")
+  tileStagesUrl       String? @map("tile_stages_url")
+  tileStandingSetsUrl String? @map("tile_standing_sets_url")
+  tileLedWallUrl      String? @map("tile_led_wall_url")
+  tileSuppliesUrl     String? @map("tile_supplies_url")
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

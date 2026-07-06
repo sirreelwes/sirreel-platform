@@ -21,10 +21,11 @@
 
 const ORDER_FORM_HREF = '/order/supplies'
 
-/** Contact-intake prefill link — lands on the Home contact band with the
- *  message pre-seeded so the agent sees exactly what was requested. */
+/** Contact-intake prefill link — lands on the /contact band with the
+ *  message pre-seeded so the agent sees exactly what was requested.
+ *  (Contact moved off Home when Home became the diagonal service-nav.) */
 export function contactPrefillHref(subject: string): string {
-  return `/home?prefill=${encodeURIComponent(subject)}#contact`
+  return `/contact?prefill=${encodeURIComponent(subject)}`
 }
 
 export type NavLeafMode = 'link' | 'order' | 'quote' | 'download' | 'request' | 'coming-soon'
@@ -120,7 +121,7 @@ export const PUBLIC_NAV: NavEntry[] = [
     ],
   },
 
-  { label: 'Contact', href: '/home#contact' },
+  { label: 'Contact', href: '/contact' },
 ]
 
 /**

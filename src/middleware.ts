@@ -38,6 +38,7 @@ const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 // the order form + assets. Everything else (staff/portal/admin) 404s.
 const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/home',
+  '/contact',
   '/vehicles',
   '/order/supplies',
   '/api/public/',
@@ -59,6 +60,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
 const ORDERS_ALLOWED_PREFIXES = [
   '/order/supplies',   // the public supply form itself (rewrite target + direct hits)
   '/home',             // public Home page (linked from the shared public nav)
+  '/contact',          // public contact band (nav Contact + quote/payment deep-links)
   '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
   '/api/public/',      // catalog / vehicle-categories / supply-request
   '/_next/',           // Next.js build assets

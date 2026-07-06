@@ -1,0 +1,47 @@
+/**
+ * Public /contact — the "Get in Touch" band, moved off Home when Home
+ * became the diagonal service-nav (2026-07-06). The header nav's Contact
+ * link and the mode-aware quote / payment-info deep-links route here
+ * (?prefill=… seeds the message). Posts to /api/public/contact.
+ */
+
+import { ContactForm } from '@/components/site/ContactForm'
+import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+
+export const dynamic = 'force-dynamic'
+
+export default async function ContactPage({
+  searchParams,
+}: {
+  searchParams?: { prefill?: string }
+}) {
+  const prefill = typeof searchParams?.prefill === 'string' ? searchParams.prefill.slice(0, 300) : ''
+
+  return (
+    <section id="contact" className="bg-[#0c0c0d] text-white scroll-mt-24">
+      <div className="max-w-[1480px] mx-auto px-5 py-16 sm:py-24">
+        <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Get in Touch
+            </div>
+            <h1 className="font-black tracking-tight text-[32px] sm:text-[46px] leading-[1.05] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Let&rsquo;s get your production rolling.
+            </h1>
+            <p className="text-[#a8a294] text-[15px] leading-relaxed mt-5 max-w-[46ch]">
+              Tell us what you need and when. A SirReel team member will follow up — no bots, no auto-replies.
+            </p>
+            <div className="mt-7 text-[14px] text-[#cfc9bd] leading-relaxed">
+              <a href={PUBLIC_CONTACT.phoneHref} className="hover:text-white transition-colors">{PUBLIC_CONTACT.phone}</a>
+              <br />
+              <a href={PUBLIC_CONTACT.emailHref} className="hover:text-white transition-colors">{PUBLIC_CONTACT.email}</a>
+              <br />
+              <span className="text-[#8b857a]">{PUBLIC_CONTACT.address}</span>
+            </div>
+          </div>
+          <ContactForm defaultMessage={prefill} />
+        </div>
+      </div>
+    </section>
+  )
+}
