@@ -63,6 +63,11 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // top edge. Without the +--s width, the overhang would show the
           // container background (gaps between bands).
           const coverStyle: React.CSSProperties = { top: 0, bottom: 0, left: 0, width: 'calc(100% + var(--s))' }
+          // Horizontal shift to seat the tilted label on the band's
+          // diagonal AXIS: a middle parallelogram's mid-height centre is
+          // s/2 right of the box centre; the flush-edged first/last bands
+          // lean on one side only, so their centre is s/4.
+          const axisShift = i === 0 || i === last ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
           const inner = (
             <>
               {/* solid color base (visible collapsed) */}
@@ -88,11 +93,15 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                 <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ ...coverStyle, backgroundColor: t.colorDeep }} />
               )}
 
-              {/* vertical label — visible collapsed, fades out on hover */}
+              {/* tilted label — runs PARALLEL to the diagonal edge (15°
+                  off vertical via a clean rotate, never a skew), seated on
+                  the band's diagonal axis. Visible collapsed; fades out on
+                  hover as the expanded label fades in. Layered shadow keeps
+                  it legible over both the solid colour and the photo. */}
               <div className="absolute inset-0 flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
                 <span
-                  className="text-white font-black uppercase tracking-[0.14em] text-[19px] whitespace-nowrap [text-shadow:0_2px_10px_rgba(0,0,0,0.5)]"
-                  style={{ fontFamily: 'Archivo, sans-serif', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                  className="text-white font-black uppercase tracking-[0.1em] text-[26px] xl:text-[30px] whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.55),0_3px_18px_rgba(0,0,0,0.6)]"
+                  style={{ fontFamily: 'Archivo, sans-serif', transform: `translateX(${axisShift}) rotate(-75deg)` }}
                 >
                   {t.label}
                 </span>
@@ -125,8 +134,12 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             flexBasis: 0,
             clipPath: clipFor(i, last),
           } as React.CSSProperties
+          // Rest: every band flex-grow 1 → equal ~20% (fills the row, no
+          // gaps — the cleaner no-hover default). Hover: grow 4 → hovered
+          // band 4/8 = ~50% of the row while the other four compress to
+          // 1/8 = ~12.5% each. Smooth flex-grow transition.
           const bandClass =
-            'group relative h-full min-w-0 transition-[flex-grow] duration-500 ease-out hover:grow-[2.4] focus-visible:grow-[2.4] outline-none'
+            'group relative h-full min-w-0 transition-[flex-grow] duration-[600ms] ease-out hover:grow-[4] focus-visible:grow-[4] outline-none'
 
           // coming-soon → non-navigating div; link/order → Link.
           return t.mode === 'coming-soon' || !t.href ? (
