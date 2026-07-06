@@ -70,12 +70,12 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           const axisShift = i === 0 || i === last ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
           const inner = (
             <>
-              {/* solid color base (visible collapsed) */}
-              <div className="absolute" style={{ ...coverStyle, backgroundColor: t.color }} />
-
-              {/* duotone photo layer — fades in on hover */}
+              {/* Always-visible media — the duotone photo, or a solid
+                  colour fallback until a photo is uploaded. The image is
+                  ALWAYS rendered (no pure-solid resting state); a dim scrim
+                  below controls calm-at-rest vs vibrant-on-hover. */}
               {t.image ? (
-                <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={coverStyle}>
+                <div className="absolute" style={coverStyle}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={t.image}
@@ -83,15 +83,27 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{ filter: 'grayscale(1) contrast(1.05) brightness(1.12)' }}
                   />
-                  {/* color multiply → black-and-[color] duotone */}
+                  {/* colour multiply → black-and-[colour] duotone */}
                   <div className="absolute inset-0" style={{ backgroundColor: t.color, mixBlendMode: 'multiply' }} />
-                  {/* gentle bottom darken for label legibility */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
                 </div>
               ) : (
-                // no-image hover: deepen the solid color
-                <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ ...coverStyle, backgroundColor: t.colorDeep }} />
+                <div className="absolute" style={{ ...coverStyle, backgroundColor: t.color }} />
               )}
+
+              {/* Dim scrim — HEAVY at rest so the page reads calm and the
+                  tilted label stays legible; LIFTS on hover to reveal the
+                  photo at full vibrancy (duotone tint intact underneath).
+                  This is the always-on-dimmed-until-hover behaviour. */}
+              <div
+                className="absolute bg-black opacity-[0.62] group-hover:opacity-[0.1] transition-opacity duration-[350ms] ease-out pointer-events-none"
+                style={coverStyle}
+              />
+              {/* Bottom darken keeps the expanded label legible over a
+                  fully-bright hovered photo. */}
+              <div
+                className="absolute bg-gradient-to-t from-black/55 via-transparent to-transparent pointer-events-none"
+                style={coverStyle}
+              />
 
               {/* tilted label — runs PARALLEL to the diagonal edge (15°
                   off vertical via a clean rotate, never a skew), seated on
@@ -129,17 +141,16 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             </>
           )
 
-          const bandStyle = {
-            flexGrow: 1,
-            flexBasis: 0,
-            clipPath: clipFor(i, last),
-          } as React.CSSProperties
-          // Rest: every band flex-grow 1 → equal ~20% (fills the row, no
-          // gaps — the cleaner no-hover default). Hover: grow 4 → hovered
-          // band 4/8 = ~50% of the row while the other four compress to
-          // 1/8 = ~12.5% each. Smooth flex-grow transition.
+          // BUGFIX: flex-grow must live in the CLASSES, not inline style.
+          // An inline `flexGrow: 1` beats the `hover:grow-[4]` class
+          // (inline wins over classes), so hover never resized the bands.
+          // Only clip-path stays inline now.
+          const bandStyle = { clipPath: clipFor(i, last) } as React.CSSProperties
+          // Rest: grow + basis-0 → all five equal (20% each, no gaps).
+          // Hover: grow-4 → hovered band 4/8 = ~50% while the other four
+          // each drop to 1/8 = ~12.5% (narrow slivers). ~350ms ease.
           const bandClass =
-            'group relative h-full min-w-0 transition-[flex-grow] duration-[600ms] ease-out hover:grow-[4] focus-visible:grow-[4] outline-none'
+            'group relative h-full min-w-0 grow basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[4] focus-visible:grow-[4] outline-none'
 
           // coming-soon → non-navigating div; link/order → Link.
           return t.mode === 'coming-soon' || !t.href ? (
