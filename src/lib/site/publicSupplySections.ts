@@ -61,6 +61,34 @@ export const PUBLIC_SUPPLY_SECTIONS: PublicSupplySection[] = [
   { label: 'Vehicle Outfitting', slugs: ['vehicle-outfitting'] },
 ]
 
+// ── Deep-link slugs ────────────────────────────────────────────────
+// External links open the form pre-filtered to a section via
+// `/order/supplies?category=<slug>`. The slug is derived from the
+// section label (stable, human-readable) rather than the category
+// slugs (a section can map several, e.g. Radios & WiFi ← communications;
+// the URL should read `radios-wifi`, matching what the user sees).
+
+/** URL slug for a section's deep-link `?category=` value. */
+export function sectionSlug(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/** Reverse lookup: a `?category=` slug → the section LABEL it selects
+ *  (the value the filter state / `activeCat` uses), or null when it
+ *  matches no known section (caller falls back to the default view). */
+export function sectionLabelForSlug(slug: string): string | null {
+  const s = slug.trim().toLowerCase()
+  return PUBLIC_SUPPLY_SECTIONS.find((sec) => sectionSlug(sec.label) === s)?.label ?? null
+}
+
+/** [{ label, slug }] for every public section — the canonical list for
+ *  building deep-links (nav wiring, docs). */
+export const PUBLIC_SECTION_LINKS: { label: string; slug: string }[] =
+  PUBLIC_SUPPLY_SECTIONS.map((s) => ({ label: s.label, slug: sectionSlug(s.label) }))
+
 // Cross-list rules — name-matched items appear in the listed sections
 // INSTEAD of their home section. Keep patterns tight: a "Director's
 // Chair Rack" is transport gear, not a chair, so the pattern requires

@@ -33,7 +33,7 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
-import { mapCatalogToSections, rankSearchResults } from '@/lib/site/publicSupplySections'
+import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug } from '@/lib/site/publicSupplySections'
 
 interface CatalogItem {
   id: string
@@ -174,6 +174,39 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // ── Category deep-link (`?category=<slug>`) ───────────────────
+  // External links (nav, docs) can open the form pre-filtered to one
+  // curated section. Read ONCE on mount: a slug that matches a known
+  // public section pre-selects its filter button (same state as a tap)
+  // and flags a scroll to the supply grid once the catalog paints. An
+  // unknown/absent slug leaves the default view (no error). This does
+  // NOT lock the filter — the user can change it freely afterwards. It
+  // is independent of the cookie-based reorder session, so both apply.
+  const supplyGridRef = useRef<HTMLDivElement>(null)
+  const deepLinkReadRef = useRef(false)
+  const deepLinkScrollPendingRef = useRef(false)
+  useEffect(() => {
+    if (deepLinkReadRef.current) return
+    deepLinkReadRef.current = true
+    const slug = new URLSearchParams(window.location.search).get('category')
+    if (!slug) return
+    const label = sectionLabelForSlug(slug)
+    if (!label) return // unknown slug → default view, no error
+    setActiveCat(label)
+    setQuery('')
+    deepLinkScrollPendingRef.current = true
+  }, [])
+  // Scroll to the grid once the catalog has painted (the section block
+  // only renders after `data` loads). One-shot: cleared after firing so
+  // later data refetches (search) don't re-scroll.
+  useEffect(() => {
+    if (!deepLinkScrollPendingRef.current || !data) return
+    deepLinkScrollPendingRef.current = false
+    requestAnimationFrame(() =>
+      supplyGridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    )
+  }, [data])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query.trim()), 200)
@@ -824,7 +857,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Clicking the active section again clears back to all.
                   Hidden while searching (query overrides sections). */}
               {!debouncedQuery && data && (
-                <div className="mt-9">
+                <div ref={supplyGridRef} className="mt-9 scroll-mt-[120px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Production Supplies

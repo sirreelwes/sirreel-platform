@@ -80,8 +80,12 @@ export const PUBLIC_NAV: NavEntry[] = [
       {
         heading: 'Order online →',
         items: [
+          // Self-serve → the order form. "Production Supplies" opens the
+          // full catalog (the form's own header IS "Production Supplies");
+          // "Walkies & Communications" deep-links to the Radios & WiFi
+          // section via ?category (see publicSupplySections sectionSlug).
           { label: 'Production Supplies', href: ORDER_FORM_HREF, mode: 'order' },
-          { label: 'Walkies & Communications', href: ORDER_FORM_HREF, mode: 'order' },
+          { label: 'Walkies & Communications', href: `${ORDER_FORM_HREF}?category=radios-wifi`, mode: 'order' },
         ],
       },
       {
