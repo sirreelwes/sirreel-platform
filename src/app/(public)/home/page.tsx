@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { ContactForm } from '@/components/site/ContactForm'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,25 +25,68 @@ function fmtRate(n: number | null): string {
 }
 
 export default async function PublicHomePage() {
-  const vehicles = await getPublicVehicles()
+  const [vehicles, hero] = await Promise.all([
+    getPublicVehicles(),
+    prisma.siteSetting.findUnique({
+      where: { id: 'singleton' },
+      select: { heroImageUrl: true, heroVideoUrl: true },
+    }),
+  ])
+  // Media is served through the public proxy — never the raw private
+  // blob URL. Poster/background = image; loop = video (needs a poster).
+  const hasImage = !!hero?.heroImageUrl
+  const hasVideo = !!hero?.heroVideoUrl
+  const heroImageSrc = hasImage ? '/api/public/site-media/hero-image' : null
+  const heroVideoSrc = hasVideo ? '/api/public/site-media/hero-video' : null
 
   return (
     <div>
-      {/* ── 1. HERO — dark, roomy, no CTA buttons ────────────────── */}
+      {/* ── 1. HERO — dark, with optional image/video behind a scrim ──
+          Video (if set) autoplays muted+looping over the poster image;
+          on mobile where autoplay may be blocked, the poster shows
+          through. With only an image → static background. With neither →
+          the plain dark band. A ~55% scrim ALWAYS sits over the media so
+          the white Archivo headline stays legible over a bright sky. */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
-        {/* future: full-bleed <Image fill> + dark scrim slot here */}
+        {(heroImageSrc || heroVideoSrc) && (
+          <div aria-hidden className="absolute inset-0 z-0">
+            {heroImageSrc && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={heroImageSrc}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
+            {heroVideoSrc && (
+              <video
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                poster={heroImageSrc ?? undefined}
+              >
+                <source src={heroVideoSrc} type="video/mp4" />
+              </video>
+            )}
+            {/* Dark scrim — always, for headline legibility. */}
+            <div className="absolute inset-0 bg-[#0c0c0d]/55" />
+          </div>
+        )}
         <div className="relative z-10 max-w-[1480px] mx-auto px-5 py-24 sm:py-32">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Production Rentals — Los Angeles
           </div>
           <h1
-            className="font-black tracking-tight leading-[0.95] text-[44px] sm:text-[64px] md:text-[80px] lg:text-[92px] max-w-[14ch]"
+            className="font-black tracking-tight leading-[0.95] text-[44px] sm:text-[64px] md:text-[80px] lg:text-[92px] max-w-[14ch] [text-shadow:0_2px_24px_rgba(0,0,0,0.45)]"
             style={{ fontFamily: 'Archivo, sans-serif' }}
           >
             Your gear is already on the truck.
           </h1>
           <div className="w-16 h-[3px] bg-[#c39a3f] mt-8 mb-7" />
-          <p className="text-[#cfc9bd] text-[17px] sm:text-[20px] max-w-[52ch] leading-relaxed">
+          <p className="text-[#e8e3d7] text-[17px] sm:text-[20px] max-w-[52ch] leading-relaxed [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]">
             Production vehicles, stages, and supplies — staged, strapped, and ready to roll.
           </p>
         </div>

@@ -4607,3 +4607,28 @@ model PlanyoSyncEvent {
   @@index([planyoReservationId])
   @@map("planyo_sync_events")
 }
+
+// ═══════════════════════════════════════
+// SITE SETTINGS (public marketing surface)
+// ═══════════════════════════════════════
+
+/// Singleton config for the public marketing site (sirreel.com). One
+/// row, keyed by the fixed id "singleton" — every read/write goes
+/// through prisma.siteSetting.upsert({ where: { id: 'singleton' }, … }).
+/// Admin-managed at /admin/site-settings (requireAdmin).
+///
+/// heroImageUrl / heroVideoUrl are PRIVATE Vercel Blob URLs (403 on a
+/// direct fetch, same store as vehicle photos) — the Home hero serves
+/// them through the public proxy /api/public/site-media/[slot], never
+/// as a raw blob src.
+model SiteSetting {
+  id           String   @id @default("singleton")
+  /// Poster / background image for the Home hero (private blob URL).
+  heroImageUrl String?  @map("hero_image_url")
+  /// Optional muted-loop MP4 for the Home hero (private blob URL).
+  heroVideoUrl String?  @map("hero_video_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("sr_site_settings")
+}
