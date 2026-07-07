@@ -50,7 +50,14 @@ function TikTokIcon() {
   )
 }
 
-export function PublicSiteNav() {
+export function PublicSiteNav({
+  liveStudioLinks = {},
+}: {
+  /** Runtime publish gate: coming-soon leaves whose label is a key here
+   *  render as a live link to the given href instead of a placeholder.
+   *  Driven by the (public) layout (e.g. Standing Sets once published). */
+  liveStudioLinks?: Record<string, string>
+} = {}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false) // mobile menu
   const [expanded, setExpanded] = useState<string | null>(null) // mobile dropdown section
@@ -64,6 +71,21 @@ export function PublicSiteNav() {
 
   // A single leaf inside a dropdown (desktop or mobile panel).
   const leaf = (item: NavLeaf, onNav?: () => void) => {
+    // Runtime publish gate: a coming-soon leaf flips to a live link once
+    // its content is published (e.g. Standing Sets → /standing-sets).
+    const liveHref = liveStudioLinks[item.label]
+    if (item.mode === 'coming-soon' && liveHref) {
+      return (
+        <Link
+          key={item.label}
+          href={liveHref}
+          onClick={onNav}
+          className="block px-3 py-2 text-[13px] text-[#cfc9bd] hover:text-white hover:bg-white/5 rounded transition-colors"
+        >
+          {item.label}
+        </Link>
+      )
+    }
     if (item.mode === 'coming-soon' || !item.href) {
       return (
         <span

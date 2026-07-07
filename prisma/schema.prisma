@@ -332,6 +332,60 @@ model VehicleCategoryPhoto {
   @@map("vehicle_category_photos")
 }
 
+// ── Spaces (Standing Sets / Stages / LED Wall) ─────────────────────
+// Generic public-catalog model for bookable production spaces — launched
+// with Standing Sets, reused by Stages + LED Wall later. Mirrors the
+// VehicleCategory + VehicleCategoryPhoto pattern exactly: private-Blob
+// photos served through the public catalog-image proxy, a `published`
+// gate, and an `active` archive flag. Client-visible ONLY when active +
+// published AND it has at least one photo (see PUBLIC_SPACE_VISIBLE_WHERE
+// in lib/site/spaces.ts) — photo-less/unpublished rows 404 publicly.
+enum SpaceType {
+  STANDING_SET
+  STAGE
+  LED_WALL
+}
+
+model Space {
+  id          String    @id @default(uuid())
+  name        String
+  type        SpaceType
+  description String?   @db.Text
+  sortOrder   Int       @default(0) @map("sort_order")
+  // Public publish gate; `active` is the HQ archive flag (soft-delete —
+  // archived rows drop out of the admin default view but are never hard-
+  // deleted). Parallels VehicleCategory.published / .active.
+  published   Boolean   @default(false)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  photos      SpacePhoto[]
+
+  // Names are unique WITHIN a type (a Stage and a Standing Set may share a
+  // name); also the upsert key for the idempotent seed.
+  @@unique([type, name])
+  @@index([type, published])
+  @@map("spaces")
+}
+
+// Gallery photos for a Space. url points at a PRIVATE blob
+// (uploadPrivateImage) — served back ONLY through the catalog-image proxy
+// (kind=space / space-photo), never the raw blob URL. Exactly one
+// isPrimary per space (enforced in the API); order is sortOrder asc.
+model SpacePhoto {
+  id        String   @id @default(uuid())
+  spaceId   String   @map("space_id")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  url       String
+  sortOrder Int      @default(0) @map("sort_order")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([spaceId])
+  @@map("space_photos")
+}
+
 model Company {
   id            String         @id @default(uuid())
   name          String

@@ -16,6 +16,7 @@
 import { prisma } from '@/lib/prisma'
 import { HOME_TILES } from '@/lib/site/homeTiles'
 import { ServiceTiles } from '@/components/site/ServiceTiles'
+import { hasPublishedSpaces } from '@/lib/site/spaces'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,10 +46,27 @@ export default async function PublicHomePage() {
     'wardrobe-makeup': !!settings?.tileWardrobeMakeupUrl,
   }
 
-  const tiles = HOME_TILES.map((t) => ({
-    ...t,
-    image: setBySlot[t.slot] ? `/api/public/site-media/tile-${t.slot}` : null,
-  }))
+  // Publish gate: the Standing Sets tile stays "coming soon" until at least
+  // one standing set is PUBLISHED with a photo. The moment Wes publishes
+  // one, this flips the tile to a live link (tap → gallery, swipe → the
+  // on-page Check Availability form) — no code change needed.
+  const standingSetsLive = await hasPublishedSpaces('STANDING_SET').catch(() => false)
+
+  const tiles = HOME_TILES.map((t) => {
+    const base = {
+      ...t,
+      image: setBySlot[t.slot] ? `/api/public/site-media/tile-${t.slot}` : null,
+    }
+    if (t.slot === 'standing-sets' && standingSetsLive) {
+      return {
+        ...base,
+        mode: 'link' as const,
+        href: '/standing-sets',
+        swipe: { label: 'Check Availability', href: '/standing-sets#availability' },
+      }
+    }
+    return base
+  })
 
   return <ServiceTiles tiles={tiles} />
 }

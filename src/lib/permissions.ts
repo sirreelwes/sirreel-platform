@@ -364,6 +364,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'fleet-pricing', label: 'Fleet Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
         { id: 'fees', label: 'Fees', icon: 'Receipt', href: '/admin/fees' },
         { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
+        { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },

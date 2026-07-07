@@ -1,6 +1,7 @@
 import { Archivo, Hanken_Grotesk } from 'next/font/google'
 import { PublicSiteNav } from '@/components/site/PublicSiteNav'
 import { PublicSiteFooter } from '@/components/site/PublicSiteFooter'
+import { hasPublishedSpaces } from '@/lib/site/spaces'
 
 /**
  * Shared public-site shell (SirReel marketing surface, orders.sirreel.com).
@@ -28,13 +29,21 @@ const hanken = Hanken_Grotesk({
   display: 'swap',
 })
 
-export default function PublicSiteLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicSiteLayout({ children }: { children: React.ReactNode }) {
+  // Publish gate for the Studios ▾ nav: the "Standing Sets" entry stays a
+  // "coming soon" placeholder until a standing set is published with a
+  // photo, then becomes a live link — mirroring the home tile gate.
+  const standingSetsLive = await hasPublishedSpaces('STANDING_SET').catch(() => false)
+  const liveStudioLinks: Record<string, string> = standingSetsLive
+    ? { 'Standing Sets': '/standing-sets' }
+    : {}
+
   return (
     <div
       className={`${archivo.variable} ${hanken.variable} min-h-screen flex flex-col bg-[#f4f1ea] text-[#0c0c0d]`}
       style={{ fontFamily: '"Hanken Grotesk", Inter, system-ui, sans-serif' }}
     >
-      <PublicSiteNav />
+      <PublicSiteNav liveStudioLinks={liveStudioLinks} />
       <main className="flex-1">{children}</main>
       <PublicSiteFooter />
     </div>

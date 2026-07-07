@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
+import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,6 +75,34 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // One gallery photo by id — only when its PARENT vehicle is client-visible.
     const photo = await prisma.vehicleCategoryPhoto.findFirst({
       where: { id, vehicleCategory: PUBLIC_VEHICLE_VISIBLE_WHERE },
+      select: { url: true },
+    })
+    if (!photo) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    return streamPrivateBlobAsResponse({ fileUrl: photo.url, filename: `${id}.jpg` })
+  }
+
+  if (kind === 'space') {
+    // A Space's representative image — the primary gallery photo — served
+    // only when the space passes the public visibility gate.
+    const space = await prisma.space.findFirst({
+      where: { id, ...PUBLIC_SPACE_VISIBLE_WHERE },
+      select: {
+        photos: {
+          select: { url: true },
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+          take: 1,
+        },
+      },
+    })
+    const fileUrl = space?.photos[0]?.url ?? null
+    if (!fileUrl) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    return streamPrivateBlobAsResponse({ fileUrl, filename: `${id}.jpg` })
+  }
+
+  if (kind === 'space-photo') {
+    // One gallery photo by id — only when its PARENT space is client-visible.
+    const photo = await prisma.spacePhoto.findFirst({
+      where: { id, space: PUBLIC_SPACE_VISIBLE_WHERE },
       select: { url: true },
     })
     if (!photo) return NextResponse.json({ error: 'not found' }, { status: 404 })
