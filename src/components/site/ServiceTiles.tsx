@@ -35,6 +35,29 @@ import type { HomeTile } from '@/lib/site/homeTiles'
 const SLANT = 'calc((100dvh - var(--pubhdr)) * 0.2679)'
 const SECTION_H = 'calc(100dvh - var(--pubhdr))'
 
+// ── Mood knobs — brighten / warm the tiles here ───────────────────
+// One place to dial the resting vibe. Higher = darker/moodier, lower =
+// brighter/cheerier. Hover always lifts the scrim to HOVER_SCRIM_OPACITY.
+//
+// Resting black scrim opacity over each tile. LOWER = brighter, more
+// vivid photos at rest (label legibility leans on the text-shadow +
+// bottom gradient below, so don't drop this to ~0).
+const REST_SCRIM_OPACITY = 0.42 // was 0.62 — too dark/noir
+// Hover scrim — near-zero so the photo reads at full brightness. Unchanged.
+const HOVER_SCRIM_OPACITY = 0.1
+// Base grayscale-photo filter, applied BEFORE the colour multiply. A
+// higher brightness lifts the whole tile and also intensifies the tint
+// (white · colour = colour under multiply), so brighter reads as more
+// vivid, not washed out.
+const IMG_FILTER = 'grayscale(1) contrast(1.05) brightness(1.26)' // was brightness(1.12)
+// Saturation boost on the COMPOSITED duotone (grayscale photo + colour
+// multiply). >1 makes the tints energetic rather than muted. 1 = as-is.
+const DUOTONE_SATURATE = 1.28
+const DUOTONE_FILTER = `saturate(${DUOTONE_SATURATE})`
+// Mobile resting overlay — left→right, darkest under the left-aligned
+// label. Lighten in step with the desktop scrim.
+const MOBILE_SCRIM = 'bg-gradient-to-r from-black/42 to-black/5' // was from-black/55 to-black/10
+
 function clipFor(i: number, last: number): string {
   if (i === 0) return `polygon(0 0, calc(100% + var(--s)) 0, 100% 100%, 0 100%)` // flush left
   if (i === last) return `polygon(var(--s) 0, 100% 0, 100% 100%, 0 100%)` // flush right
@@ -53,7 +76,12 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
       // with N bands, grow=N-1 gives (N-1)/((N-1)+(N-1)·1) = 1/2 while
       // the other N-1 bands share the remaining half. Adding tiles just
       // narrows the resting slivers; the open size stays constant.
-      style={{ ['--s' as string]: SLANT, ['--hovergrow' as string]: String(Math.max(tiles.length - 1, 1)) }}
+      style={{
+        ['--s' as string]: SLANT,
+        ['--hovergrow' as string]: String(Math.max(tiles.length - 1, 1)),
+        ['--tile-rest-scrim' as string]: String(REST_SCRIM_OPACITY),
+        ['--tile-hover-scrim' as string]: String(HOVER_SCRIM_OPACITY),
+      }}
     >
       {/* ── Desktop: diagonal bands ─────────────────────────────── */}
       <div
@@ -79,13 +107,15 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                   ALWAYS rendered (no pure-solid resting state); a dim scrim
                   below controls calm-at-rest vs vibrant-on-hover. */}
               {t.image ? (
-                <div className="absolute" style={coverStyle}>
+                // saturate() on the wrapper boosts the COMPOSITED duotone
+                // (photo × colour multiply) and isolates the blend group.
+                <div className="absolute" style={{ ...coverStyle, filter: DUOTONE_FILTER }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={t.image}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'grayscale(1) contrast(1.05) brightness(1.12)' }}
+                    style={{ filter: IMG_FILTER }}
                   />
                   {/* colour multiply → black-and-[colour] duotone */}
                   <div className="absolute inset-0" style={{ backgroundColor: t.color, mixBlendMode: 'multiply' }} />
@@ -99,7 +129,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                   photo at full vibrancy (duotone tint intact underneath).
                   This is the always-on-dimmed-until-hover behaviour. */}
               <div
-                className="absolute bg-black opacity-[0.62] group-hover:opacity-[0.1] transition-opacity duration-[350ms] ease-out pointer-events-none"
+                className="absolute bg-black opacity-[var(--tile-rest-scrim)] group-hover:opacity-[var(--tile-hover-scrim)] transition-opacity duration-[350ms] ease-out pointer-events-none"
                 style={coverStyle}
               />
               {/* Bottom darken keeps the expanded label legible over a
@@ -176,16 +206,16 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             <>
               <div className="absolute inset-0" style={{ backgroundColor: t.color }} />
               {t.image && (
-                <div className="absolute inset-0">
+                <div className="absolute inset-0" style={{ filter: DUOTONE_FILTER }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={t.image}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={{ filter: 'grayscale(1) contrast(1.05) brightness(1.12)' }}
+                    style={{ filter: IMG_FILTER }}
                   />
                   <div className="absolute inset-0" style={{ backgroundColor: t.color, mixBlendMode: 'multiply' }} />
-                  <div className="absolute inset-0 bg-gradient-to-r from-black/55 to-black/10" />
+                  <div className={`absolute inset-0 ${MOBILE_SCRIM}`} />
                 </div>
               )}
               <div className="absolute inset-0 flex flex-col justify-center px-6">
