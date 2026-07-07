@@ -31,6 +31,8 @@ export function SwipeableMobileTile({
   label,
   comingSoon,
   swipe,
+  color,
+  image,
   rowStyle,
   accent,
   children,
@@ -39,6 +41,10 @@ export function SwipeableMobileTile({
   label: string
   comingSoon: boolean
   swipe?: { label: string; href: string }
+  /** This tile's assigned brand colour — tints the revealed action area. */
+  color: string
+  /** This tile's photo (proxy URL) or null — shown behind the action tint. */
+  image: string | null
   rowStyle: React.CSSProperties
   accent: React.ReactNode
   children: React.ReactNode
@@ -136,14 +142,29 @@ export function SwipeableMobileTile({
 
   return (
     <div className="relative block w-full overflow-hidden" style={rowStyle}>
-      {/* Revealed express action, pinned behind the tile's right edge. */}
+      {/* Revealed express action, pinned behind the tile's right edge. The
+          panel wears THIS tile's colour (tinting the photo behind it), with
+          a rounded black button carrying the per-tile action label. */}
       <Link
         href={swipe.href}
         aria-label={`${label} — ${swipe.label}`}
-        className="absolute inset-y-0 right-0 flex items-center justify-center text-center bg-[#c39a3f] text-[#0c0c0d] font-black uppercase tracking-[0.05em] text-[12.5px] leading-tight px-3"
-        style={{ width: REVEAL, fontFamily: 'Archivo, sans-serif' }}
+        className="absolute inset-y-0 right-0 flex items-center justify-center overflow-hidden px-3"
+        style={{ width: REVEAL }}
       >
-        {swipe.label}
+        {/* tile photo behind (cropped slice) */}
+        {image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        {/* tile's own colour tint — full when photo-less, translucent over a photo */}
+        <div className="absolute inset-0" style={{ backgroundColor: color, opacity: image ? 0.7 : 1 }} />
+        {/* rounded black button on top */}
+        <span
+          className="relative z-10 inline-flex items-center justify-center text-center rounded-xl bg-black text-white font-black uppercase tracking-[0.04em] text-[12px] leading-tight px-3 py-2 min-h-[48px] max-w-full shadow-[0_4px_14px_rgba(0,0,0,0.45)]"
+          style={{ fontFamily: 'Archivo, sans-serif' }}
+        >
+          {swipe.label}
+        </span>
       </Link>
 
       {/* Foreground tile — slides left to expose the action. A tappable

@@ -59,6 +59,12 @@ const DUOTONE_FILTER = `saturate(${DUOTONE_SATURATE})`
 // label. Lighten in step with the desktop scrim.
 const MOBILE_SCRIM = 'bg-gradient-to-r from-black/42 to-black/5' // was from-black/55 to-black/10
 
+// Localized legibility halo behind tile TITLES only — a tight dark edge +
+// soft glow so titles stay crisp over any busy duotone photo, without
+// darkening the whole tile. Applied to every title, mobile + desktop.
+const TITLE_SHADOW =
+  '[text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_4px_rgba(0,0,0,0.8),0_2px_16px_rgba(0,0,0,0.6)]'
+
 function clipFor(i: number, last: number): string {
   if (i === 0) return `polygon(0 0, calc(100% + var(--s)) 0, 100% 100%, 0 100%)` // flush left
   if (i === last) return `polygon(var(--s) 0, 100% 0, 100% 100%, 0 100%)` // flush right
@@ -147,7 +153,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                   it legible over both the solid colour and the photo. */}
               <div className="absolute inset-0 flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
                 <span
-                  className="text-white font-black uppercase tracking-[0.1em] text-[26px] xl:text-[30px] whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.55),0_3px_18px_rgba(0,0,0,0.6)]"
+                  className={`text-white font-black uppercase tracking-[0.1em] text-[26px] xl:text-[30px] whitespace-nowrap ${TITLE_SHADOW}`}
                   style={{ fontFamily: 'Archivo, sans-serif', transform: `translateX(${axisShift}) rotate(-75deg)` }}
                 >
                   {t.label}
@@ -157,7 +163,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
               {/* horizontal label + tagline — fades in on hover */}
               <div className="absolute left-0 right-0 bottom-0 p-7 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75 pointer-events-none"
                 style={{ paddingLeft: `calc(1.75rem + var(--s))` }}>
-                <div className="text-white font-black uppercase tracking-[0.08em] text-[26px] leading-none [text-shadow:0_2px_12px_rgba(0,0,0,0.6)]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                <div className={`text-white font-black uppercase tracking-[0.08em] text-[26px] leading-none ${TITLE_SHADOW}`} style={{ fontFamily: 'Archivo, sans-serif' }}>
                   {t.label}
                 </div>
                 <div className="text-white/85 text-[13px] mt-2 max-w-[26ch] [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]">
@@ -220,7 +226,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                 </div>
               )}
               <div className="absolute inset-0 flex flex-col justify-center px-6">
-                <div className="text-white font-black uppercase tracking-[0.08em] text-[26px] leading-none [text-shadow:0_2px_12px_rgba(0,0,0,0.6)]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                <div className={`text-white font-black uppercase tracking-[0.08em] text-[26px] leading-none ${TITLE_SHADOW}`} style={{ fontFamily: 'Archivo, sans-serif' }}>
                   {t.label}
                 </div>
                 <div className="text-white/85 text-[12.5px] mt-1.5 [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]">{t.tagline}</div>
@@ -256,6 +262,8 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
               label={t.label}
               comingSoon={t.mode === 'coming-soon'}
               swipe={t.swipe}
+              color={t.color}
+              image={t.image}
               rowStyle={rowStyle}
               accent={accent}
             >
