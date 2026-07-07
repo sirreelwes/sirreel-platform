@@ -205,22 +205,28 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
               </div>
             </>
           )
-          // Slight diagonal bottom edge for flavor; overlap the next row
-          // by the cut so colors interlock. Last row is flush.
+          // Each tile is a FULL-RECTANGLE tap target — no clip-path on the
+          // interactive element (that would shrink the hit-area so taps in
+          // the cut corner fell through). Tiles butt together flush; a thin
+          // skewed accent line (pointer-events-none, clipped by overflow)
+          // keeps a hint of the diagonal language without eating taps.
           const isLast = i === last
-          const rowStyle = {
-            height: '20vh',
-            minHeight: 132,
-            clipPath: isLast ? undefined : 'polygon(0 0, 100% 0, 100% calc(100% - 22px), 0 100%)',
-            marginBottom: isLast ? 0 : -22,
-          } as React.CSSProperties
+          const rowStyle = { height: '20vh', minHeight: 132 } as React.CSSProperties
+          const accent = !isLast && (
+            <div
+              className="absolute inset-x-0 -bottom-px h-[3px] bg-[#c39a3f]/45 pointer-events-none"
+              style={{ transform: 'skewY(-1.2deg)' }}
+            />
+          )
           return t.mode === 'coming-soon' || !t.href ? (
-            <div key={t.slot} className="relative block w-full" style={rowStyle} aria-label={`${t.label} — coming soon`}>
+            <div key={t.slot} className="relative block w-full overflow-hidden" style={rowStyle} aria-label={`${t.label} — coming soon`}>
               {inner}
+              {accent}
             </div>
           ) : (
-            <Link key={t.slot} href={t.href} className="relative block w-full" style={rowStyle} aria-label={t.label}>
+            <Link key={t.slot} href={t.href} className="relative block w-full overflow-hidden" style={rowStyle} aria-label={t.label}>
               {inner}
+              {accent}
             </Link>
           )
         })}

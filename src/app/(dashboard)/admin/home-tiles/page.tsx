@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type Slot = 'trucking' | 'stages' | 'standing-sets' | 'led-wall' | 'supplies' | 'radios-wifi' | 'grip-electric';
+type Slot = 'trucking' | 'stages' | 'standing-sets' | 'led-wall' | 'supplies' | 'radios-wifi' | 'grip-electric' | 'wardrobe-makeup';
 
 interface TilesState {
   trucking: boolean;
@@ -20,6 +20,7 @@ interface TilesState {
   supplies: boolean;
   radiosWifi: boolean;
   gripElectric: boolean;
+  wardrobeMakeup: boolean;
   updatedAt: string | null;
 }
 
@@ -31,6 +32,7 @@ const SLOTS: { slot: Slot; title: string; color: string; stateKey: keyof TilesSt
   { slot: 'supplies', title: 'Supplies & Equipment', color: '#7e57c2', stateKey: 'supplies' },
   { slot: 'radios-wifi', title: 'Radios & WiFi', color: '#0e9db0', stateKey: 'radiosWifi' },
   { slot: 'grip-electric', title: 'Grip & Electric', color: '#e0701f', stateKey: 'gripElectric' },
+  { slot: 'wardrobe-makeup', title: 'Wardrobe & Makeup', color: '#d6448c', stateKey: 'wardrobeMakeup' },
 ];
 
 export default function AdminHomeTilesPage() {
@@ -47,6 +49,7 @@ export default function AdminHomeTilesPage() {
     supplies: useRef<HTMLInputElement>(null),
     'radios-wifi': useRef<HTMLInputElement>(null),
     'grip-electric': useRef<HTMLInputElement>(null),
+    'wardrobe-makeup': useRef<HTMLInputElement>(null),
   };
 
   const load = useCallback(async () => {

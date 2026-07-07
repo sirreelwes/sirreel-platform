@@ -12,7 +12,7 @@ export type TileMode = 'link' | 'order' | 'coming-soon'
 
 export interface HomeTile {
   /** Admin/media slot id (also the public proxy suffix: tile-<slot>). */
-  slot: 'trucking' | 'stages' | 'standing-sets' | 'led-wall' | 'supplies' | 'radios-wifi' | 'grip-electric'
+  slot: 'trucking' | 'stages' | 'standing-sets' | 'led-wall' | 'supplies' | 'radios-wifi' | 'grip-electric' | 'wardrobe-makeup'
   label: string
   /** Saturated brand color for this tile (collapsed solid + duotone tint). */
   color: string
@@ -40,4 +40,6 @@ export const HOME_TILES: HomeTile[] = [
   // Quote-request: routes to the contact intake with a prefilled subject
   // (matches the Equipment ▾ "Request a quote" grip/lighting flow).
   { slot: 'grip-electric', label: 'Grip & Electric', color: '#e0701f', colorDeep: '#9c4c12', tagline: 'Lighting, grip & power — request a quote', mode: 'link', href: contactPrefillHref('Equipment quote: Grip & Electric') },
+  // Self-serve: deep-links the order form to the Wardrobe & Makeup section.
+  { slot: 'wardrobe-makeup', label: 'Wardrobe & Makeup', color: '#d6448c', colorDeep: '#912a5c', tagline: 'Chairs, mirrors, steamers & racks', mode: 'order', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup` },
 ]

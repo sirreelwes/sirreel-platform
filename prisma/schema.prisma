@@ -4654,6 +4654,7 @@ model SiteSetting {
   tileSuppliesUrl     String? @map("tile_supplies_url")
   tileRadiosWifiUrl   String? @map("tile_radios_wifi_url")
   tileGripElectricUrl String? @map("tile_grip_electric_url")
+  tileWardrobeMakeupUrl String? @map("tile_wardrobe_makeup_url")
 
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")

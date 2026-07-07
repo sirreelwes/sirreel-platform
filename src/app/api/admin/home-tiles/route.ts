@@ -2,9 +2,9 @@
  * /api/admin/home-tiles — manage the Home diagonal service-nav tile
  * images (requireAdmin on every method).
  *
- *   GET    → { trucking, stages, standingSets, ledWall, supplies, radiosWifi, gripElectric: boolean, updatedAt }
+ *   GET    → { …trucking…supplies, radiosWifi, gripElectric, wardrobeMakeup: boolean, updatedAt }
  *   POST   → multipart { slot, file }, slot ∈
- *              'trucking' | 'stages' | 'standing-sets' | 'led-wall' | 'supplies' | 'radios-wifi' | 'grip-electric'
+ *              'trucking' | … | 'radios-wifi' | 'grip-electric' | 'wardrobe-makeup'
  *            uploads an image to the PRIVATE Blob store and persists the
  *            URL on the SiteSetting singleton.
  *   DELETE → ?slot=<slot> clears that tile (falls back to solid color).
@@ -32,6 +32,7 @@ const SLOT = {
   supplies: 'tileSuppliesUrl',
   'radios-wifi': 'tileRadiosWifiUrl',
   'grip-electric': 'tileGripElectricUrl',
+  'wardrobe-makeup': 'tileWardrobeMakeupUrl',
 } as const
 type SlotKey = keyof typeof SLOT
 
@@ -44,7 +45,8 @@ export async function GET() {
     select: {
       tileTruckingUrl: true, tileStagesUrl: true, tileStandingSetsUrl: true,
       tileLedWallUrl: true, tileSuppliesUrl: true,
-      tileRadiosWifiUrl: true, tileGripElectricUrl: true, updatedAt: true,
+      tileRadiosWifiUrl: true, tileGripElectricUrl: true, tileWardrobeMakeupUrl: true,
+      updatedAt: true,
     },
   })
   return NextResponse.json({
@@ -55,6 +57,7 @@ export async function GET() {
     supplies: !!s?.tileSuppliesUrl,
     radiosWifi: !!s?.tileRadiosWifiUrl,
     gripElectric: !!s?.tileGripElectricUrl,
+    wardrobeMakeup: !!s?.tileWardrobeMakeupUrl,
     updatedAt: s?.updatedAt ?? null,
   })
 }
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
   const file = form?.get('file')
   const slot = SLOT[slotRaw as SlotKey] ? (slotRaw as SlotKey) : null
   if (!slot) {
-    return NextResponse.json({ error: 'slot must be trucking, stages, standing-sets, led-wall, supplies, radios-wifi, or grip-electric' }, { status: 400 })
+    return NextResponse.json({ error: 'slot must be a known tile (trucking … radios-wifi, grip-electric, wardrobe-makeup)' }, { status: 400 })
   }
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'file field required' }, { status: 400 })

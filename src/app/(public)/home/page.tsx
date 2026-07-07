@@ -26,7 +26,7 @@ export default async function PublicHomePage() {
       select: {
         tileTruckingUrl: true, tileStagesUrl: true, tileStandingSetsUrl: true,
         tileLedWallUrl: true, tileSuppliesUrl: true,
-        tileRadiosWifiUrl: true, tileGripElectricUrl: true,
+        tileRadiosWifiUrl: true, tileGripElectricUrl: true, tileWardrobeMakeupUrl: true,
       },
     })
     .catch((err) => {
@@ -42,6 +42,7 @@ export default async function PublicHomePage() {
     supplies: !!settings?.tileSuppliesUrl,
     'radios-wifi': !!settings?.tileRadiosWifiUrl,
     'grip-electric': !!settings?.tileGripElectricUrl,
+    'wardrobe-makeup': !!settings?.tileWardrobeMakeupUrl,
   }
 
   const tiles = HOME_TILES.map((t) => ({
