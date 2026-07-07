@@ -1,5 +1,15 @@
 import Link from 'next/link'
 import type { HomeTile } from '@/lib/site/homeTiles'
+import { SwipeableMobileTile } from '@/components/site/SwipeableMobileTile'
+
+// Tiles that get the mobile swipe-to-add express path: self-serve
+// order-form sections only. Radios & WiFi deep-links to its section; Pro
+// Supplies opens the general supplies form. Quote-only (Grip & Electric)
+// and coming-soon tiles are intentionally excluded.
+// NOTE: Wardrobe & Makeup ('wardrobe-makeup') is ALSO a self-serve order
+// tile with a ?category= deep link, but per the current brief only these
+// two get swipe-add. Add 'wardrobe-makeup' here to include it.
+const SWIPE_ADD_SLOTS = new Set<HomeTile['slot']>(['supplies', 'radios-wifi'])
 
 /**
  * Home diagonal service-nav — 5 tessellating bands.
@@ -248,16 +258,19 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
               style={{ transform: 'skewY(-1.2deg)' }}
             />
           )
-          return t.mode === 'coming-soon' || !t.href ? (
-            <div key={t.slot} className="relative block w-full overflow-hidden" style={rowStyle} aria-label={`${t.label} — coming soon`}>
+          return (
+            <SwipeableMobileTile
+              key={t.slot}
+              href={t.href}
+              label={t.label}
+              comingSoon={t.mode === 'coming-soon'}
+              selfServe={SWIPE_ADD_SLOTS.has(t.slot)}
+              addHref={t.href}
+              rowStyle={rowStyle}
+              accent={accent}
+            >
               {inner}
-              {accent}
-            </div>
-          ) : (
-            <Link key={t.slot} href={t.href} className="relative block w-full overflow-hidden" style={rowStyle} aria-label={t.label}>
-              {inner}
-              {accent}
-            </Link>
+            </SwipeableMobileTile>
           )
         })}
       </div>

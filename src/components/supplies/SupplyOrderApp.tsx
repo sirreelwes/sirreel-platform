@@ -776,8 +776,12 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               </div>
             </div>
 
-            {/* catalog grid */}
-            <div className="mt-3">
+            {/* catalog grid. flex-col + `order-*` swaps the vertical order
+                on mobile ONLY: supplies render ABOVE vehicles under the
+                phone breakpoint, while `md:` restores the desktop order
+                (vehicles first). Same blocks, same components — CSS order
+                only. Error/empty states keep default order-0 (stay on top). */}
+            <div className="mt-3 flex flex-col">
               {error && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-900 text-sm px-3 py-2 mb-4">
                   Couldn&apos;t load the catalog: {error}
@@ -798,7 +802,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   stay focused. Vehicles are price-on-quote by default
                   (dailyRate null) — the tile labels them as such. */}
               {!debouncedQuery && vehicles && vehicles.length > 0 && (
-                <section className="mt-2 scroll-mt-[200px]">
+                <section className="order-2 md:order-1 mt-2 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Reserve Vehicles
@@ -857,7 +861,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Clicking the active section again clears back to all.
                   Hidden while searching (query overrides sections). */}
               {!debouncedQuery && data && (
-                <div ref={supplyGridRef} className="mt-9 scroll-mt-[120px]">
+                <div ref={supplyGridRef} className="order-1 md:order-2 mt-9 scroll-mt-[120px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Production Supplies
@@ -893,7 +897,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               )}
 
               {displaySections.map((cat) => (
-                <section key={cat.label} className="mt-8 scroll-mt-[200px]">
+                <section key={cat.label} className="order-1 md:order-3 mt-8 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       {cat.label}
