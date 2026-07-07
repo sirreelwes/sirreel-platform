@@ -252,7 +252,7 @@ export function PublicSiteNav({
             {socials()}
           </div>
           <Link href={PUBLIC_HOME_HREF} aria-label="SirReel — Home" className="justify-self-center">
-            <Image src="/sirreel-logo-white.png" alt="SirReel Studio Services" width={520} height={137} priority className="h-12 lg:h-14 w-auto" />
+            <Image src="/s-logo-white.png" alt="SirReel Studio Services" width={1118} height={1065} priority className="h-11 lg:h-12 w-auto" />
           </Link>
           <div className="justify-self-end">
             {orderBtn()}
@@ -275,7 +275,7 @@ export function PublicSiteNav({
             )}
           </button>
           <Link href={PUBLIC_HOME_HREF} aria-label="SirReel — Home" className="min-w-0">
-            <Image src="/sirreel-logo-white.png" alt="SirReel Studio Services" width={400} height={105} priority className="h-9 w-auto" />
+            <Image src="/s-logo-white.png" alt="SirReel Studio Services" width={1118} height={1065} priority className="h-9 w-auto" />
           </Link>
           <div className="flex-none">
             <Link

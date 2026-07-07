@@ -56,11 +56,14 @@ export const HOME_TILES: HomeTile[] = [
     swipe: { label: 'Check Availability', href: contactPrefillHref('Availability: LED Wall') } },
   // Self-serve: "Add Items" opens the full supplies catalog (no category —
   // "Production Supplies" is the whole form, not a filterable section).
+  // Swipe "Add Items" adds `focus=1` → the streamlined mobile focus mode
+  // (see SupplyOrderApp). The tile TAP (href) omits it, so a tap opens the
+  // full form. focus=1 only triggers streamlined ON MOBILE (md: classes).
   { slot: 'supplies', label: 'Supplies & Equipment', color: '#7e57c2', colorDeep: '#523584', tagline: 'Order online — on the truck when you need it', mode: 'order', href: ORDER_FORM_HREF,
-    swipe: { label: 'Add Items', href: ORDER_FORM_HREF } },
+    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?focus=1` } },
   // Self-serve: deep-links the order form to the Radios & WiFi section.
   { slot: 'radios-wifi', label: 'Radios & WiFi', color: '#0e9db0', colorDeep: '#0a6b78', tagline: 'Walkies, comms & on-set WiFi', mode: 'order', href: `${ORDER_FORM_HREF}?category=radios-wifi`,
-    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=radios-wifi` } },
+    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=radios-wifi&focus=1` } },
   // Quote-request: routes to the contact intake with a prefilled subject
   // (matches the Equipment ▾ "Request a quote" grip/lighting flow).
   { slot: 'grip-electric', label: 'Grip & Electric', color: '#e0701f', colorDeep: '#9c4c12', tagline: 'Lighting, grip & power — request a quote', mode: 'link', href: contactPrefillHref('Equipment quote: Grip & Electric'),
@@ -68,5 +71,5 @@ export const HOME_TILES: HomeTile[] = [
   // Self-serve catalog section (Wardrobe & Makeup exists on the order form):
   // "Add Items" deep-links to that section.
   { slot: 'wardrobe-makeup', label: 'Wardrobe & Makeup', color: '#d6448c', colorDeep: '#912a5c', tagline: 'Chairs, mirrors, steamers & racks', mode: 'order', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup`,
-    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup` } },
+    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup&focus=1` } },
 ]

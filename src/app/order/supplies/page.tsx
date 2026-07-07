@@ -32,12 +32,24 @@ export const metadata: Metadata = {
   description: 'Build a supply order — basecamp, grip, power, safety, expendables.',
 }
 
-export default function PublicSupplyOrderPage() {
+// Reading searchParams makes this dynamic (per-request focus gate).
+export const dynamic = 'force-dynamic'
+
+export default function PublicSupplyOrderPage({
+  searchParams,
+}: {
+  searchParams?: { focus?: string; category?: string }
+}) {
+  // `focus=1` (set only on the mobile home-tile "Add Items" swipe path)
+  // opts into the streamlined mobile focus mode. It's applied ONLY on
+  // mobile via md: classes inside SupplyOrderApp — desktop is unaffected.
+  const focusMode = searchParams?.focus === '1'
   return (
     <div className={`${archivo.variable} ${hanken.variable}`}>
       <SupplyOrderApp
         submitEndpoint="/api/public/supply-request"
         signInHref="/portal/auth/sign-in"
+        focusMode={focusMode}
       />
     </div>
   )

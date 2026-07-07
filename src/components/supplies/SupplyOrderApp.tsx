@@ -34,6 +34,7 @@ import {
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
 import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug } from '@/lib/site/publicSupplySections'
+import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 interface CatalogItem {
   id: string
@@ -163,9 +164,31 @@ function isPlausibleEmail(s: string): boolean {
 interface SupplyOrderAppProps {
   submitEndpoint: string
   signInHref?: string | null
+  /**
+   * Streamlined mobile focus mode — set by the server page when the form
+   * is reached via a home-tile "Add Items" swipe (`?focus=1`). On MOBILE
+   * it hides the hero/tagline, search, filters and vehicles, shows a slim
+   * header + a "Full Order Form" button, and keeps the persistent cart
+   * bar. Applied purely via md: classes, so DESKTOP is always the full
+   * form regardless of this flag.
+   */
+  focusMode?: boolean
 }
 
-export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign-in' }: SupplyOrderAppProps) {
+export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign-in', focusMode = false }: SupplyOrderAppProps) {
+  // In focus mode, hide this element on MOBILE only (desktop keeps full form).
+  const focusHideMobile = focusMode ? 'hidden md:block' : ''
+
+  // The "Full Order Form" link = the current URL minus `focus` (keeps the
+  // category deep-link). Cart carries over via sessionStorage.
+  const [fullFormHref, setFullFormHref] = useState('/order/supplies')
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    sp.delete('focus')
+    const qs = sp.toString()
+    setFullFormHref(`/order/supplies${qs ? `?${qs}` : ''}`)
+  }, [])
+
   // ── Catalog data ──────────────────────────────────────────────
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -622,8 +645,39 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f4f1ea] text-[#0c0c0d]" style={{ fontFamily: '"Hanken Grotesk", Inter, system-ui, sans-serif' }}>
+      {/* ── STREAMLINED HEADER (mobile focus mode only) ───────────
+          Slim black bar: call-us phone icon left, S-mark logo centered
+          (→ /home), Login (magic-link flow) right. Shown ONLY on mobile
+          when arrived-from-home; desktop keeps the full header below. */}
+      {focusMode && (
+        <header className="md:hidden sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black">
+          <div className="relative px-4 h-14 flex items-center justify-between">
+            <a
+              href={PUBLIC_CONTACT.phoneHref}
+              aria-label="Call SirReel"
+              className="w-10 h-10 -ml-1 inline-flex items-center justify-center text-[#cfc9bd] hover:text-white"
+            >
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+            </a>
+            <Link href="/home" aria-label="SirReel — Home" className="absolute left-1/2 -translate-x-1/2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/s-logo-white.png" alt="SirReel Studio Services" className="h-9 w-auto" />
+            </Link>
+            <Link
+              href={signInHref ?? '/portal/auth/sign-in'}
+              className="text-[13px] font-bold uppercase tracking-[0.08em] text-[#c39a3f] hover:text-white transition-colors"
+              style={{ fontFamily: 'Archivo, sans-serif' }}
+            >
+              Login
+            </Link>
+          </div>
+        </header>
+      )}
+
       {/* ── HEADER ────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black">
+      <header className={`sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black ${focusHideMobile}`}>
         <div className="max-w-[1480px] mx-auto px-5 h-[68px] flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div className="font-black text-2xl tracking-tight whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
@@ -669,8 +723,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
 
       {/* ── HERO ─────────────────────────────────────────────── */}
       {/* Minimal by design (2026-07-05): eyebrow, title, and the
-          agent-confirmation line. No blurb, no steps, no side copy. */}
-      <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
+          agent-confirmation line. No blurb, no steps, no side copy.
+          Hidden on mobile in focus mode (tagline/reorder suppressed). */}
+      <section className={`bg-[#0c0c0d] text-white relative overflow-hidden ${focusHideMobile}`}>
         <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-14 relative">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Production Reservation
@@ -756,7 +811,22 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               it, long item names + the auto-fill catalog grid push the
               page horizontally and clip the chip strip. */}
           <main className="min-w-0">
-            <div className="sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3">
+            {/* "Full Order Form" — mobile focus mode only. Drops `focus` (and
+                keeps the category) so the page re-renders as the FULL form;
+                cart carries over via sessionStorage. */}
+            {focusMode && (
+              <div className="md:hidden pt-4">
+                <Link
+                  href={fullFormHref}
+                  className="flex items-center justify-center gap-2 w-full rounded-xl border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white px-4 py-3 text-[13px] font-bold uppercase tracking-[0.08em]"
+                  style={{ fontFamily: 'Archivo, sans-serif' }}
+                >
+                  Full Order Form
+                  <span aria-hidden>→</span>
+                </Link>
+              </div>
+            )}
+            <div className={`sticky top-[68px] z-30 bg-[#f4f1ea] py-4 pb-3 ${focusHideMobile}`}>
               <div className="relative">
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b857a" strokeWidth={2.2} strokeLinecap="round" className="absolute left-4 top-1/2 -translate-y-1/2">
                   <circle cx={11} cy={11} r={7} />
@@ -802,7 +872,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   stay focused. Vehicles are price-on-quote by default
                   (dailyRate null) — the tile labels them as such. */}
               {!debouncedQuery && vehicles && vehicles.length > 0 && (
-                <section className="order-2 md:order-1 mt-2 scroll-mt-[200px]">
+                <section className={`order-2 md:order-1 mt-2 scroll-mt-[200px] ${focusHideMobile}`}>
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Reserve Vehicles
@@ -861,7 +931,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   Clicking the active section again clears back to all.
                   Hidden while searching (query overrides sections). */}
               {!debouncedQuery && data && (
-                <div ref={supplyGridRef} className="order-1 md:order-2 mt-9 scroll-mt-[120px]">
+                <div ref={supplyGridRef} className={`order-1 md:order-2 mt-9 scroll-mt-[120px] ${focusHideMobile}`}>
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Production Supplies
