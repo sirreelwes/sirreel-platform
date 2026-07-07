@@ -1,0 +1,6 @@
+phase,action,code,id,description,category,qty_owned,daily_rate,weekly_rate,is_active,note
+before,duplicate,DCTCR,15afe0c1-fd59-4e9e-abd9-28169271628e,Tall Director Chair,Basecamp Basics,35,7,21,true,source row (real rates $7/$21 3x); task's stated $275 weekly did not exist
+before,keeper,TAB-DIRECTORS-CHAIRS-TALL,f7672693-b19a-4394-bcaf-9452e9ae3842,"Director's Chairs, Tall",Tables & Chairs,0,4,0,true,qty-0 stub in the correct category
+after,keeper,TAB-DIRECTORS-CHAIRS-TALL,f7672693-b19a-4394-bcaf-9452e9ae3842,"Director's Chairs, Tall",Tables & Chairs,35,7,21,true,merged: qty 35 + DCTCR rates $7/$21 (Wes-confirmed); publicVisible=true
+after,duplicate,DCTCR,15afe0c1-fd59-4e9e-abd9-28169271628e,Tall Director Chair,Basecamp Basics,35,7,21,false,archived (isActive=false, archivedAt=2026-07-07T23:04:56.507Z); not deleted
+audit,rate_change_log,TAB-DIRECTORS-CHAIRS-TALL,4e6baa60-7574-46b4-a628-131291007003,"Director's Chairs, Tall",Tables & Chairs,,4->7,0->21,,"RateChangeLog id; source=MANUAL; matchMethod=merge:DCTCR->TAB-DIRECTORS-CHAIRS-TALL; appliedBy=wes@sirreel.com"
