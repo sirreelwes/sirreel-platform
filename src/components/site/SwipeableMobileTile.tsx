@@ -148,7 +148,11 @@ export function SwipeableMobileTile({
       <Link
         href={swipe.href}
         aria-label={`${label} — ${swipe.label}`}
-        className="absolute inset-y-0 right-0 flex items-center justify-center overflow-hidden px-3"
+        // `isolate` keeps the button's z-10 INSIDE this panel's own stacking
+        // context — otherwise it escapes above the foreground and the button
+        // shows at rest. The panel paints as one unit behind the foreground,
+        // revealed only when the swipe slides the foreground aside.
+        className="absolute inset-y-0 right-0 isolate flex items-center justify-center overflow-hidden px-3"
         style={{ width: REVEAL }}
       >
         {/* tile photo behind (cropped slice) */}
