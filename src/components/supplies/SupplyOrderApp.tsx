@@ -34,7 +34,7 @@ import {
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
 import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug } from '@/lib/site/publicSupplySections'
-import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { PUBLIC_CONTACT, PUBLIC_HOME_URL } from '@/lib/site/publicNav'
 
 interface CatalogItem {
   id: string
@@ -657,8 +657,11 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 h-14">
             {/* LEFT: back to home + call us */}
             <div className="flex items-center gap-1.5 justify-self-start">
-              <Link
-                href="/home"
+              {/* Absolute URL: the order form can render on the portal host
+                  (tsx) after the hq→tsx redirect, where a relative /home 404s.
+                  PUBLIC_HOME_URL always targets the public marketing home. */}
+              <a
+                href={PUBLIC_HOME_URL}
                 aria-label="Back to home"
                 className="inline-flex items-center gap-1 text-[#cfc9bd] hover:text-white text-[13px] font-semibold py-2"
                 style={{ fontFamily: 'Archivo, sans-serif' }}
@@ -667,7 +670,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   <path d="M19 12H5M12 19l-7-7 7-7" />
                 </svg>
                 Home
-              </Link>
+              </a>
               <a
                 href={PUBLIC_CONTACT.phoneHref}
                 aria-label="Call SirReel"
@@ -679,10 +682,10 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               </a>
             </div>
             {/* CENTER: logo → home (own grid cell, padded tap area) */}
-            <Link href="/home" aria-label="SirReel — Home" className="justify-self-center py-2">
+            <a href={PUBLIC_HOME_URL} aria-label="SirReel — Home" className="justify-self-center py-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/s-logo-white.png" alt="SirReel Studio Services" className="h-9 w-auto" />
-            </Link>
+            </a>
             {/* RIGHT: login */}
             <Link
               href={signInHref ?? '/portal/auth/sign-in'}

@@ -134,8 +134,24 @@ export const PUBLIC_NAV: NavEntry[] = [
  */
 export const PUBLIC_ORDER_CTA = { label: 'ORDER', href: ORDER_FORM_HREF }
 
-/** Home target for the centered wordmark. */
+/** Home target for SAME-HOST public links (nav, footer, tiles). Relative
+ *  so it stays correct on whichever public host serves it (hq / orders /
+ *  future sirreel.com) — and inherently safe across the DNS cutover. */
 export const PUBLIC_HOME_HREF = '/home'
+
+/**
+ * Absolute origin of the public marketing site. Use PUBLIC_HOME_URL for
+ * CROSS-HOST links that must reach the public Home from a host that does
+ * NOT serve it — notably the order form, which the host-routing middleware
+ * serves on the PORTAL host (tsx.sirreel.com) after an hq → tsx redirect,
+ * where a relative `/home` resolves to tsx and 404s.
+ *
+ * Same env+default shape as portalUrl.ts. DNS cutover to sirreel.com is a
+ * ONE-LINE change: set NEXT_PUBLIC_SITE_URL in Vercel (or edit the default
+ * here) — every absolute public-home link updates at once.
+ */
+export const PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://hq.sirreel.com'
+export const PUBLIC_HOME_URL = `${PUBLIC_SITE_URL}/home`
 
 /**
  * Canonical public contact values — mirrors the footer copy the site has
