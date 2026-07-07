@@ -14,6 +14,8 @@
  *   slot=tile-standing-sets → SiteSetting.tileStandingSetsUrl
  *   slot=tile-led-wall      → SiteSetting.tileLedWallUrl
  *   slot=tile-supplies      → SiteSetting.tileSuppliesUrl
+ *   slot=tile-radios-wifi   → SiteSetting.tileRadiosWifiUrl
+ *   slot=tile-grip-electric → SiteSetting.tileGripElectricUrl
  *
  * Unlike the private claims/COI proxy, this content is public and
  * cacheable — the hero is on the marketing site — so it streams inline
@@ -38,6 +40,8 @@ const SLOT_FIELD = {
   'tile-standing-sets': 'tileStandingSetsUrl',
   'tile-led-wall': 'tileLedWallUrl',
   'tile-supplies': 'tileSuppliesUrl',
+  'tile-radios-wifi': 'tileRadiosWifiUrl',
+  'tile-grip-electric': 'tileGripElectricUrl',
 } as const
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -53,6 +57,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true,
       tileTruckingUrl: true, tileStagesUrl: true, tileStandingSetsUrl: true,
       tileLedWallUrl: true, tileSuppliesUrl: true,
+      tileRadiosWifiUrl: true, tileGripElectricUrl: true,
     },
   })
   const fileUrl = settings?.[field]

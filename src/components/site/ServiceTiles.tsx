@@ -49,7 +49,11 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
       // nav row). Responsive because the wordmark grows lg+. --s derives
       // the constant slant px from the section height.
       className="[--pubhdr:133px] lg:[--pubhdr:141px]"
-      style={{ ['--s' as string]: SLANT }}
+      // --hovergrow keeps the hovered band at ~50% for ANY tile count:
+      // with N bands, grow=N-1 gives (N-1)/((N-1)+(N-1)·1) = 1/2 while
+      // the other N-1 bands share the remaining half. Adding tiles just
+      // narrows the resting slivers; the open size stays constant.
+      style={{ ['--s' as string]: SLANT, ['--hovergrow' as string]: String(Math.max(tiles.length - 1, 1)) }}
     >
       {/* ── Desktop: diagonal bands ─────────────────────────────── */}
       <div
@@ -146,11 +150,11 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // (inline wins over classes), so hover never resized the bands.
           // Only clip-path stays inline now.
           const bandStyle = { clipPath: clipFor(i, last) } as React.CSSProperties
-          // Rest: grow + basis-0 → all five equal (20% each, no gaps).
-          // Hover: grow-4 → hovered band 4/8 = ~50% while the other four
-          // each drop to 1/8 = ~12.5% (narrow slivers). ~350ms ease.
+          // Rest: grow + basis-0 → all bands equal (1/N each, no gaps).
+          // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
+          // while the others share the rest as narrow slivers. ~350ms ease.
           const bandClass =
-            'group relative h-full min-w-0 grow basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[4] focus-visible:grow-[4] outline-none'
+            'group relative h-full min-w-0 grow basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none'
 
           // coming-soon → non-navigating div; link/order → Link.
           return t.mode === 'coming-soon' || !t.href ? (
