@@ -30,7 +30,7 @@ import { contactPrefillHref } from '@/lib/site/publicNav'
 const ORDER_FORM_HREF = '/order/supplies'
 
 export const HOME_TILES: HomeTile[] = [
-  { slot: 'trucking', label: 'Trucking', color: '#d99a2b', colorDeep: '#9c6c14', tagline: 'Production vehicles, ready to roll', mode: 'link', href: '/vehicles' },
+  { slot: 'trucking', label: 'Trucks and Vans', color: '#d99a2b', colorDeep: '#9c6c14', tagline: 'Production vehicles, ready to roll', mode: 'link', href: '/vehicles' },
   { slot: 'stages', label: 'Stages', color: '#c0392b', colorDeep: '#822015', tagline: 'Stage space in Sun Valley', mode: 'coming-soon' },
   { slot: 'standing-sets', label: 'Standing Sets', color: '#2b7fd9', colorDeep: '#17548f', tagline: 'Turnkey standing sets', mode: 'coming-soon' },
   { slot: 'led-wall', label: 'LED Wall', color: '#4caf50', colorDeep: '#2e6d31', tagline: 'Virtual production volume', mode: 'coming-soon' },
