@@ -4,16 +4,15 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 
 /**
- * Mobile-only swipe-to-add wrapper for a single home service band.
+ * Mobile-only swipe-to-reveal wrapper for a single home service band.
  *
- * SELF-SERVE tiles (Pro Supplies, Radios & WiFi) gain a left-swipe
- * gesture that slides the tile aside to reveal an "Add Items" button; it
- * navigates to the SAME deep-link the tile already points at (the Build 1
- * `?category=` order-form URL). The normal full-tile tap is untouched —
- * swipe is an ADDITIONAL express path, not a replacement.
- *
- * Non-self-serve tiles (coming-soon / quote-only) render as the plain
- * tap target with no swipe affordance.
+ * A left-swipe slides the tile aside to reveal a DATA-DRIVEN action button
+ * whose label + destination come from the tile's `swipe` config
+ * (homeTiles.ts) — "Add Items" → order form, "View Vehicles" → /vehicles,
+ * "Check Availability" / "Request a Quote" → the /contact intake with a
+ * prefilled subject. Swipe is an ADDITIONAL express path: the normal
+ * full-tile tap (`href`) is untouched, and coming-soon tiles keep their
+ * non-navigating tap while still exposing the swipe action.
  *
  * Gesture is hand-rolled on touch events (no gesture library). `touch-
  * action: pan-y` lets the browser keep vertical scrolling while we own
@@ -24,15 +23,14 @@ import Link from 'next/link'
  * `md:hidden` mobile stack.
  */
 
-const REVEAL = 132 // px the tile slides to expose the Add Items button
+const REVEAL = 150 // px the tile slides to expose the action button
 const H_THRESHOLD = 6 // px before a move counts as a horizontal drag
 
 export function SwipeableMobileTile({
   href,
   label,
   comingSoon,
-  selfServe,
-  addHref,
+  swipe,
   rowStyle,
   accent,
   children,
@@ -40,14 +38,23 @@ export function SwipeableMobileTile({
   href?: string
   label: string
   comingSoon: boolean
-  selfServe: boolean
-  addHref?: string
+  swipe?: { label: string; href: string }
   rowStyle: React.CSSProperties
   accent: React.ReactNode
   children: React.ReactNode
 }) {
-  // ── Non-self-serve: exact plain markup, no swipe ────────────────
-  if (!selfServe || !href || !addHref) {
+  // Hooks run unconditionally (before any early return).
+  const [tx, setTx] = useState(0) // current translateX (0…-REVEAL)
+  const [dragActive, setDragActive] = useState(false)
+  const startX = useRef(0)
+  const startY = useRef(0)
+  const dragging = useRef(false)
+  const horizontal = useRef(false)
+  const moved = useRef(false)
+  const open = useRef(false)
+
+  // No swipe action configured → plain tap target (Link or coming-soon div).
+  if (!swipe) {
     return comingSoon || !href ? (
       <div className="relative block w-full overflow-hidden" style={rowStyle} aria-label={`${label} — coming soon`}>
         {children}
@@ -60,16 +67,6 @@ export function SwipeableMobileTile({
       </Link>
     )
   }
-
-  // ── Self-serve: swipeable express path ──────────────────────────
-  const [tx, setTx] = useState(0) // current translateX (0…-REVEAL)
-  const [dragActive, setDragActive] = useState(false)
-  const startX = useRef(0)
-  const startY = useRef(0)
-  const dragging = useRef(false)
-  const horizontal = useRef(false)
-  const moved = useRef(false)
-  const open = useRef(false)
 
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0]
@@ -121,39 +118,48 @@ export function SwipeableMobileTile({
     }
   }
 
+  // Foreground touch/transform props — spread onto a Link (tappable tile)
+  // or a div (coming-soon tile: swipeable but no tap navigation).
+  const fgProps = {
+    className: 'absolute inset-0 block overflow-hidden',
+    style: {
+      transform: `translateX(${tx}px)`,
+      transition: dragActive ? 'none' : 'transform 220ms ease',
+      touchAction: 'pan-y' as const,
+    },
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel: onTouchEnd,
+    onClickCapture,
+  }
+
   return (
     <div className="relative block w-full overflow-hidden" style={rowStyle}>
       {/* Revealed express action, pinned behind the tile's right edge. */}
       <Link
-        href={addHref}
-        aria-label={`${label} — add items`}
-        className="absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-1 bg-[#c39a3f] text-[#0c0c0d] font-black uppercase tracking-[0.06em] text-[13px]"
+        href={swipe.href}
+        aria-label={`${label} — ${swipe.label}`}
+        className="absolute inset-y-0 right-0 flex items-center justify-center text-center bg-[#c39a3f] text-[#0c0c0d] font-black uppercase tracking-[0.05em] text-[12.5px] leading-tight px-3"
         style={{ width: REVEAL, fontFamily: 'Archivo, sans-serif' }}
       >
-        <span aria-hidden className="text-[18px] leading-none">+</span>
-        Add Items
+        {swipe.label}
       </Link>
 
-      {/* Foreground tile — slides left to expose the action. Normal tap
-          still navigates to `href`; touch-action pan-y keeps scrolling. */}
-      <Link
-        href={href}
-        aria-label={label}
-        className="absolute inset-0 block overflow-hidden"
-        style={{
-          transform: `translateX(${tx}px)`,
-          transition: dragActive ? 'none' : 'transform 220ms ease',
-          touchAction: 'pan-y',
-        }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
-        onClickCapture={onClickCapture}
-      >
-        {children}
-        {accent}
-      </Link>
+      {/* Foreground tile — slides left to expose the action. A tappable
+          tile keeps its normal navigation; a coming-soon tile is a plain
+          div (swipe-only). touch-action pan-y preserves vertical scroll. */}
+      {href ? (
+        <Link href={href} aria-label={label} {...fgProps}>
+          {children}
+          {accent}
+        </Link>
+      ) : (
+        <div aria-label={`${label} — coming soon`} {...fgProps}>
+          {children}
+          {accent}
+        </div>
+      )}
     </div>
   )
 }

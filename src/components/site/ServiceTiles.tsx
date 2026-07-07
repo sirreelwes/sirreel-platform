@@ -2,12 +2,6 @@ import Link from 'next/link'
 import type { HomeTile } from '@/lib/site/homeTiles'
 import { SwipeableMobileTile } from '@/components/site/SwipeableMobileTile'
 
-// Tiles that get the mobile swipe-to-add express path: self-serve
-// order-form sections only. Radios & WiFi and Wardrobe & Makeup deep-link
-// to their sections; Pro Supplies opens the general supplies form.
-// Quote-only (Grip & Electric) and coming-soon tiles are excluded.
-const SWIPE_ADD_SLOTS = new Set<HomeTile['slot']>(['supplies', 'radios-wifi', 'wardrobe-makeup'])
-
 /**
  * Home diagonal service-nav — 5 tessellating bands.
  *
@@ -261,8 +255,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
               href={t.href}
               label={t.label}
               comingSoon={t.mode === 'coming-soon'}
-              selfServe={SWIPE_ADD_SLOTS.has(t.slot)}
-              addHref={t.href}
+              swipe={t.swipe}
               rowStyle={rowStyle}
               accent={accent}
             >
