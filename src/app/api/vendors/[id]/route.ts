@@ -44,6 +44,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     phone?: string | null
     website?: string | null
     notes?: string | null
+    address?: string | null
+    poEmail?: string | null
+    supplies?: string | null
+    deliveryTerms?: string | null
     isActive?: boolean
   }
 
@@ -64,6 +68,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (website !== undefined) data.website = website
   const notes = nullableTrim(body.notes)
   if (notes !== undefined) data.notes = notes
+  const address = nullableTrim(body.address)
+  if (address !== undefined) data.address = address
+  const poEmail = nullableTrim(body.poEmail)
+  if (poEmail !== undefined) data.poEmail = poEmail
+  const supplies = nullableTrim(body.supplies)
+  if (supplies !== undefined) data.supplies = supplies
+  const deliveryTerms = nullableTrim(body.deliveryTerms)
+  if (deliveryTerms !== undefined) data.deliveryTerms = deliveryTerms
   if (typeof body.isActive === 'boolean') data.isActive = body.isActive
 
   if (Object.keys(data).length === 0) {

@@ -25,13 +25,21 @@ export async function GET(req: NextRequest) {
   // so archived vendors drop out of selection without affecting
   // historical assignments.
   const includeArchived = new URL(req.url).searchParams.get('includeArchived') === '1'
-  const vendors = await prisma.vendor.findMany({
+  const rows = await prisma.vendor.findMany({
     where: includeArchived ? {} : { isActive: true },
     include: {
       _count: { select: { subRentals: true, inventoryItems: true } },
     },
     orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })
+  // `effectivePoEmail` resolves the PO destination: explicit poEmail wins,
+  // else fall back to the primary contact email. Raw `poEmail` is kept
+  // alongside so the admin edit form shows the stored value, not the
+  // fallback. Later PO/request phases read `effectivePoEmail`.
+  const vendors = rows.map((v) => ({
+    ...v,
+    effectivePoEmail: v.poEmail ?? v.email ?? null,
+  }))
   return NextResponse.json({ vendors })
 }
 
@@ -46,6 +54,10 @@ export async function POST(req: NextRequest) {
     phone?: string | null
     website?: string | null
     notes?: string | null
+    address?: string | null
+    poEmail?: string | null
+    supplies?: string | null
+    deliveryTerms?: string | null
   } | null
 
   if (!body || !body.name || !body.name.trim()) {
@@ -61,14 +73,23 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const trimOrNull = (v: string | null | undefined) => {
+    const t = (v ?? '').trim()
+    return t.length === 0 ? null : t
+  }
+
   const vendor = await prisma.vendor.create({
     data: {
       name: body.name.trim(),
-      contactName: body.contactName ?? null,
-      email: body.email ?? null,
-      phone: body.phone ?? null,
-      website: body.website ?? null,
-      notes: body.notes ?? null,
+      contactName: trimOrNull(body.contactName),
+      email: trimOrNull(body.email),
+      phone: trimOrNull(body.phone),
+      website: trimOrNull(body.website),
+      notes: trimOrNull(body.notes),
+      address: trimOrNull(body.address),
+      poEmail: trimOrNull(body.poEmail),
+      supplies: trimOrNull(body.supplies),
+      deliveryTerms: trimOrNull(body.deliveryTerms),
     },
   })
   return NextResponse.json(vendor, { status: 201 })

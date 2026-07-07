@@ -3178,6 +3178,24 @@ model Vendor {
   phone       String?  @db.VarChar(30)
   website     String?
   notes       String?  @db.Text
+
+  // --- Sub-rental Phase A additions (roster fields for later PO /
+  // shortfall-sourcing / margin phases; no PO or margin logic here) ---
+  // Mailing / pickup address — free text (multi-line ok).
+  address       String? @db.Text
+  // Where purchase-orders / sub-rental requests get sent. Falls back to
+  // `email` (primary contact) at read time when null — see the vendors
+  // API serializer. Kept distinct because AP / ordering desks often
+  // differ from the day-to-day contact.
+  poEmail       String? @map("po_email")
+  // What this vendor sources — free text for now (e.g. "grip, dolly,
+  // lighting"). Phase B shortfall matching may promote this to tags;
+  // starting simple on purpose.
+  supplies      String? @db.Text
+  // Standing delivery / pickup terms shown on a PO (lead time, cutoffs,
+  // dock hours). Distinct from general `notes`.
+  deliveryTerms String? @db.Text @map("delivery_terms")
+
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
