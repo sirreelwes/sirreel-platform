@@ -224,7 +224,7 @@ export function PublicSiteNav() {
       <div className="max-w-[1480px] mx-auto px-5">
         {/* Desktop: 3-column grid so the wordmark is truly centered. */}
         <div className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4 py-3.5">
-          <div className="flex flex-col gap-1.5 text-[12px] text-[#a8a294]">
+          <div className="flex flex-col gap-1.5 text-[13px] text-[#a8a294]">
             <div className="flex items-center gap-4">
               <a href={PUBLIC_CONTACT.phoneHref} className="hover:text-white transition-colors whitespace-nowrap">{PUBLIC_CONTACT.phone}</a>
               <a href={PUBLIC_CONTACT.emailHref} className="hover:text-white transition-colors whitespace-nowrap">{PUBLIC_CONTACT.email}</a>
