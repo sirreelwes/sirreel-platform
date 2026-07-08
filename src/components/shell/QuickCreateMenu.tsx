@@ -3,32 +3,30 @@
 /**
  * "+ New" quick-create dropdown wired into the dashboard top bar.
  *
- * Three entries, all wiring to existing flows — no new modal logic,
- * no scheduler write-path changes:
+ * Two entries (New Inquiry / New Quote were removed as redundant — those
+ * flows stay reachable via InquiriesSection / the /orders/new-quote route):
  *
- *   - New Hold     → reveals the category picker (same UX as the
- *                    gantt's "+ New Hold" header button), then opens
- *                    <NewHoldModal>. When the agent is on an
- *                    /orders/[id] or /jobs/[id] page, the saved
- *                    entity's job + company + dates are pre-seeded
- *                    so the hold lands attached to that job in one
- *                    motion. On /orders/new-quote (pre-save) we just
- *                    open blank — the page's draft state isn't
- *                    addressable server-side yet.
- *   - New Inquiry  → opens the existing <NewInquiryModal> (manual
- *                    capture form already used by InquiriesSection).
- *   - New Quote    → navigates to /orders/new-quote (the AI-parse
- *                    builder).
+ *   - New Reservation → reveals the category picker (same UX as the
+ *                       gantt's "+ New Hold" header button), then opens
+ *                       <NewHoldModal>. On an /orders/[id] or /jobs/[id]
+ *                       page the saved entity's job + company + dates are
+ *                       pre-seeded so the hold lands attached in one motion.
+ *   - New Task        → opens <NewTaskModal> in standalone mode (no order):
+ *                       a delivery/pickup DispatchTask created via
+ *                       POST /api/scheduling/dispatch-tasks (orderId null).
+ *                       Lands PENDING and shows in the gantt needs-assignment
+ *                       lane by date. Gated on canCreateBooking (sales).
  *
- * NewHoldModal write-path is untouched: it still calls
- * POST /api/scheduling/holds with the same payload shape. This file
- * adds an entry point, nothing else.
+ * NewHoldModal write-path is untouched (POST /api/scheduling/holds).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+import type { UserRole } from '@prisma/client'
+import { getPermissions } from '@/lib/permissions'
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal'
-import { NewInquiryModal } from '@/components/sales/NewInquiryModal'
+import { NewTaskModal } from '@/components/scheduling/NewTaskModal'
 
 interface Category {
   id: string
@@ -81,6 +79,14 @@ export function QuickCreateMenu() {
   const router = useRouter()
   const pathname = usePathname()
   const wrapperRef = useRef<HTMLDivElement>(null)
+  // Sales gate for "New Task" (delivery/pickup) — same perm as order-nudge
+  // task creation. Hidden for non-sales; the endpoint also enforces it.
+  const { data: session } = useSession()
+  const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
+  const sessionSalesOnly = (session?.user as { salesOnly?: boolean } | undefined)?.salesOnly ?? false
+  const canCreateTask = sessionRole
+    ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).canCreateBooking
+    : false
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
@@ -90,7 +96,7 @@ export function QuickCreateMenu() {
     context: HoldContext
     shortlistItem?: OrderShortlistItem
   }>(null)
-  const [inquiryOpen, setInquiryOpen] = useState(false)
+  const [taskOpen, setTaskOpen] = useState(false)
   const [context, setContext] = useState<HoldContext>(EMPTY_CONTEXT)
 
   // Click-outside collapses the menu + category picker.
@@ -248,15 +254,10 @@ export function QuickCreateMenu() {
     [context],
   )
 
-  const onPickNewInquiry = useCallback(() => {
+  const onPickNewTask = useCallback(() => {
     setMenuOpen(false)
-    setInquiryOpen(true)
+    setTaskOpen(true)
   }, [])
-
-  const onPickNewQuote = useCallback(() => {
-    setMenuOpen(false)
-    router.push('/orders/new-quote')
-  }, [router])
 
   // Default the hold window. Priority:
   //   1. The picked shortlist item's per-line dates (most specific).
@@ -320,22 +321,16 @@ export function QuickCreateMenu() {
               {context.jobCode ? `for ${context.jobCode}` : 'pick category'}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={onPickNewInquiry}
-            className="w-full text-left px-3 py-2 text-[13px] hover:bg-gray-50 border-t border-gray-100 flex flex-col gap-0.5"
-          >
-            <span className="font-semibold text-gray-900">New Inquiry</span>
-            <span className="text-[11px] text-gray-500">manual capture form</span>
-          </button>
-          <button
-            type="button"
-            onClick={onPickNewQuote}
-            className="w-full text-left px-3 py-2 text-[13px] hover:bg-gray-50 border-t border-gray-100 flex flex-col gap-0.5"
-          >
-            <span className="font-semibold text-gray-900">New Quote</span>
-            <span className="text-[11px] text-gray-500">paste email → AI parse</span>
-          </button>
+          {canCreateTask && (
+            <button
+              type="button"
+              onClick={onPickNewTask}
+              className="w-full text-left px-3 py-2 text-[13px] hover:bg-gray-50 border-t border-gray-100 flex flex-col gap-0.5"
+            >
+              <span className="font-semibold text-gray-900">New Task</span>
+              <span className="text-[11px] text-gray-500">delivery / pickup</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -412,14 +407,16 @@ export function QuickCreateMenu() {
         />
       )}
 
-      <NewInquiryModal
-        open={inquiryOpen}
-        onClose={() => setInquiryOpen(false)}
-        onCreated={(inquiryId) => {
-          setInquiryOpen(false)
-          if (inquiryId) router.push(`/inquiries/${inquiryId}`)
-        }}
-      />
+      {taskOpen && (
+        <NewTaskModal
+          onClose={() => setTaskOpen(false)}
+          onCreated={() => {
+            setTaskOpen(false)
+            // Surface the new PENDING task in the reservations needs-assignment lane.
+            router.push('/gantt')
+          }}
+        />
+      )}
     </div>
   )
 }

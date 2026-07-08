@@ -391,7 +391,9 @@ export async function GET(req: NextRequest) {
       scheduledTime: t.scheduledTime ?? '',
       siteAddress: t.siteAddress ?? '',
       deliveryItems: t.deliveryItems ?? '',
-      clientName: t.order?.company?.name ?? t.booking?.company?.name ?? '—',
+      // Standalone tasks have no order/booking — fall back to the site address
+      // so the lane label reads "Delivery · <site>" rather than a blank dash.
+      clientName: t.order?.company?.name ?? t.booking?.company?.name ?? t.siteAddress ?? '—',
       jobName: t.order?.job?.name ?? t.booking?.jobName ?? t.order?.orderNumber ?? '',
     }
   })
