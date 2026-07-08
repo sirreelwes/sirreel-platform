@@ -353,78 +353,21 @@ export async function GET(req: NextRequest) {
       return a.unitName.localeCompare(b.unitName, undefined, { numeric: true })
     })
 
-  // ── unassignedHolds[] — category-level REQUESTED holds with zero
-  //    assignments overlapping the window. These don't appear in
-  //    units[] (which is asset-keyed) so the gantt's By-Asset view was
-  //    silently dropping them. The gantt renders them as bars in a
-  //    pinned "Needs assignment" lane at the top; click → existing
-  //    AssignUnitsModal. By-Job already shows them via jobs[] as
-  //    unit='(unassigned)', so we don't touch that path.
-  //
-  //    Strict filter: BookingItem.status='REQUESTED' AND assignments=[].
-  //    Partially-assigned items (some slots filled, some not) still
-  //    surface their bound assignments under units[] — the unfilled
-  //    slots remain invisible by design; that's a separate concern. ──
-  const unassignedItems = await prisma.bookingItem.findMany({
-    where: {
-      status: 'REQUESTED',
-      assignments: { none: {} },
-      booking: {
-        archivedAt: null,
-        startDate: { lte: to },
-        endDate: { gte: from },
-      },
-    },
-    select: {
-      id: true,
-      quantity: true,
-      status: true,
-      holdRank: true,
-      category: { select: { id: true, name: true, slug: true } },
-      booking: {
-        select: {
-          id: true,
-          bookingNumber: true,
-          jobName: true,
-          startDate: true,
-          endDate: true,
-          status: true,
-          rentalworksOrderId: true,
-          job: { select: { id: true, jobCode: true } },
-          company: { select: { name: true } },
-          person: { select: { firstName: true, lastName: true } },
-          agent: { select: { name: true } },
-        },
-      },
-    },
-  })
-
-  const unassignedHolds = unassignedItems.map((it) => {
-    const cat = mapCategoryName(it.category?.name ?? '')
-    return {
-      bookingItemId: it.id,
-      bookingId: it.booking.id,
-      jobId: it.booking.job?.id ?? null,
-      jobCode: it.booking.job?.jobCode ?? null,
-      categoryId: it.category?.id ?? null,
-      categoryName: it.category?.name ?? '',
-      cat,
-      resourceName: it.category?.name ?? '',
-      quantity: it.quantity,
-      holdRank: it.holdRank,
-      itemStatus: it.status,
-      bookingNumber: it.booking.bookingNumber,
-      jobName: it.booking.jobName,
-      clientName: it.booking.company.name,
-      contact: nameOfPerson(it.booking.person),
-      agent: it.booking.agent.name ?? '',
-      rwOrderNumber: it.booking.rentalworksOrderId,
-      start: ymd(it.booking.startDate),
-      end: ymd(it.booking.endDate),
-      status: mapStatus(it.booking.status),
-      bookingStatus: it.booking.status,
-    }
-  })
+  // ── Needs-Assignment lane — VEHICLES INTENTIONALLY EXCLUDED. ──
+  //    The lane previously listed every REQUESTED BookingItem with zero
+  //    BookingAssignments. Pre-cutover that is ALL Planyo-imported vehicles:
+  //    the importer records the unit only on the Reservation mirror
+  //    (unit_assignment) and never creates a BookingAssignment, so every
+  //    imported BookingItem is REQUESTED/unassigned. Planyo is still the
+  //    operational source of truth (PLANYO_BACKFILL rows are a stale snapshot),
+  //    so an HQ "needs assignment" pile for them is pure noise. Per product,
+  //    this lane is reserved for Pickup/Delivery tasks (a later build) — not
+  //    vehicles — so we emit an empty list; the gantt lane self-hides when
+  //    empty. Display only: no BookingItem/assignment/import data is touched,
+  //    and a deliberate bind is still available from a bar's detail modal
+  //    (Assign / change units). The delivery/pickup source will repopulate
+  //    this field in its own build.
+  const unassignedHolds: Array<Record<string, unknown>> = []
 
   return NextResponse.json({
     ok: true,
