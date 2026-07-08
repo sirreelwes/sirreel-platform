@@ -43,6 +43,10 @@ const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }
 // status above). Applies to booked bars only; other statuses are unaffected.
 const BLIND_PICKUP_COLOR = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' } as const
 
+// Unit N/A (out-of-service) — an open maintenance window on a unit's row.
+// Grey now uniquely means "unavailable" (backups moved to faded blue below).
+const UNIT_NA_COLOR = { bg: 'bg-gray-400', border: 'border-gray-500', text: 'text-white' } as const
+
 // A booked bar becomes violet when its order is a blind pickup; everything
 // else uses the plain status color (falling back to booked).
 function barColor(status: string, blindPickup?: boolean) {
@@ -521,6 +525,8 @@ export default function GanttPage() {
           { label: 'Booked', color: 'bg-green-600', struck: false },
           { label: 'Booked · Blind Pickup', color: 'bg-violet-500', struck: false },
           { label: 'Cancelled', color: 'bg-gray-200', struck: true },
+          { label: 'Unit N/A (in service)', color: 'bg-gray-400', struck: false },
+          { label: 'Backup (queued)', color: 'bg-blue-200', struck: false },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1">
             <div className={`w-3 h-2 rounded-sm border border-black/5 ${l.color}`} />
@@ -723,6 +729,25 @@ export default function GanttPage() {
                             />
                           ))}
                         </div>
+                        {/* Unit N/A — open maintenance windows (grey, informational,
+                            click-through so the +Hold row gesture still works). Drawn
+                            before bookings so a real booking bar sits on top. */}
+                        {(entry.unit.naWindows || []).map((w: any, k: number) => {
+                          const bar = getBar(w.start, w.end || dates[dates.length - 1])
+                          if (!bar) return null
+                          return (
+                            <div
+                              key={`na-${k}`}
+                              className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
+                              style={{ left: bar.left, width: bar.width }}
+                              title={`Unit N/A · In Service${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
+                            >
+                              <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
+                                N/A · In Service
+                              </span>
+                            </div>
+                          )
+                        })}
                         {/* Primary bars */}
                         {entry.primaryBookings.map((b: any, j: number) => {
                           const bar = getBar(b.start, b.end)
@@ -745,13 +770,13 @@ export default function GanttPage() {
                           )
                         })}
                       </div>
-                      {/* Backup sub-lane — greyed, rank-2+ bars stacked here.
-                          Empty-span clicks here delegate to the same
-                          asset-row handler; overlap detection will
-                          pick the right primary/backup mode. */}
+                      {/* Backup sub-lane — faded-blue "queued hold" rank-2+ bars
+                          stacked here (blue, not grey, so grey now uniquely means
+                          unavailable). Empty-span clicks delegate to the same
+                          asset-row handler; overlap detection picks the mode. */}
                       {hasBackups && (
                         <div
-                          className="relative h-8 border-b border-gray-100 bg-gray-100/70 cursor-pointer hover:bg-gray-200/70"
+                          className="relative h-8 border-b border-gray-100 bg-blue-50/60 cursor-pointer hover:bg-blue-100/60"
                           onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                         >
                           {/* Grid (lighter on the sub-lane) */}
@@ -772,7 +797,7 @@ export default function GanttPage() {
                             return (
                               <div
                                 key={`b-${j}`}
-                                className="absolute top-1 h-6 rounded-md bg-gray-300/70 border border-dashed border-gray-400 flex items-center px-1.5 cursor-pointer hover:bg-gray-300 transition-opacity overflow-hidden"
+                                className="absolute top-1 h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
                                 style={{ left: bar.left, width: bar.width }}
                                 onClick={(ev) => {
                                   ev.stopPropagation()
@@ -780,7 +805,7 @@ export default function GanttPage() {
                                 }}
                                 title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
                               >
-                                <span className="text-[9px] font-semibold text-gray-700 truncate whitespace-nowrap">
+                                <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
                                   {rankLabel} · {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''}
                                 </span>
                               </div>

@@ -319,8 +319,33 @@ export async function GET(req: NextRequest) {
     unitMap.set(unitName, slot)
   }
 
+  // ── Unit N/A (out-of-service) windows — OPEN MaintenanceRecord windows
+  //    (SCHEDULED / IN_PROGRESS only; not COMPLETED/CANCELLED) overlapping the
+  //    visible range, keyed by assetId. Rendered as informational grey bars on
+  //    the unit's row. endDate null = open-ended (ongoing). Display-only — does
+  //    NOT touch booking/assign availability. Only for assets already shown as
+  //    unit rows (a maintenance-only unit with no bookings won't have a row). ──
+  const naByAsset = new Map<string, Array<{ start: string; end: string | null }>>()
+  const naAssetIds = [...unitMap.values()].map((u) => u.assetId)
+  if (naAssetIds.length) {
+    const maint = await prisma.maintenanceRecord.findMany({
+      where: {
+        assetId: { in: naAssetIds },
+        status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+        startDate: { lte: to },
+        OR: [{ endDate: null }, { endDate: { gte: from } }],
+      },
+      select: { assetId: true, startDate: true, endDate: true },
+    })
+    for (const m of maint) {
+      const arr = naByAsset.get(m.assetId) ?? []
+      arr.push({ start: ymd(m.startDate), end: m.endDate ? ymd(m.endDate) : null })
+      naByAsset.set(m.assetId, arr)
+    }
+  }
+
   const units = [...unitMap.values()]
-    .map((u) => ({ ...u, bookings: u.bookings.sort((a, b) => String(a.start).localeCompare(String(b.start))) }))
+    .map((u) => ({ ...u, naWindows: naByAsset.get(u.assetId) ?? [], bookings: u.bookings.sort((a, b) => String(a.start).localeCompare(String(b.start))) }))
     .sort((a, b) => {
       const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
       const ca = catOrder.indexOf(a.cat); const cb = catOrder.indexOf(b.cat)
