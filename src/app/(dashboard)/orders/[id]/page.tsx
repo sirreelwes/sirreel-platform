@@ -450,6 +450,21 @@ export default function OrderDetailPage() {
   const [dispatchSaving, setDispatchSaving] = useState(false);
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
 
+  // Delivery/pickup task-creation form (STEP 3). Opened from the nudge banner;
+  // creates a PENDING DispatchTask. Driver + tow vehicle are fleet's job later.
+  const [taskForm, setTaskForm] = useState<{
+    type: "DELIVERY" | "PICKUP";
+    scheduledDate: string;
+    scheduledTime: string;
+    siteAddress: string;
+    contactName: string;
+    contactPhone: string;
+    deliveryItems: string;
+    notes: string;
+  } | null>(null);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskErr, setTaskErr] = useState<string | null>(null);
+
   const [invSearch, setInvSearch] = useState("");
   const [invResults, setInvResults] = useState<InvItem[]>([]);
   const [showInvDropdown, setShowInvDropdown] = useState(false);
@@ -643,6 +658,49 @@ export default function OrderDetailPage() {
       setDispatchSaving(false);
     }
   }, [orderId, deliveryRequested, pickupRequested, fetchOrder]);
+
+  const openTaskForm = useCallback((type: "DELIVERY" | "PICKUP") => {
+    if (!order) return;
+    // Prefill the scheduled day from the order's date chain (delivery ≈ start,
+    // pickup ≈ end) and items from the order's line descriptions — all editable.
+    const dateSrc = type === "DELIVERY" ? order.startDate : order.endDate;
+    setTaskErr(null);
+    setTaskForm({
+      type,
+      scheduledDate: dateSrc ? dateSrc.slice(0, 10) : "",
+      scheduledTime: "",
+      siteAddress: "",
+      contactName: "",
+      contactPhone: "",
+      deliveryItems: order.lineItems.map((li) => li.description).filter(Boolean).join(", "),
+      notes: "",
+    });
+  }, [order]);
+
+  const submitTaskForm = useCallback(async () => {
+    if (!taskForm) return;
+    if (!taskForm.scheduledDate) { setTaskErr("Scheduled date is required."); return; }
+    if (!taskForm.siteAddress.trim()) { setTaskErr("Site address is required."); return; }
+    setTaskSaving(true);
+    setTaskErr(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/dispatch-tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(taskForm),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.reason || d.error || `Create failed (${res.status})`);
+      }
+      setTaskForm(null);
+      await fetchOrder(); // nudge clears — a matching PENDING task now exists
+    } catch (e) {
+      setTaskErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTaskSaving(false);
+    }
+  }, [taskForm, orderId, fetchOrder]);
 
   // Inline "Add quote recipient" form state — opened from the
   // RecipientLine warning, creates a JobContact + optional PortalAccess
@@ -1747,16 +1805,143 @@ export default function OrderDetailPage() {
         return (
           <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
             <span className="text-amber-500 text-xl leading-none">⚠</span>
-            <div className="text-sm text-lt-fg">
+            <div className="text-sm text-lt-fg flex-1">
               <div className="font-semibold text-amber-600">Create the {which} task</div>
               <div className="text-xs text-lt-fg2 mt-0.5">
                 This order is marked for {which}, but no {which} task is on the schedule yet.
                 Create it so it lands on the reservations board for fleet to assign.
               </div>
+              {canMarkDispatch && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {needDelivery && (
+                    <button
+                      onClick={() => openTaskForm("DELIVERY")}
+                      className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded"
+                    >
+                      Create delivery task
+                    </button>
+                  )}
+                  {needPickup && (
+                    <button
+                      onClick={() => openTaskForm("PICKUP")}
+                      className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded"
+                    >
+                      Create pickup task
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );
       })()}
+
+      {/* Delivery/pickup task-creation form (STEP 3). Sales fills logistics;
+          the task is created PENDING/unassigned — fleet assigns driver + tow
+          vehicle later. On success the nudge clears (a matching task exists). */}
+      {taskForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => { if (!taskSaving) setTaskForm(null); }}
+        >
+          <div
+            className="bg-lt-card rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="text-lg font-semibold text-lt-fg">
+                Create {taskForm.type === "DELIVERY" ? "delivery" : "pickup"} task
+              </h2>
+              <button onClick={() => setTaskForm(null)} className="text-lt-fg3 hover:text-lt-fg text-xl leading-none">×</button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs text-lt-fg3">Date</span>
+                  <input
+                    type="date"
+                    value={taskForm.scheduledDate}
+                    onChange={(e) => setTaskForm({ ...taskForm, scheduledDate: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-lt-fg3">Time (optional)</span>
+                  <input
+                    type="text"
+                    value={taskForm.scheduledTime}
+                    placeholder="e.g. 7am call"
+                    onChange={(e) => setTaskForm({ ...taskForm, scheduledTime: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg placeholder:text-lt-fg3"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-xs text-lt-fg3">
+                  {taskForm.type === "DELIVERY" ? "Delivery address (client site)" : "Pickup address (client site)"} *
+                </span>
+                <textarea
+                  value={taskForm.siteAddress}
+                  rows={2}
+                  placeholder="Street, city, stage/lot, gate…"
+                  onChange={(e) => setTaskForm({ ...taskForm, siteAddress: e.target.value })}
+                  className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg placeholder:text-lt-fg3 resize-y"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-xs text-lt-fg3">On-site contact</span>
+                  <input
+                    type="text"
+                    value={taskForm.contactName}
+                    onChange={(e) => setTaskForm({ ...taskForm, contactName: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-lt-fg3">Contact phone</span>
+                  <input
+                    type="tel"
+                    value={taskForm.contactPhone}
+                    onChange={(e) => setTaskForm({ ...taskForm, contactPhone: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg"
+                  />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-xs text-lt-fg3">Items</span>
+                <textarea
+                  value={taskForm.deliveryItems}
+                  rows={2}
+                  onChange={(e) => setTaskForm({ ...taskForm, deliveryItems: e.target.value })}
+                  className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg resize-y"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-lt-fg3">Special instructions</span>
+                <textarea
+                  value={taskForm.notes}
+                  rows={2}
+                  onChange={(e) => setTaskForm({ ...taskForm, notes: e.target.value })}
+                  className="mt-1 w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-lt-fg resize-y"
+                />
+              </label>
+              <p className="text-[11px] text-lt-fg3">Fleet assigns the driver + tow vehicle after the task is created.</p>
+              {taskErr && <p className="text-xs text-rose-600">{taskErr}</p>}
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setTaskForm(null)} disabled={taskSaving} className="text-sm text-lt-fg2 hover:text-lt-fg px-3 py-1.5">Cancel</button>
+              <button
+                onClick={submitTaskForm}
+                disabled={taskSaving}
+                className="text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded disabled:opacity-40"
+              >
+                {taskSaving ? "Creating…" : "Create task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
