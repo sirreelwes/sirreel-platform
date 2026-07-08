@@ -6,6 +6,7 @@ import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
+import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 import { getPermissions } from '@/lib/permissions';
@@ -68,6 +69,10 @@ export default function GanttPage() {
   const { data: session } = useSession()
   const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
   const canBindUnit = sessionRole ? getPermissions(sessionRole).dispatch : false
+  // Fleet capability — gates the delivery/pickup task-assign action in the
+  // needs-assignment lane (sales can see the tasks but not assign).
+  const canAssignTasks = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
+  const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
   const [catFilter, setCatFilter] = useState('all')
@@ -590,6 +595,8 @@ export default function GanttPage() {
                   )
                 }
                 if (entry.type === 'needsAssign') {
+                  const t = entry.hold
+                  const label = t.taskType === 'PICKUP' ? 'Pickup' : 'Delivery'
                   return (
                     <div
                       key={`na-${i}`}
@@ -598,9 +605,9 @@ export default function GanttPage() {
                       <div className="w-2 h-2 rounded-full flex-shrink-0 bg-rose-400" />
                       <div className="min-w-0">
                         <div className="text-[11px] font-semibold text-gray-900 truncate">
-                          {entry.hold.categoryName || entry.hold.resourceName || '—'}
+                          {label} · {t.clientName}
                         </div>
-                        <div className="text-[9px] text-rose-600 truncate italic">unassigned</div>
+                        <div className="text-[9px] text-rose-600 truncate italic">needs fleet assignment</div>
                       </div>
                     </div>
                   )
@@ -679,8 +686,15 @@ export default function GanttPage() {
                     return <div key={`d-${i}`} className={`h-6 border-b border-gray-200 ${dividerBg}`} />
                   }
                   if (entry.type === 'needsAssign') {
-                    const h = entry.hold
-                    const bar = getBar(h.start, h.end)
+                    const t = entry.hold
+                    const bar = getBar(t.start, t.end)
+                    const label = t.taskType === 'PICKUP' ? 'Pickup' : 'Delivery'
+                    const detail = [
+                      t.jobName,
+                      t.scheduledTime,
+                      t.siteAddress,
+                      t.deliveryItems,
+                    ].filter(Boolean).join(' · ')
                     return (
                       <div key={`na-${i}`} className="relative h-8 border-b border-gray-100 bg-rose-50/40">
                         {/* Grid */}
@@ -695,13 +709,13 @@ export default function GanttPage() {
                         </div>
                         {bar && (
                           <div
-                            className="absolute top-1 h-6 rounded-md bg-amber-200 border border-dashed border-amber-500 flex items-center px-1.5 cursor-pointer hover:bg-amber-300 transition-colors overflow-hidden"
-                            style={{ left: bar.left, width: bar.width }}
-                            onClick={(ev) => { ev.stopPropagation(); setAssignBookingItemId(h.bookingItemId) }}
-                            title={`Click to assign a unit — ${h.clientName}${h.jobName ? ` · ${h.jobName}` : ''}`}
+                            className={`absolute top-1 h-6 rounded-md bg-amber-200 border border-dashed border-amber-500 flex items-center px-1.5 overflow-hidden ${canAssignTasks ? 'cursor-pointer hover:bg-amber-300 transition-colors' : ''}`}
+                            style={{ left: bar.left, width: bar.width, minWidth: 120 }}
+                            onClick={canAssignTasks ? (ev) => { ev.stopPropagation(); setAssignTask(t) } : undefined}
+                            title={`${label} — ${t.clientName}${detail ? ` · ${detail}` : ''}${canAssignTasks ? ' · click to assign driver + tow vehicle' : ''}`}
                           >
                             <span className="text-[9px] font-bold text-amber-900 truncate whitespace-nowrap">
-                              ⚠ {h.clientName}{h.jobName ? ` · ${h.jobName}` : ''} · qty {h.quantity} · assign →
+                              ⚠ {label} · {t.clientName}{t.scheduledTime ? ` · ${t.scheduledTime}` : ''}{canAssignTasks ? ' · assign →' : ''}
                             </span>
                           </div>
                         )}
@@ -1046,6 +1060,16 @@ export default function GanttPage() {
           bufferDays={1}
           onClose={() => setAssignBookingItemId(null)}
           onChanged={() => refreshTimeline()}
+        />
+      )}
+
+      {/* Assign delivery/pickup task — fleet sets driver + tow vehicle.
+          Setting a tow vehicle drops the task from the needs-assignment lane. */}
+      {assignTask && (
+        <AssignTaskModal
+          task={assignTask}
+          onClose={() => setAssignTask(null)}
+          onAssigned={() => { setAssignTask(null); refreshTimeline() }}
         />
       )}
     </div>

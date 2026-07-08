@@ -353,21 +353,47 @@ export async function GET(req: NextRequest) {
       return a.unitName.localeCompare(b.unitName, undefined, { numeric: true })
     })
 
-  // ── Needs-Assignment lane — VEHICLES INTENTIONALLY EXCLUDED. ──
-  //    The lane previously listed every REQUESTED BookingItem with zero
-  //    BookingAssignments. Pre-cutover that is ALL Planyo-imported vehicles:
-  //    the importer records the unit only on the Reservation mirror
-  //    (unit_assignment) and never creates a BookingAssignment, so every
-  //    imported BookingItem is REQUESTED/unassigned. Planyo is still the
-  //    operational source of truth (PLANYO_BACKFILL rows are a stale snapshot),
-  //    so an HQ "needs assignment" pile for them is pure noise. Per product,
-  //    this lane is reserved for Pickup/Delivery tasks (a later build) — not
-  //    vehicles — so we emit an empty list; the gantt lane self-hides when
-  //    empty. Display only: no BookingItem/assignment/import data is touched,
-  //    and a deliberate bind is still available from a bar's detail modal
-  //    (Assign / change units). The delivery/pickup source will repopulate
-  //    this field in its own build.
-  const unassignedHolds: Array<Record<string, unknown>> = []
+  // ── Needs-Assignment lane — DELIVERY/PICKUP TASKS awaiting fleet. ──
+  //    Vehicles are intentionally NOT in this lane (Planyo backfill = every
+  //    imported BookingItem is unassigned noise). It now surfaces the
+  //    sales-created delivery/pickup DispatchTasks that still need a fleet
+  //    assignment: PENDING, in the visible window by scheduledDate, and NOT
+  //    yet given a tow vehicle. Assigning a tow vehicle (fleet action) drops
+  //    the task from this lane. Read-only here — assignment is a separate,
+  //    canAssignAssets-gated endpoint.
+  const taskRows = await prisma.dispatchTask.findMany({
+    where: {
+      type: { in: ['DELIVERY', 'PICKUP'] },
+      status: 'PENDING',
+      towVehicle: null,
+      scheduledDate: { gte: from, lte: to },
+    },
+    select: {
+      id: true, type: true, scheduledDate: true, scheduledTime: true,
+      siteAddress: true, deliveryItems: true,
+      order: { select: { orderNumber: true, company: { select: { name: true } }, job: { select: { name: true, jobCode: true } } } },
+      booking: { select: { jobName: true, company: { select: { name: true } } } },
+    },
+    orderBy: { scheduledDate: 'asc' },
+  })
+  const unassignedHolds = taskRows.map((t) => {
+    const day = ymd(t.scheduledDate)
+    return {
+      kind: 'task' as const,
+      taskId: t.id,
+      taskType: t.type, // 'DELIVERY' | 'PICKUP'
+      // cat lets the gantt's category filter treat tasks distinctly; they show
+      // in the default "All Categories" view.
+      cat: t.type === 'DELIVERY' ? 'delivery' : 'pickup',
+      start: day,
+      end: day,
+      scheduledTime: t.scheduledTime ?? '',
+      siteAddress: t.siteAddress ?? '',
+      deliveryItems: t.deliveryItems ?? '',
+      clientName: t.order?.company?.name ?? t.booking?.company?.name ?? '—',
+      jobName: t.order?.job?.name ?? t.booking?.jobName ?? t.order?.orderNumber ?? '',
+    }
+  })
 
   return NextResponse.json({
     ok: true,
