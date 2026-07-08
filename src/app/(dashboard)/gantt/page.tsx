@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
+import { getPermissions } from '@/lib/permissions';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -35,6 +38,13 @@ const CAT_LABELS: Record<string, string> = {
 }
 
 export default function GanttPage() {
+  // Whether this user can bind a specific unit — mirrors the server gate on
+  // POST /booking-items/[id]/assign (requireDispatchAccess → dispatch perm).
+  // Passed to NewHoldModal so a non-dispatch user's specific-unit click
+  // creates a general hold instead of orphaning on a 403.
+  const { data: session } = useSession()
+  const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
+  const canBindUnit = sessionRole ? getPermissions(sessionRole).dispatch : false
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
   const [catFilter, setCatFilter] = useState('all')
@@ -965,6 +975,7 @@ export default function GanttPage() {
           bufferDays={1}
           asBackup={holdModal.asBackup}
           asset={holdModal.asset}
+          canBindUnit={canBindUnit}
           onClose={() => setHoldModal(null)}
           onCreated={() => {
             setHoldModal(null)

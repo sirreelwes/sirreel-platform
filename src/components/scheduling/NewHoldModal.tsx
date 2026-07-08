@@ -63,6 +63,16 @@ interface NewHoldModalProps {
    *  Omit for category-only holds ("+ New Hold" top-bar button —
    *  agent assigns the unit later). */
   asset?: { id: string; unitName: string }
+  /** Whether the current user may bind a specific unit — i.e. has the
+   *  dispatch/assign capability that POST /booking-items/[id]/assign
+   *  requires (requireDispatchAccess). When false AND an `asset` is
+   *  provided, the modal does NOT attempt the (dispatch-gated) assign:
+   *  it finishes as a valid general/unbound category hold so a
+   *  non-dispatch user (AGENT/sales) never produces an orphaned hold +
+   *  dead-end 403. The permission is knowable up front, so we decide
+   *  before creating rather than create-then-fail. Defaults true to
+   *  preserve behavior for callers that don't pass it. */
+  canBindUnit?: boolean
   /** Optional pre-seed company. Lets a parent that already knows the
    *  client (saved Order/Job context) avoid forcing the agent to
    *  re-pick. Existing internal state behavior preserved when unset. */
@@ -99,6 +109,7 @@ export function NewHoldModal({
   bufferDays,
   asBackup = false,
   asset,
+  canBindUnit = true,
   defaultCompany,
   defaultJob,
   defaultQuantity,
@@ -137,6 +148,11 @@ export function NewHoldModal({
   // created with no pre-bound unit, the same modal hands off to the
   // AssignUnitsModal drawer for an optional specific-unit pick.
   const [assignPhase, setAssignPhase] = useState<{ bookingItemId: string; hold: CreatedHold } | null>(null)
+  // Non-error confirmation shown when an asset-context hold is finished as a
+  // general (unbound) hold — either because the user lacks the dispatch/assign
+  // capability (checked up front) or, as a safety net, because the assign
+  // returned 403. Prevents the orphaned-hold + dead-end-error dead end.
+  const [heldNotice, setHeldNotice] = useState<{ hold: CreatedHold; message: string } | null>(null)
 
   const ASSET_BEARING = new Set(['VEHICLES', 'STAGES'])
 
@@ -200,6 +216,20 @@ export function NewHoldModal({
         // Backups carry bufferOverride=true on assign — backups
         // are explicitly allowed to overlap the buffer state too.
         let assignedAsset: { id: string; unitName: string } | null = null
+        if (asset && !canBindUnit) {
+          // Non-dispatch user (AGENT/sales) clicked a specific unit. The
+          // /assign call is dispatch-gated (requireDispatchAccess) and would
+          // 403 — leaving an orphaned unbound hold they can't recover. The
+          // permission is known up front, so we NEVER attempt the assign: the
+          // hold we just created is a valid general (unbound) category hold.
+          // Finish with a clear, non-error confirmation — a dispatcher binds
+          // the unit later via the stale-holds / AssignUnitsModal flow.
+          setHeldNotice({
+            hold: { ...(json as CreatedHold), assignedAsset: null },
+            message: 'Held — a dispatcher will assign the unit.',
+          })
+          return
+        }
         if (asset) {
           try {
             const bookingItemId = (json.bookingItem as { id: string }).id
@@ -211,11 +241,21 @@ export function NewHoldModal({
             const assignJson = await assignRes.json()
             if (assignRes.ok && assignJson.ok) {
               assignedAsset = { id: asset.id, unitName: asset.unitName }
+            } else if (assignRes.status === 403) {
+              // Safety net for a stale permission read (e.g. the session
+              // hadn't loaded when the modal opened, so canBindUnit was
+              // conservatively true/false out of step with the server). Never
+              // orphan: finish as a general hold with the same friendly
+              // message rather than a dead-end error the user can't recover.
+              setHeldNotice({
+                hold: { ...(json as CreatedHold), assignedAsset: null },
+                message: 'Held — a dispatcher will assign the unit.',
+              })
+              return
             } else {
-              // BookingItem exists (REQUESTED) but the unit binding
-              // failed. Don't undo the hold — surface the assign
-              // error so the operator can pick a different unit
-              // via the AssignUnitsModal flow.
+              // Real binding conflict (over-capacity / buffer). BookingItem
+              // exists (REQUESTED) — don't undo the hold; surface the error so
+              // the operator can pick a different unit via AssignUnitsModal.
               setHardError(
                 `Hold created (${(json.bookingItem as { id: string }).id.slice(0, 8)}…) but binding to ${asset.unitName} failed: ${assignJson.reason || assignJson.error || `HTTP ${assignRes.status}`}`,
               )
@@ -270,6 +310,26 @@ export function NewHoldModal({
     )
   }
 
+  // General-hold confirmation (non-dispatch user, or 403 safety net). Clear
+  // success — no error, no orphan; a dispatcher assigns the unit later.
+  if (heldNotice) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center space-y-3">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-green-100 text-green-600 text-xl">✓</div>
+          <h2 className="text-lg font-semibold text-zinc-900">Hold created</h2>
+          <p className="text-sm text-zinc-600">{heldNotice.message}</p>
+          <button
+            onClick={() => onCreated(heldNotice.hold)}
+            className="mt-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium px-4 py-1.5 rounded"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -282,7 +342,11 @@ export function NewHoldModal({
             <p className="text-sm text-zinc-600 mt-0.5">
               {categoryName} · bufferDays={bufferDays}
               {asBackup ? ' · queues behind existing holds (rank assigned by server)' : ''}
-              {asset ? ' · will bind to this specific unit on create' : ''}
+              {asset
+                ? canBindUnit
+                  ? ' · will bind to this specific unit on create'
+                  : ` · dispatch will assign ${asset.unitName} after the hold`
+                : ''}
             </p>
           </div>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-xl leading-none">×</button>
@@ -324,7 +388,7 @@ export function NewHoldModal({
 
           <label className="block">
             <span className="text-xs uppercase tracking-wide text-zinc-600">
-              Quantity{asset ? ' (locked to 1 — binding a specific unit)' : ''}
+              Quantity{asset ? (canBindUnit ? ' (locked to 1 — binding a specific unit)' : ' (locked to 1)') : ''}
             </span>
             <input
               type="number"
