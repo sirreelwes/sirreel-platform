@@ -38,10 +38,17 @@ const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }
   cancelled: { bg: 'bg-gray-200',  border: 'border-gray-300',  text: 'text-gray-400 line-through' },
 }
 
-// Blind-pickup bar color — reserved for a later dispatch-marker step. Violet,
-// distinct from every status above. Intentionally NOT wired to any bar yet.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Blind-pickup bar color — a BOOKED bar whose linked order is flagged
+// blindPickup renders violet instead of booked-green (distinct from every
+// status above). Applies to booked bars only; other statuses are unaffected.
 const BLIND_PICKUP_COLOR = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' } as const
+
+// A booked bar becomes violet when its order is a blind pickup; everything
+// else uses the plain status color (falling back to booked).
+function barColor(status: string, blindPickup?: boolean) {
+  if (status === 'booked' && blindPickup) return BLIND_PICKUP_COLOR
+  return STATUS_COLORS[status] || STATUS_COLORS.booked
+}
 
 const CAT_LABELS: Record<string, string> = {
   cube: 'Cube', cargo: 'Cargo', pass: 'Pass Van', pop: 'PopVan',
@@ -512,6 +519,7 @@ export default function GanttPage() {
           { label: 'Inquiry', color: 'bg-green-200', struck: false },
           { label: 'Hold', color: 'bg-blue-500', struck: false },
           { label: 'Booked', color: 'bg-green-600', struck: false },
+          { label: 'Booked · Blind Pickup', color: 'bg-violet-500', struck: false },
           { label: 'Cancelled', color: 'bg-gray-200', struck: true },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1">
@@ -719,7 +727,7 @@ export default function GanttPage() {
                         {entry.primaryBookings.map((b: any, j: number) => {
                           const bar = getBar(b.start, b.end)
                           if (!bar) return null
-                          const sc = STATUS_COLORS[b.status] || STATUS_COLORS.booked
+                          const sc = barColor(b.status, b.blindPickup)
                           return (
                             <div
                               key={`p-${j}`}
@@ -798,7 +806,7 @@ export default function GanttPage() {
                     {(() => {
                       const bar = getBar(job.startDate, job.endDate)
                       if (!bar) return null
-                      const sc = STATUS_COLORS[job.status] || STATUS_COLORS.booked
+                      const sc = barColor(job.status, job.blindPickup)
                       return (
                         <div
                           className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}

@@ -150,6 +150,10 @@ export async function GET(req: NextRequest) {
       company: { select: { id: true, name: true } },
       person: { select: { id: true, firstName: true, lastName: true } },
       agent: { select: { id: true, name: true } },
+      // Blind-pickup flag lives on the linked Order(s). Booking→orders is
+      // 1-to-many in the schema (≈1 in practice); a bar is "blind pickup" if
+      // ANY linked order is flagged. Only meaningful for booked-status bars.
+      orders: { select: { blindPickup: true } },
       adminNotes: true,
       items: {
         select: {
@@ -221,6 +225,7 @@ export async function GET(req: NextRequest) {
       agent: b.agent.name ?? '',
       status,
       stage: status,
+      blindPickup: b.orders.some((o) => o.blindPickup),
       startDate: ymd(b.startDate),
       endDate: ymd(b.endDate),
       color: CAT_COLORS[firstCatKey] ?? CAT_COLORS.general,
@@ -258,6 +263,7 @@ export async function GET(req: NextRequest) {
               job: { select: { id: true, jobCode: true } },
               company: { select: { name: true } },
               agent: { select: { name: true } },
+              orders: { select: { blindPickup: true } },
             },
           },
         },
@@ -303,6 +309,7 @@ export async function GET(req: NextRequest) {
       cat,
       status: mapStatus(a.bookingItem.booking.status),
       bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
+      blindPickup: a.bookingItem.booking.orders.some((o) => o.blindPickup),
       start: ymd(a.startDate),
       end: ymd(a.endDate),
       adminNotes: '',
