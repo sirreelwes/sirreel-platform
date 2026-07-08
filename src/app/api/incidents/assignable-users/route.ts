@@ -32,7 +32,7 @@ export async function GET() {
   // The set is small (<20 today) and changes rarely.
   const users = await prisma.user.findMany({
     where: {
-      role: { in: ['ADMIN', 'MANAGER', 'AGENT', 'FLEET_TECH', 'DISPATCHER'] satisfies UserRole[] },
+      role: { in: ['ADMIN', 'MANAGER', 'AGENT', 'FLEET_TECH'] satisfies UserRole[] },
     },
     select: { id: true, name: true, email: true, role: true, salesOnly: true },
     orderBy: { name: 'asc' },

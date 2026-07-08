@@ -1,10 +1,13 @@
 /**
- * Server-side guard for the Phase 4 dispatch board.
+ * Server-side guard for fleet asset-assignment actions: the scheduling
+ * assign/unassign/promote/release + booking-confirm routes, the dot-sheet /
+ * BIT PDFs, and the dispatch board.
  *
- * Read-only surface — gated on the existing `dispatch` permission so
- * the same five operational roles that get the legacy Dispatch nav
- * entry (ADMIN, MANAGER, AGENT, FLEET_TECH, DISPATCHER) see the new
- * board. No permissions.ts churn — the perm already covers them.
+ * Gated on the `canAssignAssets` permission — the fleet capability (ADMIN,
+ * MANAGER, FLEET_TECH, DISPATCHER); AGENT is excluded. Repointed off the
+ * legacy `dispatch` perm (STEP 5 of retiring DISPATCHER): for every role
+ * canAssignAssets equals the old `dispatch` value, so no access changed. The
+ * function name is kept to minimize blast radius across its callers.
  *
  * Modeled on src/lib/warehouse/requirePickerRole.ts. Returns a
  * discriminated result so route handlers do:
@@ -44,11 +47,11 @@ export async function requireDispatchAccess(): Promise<RequireDispatchAccessResu
     }
   }
 
-  if (!can(user.role, 'dispatch')) {
+  if (!can(user.role, 'canAssignAssets')) {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: 'forbidden', reason: 'dispatch board requires the dispatch permission' },
+        { error: 'forbidden', reason: 'this action requires the fleet asset-assignment permission' },
         { status: 403 },
       ),
     }

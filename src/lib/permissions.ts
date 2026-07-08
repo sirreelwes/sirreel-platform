@@ -283,7 +283,9 @@ export function isSalesRole(role: UserRole): boolean {
 // auto-redirects /dashboard → /fleet/today for these (mirrors the
 // sales-role pattern above) and their nav gets a "Today" entry.
 export function isFleetYardRole(role: UserRole): boolean {
-  return role === UserRole.FLEET_TECH || role === UserRole.DISPATCHER;
+  // DISPATCHER is being retired (fold into FLEET_TECH); no live DISPATCHER
+  // users exist, so this covers the yard roles.
+  return role === UserRole.FLEET_TECH;
 }
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {

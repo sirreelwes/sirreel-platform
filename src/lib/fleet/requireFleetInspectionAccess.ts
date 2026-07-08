@@ -2,8 +2,9 @@
  * Server-side guard for the pre-rental inspection checkout flow
  * (Sprint 2A). Explicit role set — NOT the `dispatch` permission,
  * which includes AGENT; the inspection surface is fleet-ops only:
- * ADMIN, MANAGER, DISPATCHER, FLEET_TECH. AGENT/CLIENT/DRIVER are
- * rejected server-side (403), not just hidden in the UI.
+ * ADMIN, MANAGER, FLEET_TECH. AGENT/CLIENT/DRIVER are rejected
+ * server-side (403), not just hidden in the UI. (DISPATCHER dropped —
+ * being retired into FLEET_TECH; no live DISPATCHER users exist.)
  *
  * Modeled on src/lib/fleet/requireDispatchAccess.ts.
  */
@@ -16,7 +17,6 @@ import { prisma } from '@/lib/prisma'
 const ALLOWED_ROLES: ReadonlySet<UserRole> = new Set<UserRole>([
   'ADMIN',
   'MANAGER',
-  'DISPATCHER',
   'FLEET_TECH',
 ])
 
@@ -46,7 +46,7 @@ export async function requireFleetInspectionAccess(): Promise<RequireFleetInspec
     return {
       ok: false,
       response: NextResponse.json(
-        { error: 'forbidden', reason: 'fleet inspection requires ADMIN, MANAGER, DISPATCHER, or FLEET_TECH' },
+        { error: 'forbidden', reason: 'fleet inspection requires ADMIN, MANAGER, or FLEET_TECH' },
         { status: 403 },
       ),
     }

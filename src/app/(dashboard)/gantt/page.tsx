@@ -63,12 +63,12 @@ const CAT_LABELS: Record<string, string> = {
 
 export default function GanttPage() {
   // Whether this user can bind a specific unit — mirrors the server gate on
-  // POST /booking-items/[id]/assign (requireDispatchAccess → dispatch perm).
-  // Passed to NewHoldModal so a non-dispatch user's specific-unit click
-  // creates a general hold instead of orphaning on a 403.
+  // POST /booking-items/[id]/assign (requireDispatchAccess → canAssignAssets).
+  // Passed to NewHoldModal so a user without assign rights makes a general
+  // hold instead of orphaning on a 403.
   const { data: session } = useSession()
   const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
-  const canBindUnit = sessionRole ? getPermissions(sessionRole).dispatch : false
+  const canBindUnit = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
   // Fleet capability — gates the delivery/pickup task-assign action in the
   // needs-assignment lane (sales can see the tasks but not assign).
   const canAssignTasks = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
