@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getPublicSpaces } from '@/lib/site/spaces'
+import { getPageTitles } from '@/lib/site/siteSettings'
 import { StandingSetAvailabilityForm } from '@/components/site/StandingSetAvailabilityForm'
 
 /**
@@ -36,7 +37,7 @@ function shortDesc(desc: string | null): string {
 }
 
 export default async function StandingSetsPage() {
-  const sets = await getPublicSpaces('STANDING_SET')
+  const [sets, titles] = await Promise.all([getPublicSpaces('STANDING_SET'), getPageTitles()])
 
   return (
     <>
@@ -47,7 +48,7 @@ export default async function StandingSetsPage() {
             Standing Sets
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Turnkey standing sets
+            {titles.standingSets}
           </h1>
           <p className="mt-4 max-w-[56ch] text-[#cfc9bd] text-base leading-relaxed">
             Purpose-built, ready-to-shoot environments. Browse the sets, then check availability for your dates.

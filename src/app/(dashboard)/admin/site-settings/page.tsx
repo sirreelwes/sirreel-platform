@@ -14,15 +14,29 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { PAGE_TITLE_DEFAULTS } from '@/lib/site/pageTitleDefaults';
+
+interface PageTitlesState {
+  standingSets: string;
+  vehicles: string;
+  contact: string;
+}
 
 interface SettingsState {
   heroPoster: boolean;
   heroVideo: boolean;
   heroVideoMobile: boolean;
   updatedAt: string | null;
+  titles?: PageTitlesState;
 }
 
 type Slot = 'hero-poster' | 'hero-video' | 'hero-video-mobile';
+
+const TITLE_ROWS: { key: keyof PageTitlesState; label: string; placeholder: string }[] = [
+  { key: 'standingSets', label: 'Standing Sets page', placeholder: PAGE_TITLE_DEFAULTS.standingSets },
+  { key: 'vehicles', label: 'Vehicles page', placeholder: PAGE_TITLE_DEFAULTS.vehicles },
+  { key: 'contact', label: 'Contact page', placeholder: PAGE_TITLE_DEFAULTS.contact },
+];
 
 export default function SiteSettingsPage() {
   const [settings, setSettings] = useState<SettingsState | null>(null);
@@ -30,6 +44,9 @@ export default function SiteSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Slot | null>(null);
   const [rev, setRev] = useState(0); // cache-buster for previews after a swap
+  const [titleDraft, setTitleDraft] = useState<PageTitlesState>({ standingSets: '', vehicles: '', contact: '' });
+  const [savingTitles, setSavingTitles] = useState(false);
+  const [titleMsg, setTitleMsg] = useState<string | null>(null);
   const inputs = {
     'hero-poster': useRef<HTMLInputElement>(null),
     'hero-video': useRef<HTMLInputElement>(null),
@@ -40,7 +57,13 @@ export default function SiteSettingsPage() {
     try {
       const res = await fetch('/api/admin/site-settings');
       if (res.status === 401 || res.status === 403) { setError('Admin access required.'); return; }
-      setSettings(await res.json());
+      const data: SettingsState = await res.json();
+      setSettings(data);
+      setTitleDraft({
+        standingSets: data.titles?.standingSets ?? '',
+        vehicles: data.titles?.vehicles ?? '',
+        contact: data.titles?.contact ?? '',
+      });
       setError(null);
     } catch {
       setError('Failed to load settings.');
@@ -78,6 +101,27 @@ export default function SiteSettingsPage() {
       await load();
     } finally {
       setBusy(null);
+    }
+  };
+
+  const saveTitles = async () => {
+    setSavingTitles(true);
+    setTitleMsg(null);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/site-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(titleDraft),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(d.error || `HTTP ${res.status}`); return; }
+      setTitleMsg('Saved. Live pages update within a moment.');
+      await load();
+    } catch {
+      setError('Failed to save titles.');
+    } finally {
+      setSavingTitles(false);
     }
   };
 
@@ -152,10 +196,42 @@ export default function SiteSettingsPage() {
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold text-lt-fg">Site Settings</h1>
-        <p className="text-sm text-lt-fg2 mt-1">Home page hero media for the public marketing site.</p>
+        <p className="text-sm text-lt-fg2 mt-1">Editable page titles and Home hero media for the public marketing site.</p>
       </div>
 
       {error && <div className="px-4 py-2 rounded-lg bg-chip-bad-bg text-chip-bad-fg text-sm">{error}</div>}
+
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-lt-fg">Page titles</h2>
+          <p className="text-xs text-lt-fg3 mt-0.5">
+            The big headline (H1) at the top of each public page. Leave a field blank to use the built-in default (shown as the placeholder).
+          </p>
+        </div>
+        {TITLE_ROWS.map((row) => (
+          <label key={row.key} className="block space-y-1">
+            <span className="text-xs font-medium text-lt-fg2">{row.label}</span>
+            <input
+              type="text"
+              value={titleDraft[row.key]}
+              onChange={(e) => setTitleDraft((t) => ({ ...t, [row.key]: e.target.value }))}
+              placeholder={row.placeholder}
+              maxLength={200}
+              className="w-full px-3 py-2 rounded-lg border border-lt-hairline bg-lt-inner text-lt-fg text-sm placeholder:text-lt-fg3 focus:outline-none focus:border-amber-600"
+            />
+          </label>
+        ))}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={saveTitles}
+            disabled={savingTitles}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40 transition-colors"
+          >
+            {savingTitles ? 'Saving…' : 'Save titles'}
+          </button>
+          {titleMsg && <span className="text-xs text-chip-good-fg">{titleMsg}</span>}
+        </div>
+      </div>
 
       <Card
         slot="hero-poster" title="Hero poster" required

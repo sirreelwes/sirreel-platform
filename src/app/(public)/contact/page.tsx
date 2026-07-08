@@ -7,6 +7,7 @@
 
 import { ContactForm } from '@/components/site/ContactForm'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { getPageTitles } from '@/lib/site/siteSettings'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,7 @@ export default async function ContactPage({
   searchParams?: { prefill?: string }
 }) {
   const prefill = typeof searchParams?.prefill === 'string' ? searchParams.prefill.slice(0, 300) : ''
+  const titles = await getPageTitles()
 
   return (
     <section id="contact" className="bg-[#0c0c0d] text-white scroll-mt-24">
@@ -26,7 +28,7 @@ export default async function ContactPage({
               Get in Touch
             </div>
             <h1 className="font-black tracking-tight text-[32px] sm:text-[46px] leading-[1.05] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Let&rsquo;s get your production rolling.
+              {titles.contact}
             </h1>
             <p className="text-[#a8a294] text-[15px] leading-relaxed mt-5 max-w-[46ch]">
               Tell us what you need and when. A SirReel team member will follow up — no bots, no auto-replies.

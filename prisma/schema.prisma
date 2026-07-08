@@ -4728,6 +4728,13 @@ model SiteSetting {
   tileGripElectricUrl String? @map("tile_grip_electric_url")
   tileWardrobeMakeupUrl String? @map("tile_wardrobe_makeup_url")
 
+  /// Editable public-page hero titles (the H1 on each marketing page). Null →
+  /// the page's built-in default copy (see src/lib/site/pageTitleDefaults.ts).
+  /// Managed at /admin/site-settings.
+  titleStandingSets String? @map("title_standing_sets")
+  titleVehicles     String? @map("title_vehicles")
+  titleContact      String? @map("title_contact")
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

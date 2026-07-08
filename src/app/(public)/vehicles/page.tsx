@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
+import { getPageTitles } from '@/lib/site/siteSettings'
 
 /**
  * Public /vehicles landing — the "Vehicles" nav destination. Lists every
@@ -31,7 +32,7 @@ function TruckPlaceholder() {
 }
 
 export default async function VehiclesIndexPage() {
-  const vehicles = await getPublicVehicles()
+  const [vehicles, titles] = await Promise.all([getPublicVehicles(), getPageTitles()])
 
   return (
     <>
@@ -42,7 +43,7 @@ export default async function VehiclesIndexPage() {
             The Fleet
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Production vehicles, ready to roll
+            {titles.vehicles}
           </h1>
           <p className="mt-4 max-w-[56ch] text-[#cfc9bd] text-base leading-relaxed">
             Cargo vans, supercubes, passenger vans, talent trailers and honeywagons. Pick a vehicle

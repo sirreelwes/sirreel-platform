@@ -37,20 +37,73 @@ const SLOT = {
 }
 type SlotKey = keyof typeof SLOT
 
+// Editable public-page hero titles: request key → SiteSetting column. The
+// public pages fall back to built-in defaults (pageTitleDefaults.ts) when a
+// column is null, so an empty submission clears the override.
+const TITLE_FIELDS = {
+  standingSets: 'titleStandingSets',
+  vehicles: 'titleVehicles',
+  contact: 'titleContact',
+} as const
+type TitleKey = keyof typeof TITLE_FIELDS
+const TITLE_MAX = 200
+
 export async function GET() {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
 
   const s = await prisma.siteSetting.findUnique({
     where: { id: SINGLETON },
-    select: { heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true, updatedAt: true },
+    select: {
+      heroPosterUrl: true, heroVideoUrl: true, heroVideoMobileUrl: true, updatedAt: true,
+      titleStandingSets: true, titleVehicles: true, titleContact: true,
+    },
   })
   return NextResponse.json({
     heroPoster: !!s?.heroPosterUrl,
     heroVideo: !!s?.heroVideoUrl,
     heroVideoMobile: !!s?.heroVideoMobileUrl,
     updatedAt: s?.updatedAt ?? null,
+    titles: {
+      standingSets: s?.titleStandingSets ?? '',
+      vehicles: s?.titleVehicles ?? '',
+      contact: s?.titleContact ?? '',
+    },
   })
+}
+
+// PUT — save editable public-page hero titles. JSON body with any of
+// { standingSets, vehicles, contact }: string. A blank/whitespace value clears
+// the override (column → null → the page's built-in default renders).
+export async function PUT(req: NextRequest) {
+  const gate = await requireAdmin()
+  if (gate instanceof NextResponse) return gate
+
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'JSON body required' }, { status: 400 })
+  }
+
+  const data: Record<string, string | null> = {}
+  for (const key of Object.keys(TITLE_FIELDS) as TitleKey[]) {
+    if (!(key in body)) continue
+    const v = (body as Record<string, unknown>)[key]
+    if (v !== null && typeof v !== 'string') {
+      return NextResponse.json({ error: `${key} must be a string` }, { status: 400 })
+    }
+    const trimmed = typeof v === 'string' ? v.trim() : ''
+    data[TITLE_FIELDS[key]] = trimmed.length ? trimmed.slice(0, TITLE_MAX) : null
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: 'no title fields provided' }, { status: 400 })
+  }
+
+  await prisma.siteSetting.upsert({
+    where: { id: SINGLETON },
+    create: { id: SINGLETON, ...data },
+    update: data,
+  })
+  return NextResponse.json({ ok: true })
 }
 
 export async function POST(req: NextRequest) {

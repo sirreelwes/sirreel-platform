@@ -31,10 +31,11 @@ export default async function StandingSetDetailPage({ params }: { params: { id: 
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
       <Link
         href="/standing-sets"
-        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8b857a] hover:text-[#0c0c0d] transition-colors"
+        className="inline-flex items-center gap-2 rounded-full border border-[#e4dfd4] bg-white px-4 py-2 text-[13px] font-bold text-[#0c0c0d] shadow-sm hover:border-[#c39a3f] hover:bg-[#faf7f0] transition-colors"
         style={{ fontFamily: 'Archivo, sans-serif' }}
       >
-        ← All standing sets
+        <span aria-hidden className="text-[15px] leading-none">←</span>
+        Back to all standing sets
       </Link>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
