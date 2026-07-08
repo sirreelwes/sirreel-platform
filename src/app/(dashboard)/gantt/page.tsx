@@ -498,12 +498,6 @@ export default function GanttPage() {
             >›</button>
           </div>
           <span className="text-[11px] font-semibold text-gray-500 px-1">{rangeLabel}</span>
-          {view === 'asset' && (
-            <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] bg-white">
-              <option value="all">All Categories</option>
-              {allCats.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
-            </select>
-          )}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             {[1,2,3,4].map(w => (
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
@@ -544,9 +538,23 @@ export default function GanttPage() {
         <div className="flex" style={{ width: 192 + renderedDays * dayWidth, minWidth: '100%' }}>
           {/* ── LEFT: labels column (sticky left:0) ── */}
           <div className="w-48 flex-shrink-0 sticky left-0 z-20 bg-gray-50 border-r border-gray-200">
-            {/* Top-left corner — sticky on both axes */}
-            <div className="h-10 border-b border-gray-200 px-3 flex items-center text-[10px] font-bold text-gray-400 uppercase bg-gray-50 sticky top-0 z-30">
-              {view === 'asset' ? 'Unit' : 'Client'}
+            {/* Top-left corner — sticky on both axes. In Asset view it hosts the
+                category filter (sits directly above the unit list it filters);
+                Job view keeps the plain "Client" column header. */}
+            <div className="h-10 border-b border-gray-200 px-2 flex items-center bg-gray-50 sticky top-0 z-30">
+              {view === 'asset' ? (
+                <select
+                  value={catFilter}
+                  onChange={e => setCatFilter(e.target.value)}
+                  aria-label="Filter units by category"
+                  className="w-full border border-gray-200 rounded-lg px-2 py-1 text-[11px] bg-white text-gray-700"
+                >
+                  <option value="all">All Categories</option>
+                  {allCats.map(c => <option key={c} value={c}>{CAT_LABELS[c] || c}</option>)}
+                </select>
+              ) : (
+                <span className="text-[10px] font-bold text-gray-400 uppercase">Client</span>
+              )}
             </div>
 
             {view === 'asset' ? (
