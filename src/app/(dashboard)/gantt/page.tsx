@@ -23,13 +23,25 @@ const CAT_COLORS: Record<string, string> = {
   stakebed: '#78716c', general: '#9ca3af',
 }
 
+// Reservations status → bar color. The token is the display token emitted by
+// mapStatus() in /api/timeline-native (inquiry | hold | booked | cancelled) —
+// NOT the raw Prisma BookingStatus. Keep these keys in lockstep with what
+// mapStatus emits (dead keys read as bugs: bars fall back to `booked`).
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  booked:  { bg: 'bg-blue-400',   border: 'border-blue-500',   text: 'text-white' },
-  active:  { bg: 'bg-emerald-400',border: 'border-emerald-500',text: 'text-white' },
-  hold:    { bg: 'bg-amber-300',  border: 'border-amber-400',  text: 'text-amber-900' },
-  inquiry: { bg: 'bg-sky-200',    border: 'border-sky-300',    text: 'text-sky-800' },
-  quoted:  { bg: 'bg-purple-300', border: 'border-purple-400', text: 'text-purple-900' },
+  inquiry:   { bg: 'bg-green-200', border: 'border-green-400', text: 'text-green-900' }, // quote sent / availability confirmed, no hold yet
+  hold:      { bg: 'bg-blue-500',  border: 'border-blue-600',  text: 'text-white' },      // AI_REVIEW / PENDING_APPROVAL
+  booked:    { bg: 'bg-green-600', border: 'border-green-700', text: 'text-white' },      // CONFIRMED / ACTIVE / RETURNED / ARCHIVED
+  // Cancelled gets its OWN treatment so a cancelled bar never reads as booked:
+  // muted grey + struck-through label. (Previously had no entry and fell back
+  // to booked's color.) `line-through` rides in `text` because that class is
+  // applied directly to the bar's label span — no per-bar JSX branch needed.
+  cancelled: { bg: 'bg-gray-200',  border: 'border-gray-300',  text: 'text-gray-400 line-through' },
 }
+
+// Blind-pickup bar color — reserved for a later dispatch-marker step. Violet,
+// distinct from every status above. Intentionally NOT wired to any bar yet.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const BLIND_PICKUP_COLOR = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' } as const
 
 const CAT_LABELS: Record<string, string> = {
   cube: 'Cube', cargo: 'Cargo', pass: 'Pass Van', pop: 'PopVan',
@@ -500,17 +512,17 @@ export default function GanttPage() {
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend — must exactly match the tokens mapStatus emits + STATUS_COLORS. */}
       <div className="flex gap-3 mb-2 text-[10px] flex-wrap">
         {[
-          { label: 'Booked', color: 'bg-blue-400' },
-          { label: 'Active', color: 'bg-emerald-400' },
-          { label: 'Hold', color: 'bg-amber-300' },
-          { label: 'Inquiry', color: 'bg-sky-200' },
+          { label: 'Inquiry', color: 'bg-green-200', struck: false },
+          { label: 'Hold', color: 'bg-blue-500', struck: false },
+          { label: 'Booked', color: 'bg-green-600', struck: false },
+          { label: 'Cancelled', color: 'bg-gray-200', struck: true },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1">
-            <div className={`w-3 h-2 rounded-sm ${l.color}`} />
-            <span className="text-gray-500">{l.label}</span>
+            <div className={`w-3 h-2 rounded-sm border border-black/5 ${l.color}`} />
+            <span className={`text-gray-500 ${l.struck ? 'line-through' : ''}`}>{l.label}</span>
           </div>
         ))}
       </div>
