@@ -262,7 +262,7 @@ export async function GET(req: NextRequest) {
               rentalworksOrderId: true,
               job: { select: { id: true, jobCode: true } },
               company: { select: { name: true } },
-              agent: { select: { name: true } },
+              agent: { select: { id: true, name: true } },
               orders: { select: { blindPickup: true } },
             },
           },
@@ -304,6 +304,7 @@ export async function GET(req: NextRequest) {
       clientName: a.bookingItem.booking.company.name,
       jobName: a.bookingItem.booking.jobName,
       agent: a.bookingItem.booking.agent.name ?? '',
+      agentId: a.bookingItem.booking.agent?.id ?? null, // owner — gates the sales status control
       rwOrderNumber: a.bookingItem.booking.rentalworksOrderId ?? null,
       resourceName: a.asset.category?.name ?? '',
       cat,

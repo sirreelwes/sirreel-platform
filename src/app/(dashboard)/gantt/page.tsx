@@ -72,6 +72,10 @@ export default function GanttPage() {
   // Fleet capability — gates the delivery/pickup task-assign action in the
   // needs-assignment lane (sales can see the tasks but not assign).
   const canAssignTasks = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
+  // Sales (canCreateBooking = AGENT + ADMIN) can set a reservation's status
+  // from the bar. Intentionally wider than the ADMIN-only canConfirmBooking.
+  const canSetStatus = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null
   const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
@@ -82,7 +86,7 @@ export default function GanttPage() {
   const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
-  const [actionPending, setActionPending] = useState<null | 'book' | 'release' | 'promote'>(null)
+  const [actionPending, setActionPending] = useState<null | 'status' | 'release' | 'promote'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [holdModal, setHoldModal] = useState<null | {
@@ -284,7 +288,9 @@ export default function GanttPage() {
 
   // ── PART 4 actions. Book/Release on a bar click.
   //    PRIMARY (holdRank=1):
-  //      Book    → POST /api/scheduling/bookings/[bookingId]/confirm
+  //      Status  → POST /api/scheduling/bookings/[bookingId]/status
+  //                  (sales set Inquiry/Hold/Booked/Cancelled; canCreateBooking,
+  //                   own bookings only — replaces the old dispatch-gated Book)
   //      Release → POST /api/scheduling/booking-items/[id]/release
   //    BACKUP (holdRank ≥ 2):
   //      Book    → POST /api/scheduling/booking-items/[id]/promote
@@ -300,26 +306,33 @@ export default function GanttPage() {
   //    Popup STAYS OPEN after each action; banners show the new
   //    state. Release is the one exception — the row goes away
   //    so we close the popup. ──
-  async function handleBook() {
+  // Sales status set (Inquiry/Hold/Booked/Cancelled). Booked (CONFIRMED)
+  // requires no rental agreement — the endpoint is a side-effect-free flip.
+  const STATUS_TO_RAW = { inquiry: 'REQUEST', hold: 'PENDING_APPROVAL', booked: 'CONFIRMED', cancelled: 'CANCELLED' } as const
+  async function handleSetStatus(next: 'inquiry' | 'hold' | 'booked' | 'cancelled') {
     if (!selected) return
     const bookingId: string | undefined = selected.bookingId
     if (!bookingId) {
       setActionError('Missing bookingId on the selected bar — refresh and retry.')
       return
     }
-    setActionPending('book')
+    if (selected.status === next) return
+    setActionPending('status')
     setActionError(null)
     setActionSuccess(null)
     try {
-      const res = await fetch(`/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
+      const res = await fetch(`/api/scheduling/bookings/${bookingId}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
       const json = await res.json()
       if (!res.ok || !json.ok) {
-        throw new Error(json.reason || json.error || `confirm failed (${res.status})`)
+        throw new Error(json.reason || json.error || `status change failed (${res.status})`)
       }
-      setActionSuccess(json.alreadyConfirmed ? 'Already confirmed.' : 'Booked.')
-      // Reflect the new state in the open popup so the Book button
-      // disappears / button copy updates without a re-click.
-      setSelected((prev: any) => prev ? { ...prev, bookingStatus: 'CONFIRMED', status: 'booked' } : prev)
+      setActionSuccess(`Status set to ${next}.`)
+      // Reflect the new state in the open popup so it recolors without a re-click.
+      setSelected((prev: any) => prev ? { ...prev, status: next, bookingStatus: STATUS_TO_RAW[next] } : prev)
       refreshTimeline()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
@@ -969,18 +982,30 @@ export default function GanttPage() {
                         </>
                       ) : (
                         <>
-                          {selected.bookingStatus !== 'CONFIRMED' && (
-                            <button
-                              onClick={handleBook}
-                              disabled={!!actionPending}
-                              className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
-                            >
-                              {actionPending === 'book' ? 'Booking…' : 'Book'}
-                            </button>
-                          )}
-                          {selected.bookingStatus === 'CONFIRMED' && (
-                            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
-                              Confirmed
+                          {/* Sales status control — set among Inquiry / Hold /
+                              Booked / Cancelled. Booked needs no rental agreement.
+                              Shown to canCreateBooking users on bookings they own
+                              (ADMIN: any). Others see a read-only status pill. */}
+                          {canSetStatus && (sessionRole === 'ADMIN' || (selected.agentId && selected.agentId === sessionUserId)) ? (
+                            <div className="flex items-center gap-1">
+                              {([['inquiry', 'Inquiry'], ['hold', 'Hold'], ['booked', 'Booked'], ['cancelled', 'Cancelled']] as const).map(([val, lbl]) => {
+                                const active = selected.status === val
+                                return (
+                                  <button
+                                    key={val}
+                                    onClick={() => handleSetStatus(val)}
+                                    disabled={!!actionPending || active}
+                                    aria-pressed={active}
+                                    className={`text-[11px] font-semibold px-2.5 py-1.5 rounded border transition-colors ${active ? 'bg-zinc-800 text-white border-zinc-800' : 'border-zinc-300 text-zinc-700 hover:bg-zinc-50'} disabled:cursor-default`}
+                                  >
+                                    {actionPending === 'status' && !active ? '…' : lbl}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded px-2.5 py-1.5 capitalize">
+                              {selected.status}
                             </span>
                           )}
                           <button
