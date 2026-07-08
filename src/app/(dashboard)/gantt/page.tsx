@@ -86,7 +86,11 @@ export default function GanttPage() {
   const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
-  const [actionPending, setActionPending] = useState<null | 'status' | 'release' | 'promote'>(null)
+  const [actionPending, setActionPending] = useState<null | 'status' | 'release' | 'promote' | 'dates'>(null)
+  // Reschedule (date-edit) local draft + buffer-encroachment warning, seeded
+  // from the selected bar. Mirrors the status control's owner gating.
+  const [dateDraft, setDateDraft] = useState<{ start: string; end: string }>({ start: '', end: '' })
+  const [dateWarn, setDateWarn] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
   const [holdModal, setHoldModal] = useState<null | {
@@ -333,6 +337,59 @@ export default function GanttPage() {
       setActionSuccess(`Status set to ${next}.`)
       // Reflect the new state in the open popup so it recolors without a re-click.
       setSelected((prev: any) => prev ? { ...prev, status: next, bookingStatus: STATUS_TO_RAW[next] } : prev)
+      refreshTimeline()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setActionPending(null)
+    }
+  }
+
+  // Seed the date draft (and clear any buffer warning) whenever the selected
+  // bar changes — including after an optimistic patch that moves the bar.
+  useEffect(() => {
+    if (selected) setDateDraft({ start: selected.start ?? '', end: selected.end ?? '' })
+    setDateWarn(null)
+  }, [selected])
+
+  // Reschedule the booking window. bufferOverride=true resubmits past a
+  // buffer-encroachment warning (over-capacity / hard overlap has no override).
+  async function handleSetDates(bufferOverride = false) {
+    if (!selected) return
+    const bookingId: string | undefined = selected.bookingId
+    if (!bookingId) {
+      setActionError('Missing bookingId on the selected bar — refresh and retry.')
+      return
+    }
+    const { start, end } = dateDraft
+    if (!start || !end || end < start) {
+      setActionError('End date must be on or after start date.')
+      return
+    }
+    if (start === selected.start && end === selected.end) return
+    setActionPending('dates')
+    setActionError(null)
+    setActionSuccess(null)
+    if (!bufferOverride) setDateWarn(null)
+    try {
+      const res = await fetch(`/api/scheduling/bookings/${bookingId}/dates`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ startDate: start, endDate: end, bufferDays: 1, bufferOverride }),
+      })
+      const json = await res.json()
+      if (res.status === 409 && json.error === 'buffer-encroachment' && json.needsOverride) {
+        setDateWarn(json.reason || 'Rescheduling would encroach on a buffer window.')
+        return
+      }
+      if (!res.ok || !json.ok) {
+        throw new Error(json.reason || json.error || `reschedule failed (${res.status})`)
+      }
+      setActionSuccess('Dates updated.')
+      setDateWarn(null)
+      // Optimistically move the bar in the open popup; refreshTimeline re-fetches
+      // so the rendered bar repositions/resizes.
+      setSelected((prev: any) => prev ? { ...prev, start, end } : prev)
       refreshTimeline()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
@@ -1021,6 +1078,56 @@ export default function GanttPage() {
                         </>
                       )}
                     </div>
+                    {/* Reschedule (dates) — sales owners only; read-only otherwise.
+                        Validated against the same buffer/overlap checks creation
+                        uses; buffer encroachment offers an override. */}
+                    {!selected.isBackup && selected.bookingId && (
+                      canSetStatus && (sessionRole === 'ADMIN' || (selected.agentId && selected.agentId === sessionUserId)) ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-400">Dates</span>
+                            <input
+                              type="date"
+                              value={dateDraft.start}
+                              onChange={(e) => setDateDraft((d) => ({ start: e.target.value, end: d.end && d.end < e.target.value ? e.target.value : d.end }))}
+                              className="border border-zinc-300 rounded px-1.5 py-1 text-[11px]"
+                            />
+                            <span className="text-gray-400">–</span>
+                            <input
+                              type="date"
+                              value={dateDraft.end}
+                              min={dateDraft.start}
+                              onChange={(e) => setDateDraft((d) => ({ ...d, end: e.target.value }))}
+                              className="border border-zinc-300 rounded px-1.5 py-1 text-[11px]"
+                            />
+                            <button
+                              onClick={() => handleSetDates(false)}
+                              disabled={!!actionPending || (dateDraft.start === selected.start && dateDraft.end === selected.end)}
+                              className="bg-zinc-800 hover:bg-black disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+                            >
+                              {actionPending === 'dates' ? 'Saving…' : 'Save dates'}
+                            </button>
+                          </div>
+                          {dateWarn && (
+                            <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 flex items-center gap-2 flex-wrap">
+                              <span>{dateWarn}</span>
+                              <button
+                                onClick={() => handleSetDates(true)}
+                                disabled={!!actionPending}
+                                className="font-semibold underline hover:text-amber-900"
+                              >
+                                Override buffer &amp; save
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-gray-500">
+                          <span className="text-gray-400">Dates:</span>{' '}
+                          <span className="font-semibold">{fMonth(selected.start)} – {fMonth(selected.end)}</span>
+                        </div>
+                      )
+                    )}
                     {selected.bookingItemId && (
                       <button
                         onClick={() => { setAssignBookingItemId(selected.bookingItemId); setSelected(null) }}
