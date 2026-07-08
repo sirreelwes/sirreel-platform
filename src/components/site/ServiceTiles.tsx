@@ -208,6 +208,24 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
 
       {/* ── Mobile: vertical tap stack ──────────────────────────── */}
       <div className="md:hidden bg-[#0c0c0d]">
+        {/* Branded band — mobile home landing only. Order form lives on the
+            separate /order/supplies route, so this can't leak into focus mode.
+            Kept compact so the tiles stay near the top of the fold. */}
+        <div className="flex flex-col items-center justify-center gap-1 py-3.5 px-6 border-b border-white/10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sirreel-logo-white.png"
+            alt="SirReel Studio Services"
+            className="w-auto"
+            style={{ maxWidth: 178, height: 'auto' }}
+          />
+          <div
+            className="text-[#c39a3f] text-[11px] tracking-[0.2em] uppercase"
+            style={{ fontFamily: 'Archivo, sans-serif' }}
+          >
+            Always on the job.
+          </div>
+        </div>
         {tiles.map((t, i) => {
           const inner = (
             <>
