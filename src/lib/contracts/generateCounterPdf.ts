@@ -26,6 +26,10 @@ export interface RenderArgs {
   decisions: DecisionForRender[]
   generatedAt?: Date
   grantedScope?: { packageName: string; items: GrantedScopeEntry[] } | null
+  /** Header/metadata title. Omit for the counter flow (defaults to the
+   *  counter-proposal label); the baseline doc-to-sign passes "Rental
+   *  Agreement". Presentation only — no effect on clause text. */
+  documentTitle?: string
 }
 
 export async function generateCounterPdf(args: RenderArgs): Promise<Buffer> {

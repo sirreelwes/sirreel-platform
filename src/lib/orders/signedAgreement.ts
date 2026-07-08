@@ -1,4 +1,6 @@
+import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
+import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
 
 /**
  * Idempotently create the rental-agreement SignedAgreement for an Order.
@@ -92,4 +94,93 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
       baselineVersion: today,
     },
   })
+}
+
+/**
+ * Render + persist the BASELINE rental agreement's "document to sign" from
+ * the APPROVED canonical clauses so the client reviews/signs the approved
+ * text in the native portal flow.
+ *
+ * The clause text comes straight from ContractDocument → contractClauses.ts
+ * (the approved 1–29 + rental policies + fleet agreement + LCDW addendum),
+ * rendered with NO ai-changes / decisions, so the output is the verbatim
+ * approved set. This ONLY selects the source document — it does not alter,
+ * reword, or reorder any clause text.
+ *
+ * Why this exists: a plain BASELINE row is created with documentToSignUrl =
+ * null (see above), and the release gate refuses to release a null-doc
+ * agreement — so the native rental sign flow was blocked and had no
+ * approved-clause PDF for the client. This fills that gap.
+ *
+ * Narrowly scoped + idempotent:
+ *   - BASELINE only (never NEGOTIATED — that points at a company/counter PDF)
+ *   - only when documentToSignUrl is still null (never regenerate/overwrite)
+ *   - never touch a SIGNED_* row
+ * Returns the resolved documentToSignUrl (existing or newly generated), or
+ * null when there's no baseline row to fill. Callers should treat a throw as
+ * non-fatal (wrap best-effort) so a render/blob hiccup never breaks the view.
+ */
+export async function ensureBaselineRentalDocumentToSign(orderId: string): Promise<string | null> {
+  const agreement = await prisma.signedAgreement.findUnique({
+    where: { orderId_contractType: { orderId, contractType: 'RENTAL_AGREEMENT' } },
+    select: { id: true, status: true, documentType: true, documentToSignUrl: true },
+  })
+  if (!agreement) return null
+  if (agreement.documentType !== 'BASELINE') return agreement.documentToSignUrl
+  if (agreement.documentToSignUrl) return agreement.documentToSignUrl
+  if (agreement.status === 'SIGNED_BASELINE' || agreement.status === 'SIGNED_NEGOTIATED') {
+    return agreement.documentToSignUrl
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      company: {
+        select: { name: true, industry: true, billingAddress: true, billingEmail: true, notes: true },
+      },
+      job: {
+        select: { jobCode: true, name: true, startDate: true, endDate: true },
+      },
+    },
+  })
+
+  const company = order?.company
+    ? {
+        name: order.company.name,
+        industry: order.company.industry,
+        billingAddress: order.company.billingAddress,
+        billingEmail: order.company.billingEmail,
+        notes: order.company.notes,
+      }
+    : null
+  const job = order?.job
+    ? {
+        jobCode: order.job.jobCode,
+        name: order.job.name,
+        startDate: order.job.startDate,
+        endDate: order.job.endDate,
+        primaryContact: null,
+      }
+    : null
+
+  // Empty ai-changes/decisions → verbatim approved clause set.
+  const pdf = await generateCounterPdf({
+    company,
+    job,
+    aiChanges: [],
+    decisions: [],
+    generatedAt: new Date(),
+    grantedScope: null,
+    // Baseline document-to-sign — NOT a counter proposal.
+    documentTitle: 'Rental Agreement',
+  })
+
+  const blobKey = `agreement-baseline/${orderId}/baseline-${Date.now()}.pdf`
+  const uploaded = await put(blobKey, pdf, { access: 'private', contentType: 'application/pdf' })
+
+  await prisma.signedAgreement.update({
+    where: { id: agreement.id },
+    data: { documentToSignUrl: uploaded.url },
+  })
+  return uploaded.url
 }

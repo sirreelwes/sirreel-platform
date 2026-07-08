@@ -76,6 +76,12 @@ export interface ContractDocumentProps {
    *  above the closing disclaimer. Members of the package expansion
    *  on the order; populated by the counter-PDF generator. */
   grantedScope?: { packageName: string; items: GrantedScopeEntry[] } | null
+  /** Header / PDF-metadata title. Defaults to the counter-proposal label
+   *  (unchanged for the contract-review counter flow). The baseline
+   *  document-to-sign passes "Rental Agreement" so the client isn't shown
+   *  a doc mislabeled "Counter Proposal". Presentation only — does NOT
+   *  affect any clause text. */
+  documentTitle?: string
 }
 
 interface ResolvedClause {
@@ -317,18 +323,20 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
   decisions,
   generatedAt,
   grantedScope,
+  documentTitle,
 }) => {
   const generated = generatedAt || new Date()
   const { byClauseRef, unmapped } = indexChanges(aiChanges, decisions)
   const c = company || {}
   const j = job || {}
   const contact = j.primaryContact || null
+  const docTitle = documentTitle || 'Rental Agreement — Counter Proposal'
 
   return (
     <Document
-      title="SirReel Rental Agreement — Counter Proposal"
+      title={`SirReel ${docTitle}`}
       author="SirReel Studio Rentals"
-      subject="Counter Proposal"
+      subject={docTitle}
     >
       <Page size="LETTER" style={styles.page}>
         <View style={styles.brandRow} fixed>
@@ -337,7 +345,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             <Text style={styles.brandSub}>SirReel Production Vehicles, Inc.</Text>
           </View>
           <View style={styles.docMeta}>
-            <Text style={styles.docTitle}>Rental Agreement — Counter Proposal</Text>
+            <Text style={styles.docTitle}>{docTitle}</Text>
             <Text style={styles.docDate}>Generated {fmtDate(generated)}</Text>
           </View>
         </View>

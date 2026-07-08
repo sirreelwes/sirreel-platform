@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
+import { ensureSignedAgreementForOrder, ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 import { RECOVERABLE_AGREEMENT_STATES } from '@/lib/portal/agreementStatus'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import type { AgreementStatus } from '@prisma/client'
@@ -55,6 +55,12 @@ export async function GET(
   }
 
   await ensureSignedAgreementForOrder(order.id)
+  // Render the BASELINE approved-clause "document to sign" up front so the
+  // agent previews (and the client later signs) the approved text. Idempotent
+  // + best-effort; no-op for negotiated/signed rows.
+  await ensureBaselineRentalDocumentToSign(order.id).catch((err) => {
+    console.error('[agreement GET] baseline PDF generation failed:', err)
+  })
 
   const agreement = await prisma.signedAgreement.findUnique({
     where: { orderId_contractType: { orderId: order.id, contractType: 'RENTAL_AGREEMENT' } },

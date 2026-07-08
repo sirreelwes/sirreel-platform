@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,15 @@ function bad(status: number, error: string) {
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
   if (!session?.user?.email) return bad(401, 'unauthorized')
+
+  // Ensure a BASELINE rental has its approved-clause "document to sign"
+  // rendered before the null-doc gate below — otherwise a plain baseline
+  // (documentToSignUrl = null) could never be released. No-op for
+  // negotiated/counter/already-generated docs. Best-effort: a render/blob
+  // failure falls through to the existing "PDF missing" guard.
+  await ensureBaselineRentalDocumentToSign(params.id).catch((err) => {
+    console.error('[agreement/release] baseline PDF generation failed:', err)
+  })
 
   const agreement = await prisma.signedAgreement.findUnique({
     where: {
