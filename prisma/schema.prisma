@@ -1882,6 +1882,10 @@ enum UserRole {
   ADMIN
   MANAGER
   AGENT
+  // DISPATCHER is retired/vestigial: no users hold it, the `dispatch` perm is
+  // gone, and all its gates were repointed to canAssignAssets. The enum VALUE
+  // is intentionally kept — dropping it requires a full Postgres enum-type
+  // recreation that rewrites the users.role column (deferred; Wes to decide).
   DISPATCHER
   FLEET_TECH
   DRIVER

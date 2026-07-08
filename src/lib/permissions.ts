@@ -14,7 +14,6 @@ export interface Permissions {
   pipeline: boolean;    // Sales pipeline kanban
   maintenance: boolean;
   fleet: boolean;
-  dispatch: boolean;
   crm: boolean;
   claims: boolean;
   reporting: boolean;
@@ -86,7 +85,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // Wes, Dani — sees everything
   ADMIN: {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: true,
-    fleet: true, dispatch: true, crm: true, claims: true,
+    fleet: true, crm: true, claims: true,
     reporting: true, ai: true, tasks: true, inspections: true, coverage: true,
     warehouse: true, billing: true, subRentals: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
@@ -102,7 +101,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // Hugo — warehouse + fleet manager. Sees production co + job, NOT client contacts
   MANAGER: {
     calendar: true, gantt: true, bookings: false, pipeline: true, maintenance: true,
-    fleet: true, dispatch: true, crm: false, claims: false,
+    fleet: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     warehouse: true, billing: false, subRentals: true,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -123,7 +122,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // items AGENTs need (Orders, Jobs).
   AGENT: {
     calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: false,
-    fleet: false, dispatch: false, crm: true, claims: false,
+    fleet: false, crm: true, claims: false,
     reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
     warehouse: false, billing: true, subRentals: true,
     seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
@@ -139,7 +138,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
   // Julian, Chris — fleet associates. Calendar/gantt with production co + job visible, NOT client contacts
   FLEET_TECH: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
-    fleet: true, dispatch: true, crm: false, claims: false,
+    fleet: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -154,7 +153,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   DISPATCHER: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,
-    fleet: true, dispatch: true, crm: false, claims: false,
+    fleet: true, crm: false, claims: false,
     reporting: false, ai: true, tasks: true, inspections: true, coverage: false,
     warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
@@ -169,7 +168,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   DRIVER: {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
-    fleet: false, dispatch: false, crm: false, claims: false,
+    fleet: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: true, inspections: true, coverage: false,
     warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
@@ -184,7 +183,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
 
   CLIENT: {
     calendar: false, gantt: false, bookings: true, pipeline: false, maintenance: false,
-    fleet: false, dispatch: false, crm: false, claims: false,
+    fleet: false, crm: false, claims: false,
     reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
     warehouse: false, billing: false, subRentals: false,
     seeClientNames: false, seeClientContact: false, seeProductionInfo: false,
@@ -244,7 +243,6 @@ export function getPermissions(input: UserRole | PermissionsUser): Permissions {
   return {
     ...base,
     fleet: false,
-    dispatch: false,
     maintenance: false,
     billing: false,
     // The bookings-gated admin-section tools (COI Check, Contract
