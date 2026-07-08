@@ -7,6 +7,7 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
+import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,6 +66,18 @@ export async function GET(req: NextRequest) {
     res.headers.append('Set-Cookie', buildJobSessionCookieHeader('', { clear: true }))
     return res
   }
+
+  // Render the BASELINE approved-clause "document to sign" up front so the
+  // client reviews the approved text (and can sign) the moment they land in
+  // the portal — not only after an operator opens the dashboard agreement
+  // view. Renders from the SAME contractClauses source as the signed PDF
+  // (via generateCounterPdf → ContractDocument). Idempotent (no-op once
+  // filled / for negotiated / for signed rows) and best-effort so a blob or
+  // render hiccup never breaks the portal read. Runs before the order read
+  // below so the freshly-populated documentToSignUrl is picked up in-band.
+  await ensureBaselineRentalDocumentToSign(resolved.orderId).catch((err) => {
+    console.error('[portal/job/data] baseline doc-to-sign generation failed:', err)
+  })
 
   const [order, otherAccesses] = await Promise.all([
     prisma.order.findUnique({
