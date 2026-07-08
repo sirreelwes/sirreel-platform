@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
 import { ensureSignedAgreementForOrder } from "@/lib/orders/signedAgreement";
@@ -89,6 +90,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
         orderBy: { sentAt: "desc" },
         take: 50,
       },
+      // Delivery/pickup tasks — drive the derived "marked but no task yet"
+      // nudge on the order page. type/status only (distinguish DELIVERY vs
+      // PICKUP; a CANCELLED task doesn't satisfy the marking).
+      dispatchTasks: { select: { id: true, type: true, status: true } },
     },
   });
 
@@ -115,6 +120,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const {
       status, description, startDate, endDate, taxRate, notes, companyId, agentId, bookingId,
       blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions,
+      deliveryRequested, pickupRequested,
     } = body;
 
     const data: Record<string, unknown> = {};
@@ -188,6 +194,25 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     if (blindReturnInstructions !== undefined) {
       data.blindReturnInstructions = blindReturnInstructions || null;
+    }
+
+    // Delivery/pickup marking is a SALES action (canCreateBooking). Gate ONLY
+    // these two fields so the rest of the PUT (status, dates, blind*) keeps its
+    // session-only behavior for its existing callers. Task creation is a later
+    // step; here we only flip the flags.
+    if (deliveryRequested !== undefined || pickupRequested !== undefined) {
+      const actor = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { role: true },
+      });
+      if (!actor || !can(actor.role, "canCreateBooking")) {
+        return NextResponse.json(
+          { error: "forbidden", reason: "marking an order for delivery/pickup is a sales action" },
+          { status: 403 },
+        );
+      }
+      if (deliveryRequested !== undefined) data.deliveryRequested = !!deliveryRequested;
+      if (pickupRequested !== undefined) data.pickupRequested = !!pickupRequested;
     }
 
     const order = await prisma.order.update({

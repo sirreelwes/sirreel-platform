@@ -107,6 +107,11 @@ type Order = {
   blindReturn: boolean;
   blindPickupInstructions: string | null;
   blindReturnInstructions: string | null;
+  // Delivery/pickup marking (sales) + the tasks that satisfy it. Drives the
+  // derived "marked but no task yet" reminder banner.
+  deliveryRequested: boolean;
+  pickupRequested: boolean;
+  dispatchTasks: { id: string; type: string; status: string }[];
   // Phase 1b — set when this Order was created via the inquiry
   // add-on triage path. Drives the small "Add-on" chip next to the
   // status pill in the header.
@@ -328,6 +333,10 @@ export default function OrderDetailPage() {
   const canManageSubRentals = sessionRole
     ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).subRentals
     : false;
+  // Marking an order for delivery/pickup is a SALES action.
+  const canMarkDispatch = sessionRole
+    ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).canCreateBooking
+    : false;
   // ?send=1 — set by new-quote's "Send quote" finishing-move CTA. The
   // detail page loads, hydrates the order, then auto-opens the review
   // gate against the TSX welcome+quote template. One continuous motion
@@ -432,6 +441,14 @@ export default function OrderDetailPage() {
   const [blindSaving, setBlindSaving] = useState(false);
   const [blindDirty, setBlindDirty] = useState(false);
   const [blindMsg, setBlindMsg] = useState<string | null>(null);
+
+  // Delivery/pickup marking — local toggles seeded from the order; dirty until
+  // Save. Task creation is a later step; this only flips the flags.
+  const [deliveryRequested, setDeliveryRequested] = useState(false);
+  const [pickupRequested, setPickupRequested] = useState(false);
+  const [dispatchDirty, setDispatchDirty] = useState(false);
+  const [dispatchSaving, setDispatchSaving] = useState(false);
+  const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
 
   const [invSearch, setInvSearch] = useState("");
   const [invResults, setInvResults] = useState<InvItem[]>([]);
@@ -563,6 +580,9 @@ export default function OrderDetailPage() {
     setBlindPickupInstructions(data.blindPickupInstructions ?? "");
     setBlindReturnInstructions(data.blindReturnInstructions ?? "");
     setBlindDirty(false);
+    setDeliveryRequested(!!data.deliveryRequested);
+    setPickupRequested(!!data.pickupRequested);
+    setDispatchDirty(false);
     if (discountsRes.ok) {
       const d = await discountsRes.json();
       setDiscountsData({ discounts: d.discounts, breakdown: d.breakdown });
@@ -600,6 +620,29 @@ export default function OrderDetailPage() {
       setBlindSaving(false);
     }
   }, [orderId, blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions]);
+
+  const saveDispatchMarking = useCallback(async () => {
+    setDispatchSaving(true);
+    setDispatchMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliveryRequested, pickupRequested }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.reason || data.error || `Save failed (${res.status})`);
+      }
+      setDispatchMsg("Saved.");
+      // Refetch so the persisted flags + the derived nudge (dispatchTasks) refresh.
+      await fetchOrder();
+    } catch (e) {
+      setDispatchMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDispatchSaving(false);
+    }
+  }, [orderId, deliveryRequested, pickupRequested, fetchOrder]);
 
   // Inline "Add quote recipient" form state — opened from the
   // RecipientLine warning, creates a JobContact + optional PortalAccess
@@ -1689,6 +1732,32 @@ export default function OrderDetailPage() {
         </div>
       )}
 
+      {/* Delivery/pickup pending-task nudge — order marked for delivery and/or
+          pickup but no matching DispatchTask exists yet. Purely derived (no
+          status column); clears when the task is created (a later step) or the
+          marking is turned off. Mirrors the A/V-tech banner. */}
+      {(() => {
+        const tasks = order.dispatchTasks ?? [];
+        const needDelivery =
+          order.deliveryRequested && !tasks.some((t) => t.type === "DELIVERY" && t.status !== "CANCELLED");
+        const needPickup =
+          order.pickupRequested && !tasks.some((t) => t.type === "PICKUP" && t.status !== "CANCELLED");
+        if (!needDelivery && !needPickup) return null;
+        const which = needDelivery && needPickup ? "delivery and pickup" : needDelivery ? "delivery" : "pickup";
+        return (
+          <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 mb-6 flex items-start gap-3">
+            <span className="text-amber-500 text-xl leading-none">⚠</span>
+            <div className="text-sm text-lt-fg">
+              <div className="font-semibold text-amber-600">Create the {which} task</div>
+              <div className="text-xs text-lt-fg2 mt-0.5">
+                This order is marked for {which}, but no {which} task is on the schedule yet.
+                Create it so it lands on the reservations board for fleet to assign.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
@@ -2202,6 +2271,51 @@ export default function OrderDetailPage() {
           on every order; instructions surface on the portal job page
           when the toggle is on, and a loud check-in alert lights up
           the inbound dispatch lane when blindReturn fires. */}
+      {/* Delivery/pickup marking — a SALES action (canCreateBooking). Flips
+          Order.deliveryRequested / pickupRequested; the reminder banner above
+          then nudges sales to create the task (a later step). Disabled for
+          non-sales roles — they can see the state but not toggle it. */}
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-lg font-semibold text-lt-fg">Delivery &amp; pickup</h2>
+          <button
+            onClick={saveDispatchMarking}
+            disabled={!canMarkDispatch || !dispatchDirty || dispatchSaving}
+            className="text-xs font-semibold bg-lt-fg hover:bg-black text-white px-3 py-1.5 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {dispatchSaving ? "Saving…" : dispatchDirty ? "Save" : "Saved"}
+          </button>
+        </div>
+        <p className="text-xs text-lt-fg3 mb-4">
+          Mark whether SirReel delivers and/or picks up for this order. Marking prompts you to create the matching task on the reservations board.{!canMarkDispatch && " (Sales only.)"}
+        </p>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-lt-fg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={deliveryRequested}
+              disabled={!canMarkDispatch}
+              onChange={(e) => { setDeliveryRequested(e.target.checked); setDispatchDirty(true); }}
+              className="accent-lt-fg disabled:opacity-40"
+            />
+            <span className="font-medium">Delivery</span>
+            <span className="text-xs text-lt-fg3">SirReel delivers to the client</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-lt-fg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pickupRequested}
+              disabled={!canMarkDispatch}
+              onChange={(e) => { setPickupRequested(e.target.checked); setDispatchDirty(true); }}
+              className="accent-lt-fg disabled:opacity-40"
+            />
+            <span className="font-medium">Pickup</span>
+            <span className="text-xs text-lt-fg3">SirReel picks up from the client</span>
+          </label>
+        </div>
+        {dispatchMsg && <p className="text-xs text-lt-fg3 mt-3">{dispatchMsg}</p>}
+      </div>
+
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6">
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="text-lg font-semibold text-lt-fg">Blind handoff</h2>
