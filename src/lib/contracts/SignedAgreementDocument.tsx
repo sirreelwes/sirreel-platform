@@ -1,6 +1,16 @@
 import React from 'react'
-import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import { CANONICAL_CLAUSES, RENTAL_POLICIES, FLEET_AGREEMENT, LCDW_ADDENDUM } from './contractClauses'
+import { GREAT_VIBES_TTF_BASE64 } from './fonts/greatVibes'
+
+// Register the handwriting font used for the client's typed signature name.
+// Inlined as a base64 data-URI (decoded by @react-pdf/font via fontkit at
+// render) so it is bundle-guaranteed on Vercel serverless — no filesystem or
+// network fetch that could 404 and silently fall back to a default face.
+Font.register({
+  family: 'GreatVibes',
+  src: `data:font/truetype;base64,${GREAT_VIBES_TTF_BASE64}`,
+})
 
 export interface SignedAgreementMeta {
   signerName: string
@@ -133,10 +143,10 @@ const styles = StyleSheet.create({
   },
   // Typed name rendered as the client's e-signature when no drawn image was
   // captured (the native flow captures a typed name, not a canvas drawing).
-  // Times-Italic is a react-pdf built-in — no bundled script font needed.
+  // GreatVibes is a bundled OFL handwriting font (see ./fonts/greatVibes.ts).
   typedSignature: {
-    fontFamily: 'Times-Italic',
-    fontSize: 22,
+    fontFamily: 'GreatVibes',
+    fontSize: 30,
     color: '#111827',
     marginBottom: 2,
   },
