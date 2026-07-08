@@ -1091,6 +1091,7 @@ enum TaskStatus {
 model DispatchTask {
   id            String     @id @default(uuid())
   bookingId     String?    @map("booking_id")
+  orderId       String?    @map("order_id")
   assetId       String?    @map("asset_id")
   type          TaskType
   assignedTo    String?    @map("assigned_to") // FK to Driver (internal)
@@ -1098,6 +1099,13 @@ model DispatchTask {
   scheduledTime String?    @map("scheduled_time")
   fromLocation  Location?  @map("from_location")
   toLocation    String?    @map("to_location") @db.Text
+  // The non-yard end of the task: destination for a DELIVERY, origin for a
+  // PICKUP (the client site). fromLocation is a yard enum and can't hold a
+  // client street address, so this free-text field carries it. Special
+  // instructions reuse the existing `notes` column below (not duplicated).
+  siteAddress   String?    @map("site_address") @db.Text
+  contactName   String?    @map("contact_name")
+  contactPhone  String?    @map("contact_phone")
   towVehicle    String?    @map("tow_vehicle") // Blue Chevy, SB01, SB02, P1, P2
   deliveryItems String?    @map("delivery_items") @db.Text // Grip, Elec, Production, etc.
   status        TaskStatus @default(PENDING)
@@ -1108,6 +1116,7 @@ model DispatchTask {
 
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id])
+  order   Order?   @relation(fields: [orderId], references: [id])
   asset   Asset?   @relation(fields: [assetId], references: [id])
   driver  Driver?  @relation("TaskDriver", fields: [assignedTo], references: [id])
 
@@ -2550,6 +2559,13 @@ model Order {
   blindReturn              Boolean @default(false) @map("blind_return")
   blindPickupInstructions  String? @map("blind_pickup_instructions") @db.Text
   blindReturnInstructions  String? @map("blind_return_instructions") @db.Text
+
+  // Delivery/pickup task origination (STEP 1 — additive fields only, no logic
+  // yet). Sales marks the order for delivery and/or pickup; a DispatchTask is
+  // created from that marking in a later step.
+  deliveryRequested        Boolean @default(false) @map("delivery_requested")
+  pickupRequested          Boolean @default(false) @map("pickup_requested")
+  dispatchTasks            DispatchTask[]
 
   // Phase 1b client-intake — set when this Order was added as an
   // "add-on" to an existing Job via the inquiry triage path (rather
