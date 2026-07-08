@@ -131,6 +131,28 @@ const styles = StyleSheet.create({
     height: 70,
     objectFit: 'contain',
   },
+  // Typed name rendered as the client's e-signature when no drawn image was
+  // captured (the native flow captures a typed name, not a canvas drawing).
+  // Times-Italic is a react-pdf built-in — no bundled script font needed.
+  typedSignature: {
+    fontFamily: 'Times-Italic',
+    fontSize: 22,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  signatureLine: {
+    borderBottomWidth: 0.8,
+    borderBottomColor: '#9ca3af',
+    width: 240,
+    marginTop: 2,
+    marginBottom: 5,
+  },
+  attestation: {
+    marginTop: 6,
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Oblique',
+    color: '#374151',
+  },
   small: {
     fontSize: 8,
     color: '#6b7280',
@@ -273,12 +295,17 @@ export function SignedAgreementDocument({
             {signature.signatureImageDataUri ? (
               <Image src={signature.signatureImageDataUri} style={styles.signatureImage} />
             ) : (
-              <Text style={styles.small}>No signature image captured.</Text>
+              <Text style={styles.typedSignature}>{signature.signerName}</Text>
             )}
+            <View style={styles.signatureLine} />
             <Text style={styles.small}>
-              X · {signature.signerName}, {signature.signerTitle}
+              {signature.signerName}
+              {signature.signerTitle ? `, ${signature.signerTitle}` : ''}
             </Text>
           </View>
+          <Text style={styles.attestation}>
+            Signed electronically by {signature.signerName} on {fmtDate(signature.signedAt)}.
+          </Text>
         </View>
 
         <View style={styles.block}>

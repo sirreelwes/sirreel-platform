@@ -28,12 +28,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import {
   JOB_SESSION_COOKIE,
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,30 +106,66 @@ export async function POST(req: NextRequest) {
 
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null
   const ua = req.headers.get('user-agent') || null
+  const signedAt = new Date()
 
   // SIGNED_BASELINE when signing the original baseline PDF (no
   // negotiation), SIGNED_NEGOTIATED when signing the counter-agreed
   // version. The source status carries that distinction.
   const targetStatus =
     agreement.status === 'NEGOTIATED_READY' ? 'SIGNED_NEGOTIATED' : 'SIGNED_BASELINE'
+  const documentLabel = targetStatus === 'SIGNED_NEGOTIATED' ? 'negotiated' : 'baseline'
+
+  const signerTitle = typeof body.signerTitle === 'string' ? body.signerTitle.trim() || null : null
+  const signerEmail = typeof body.signerEmail === 'string' ? body.signerEmail.trim() || null : null
+  const signatureImageData =
+    typeof body.signatureImageData === 'string' ? body.signatureImageData : null
+
+  // Render the immutable SIGNED PDF: the approved 29 clauses (same
+  // contractClauses.ts source as the review doc, via SignedAgreementDocument)
+  // PLUS a signature block showing the client's typed name, date, and e-sign
+  // attestation + audit trail. Replaces the prior MVP placeholder that pointed
+  // signedDocumentUrl at the UNSIGNED review doc. documentToSignUrl (the
+  // pre-sign review copy) is left untouched. A render/upload failure aborts
+  // the sign — we never flip to a SIGNED status without a signed artifact, so
+  // the client can safely retry.
+  const orderForPdf = await prisma.order.findUnique({
+    where: { id: resolved.orderId },
+    select: {
+      company: { select: { name: true, billingAddress: true } },
+      job: { select: { jobCode: true, name: true, startDate: true, endDate: true } },
+    },
+  })
+  const pdfBuffer = await generateSignedAgreementPdf({
+    company: orderForPdf?.company ?? null,
+    job: orderForPdf?.job ?? null,
+    signature: {
+      signerName,
+      signerTitle: signerTitle ?? '',
+      signerEmail: signerEmail ?? '',
+      signatureImageDataUri: signatureImageData ?? '',
+      acknowledgmentText,
+      signedAt,
+      ipAddress: ip,
+      userAgent: ua,
+    },
+    documentLabel,
+  })
+  const blobKey = `signed-agreements/${resolved.orderId}/${documentLabel}-${signedAt.getTime()}.pdf`
+  const uploaded = await put(blobKey, pdfBuffer, { access: 'private', contentType: 'application/pdf' })
 
   const updated = await prisma.signedAgreement.update({
     where: { id: agreement.id },
     data: {
       status: targetStatus,
-      signedAt: new Date(),
+      signedAt,
       signerName,
-      signerTitle: typeof body.signerTitle === 'string' ? body.signerTitle.trim() || null : null,
-      signerEmail: typeof body.signerEmail === 'string' ? body.signerEmail.trim() || null : null,
-      signatureImageData:
-        typeof body.signatureImageData === 'string' ? body.signatureImageData : null,
+      signerTitle,
+      signerEmail,
+      signatureImageData,
       acknowledgmentText,
       signerIpAddress: ip,
       signerUserAgent: ua,
-      // MVP placeholder: signedDocumentUrl = documentToSignUrl until a
-      // follow-up commit burns the typed-name overlay into the PDF and
-      // uploads a separate signed copy. Same approach as stage-sign.
-      signedDocumentUrl: agreement.documentToSignUrl,
+      signedDocumentUrl: uploaded.url,
     },
     select: { id: true, status: true, signedAt: true, signedDocumentUrl: true },
   })
