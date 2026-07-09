@@ -33,7 +33,7 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { useSupplyCart, type CartLine, type AddToCartArgs, type ItemKind, lineEstimate, rentalDaysBetween } from '@/hooks/useSupplyCart'
-import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug } from '@/lib/site/publicSupplySections'
+import { mapCatalogToSections, rankSearchResults, sectionLabelForSlug, heroTitleForSection } from '@/lib/site/publicSupplySections'
 import { PUBLIC_CONTACT, PUBLIC_HOME_URL } from '@/lib/site/publicNav'
 
 interface CatalogItem {
@@ -988,12 +988,25 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 </div>
               )}
 
-              {displaySections.map((cat) => (
+              {displaySections.map((cat) => {
+                // Branded hero title (heroTitleForSection) — the custom title
+                // becomes the heading with the real section name as a small
+                // kicker; unbranded sections keep their plain label. Header
+                // text only — items/filtering/cart untouched.
+                const heroTitle = heroTitleForSection(cat.label)
+                return (
                 <section key={cat.label} className="order-1 md:order-3 mt-8 scroll-mt-[200px]">
                   <div className="flex items-baseline gap-3.5 mb-3.5">
-                    <h2 className="font-extrabold tracking-tight text-[23px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                      {cat.label}
-                    </h2>
+                    <div>
+                      {heroTitle && (
+                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#a37f2c]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                          {cat.label}
+                        </div>
+                      )}
+                      <h2 className="font-extrabold tracking-tight text-[23px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                        {heroTitle ?? cat.label}
+                      </h2>
+                    </div>
                     <span className="flex-1 h-[2px] bg-[#0c0c0d] opacity-10" />
                     <span className="font-semibold text-[12px] text-[#8b857a] tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       {cat.items.length}
@@ -1036,7 +1049,8 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     })}
                   </div>
                 </section>
-              ))}
+                )
+              })}
             </div>
           </main>
 

@@ -89,6 +89,26 @@ export function sectionLabelForSlug(slug: string): string | null {
 export const PUBLIC_SECTION_LINKS: { label: string; slug: string }[] =
   PUBLIC_SUPPLY_SECTIONS.map((s) => ({ label: s.label, slug: sectionSlug(s.label) }))
 
+// ── Branded section hero titles ────────────────────────────────────
+// Slug → custom header title. When a section has an entry, the order
+// form renders this as the big heading with the REAL section label as
+// a small kicker above it; sections without an entry keep their plain
+// label. Add more lines to brand more sections.
+// NOTE: 'grip-electric' has no order-form section today (the home tile
+// routes to a quote request) — kept for the future; 'power-and-lighting'
+// IS the form's grip/electric section, so it carries the same title.
+export const SECTION_HERO_TITLES: Record<string, string> = {
+  'radios-wifi': 'Stay Connected',
+  'wardrobe-makeup': 'Glam Squad Central',
+  'grip-electric': 'Build your Gear List',
+  'power-and-lighting': 'Build your Gear List',
+}
+
+/** Branded hero title for a section LABEL, or null for the plain label. */
+export function heroTitleForSection(label: string): string | null {
+  return SECTION_HERO_TITLES[sectionSlug(label)] ?? null
+}
+
 // Cross-list rules — name-matched items appear in the listed sections
 // INSTEAD of their home section. Keep patterns tight: a "Director's
 // Chair Rack" is transport gear, not a chair, so the pattern requires
