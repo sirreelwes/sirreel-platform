@@ -84,9 +84,9 @@ export default function GanttPage() {
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
   // unit row to rebind for the SAME dates via the existing assign/unassign
   // endpoints. Dates never change (that's the modal reschedule).
-  const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; label: string; startX: number; startY: number; moved: boolean; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string }>(null)
+  const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; fromCat: string; winStart: string; winEnd: string; label: string; startX: number; startY: number; moved: boolean; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string }>(null)
   const suppressBarClick = useRef(false)
-  const [drag, setDrag] = useState<null | { x: number; y: number; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string; label: string; fromAssetId: string; targetAssetId: string | null; targetUnit: string | null }>(null)
+  const [drag, setDrag] = useState<null | { x: number; y: number; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string; label: string; fromAssetId: string; fromCat: string; winStart: string; winEnd: string; targetAssetId: string | null; targetUnit: string | null; targetValid: boolean }>(null)
   const [dragBusy, setDragBusy] = useState(false)
   const [dragErr, setDragErr] = useState<string | null>(null)
   const [dragBuffer, setDragBuffer] = useState<null | { bookingItemId: string; fromAssetId: string; toAssetId: string; toUnit: string; reason: string }>(null)
@@ -535,6 +535,32 @@ export default function GanttPage() {
     const assetId = el.getAttribute('data-unit-assetid')
     if (!assetId) return null
     return { assetId, unit: el.getAttribute('data-unit-name') || '' }
+  }
+
+  // Would a drop of the dragged bar onto this unit SUCCEED? Mirrors the assign
+  // endpoint's HARD blocks so the highlight can't disagree with the real result:
+  //   · different AssetCategory        → reject ("belongs to a different category")
+  //   · any booking overlapping window → reject (over-capacity / backup-has-dibs)
+  //   · N/A window overlapping         → treat as unavailable
+  // Buffer-adjacent (soft, override-able) is left as valid — it can still commit.
+  // Only rows we return true for are tinted green, so green ⇒ the drop works.
+  function isValidDropTarget(unit: any, d: { fromAssetId: string; fromCat: string; winStart: string; winEnd: string }): boolean {
+    if (!unit || unit.assetId === d.fromAssetId) return false
+    if (unit.cat !== d.fromCat) return false
+    const overlaps = (bk: any) => bk && bk.start <= d.winEnd && bk.end >= d.winStart
+    if ((unit.bookings || []).some(overlaps)) return false
+    if ((unit.naWindows || []).some((w: any) => w && w.start <= d.winEnd && (w.end || d.winEnd) >= d.winStart)) return false
+    return true
+  }
+
+  // Per-row tint shown WHILE a bar is being dragged: valid same-category free
+  // rows go green (the one under the cursor gets a ring), invalid rows mute, and
+  // the source row stays neutral (dropping back on it is a no-op).
+  function dropTargetClass(unit: any): string {
+    if (!drag) return ''
+    if (unit.assetId === drag.fromAssetId) return ''
+    if (!isValidDropTarget(unit, drag)) return 'opacity-40'
+    return drag.targetAssetId === unit.assetId ? 'ring-2 ring-inset ring-green-500 bg-green-100/70' : 'bg-green-50/60'
   }
 
   // Reassign a booking item to a different unit for the SAME dates via the exact
@@ -995,7 +1021,7 @@ export default function GanttPage() {
                       <div
                         data-unit-assetid={entry.unit.assetId}
                         data-unit-name={entry.unit.unitName}
-                        className={`relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20 ${drag && drag.targetAssetId === entry.unit.assetId && drag.fromAssetId !== entry.unit.assetId ? 'ring-2 ring-inset ring-blue-400 bg-blue-50/50' : ''}`}
+                        className={`relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20 ${dropTargetClass(entry.unit)}`}
                         onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                       >
                         {/* Grid */}
@@ -1048,6 +1074,13 @@ export default function GanttPage() {
                                   bookingItemId: b.bookingItemId,
                                   fromAssetId: entry.unit.assetId,
                                   fromUnit: entry.unit.unitName,
+                                  // Source unit's category IS the booking's category (assign
+                                  // enforces asset.categoryId === bookingItem.categoryId), and
+                                  // its dates are the drop window — both used to pre-mark
+                                  // valid target rows.
+                                  fromCat: entry.unit.cat,
+                                  winStart: b.start,
+                                  winEnd: b.end,
                                   label: `${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`,
                                   startX: ev.clientX,
                                   startY: ev.clientY,
@@ -1072,7 +1105,9 @@ export default function GanttPage() {
                                 if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
                                 d.moved = true
                                 const tgt = unitAtPoint(ev.clientX, ev.clientY)
-                                setDrag({ x: ev.clientX, y: ev.clientY, grabDX: d.grabDX, grabDY: d.grabDY, width: d.width, height: d.height, bg: d.bg, border: d.border, text: d.text, label: d.label, fromAssetId: d.fromAssetId, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null })
+                                const tgtUnit = tgt ? filteredUnits.find((u: any) => u.assetId === tgt.assetId) : null
+                                const targetValid = tgt ? isValidDropTarget(tgtUnit, d) : false
+                                setDrag({ x: ev.clientX, y: ev.clientY, grabDX: d.grabDX, grabDY: d.grabDY, width: d.width, height: d.height, bg: d.bg, border: d.border, text: d.text, label: d.label, fromAssetId: d.fromAssetId, fromCat: d.fromCat, winStart: d.winStart, winEnd: d.winEnd, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null, targetValid })
                               } : undefined}
                               onPointerUp={canBindUnit ? (ev) => {
                                 const d = dragState.current
@@ -1453,16 +1488,20 @@ export default function GanttPage() {
 
       {/* Drag-to-reassign ghost — follows the pointer; pointer-events-none so the
           row hit-test (elementFromPoint) sees the unit rows underneath. */}
-      {drag && (
-        <div
-          className={`fixed z-[60] pointer-events-none rounded-md border ${drag.bg} ${drag.border} flex items-center px-1.5 overflow-hidden opacity-80 shadow-lg ring-2 ${drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId ? 'ring-blue-400' : 'ring-gray-300'}`}
-          style={{ left: drag.x - drag.grabDX, top: drag.y - drag.grabDY, width: drag.width, height: drag.height }}
-        >
-          <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
-            {drag.label}{drag.targetUnit && drag.targetAssetId !== drag.fromAssetId ? ` → ${drag.targetUnit}` : ''}
-          </span>
-        </div>
-      )}
+      {drag && (() => {
+        const overTarget = !!drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId
+        const ring = drag.targetValid ? 'ring-green-500' : overTarget ? 'ring-rose-400' : 'ring-gray-300'
+        return (
+          <div
+            className={`fixed z-[60] pointer-events-none rounded-md border ${drag.bg} ${drag.border} flex items-center px-1.5 overflow-hidden opacity-80 shadow-lg ring-2 ${ring}`}
+            style={{ left: drag.x - drag.grabDX, top: drag.y - drag.grabDY, width: drag.width, height: drag.height }}
+          >
+            <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
+              {drag.label}{overTarget ? ` ${drag.targetValid ? '→' : '✕'} ${drag.targetUnit}` : ''}
+            </span>
+          </div>
+        )
+      })()}
 
       {/* Buffer-adjacent drop — same override the units drawer offers. */}
       {dragBuffer && (
