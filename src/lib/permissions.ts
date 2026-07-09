@@ -361,7 +361,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       label: 'Admin',
       items: [
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
-        { id: 'fleet-pricing', label: 'Fleet Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
+        { id: 'fleet-pricing', label: 'Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
         { id: 'fees', label: 'Fees', icon: 'Receipt', href: '/admin/fees' },
         { id: 'vendors', label: 'Vendors', icon: 'Store', href: '/admin/vendors' },
         { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },

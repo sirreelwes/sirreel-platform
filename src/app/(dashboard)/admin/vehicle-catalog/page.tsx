@@ -225,12 +225,12 @@ export default function AdminVehicleCatalogPage() {
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-bold text-sirreel-text">Vehicle Catalog</h1>
         <a href="/admin/asset-categories" className="text-sm font-semibold text-sirreel-text-muted hover:text-sirreel-text">
-          Fleet Pricing →
+          Pricing →
         </a>
       </div>
       <p className="text-sm text-sirreel-text-muted mb-6">
         Public-site content for each vehicle (shown at <code>/vehicles</code>). Name, slug and price
-        are set in Fleet Pricing. A vehicle is LIVE for clients only when it&rsquo;s published{" "}
+        are set in Pricing. A vehicle is LIVE for clients only when it&rsquo;s published{" "}
         <b>and</b> has at least one photo. Edits go live on the public pages.
       </p>
 

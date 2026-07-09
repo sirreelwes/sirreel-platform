@@ -202,7 +202,7 @@ export default function AdminAssetCategoriesPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-5">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-lt-fg">Fleet Pricing</h1>
+          <h1 className="text-2xl font-bold text-lt-fg">Pricing</h1>
           <a href="/admin/vehicle-catalog" className="text-sm font-semibold text-lt-fg2 hover:text-lt-fg">
             Vehicle Catalog (public specs) →
           </a>
