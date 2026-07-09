@@ -67,6 +67,28 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "asset not found" }, { status: 404 });
   }
 
+  // Featured inspection for the panel hero: the most recent CHECKOUT that HAS
+  // photos, else the latest inspection of any type with photos. Only photo IDs
+  // are returned — the panel loads bytes through the session-gated
+  // /api/fleet/photos/[photoId] proxy, never a raw blob URL.
+  const inspectionSelect = {
+    id: true,
+    type: true,
+    inspectionDate: true,
+    photos: { select: { id: true }, orderBy: { createdAt: "asc" as const } },
+  };
+  const featured =
+    (await prisma.inspection.findFirst({
+      where: { assetId, type: "CHECKOUT", photos: { some: {} } },
+      orderBy: { inspectionDate: "desc" },
+      select: inspectionSelect,
+    })) ??
+    (await prisma.inspection.findFirst({
+      where: { assetId, photos: { some: {} } },
+      orderBy: { inspectionDate: "desc" },
+      select: inspectionSelect,
+    }));
+
   // Open/in-progress first (newest first within each group), then a concise
   // tail of recent completed/cancelled records.
   const open = asset.maintenanceRecords.filter((m) => OPEN_MAINT.has(m.status));
@@ -85,6 +107,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
         hasImage: Boolean(category.imageUrl),
       },
       maintenance: { open, recent: closed },
+      featuredInspection: featured
+        ? {
+            type: featured.type,
+            inspectionDate: featured.inspectionDate,
+            photoIds: featured.photos.map((p) => p.id),
+          }
+        : null,
     },
   });
 }

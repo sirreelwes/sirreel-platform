@@ -53,6 +53,8 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
   const [imgOk, setImgOk] = useState(true)
+  const [photoIdx, setPhotoIdx] = useState(0)
+  const [photoOk, setPhotoOk] = useState(true)
   const [notesDraft, setNotesDraft] = useState('')
   const [notesDirty, setNotesDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -67,6 +69,8 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
       setData(json.asset)
       setNotesDraft(json.asset.notes ?? '')
       setNotesDirty(false)
+      setPhotoIdx(0)
+      setPhotoOk(true)
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
@@ -130,22 +134,79 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
           <div className="p-8 text-center text-sm text-rose-600">{err || 'Failed to load asset.'}</div>
         ) : (
           <>
-            {/* Header — unit name + category-generic picture */}
-            <div className="relative">
-              {data.category?.hasImage && imgOk && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/scheduling/assets/${assetId}/category-image`}
-                  alt={data.category?.name || 'Vehicle'}
-                  className="w-full h-36 object-cover rounded-t-xl bg-gray-100"
-                  onError={() => setImgOk(false)}
-                />
-              )}
-              <button
-                onClick={onClose}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 shadow text-gray-500 hover:text-gray-900 text-lg leading-none"
-              >×</button>
-            </div>
+            {/* Header hero — the most recent fleet CHECKOUT photos (via the
+                session-gated /api/fleet/photos proxy, never a raw blob URL),
+                with the generic category picture demoted to a thumbnail.
+                Fallback when the asset has no inspection photos: the category
+                picture IS the hero and the thumbnail is skipped. */}
+            {(() => {
+              const photoIds: string[] = photoOk ? (data.featuredInspection?.photoIds ?? []) : []
+              const hasPhotos = photoIds.length > 0
+              const idx = Math.min(photoIdx, Math.max(0, photoIds.length - 1))
+              const catImg = data.category?.hasImage && imgOk
+              return (
+                <div className="relative">
+                  {hasPhotos ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/fleet/photos/${photoIds[idx]}`}
+                        alt={`Checkout photo ${idx + 1} of ${photoIds.length}`}
+                        className="w-full h-44 object-cover rounded-t-xl bg-gray-100"
+                        onError={() => setPhotoOk(false)}
+                      />
+                      {/* Inspection recency badge */}
+                      <span className="absolute bottom-2 left-2 text-[9px] font-semibold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                        {data.featuredInspection.type === 'CHECKOUT' ? 'Checkout' : String(data.featuredInspection.type).toLowerCase()} · {fDate(data.featuredInspection.inspectionDate)}
+                      </span>
+                      {/* Pager (only when several photos) */}
+                      {photoIds.length > 1 && (
+                        <>
+                          <button
+                            onClick={() => setPhotoIdx((i) => (i - 1 + photoIds.length) % photoIds.length)}
+                            className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 hover:bg-black/60 text-white text-xs leading-none"
+                            aria-label="Previous photo"
+                          >‹</button>
+                          <button
+                            onClick={() => setPhotoIdx((i) => (i + 1) % photoIds.length)}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 hover:bg-black/60 text-white text-xs leading-none"
+                            aria-label="Next photo"
+                          >›</button>
+                          <span className="absolute bottom-2 right-2 text-[9px] font-semibold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                            {idx + 1}/{photoIds.length}
+                          </span>
+                        </>
+                      )}
+                      {/* Generic category picture — demoted to a small thumbnail. */}
+                      {catImg && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/api/scheduling/assets/${assetId}/category-image`}
+                          alt={data.category?.name || 'Category'}
+                          title={`${data.category?.name || 'Category'} (generic)`}
+                          className="absolute top-2 left-2 w-14 h-10 object-cover rounded border-2 border-white/90 shadow"
+                          onError={() => setImgOk(false)}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    catImg && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/scheduling/assets/${assetId}/category-image`}
+                        alt={data.category?.name || 'Vehicle'}
+                        className="w-full h-36 object-cover rounded-t-xl bg-gray-100"
+                        onError={() => setImgOk(false)}
+                      />
+                    )
+                  )}
+                  <button
+                    onClick={onClose}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 shadow text-gray-500 hover:text-gray-900 text-lg leading-none"
+                  >×</button>
+                </div>
+              )
+            })()}
             <div className="p-5">
               <div className="flex items-baseline justify-between gap-2 mb-1">
                 <h2 className="text-lg font-semibold text-gray-900 truncate">{data.unitName}</h2>
