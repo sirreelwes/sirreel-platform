@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
+import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 import { getPermissions } from '@/lib/permissions';
@@ -92,6 +93,8 @@ export default function GanttPage() {
   // Unit N/A (out-of-service) per-row action menu. Positioned fixed (the label
   // column scrolls, so an absolute dropdown would clip).
   const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; tier: string; x: number; y: number }>(null)
+  // Asset summary panel — opened by clicking a unit's NAME (asset view).
+  const [summaryAssetId, setSummaryAssetId] = useState<string | null>(null)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
@@ -539,27 +542,9 @@ export default function GanttPage() {
     }
   }
 
-  // Fleet (canAssignAssets) sets a unit's condition tier — reuses Asset.tier via
-  // the tier endpoint; the dot recolors live on refresh. Sales are 403'd server-side.
-  async function handleSetTier(assetId: string, tier: string) {
-    setNaBusy(true)
-    setNaErr(null)
-    try {
-      const res = await fetch(`/api/scheduling/assets/${assetId}/tier`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tier }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `failed (${res.status})`)
-      setUnitMenu(null)
-      refreshTimeline()
-    } catch (e) {
-      setNaErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setNaBusy(false)
-    }
-  }
+  // (Condition tier is set from the AssetSummaryPanel — the canonical setter —
+  // via PATCH /assets/[id]/summary; the older POST /assets/[id]/tier endpoint
+  // remains live for API parity but has no UI caller here anymore.)
 
   // Hit-test the unit row under a screen point (drag-to-reassign). The ghost
   // + any overlay are pointer-events-none so elementFromPoint sees the row.
@@ -924,8 +909,13 @@ export default function GanttPage() {
                         style={{ background: TIER_COLORS[entry.unit.tier] || '#9ca3af' }}
                         title={`Condition: ${TIER_LABELS[entry.unit.tier] || 'unset'}`}
                       />
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
+                      {/* Name click → asset summary panel (separate from the "…" menu). */}
+                      <div
+                        className="min-w-0 cursor-pointer group"
+                        onClick={(e) => { e.stopPropagation(); setSummaryAssetId(entry.unit.assetId) }}
+                        title="Vehicle summary"
+                      >
+                        <div className="text-[11px] font-semibold text-gray-900 truncate group-hover:underline">{entry.unit.unitName}</div>
                         <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
                       </div>
                       {(() => {
@@ -1548,6 +1538,18 @@ export default function GanttPage() {
         />
       )}
 
+      {/* Asset summary — vehicle at a glance (name click / "…" menu). Edits
+          (notes + condition tier) are fleet-gated; tier changes re-color the
+          board dot via the refresh. */}
+      {summaryAssetId && (
+        <AssetSummaryPanel
+          assetId={summaryAssetId}
+          canEdit={canBindUnit}
+          onClose={() => setSummaryAssetId(null)}
+          onChanged={refreshTimeline}
+        />
+      )}
+
       {/* Drag-to-reassign ghost — follows the pointer; pointer-events-none so the
           row hit-test (elementFromPoint) sees the unit rows underneath. */}
       {drag && (() => {
@@ -1622,21 +1624,16 @@ export default function GanttPage() {
                 Clear · back in service
               </button>
             )}
-            {/* Fleet-only condition tier setter (canAssignAssets). Sales never see this. */}
-            {canBindUnit && (
-              <>
-                <div className="border-t border-gray-100 my-1" />
-                <div className="px-3 py-0.5 text-[9px] uppercase tracking-wide text-gray-400 font-semibold">Condition tier</div>
-                {TIER_ORDER.map(t => (
-                  <button key={t} onClick={() => handleSetTier(unitMenu.assetId, t)} disabled={naBusy}
-                    className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TIER_COLORS[t] }} />
-                    {TIER_LABELS[t]}
-                    {unitMenu.tier === t && <span className="ml-auto text-gray-500">✓</span>}
-                  </button>
-                ))}
-              </>
-            )}
+            {/* Condition tier now lives in the asset summary panel (canonical
+                setter home) — this menu just points there. */}
+            <div className="border-t border-gray-100 my-1" />
+            <button
+              onClick={() => { setSummaryAssetId(unitMenu.assetId); setUnitMenu(null) }}
+              className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TIER_COLORS[unitMenu.tier] || '#9ca3af' }} />
+              Vehicle summary · condition tier
+            </button>
             {naErr && <div className="px-3 py-1 text-[10px] text-rose-600">{naErr}</div>}
           </div>
         </>
