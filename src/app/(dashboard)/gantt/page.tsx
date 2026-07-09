@@ -711,10 +711,24 @@ export default function GanttPage() {
     }
     const isBookedInWindow = (u: any) =>
       Array.isArray(u.bookings) && u.bookings.some((b: any) => b && b.start <= visibleEnd && b.end >= visibleStart)
+    // Canonical unit order — MUST match the server sort (timeline-native):
+    // category order, then numeric unitName. Applied as the tiebreaker AFTER the
+    // booked/idle class, so BOTH sections are strictly numerical per class and
+    // the order is deterministic regardless of how units arrive (rather than a
+    // stable split that merely trusted the incoming order). A reassign settles
+    // the moved vehicle into its sorted spot — no positional row swap.
+    const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
+    const canonicalCmp = (a: any, b: any) => {
+      const ca = catOrder.indexOf(a.cat)
+      const cb = catOrder.indexOf(b.cat)
+      if (ca !== cb) return ca - cb
+      return String(a.unitName).localeCompare(String(b.unitName), undefined, { numeric: true })
+    }
     const sorted = [...filteredUnits].sort((a, b) => {
       const av = isBookedInWindow(a) ? 0 : 1
       const bv = isBookedInWindow(b) ? 0 : 1
-      return av - bv
+      if (av !== bv) return av - bv
+      return canonicalCmp(a, b)
     })
     let booked = 0
     for (const u of sorted) if (isBookedInWindow(u)) booked++
@@ -903,7 +917,7 @@ export default function GanttPage() {
                 }
                 const hasBackups = entry.backupBookings.length > 0
                 return (
-                  <div key={`u-${i}`}>
+                  <div key={`u-${entry.unit.assetId}`}>
                     <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50">
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
@@ -1061,7 +1075,7 @@ export default function GanttPage() {
                   }
                   const hasBackups = entry.backupBookings.length > 0
                   return (
-                    <div key={`u-${i}`}>
+                    <div key={`u-${entry.unit.assetId}`}>
                       {/* Main row — primary bars only.
                           Row-level onClick fires on empty-span clicks
                           (bar onClicks stopPropagation). Native-only
