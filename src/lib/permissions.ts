@@ -108,7 +108,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     seeDriverInfo: true, seePricing: false,
     seeRevenue: false, seeAllBookings: true, seeOtherAgents: true,
     seeMaintCost: true, seeEmailHistory: false,
-    canCreateBooking: false, canConfirmBooking: false, canCancelBooking: false,
+    // canCreateBooking granted 2026-07 (Wes): Hugo gets sales-level reservation
+    // control (holds, status, dates, unit assignment, promote/release, confirm)
+    // ON TOP of fleet capabilities.
+    canCreateBooking: true, canConfirmBooking: false, canCancelBooking: false,
     canAssignAssets: true, canChangeAssetStatus: true, canCreateMaintenance: true,
     canManageDrivers: true, canProcessCheckout: true, canManageClaims: false,
     canSendEmail: false, canEditCompany: false, canManageUsers: false,

@@ -26,9 +26,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     where: { email: session.user.email },
     select: { role: true },
   });
-  if (!actor || !can(actor.role, "canAssignAssets")) {
+  // SALES or FLEET (2026-07 re-split): task tow-vehicle + driver assignment is
+  // shared between reservation control and fleet ops.
+  if (!actor || !(can(actor.role, "canCreateBooking") || can(actor.role, "canAssignAssets"))) {
     return NextResponse.json(
-      { error: "forbidden", reason: "assigning a delivery/pickup task is a fleet action" },
+      { error: "forbidden", reason: "assigning a delivery/pickup task is a sales or fleet action" },
       { status: 403 },
     );
   }

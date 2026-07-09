@@ -17,8 +17,9 @@
  * still surfaces it.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
+import { can } from '@/lib/permissions'
 import { computeUnitStates, type AssignmentWindow, type ServiceableAsset } from '@/lib/scheduling/availability'
 
 export const dynamic = 'force-dynamic'
@@ -30,8 +31,23 @@ interface AssignBody {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireDispatchAccess()
-  if (!auth.ok) return auth.response
+  // SALES action (2026-07 re-split): unit assignment is reservation control,
+  // owned by canCreateBooking (AGENT/MANAGER/ADMIN). Deliberately NO ownership
+  // check — assignment is shared coverage work. Fleet keeps documents/ops only.
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  if (!actor || !can(actor.role, 'canCreateBooking')) {
+    return NextResponse.json(
+      { error: 'forbidden', reason: 'assigning units is a sales action' },
+      { status: 403 },
+    )
+  }
   const body = (await req.json().catch(() => null)) as AssignBody | null
   if (!body) return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
   if (!body.assetId) return NextResponse.json({ error: 'assetId required' }, { status: 400 })

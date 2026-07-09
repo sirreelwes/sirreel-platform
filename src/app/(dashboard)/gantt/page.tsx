@@ -76,16 +76,20 @@ const CAT_LABELS: Record<string, string> = {
 }
 
 export default function GanttPage() {
-  // Whether this user can bind a specific unit — mirrors the server gate on
-  // POST /booking-items/[id]/assign (requireDispatchAccess → canAssignAssets).
-  // Passed to NewHoldModal so a user without assign rights makes a general
-  // hold instead of orphaning on a 403.
+  // 2026-07 re-split: unit assignment is SALES (canCreateBooking) — mirrors
+  // the server gate on POST /booking-items/[id]/assign. Passed to NewHoldModal
+  // so a user without assign rights makes a general hold instead of orphaning
+  // on a 403. Drives the bar drag-reassign + "Assign / change units".
   const { data: session } = useSession()
   const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
-  const canBindUnit = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
-  // Fleet capability — gates the delivery/pickup task-assign action in the
-  // needs-assignment lane (sales can see the tasks but not assign).
-  const canAssignTasks = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
+  const canBindUnit = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
+  // FLEET capability (canAssignAssets) — N/A mark/clear, condition tier, asset
+  // notes (AssetSummaryPanel edit). Split off canBindUnit in the re-split.
+  const canFleetOps = sessionRole ? getPermissions(sessionRole).canAssignAssets : false
+  // Task tow-vehicle/driver assignment — SALES or FLEET.
+  const canAssignTasks = sessionRole
+    ? getPermissions(sessionRole).canCreateBooking || getPermissions(sessionRole).canAssignAssets
+    : false
   // Sales (canCreateBooking = AGENT + ADMIN) can set a reservation's status
   // from the bar. Intentionally wider than the ADMIN-only canConfirmBooking.
   const canSetStatus = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
@@ -931,7 +935,7 @@ export default function GanttPage() {
                         const referralPending = na.some((w) => w.kind === 'referral')
                         // A kebab appears only when the viewer has an available action:
                         // sales can refer a non-N/A unit; fleet can mark/clear.
-                        const canAny = (canSetStatus && !isNa) || canBindUnit
+                        const canAny = (canSetStatus && !isNa) || canFleetOps
                         return (
                           <div className="ml-auto flex items-center gap-1">
                             {isNa && (
@@ -1482,7 +1486,8 @@ export default function GanttPage() {
                         </div>
                       )
                     )}
-                    {selected.bookingItemId && (
+                    {/* Unit assignment is SALES (canCreateBooking) — re-split. */}
+                    {canBindUnit && selected.bookingItemId && (
                       <button
                         onClick={() => { setAssignBookingItemId(selected.bookingItemId); setSelected(null) }}
                         className="w-full border border-zinc-300 hover:bg-zinc-50 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
@@ -1565,7 +1570,7 @@ export default function GanttPage() {
       {summaryAssetId && (
         <AssetSummaryPanel
           assetId={summaryAssetId}
-          canEdit={canBindUnit}
+          canEdit={canFleetOps}
           onClose={() => setSummaryAssetId(null)}
           onChanged={refreshTimeline}
         />
@@ -1633,13 +1638,13 @@ export default function GanttPage() {
                 Refer to Maintenance
               </button>
             )}
-            {canBindUnit && !unitMenu.isNa && (
+            {canFleetOps && !unitMenu.isNa && (
               <button onClick={() => handleUnitNa(unitMenu.assetId, 'mark-na')} disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
                 Mark Not Available
               </button>
             )}
-            {canBindUnit && unitMenu.isNa && (
+            {canFleetOps && unitMenu.isNa && (
               <button onClick={() => handleUnitNa(unitMenu.assetId, 'clear')} disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
                 Clear · back in service

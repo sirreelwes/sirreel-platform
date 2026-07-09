@@ -15,8 +15,9 @@
  * different action paths than a casual "book it" click.
  */
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
+import { can } from '@/lib/permissions'
 import type { BookingStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -24,8 +25,23 @@ export const dynamic = 'force-dynamic'
 const CONFIRMABLE_FROM: readonly BookingStatus[] = ['REQUEST', 'AI_REVIEW', 'PENDING_APPROVAL'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  const auth = await requireDispatchAccess()
-  if (!auth.ok) return auth.response
+  // SALES action (2026-07 re-split): confirming a booking is reservation
+  // control (canCreateBooking) — consistent with the status route, which
+  // already lets sales set Booked/CONFIRMED. Was fleet (requireDispatchAccess).
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  if (!actor || !can(actor.role, 'canCreateBooking')) {
+    return NextResponse.json(
+      { error: 'forbidden', reason: 'confirming a booking is a sales action' },
+      { status: 403 },
+    )
+  }
   const booking = await prisma.booking.findUnique({
     where: { id: params.id },
     select: { id: true, bookingNumber: true, status: true, archivedAt: true },
