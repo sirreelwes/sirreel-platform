@@ -40,6 +40,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/home',
   '/contact',
   '/vehicles',
+  '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
   '/order/supplies',
   '/api/public/',
   '/_next/',
@@ -62,6 +63,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/home',             // public Home page (linked from the shared public nav)
   '/contact',          // public contact band (nav Contact + quote/payment deep-links)
   '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
+  '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
   '/api/public/',      // catalog / vehicle-categories / supply-request
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights

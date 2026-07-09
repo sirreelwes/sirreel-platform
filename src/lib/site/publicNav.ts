@@ -108,7 +108,9 @@ export const PUBLIC_NAV: NavEntry[] = [
         items: [
           { label: 'Sample COI', href: '/api/public/forms/coi', mode: 'download', external: true },
           { label: 'W-9', href: '/api/public/forms/w9', mode: 'download', external: true },
-          { label: 'Rental Agreement', href: '/api/public/forms/rental-agreement', mode: 'download', external: true },
+          // Interactive review page (rendered from contractClauses.ts) with its
+          // own source-matched "Download PDF" — replaced the static-PDF link.
+          { label: 'Rental Agreement', href: '/rental-agreement', mode: 'link' },
           { label: 'Studio Contract', href: '/api/public/forms/studio-contract', mode: 'download', external: true },
         ],
       },
