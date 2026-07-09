@@ -2,15 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { can } from "@/lib/permissions";
+import { NA_REFERRAL_TITLE, NA_FLEET_TITLE } from "@/lib/scheduling/naTitles";
 
 type Params = { params: Promise<{ assetId: string }> };
-
-// Title tags let the gantt N/A display distinguish a sales referral (pending
-// fleet review) from a fleet-confirmed out-of-service record — no schema field.
-// Keep in lockstep with the /referral|pending fleet review/i test in
-// timeline-native's naByAsset classifier.
-export const NA_REFERRAL_TITLE = "Unit N/A — sales referral (pending fleet review)";
-export const NA_FLEET_TITLE = "Unit N/A — out of service (fleet)";
 
 const OPEN_STATUSES = ["SCHEDULED", "IN_PROGRESS"] as const;
 // UTC-midnight "today" for the @db.Date columns.

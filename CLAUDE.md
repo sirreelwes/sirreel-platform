@@ -23,10 +23,17 @@ export DATABASE_URL=$(grep DATABASE_URL .env.local | grep -v PRISMA | cut -d'"' 
 ```
 
 ### Before every git push
+Run the REAL production build — this is what Vercel runs and what fails the deploy.
+`tsc --noEmit` alone is NOT enough: it skips ESLint and Next's route-type
+validation (e.g. a stray `export const FOO` from a route file passes tsc but
+FAILS `next build`). A red build blocks ALL subsequent commits from deploying.
 ```bash
-npx tsc --noEmit 2>&1 | grep -v node_modules
+npm run build
 ```
-Must be clean.
+Must exit 0 (ends with `✓ Generating static pages` + the route table, no
+`Failed to compile`). Do NOT disable lint/build checks to force it green — fix
+the code. (`npx tsc --noEmit 2>&1 | grep -v node_modules` is a fast inner-loop
+check, but the build is the gate.)
 
 ### Schema changes — DO NOT use `prisma migrate dev`
 Migration history has known drift from live DB. Use `prisma db push` instead.
