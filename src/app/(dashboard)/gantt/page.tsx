@@ -81,6 +81,15 @@ export default function GanttPage() {
   const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; x: number; y: number }>(null)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
+  // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
+  // unit row to rebind for the SAME dates via the existing assign/unassign
+  // endpoints. Dates never change (that's the modal reschedule).
+  const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; label: string; startX: number; startY: number; moved: boolean }>(null)
+  const suppressBarClick = useRef(false)
+  const [drag, setDrag] = useState<null | { x: number; y: number; label: string; fromAssetId: string; targetAssetId: string | null; targetUnit: string | null }>(null)
+  const [dragBusy, setDragBusy] = useState(false)
+  const [dragErr, setDragErr] = useState<string | null>(null)
+  const [dragBuffer, setDragBuffer] = useState<null | { bookingItemId: string; fromAssetId: string; toAssetId: string; toUnit: string; reason: string }>(null)
   const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
@@ -484,6 +493,77 @@ export default function GanttPage() {
     }
   }
 
+  // Hit-test the unit row under a screen point (drag-to-reassign). The ghost
+  // + any overlay are pointer-events-none so elementFromPoint sees the row.
+  function unitAtPoint(x: number, y: number): { assetId: string; unit: string } | null {
+    if (typeof document === 'undefined') return null
+    const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-unit-assetid]') as HTMLElement | null
+    if (!el) return null
+    const assetId = el.getAttribute('data-unit-assetid')
+    if (!assetId) return null
+    return { assetId, unit: el.getAttribute('data-unit-name') || '' }
+  }
+
+  // Reassign a booking item to a different unit for the SAME dates via the exact
+  // endpoints AssignUnitsModal uses (unassign old → assign new). The assign route
+  // hard-blocks a fully-assigned item, so the old pick MUST be released first.
+  // If binding the new unit then fails, we RESTORE the old assignment so the bar
+  // snaps back and the item is never left orphaned. Dates never change here.
+  async function doReassign(bookingItemId: string, fromAssetId: string, toAssetId: string, toUnit: string, bufferOverride = false) {
+    const assignUnit = async (assetId: string, override: boolean) => {
+      const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId, bufferDays: 1, bufferOverride: override }),
+      })
+      return { status: r.status, ok: r.ok, j: await r.json().catch(() => ({} as any)) }
+    }
+    const unassignUnit = async (assetId: string) => {
+      const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/unassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId }),
+      })
+      return { ok: r.ok, j: await r.json().catch(() => ({} as any)) }
+    }
+
+    setDragBusy(true)
+    setDragErr(null)
+    try {
+      // 1. Release the old unit. If this fails (e.g. checked out), nothing has
+      //    changed — the bar stays put.
+      const u = await unassignUnit(fromAssetId)
+      if (!u.ok || !u.j.ok) {
+        setDragErr(u.j.reason || u.j.error || 'Could not release the current unit.')
+        return
+      }
+      // 2. Bind the new unit.
+      const a = await assignUnit(toAssetId, bufferOverride)
+      if (a.ok && a.j.ok) {
+        setDragBuffer(null)
+        refreshTimeline()
+        return
+      }
+      // 3. New unit rejected — restore the old assignment so the bar snaps back.
+      const restore = await assignUnit(fromAssetId, true)
+      if (!restore.ok || !restore.j.ok) {
+        setDragErr(`Move failed and the old unit couldn't be restored (${restore.j.reason || restore.j.error || 'unknown'}). Reassign via “change units”.`)
+        refreshTimeline()
+        return
+      }
+      // Old is back exactly where it was (the on-screen bar never moved).
+      if (a.status === 409 && a.j.error === 'buffer-encroachment' && a.j.needsOverride) {
+        setDragBuffer({ bookingItemId, fromAssetId, toAssetId, toUnit, reason: a.j.reason || 'This move encroaches a turnaround buffer.' })
+        return
+      }
+      setDragErr(a.j.reason || a.j.error || `Reassign failed (${a.status})`)
+    } catch (e) {
+      setDragErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDragBusy(false)
+    }
+  }
+
   function getBar(start: string, end: string) {
     // Position bars in the RENDERED range, not the visible range —
     // a bar that lives in the buffer (off-visible-screen) should
@@ -861,7 +941,9 @@ export default function GanttPage() {
                           (bar onClicks stopPropagation). Native-only
                           per the brief — gated inside openHoldOnAssetRow. */}
                       <div
-                        className="relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20"
+                        data-unit-assetid={entry.unit.assetId}
+                        data-unit-name={entry.unit.unitName}
+                        className={`relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20 ${drag && drag.targetAssetId === entry.unit.assetId && drag.fromAssetId !== entry.unit.assetId ? 'ring-2 ring-inset ring-blue-400 bg-blue-50/50' : ''}`}
                         onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                       >
                         {/* Grid */}
@@ -904,10 +986,45 @@ export default function GanttPage() {
                           return (
                             <div
                               key={`p-${j}`}
-                              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 transition-opacity overflow-hidden`}
+                              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
                               style={{ left: bar.left, width: bar.width }}
+                              onPointerDown={canBindUnit ? (ev) => {
+                                ev.stopPropagation()
+                                ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+                                dragState.current = {
+                                  bookingItemId: b.bookingItemId,
+                                  fromAssetId: entry.unit.assetId,
+                                  fromUnit: entry.unit.unitName,
+                                  label: `${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`,
+                                  startX: ev.clientX,
+                                  startY: ev.clientY,
+                                  moved: false,
+                                }
+                              } : undefined}
+                              onPointerMove={canBindUnit ? (ev) => {
+                                const d = dragState.current
+                                if (!d) return
+                                if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
+                                d.moved = true
+                                const tgt = unitAtPoint(ev.clientX, ev.clientY)
+                                setDrag({ x: ev.clientX, y: ev.clientY, label: d.label, fromAssetId: d.fromAssetId, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null })
+                              } : undefined}
+                              onPointerUp={canBindUnit ? (ev) => {
+                                const d = dragState.current
+                                dragState.current = null
+                                ;(ev.currentTarget as HTMLElement).releasePointerCapture?.(ev.pointerId)
+                                setDrag(null)
+                                if (!d || !d.moved) return // no drag → let onClick open the detail modal
+                                suppressBarClick.current = true // this was a drag; swallow the trailing click
+                                setTimeout(() => { suppressBarClick.current = false }, 0)
+                                const tgt = unitAtPoint(ev.clientX, ev.clientY)
+                                if (tgt && tgt.assetId && tgt.assetId !== d.fromAssetId) {
+                                  void doReassign(d.bookingItemId, d.fromAssetId, tgt.assetId, tgt.unit)
+                                }
+                              } : undefined}
                               onClick={(ev) => {
                                 ev.stopPropagation()
+                                if (suppressBarClick.current) { suppressBarClick.current = false; return }
                                 setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: 1 })
                               }}
                             >
@@ -1267,6 +1384,48 @@ export default function GanttPage() {
           onClose={() => setAssignTask(null)}
           onAssigned={() => { setAssignTask(null); refreshTimeline() }}
         />
+      )}
+
+      {/* Drag-to-reassign ghost — follows the pointer; pointer-events-none so the
+          row hit-test (elementFromPoint) sees the unit rows underneath. */}
+      {drag && (
+        <div
+          className={`fixed z-[60] pointer-events-none px-2 py-1 rounded-md text-[10px] font-semibold text-white shadow-lg ${drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId ? 'bg-blue-600/90' : 'bg-gray-500/80'}`}
+          style={{ left: drag.x + 12, top: drag.y + 12 }}
+        >
+          {drag.label}{drag.targetUnit && drag.targetAssetId !== drag.fromAssetId ? ` → ${drag.targetUnit}` : ''}
+        </div>
+      )}
+
+      {/* Buffer-adjacent drop — same override the units drawer offers. */}
+      {dragBuffer && (
+        <>
+          <div className="fixed inset-0 z-[65] bg-black/20" onClick={() => setDragBuffer(null)} />
+          <div className="fixed z-[66] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-amber-300 rounded-lg shadow-xl p-4 w-80 text-sm">
+            <div className="font-semibold text-amber-800 mb-1">Turnaround buffer</div>
+            <div className="text-xs text-gray-700 mb-3">{dragBuffer.reason} Move to {dragBuffer.toUnit} anyway?</div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDragBuffer(null)} disabled={dragBusy} className="text-xs text-gray-600 hover:text-gray-900 px-3 py-1.5 disabled:opacity-40">Cancel</button>
+              <button
+                onClick={() => doReassign(dragBuffer.bookingItemId, dragBuffer.fromAssetId, dragBuffer.toAssetId, dragBuffer.toUnit, true)}
+                disabled={dragBusy}
+                className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40"
+              >
+                {dragBusy ? 'Moving…' : 'Override & move'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Reassign error / conflict — readable reason; the bar never left its row. */}
+      {dragErr && (
+        <div
+          className="fixed z-[60] bottom-4 left-1/2 -translate-x-1/2 bg-rose-600 text-white text-xs px-3 py-2 rounded-lg shadow-lg max-w-md cursor-pointer"
+          onClick={() => setDragErr(null)}
+        >
+          {dragErr}
+        </div>
       )}
 
       {/* Unit N/A action menu — fixed so the scrolling label column can't clip it. */}
