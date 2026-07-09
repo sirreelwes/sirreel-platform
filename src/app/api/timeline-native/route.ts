@@ -247,7 +247,7 @@ export async function GET(req: NextRequest) {
       startDate: true,
       endDate: true,
       status: true,
-      asset: { select: { id: true, unitName: true, categoryId: true, category: { select: { id: true, name: true } } } },
+      asset: { select: { id: true, unitName: true, categoryId: true, tier: true, category: { select: { id: true, name: true } } } },
       bookingItem: {
         select: {
           id: true,
@@ -278,6 +278,7 @@ export async function GET(req: NextRequest) {
       assetId: string
       categoryId: string
       cat: string
+      tier: string
       resourceName: string
       bookings: Array<Record<string, unknown>>
     }
@@ -290,6 +291,7 @@ export async function GET(req: NextRequest) {
       assetId: a.asset.id, // needed by gantt row-click → +Hold flow (asset binding)
       categoryId: a.asset.categoryId, // needed by gantt row-click → +Hold flow (modal category prop)
       cat,
+      tier: a.asset.tier, // condition tier → gantt dot color (Best/Good/Workhorse)
       resourceName: a.asset.category?.name ?? '',
       bookings: [] as Array<Record<string, unknown>>,
     }
@@ -343,7 +345,7 @@ export async function GET(req: NextRequest) {
       title: true,
       startDate: true,
       endDate: true,
-      asset: { select: { id: true, unitName: true, categoryId: true, category: { select: { name: true } } } },
+      asset: { select: { id: true, unitName: true, categoryId: true, tier: true, category: { select: { name: true } } } },
     },
     orderBy: { startDate: 'asc' },
   })
@@ -360,6 +362,7 @@ export async function GET(req: NextRequest) {
         assetId: m.asset.id,
         categoryId: m.asset.categoryId,
         cat: mapCategoryName(m.asset.category?.name ?? ''),
+        tier: m.asset.tier,
         resourceName: m.asset.category?.name ?? '',
         bookings: [],
       })

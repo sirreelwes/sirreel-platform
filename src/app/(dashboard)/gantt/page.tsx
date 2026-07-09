@@ -24,6 +24,19 @@ const CAT_COLORS: Record<string, string> = {
   stakebed: '#78716c', general: '#9ca3af',
 }
 
+// Condition tier → left-of-name dot. Reuses the existing Asset.tier enum
+// (PREMIUM/STANDARD/ECONOMY); Wes's mapping: Best=green, Good=orange,
+// Workhorse=yellow. Category stays identifiable via the unit's label text.
+const TIER_COLORS: Record<string, string> = {
+  PREMIUM: '#22c55e',  // green — Best
+  STANDARD: '#f97316', // orange — Good
+  ECONOMY: '#eab308',  // yellow — Workhorse
+}
+const TIER_LABELS: Record<string, string> = {
+  PREMIUM: 'Best', STANDARD: 'Good', ECONOMY: 'Workhorse',
+}
+const TIER_ORDER = ['PREMIUM', 'STANDARD', 'ECONOMY'] as const
+
 // Reservations status → bar color. The token is the display token emitted by
 // mapStatus() in /api/timeline-native (inquiry | hold | booked | cancelled) —
 // NOT the raw Prisma BookingStatus. Keep these keys in lockstep with what
@@ -78,7 +91,7 @@ export default function GanttPage() {
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null
   // Unit N/A (out-of-service) per-row action menu. Positioned fixed (the label
   // column scrolls, so an absolute dropdown would clip).
-  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; x: number; y: number }>(null)
+  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; tier: string; x: number; y: number }>(null)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
@@ -526,6 +539,28 @@ export default function GanttPage() {
     }
   }
 
+  // Fleet (canAssignAssets) sets a unit's condition tier — reuses Asset.tier via
+  // the tier endpoint; the dot recolors live on refresh. Sales are 403'd server-side.
+  async function handleSetTier(assetId: string, tier: string) {
+    setNaBusy(true)
+    setNaErr(null)
+    try {
+      const res = await fetch(`/api/scheduling/assets/${assetId}/tier`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `failed (${res.status})`)
+      setUnitMenu(null)
+      refreshTimeline()
+    } catch (e) {
+      setNaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setNaBusy(false)
+    }
+  }
+
   // Hit-test the unit row under a screen point (drag-to-reassign). The ghost
   // + any overlay are pointer-events-none so elementFromPoint sees the row.
   function unitAtPoint(x: number, y: number): { assetId: string; unit: string } | null {
@@ -787,6 +822,15 @@ export default function GanttPage() {
             <span className={`text-gray-500 ${l.struck ? 'line-through' : ''}`}>{l.label}</span>
           </div>
         ))}
+        {/* Condition-tier key — the left-of-name dot color (Asset.tier). */}
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400 font-medium">Condition:</span>
+        {TIER_ORDER.map(t => (
+          <div key={t} className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full border border-black/5" style={{ background: TIER_COLORS[t] }} />
+            <span className="text-gray-500">{TIER_LABELS[t]}</span>
+          </div>
+        ))}
       </div>
 
       {/* Gantt — single scroll container.
@@ -861,7 +905,11 @@ export default function GanttPage() {
                 return (
                   <div key={`u-${i}`}>
                     <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[entry.unit.cat] || '#9ca3af' }} />
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ background: TIER_COLORS[entry.unit.tier] || '#9ca3af' }}
+                        title={`Condition: ${TIER_LABELS[entry.unit.tier] || 'unset'}`}
+                      />
                       <div className="min-w-0">
                         <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
                         <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
@@ -889,7 +937,7 @@ export default function GanttPage() {
                                   setUnitMenu(
                                     unitMenu?.assetId === entry.unit.assetId
                                       ? null
-                                      : { assetId: entry.unit.assetId, isNa, x: r.right, y: r.bottom },
+                                      : { assetId: entry.unit.assetId, isNa, tier: entry.unit.tier, x: r.right, y: r.bottom },
                                   )
                                 }}
                                 className="text-gray-400 hover:text-gray-700 text-[13px] leading-none px-1"
@@ -1559,6 +1607,21 @@ export default function GanttPage() {
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
                 Clear · back in service
               </button>
+            )}
+            {/* Fleet-only condition tier setter (canAssignAssets). Sales never see this. */}
+            {canBindUnit && (
+              <>
+                <div className="border-t border-gray-100 my-1" />
+                <div className="px-3 py-0.5 text-[9px] uppercase tracking-wide text-gray-400 font-semibold">Condition tier</div>
+                {TIER_ORDER.map(t => (
+                  <button key={t} onClick={() => handleSetTier(unitMenu.assetId, t)} disabled={naBusy}
+                    className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: TIER_COLORS[t] }} />
+                    {TIER_LABELS[t]}
+                    {unitMenu.tier === t && <span className="ml-auto text-gray-500">✓</span>}
+                  </button>
+                ))}
+              </>
             )}
             {naErr && <div className="px-3 py-1 text-[10px] text-rose-600">{naErr}</div>}
           </div>
