@@ -90,10 +90,36 @@ export default function GanttPage() {
   const [dragBusy, setDragBusy] = useState(false)
   const [dragErr, setDragErr] = useState<string | null>(null)
   const [dragBuffer, setDragBuffer] = useState<null | { bookingItemId: string; fromAssetId: string; toAssetId: string; toUnit: string; reason: string }>(null)
-  // Task chips (top lane) drag HORIZONTALLY to a different day — reschedules
-  // scheduledDate only. Vertical position is ignored (tasks don't live on units).
-  const taskDragState = useRef<null | { taskId: string; fromDay: string; label: string; startX: number; startY: number; moved: boolean }>(null)
-  const [taskDrag, setTaskDrag] = useState<null | { x: number; y: number; label: string; fromDay: string; targetDay: string | null }>(null)
+
+  // Bulletproof teardown for the unit drag-reassign ghost. Whatever ends the
+  // gesture — a normal pointerup, pointercancel, Escape, window blur, or the
+  // dragged bar unmounting mid-drag (e.g. a background timeline refresh) — the
+  // ghost (driven by `drag`) is removed and the in-flight ref is cleared, so no
+  // orphaned preview can be left mounted. The bar's own onPointerUp fires first
+  // (React root handler runs before this window listener), so a valid drop
+  // still completes its reassign before this net clears the visual.
+  const dragging = drag !== null
+  useEffect(() => {
+    if (!dragging) return
+    const clear = () => {
+      dragState.current = null
+      setDrag(null)
+      // Swallow the click that trails a drag-end so it can't open the detail modal.
+      suppressBarClick.current = true
+      setTimeout(() => { suppressBarClick.current = false }, 0)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') clear() }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerup', clear)
+    window.addEventListener('pointercancel', clear)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerup', clear)
+      window.removeEventListener('pointercancel', clear)
+      window.removeEventListener('blur', clear)
+    }
+  }, [dragging])
   const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
@@ -571,39 +597,6 @@ export default function GanttPage() {
     }
   }
 
-  // Move a delivery/pickup task to a different day (drag in the top task lane).
-  // Fleet action; changes only scheduledDate. The chip snaps to the new day on
-  // refresh; on failure nothing moved (it only ever showed a ghost).
-  async function doRescheduleTask(taskId: string, newDay: string) {
-    setDragBusy(true)
-    setDragErr(null)
-    try {
-      const r = await fetch(`/api/scheduling/dispatch-tasks/${taskId}/schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledDate: newDay }),
-      })
-      const j = await r.json().catch(() => ({} as any))
-      if (!r.ok || !j.ok) {
-        setDragErr(j.reason || j.error || `Reschedule failed (${r.status})`)
-        return
-      }
-      refreshTimeline()
-    } catch (e) {
-      setDragErr(e instanceof Error ? e.message : String(e))
-    } finally {
-      setDragBusy(false)
-    }
-  }
-
-  // Map a screen X (within the task band) to a rendered day. bandLeft is the
-  // band's viewport left edge, which aligns with dates[0] (renderedStartDate).
-  function dayAtX(clientX: number, bandLeft: number): string | null {
-    const idx = Math.round((clientX - bandLeft) / dayWidth)
-    if (idx < 0 || idx >= dates.length) return null
-    return dates[idx]
-  }
-
   function getBar(start: string, end: string) {
     // Position bars in the RENDERED range, not the visible range —
     // a bar that lives in the buffer (off-visible-screen) should
@@ -975,41 +968,13 @@ export default function GanttPage() {
                           return (
                             <div
                               key={`tk-${k}`}
-                              className={`absolute rounded border border-dashed flex items-center overflow-hidden ${chipColor} ${canAssignTasks ? 'cursor-grab active:cursor-grabbing touch-none transition-colors' : ''}`}
+                              // Tasks are NOT draggable — click opens the assign flow. (No
+                              // pointer-drag handlers here, so no ghost is ever created for
+                              // a task; drag-reassign is only for assigned unit bars.)
+                              className={`absolute rounded border border-dashed flex items-center overflow-hidden ${chipColor} ${canAssignTasks ? 'cursor-pointer transition-colors' : ''}`}
                               style={{ left: bar.left, width: Math.max(dayWidth - 2, 24), top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H }}
-                              onPointerDown={canAssignTasks ? (ev) => {
-                                ev.stopPropagation()
-                                ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-                                taskDragState.current = { taskId: t.taskId, fromDay: t.start, label: `${label} · ${t.clientName}`, startX: ev.clientX, startY: ev.clientY, moved: false }
-                              } : undefined}
-                              onPointerMove={canAssignTasks ? (ev) => {
-                                const d = taskDragState.current
-                                if (!d) return
-                                if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
-                                d.moved = true
-                                const band = (ev.currentTarget as HTMLElement).offsetParent as HTMLElement | null
-                                const bandLeft = band ? band.getBoundingClientRect().left : 0
-                                setTaskDrag({ x: ev.clientX, y: ev.clientY, label: d.label, fromDay: d.fromDay, targetDay: dayAtX(ev.clientX, bandLeft) })
-                              } : undefined}
-                              onPointerUp={canAssignTasks ? (ev) => {
-                                const d = taskDragState.current
-                                taskDragState.current = null
-                                const band = (ev.currentTarget as HTMLElement).offsetParent as HTMLElement | null
-                                const bandLeft = band ? band.getBoundingClientRect().left : 0
-                                ;(ev.currentTarget as HTMLElement).releasePointerCapture?.(ev.pointerId)
-                                setTaskDrag(null)
-                                if (!d || !d.moved) return // no drag → let onClick open the assign modal
-                                suppressBarClick.current = true
-                                setTimeout(() => { suppressBarClick.current = false }, 0)
-                                const target = dayAtX(ev.clientX, bandLeft)
-                                if (target && target !== d.fromDay) void doRescheduleTask(d.taskId, target)
-                              } : undefined}
-                              onClick={canAssignTasks ? (ev) => {
-                                ev.stopPropagation()
-                                if (suppressBarClick.current) { suppressBarClick.current = false; return }
-                                setAssignTask(t)
-                              } : undefined}
-                              title={`${label} — ${t.clientName}${detail ? ` · ${detail}` : ''}${canAssignTasks ? ' · drag to another day · click to assign driver + tow vehicle' : ''}`}
+                              onClick={canAssignTasks ? (ev) => { ev.stopPropagation(); setAssignTask(t) } : undefined}
+                              title={`${label} — ${t.clientName}${detail ? ` · ${detail}` : ''}${canAssignTasks ? ' · click to assign driver + tow vehicle' : ''}`}
                             >
                               <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
                                 {isPickup ? '↑' : '↓'}{t.scheduledTime ? ` ${t.scheduledTime}` : ` ${t.clientName}`}
@@ -1496,16 +1461,6 @@ export default function GanttPage() {
           <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
             {drag.label}{drag.targetUnit && drag.targetAssetId !== drag.fromAssetId ? ` → ${drag.targetUnit}` : ''}
           </span>
-        </div>
-      )}
-
-      {/* Task drag ghost — follows the pointer; shows the target day. */}
-      {taskDrag && (
-        <div
-          className={`fixed z-[60] pointer-events-none px-2 py-1 rounded-md text-[10px] font-semibold text-white shadow-lg ${taskDrag.targetDay && taskDrag.targetDay !== taskDrag.fromDay ? 'bg-amber-600/90' : 'bg-gray-500/80'}`}
-          style={{ left: taskDrag.x + 12, top: taskDrag.y + 12 }}
-        >
-          {taskDrag.label}{taskDrag.targetDay && taskDrag.targetDay !== taskDrag.fromDay ? ` → ${fMonth(taskDrag.targetDay)}` : ''}
         </div>
       )}
 
