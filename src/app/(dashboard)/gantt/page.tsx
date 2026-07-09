@@ -359,6 +359,8 @@ export default function GanttPage() {
   }
 
   // ── PART 4 actions. Book/Release on a bar click.
+  //    ALL of these are SALES actions (canCreateBooking) — promote/release
+  //    moved off canAssignAssets per Wes; fleet keeps only assignment.
   //    PRIMARY (holdRank=1):
   //      Status  → POST /api/scheduling/bookings/[bookingId]/status
   //                  (sales set Inquiry/Hold/Booked/Cancelled; canCreateBooking,
@@ -1356,25 +1358,35 @@ export default function GanttPage() {
                     )}
                     <div className="flex items-center gap-2">
                       {selected.isBackup ? (
-                        <>
-                          <button
-                            onClick={handlePromote}
-                            disabled={!!actionPending}
-                            className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
-                          >
-                            {actionPending === 'promote' ? 'Promoting…' : 'Promote'}
-                          </button>
-                          <button
-                            onClick={handleRelease}
-                            disabled={!!actionPending}
-                            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
-                          >
-                            {actionPending === 'release' ? 'Releasing…' : 'Release backup'}
-                          </button>
-                          <span className="text-[10px] text-gray-400 ml-auto">
-                            Promote re-ranks the queue; Book becomes available after.
+                        // Promote + Release are SALES actions (canCreateBooking) —
+                        // per Wes they re-rank / terminate the reservation queue,
+                        // which is a booking decision, not assignment. Fleet sees
+                        // a read-only note; the endpoints 403 them too.
+                        canSetStatus ? (
+                          <>
+                            <button
+                              onClick={handlePromote}
+                              disabled={!!actionPending}
+                              className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-[11px] font-semibold px-3 py-1.5 rounded"
+                            >
+                              {actionPending === 'promote' ? 'Promoting…' : 'Promote'}
+                            </button>
+                            <button
+                              onClick={handleRelease}
+                              disabled={!!actionPending}
+                              className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                            >
+                              {actionPending === 'release' ? 'Releasing…' : 'Release backup'}
+                            </button>
+                            <span className="text-[10px] text-gray-400 ml-auto">
+                              Promote re-ranks the queue; Book becomes available after.
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">
+                            Backup hold — promote/release is a sales action.
                           </span>
-                        </>
+                        )
                       ) : (
                         <>
                           {/* Sales status control — set among Inquiry / Hold /
@@ -1403,13 +1415,17 @@ export default function GanttPage() {
                               {selected.status}
                             </span>
                           )}
-                          <button
-                            onClick={handleRelease}
-                            disabled={!!actionPending}
-                            className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
-                          >
-                            {actionPending === 'release' ? 'Releasing…' : 'Release'}
-                          </button>
+                          {/* Release is a SALES action (canCreateBooking) — see note
+                              on the backup branch. Fleet keeps only assignment. */}
+                          {canSetStatus && (
+                            <button
+                              onClick={handleRelease}
+                              disabled={!!actionPending}
+                              className="border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40 text-zinc-800 text-[11px] font-semibold px-3 py-1.5 rounded"
+                            >
+                              {actionPending === 'release' ? 'Releasing…' : 'Release'}
+                            </button>
+                          )}
                           <span className="text-[10px] text-gray-400 ml-auto">
                             Backups (if any) stay queued — no auto-promote.
                           </span>

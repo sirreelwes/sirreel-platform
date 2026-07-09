@@ -15,8 +15,9 @@
  *    holds the same window), returns 409 unless body.force=true
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
+import { can } from '@/lib/permissions'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 
 export const dynamic = 'force-dynamic'
@@ -27,8 +28,23 @@ interface PromoteBody {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await requireDispatchAccess()
-  if (!auth.ok) return auth.response
+  // SALES action (per Wes): promoting a backup re-ranks the reservation queue —
+  // a booking decision, not an assignment. Was canAssignAssets
+  // (requireDispatchAccess); fleet/warehouse no longer pass.
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  if (!actor || !can(actor.role, 'canCreateBooking')) {
+    return NextResponse.json(
+      { error: 'forbidden', reason: 'promoting a backup is a sales action' },
+      { status: 403 },
+    )
+  }
   const body = (await req.json().catch(() => null)) as PromoteBody | null
   const force = body?.force === true
   const bufferDays = body?.bufferDays ?? 1

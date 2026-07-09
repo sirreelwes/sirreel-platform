@@ -23,16 +23,32 @@
  * separate deliberate action.
  */
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
+import { can } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 
 const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  const auth = await requireDispatchAccess()
-  if (!auth.ok) return auth.response
+  // SALES action (per Wes): releasing a hold (primary bar or backup)
+  // terminates the reservation item — a booking decision, not an assignment.
+  // Was canAssignAssets (requireDispatchAccess); fleet/warehouse no longer pass.
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true },
+  })
+  if (!actor || !can(actor.role, 'canCreateBooking')) {
+    return NextResponse.json(
+      { error: 'forbidden', reason: 'releasing a hold is a sales action' },
+      { status: 403 },
+    )
+  }
   const item = await prisma.bookingItem.findUnique({
     where: { id: params.id },
     select: {
