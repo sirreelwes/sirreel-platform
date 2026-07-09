@@ -252,7 +252,10 @@ export function PublicSiteNav({
             {socials()}
           </div>
           <Link href={PUBLIC_HOME_HREF} aria-label="SirReel — Home" className="justify-self-center">
-            <Image src="/s-logo-white.png" alt="SirReel Studio Services" width={1118} height={1065} priority className="h-11 lg:h-12 w-auto" />
+            {/* Full wordmark on desktop (same asset as the mobile branded
+                band). Same h-11/h-12 as the old S badge so the bar height is
+                unchanged. Mobile below keeps the slim S-mark. */}
+            <Image src="/sirreel-logo-white.png" alt="SirReel Studio Services" width={1921} height={693} priority className="h-11 lg:h-12 w-auto" />
           </Link>
           <div className="justify-self-end">
             {orderBtn()}
