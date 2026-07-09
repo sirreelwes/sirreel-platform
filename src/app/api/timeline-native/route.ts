@@ -320,28 +320,49 @@ export async function GET(req: NextRequest) {
     unitMap.set(unitName, slot)
   }
 
-  // ── Unit N/A (out-of-service) windows — OPEN MaintenanceRecord windows
-  //    (SCHEDULED / IN_PROGRESS only; not COMPLETED/CANCELLED) overlapping the
-  //    visible range, keyed by assetId. Rendered as informational grey bars on
-  //    the unit's row. endDate null = open-ended (ongoing). Display-only — does
-  //    NOT touch booking/assign availability. Only for assets already shown as
-  //    unit rows (a maintenance-only unit with no bookings won't have a row). ──
-  const naByAsset = new Map<string, Array<{ start: string; end: string | null }>>()
-  const naAssetIds = [...unitMap.values()].map((u) => u.assetId)
-  if (naAssetIds.length) {
-    const maint = await prisma.maintenanceRecord.findMany({
-      where: {
-        assetId: { in: naAssetIds },
-        status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
-        startDate: { lte: to },
-        OR: [{ endDate: null }, { endDate: { gte: from } }],
-      },
-      select: { assetId: true, startDate: true, endDate: true },
-    })
-    for (const m of maint) {
-      const arr = naByAsset.get(m.assetId) ?? []
-      arr.push({ start: ymd(m.startDate), end: m.endDate ? ymd(m.endDate) : null })
-      naByAsset.set(m.assetId, arr)
+  // ── Unit N/A (out-of-service) — OPEN MaintenanceRecord windows (SCHEDULED /
+  //    IN_PROGRESS; not COMPLETED/CANCELLED) overlapping the visible range,
+  //    keyed by assetId, rendered as grey bars. endDate null = open-ended.
+  //    `kind` distinguishes a sales referral (pending fleet review) from a
+  //    fleet-confirmed / genuine out-of-service record (title-tagged — no
+  //    schema field). Booking-less N/A units get their OWN unit row here so
+  //    they're visible + clearable even with nothing booked. Display-only —
+  //    does NOT touch booking/assign availability. ──
+  const naByAsset = new Map<
+    string,
+    Array<{ recordId: string; start: string; end: string | null; kind: 'referral' | 'fleet'; title: string }>
+  >()
+  const naMaint = await prisma.maintenanceRecord.findMany({
+    where: {
+      status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+      startDate: { lte: to },
+      OR: [{ endDate: null }, { endDate: { gte: from } }],
+    },
+    select: {
+      id: true,
+      title: true,
+      startDate: true,
+      endDate: true,
+      asset: { select: { id: true, unitName: true, categoryId: true, category: { select: { name: true } } } },
+    },
+    orderBy: { startDate: 'asc' },
+  })
+  for (const m of naMaint) {
+    if (!m.asset) continue
+    const kind: 'referral' | 'fleet' = /referral|pending fleet review/i.test(m.title) ? 'referral' : 'fleet'
+    const arr = naByAsset.get(m.asset.id) ?? []
+    arr.push({ recordId: m.id, start: ymd(m.startDate), end: m.endDate ? ymd(m.endDate) : null, kind, title: m.title })
+    naByAsset.set(m.asset.id, arr)
+    // Surface a booking-less out-of-service unit as its own row.
+    if (!unitMap.has(m.asset.unitName)) {
+      unitMap.set(m.asset.unitName, {
+        unitName: m.asset.unitName,
+        assetId: m.asset.id,
+        categoryId: m.asset.categoryId,
+        cat: mapCategoryName(m.asset.category?.name ?? ''),
+        resourceName: m.asset.category?.name ?? '',
+        bookings: [],
+      })
     }
   }
 

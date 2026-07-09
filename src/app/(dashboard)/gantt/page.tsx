@@ -76,6 +76,11 @@ export default function GanttPage() {
   // from the bar. Intentionally wider than the ADMIN-only canConfirmBooking.
   const canSetStatus = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null
+  // Unit N/A (out-of-service) per-row action menu. Positioned fixed (the label
+  // column scrolls, so an absolute dropdown would clip).
+  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; x: number; y: number }>(null)
+  const [naBusy, setNaBusy] = useState(false)
+  const [naErr, setNaErr] = useState<string | null>(null)
   const [assignTask, setAssignTask] = useState<any>(null)
   const [view, setView] = useState<'asset' | 'job'>('asset')
   const [weeks, setWeeks] = useState(2)
@@ -456,6 +461,29 @@ export default function GanttPage() {
     }
   }
 
+  // Sales "Refer to Maintenance" (canCreateBooking) / fleet "Mark Not Available"
+  // + "Clear" (canAssignAssets) — open/close OPEN MaintenanceRecords, flowing
+  // through the shipped N/A grey display. Server enforces the per-action perm.
+  async function handleUnitNa(assetId: string, action: 'refer' | 'mark-na' | 'clear') {
+    setNaBusy(true)
+    setNaErr(null)
+    try {
+      const res = await fetch(`/api/scheduling/assets/${assetId}/maintenance`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `failed (${res.status})`)
+      setUnitMenu(null)
+      refreshTimeline()
+    } catch (e) {
+      setNaErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setNaBusy(false)
+    }
+  }
+
   function getBar(start: string, end: string) {
     // Position bars in the RENDERED range, not the visible range —
     // a bar that lives in the buffer (off-visible-screen) should
@@ -691,6 +719,39 @@ export default function GanttPage() {
                         <div className="text-[11px] font-semibold text-gray-900 truncate">{entry.unit.unitName}</div>
                         <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
                       </div>
+                      {(() => {
+                        const na = (entry.unit.naWindows || []) as any[]
+                        const isNa = na.length > 0
+                        const referralPending = na.some((w) => w.kind === 'referral')
+                        // A kebab appears only when the viewer has an available action:
+                        // sales can refer a non-N/A unit; fleet can mark/clear.
+                        const canAny = (canSetStatus && !isNa) || canBindUnit
+                        return (
+                          <div className="ml-auto flex items-center gap-1">
+                            {isNa && (
+                              <span className={`text-[8px] font-bold px-1 rounded ${referralPending ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-600'}`}>
+                                {referralPending ? 'N/A?' : 'N/A'}
+                              </span>
+                            )}
+                            {canAny && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                  setNaErr(null)
+                                  setUnitMenu(
+                                    unitMenu?.assetId === entry.unit.assetId
+                                      ? null
+                                      : { assetId: entry.unit.assetId, isNa, x: r.right, y: r.bottom },
+                                  )
+                                }}
+                                className="text-gray-400 hover:text-gray-700 text-[13px] leading-none px-1"
+                                title="Unit availability"
+                              >⋯</button>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                     {hasBackups && (
                       <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-100/70">
@@ -819,15 +880,18 @@ export default function GanttPage() {
                         {(entry.unit.naWindows || []).map((w: any, k: number) => {
                           const bar = getBar(w.start, w.end || dates[dates.length - 1])
                           if (!bar) return null
+                          // Sales referral (pending fleet review) → dashed amber
+                          // edge; fleet/genuine out-of-service → plain grey. Both grey fill.
+                          const referral = w.kind === 'referral'
                           return (
                             <div
                               key={`na-${k}`}
-                              className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
+                              className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${referral ? 'border-dashed border-amber-400' : UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
                               style={{ left: bar.left, width: bar.width }}
-                              title={`Unit N/A · In Service${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
+                              title={`${w.title || 'Unit N/A'}${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
                             >
                               <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
-                                N/A · In Service
+                                N/A · {referral ? 'pending review' : 'out of service'}
                               </span>
                             </div>
                           )
@@ -1203,6 +1267,37 @@ export default function GanttPage() {
           onClose={() => setAssignTask(null)}
           onAssigned={() => { setAssignTask(null); refreshTimeline() }}
         />
+      )}
+
+      {/* Unit N/A action menu — fixed so the scrolling label column can't clip it. */}
+      {unitMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setUnitMenu(null)} />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg w-52 py-1"
+            style={{ left: Math.max(8, unitMenu.x - 208), top: unitMenu.y + 4 }}
+          >
+            {canSetStatus && !unitMenu.isNa && (
+              <button onClick={() => handleUnitNa(unitMenu.assetId, 'refer')} disabled={naBusy}
+                className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
+                Refer to Maintenance
+              </button>
+            )}
+            {canBindUnit && !unitMenu.isNa && (
+              <button onClick={() => handleUnitNa(unitMenu.assetId, 'mark-na')} disabled={naBusy}
+                className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
+                Mark Not Available
+              </button>
+            )}
+            {canBindUnit && unitMenu.isNa && (
+              <button onClick={() => handleUnitNa(unitMenu.assetId, 'clear')} disabled={naBusy}
+                className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
+                Clear · back in service
+              </button>
+            )}
+            {naErr && <div className="px-3 py-1 text-[10px] text-rose-600">{naErr}</div>}
+          </div>
+        </>
       )}
     </div>
   )
