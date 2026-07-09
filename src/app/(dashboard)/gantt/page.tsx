@@ -233,6 +233,11 @@ export default function GanttPage() {
   //    mode (per "backup has dibs"); otherwise PRIMARY. Server still
   //    enforces availability — this is just UX. ──
   function openHoldOnAssetRow(unit: any, e: React.MouseEvent<HTMLDivElement>) {
+    // Creating a hold is a sales action (canCreateBooking). Fleet/warehouse
+    // (canAssignAssets-only) view + assign but create nothing — without this
+    // gate an empty-row click opened the create-hold modal for fleet (the
+    // endpoint now 403s them too, but don't offer the dead flow at all).
+    if (!canSetStatus) return
     if (!unit?.assetId || !unit?.categoryId) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -1073,7 +1078,7 @@ export default function GanttPage() {
                       <div
                         data-unit-assetid={entry.unit.assetId}
                         data-unit-name={entry.unit.unitName}
-                        className={`relative h-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50/20 ${dropTargetClass(entry.unit)}`}
+                        className={`relative h-8 border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${dropTargetClass(entry.unit)}`}
                         onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                       >
                         {/* Grid */}
@@ -1193,7 +1198,7 @@ export default function GanttPage() {
                           asset-row handler; overlap detection picks the mode. */}
                       {hasBackups && (
                         <div
-                          className="relative h-8 border-b border-gray-100 bg-blue-50/60 cursor-pointer hover:bg-blue-100/60"
+                          className={`relative h-8 border-b border-gray-100 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
                           onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
                         >
                           {/* Grid (lighter on the sub-lane) */}

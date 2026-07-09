@@ -26,6 +26,7 @@ import { prisma } from '@/lib/prisma'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { getServerSession } from 'next-auth'
+import { can } from '@/lib/permissions'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
 export const dynamic = 'force-dynamic'
@@ -79,6 +80,25 @@ async function nextBookingNumber(year: number): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  // Creating a hold is a SALES action (canCreateBooking: AGENT/ADMIN).
+  // Fleet/warehouse (canAssignAssets-only: MANAGER, FLEET_TECH) view the board
+  // and assign, but create nothing — previously this route had no perm check
+  // at all (any signed-in user passed), which leaked create to fleet.
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true, role: true },
+  })
+  if (!actor || !can(actor.role, 'canCreateBooking')) {
+    return NextResponse.json(
+      { error: 'forbidden', reason: 'creating a reservation/hold is a sales action' },
+      { status: 403 },
+    )
+  }
+
   const body = (await req.json().catch(() => null)) as HoldBody | null
   if (!body) return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
 
@@ -108,15 +128,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'jobId, newJobName, or jobName required' }, { status: 400 })
   }
 
-  // Resolve agentId — body, then session.
-  let agentId = body.agentId
-  if (!agentId) {
-    const session = await getServerSession()
-    if (session?.user?.email) {
-      const u = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
-      if (u) agentId = u.id
-    }
-  }
+  // Resolve agentId — body, then the authenticated actor (already fetched by
+  // the sales gate above).
+  const agentId = body.agentId || actor.id
   if (!agentId) return NextResponse.json({ error: 'agentId required (none in body or session)' }, { status: 400 })
 
   // Look up category for the dailyRate default; also confirms it exists.

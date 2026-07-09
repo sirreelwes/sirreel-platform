@@ -84,7 +84,7 @@ export function QuickCreateMenu() {
   const { data: session } = useSession()
   const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
   const sessionSalesOnly = (session?.user as { salesOnly?: boolean } | undefined)?.salesOnly ?? false
-  const canCreateTask = sessionRole
+  const canCreate = sessionRole
     ? getPermissions({ role: sessionRole, salesOnly: sessionSalesOnly }).canCreateBooking
     : false
 
@@ -293,6 +293,11 @@ export function QuickCreateMenu() {
       ? { id: holdModal.context.companyId, name: holdModal.context.companyName }
       : undefined
 
+  // Both entries (New Reservation, New Task) are sales-only creates
+  // (canCreateBooking). Fleet/warehouse get NO "+ New" button at all — not a
+  // dead/empty menu. The holds + dispatch-tasks endpoints enforce the same gate.
+  if (!canCreate) return null
+
   return (
     <div className="relative" ref={wrapperRef}>
       <button
@@ -321,7 +326,7 @@ export function QuickCreateMenu() {
               {context.jobCode ? `for ${context.jobCode}` : 'pick category'}
             </span>
           </button>
-          {canCreateTask && (
+          {canCreate && (
             <button
               type="button"
               onClick={onPickNewTask}
