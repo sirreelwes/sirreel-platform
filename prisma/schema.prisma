@@ -37,6 +37,7 @@ enum AssetStatus {
   RETIRED
   SOLD
   STOLEN
+  TOTALED // insurance write-off — terminal (out of fleet), unit kept for history
 }
 
 enum AssetTier {

@@ -69,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (asset.categoryId !== bookingItem.categoryId) {
     return NextResponse.json({ error: 'asset belongs to a different category' }, { status: 400 })
   }
-  if (!asset.isActive || ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN'].includes(asset.status)) {
+  if (!asset.isActive || ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN', 'TOTALED'].includes(asset.status)) {
     return NextResponse.json({ error: 'asset is not serviceable', status: asset.status }, { status: 409 })
   }
 

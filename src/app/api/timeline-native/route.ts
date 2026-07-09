@@ -241,6 +241,11 @@ export async function GET(req: NextRequest) {
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       startDate: { lte: to },
       endDate: { gte: from },
+      // Out-of-fleet units (terminal status → isActive=false) drop off the
+      // board entirely — history stays in the DB, viewable on Fleet's
+      // Inactive tab. isActive is the canonical signal (the fleet status
+      // PATCH keeps it in lockstep with terminal statuses).
+      asset: { isActive: true },
     },
     select: {
       id: true,
@@ -339,6 +344,8 @@ export async function GET(req: NextRequest) {
       status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
       startDate: { lte: to },
       OR: [{ endDate: null }, { endDate: { gte: from } }],
+      // Same out-of-fleet exclusion as the assignments query above.
+      asset: { isActive: true },
     },
     select: {
       id: true,

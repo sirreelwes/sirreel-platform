@@ -45,7 +45,7 @@ export async function GET() {
     prisma.asset.count({
       where: {
         isActive: true,
-        status: { notIn: ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN'] },
+        status: { notIn: ['MAINTENANCE', 'RETIRED', 'SOLD', 'STOLEN', 'TOTALED'] },
       },
     }),
     prisma.asset.count({ where: { isActive: true } }),

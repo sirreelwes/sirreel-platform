@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useSession } from 'next-auth/react';
+import type { UserRole } from '@prisma/client';
+import { getPermissions } from '@/lib/permissions';
 
 type Asset = {
   id: string;
@@ -17,44 +20,91 @@ type Asset = {
   notes: string | null;
   categoryId: string;
   categoryName: string;
+  categoryHasImage: boolean;
   currentBooking: { company: string; agent: string; endDate: string } | null;
   maintenanceNote: string | null;
 };
 
+// Full asset lifecycle (AssetStatus). Terminal statuses take the unit out of
+// fleet (server also flips isActive=false) — it drops off this default list
+// and the reservations board, but is NEVER deleted: the Inactive tab keeps
+// history viewable, and Reactivate puts it back (AVAILABLE).
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  AVAILABLE:   { label: 'Available',   color: 'text-emerald-700', bg: 'bg-emerald-50',  dot: 'bg-emerald-500' },
+  AVAILABLE:   { label: 'Active',      color: 'text-emerald-700', bg: 'bg-emerald-50',  dot: 'bg-emerald-500' },
   BOOKED:      { label: 'Booked',      color: 'text-blue-700',    bg: 'bg-blue-50',     dot: 'bg-blue-500' },
-  CHECKED_OUT: { label: 'Out',         color: 'text-purple-700',  bg: 'bg-purple-50',   dot: 'bg-purple-500' },
-  MAINTENANCE: { label: 'Maint',       color: 'text-red-700',     bg: 'bg-red-50',      dot: 'bg-red-500' },
-  INACTIVE:    { label: 'Inactive',    color: 'text-gray-500',    bg: 'bg-gray-50',     dot: 'bg-gray-400' },
+  MAINTENANCE: { label: 'In Repair',   color: 'text-red-700',     bg: 'bg-red-50',      dot: 'bg-red-500' },
+  IN_TRANSIT:  { label: 'In Transit',  color: 'text-purple-700',  bg: 'bg-purple-50',   dot: 'bg-purple-500' },
+  WAREHOUSE:   { label: 'Warehouse',   color: 'text-cyan-700',    bg: 'bg-cyan-50',     dot: 'bg-cyan-500' },
+  TOTALED:     { label: 'Totaled',     color: 'text-rose-700',    bg: 'bg-rose-50',     dot: 'bg-rose-500' },
+  SOLD:        { label: 'Sold',        color: 'text-amber-700',   bg: 'bg-amber-50',    dot: 'bg-amber-500' },
+  RETIRED:     { label: 'Retired',     color: 'text-gray-600',    bg: 'bg-gray-100',    dot: 'bg-gray-400' },
+  STOLEN:      { label: 'Stolen',      color: 'text-orange-700',  bg: 'bg-orange-50',   dot: 'bg-orange-500' },
 };
+
+// The five lifecycle states fleet sets by hand (BOOKED/IN_TRANSIT/WAREHOUSE
+// are operational states driven elsewhere).
+const SETTABLE_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'TOTALED', 'SOLD', 'RETIRED'] as const;
+
+// Category-generic thumbnail (same gated per-asset proxy the asset summary
+// panel uses — never a raw blob URL). Clean neutral placeholder when the
+// category has no photo or the stream fails.
+function CatThumb({ assetId, hasImage, name }: { assetId: string; hasImage: boolean; name: string }) {
+  const [ok, setOk] = useState(true);
+  if (!hasImage || !ok) {
+    return (
+      <div className="w-12 h-9 rounded bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0 text-gray-300 text-[14px]" title={name}>
+        🚚
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/scheduling/assets/${assetId}/category-image`}
+      alt={name}
+      title={`${name} (generic)`}
+      className="w-12 h-9 rounded object-cover border border-gray-200 flex-shrink-0 bg-gray-100"
+      loading="lazy"
+      onError={() => setOk(false)}
+    />
+  );
+}
 
 export default function FleetPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [inactiveCount, setInactiveCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterCat, setFilterCat] = useState('All');
+  const [scope, setScope] = useState<'active' | 'inactive'>('active');
   const [search, setSearch] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
   const [dotAsset, setDotAsset] = useState<Asset | null>(null);
 
-  const load = () => {
+  // Lifecycle status writes are fleet-only (canAssignAssets) — server enforces;
+  // this just hides the setter for everyone else.
+  const { data: session } = useSession();
+  const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null;
+  const canManage = sessionRole ? getPermissions(sessionRole).canAssignAssets : false;
+
+  const load = (s: 'active' | 'inactive' = scope) => {
     setLoading(true);
-    fetch('/api/fleet')
+    fetch(`/api/fleet${s === 'inactive' ? '?scope=inactive' : ''}`)
       .then(r => r.json())
       .then(d => {
         if (d.ok) {
           setAssets(d.assets);
           setCategories(d.categories);
           setStatusCounts(d.statusCounts);
+          setInactiveCount(d.inactiveCount ?? 0);
         }
       })
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(scope); setFilterStatus('All'); }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     return assets.filter(a => {
@@ -69,12 +119,16 @@ export default function FleetPage() {
 
   async function setStatus(assetId: string, status: string) {
     setUpdating(assetId);
-    await fetch('/api/fleet', {
+    const res = await fetch('/api/fleet', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assetId, status })
     });
-    await load();
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.reason || d.error || `Status change failed (${res.status})`);
+    }
+    load();
     setUpdating(null);
   }
 
@@ -83,9 +137,23 @@ export default function FleetPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900">Fleet</h1>
-          <p className="text-[11px] text-gray-400">{totalAssets} units total</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">Fleet</h1>
+            <p className="text-[11px] text-gray-400">{totalAssets} units {scope === 'inactive' ? 'out of fleet' : 'total'}</p>
+          </div>
+          {/* Active / Inactive (out of fleet) scope. Retired-class units are
+              never deleted — they live here with full history. */}
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px] font-semibold">
+            <button onClick={() => setScope('active')}
+              className={`px-3 py-1.5 ${scope === 'active' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}>
+              Active fleet
+            </button>
+            <button onClick={() => setScope('inactive')}
+              className={`px-3 py-1.5 border-l border-gray-200 ${scope === 'inactive' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:text-gray-800'}`}>
+              Inactive{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
+            </button>
+          </div>
         </div>
         <div className="flex gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)}
@@ -122,7 +190,7 @@ export default function FleetPage() {
 
       {/* Units table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-[1.5fr_110px_100px_1.5fr_90px] gap-2 px-4 py-2.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+        <div className="grid grid-cols-[1.5fr_110px_100px_1.5fr_120px] gap-2 px-4 py-2.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
           <div>Unit</div>
           <div>Status</div>
           <div>Location</div>
@@ -139,16 +207,19 @@ export default function FleetPage() {
             const s = STATUS_CONFIG[a.status] || STATUS_CONFIG.AVAILABLE;
             const isUpdating = updating === a.id;
             return (
-              <div key={a.id} className={`grid grid-cols-[1.5fr_110px_100px_1.5fr_90px] gap-2 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors ${isUpdating ? 'opacity-50' : ''}`}>
-                <div>
-                  <button onClick={() => setDotAsset(a)} className="text-[12px] font-semibold text-gray-800 hover:text-blue-600 hover:underline text-left">
-                    {a.unitName}
-                  </button>
-                  <div className="text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
-                  <div className="text-[9px] text-gray-300 flex gap-1.5">
-                    {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
-                    {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
-                    {a.latestBitDate ? <span className="text-emerald-500">BIT {a.latestBitDate.slice(0, 10)}</span> : null}
+              <div key={a.id} className={`grid grid-cols-[1.5fr_110px_100px_1.5fr_120px] gap-2 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors ${isUpdating ? 'opacity-50' : ''}`}>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <CatThumb assetId={a.id} hasImage={a.categoryHasImage} name={a.categoryName} />
+                  <div className="min-w-0">
+                    <button onClick={() => setDotAsset(a)} className="text-[12px] font-semibold text-gray-800 hover:text-blue-600 hover:underline text-left">
+                      {a.unitName}
+                    </button>
+                    <div className="text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
+                    <div className="text-[9px] text-gray-300 flex gap-1.5">
+                      {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
+                      {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
+                      {a.latestBitDate ? <span className="text-emerald-500">BIT {a.latestBitDate.slice(0, 10)}</span> : null}
+                    </div>
                   </div>
                 </div>
 
@@ -169,22 +240,32 @@ export default function FleetPage() {
                   ) : '—'}
                 </div>
 
-                <div className="flex gap-1">
-                  {[
-                    { k: 'AVAILABLE',   l: '✓' },
-                    { k: 'MAINTENANCE', l: '🔧' },
-                    { k: 'INACTIVE',    l: '○' },
-                  ].map(btn => {
-                    const isOn = a.status === btn.k;
-                    const cfg = STATUS_CONFIG[btn.k];
-                    return (
-                      <button key={btn.k} onClick={() => setStatus(a.id, btn.k)} disabled={isUpdating}
-                        className={`w-6 h-6 rounded flex items-center justify-center text-[10px] transition-all ${isOn ? `${cfg.bg} ${cfg.color} ring-1 ring-current` : 'bg-white text-gray-300 hover:text-gray-500 border border-gray-100'}`}>
-                        {btn.l}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Lifecycle setter — fleet (canAssignAssets) only; a labeled
+                    dropdown reads better than icons for 5 states. Terminal picks
+                    (Totaled/Sold/Retired) move the unit to the Inactive tab; in
+                    that tab Reactivate returns it to Active. Never deletable. */}
+                {!canManage ? (
+                  <span className="text-[9px] text-gray-300 italic">set by fleet</span>
+                ) : scope === 'inactive' ? (
+                  <button onClick={() => setStatus(a.id, 'AVAILABLE')} disabled={isUpdating}
+                    className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-1 w-fit">
+                    Reactivate
+                  </button>
+                ) : (
+                  <select
+                    value={SETTABLE_STATUSES.includes(a.status as any) ? a.status : ''}
+                    disabled={isUpdating}
+                    onChange={e => { if (e.target.value) setStatus(a.id, e.target.value); }}
+                    className="border border-gray-200 rounded-lg px-1.5 py-1 text-[10px] text-gray-700 bg-white w-full focus:outline-none focus:border-gray-400"
+                  >
+                    {!SETTABLE_STATUSES.includes(a.status as any) && (
+                      <option value="" disabled>{STATUS_CONFIG[a.status]?.label || a.status}</option>
+                    )}
+                    {SETTABLE_STATUSES.map(k => (
+                      <option key={k} value={k}>{STATUS_CONFIG[k].label}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             );
           })}
