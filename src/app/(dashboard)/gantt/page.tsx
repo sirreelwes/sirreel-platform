@@ -124,6 +124,9 @@ export default function GanttPage() {
 
   const totalDays = weeks * 7
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
+  // Top task lane: chip height + per-day stack slot pitch (chip + gap).
+  const TASK_CHIP_H = 18
+  const TASK_SLOT = 20
   const startDate = anchorDate
   // ── Render-vs-visible windows ────────────────────────────────────
   // The "visible window" is the [anchorDate, anchorDate + totalDays)
@@ -599,7 +602,7 @@ export default function GanttPage() {
   type RowEntry =
     | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[] }
     | { type: 'divider'; label: string; accent?: 'warn' | 'idle' }
-    | { type: 'needsAssign'; hold: any }
+    | { type: 'taskBand'; tasks: any[]; bandHeight: number }
   const { rowEntries } = useMemo(() => {
     const visibleStart = startDate
     const visibleEnd = addDays(startDate, totalDays - 1)
@@ -637,12 +640,24 @@ export default function GanttPage() {
       return inWindow && matchesCatFilter
     })
     if (visibleUnassigned.length > 0) {
-      entries.push({
-        type: 'divider',
-        label: `${visibleUnassigned.length} needs assignment`,
-        accent: 'warn',
-      })
-      for (const h of visibleUnassigned) entries.push({ type: 'needsAssign', hold: h })
+      // One compact band at the top of the chart: tasks sit on their scheduled
+      // day, and multiple tasks on the SAME day stack vertically in that day's
+      // column. A stronger bottom border delineates the band from the vehicles.
+      const dayCounts = new Map<string, number>()
+      const stacked = visibleUnassigned
+        .slice()
+        .sort((a, b) =>
+          String(a.start).localeCompare(String(b.start)) ||
+          String(a.scheduledTime).localeCompare(String(b.scheduledTime)) ||
+          String(a.clientName).localeCompare(String(b.clientName)),
+        )
+        .map((t) => {
+          const stackIndex = dayCounts.get(t.start) ?? 0
+          dayCounts.set(t.start, stackIndex + 1)
+          return { ...t, stackIndex }
+        })
+      const maxStack = Math.max(1, ...Array.from(dayCounts.values()))
+      entries.push({ type: 'taskBand', tasks: stacked, bandHeight: maxStack * TASK_SLOT + 6 })
     }
 
     for (let i = 0; i < sorted.length; i++) {
@@ -772,20 +787,16 @@ export default function GanttPage() {
                     </div>
                   )
                 }
-                if (entry.type === 'needsAssign') {
-                  const t = entry.hold
-                  const label = t.taskType === 'PICKUP' ? 'Pickup' : 'Delivery'
+                if (entry.type === 'taskBand') {
                   return (
                     <div
-                      key={`na-${i}`}
-                      className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-rose-50/40"
+                      key={`tb-${i}`}
+                      style={{ height: entry.bandHeight }}
+                      className="border-b-2 border-gray-300 px-3 flex flex-col justify-center bg-rose-50/40"
                     >
-                      <div className="w-2 h-2 rounded-full flex-shrink-0 bg-rose-400" />
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-semibold text-gray-900 truncate">
-                          {label} · {t.clientName}
-                        </div>
-                        <div className="text-[9px] text-rose-600 truncate italic">needs fleet assignment</div>
+                      <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wide leading-tight">Tasks</div>
+                      <div className="text-[9px] text-rose-600 italic leading-tight">
+                        {entry.tasks.length} need{entry.tasks.length === 1 ? 's' : ''} assignment
                       </div>
                     </div>
                   )
@@ -896,18 +907,13 @@ export default function GanttPage() {
                     const dividerBg = entry.accent === 'warn' ? 'bg-rose-50' : 'bg-gray-100'
                     return <div key={`d-${i}`} className={`h-6 border-b border-gray-200 ${dividerBg}`} />
                   }
-                  if (entry.type === 'needsAssign') {
-                    const t = entry.hold
-                    const bar = getBar(t.start, t.end)
-                    const label = t.taskType === 'PICKUP' ? 'Pickup' : 'Delivery'
-                    const detail = [
-                      t.jobName,
-                      t.scheduledTime,
-                      t.siteAddress,
-                      t.deliveryItems,
-                    ].filter(Boolean).join(' · ')
+                  if (entry.type === 'taskBand') {
                     return (
-                      <div key={`na-${i}`} className="relative h-8 border-b border-gray-100 bg-rose-50/40">
+                      <div
+                        key={`tb-${i}`}
+                        style={{ height: entry.bandHeight }}
+                        className="relative border-b-2 border-gray-300 bg-rose-50/30"
+                      >
                         {/* Grid */}
                         <div className="absolute inset-0 flex pointer-events-none">
                           {dates.map(ds => (
@@ -918,18 +924,31 @@ export default function GanttPage() {
                             />
                           ))}
                         </div>
-                        {bar && (
-                          <div
-                            className={`absolute top-1 h-6 rounded-md bg-amber-200 border border-dashed border-amber-500 flex items-center px-1.5 overflow-hidden ${canAssignTasks ? 'cursor-pointer hover:bg-amber-300 transition-colors' : ''}`}
-                            style={{ left: bar.left, width: bar.width, minWidth: 120 }}
-                            onClick={canAssignTasks ? (ev) => { ev.stopPropagation(); setAssignTask(t) } : undefined}
-                            title={`${label} — ${t.clientName}${detail ? ` · ${detail}` : ''}${canAssignTasks ? ' · click to assign driver + tow vehicle' : ''}`}
-                          >
-                            <span className="text-[9px] font-bold text-amber-900 truncate whitespace-nowrap">
-                              ⚠ {label} · {t.clientName}{t.scheduledTime ? ` · ${t.scheduledTime}` : ''}{canAssignTasks ? ' · assign →' : ''}
-                            </span>
-                          </div>
-                        )}
+                        {/* Task chips — placed on their scheduled day; same-day
+                            tasks stack vertically within that day's column. */}
+                        {entry.tasks.map((t: any, k: number) => {
+                          const bar = getBar(t.start, t.end)
+                          if (!bar) return null
+                          const isPickup = t.taskType === 'PICKUP'
+                          const label = isPickup ? 'Pickup' : 'Delivery'
+                          const detail = [t.jobName, t.scheduledTime, t.siteAddress, t.deliveryItems].filter(Boolean).join(' · ')
+                          const chipColor = isPickup
+                            ? 'bg-violet-200 border-violet-500 text-violet-900 hover:bg-violet-300'
+                            : 'bg-amber-200 border-amber-500 text-amber-900 hover:bg-amber-300'
+                          return (
+                            <div
+                              key={`tk-${k}`}
+                              className={`absolute rounded border border-dashed flex items-center overflow-hidden ${chipColor} ${canAssignTasks ? 'cursor-pointer transition-colors' : ''}`}
+                              style={{ left: bar.left, width: Math.max(dayWidth - 2, 24), top: t.stackIndex * TASK_SLOT + 3, height: TASK_CHIP_H }}
+                              onClick={canAssignTasks ? (ev) => { ev.stopPropagation(); setAssignTask(t) } : undefined}
+                              title={`${label} — ${t.clientName}${detail ? ` · ${detail}` : ''}${canAssignTasks ? ' · click to assign driver + tow vehicle' : ''}`}
+                            >
+                              <span className="text-[8px] font-bold truncate whitespace-nowrap px-1 leading-none">
+                                {isPickup ? '↑' : '↓'}{t.scheduledTime ? ` ${t.scheduledTime}` : ` ${t.clientName}`}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   }
