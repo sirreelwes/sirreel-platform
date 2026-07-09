@@ -108,8 +108,10 @@ export function PublicSiteFooter() {
           </div>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-white/10 text-[12px] text-[#6d685e]">
-          © {year} {PUBLIC_CONTACT.entity}. All rights reserved.
+        <div className="mt-10 pt-6 border-t border-white/10 text-[12px] text-[#6d685e] flex items-center gap-2">
+          {/* Quiet S-mark sign-off beside the copyright line. */}
+          <Image src="/s-logo-white.png" alt="" aria-hidden width={1118} height={1065} className="h-3.5 w-auto opacity-40" />
+          <span>© {year} {PUBLIC_CONTACT.entity}. All rights reserved.</span>
         </div>
       </div>
     </footer>

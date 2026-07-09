@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Metadata } from 'next'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { getPageTitles } from '@/lib/site/siteSettings'
+import { SWatermark } from '@/components/site/SWatermark'
 
 /**
  * Public /vehicles landing — the "Vehicles" nav destination. Lists every
@@ -22,11 +24,10 @@ function fmtMoney(n: number): string {
 }
 
 function TruckPlaceholder() {
+  // Photo-less card → a quiet S-mark instead of a generic truck glyph.
   return (
     <div className="w-full h-[160px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-      <svg width={54} height={54} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-        <path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h11l3 4h0a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 17a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2m6 0a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2" />
-      </svg>
+      <Image src="/s-logo-white.png" alt="" aria-hidden width={1118} height={1065} className="h-12 w-auto opacity-20" />
     </div>
   )
 }
@@ -37,8 +38,9 @@ export default async function VehiclesIndexPage() {
   return (
     <>
       {/* Hero band — matches the order form's dark editorial band. */}
-      <section className="bg-[#0c0c0d] text-white">
-        <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
+      <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
+        <SWatermark />
+        <div className="relative max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             The Fleet
           </div>

@@ -5,6 +5,7 @@ import {
   FLEET_AGREEMENT,
   LCDW_ADDENDUM,
 } from '@/lib/contracts/contractClauses'
+import { SWatermark } from '@/components/site/SWatermark'
 
 /**
  * Public /rental-agreement — interactive review page for the approved rental
@@ -60,8 +61,9 @@ export default function RentalAgreementPage() {
   return (
     <>
       {/* Hero band — matches the public site's dark editorial band. */}
-      <section className="bg-[#0c0c0d] text-white">
-        <div className="max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
+      <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
+        <SWatermark />
+        <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Forms
           </div>
@@ -166,7 +168,8 @@ export default function RentalAgreementPage() {
             </section>
 
             {/* Tail CTA — review-only page; signing happens in the client portal. */}
-            <div className="mt-12 bg-[#0c0c0d] text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+            <div className="mt-12 bg-[#0c0c0d] text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-4 justify-between relative overflow-hidden">
+              <SWatermark size={220} className="-right-10 -bottom-12 rotate-[-8deg]" />
               <div>
                 <div className="text-[16px] font-black" style={{ fontFamily: 'Archivo, sans-serif' }}>Need a copy for production?</div>
                 <p className="text-[13px] text-[#cfc9bd] mt-1">

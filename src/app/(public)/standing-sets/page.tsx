@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Metadata } from 'next'
 import { getPublicSpaces } from '@/lib/site/spaces'
 import { getPageTitles } from '@/lib/site/siteSettings'
 import { StandingSetAvailabilityForm } from '@/components/site/StandingSetAvailabilityForm'
+import { SWatermark } from '@/components/site/SWatermark'
 
 /**
  * Public /standing-sets — gallery of PUBLISHED standing-set Spaces (each
@@ -20,11 +22,10 @@ export const metadata: Metadata = {
 }
 
 function SetPlaceholder() {
+  // Photo-less card → a quiet S-mark instead of a generic building glyph.
   return (
     <div className="w-full h-[190px] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-      <svg width={54} height={54} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
-        <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M14 9h1M14 13h1M10 21v-4h4v4" />
-      </svg>
+      <Image src="/s-logo-white.png" alt="" aria-hidden width={1118} height={1065} className="h-14 w-auto opacity-20" />
     </div>
   )
 }
@@ -42,8 +43,9 @@ export default async function StandingSetsPage() {
   return (
     <>
       {/* Hero */}
-      <section className="bg-[#0c0c0d] text-white">
-        <div className="max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
+      <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
+        <SWatermark />
+        <div className="relative max-w-[1480px] mx-auto px-5 py-12 sm:py-16">
           <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
             Standing Sets
           </div>
@@ -94,8 +96,9 @@ export default async function StandingSetsPage() {
       </section>
 
       {/* Check Availability */}
-      <section id="availability" className="bg-[#0c0c0d] text-white scroll-mt-24">
-        <div className="max-w-[1480px] mx-auto px-5 py-16 sm:py-20">
+      <section id="availability" className="bg-[#0c0c0d] text-white scroll-mt-24 relative overflow-hidden">
+        <SWatermark size={460} className="-right-24 -top-24 rotate-[6deg]" />
+        <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-20">
           <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
             <div>
               <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>

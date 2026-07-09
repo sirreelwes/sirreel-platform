@@ -8,6 +8,7 @@
 import { ContactForm } from '@/components/site/ContactForm'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import { getPageTitles } from '@/lib/site/siteSettings'
+import { SWatermark } from '@/components/site/SWatermark'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,8 +21,9 @@ export default async function ContactPage({
   const titles = await getPageTitles()
 
   return (
-    <section id="contact" className="bg-[#0c0c0d] text-white scroll-mt-24">
-      <div className="max-w-[1480px] mx-auto px-5 py-16 sm:py-24">
+    <section id="contact" className="bg-[#0c0c0d] text-white scroll-mt-24 relative overflow-hidden">
+      <SWatermark size={460} className="-right-24 -top-24 rotate-[6deg]" />
+      <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-24">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] items-start">
           <div>
             <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
