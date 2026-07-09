@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
-import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
-import { portalJobUrl } from '@/lib/portal/portalUrl'
-import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
+import { sendPortalInvite } from '@/lib/portal/sendPortalInvite'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +16,9 @@ export const dynamic = 'force-dynamic'
  * portal URL so the rep can copy it if email delivery is unverified (Resend
  * domain status is what makes this best-effort today).
  *
+ * Core logic lives in src/lib/portal/sendPortalInvite.ts (shared verbatim
+ * with the "Send Paperwork Portal" compose action — one invite path).
+ *
  * `regenerate` behavior from /portal-access POST is separate — that endpoint
  * is for "regenerate the existing access for a known contact". This endpoint
  * is for "I have an email address, set them up from scratch."
@@ -32,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const sessionUser = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, name: true },
+    select: { id: true },
   })
   if (!sessionUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -43,93 +41,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     firstName?: unknown
     lastName?: unknown
   }
-  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '')
-  const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
-  const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : ''
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
-  }
 
-  const order = await prisma.order.findUnique({
-    where: { id: params.id },
-    select: {
-      id: true,
-      portalSlug: true,
-      job: { select: { name: true, jobCode: true } },
-      company: { select: { name: true } },
-      agent: { select: { name: true, email: true, phone: true } },
-    },
-  })
-  if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
-  if (!order.portalSlug) {
-    return NextResponse.json({ error: 'Order has no portal slug' }, { status: 409 })
-  }
-
-  // Find-or-create Person via the alias-aware resolver — if the given
-  // email was merged into a survivor previously, we want the survivor's
-  // row back, not a fresh Person.
-  const existingPerson = await resolvePersonByEmail(email, {
-    select: { id: true, firstName: true, lastName: true, email: true },
-  }) as { id: string; firstName: string; lastName: string; email: string } | null
-  let person: { id: string; firstName: string; lastName: string; email: string }
-  if (existingPerson) {
-    if (firstName || lastName) {
-      person = await prisma.person.update({
-        where: { id: existingPerson.id },
-        data: {
-          firstName: firstName || undefined,
-          lastName: lastName || undefined,
-        },
-        select: { id: true, firstName: true, lastName: true, email: true },
-      })
-    } else {
-      person = existingPerson
-    }
-  } else {
-    person = await prisma.person.create({
-      data: {
-        email,
-        firstName: firstName || email.split('@')[0],
-        lastName: lastName || '—',
-      },
-      select: { id: true, firstName: true, lastName: true, email: true },
+  try {
+    const result = await sendPortalInvite({
+      orderId: params.id,
+      email: typeof body.email === 'string' ? body.email : '',
+      firstName: typeof body.firstName === 'string' ? body.firstName : undefined,
+      lastName: typeof body.lastName === 'string' ? body.lastName : undefined,
     })
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Invite failed'
+    const status = msg === 'Order not found' ? 404 : msg === 'Order has no portal slug' ? 409 : 400
+    return NextResponse.json({ error: msg }, { status })
   }
-
-  const issued = await issueJobMagicLink({ orderId: order.id, contactId: person.id })
-  const portalUrl = portalJobUrl(order.portalSlug, issued.token)
-
-  const jobLabel = order.job?.name || order.company?.name || ''
-  const tpl = buildPortalInviteEmail({
-    firstName: person.firstName,
-    projectName: jobLabel,
-    portalLink: portalUrl,
-    repName: order.agent?.name || 'the SirReel team',
-    repPhone: order.agent?.phone || null,
-    repEmail: order.agent?.email || null,
-  })
-  const emailResult = await sendAgreementEmail({
-    label: 'portal/invite',
-    to: [person.email],
-    subject: tpl.subject,
-    html: tpl.html,
-    text: tpl.text,
-  })
-  if (emailResult.ok && emailResult.id) {
-    await recordEmailDelivery({
-      resendMessageId: emailResult.id,
-      toAddress: person.email,
-      subject: tpl.subject,
-      label: 'portal/invite',
-      orderId: order.id,
-    })
-  }
-
-  return NextResponse.json({
-    ok: true,
-    portalUrl,
-    person,
-    portalAccessId: issued.portalAccessId,
-    emailResult,
-  })
 }

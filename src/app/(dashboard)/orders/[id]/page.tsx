@@ -995,6 +995,48 @@ export default function OrderDetailPage() {
     }
   };
 
+  // ONE action, no quote: invite the client to the portal AND make the rental
+  // agreement immediately signable (generate baseline doc + release). Reuses
+  // the invite fields; result message includes the copy/paste portal URL and
+  // any agreement warning (invite still sends if agreement prep fails).
+  const sendPaperworkPortal = async () => {
+    const email = inviteEmail.trim();
+    if (!email) { setInviteMsg('Enter the client email first.'); return; }
+    setInviteBusy(true);
+    setInviteMsg('');
+    try {
+      const r = await fetch(`/api/orders/${orderId}/send-paperwork-portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          firstName: inviteFirst.trim() || undefined,
+          lastName: inviteLast.trim() || undefined,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setInviteMsg(data.error || 'Send failed');
+        return;
+      }
+      const emailBit = data.emailResult?.ok
+        ? `Paperwork portal sent to ${email}.`
+        : `Portal created but email failed: ${data.emailResult?.reason || 'unknown'}.`;
+      const signBit = data.agreementError
+        ? ` ⚠ ${data.agreementError}`
+        : data.agreement?.signable
+          ? ' Agreement is ready to sign.'
+          : '';
+      setInviteMsg(`${emailBit}${signBit} · URL: ${data.portalUrl}`);
+      setInviteEmail('');
+      setInviteFirst('');
+      setInviteLast('');
+      await fetchPortalAccess();
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
   const revokeAccess = async (portalAccessId: string) => {
     if (!confirm('Revoke this portal access?')) return;
     await fetch(`/api/orders/${orderId}/portal-access`, {
@@ -3234,6 +3276,45 @@ export default function OrderDetailPage() {
               Per-contact magic links · 7-day TTL · 30-day session.{' '}
               <span className="text-lt-fg3">Add new contacts via &ldquo;+ Add quote recipient&rdquo; above.</span>
             </div>
+          </div>
+        </div>
+
+        {/* Send Paperwork Portal — one action, no quote: invite + make the
+            rental agreement immediately signable (baseline doc + release). */}
+        <div className="border border-lt-hairline rounded-lg p-3 bg-lt-inner space-y-2">
+          <div className="text-xs font-semibold text-lt-fg">Send paperwork portal</div>
+          <div className="text-[11px] text-lt-fg3">
+            Emails the client their portal link and opens the rental agreement for signing — no quote needed.
+          </div>
+          <div className="flex gap-2 flex-wrap items-center">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="client@production.com"
+              className="flex-1 min-w-[180px] px-2.5 py-1.5 bg-lt-card border border-lt-hairline rounded-lg text-xs text-lt-fg placeholder:text-lt-fg3"
+            />
+            <input
+              type="text"
+              value={inviteFirst}
+              onChange={(e) => setInviteFirst(e.target.value)}
+              placeholder="First"
+              className="w-24 px-2.5 py-1.5 bg-lt-card border border-lt-hairline rounded-lg text-xs text-lt-fg placeholder:text-lt-fg3"
+            />
+            <input
+              type="text"
+              value={inviteLast}
+              onChange={(e) => setInviteLast(e.target.value)}
+              placeholder="Last"
+              className="w-24 px-2.5 py-1.5 bg-lt-card border border-lt-hairline rounded-lg text-xs text-lt-fg placeholder:text-lt-fg3"
+            />
+            <button
+              onClick={sendPaperworkPortal}
+              disabled={inviteBusy || !inviteEmail.trim()}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-xs font-semibold rounded-lg"
+            >
+              {inviteBusy ? 'Sending…' : 'Send Paperwork Portal'}
+            </button>
           </div>
         </div>
 
