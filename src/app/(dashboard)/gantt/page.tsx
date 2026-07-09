@@ -84,9 +84,9 @@ export default function GanttPage() {
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
   // unit row to rebind for the SAME dates via the existing assign/unassign
   // endpoints. Dates never change (that's the modal reschedule).
-  const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; label: string; startX: number; startY: number; moved: boolean }>(null)
+  const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; label: string; startX: number; startY: number; moved: boolean; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string }>(null)
   const suppressBarClick = useRef(false)
-  const [drag, setDrag] = useState<null | { x: number; y: number; label: string; fromAssetId: string; targetAssetId: string | null; targetUnit: string | null }>(null)
+  const [drag, setDrag] = useState<null | { x: number; y: number; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string; label: string; fromAssetId: string; targetAssetId: string | null; targetUnit: string | null }>(null)
   const [dragBusy, setDragBusy] = useState(false)
   const [dragErr, setDragErr] = useState<string | null>(null)
   const [dragBuffer, setDragBuffer] = useState<null | { bookingItemId: string; fromAssetId: string; toAssetId: string; toUnit: string; reason: string }>(null)
@@ -919,7 +919,7 @@ export default function GanttPage() {
                   <div
                     key={ds}
                     style={{ width: dayWidth, minWidth: dayWidth }}
-                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-100 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
+                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-200 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
                   >
                     {fDay(ds)}
                   </div>
@@ -957,7 +957,7 @@ export default function GanttPage() {
                             <div
                               key={ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -1039,7 +1039,7 @@ export default function GanttPage() {
                             <div
                               key={ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -1077,6 +1077,7 @@ export default function GanttPage() {
                               style={{ left: bar.left, width: bar.width }}
                               onPointerDown={canBindUnit ? (ev) => {
                                 ev.stopPropagation()
+                                const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
                                 ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
                                 dragState.current = {
                                   bookingItemId: b.bookingItemId,
@@ -1086,6 +1087,18 @@ export default function GanttPage() {
                                   startX: ev.clientX,
                                   startY: ev.clientY,
                                   moved: false,
+                                  // Where inside the bar the grab happened, so the ghost
+                                  // tracks the cursor from that point (not snapping its
+                                  // left/top edge to the cursor). Viewport coords → the
+                                  // fixed ghost + elementFromPoint hit-test both account
+                                  // for board scroll automatically.
+                                  grabDX: ev.clientX - rect.left,
+                                  grabDY: ev.clientY - rect.top,
+                                  width: rect.width,
+                                  height: rect.height,
+                                  bg: sc.bg,
+                                  border: sc.border,
+                                  text: sc.text,
                                 }
                               } : undefined}
                               onPointerMove={canBindUnit ? (ev) => {
@@ -1094,7 +1107,7 @@ export default function GanttPage() {
                                 if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
                                 d.moved = true
                                 const tgt = unitAtPoint(ev.clientX, ev.clientY)
-                                setDrag({ x: ev.clientX, y: ev.clientY, label: d.label, fromAssetId: d.fromAssetId, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null })
+                                setDrag({ x: ev.clientX, y: ev.clientY, grabDX: d.grabDX, grabDY: d.grabDY, width: d.width, height: d.height, bg: d.bg, border: d.border, text: d.text, label: d.label, fromAssetId: d.fromAssetId, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null })
                               } : undefined}
                               onPointerUp={canBindUnit ? (ev) => {
                                 const d = dragState.current
@@ -1137,7 +1150,7 @@ export default function GanttPage() {
                               <div
                                 key={ds}
                                 style={{ width: dayWidth, minWidth: dayWidth }}
-                                className={`flex-shrink-0 border-r border-gray-200/40 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                                className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                               />
                             ))}
                           </div>
@@ -1176,7 +1189,7 @@ export default function GanttPage() {
                         <div
                           key={ds}
                           style={{ width: dayWidth, minWidth: dayWidth }}
-                          className={`flex-shrink-0 border-r border-gray-100/50 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                          className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
                         />
                       ))}
                     </div>
@@ -1477,10 +1490,12 @@ export default function GanttPage() {
           row hit-test (elementFromPoint) sees the unit rows underneath. */}
       {drag && (
         <div
-          className={`fixed z-[60] pointer-events-none px-2 py-1 rounded-md text-[10px] font-semibold text-white shadow-lg ${drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId ? 'bg-blue-600/90' : 'bg-gray-500/80'}`}
-          style={{ left: drag.x + 12, top: drag.y + 12 }}
+          className={`fixed z-[60] pointer-events-none rounded-md border ${drag.bg} ${drag.border} flex items-center px-1.5 overflow-hidden opacity-80 shadow-lg ring-2 ${drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId ? 'ring-blue-400' : 'ring-gray-300'}`}
+          style={{ left: drag.x - drag.grabDX, top: drag.y - drag.grabDY, width: drag.width, height: drag.height }}
         >
-          {drag.label}{drag.targetUnit && drag.targetAssetId !== drag.fromAssetId ? ` → ${drag.targetUnit}` : ''}
+          <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
+            {drag.label}{drag.targetUnit && drag.targetAssetId !== drag.fromAssetId ? ` → ${drag.targetUnit}` : ''}
+          </span>
         </div>
       )}
 
