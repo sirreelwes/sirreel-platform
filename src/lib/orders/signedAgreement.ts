@@ -94,6 +94,20 @@ export async function ensureSignedAgreementForOrder(orderId: string): Promise<vo
       baselineVersion: today,
     },
   })
+
+  // Render the review document UP FRONT (2026-07): the client must be able to
+  // review the approved clause text BEFORE signing, so documentToSignUrl is
+  // populated the moment the baseline row exists — not lazily on first portal
+  // read. Renders from contractClauses.ts via ContractDocument (the SAME
+  // module source SignedAgreementDocument re-renders at sign-time, so review
+  // and signed text cannot diverge). Best-effort: a render/blob hiccup leaves
+  // the existing lazy fill paths (portal read / release / welcome click) to
+  // repair it — this helper's callers must never break on a render failure.
+  // Fires only on first creation (the `existing` guard above), so hot paths
+  // pay the ~300ms render exactly once per order.
+  await ensureBaselineRentalDocumentToSign(orderId).catch((err) => {
+    console.error('[ensureSignedAgreementForOrder] up-front baseline render failed (lazy fill will retry):', orderId, err)
+  })
 }
 
 /**
