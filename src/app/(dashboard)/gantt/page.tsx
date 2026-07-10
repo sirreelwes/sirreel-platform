@@ -503,17 +503,29 @@ export default function GanttPage() {
 
   // ── Refresh the timeline data after an action. Kept inline so the
   //    fetch URL stays consistent with the initial load. ──
+  // SEQUENCE-GUARDED refetch: only the NEWEST response is applied, and no
+  // snapshot is applied while a reassign is still in flight (a stale snapshot
+  // would clobber a newer optimistic move and leave the board disagreeing
+  // with the server — the root of the drag-back 404/409 bug). If a snapshot
+  // is skipped because mutations are pending, the settle path refetches.
+  const refetchSeq = useRef(0)
+  const inFlightReassigns = useRef<Set<string>>(new Set())
+  // Refetch requested by ANY drop — fires once the LAST in-flight settles
+  // (shared across overlapping drops so no request is lost).
+  const pendingRefetch = useRef(false)
   const refreshTimeline = useCallback(() => {
+    const seq = ++refetchSeq.current
     setLoading(true)
     const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
     fetch(`/api/timeline-native?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok) {
-          setJobs(d.jobs || [])
-          setUnits(d.units || [])
-          setUnassignedHolds(d.unassignedHolds || [])
-        }
+        if (!d.ok) return
+        if (seq !== refetchSeq.current) return // superseded by a newer refetch
+        if (inFlightReassigns.current.size > 0) return // mutations pending — settle path will refetch
+        setJobs(d.jobs || [])
+        setUnits(d.units || [])
+        setUnassignedHolds(d.unassignedHolds || [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -832,6 +844,14 @@ export default function GanttPage() {
     setUnits((prev) => moveBookingLocal(prev, bookingItemId, fromAssetId, toAssetId))
     const rollback = () => setUnits((prev) => moveBookingLocal(prev, bookingItemId, toAssetId, fromAssetId))
 
+    // Register the in-flight reassign: a new drag on THIS booking is blocked
+    // until these mutations settle (other bookings stay draggable), and the
+    // reconciling refetch is DEFERRED to settle-time so a mid-flight snapshot
+    // can never clobber the optimistic state. This is the drag-back 404/409
+    // fix — the second drag used the optimistic row while the server was
+    // still mid-move.
+    inFlightReassigns.current.add(bookingItemId)
+
     setDragBusy(true)
     setDragErr(null)
     try {
@@ -844,11 +864,11 @@ export default function GanttPage() {
         return
       }
       // 2. Bind the new unit. Success → the optimistic state already matches
-      //    the server; refetch reconciles ids/derived fields in the background.
+      //    the server; the settle path refetches to reconcile derived fields.
       const a = await assignUnit(toAssetId, bufferOverride)
       if (a.ok && a.j.ok) {
         setDragBuffer(null)
-        refreshTimeline()
+        pendingRefetch.current = true
         return
       }
       // 3. New unit rejected — restore the old assignment on the server, and
@@ -857,7 +877,7 @@ export default function GanttPage() {
       const restore = await assignUnit(fromAssetId, true)
       if (!restore.ok || !restore.j.ok) {
         setDragErr(`Move failed and the old unit couldn't be restored (${restore.j.reason || restore.j.error || 'unknown'}). Reassign via “change units”.`)
-        refreshTimeline() // board truth diverged (item unassigned) — reconcile now
+        pendingRefetch.current = true // board truth diverged (item unassigned) — reconcile at settle
         return
       }
       // Old is back exactly where it was, on server and screen.
@@ -870,11 +890,18 @@ export default function GanttPage() {
       setDragErr(a.j.reason || a.j.error || `Reassign failed (${a.status}) — move undone.`)
     } catch (e) {
       // Network failure mid-sequence — server state unknown. Roll the local
-      // move back, say so, and refetch the truth.
+      // move back, say so, and reconcile at settle.
       rollback()
       setDragErr(`${e instanceof Error ? e.message : String(e)} — move undone.`)
-      refreshTimeline()
+      pendingRefetch.current = true
     } finally {
+      // Settle: unblock this booking; refetch once the LAST in-flight
+      // reassign completes so the snapshot reflects all mutations.
+      inFlightReassigns.current.delete(bookingItemId)
+      if (pendingRefetch.current && inFlightReassigns.current.size === 0) {
+        pendingRefetch.current = false
+        refreshTimeline()
+      }
       setDragBusy(false)
     }
   }, [refreshTimeline])
@@ -911,6 +938,11 @@ export default function GanttPage() {
   //    over refs/setters (stable) so non-target rows skip re-render. ──
   const onBarPointerDown = useCallback((ev: React.PointerEvent<HTMLDivElement>, b: any, unit: any) => {
     ev.stopPropagation()
+    // This booking's previous reassign hasn't settled — its on-screen row may
+    // not match the server yet, so a drag now would act on a stale position
+    // (the drag-back 404/409 bug). Ignore the gesture; the settle refetch
+    // unblocks it moments later. Other bookings drag freely.
+    if (inFlightReassigns.current.has(b.bookingItemId)) return
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
     const sc = barColor(b.status, b.blindPickup)
