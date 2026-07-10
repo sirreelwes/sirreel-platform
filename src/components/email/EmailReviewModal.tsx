@@ -124,7 +124,11 @@ export type EmailReviewTarget =
       message?: string | null;
     }
   | { kind: 'followup-job'; jobId: string; message?: string | null }
-  | { kind: 'quick-reply'; payload: QuickReplyPayload; message?: string | null };
+  | { kind: 'quick-reply'; payload: QuickReplyPayload; message?: string | null }
+  // Welcome / Job Begin invite — server derives everything from the inquiry;
+  // the send mints the WelcomeInvite token, and the Job is created only when
+  // the client clicks "Get Paperwork Started".
+  | { kind: 'welcome'; inquiryId: string; message?: string | null };
 
 interface Props {
   target: EmailReviewTarget | null;
@@ -166,6 +170,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         send: `/api/sales/quick-reply/send`,
         titleKind: 'Quick reply',
       };
+    case 'welcome':
+      return {
+        preview: `/api/sales/welcome/preview`,
+        send: `/api/sales/welcome/send`,
+        titleKind: 'Welcome email',
+      };
   }
 }
 
@@ -190,6 +200,12 @@ function buildPreviewBody(
   // replaces the templated prose (the availability block + shell stay).
   if (target.kind === 'quick-reply') {
     base.payload = { ...target.payload, customMessage: customMessage.trim() || null };
+  }
+  // Welcome invite: the server derives recipient/company/agent from the
+  // inquiry; only the id + the agent's words travel in the body.
+  if (target.kind === 'welcome') {
+    base.inquiryId = target.inquiryId;
+    base.customMessage = customMessage.trim() || null;
   }
   return base;
 }
@@ -557,10 +573,10 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                 />
               </div>
 
-              {/* Write my own email — quick-reply only. Replaces the templated
-                  prose with the rep's message; the branded shell + the REAL
-                  availability block + supply CTA below stay intact. */}
-              {target.kind === 'quick-reply' && (
+              {/* Write my own email — quick-reply + welcome. Replaces the
+                  templated prose with the rep's message; the branded shell +
+                  structural blocks (availability / portal CTA) stay intact. */}
+              {(target.kind === 'quick-reply' || target.kind === 'welcome') && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                   <label className="flex items-center gap-2 text-[12px] text-zinc-300 cursor-pointer select-none">
                     <input
@@ -570,7 +586,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                       onChange={(e) => { setWriteOwn(e.target.checked); if (!e.target.checked) { setAiFlags(null); setAiPolished(null); setAiError(null); } }}
                       className="accent-amber-600"
                     />
-                    <span>Write my own email <span className="text-zinc-500">— your message replaces the standard wording; the availability list &amp; supply link stay.</span></span>
+                    <span>Write my own email <span className="text-zinc-500">— your message replaces the standard wording; {target.kind === 'welcome' ? 'the portal button & sign-off stay.' : 'the availability list & supply link stay.'}</span></span>
                   </label>
                   {writeOwn && (
                     <div className="mt-2 space-y-2">

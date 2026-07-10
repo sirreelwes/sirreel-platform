@@ -575,6 +575,7 @@ model Person {
   orderContacts    Order[]        @relation("OrderJobContact")
   inquiries        Inquiry[]      @relation("InquiryContact")
   portalAccesses   PortalAccess[] @relation("PortalAccessContact")
+  welcomeInvites   WelcomeInvite[] @relation("WelcomeInvitePerson")
   personSessions   PersonSession[]
   inquiryCaptures  InquiryCapture[] @relation("CaptureContact")
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
@@ -3645,10 +3646,38 @@ model Inquiry {
   respondedAt        DateTime?     @map("responded_at")
   respondedBy        String?       @map("responded_by")
 
+  // Welcome / Job Begin invite (client click-to-create) — at most one per
+  // inquiry (@unique on WelcomeInvite.inquiryId).
+  welcomeInvite      WelcomeInvite?
+
   @@index([status, createdAt])
   @@index([assignedToId])
   @@index([rfc822MessageId])
   @@map("sr_inquiries")
+}
+
+// ── Welcome / Job Begin invite ──────────────────────────────────────
+// Minted when the agent SENDS the welcome email (explicit review + send).
+// The Job/Order/portal are created ONLY when the client presses "Get
+// Paperwork Started" on the landing page — never at send time. inquiryId
+// is @unique so re-sends refresh the one invite and concurrent clicks
+// can never mint two jobs for one inquiry; createdJobId/createdOrderId
+// stamp the first successful click so every later click resolves to the
+// SAME portal.
+model WelcomeInvite {
+  id             String    @id @default(uuid())
+  token          String    @unique // 256-bit hex, minted at send
+  inquiryId      String    @unique @map("inquiry_id")
+  inquiry        Inquiry   @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  personId       String    @map("person_id")
+  person         Person    @relation("WelcomeInvitePerson", fields: [personId], references: [id])
+  expiresAt      DateTime  @map("expires_at")
+  createdJobId   String?   @map("created_job_id")
+  createdOrderId String?   @map("created_order_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  usedAt         DateTime? @map("used_at")
+
+  @@map("sr_welcome_invites")
 }
 
 // InquiryCapture — verdict-per-inbound-message audit trail for the

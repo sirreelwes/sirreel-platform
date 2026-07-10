@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
 
 type InquiryStatus = 'NEW' | 'CONVERTED' | 'DISMISSED'
 type InquirySource = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
@@ -105,6 +106,11 @@ export default function InquiryDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState<null | 'dismiss' | 'assign'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Welcome / Job Begin email — pre-drafted, agent-edited, confirm-to-send in
+  // EmailReviewModal. The Job is created only when the client clicks the
+  // "Get Paperwork Started" button in the email's landing page.
+  const [welcomeTarget, setWelcomeTarget] = useState<EmailReviewTarget | null>(null)
+  const [welcomeFlash, setWelcomeFlash] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -234,6 +240,16 @@ export default function InquiryDetailPage() {
                 >
                   {actionPending === 'dismiss' ? 'Dismissing…' : 'Dismiss'}
                 </button>
+                {/* Welcome / Job Begin — needs the inquiry qualified (person
+                    with email + company); the preview endpoint surfaces a
+                    readable error otherwise. Job mints on the CLIENT's click. */}
+                <button
+                  onClick={() => setWelcomeTarget({ kind: 'welcome', inquiryId: inquiry.id })}
+                  disabled={actionPending != null}
+                  className="text-xs font-semibold border border-amber-600/60 text-amber-500 hover:bg-amber-600/10 px-3 py-1.5 rounded-lg disabled:opacity-40"
+                >
+                  Send Welcome →
+                </button>
                 <Link
                   href={`/orders/new-quote?inquiryId=${inquiry.id}`}
                   className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg"
@@ -339,6 +355,22 @@ export default function InquiryDetailPage() {
           </summary>
           <pre className="whitespace-pre-wrap font-mono text-[11px] text-zinc-400 mt-3">{inquiry.description}</pre>
         </details>
+      )}
+
+      {/* Welcome / Job Begin review + confirm-send */}
+      <EmailReviewModal
+        target={welcomeTarget}
+        onClose={() => setWelcomeTarget(null)}
+        onSent={(info) => {
+          setWelcomeTarget(null)
+          setWelcomeFlash(`Welcome sent to ${info.recipient} — the job is created when they click “Get Paperwork Started”.`)
+          window.setTimeout(() => setWelcomeFlash(null), 8000)
+        }}
+      />
+      {welcomeFlash && (
+        <div className="fixed bottom-6 right-6 z-40 bg-emerald-950 border border-emerald-700 text-emerald-200 text-sm px-4 py-2.5 rounded-lg shadow-lg max-w-md">
+          {welcomeFlash}
+        </div>
       )}
     </div>
   )

@@ -37,6 +37,15 @@ export interface BookingWelcomeEmailInput {
    *  by the caller as the Reply-To header so client replies route to
    *  the rep's inbox, not the shared notifications@ address. */
   repEmail?: string | null
+  /** Agent's personal note (review-modal textarea) — an extra paragraph after
+   *  the intro. Escaped + newline-converted here. Empty/null = omitted. */
+  personalNote?: string | null
+  /** Write-my-own mode: replaces the standard intro prose. The greeting,
+   *  benefits, CTA button and sign-off stay intact. */
+  customMessage?: string | null
+  /** CTA button label — the welcome/job-begin invite passes
+   *  "Get Paperwork Started". Defaults to the original portal wording. */
+  ctaLabel?: string
 }
 
 export interface BookingWelcomeEmail {
@@ -60,6 +69,22 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const repPhone = input.repPhone ? escapeHtml(input.repPhone) : ''
   const repEmail = input.repEmail ? escapeHtml(input.repEmail) : ''
   const portalLink = input.portalLink
+  const ctaLabel = escapeHtml(input.ctaLabel || 'Click here for your TSX portal')
+  const noteRaw = (input.personalNote || '').trim()
+  const customRaw = (input.customMessage || '').trim()
+  // HTML-safe, newline→paragraph conversion for the injected agent copy.
+  const toParas = (t: string, style: string) =>
+    t
+      .split(/\n{2,}/)
+      .map((p) => `<p style="${style}">${escapeHtml(p).replace(/\n/g, '<br />')}</p>`)
+      .join('')
+  // Write-my-own replaces ONLY the standard intro prose; greeting, benefits,
+  // CTA button and sign-off stay intact. Personal note = extra paragraph(s).
+  const introHtml = customRaw
+    ? toParas(customRaw, 'margin:0 0 16px;')
+    : `<p style="margin:0 0 16px;">We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place &mdash; your TSX portal.</p>`
+  const noteHtml = noteRaw ? toParas(noteRaw, 'margin:0 0 16px;color:#1a1a1a;') : ''
+  const introText = customRaw || `We're excited to take care of your team on ${input.projectName || 'this project'}.`
 
   const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
@@ -68,14 +93,15 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
-    `We're excited to take care of your team on ${input.projectName || 'this project'}.`,
+    introText,
+    ...(noteRaw ? ['', noteRaw] : []),
     ``,
     `Everything you'll need lives in one place:`,
     `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
     `  ✓ Your dedicated rep — me, from estimate to wrap`,
     `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
     ``,
-    `Click here for your TSX portal: ${portalLink}`,
+    `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
     ``,
     `Your progress saves automatically, so feel free to come back any time.`,
     ``,
@@ -150,9 +176,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:24px 36px 12px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
-              <p style="margin:0 0 16px;">
-                We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place — your TSX portal.
-              </p>
+              ${introHtml}${noteHtml}
             </td>
           </tr>
 
@@ -212,12 +236,12 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <!--[if mso]>
               <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:260px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
                 <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Click here for your TSX portal</center>
+                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">${ctaLabel}</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:6px;">
-                Click here for your TSX portal
+                ${ctaLabel}
               </a>
               <!--<![endif]-->
               <p style="margin:18px 0 0;font-size:12px;color:#888888;">
