@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
@@ -75,6 +75,202 @@ const CAT_LABELS: Record<string, string> = {
   stakebed: 'Stakebed', general: 'Other',
 }
 
+// Would a drop of the dragged bar onto this unit SUCCEED? Mirrors the assign
+// endpoint's HARD blocks so the highlight can't disagree with the real result:
+//   · different AssetCategory        → reject ("belongs to a different category")
+//   · any booking overlapping window → reject (over-capacity / backup-has-dibs)
+//   · N/A window overlapping         → treat as unavailable
+// Buffer-adjacent (soft, override-able) is left as valid — it can still commit.
+// Pure — hoisted to module scope so the memoized row component can share it.
+function isValidDropTarget(unit: any, d: { fromAssetId: string; fromCat: string; winStart: string; winEnd: string }): boolean {
+  if (!unit || unit.assetId === d.fromAssetId) return false
+  if (unit.cat !== d.fromCat) return false
+  const overlaps = (bk: any) => bk && bk.start <= d.winEnd && bk.end >= d.winStart
+  if ((unit.bookings || []).some(overlaps)) return false
+  if ((unit.naWindows || []).some((w: any) => w && w.start <= d.winEnd && (w.end || d.winEnd) >= d.winStart)) return false
+  return true
+}
+
+// Pure bar-geometry: position bars in the RENDERED range, not the visible
+// range — a bar in the pan buffer still renders so trackpad pan reveals it.
+function computeBar(start: string, end: string, renderedStartDate: string, renderedDays: number, dayWidth: number) {
+  const s = Math.max(0, diffDays(renderedStartDate, start))
+  const e = Math.min(renderedDays - 1, diffDays(renderedStartDate, end))
+  if (e < 0 || s >= renderedDays) return null
+  return { left: s * dayWidth, width: Math.max((e - s + 1) * dayWidth - 2, dayWidth - 2) }
+}
+
+// Per-drag row highlight state (computed once per target change in the parent;
+// the memoized row re-renders only when ITS state string flips).
+type DropState = 'none' | 'source' | 'valid' | 'valid-hover' | 'invalid'
+const DROP_STATE_CLASS: Record<DropState, string> = {
+  none: '',
+  source: '',
+  valid: 'bg-green-50/60',
+  'valid-hover': 'ring-2 ring-inset ring-green-500 bg-green-100/70',
+  invalid: 'opacity-40',
+}
+
+// Hit-test the unit row under a screen point (drag-to-reassign). The ghost
+// + any overlay are pointer-events-none so elementFromPoint sees the row.
+function unitAtPoint(x: number, y: number): { assetId: string; unit: string } | null {
+  if (typeof document === 'undefined') return null
+  const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-unit-assetid]') as HTMLElement | null
+  if (!el) return null
+  const assetId = el.getAttribute('data-unit-assetid')
+  if (!assetId) return null
+  return { assetId, unit: el.getAttribute('data-unit-name') || '' }
+}
+
+// Precomputed per-day-cell metadata (fix for per-render Date construction in
+// every grid cell across all lanes).
+interface DayMeta { ds: string; weekend: boolean; isToday: boolean; label: string }
+
+// ── TimelineUnitRow — one asset's timeline lane(s): day grid + N/A windows +
+//    primary bars (+ backup sub-lane). memo()'d so a drag-target change
+//    re-renders ONLY the two rows whose dropState string flipped; all props
+//    are stable (rowEntries identity is memoized, handlers are useCallback,
+//    dayMeta/dimensions change only with the window). Behavior is identical
+//    to the previous inline JSX — pure render-perf extraction. ──
+interface TimelineUnitRowProps {
+  entry: any
+  dayMeta: DayMeta[]
+  dayWidth: number
+  renderedStartDate: string
+  renderedDays: number
+  lastRenderedDate: string
+  canBindUnit: boolean
+  canSetStatus: boolean
+  dropState: DropState
+  onRowClick: (unit: any, ev: React.MouseEvent<HTMLDivElement>) => void
+  onBarPointerDown: (ev: React.PointerEvent<HTMLDivElement>, b: any, unit: any) => void
+  onBarPointerMove: (ev: React.PointerEvent<HTMLDivElement>) => void
+  onBarPointerUp: (ev: React.PointerEvent<HTMLDivElement>) => void
+  onBarClick: (b: any, unit: any) => void
+  onBackupClick: (b: any, unit: any, rank: number) => void
+}
+
+const TimelineUnitRow = memo(function TimelineUnitRow({
+  entry,
+  dayMeta,
+  dayWidth,
+  renderedStartDate,
+  renderedDays,
+  lastRenderedDate,
+  canBindUnit,
+  canSetStatus,
+  dropState,
+  onRowClick,
+  onBarPointerDown,
+  onBarPointerMove,
+  onBarPointerUp,
+  onBarClick,
+  onBackupClick,
+}: TimelineUnitRowProps) {
+  const hasBackups = entry.backupBookings.length > 0
+  const grid = (
+    <div className="absolute inset-0 flex pointer-events-none">
+      {dayMeta.map((d) => (
+        <div
+          key={d.ds}
+          style={{ width: dayWidth, minWidth: dayWidth }}
+          className={`flex-shrink-0 border-r border-gray-200 ${d.weekend ? 'bg-gray-200/60' : ''}`}
+        />
+      ))}
+    </div>
+  )
+  return (
+    <div>
+      {/* Main row — primary bars only. Row-level onClick fires on empty-span
+          clicks (bar onClicks stopPropagation); gated inside the handler. */}
+      <div
+        data-unit-assetid={entry.unit.assetId}
+        data-unit-name={entry.unit.unitName}
+        className={`relative h-8 border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
+        onClick={(ev) => onRowClick(entry.unit, ev)}
+      >
+        {grid}
+        {/* Unit N/A — open maintenance windows (grey, informational,
+            click-through so the +Hold row gesture still works). Drawn
+            before bookings so a real booking bar sits on top. */}
+        {(entry.unit.naWindows || []).map((w: any, k: number) => {
+          const bar = computeBar(w.start, w.end || lastRenderedDate, renderedStartDate, renderedDays, dayWidth)
+          if (!bar) return null
+          const referral = w.kind === 'referral'
+          return (
+            <div
+              key={`na-${k}`}
+              className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${referral ? 'border-dashed border-amber-400' : UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
+              style={{ left: bar.left, width: bar.width }}
+              title={`${w.title || 'Unit N/A'}${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
+            >
+              <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
+                N/A · {referral ? 'pending review' : 'out of service'}
+              </span>
+            </div>
+          )
+        })}
+        {/* Primary bars */}
+        {entry.primaryBookings.map((b: any, j: number) => {
+          const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
+          if (!bar) return null
+          const sc = barColor(b.status, b.blindPickup)
+          return (
+            <div
+              key={`p-${j}`}
+              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
+              style={{ left: bar.left, width: bar.width }}
+              onPointerDown={canBindUnit ? (ev) => onBarPointerDown(ev, b, entry.unit) : undefined}
+              onPointerMove={canBindUnit ? onBarPointerMove : undefined}
+              onPointerUp={canBindUnit ? onBarPointerUp : undefined}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                onBarClick(b, entry.unit)
+              }}
+            >
+              <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {/* Backup sub-lane — faded-blue "queued hold" rank-2+ bars. Empty-span
+          clicks delegate to the same asset-row handler. */}
+      {hasBackups && (
+        <div
+          className={`relative h-8 border-b border-gray-100 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
+          onClick={(ev) => onRowClick(entry.unit, ev)}
+        >
+          {grid}
+          {entry.backupBookings.map((b: any, j: number) => {
+            const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
+            if (!bar) return null
+            const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
+            const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
+            return (
+              <div
+                key={`b-${j}`}
+                className="absolute top-1 h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
+                style={{ left: bar.left, width: bar.width }}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  onBackupClick(b, entry.unit, rank)
+                }}
+                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
+              >
+                <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
+                  {rankLabel} · {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
+
 export default function GanttPage() {
   // 2026-07 re-split: unit assignment is SALES (canCreateBooking) — mirrors
   // the server gate on POST /booking-items/[id]/assign. Passed to NewHoldModal
@@ -106,7 +302,14 @@ export default function GanttPage() {
   // endpoints. Dates never change (that's the modal reschedule).
   const dragState = useRef<null | { bookingItemId: string; fromAssetId: string; fromUnit: string; fromCat: string; winStart: string; winEnd: string; label: string; startX: number; startY: number; moved: boolean; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string }>(null)
   const suppressBarClick = useRef(false)
-  const [drag, setDrag] = useState<null | { x: number; y: number; grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string; label: string; fromAssetId: string; fromCat: string; winStart: string; winEnd: string; targetAssetId: string | null; targetUnit: string | null; targetValid: boolean }>(null)
+  // PERF: `drag` state carries per-GESTURE constants + the current target only.
+  // The ghost's x/y live OUTSIDE React (ghostPosRef + direct style.transform on
+  // pointermove), so a frame where the hovered row didn't change renders
+  // NOTHING — the old shape wrote a fresh {x,y,...} object per mousemove and
+  // re-rendered the whole board 60-120×/s.
+  const [drag, setDrag] = useState<null | { grabDX: number; grabDY: number; width: number; height: number; bg: string; border: string; text: string; label: string; fromAssetId: string; fromCat: string; winStart: string; winEnd: string; targetAssetId: string | null; targetUnit: string | null; targetValid: boolean }>(null)
+  const ghostRef = useRef<HTMLDivElement | null>(null)
+  const ghostPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const [dragBusy, setDragBusy] = useState(false)
   const [dragErr, setDragErr] = useState<string | null>(null)
   const [dragBuffer, setDragBuffer] = useState<null | { bookingItemId: string; fromAssetId: string; toAssetId: string; toUnit: string; reason: string }>(null)
@@ -204,6 +407,19 @@ export default function GanttPage() {
     [renderedStartDate, renderedDays],
   )
   const todayOffset = diffDays(renderedStartDate, today)
+  // PERF: per-day-cell metadata computed ONCE per window change. The grid
+  // lanes previously ran `new Date(ds+'T12:00:00').getDay()` in EVERY cell of
+  // EVERY lane on EVERY render (~3.6k Date allocations/frame while dragging).
+  const dayMeta = useMemo<DayMeta[]>(
+    () =>
+      dates.map((ds) => ({
+        ds,
+        weekend: [0, 6].includes(new Date(ds + 'T12:00:00').getDay()),
+        isToday: ds === today,
+        label: fDay(ds),
+      })),
+    [dates, today],
+  )
 
   // Fetch the timeline for the RENDERED range plus a ±7d cushion so
   // bars straddling the edge don't pop in/out as the operator pans.
@@ -236,7 +452,7 @@ export default function GanttPage() {
   //    an existing booking on that unit, the modal opens in BACKUP
   //    mode (per "backup has dibs"); otherwise PRIMARY. Server still
   //    enforces availability — this is just UX. ──
-  function openHoldOnAssetRow(unit: any, e: React.MouseEvent<HTMLDivElement>) {
+  const openHoldOnAssetRow = useCallback((unit: any, e: React.MouseEvent<HTMLDivElement>) => {
     // Creating a hold is a sales action (canCreateBooking). Fleet/warehouse
     // (canAssignAssets-only) view + assign but create nothing — without this
     // gate an empty-row click opened the create-hold modal for fleet (the
@@ -260,11 +476,12 @@ export default function GanttPage() {
       endDate: clickedDate,
       asBackup: !!overlap,
     })
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSetStatus, renderedDays, dayWidth, dates])
 
   // ── Refresh the timeline data after an action. Kept inline so the
   //    fetch URL stays consistent with the initial load. ──
-  function refreshTimeline() {
+  const refreshTimeline = useCallback(() => {
     setLoading(true)
     const params = new URLSearchParams({ from: fetchRange.from, to: fetchRange.to })
     fetch(`/api/timeline-native?${params.toString()}`)
@@ -278,7 +495,7 @@ export default function GanttPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }
+  }, [fetchRange.from, fetchRange.to])
 
   // ── Window paging. ‹ / › step by the current visible width
   //    (totalDays) so a 2W window pages two weeks at a time, a 4W
@@ -557,49 +774,12 @@ export default function GanttPage() {
   // via PATCH /assets/[id]/summary; the older POST /assets/[id]/tier endpoint
   // remains live for API parity but has no UI caller here anymore.)
 
-  // Hit-test the unit row under a screen point (drag-to-reassign). The ghost
-  // + any overlay are pointer-events-none so elementFromPoint sees the row.
-  function unitAtPoint(x: number, y: number): { assetId: string; unit: string } | null {
-    if (typeof document === 'undefined') return null
-    const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-unit-assetid]') as HTMLElement | null
-    if (!el) return null
-    const assetId = el.getAttribute('data-unit-assetid')
-    if (!assetId) return null
-    return { assetId, unit: el.getAttribute('data-unit-name') || '' }
-  }
-
-  // Would a drop of the dragged bar onto this unit SUCCEED? Mirrors the assign
-  // endpoint's HARD blocks so the highlight can't disagree with the real result:
-  //   · different AssetCategory        → reject ("belongs to a different category")
-  //   · any booking overlapping window → reject (over-capacity / backup-has-dibs)
-  //   · N/A window overlapping         → treat as unavailable
-  // Buffer-adjacent (soft, override-able) is left as valid — it can still commit.
-  // Only rows we return true for are tinted green, so green ⇒ the drop works.
-  function isValidDropTarget(unit: any, d: { fromAssetId: string; fromCat: string; winStart: string; winEnd: string }): boolean {
-    if (!unit || unit.assetId === d.fromAssetId) return false
-    if (unit.cat !== d.fromCat) return false
-    const overlaps = (bk: any) => bk && bk.start <= d.winEnd && bk.end >= d.winStart
-    if ((unit.bookings || []).some(overlaps)) return false
-    if ((unit.naWindows || []).some((w: any) => w && w.start <= d.winEnd && (w.end || d.winEnd) >= d.winStart)) return false
-    return true
-  }
-
-  // Per-row tint shown WHILE a bar is being dragged: valid same-category free
-  // rows go green (the one under the cursor gets a ring), invalid rows mute, and
-  // the source row stays neutral (dropping back on it is a no-op).
-  function dropTargetClass(unit: any): string {
-    if (!drag) return ''
-    if (unit.assetId === drag.fromAssetId) return ''
-    if (!isValidDropTarget(unit, drag)) return 'opacity-40'
-    return drag.targetAssetId === unit.assetId ? 'ring-2 ring-inset ring-green-500 bg-green-100/70' : 'bg-green-50/60'
-  }
-
   // Reassign a booking item to a different unit for the SAME dates via the exact
   // endpoints AssignUnitsModal uses (unassign old → assign new). The assign route
   // hard-blocks a fully-assigned item, so the old pick MUST be released first.
   // If binding the new unit then fails, we RESTORE the old assignment so the bar
   // snaps back and the item is never left orphaned. Dates never change here.
-  async function doReassign(bookingItemId: string, fromAssetId: string, toAssetId: string, toUnit: string, bufferOverride = false) {
+  const doReassign = useCallback(async (bookingItemId: string, fromAssetId: string, toAssetId: string, toUnit: string, bufferOverride = false) => {
     const assignUnit = async (assetId: string, override: boolean) => {
       const r = await fetch(`/api/scheduling/booking-items/${bookingItemId}/assign`, {
         method: 'POST',
@@ -652,23 +832,115 @@ export default function GanttPage() {
     } finally {
       setDragBusy(false)
     }
-  }
+  }, [refreshTimeline])
 
+  // Wrapper over the pure module-level computeBar (kept for the non-row call
+  // sites: task band chips, job view, needs-assign lane).
   function getBar(start: string, end: string) {
-    // Position bars in the RENDERED range, not the visible range —
-    // a bar that lives in the buffer (off-visible-screen) should
-    // still render so trackpad pan reveals it as the operator
-    // scrolls toward it. The earlier `totalDays` clamp clipped
-    // anything outside the visible span and is what made pan
-    // pointless: nothing existed to scroll into.
-    const s = Math.max(0, diffDays(renderedStartDate, start))
-    const e = Math.min(renderedDays - 1, diffDays(renderedStartDate, end))
-    if (e < 0 || s >= renderedDays) return null
-    return { left: s * dayWidth, width: Math.max((e - s + 1) * dayWidth - 2, dayWidth - 2) }
+    return computeBar(start, end, renderedStartDate, renderedDays, dayWidth)
   }
 
   const allCats = [...new Set(units.map(u => u.cat))].sort()
   const filteredUnits = catFilter === 'all' ? units : units.filter(u => u.cat === catFilter)
+
+  // Drop-target validity for the WHOLE board, computed ONCE per drag gesture
+  // (not per row per frame). Rows derive a DropState string from this map —
+  // the memoized row re-renders only when its own state flips.
+  const dragGestureKey = drag ? `${drag.fromAssetId}|${drag.fromCat}|${drag.winStart}|${drag.winEnd}` : null
+  const dropValidity = useMemo(() => {
+    if (!drag) return null
+    const m = new Map<string, boolean>()
+    for (const u of filteredUnits) m.set(u.assetId, isValidDropTarget(u, drag))
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragGestureKey, filteredUnits])
+
+  function dropStateFor(assetId: string): DropState {
+    if (!drag || !dropValidity) return 'none'
+    if (assetId === drag.fromAssetId) return 'source'
+    if (!dropValidity.get(assetId)) return 'invalid'
+    return drag.targetAssetId === assetId ? 'valid-hover' : 'valid'
+  }
+
+  // ── Stable handlers for the memoized TimelineUnitRow (fix 4). All close
+  //    over refs/setters (stable) so non-target rows skip re-render. ──
+  const onBarPointerDown = useCallback((ev: React.PointerEvent<HTMLDivElement>, b: any, unit: any) => {
+    ev.stopPropagation()
+    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+    ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+    const sc = barColor(b.status, b.blindPickup)
+    dragState.current = {
+      bookingItemId: b.bookingItemId,
+      fromAssetId: unit.assetId,
+      fromUnit: unit.unitName,
+      // Source unit's category IS the booking's category (assign enforces
+      // asset.categoryId === bookingItem.categoryId); its dates are the drop
+      // window — both pre-mark valid target rows.
+      fromCat: unit.cat,
+      winStart: b.start,
+      winEnd: b.end,
+      label: `${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      moved: false,
+      // Where inside the bar the grab happened, so the ghost tracks the
+      // cursor from that point. Viewport coords → the fixed ghost +
+      // elementFromPoint hit-test both account for board scroll automatically.
+      grabDX: ev.clientX - rect.left,
+      grabDY: ev.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+      bg: sc.bg,
+      border: sc.border,
+      text: sc.text,
+    }
+  }, [])
+
+  const onBarPointerMove = useCallback((ev: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragState.current
+    if (!d) return
+    if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
+    d.moved = true
+    // Per-frame: move the ghost DIRECTLY (no React render).
+    ghostPosRef.current = { x: ev.clientX, y: ev.clientY }
+    if (ghostRef.current) {
+      ghostRef.current.style.transform = `translate(${ev.clientX - d.grabDX}px, ${ev.clientY - d.grabDY}px)`
+    }
+    const tgt = unitAtPoint(ev.clientX, ev.clientY)
+    const tgtId = tgt?.assetId ?? null
+    // State updates ONLY when the hovered target row changes (or the first
+    // moved frame) — returning prev makes React skip the render entirely.
+    setDrag((prev) => {
+      if (prev && prev.targetAssetId === tgtId) return prev
+      const tgtUnit = tgt ? filteredUnits.find((u: any) => u.assetId === tgt.assetId) : null
+      const targetValid = tgt ? isValidDropTarget(tgtUnit, d) : false
+      return { grabDX: d.grabDX, grabDY: d.grabDY, width: d.width, height: d.height, bg: d.bg, border: d.border, text: d.text, label: d.label, fromAssetId: d.fromAssetId, fromCat: d.fromCat, winStart: d.winStart, winEnd: d.winEnd, targetAssetId: tgtId, targetUnit: tgt?.unit ?? null, targetValid }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredUnits])
+
+  const onBarPointerUp = useCallback((ev: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragState.current
+    dragState.current = null
+    ;(ev.currentTarget as HTMLElement).releasePointerCapture?.(ev.pointerId)
+    setDrag(null)
+    if (!d || !d.moved) return // no drag → let onClick open the detail modal
+    suppressBarClick.current = true // this was a drag; swallow the trailing click
+    setTimeout(() => { suppressBarClick.current = false }, 0)
+    const tgt = unitAtPoint(ev.clientX, ev.clientY)
+    if (tgt && tgt.assetId && tgt.assetId !== d.fromAssetId) {
+      void doReassign(d.bookingItemId, d.fromAssetId, tgt.assetId, tgt.unit)
+    }
+  }, [doReassign])
+
+  const onBarClick = useCallback((b: any, unit: any) => {
+    if (suppressBarClick.current) { suppressBarClick.current = false; return }
+    setSelected({ ...b, unitName: unit.unitName, isUnit: true, holdRank: 1 })
+  }, [])
+
+  const onBackupClick = useCallback((b: any, unit: any, rank: number) => {
+    setSelected({ ...b, unitName: unit.unitName, isUnit: true, holdRank: rank, isBackup: true })
+  }, [])
 
   // ── Booked-in-window sort + divider rows ──
   // Two-tier: any asset with a booking overlapping the CURRENTLY
@@ -994,19 +1266,15 @@ export default function GanttPage() {
           <div className="flex-shrink-0" style={{ width: renderedDays * dayWidth }}>
             {/* Sticky date header */}
             <div className="flex h-10 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
-              {dates.map(ds => {
-                const isToday = ds === today
-                const isWeekend = [0,6].includes(new Date(ds + 'T12:00:00').getDay())
-                return (
-                  <div
-                    key={ds}
-                    style={{ width: dayWidth, minWidth: dayWidth }}
-                    className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-200 ${isToday ? 'bg-blue-50 font-bold text-blue-600' : isWeekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
-                  >
-                    {fDay(ds)}
-                  </div>
-                )
-              })}
+              {dayMeta.map(d => (
+                <div
+                  key={d.ds}
+                  style={{ width: dayWidth, minWidth: dayWidth }}
+                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-200 ${d.isToday ? 'bg-blue-50 font-bold text-blue-600' : d.weekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
+                >
+                  {d.label}
+                </div>
+              ))}
             </div>
 
             {/* Rows + today line */}
@@ -1035,11 +1303,11 @@ export default function GanttPage() {
                       >
                         {/* Grid */}
                         <div className="absolute inset-0 flex pointer-events-none">
-                          {dates.map(ds => (
+                          {dayMeta.map(d => (
                             <div
-                              key={ds}
+                              key={d.ds}
                               style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                              className={`flex-shrink-0 border-r border-gray-200 ${d.weekend ? 'bg-gray-200/60' : ''}`}
                             />
                           ))}
                         </div>
@@ -1074,185 +1342,36 @@ export default function GanttPage() {
                       </div>
                     )
                   }
-                  const hasBackups = entry.backupBookings.length > 0
                   return (
-                    <div key={`u-${entry.unit.assetId}`}>
-                      {/* Main row — primary bars only.
-                          Row-level onClick fires on empty-span clicks
-                          (bar onClicks stopPropagation). Native-only
-                          per the brief — gated inside openHoldOnAssetRow. */}
-                      <div
-                        data-unit-assetid={entry.unit.assetId}
-                        data-unit-name={entry.unit.unitName}
-                        className={`relative h-8 border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${dropTargetClass(entry.unit)}`}
-                        onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
-                      >
-                        {/* Grid */}
-                        <div className="absolute inset-0 flex pointer-events-none">
-                          {dates.map(ds => (
-                            <div
-                              key={ds}
-                              style={{ width: dayWidth, minWidth: dayWidth }}
-                              className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
-                            />
-                          ))}
-                        </div>
-                        {/* Unit N/A — open maintenance windows (grey, informational,
-                            click-through so the +Hold row gesture still works). Drawn
-                            before bookings so a real booking bar sits on top. */}
-                        {(entry.unit.naWindows || []).map((w: any, k: number) => {
-                          const bar = getBar(w.start, w.end || dates[dates.length - 1])
-                          if (!bar) return null
-                          // Sales referral (pending fleet review) → dashed amber
-                          // edge; fleet/genuine out-of-service → plain grey. Both grey fill.
-                          const referral = w.kind === 'referral'
-                          return (
-                            <div
-                              key={`na-${k}`}
-                              className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${referral ? 'border-dashed border-amber-400' : UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
-                              style={{ left: bar.left, width: bar.width }}
-                              title={`${w.title || 'Unit N/A'}${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
-                            >
-                              <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
-                                N/A · {referral ? 'pending review' : 'out of service'}
-                              </span>
-                            </div>
-                          )
-                        })}
-                        {/* Primary bars */}
-                        {entry.primaryBookings.map((b: any, j: number) => {
-                          const bar = getBar(b.start, b.end)
-                          if (!bar) return null
-                          const sc = barColor(b.status, b.blindPickup)
-                          return (
-                            <div
-                              key={`p-${j}`}
-                              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
-                              style={{ left: bar.left, width: bar.width }}
-                              onPointerDown={canBindUnit ? (ev) => {
-                                ev.stopPropagation()
-                                const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
-                                ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-                                dragState.current = {
-                                  bookingItemId: b.bookingItemId,
-                                  fromAssetId: entry.unit.assetId,
-                                  fromUnit: entry.unit.unitName,
-                                  // Source unit's category IS the booking's category (assign
-                                  // enforces asset.categoryId === bookingItem.categoryId), and
-                                  // its dates are the drop window — both used to pre-mark
-                                  // valid target rows.
-                                  fromCat: entry.unit.cat,
-                                  winStart: b.start,
-                                  winEnd: b.end,
-                                  label: `${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`,
-                                  startX: ev.clientX,
-                                  startY: ev.clientY,
-                                  moved: false,
-                                  // Where inside the bar the grab happened, so the ghost
-                                  // tracks the cursor from that point (not snapping its
-                                  // left/top edge to the cursor). Viewport coords → the
-                                  // fixed ghost + elementFromPoint hit-test both account
-                                  // for board scroll automatically.
-                                  grabDX: ev.clientX - rect.left,
-                                  grabDY: ev.clientY - rect.top,
-                                  width: rect.width,
-                                  height: rect.height,
-                                  bg: sc.bg,
-                                  border: sc.border,
-                                  text: sc.text,
-                                }
-                              } : undefined}
-                              onPointerMove={canBindUnit ? (ev) => {
-                                const d = dragState.current
-                                if (!d) return
-                                if (!d.moved && Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
-                                d.moved = true
-                                const tgt = unitAtPoint(ev.clientX, ev.clientY)
-                                const tgtUnit = tgt ? filteredUnits.find((u: any) => u.assetId === tgt.assetId) : null
-                                const targetValid = tgt ? isValidDropTarget(tgtUnit, d) : false
-                                setDrag({ x: ev.clientX, y: ev.clientY, grabDX: d.grabDX, grabDY: d.grabDY, width: d.width, height: d.height, bg: d.bg, border: d.border, text: d.text, label: d.label, fromAssetId: d.fromAssetId, fromCat: d.fromCat, winStart: d.winStart, winEnd: d.winEnd, targetAssetId: tgt?.assetId ?? null, targetUnit: tgt?.unit ?? null, targetValid })
-                              } : undefined}
-                              onPointerUp={canBindUnit ? (ev) => {
-                                const d = dragState.current
-                                dragState.current = null
-                                ;(ev.currentTarget as HTMLElement).releasePointerCapture?.(ev.pointerId)
-                                setDrag(null)
-                                if (!d || !d.moved) return // no drag → let onClick open the detail modal
-                                suppressBarClick.current = true // this was a drag; swallow the trailing click
-                                setTimeout(() => { suppressBarClick.current = false }, 0)
-                                const tgt = unitAtPoint(ev.clientX, ev.clientY)
-                                if (tgt && tgt.assetId && tgt.assetId !== d.fromAssetId) {
-                                  void doReassign(d.bookingItemId, d.fromAssetId, tgt.assetId, tgt.unit)
-                                }
-                              } : undefined}
-                              onClick={(ev) => {
-                                ev.stopPropagation()
-                                if (suppressBarClick.current) { suppressBarClick.current = false; return }
-                                setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: 1 })
-                              }}
-                            >
-                              <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                                {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {/* Backup sub-lane — faded-blue "queued hold" rank-2+ bars
-                          stacked here (blue, not grey, so grey now uniquely means
-                          unavailable). Empty-span clicks delegate to the same
-                          asset-row handler; overlap detection picks the mode. */}
-                      {hasBackups && (
-                        <div
-                          className={`relative h-8 border-b border-gray-100 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
-                          onClick={(ev) => openHoldOnAssetRow(entry.unit, ev)}
-                        >
-                          {/* Grid (lighter on the sub-lane) */}
-                          <div className="absolute inset-0 flex pointer-events-none">
-                            {dates.map(ds => (
-                              <div
-                                key={ds}
-                                style={{ width: dayWidth, minWidth: dayWidth }}
-                                className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
-                              />
-                            ))}
-                          </div>
-                          {entry.backupBookings.map((b: any, j: number) => {
-                            const bar = getBar(b.start, b.end)
-                            if (!bar) return null
-                            const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
-                            const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
-                            return (
-                              <div
-                                key={`b-${j}`}
-                                className="absolute top-1 h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
-                                style={{ left: bar.left, width: bar.width }}
-                                onClick={(ev) => {
-                                  ev.stopPropagation()
-                                  setSelected({ ...b, unitName: entry.unit.unitName, isUnit: true, holdRank: rank, isBackup: true })
-                                }}
-                                title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
-                              >
-                                <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
-                                  {rankLabel} · {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <TimelineUnitRow
+                      key={`u-${entry.unit.assetId}`}
+                      entry={entry}
+                      dayMeta={dayMeta}
+                      dayWidth={dayWidth}
+                      renderedStartDate={renderedStartDate}
+                      renderedDays={renderedDays}
+                      lastRenderedDate={dates[dates.length - 1]}
+                      canBindUnit={canBindUnit}
+                      canSetStatus={canSetStatus}
+                      dropState={dropStateFor(entry.unit.assetId)}
+                      onRowClick={openHoldOnAssetRow}
+                      onBarPointerDown={onBarPointerDown}
+                      onBarPointerMove={onBarPointerMove}
+                      onBarPointerUp={onBarPointerUp}
+                      onBarClick={onBarClick}
+                      onBackupClick={onBackupClick}
+                    />
                   )
                 })
               ) : (
                 jobs.map((job, i) => (
                   <div key={i} className="relative h-8 border-b border-gray-100">
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {dates.map(ds => (
+                      {dayMeta.map(d => (
                         <div
-                          key={ds}
+                          key={d.ds}
                           style={{ width: dayWidth, minWidth: dayWidth }}
-                          className={`flex-shrink-0 border-r border-gray-200 ${[0,6].includes(new Date(ds + 'T12:00:00').getDay()) ? 'bg-gray-200/60' : ''}`}
+                          className={`flex-shrink-0 border-r border-gray-200 ${d.weekend ? 'bg-gray-200/60' : ''}`}
                         />
                       ))}
                     </div>
@@ -1577,14 +1696,24 @@ export default function GanttPage() {
       )}
 
       {/* Drag-to-reassign ghost — follows the pointer; pointer-events-none so the
-          row hit-test (elementFromPoint) sees the unit rows underneath. */}
+          row hit-test (elementFromPoint) sees the unit rows underneath.
+          PERF: position lives OUTSIDE React — the callback ref seeds the
+          transform from ghostPosRef and pointermove mutates style.transform
+          directly, so React only touches this node when the TARGET changes
+          (ring color / arrow label). */}
       {drag && (() => {
         const overTarget = !!drag.targetAssetId && drag.targetAssetId !== drag.fromAssetId
         const ring = drag.targetValid ? 'ring-green-500' : overTarget ? 'ring-rose-400' : 'ring-gray-300'
         return (
           <div
+            ref={(el) => {
+              ghostRef.current = el
+              if (el) {
+                el.style.transform = `translate(${ghostPosRef.current.x - drag.grabDX}px, ${ghostPosRef.current.y - drag.grabDY}px)`
+              }
+            }}
             className={`fixed z-[60] pointer-events-none rounded-md border ${drag.bg} ${drag.border} flex items-center px-1.5 overflow-hidden opacity-80 shadow-lg ring-2 ${ring}`}
-            style={{ left: drag.x - drag.grabDX, top: drag.y - drag.grabDY, width: drag.width, height: drag.height }}
+            style={{ left: 0, top: 0, width: drag.width, height: drag.height, willChange: 'transform' }}
           >
             <span className={`text-[9px] font-bold ${drag.text} truncate whitespace-nowrap`}>
               {drag.label}{overTarget ? ` ${drag.targetValid ? '→' : '✕'} ${drag.targetUnit}` : ''}
