@@ -6,6 +6,7 @@ import {
   LCDW_ADDENDUM,
 } from '@/lib/contracts/contractClauses'
 import { SWatermark } from '@/components/site/SWatermark'
+import { AgreementEmailGate } from '@/components/site/AgreementEmailGate'
 
 /**
  * Public /rental-agreement — interactive review page for the approved rental
@@ -63,20 +64,27 @@ export default function RentalAgreementPage() {
       {/* Hero band — matches the public site's dark editorial band. */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />
-        <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16">
-          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Forms
+        <div className="relative max-w-[1200px] mx-auto px-5 py-12 sm:py-16 md:flex md:items-start md:justify-between md:gap-10">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Forms
+            </div>
+            <h1 className="font-black tracking-tight leading-[0.95] text-[38px] sm:text-[52px] md:text-[60px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+              Rental Agreement
+            </h1>
+            <p className="mt-4 max-w-[58ch] text-[#cfc9bd] text-base leading-relaxed">
+              The full SirReel Studio Rentals agreement — rental policies, the numbered terms &amp;
+              conditions, the fleet agreement, and the Limited Collision Damage Waiver addendum.
+              Review it below, or take a copy with you.
+            </p>
+            <div className="mt-6">
+              <DownloadButton />
+            </div>
           </div>
-          <h1 className="font-black tracking-tight leading-[0.95] text-[38px] sm:text-[52px] md:text-[60px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Rental Agreement
-          </h1>
-          <p className="mt-4 max-w-[58ch] text-[#cfc9bd] text-base leading-relaxed">
-            The full SirReel Studio Rentals agreement — rental policies, the numbered terms &amp;
-            conditions, the fleet agreement, and the Limited Collision Damage Waiver addendum.
-            Review it below, or take a copy with you.
-          </p>
-          <div className="mt-6">
-            <DownloadButton />
+          {/* Email gate — upper-right. The response is a constant neutral
+              message; all branching happens inside the emailed link. */}
+          <div className="mt-8 md:mt-1 md:flex-none">
+            <AgreementEmailGate />
           </div>
         </div>
       </section>

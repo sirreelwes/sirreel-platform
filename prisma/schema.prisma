@@ -3656,6 +3656,31 @@ model Inquiry {
   @@map("sr_inquiries")
 }
 
+// ── Agreement entry tokens (public rental-agreement email gate) ─────
+// Sibling of WelcomeInvite, NOT an extension: WelcomeInvite requires an
+// inquiryId + personId at mint (agent-qualified inquiry) and is 1:1 with an
+// inquiry, while these tokens are minted from a bare EMAIL on the public page
+// — Branch A needs one CONFIRM_JOB token PER open job and Branch C's
+// START_NEW exists before any Person/Inquiry does. Loose string ids (no FKs)
+// keep it purely additive. Job creation itself still flows through the
+// WelcomeInvite click-to-create path (createdInquiryId → WelcomeInvite →
+// startWelcomeInvite) so idempotency lives in ONE place.
+model AgreementEntry {
+  id               String    @id @default(uuid())
+  token            String    @unique // 256-bit hex
+  email            String
+  kind             String // 'CONFIRM_JOB' | 'START_NEW'
+  personId         String?   @map("person_id")
+  jobId            String?   @map("job_id") // CONFIRM_JOB: the job this link confirms
+  createdInquiryId String?   @map("created_inquiry_id") // START_NEW: stamped on submit
+  expiresAt        DateTime  @map("expires_at")
+  usedAt           DateTime? @map("used_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("sr_agreement_entries")
+}
+
 // ── Welcome / Job Begin invite ──────────────────────────────────────
 // Minted when the agent SENDS the welcome email (explicit review + send).
 // The Job/Order/portal are created ONLY when the client presses "Get
