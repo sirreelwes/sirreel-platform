@@ -2409,6 +2409,12 @@ model InventoryItem {
   model           String?
   specs           String?             @db.Text
   dimensions      String?
+  // Color-variant grouping (2026-07, tents first): items sharing a
+  // variantGroupKey render as ONE public-catalog card with color swatches;
+  // color labels each swatch. Only COLOR is a variant — sizes stay separate
+  // groups/cards. Null = standalone item (renders exactly as before).
+  color           String?
+  variantGroupKey String?             @map("variant_group_key")
   needsReview     Boolean             @default(false) @map("needs_review")
   rwLastSyncedAt  DateTime?           @map("rw_last_synced_at")
   rwId            String?             @map("rw_id")

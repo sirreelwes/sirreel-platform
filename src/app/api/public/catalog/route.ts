@@ -61,6 +61,8 @@ export async function GET(req: NextRequest) {
       includedFree: true,
       imageUrl: true,
       type: true,
+      color: true,
+      variantGroupKey: true,
       category: {
         select: { id: true, slug: true, name: true, sortOrder: true },
       },
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
     slug: string
     name: string
     sortOrder: number
-    items: Array<{ id: string; name: string; price: number; included: boolean; image: string | null; type: string; category: string }>
+    items: Array<{ id: string; name: string; price: number; included: boolean; image: string | null; type: string; category: string; color: string | null; variantGroupKey: string | null }>
   }
   const groups = new Map<string, CatGroup>()
   for (const it of items) {
@@ -126,6 +128,10 @@ export async function GET(req: NextRequest) {
       image: it.imageUrl ? `/api/public/catalog-image/supply/${it.id}` : null,
       type: it.type, // EQUIPMENT | EXPENDABLE | … (catalog-side authority)
       category: it.category.slug,
+      // Color-variant grouping — items sharing variantGroupKey render as one
+      // card with color swatches on the form; null = standalone card.
+      color: it.color,
+      variantGroupKey: it.variantGroupKey,
     })
     groups.set(it.category.id, slot)
   }

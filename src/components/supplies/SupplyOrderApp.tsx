@@ -47,6 +47,37 @@ interface CatalogItem {
   image?: string | null
   type: string
   category: string
+  /** Color-variant grouping: items sharing variantGroupKey render as ONE card
+   *  with color swatches (color labels the swatch). Null/absent = standalone. */
+  color?: string | null
+  variantGroupKey?: string | null
+}
+
+// Swatch colors for variant cards. Unknown color names fall back to a neutral
+// square carrying the color's initial.
+const SWATCH_HEX: Record<string, string> = {
+  black: '#1a1a1c',
+  blue: '#2563eb',
+  white: '#ffffff',
+  grey: '#9ca3af',
+  gray: '#9ca3af',
+  red: '#dc2626',
+  green: '#16a34a',
+  yellow: '#eab308',
+  orange: '#ea580c',
+  tan: '#d2b48c',
+}
+
+/** Card title for a variant group: the variant's name minus its color word
+ *  (so "Caravan Canopy Tent - 10' x 15', Black" → "Caravan Canopy Tent -
+ *  10' x 15'"). Display-only — cart lines keep the variant's full name. */
+function variantGroupTitle(it: CatalogItem): string {
+  if (!it.color) return it.name
+  const stripped = it.name
+    .replace(new RegExp(`[,\\s-]*\\b${it.color}\\b`, 'i'), '')
+    .replace(/[,\s-]+$/, '')
+    .trim()
+  return stripped || it.name
 }
 
 // Default per-line dates when the agent hits Add. Reads from the
@@ -1015,40 +1046,71 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     </span>
                   </div>
                   <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(234px, 1fr))' }}>
-                    {cat.items.map((it) => {
-                      // Across the cart, a single item can appear on
-                      // multiple lines with different dates (post-
-                      // commit-2). The catalog tile shows the summed
-                      // qty for the "in cart" badge; the stepper +/-
-                      // targets the first line (insertion order). UI
-                      // for multi-line per-item edits lives in the
-                      // cart panel rework (commit 5).
-                      const slot = cartByItemId.get(it.id)
-                      const firstLineId = slot?.lines[0]?.cartLineId ?? null
-                      return (
-                        <ItemCard
-                          key={it.id}
-                          item={it}
-                          qty={slot?.totalQty ?? 0}
-                          onAdd={() => {
-                            const dates = defaultDatesForAdd(form)
-                            addToCart({
-                              itemKind: 'SUPPLY',
-                              itemId: it.id,
-                              name: it.name,
-                              price: it.price,
-                              type: it.type,
-                              category: it.category,
-                              pickupDate: dates.pickupDate,
-                              returnDate: dates.returnDate,
-                            })
-                          }}
-                          onSetQty={(q) => {
-                            if (firstLineId) setQty(firstLineId, q)
-                          }}
-                        />
+                    {(() => {
+                      // Group color variants (shared variantGroupKey) into ONE
+                      // card with swatches; everything else renders standalone
+                      // exactly as before. Groups keep the position of their
+                      // first variant in the section's alphabetical order.
+                      type RenderUnit =
+                        | { kind: 'item'; item: CatalogItem }
+                        | { kind: 'group'; key: string; variants: CatalogItem[] }
+                      const units: RenderUnit[] = []
+                      const groupIdx = new Map<string, number>()
+                      for (const it of cat.items as CatalogItem[]) {
+                        if (it.variantGroupKey) {
+                          const gi = groupIdx.get(it.variantGroupKey)
+                          if (gi == null) {
+                            groupIdx.set(it.variantGroupKey, units.length)
+                            units.push({ kind: 'group', key: it.variantGroupKey, variants: [it] })
+                          } else {
+                            ;(units[gi] as { kind: 'group'; variants: CatalogItem[] }).variants.push(it)
+                          }
+                        } else {
+                          units.push({ kind: 'item', item: it })
+                        }
+                      }
+                      // Cart wiring shared by both card kinds. Across the
+                      // cart, a single item can appear on multiple lines with
+                      // different dates; the tile shows the summed qty and the
+                      // stepper targets the first line (insertion order).
+                      const qtyFor = (id: string) => cartByItemId.get(id)?.totalQty ?? 0
+                      const addItem = (it: CatalogItem) => {
+                        const dates = defaultDatesForAdd(form)
+                        addToCart({
+                          itemKind: 'SUPPLY',
+                          itemId: it.id,
+                          name: it.name,
+                          price: it.price,
+                          type: it.type,
+                          category: it.category,
+                          pickupDate: dates.pickupDate,
+                          returnDate: dates.returnDate,
+                        })
+                      }
+                      const setItemQty = (id: string, q: number) => {
+                        const firstLineId = cartByItemId.get(id)?.lines[0]?.cartLineId ?? null
+                        if (firstLineId) setQty(firstLineId, q)
+                      }
+                      return units.map((u) =>
+                        u.kind === 'item' ? (
+                          <ItemCard
+                            key={u.item.id}
+                            item={u.item}
+                            qty={qtyFor(u.item.id)}
+                            onAdd={() => addItem(u.item)}
+                            onSetQty={(q) => setItemQty(u.item.id, q)}
+                          />
+                        ) : (
+                          <VariantCard
+                            key={`vg-${u.key}`}
+                            variants={u.variants}
+                            qtyFor={qtyFor}
+                            onAdd={addItem}
+                            onSetQty={setItemQty}
+                          />
+                        ),
                       )
-                    })}
+                    })()}
                   </div>
                 </section>
                 )
@@ -1401,6 +1463,103 @@ function ItemCard({
       ) : (
         <button
           onClick={onAdd}
+          className="flex-none border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[38px] min-w-[62px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform"
+          style={{ fontFamily: 'Archivo, sans-serif' }}
+        >
+          + Add
+        </button>
+      )}
+    </div>
+  )
+}
+
+// VariantCard — ONE card for a color-variant group (shared variantGroupKey):
+// the ItemCard shell plus a row of tappable color swatches. Tapping a swatch
+// selects that color; +Add / the qty stepper operate on the SELECTED variant's
+// InventoryItem, so the cart tracks the exact color chosen (line name keeps
+// the variant's full name incl. color). Image + price follow the selection
+// (variants can price differently, e.g. the white 10x15 canopy).
+function VariantCard({
+  variants,
+  qtyFor,
+  onAdd,
+  onSetQty,
+}: {
+  variants: CatalogItem[]
+  qtyFor: (id: string) => number
+  onAdd: (item: CatalogItem) => void
+  onSetQty: (id: string, q: number) => void
+}) {
+  const [selectedId, setSelectedId] = useState(variants[0].id)
+  const selected = variants.find((v) => v.id === selectedId) ?? variants[0]
+  const qty = qtyFor(selected.id)
+  const inCart = qty > 0
+  const title = variantGroupTitle(variants[0])
+  const isExp = selected.type === 'EXPENDABLE'
+  const unitTxt = isExp ? 'each' : '/day'
+  // Prefer the selected variant's photo; fall back to any variant's.
+  const image = selected.image ?? variants.find((v) => v.image)?.image ?? null
+
+  return (
+    <div
+      className={`bg-white rounded-[11px] p-3 pl-3.5 flex items-center gap-2.5 shadow-sm transition-all ${
+        inCart ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
+      }`}
+    >
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image}
+          alt={`${title} — ${selected.color ?? ''}`}
+          loading="lazy"
+          className="flex-none w-11 h-11 rounded-[8px] object-cover bg-[#f0eadb] border border-[#e4dfd4]"
+        />
+      ) : (
+        <div className="flex-none w-11 h-11 rounded-[8px] bg-[#f6efdc] border border-[#e9e1cc] flex items-center justify-center">
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#c39a3f" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+          </svg>
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-[14.5px] leading-[1.22] break-words">{title}</div>
+        <div className="font-semibold text-[12.5px] text-[#8b857a] mt-0.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+          <b className="text-[#0c0c0d] font-extrabold text-[14px]">{fmtMoney(selected.price)}</b> {unitTxt}
+        </div>
+        {/* Color swatches — tap to pick the variant. */}
+        <div className="flex items-center gap-1.5 mt-1.5">
+          {variants.map((v) => {
+            const hex = SWATCH_HEX[(v.color ?? '').toLowerCase()] ?? null
+            const active = v.id === selected.id
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSelectedId(v.id)}
+                title={v.color ?? 'Variant'}
+                aria-label={`Color: ${v.color ?? 'variant'}`}
+                aria-pressed={active}
+                className={`w-5 h-5 rounded-[5px] border flex-none flex items-center justify-center transition-all ${
+                  active ? 'ring-2 ring-[#c39a3f] ring-offset-1 border-[#c39a3f]' : 'border-[#cdc7b9] hover:border-[#0c0c0d]'
+                }`}
+                style={hex ? { background: hex } : { background: '#f0eadb' }}
+              >
+                {!hex && <span className="text-[9px] font-bold text-[#8b857a]">{(v.color ?? '?').slice(0, 1)}</span>}
+              </button>
+            )
+          })}
+          <span className="text-[10px] text-[#8b857a] ml-0.5">{selected.color}</span>
+        </div>
+      </div>
+      {inCart ? (
+        <div className="flex-none flex items-center border-[1.5px] border-[#c39a3f] rounded-[10px] overflow-hidden h-[38px]">
+          <button onClick={() => onSetQty(selected.id, qty - 1)} className="w-[34px] h-full bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]" aria-label="Decrease">−</button>
+          <span className="min-w-[34px] text-center font-extrabold text-[15px]" style={{ fontFamily: 'Archivo, sans-serif' }}>{qty}</span>
+          <button onClick={() => onSetQty(selected.id, qty + 1)} className="w-[34px] h-full bg-white text-[#a37f2c] text-xl font-bold hover:bg-[#fbf6ea]" aria-label="Increase">+</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => onAdd(selected)}
           className="flex-none border-[1.5px] border-[#0c0c0d] bg-[#0c0c0d] text-white rounded-[10px] h-[38px] min-w-[62px] px-3 font-bold text-[13px] tracking-wide hover:-translate-y-0.5 transition-transform"
           style={{ fontFamily: 'Archivo, sans-serif' }}
         >
