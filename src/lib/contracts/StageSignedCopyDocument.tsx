@@ -2,6 +2,7 @@ import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { STUDIO_TERMS } from '@/components/portal-v2/terms'
 import { stageAreaLabel } from './stageAreas'
+import { WORDMARK_WHITE_DATA_URI } from './brandAssets'
 import {
   STRYKER_MMA_TITLE,
   STRYKER_EXHIBIT_A,
@@ -17,8 +18,13 @@ import {
  * Hospital-Set jobs) the full populated Stryker Master Media Use
  * Agreement with its own signature block, so the copy is self-contained.
  *
- * Parallels StageContractDocument.tsx (the Order-flow pre-signed PDF)
- * but renders the token-portal signing record instead.
+ * Visual language (July 2026 restyle): branded editorial — dark
+ * repeating header with the REAL white wordmark (embedded via
+ * brandAssets.ts, never typed as text), gold-rule accents matching the
+ * portal/email treatment, Times serif headings, formal execution blocks
+ * for signatures, and a distinct title panel giving the Stryker MMA a
+ * clear visual break as its own agreement. PRESENTATION ONLY — every
+ * legal string, value, timestamp, and signature datum is unchanged.
  */
 
 export interface StageSignedCopyProps {
@@ -59,66 +65,180 @@ export interface StageSignedCopyProps {
   } | null
 }
 
-const C = { ink: '#111111', muted: '#555555', faint: '#888888', rule: '#cccccc', gold: '#8a6a1a' }
+const C = {
+  ink: '#111111',
+  muted: '#555555',
+  faint: '#888888',
+  rule: '#d9d7d2',
+  dark: '#0a0a0a',
+  gold: '#D4A547',
+  goldInk: '#8a6a1a',
+  panel: '#f8f7f4',
+}
+
+const SERIF = 'Times-Roman'
+const SERIF_BOLD = 'Times-Bold'
 
 const styles = StyleSheet.create({
+  // NOTE: no lineHeight on the page style — react-pdf 4.5.1 silently
+  // drops dynamic (`render`-prop) text, e.g. the Page X of Y footer,
+  // when lineHeight is inherited from the page. Line height lives on
+  // the individual content styles below instead.
   page: {
-    paddingTop: 40,
-    paddingBottom: 56,
-    paddingHorizontal: 44,
+    paddingTop: 92,
+    paddingBottom: 72,
+    paddingHorizontal: 52,
     fontFamily: 'Helvetica',
     fontSize: 9.5,
-    lineHeight: 1.45,
     color: C.ink,
   },
-  brandRow: {
+
+  // ── Repeating dark brand band ─────────────────────────────────────
+  band: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 62,
+    backgroundColor: C.dark,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    borderBottomWidth: 1.5,
-    borderBottomColor: C.ink,
-    paddingBottom: 8,
-    marginBottom: 16,
+    paddingHorizontal: 52,
   },
-  brandName: { fontFamily: 'Helvetica-Bold', fontSize: 17 },
-  brandSub: { fontSize: 8.5, color: C.muted, marginTop: 2 },
-  docTitle: { fontFamily: 'Helvetica-Bold', fontSize: 11, textAlign: 'right' },
-  docDate: { fontSize: 8.5, color: C.muted, marginTop: 2, textAlign: 'right' },
-  sectionTitle: { fontFamily: 'Helvetica-Bold', fontSize: 10.5, marginTop: 14, marginBottom: 6 },
-  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 },
-  metaCell: { width: '50%', marginBottom: 6 },
-  metaLabel: { fontSize: 7.5, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.5 },
-  metaValue: { fontFamily: 'Helvetica-Bold', fontSize: 9.5, marginTop: 1 },
-  para: { marginBottom: 6 },
-  paraBold: { fontFamily: 'Helvetica-Bold' },
-  notes: { marginTop: 2, marginBottom: 6, color: C.muted },
-  sigBlock: {
-    marginTop: 16,
-    paddingTop: 10,
-    borderTopWidth: 1,
+  bandRule: {
+    position: 'absolute',
+    top: 62,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: C.gold,
+  },
+  wordmark: { width: 108, height: 26, objectFit: 'contain' },
+  bandRight: { flexDirection: 'column', alignItems: 'flex-end' },
+  docTitle: { fontFamily: SERIF_BOLD, fontSize: 11, color: '#ffffff', textAlign: 'right' },
+  docDate: { fontSize: 8, color: C.gold, marginTop: 3, textAlign: 'right', letterSpacing: 0.4 },
+
+  // ── Repeating footer ──────────────────────────────────────────────
+  footerWrap: {
+    position: 'absolute',
+    bottom: 26,
+    left: 52,
+    right: 52,
+    borderTopWidth: 0.75,
     borderTopColor: C.rule,
+    paddingTop: 7,
   },
-  sigLabel: { fontSize: 7.5, color: C.gold, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4, fontFamily: 'Helvetica-Bold' },
-  sigImage: { width: 180, height: 45, objectFit: 'contain', alignSelf: 'flex-start' },
-  sigLine: { width: 220, borderBottomWidth: 1, borderBottomColor: C.ink, marginTop: 2, marginBottom: 3 },
-  sigMeta: { fontSize: 8.5, color: C.muted },
-  exhibitRow: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: C.rule, paddingVertical: 3 },
-  exhibitHead: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.ink, paddingBottom: 3, marginTop: 4 },
+  footerAddress: { fontSize: 7, color: C.faint, textAlign: 'center', letterSpacing: 0.3 },
+  footerPage: {
+    position: 'absolute',
+    bottom: 16,
+    left: 52,
+    right: 52,
+    fontSize: 7,
+    color: C.faint,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+
+  // ── Meta / title blocks ───────────────────────────────────────────
+  metaPanel: {
+    backgroundColor: C.panel,
+    borderWidth: 0.75,
+    borderColor: C.rule,
+    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  metaCell: { width: '50%', marginBottom: 8, paddingRight: 10 },
+  metaCellLast: { marginBottom: 0 },
+  metaLabel: {
+    fontSize: 6.5,
+    color: C.goldInk,
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+    fontFamily: 'Helvetica-Bold',
+  },
+  metaValue: { fontFamily: SERIF_BOLD, fontSize: 11, marginTop: 2, color: C.ink },
+
+  // ── Sections ──────────────────────────────────────────────────────
+  sectionWrap: { marginTop: 16, marginBottom: 8 },
+  sectionTitle: { fontFamily: SERIF_BOLD, fontSize: 13, color: C.ink },
+  sectionRule: { width: 26, height: 2, backgroundColor: C.gold, marginTop: 4 },
+
+  para: { marginBottom: 6, textAlign: 'justify', lineHeight: 1.35 },
+  paraBold: { fontFamily: 'Helvetica-Bold' },
+  clause: { marginBottom: 6 },
+  notes: { marginTop: 2, marginBottom: 6, color: C.muted, lineHeight: 1.35 },
+
+  // ── Execution blocks ──────────────────────────────────────────────
+  sigBlock: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: C.ink,
+    borderLeftWidth: 3,
+    borderLeftColor: C.gold,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fffefb',
+  },
+  sigLabel: {
+    fontSize: 7,
+    color: C.goldInk,
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+    marginBottom: 8,
+    fontFamily: 'Helvetica-Bold',
+  },
+  sigImage: { width: 190, height: 48, objectFit: 'contain', alignSelf: 'flex-start' },
+  sigLine: { width: 240, borderBottomWidth: 1, borderBottomColor: C.ink, marginTop: 2, marginBottom: 5 },
+  sigMeta: { fontSize: 8.5, color: C.muted, lineHeight: 1.4 },
+
+  // ── Exhibit A table ───────────────────────────────────────────────
+  exhibitHead: {
+    flexDirection: 'row',
+    backgroundColor: C.dark,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    marginTop: 6,
+  },
+  exhibitRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.rule,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  exhibitRowAlt: { backgroundColor: C.panel },
   exCol1: { width: '46%' },
   exCol2: { width: '24%' },
   exCol3: { width: '10%' },
   exCol4: { width: '20%' },
-  exHeadText: { fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
-  exCellText: { fontSize: 8.5 },
-  footer: {
-    position: 'absolute',
-    bottom: 28,
-    left: 44,
-    right: 44,
-    fontSize: 7.5,
-    color: C.faint,
-    textAlign: 'center',
+  exHeadText: { fontFamily: 'Helvetica-Bold', fontSize: 8, color: '#ffffff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  exCellText: { fontSize: 8.5, lineHeight: 1.3 },
+
+  // ── Stryker title panel (distinct-agreement break) ────────────────
+  strykerPanel: {
+    backgroundColor: C.dark,
+    borderRadius: 4,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
+  strykerPanelRule: { width: 34, height: 2, backgroundColor: C.gold, marginBottom: 10 },
+  strykerPanelTitle: { fontFamily: SERIF_BOLD, fontSize: 16, color: '#ffffff' },
+  strykerPanelMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
+  strykerPanelCell: { width: '50%', paddingRight: 10 },
+  strykerPanelLabel: {
+    fontSize: 6.5,
+    color: C.gold,
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+    fontFamily: 'Helvetica-Bold',
+  },
+  strykerPanelValue: { fontFamily: SERIF_BOLD, fontSize: 11, marginTop: 2, color: '#ffffff' },
 })
 
 // Signature timestamps render in Pacific time with an explicit zone
@@ -137,17 +257,27 @@ const fmtDateTime = (iso: string) =>
       })} PT`
     : '—'
 
-function Brand({ title, date }: { title: string; date: string }) {
+/** Repeating dark brand band + gold rule — every page of the document. */
+function BrandBand({ title, date }: { title: string; date: string }) {
   return (
-    <View style={styles.brandRow}>
-      <View>
-        <Text style={styles.brandName}>SirReel</Text>
-        <Text style={styles.brandSub}>SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
+    <>
+      <View style={styles.band} fixed>
+        <Image src={WORDMARK_WHITE_DATA_URI} style={styles.wordmark} />
+        <View style={styles.bandRight}>
+          <Text style={styles.docTitle}>{title}</Text>
+          <Text style={styles.docDate}>{date}</Text>
+        </View>
       </View>
-      <View>
-        <Text style={styles.docTitle}>{title}</Text>
-        <Text style={styles.docDate}>{date}</Text>
-      </View>
+      <View style={styles.bandRule} fixed />
+    </>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.sectionWrap} minPresenceAhead={40}>
+      <Text style={styles.sectionTitle}>{children}</Text>
+      <View style={styles.sectionRule} />
     </View>
   )
 }
@@ -157,28 +287,30 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
   return (
     <Document title={`SirReel Studio Contract — ${props.jobName}`}>
       <Page size="LETTER" style={styles.page}>
-        <Brand title="Standing Sets Contract — Signed Copy" date={`Signed ${fmtDateTime(props.signedAt)}`} />
+        <BrandBand title="Standing Sets Contract — Signed Copy" date={`Signed ${fmtDateTime(props.signedAt)}`} />
 
-        <View style={styles.metaGrid}>
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>Production</Text>
-            <Text style={styles.metaValue}>{props.jobName}</Text>
-          </View>
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>Company</Text>
-            <Text style={styles.metaValue}>{props.companyName}</Text>
-          </View>
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>Rental Start</Text>
-            <Text style={styles.metaValue}>{props.rentalStart || '—'}</Text>
-          </View>
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>Rental End</Text>
-            <Text style={styles.metaValue}>{props.rentalEnd || '—'}</Text>
+        <View style={styles.metaPanel}>
+          <View style={styles.metaGrid}>
+            <View style={styles.metaCell}>
+              <Text style={styles.metaLabel}>Production</Text>
+              <Text style={styles.metaValue}>{props.jobName}</Text>
+            </View>
+            <View style={styles.metaCell}>
+              <Text style={styles.metaLabel}>Company</Text>
+              <Text style={styles.metaValue}>{props.companyName}</Text>
+            </View>
+            <View style={[styles.metaCell, styles.metaCellLast]}>
+              <Text style={styles.metaLabel}>Rental Start</Text>
+              <Text style={styles.metaValue}>{props.rentalStart || '—'}</Text>
+            </View>
+            <View style={[styles.metaCell, styles.metaCellLast]}>
+              <Text style={styles.metaLabel}>Rental End</Text>
+              <Text style={styles.metaValue}>{props.rentalEnd || '—'}</Text>
+            </View>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Negotiated Terms</Text>
+        <SectionTitle>Negotiated Terms</SectionTitle>
         <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>Sets</Text>
@@ -229,7 +361,7 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
         ) : null}
         {terms.complexAreasIncluded && terms.complexAreasIncluded.length > 0 ? (
           <View>
-            <Text style={styles.sectionTitle}>Complex Areas Included</Text>
+            <SectionTitle>Complex Areas Included</SectionTitle>
             <Text style={styles.para}>
               The following shared complex areas are included with this agreement:{' '}
               {terms.complexAreasIncluded.join(', ')}.
@@ -238,12 +370,14 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
         ) : null}
         {terms.notes ? <Text style={styles.notes}>Notes: {terms.notes}</Text> : null}
 
-        <Text style={styles.sectionTitle}>Terms & Conditions</Text>
+        <SectionTitle>Terms & Conditions</SectionTitle>
         {STUDIO_TERMS.map((t) => (
-          <Text key={t.heading} style={styles.para}>
-            <Text style={styles.paraBold}>{t.heading} </Text>
-            {t.text}
-          </Text>
+          <View key={t.heading} style={styles.clause} wrap={false}>
+            <Text style={styles.para}>
+              <Text style={styles.paraBold}>{t.heading} </Text>
+              {t.text}
+            </Text>
+          </View>
         ))}
 
         <View style={styles.sigBlock} wrap={false}>
@@ -256,8 +390,13 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
           </Text>
         </View>
 
+        <View style={styles.footerWrap} fixed>
+          <Text style={styles.footerAddress}>SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
+        </View>
+        {/* pageNumber render prop only evaluates on a Text that is a direct
+            child of <Page> — nesting it in a View/component yields blank. */}
         <Text
-          style={styles.footer}
+          style={styles.footerPage}
           render={({ pageNumber, totalPages }) => `SirReel Studio Services · Standing Sets Contract · Page ${pageNumber} of ${totalPages}`}
           fixed
         />
@@ -265,34 +404,41 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
 
       {stryker && (
         <Page size="LETTER" style={styles.page}>
-          <Brand title={STRYKER_MMA_TITLE} date={`Signed ${fmtDateTime(stryker.signedAt)}`} />
+          <BrandBand title={STRYKER_MMA_TITLE} date={`Signed ${fmtDateTime(stryker.signedAt)}`} />
 
-          <View style={styles.metaGrid}>
-            <View style={styles.metaCell}>
-              <Text style={styles.metaLabel}>Production / Show Title</Text>
-              <Text style={styles.metaValue}>{stryker.fields.projectTitle}</Text>
-            </View>
-            <View style={styles.metaCell}>
-              <Text style={styles.metaLabel}>Producer</Text>
-              <Text style={styles.metaValue}>{stryker.fields.producerName}</Text>
+          {/* Distinct-agreement break: the Stryker MMA opens with its own
+              dark title panel so it reads as a separate agreement, not a
+              continuation of the studio contract. */}
+          <View style={styles.strykerPanel}>
+            <View style={styles.strykerPanelRule} />
+            <Text style={styles.strykerPanelTitle}>{STRYKER_MMA_TITLE}</Text>
+            <View style={styles.strykerPanelMeta}>
+              <View style={styles.strykerPanelCell}>
+                <Text style={styles.strykerPanelLabel}>Production / Show Title</Text>
+                <Text style={styles.strykerPanelValue}>{stryker.fields.projectTitle}</Text>
+              </View>
+              <View style={styles.strykerPanelCell}>
+                <Text style={styles.strykerPanelLabel}>Producer</Text>
+                <Text style={styles.strykerPanelValue}>{stryker.fields.producerName}</Text>
+              </View>
             </View>
           </View>
 
           {renderStrykerParagraphs(stryker.fields).map((p, i) => (
-            <Text key={i} style={styles.para}>
-              {p}
-            </Text>
+            <View key={i} minPresenceAhead={20}>
+              <Text style={styles.para}>{p}</Text>
+            </View>
           ))}
 
-          <Text style={styles.sectionTitle}>Exhibit A</Text>
-          <View style={styles.exhibitHead}>
+          <SectionTitle>Exhibit A</SectionTitle>
+          <View style={styles.exhibitHead} minPresenceAhead={60}>
             <Text style={[styles.exCol1, styles.exHeadText]}>Product Description</Text>
             <Text style={[styles.exCol2, styles.exHeadText]}>Product No.</Text>
             <Text style={[styles.exCol3, styles.exHeadText]}>Qty</Text>
             <Text style={[styles.exCol4, styles.exHeadText]}>Value</Text>
           </View>
-          {STRYKER_EXHIBIT_A.map((r) => (
-            <View key={r.productNo} style={styles.exhibitRow}>
+          {STRYKER_EXHIBIT_A.map((r, i) => (
+            <View key={r.productNo} style={i % 2 === 1 ? [styles.exhibitRow, styles.exhibitRowAlt] : styles.exhibitRow}>
               <Text style={[styles.exCol1, styles.exCellText]}>{r.description}</Text>
               <Text style={[styles.exCol2, styles.exCellText]}>{r.productNo}</Text>
               <Text style={[styles.exCol3, styles.exCellText]}>{r.quantity}</Text>
@@ -309,8 +455,11 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
             </Text>
           </View>
 
+          <View style={styles.footerWrap} fixed>
+            <Text style={styles.footerAddress}>SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
+          </View>
           <Text
-            style={styles.footer}
+            style={styles.footerPage}
             render={({ pageNumber, totalPages }) => `SirReel Studio Services · ${STRYKER_MMA_TITLE} · Page ${pageNumber} of ${totalPages}`}
             fixed
           />
