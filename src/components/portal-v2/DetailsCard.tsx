@@ -51,11 +51,15 @@ export function intakeComplete(i: V2Intake): boolean {
 
 export function DetailsCard({
   intake,
+  persisted,
   onSave,
   open,
   onToggle,
 }: {
   intake: V2Intake
+  /** True once the intake has actually been saved server-side — pre-filled
+   *  but unsaved details show "Confirm" instead of "Saved". */
+  persisted: boolean
   onSave: (next: V2Intake) => Promise<boolean>
   open: boolean
   onToggle: () => void
@@ -85,7 +89,7 @@ export function DetailsCard({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {complete ? (
+          {persisted && complete ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               Saved
@@ -95,7 +99,7 @@ export function DetailsCard({
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide"
               style={{ borderColor: TSX.gold, color: '#8a6a1f', backgroundColor: 'rgba(212,165,71,0.10)' }}
             >
-              Start here
+              {complete ? 'Confirm' : 'Start here'}
             </span>
           )}
           <span className={`text-gray-300 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>

@@ -8,9 +8,17 @@ import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Paperwork } from './types'
 
 /**
- * Studio / Standing Sets contract card. Renders the stageDetails JSON the
- * legacy portal renders and submits through the existing endpoint:
- * POST /api/portal/[token]/sign  { step: 'studio', ... }.
+ * Studio / Standing Sets contract card.
+ *
+ * Stage rates are individually negotiated, so this card is GATED: it only
+ * becomes signable once a SirReel agent has prepared the terms (areas +
+ * day rate) in PaperworkRequest.stageDetails. Until then the client sees
+ * an "awaiting terms" state. When the hospital set is among the areas the
+ * Stryker Master Media Agreement addendum is folded into the terms and
+ * must be explicitly acknowledged.
+ *
+ * Submits through POST /api/portal/v2/[token]/stage-sign, which enforces
+ * the same gate server-side and records the signoff.
  */
 
 const fmtDate = (d?: string) =>
@@ -20,6 +28,7 @@ export function StudioContractCard({
   token,
   booking,
   paperwork,
+  signerName,
   done,
   locked,
   open,
@@ -29,6 +38,8 @@ export function StudioContractCard({
   token: string
   booking: V2Booking
   paperwork: V2Paperwork
+  /** Threaded from the collect-once intake for the signoff record. */
+  signerName: string
   done: boolean
   locked: boolean
   open: boolean
@@ -36,6 +47,7 @@ export function StudioContractCard({
   onSigned: () => void
 }) {
   const [agreed, setAgreed] = useState(false)
+  const [strykerAcknowledged, setStrykerAcknowledged] = useState(false)
   const [sig, setSig] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -50,7 +62,11 @@ export function StudioContractCard({
   const prelitSets: string[] = sd?.prelitSets || []
   const hasHospital = sets.includes('hospital')
 
-  const status = done ? 'done' : locked ? 'locked' : 'todo'
+  // Agent-prepared terms gate: rate and areas are negotiated per job, so
+  // the contract is only signable once both exist on the request.
+  const termsReady = sets.length > 0 && !!sd?.ratePerDay
+
+  const status = done ? 'done' : locked ? 'locked' : !termsReady ? 'pending' : 'todo'
 
   return (
     <CardShell
@@ -58,7 +74,7 @@ export function StudioContractCard({
       title="Studio Contract"
       subtitle="Standing sets license agreement"
       status={status}
-      statusLabel={done ? 'Signed' : undefined}
+      statusLabel={done ? 'Signed' : !termsReady && !locked ? 'Awaiting terms' : undefined}
       chips={hasHospital ? <ContextChip>Stryker addendum</ContextChip> : undefined}
       open={open}
       onToggle={onToggle}
@@ -68,6 +84,18 @@ export function StudioContractCard({
         <LockedNote title="Studio Contract" />
       ) : done ? (
         <DoneNote title="Studio Contract Signed" sub="Signed & on file with SirReel" />
+      ) : !termsReady ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+          <span className="text-xl">⏳</span>
+          <div>
+            <div className="text-sm font-bold text-amber-800">Your agent is preparing your contract terms</div>
+            <div className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+              Stage rates and areas are tailored to your production
+              {booking.agent?.name ? ` — ${booking.agent.name} is finalizing your negotiated rate and the sets you'll be using.` : '.'}{' '}
+              You&rsquo;ll be able to review and sign here as soon as they&rsquo;re set. No action needed from you yet.
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-xl text-xs">
@@ -172,6 +200,26 @@ export function StudioContractCard({
             <span className="text-sm text-gray-700 font-medium">I have read and agree to all terms and conditions of this Studio Contract.</span>
           </label>
 
+          {hasHospital && (
+            <div className="rounded-xl border p-3" style={{ borderColor: '#D4A547', backgroundColor: 'rgba(212,165,71,0.06)' }}>
+              <div className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: '#8a6a1f' }}>
+                Stryker addendum — required for the Hospital Set
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed mb-2">{STRYKER_ADDENDUM.text}</p>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={strykerAcknowledged}
+                  onChange={(e) => setStrykerAcknowledged(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-gray-900"
+                />
+                <span className="text-sm text-gray-700 font-medium">
+                  I acknowledge the Stryker Master Media Agreement addendum and agree to its terms regarding Stryker medical equipment on set.
+                </span>
+              </label>
+            </div>
+          )}
+
           <div>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Authorized Signature</div>
             <p className="text-xs text-gray-500 mb-2">
@@ -186,13 +234,19 @@ export function StudioContractCard({
               setError('')
               setSubmitting(true)
               try {
-                const r = await fetch(`/api/portal/${token}/sign`, {
+                const r = await fetch(`/api/portal/v2/${token}/stage-sign`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ step: 'studio', studioAgreed: agreed, signatureData: sig || '' }),
+                  body: JSON.stringify({
+                    studioAgreed: agreed,
+                    strykerAcknowledged,
+                    signerName,
+                    signatureData: sig || '',
+                  }),
                 })
                 if (!r.ok) {
-                  setError('Failed to sign — please try again.')
+                  const data = await r.json().catch(() => ({}))
+                  setError(data.error || 'Failed to sign — please try again.')
                   return
                 }
                 onSigned()
@@ -202,7 +256,7 @@ export function StudioContractCard({
                 setSubmitting(false)
               }
             }}
-            disabled={!agreed || !sig || submitting}
+            disabled={!agreed || (hasHospital && !strykerAcknowledged) || !sig || submitting}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ backgroundColor: TSX.ink }}
           >

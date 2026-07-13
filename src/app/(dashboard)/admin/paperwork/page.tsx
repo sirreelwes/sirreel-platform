@@ -40,6 +40,12 @@ const TOOLS = [
     description:
       'Every client with a recorded standing agreement — established date, review-due, summary, and the PDF in use on new orders.',
   },
+  {
+    href: '/admin/stage-terms',
+    title: 'Stage Contract Terms',
+    description:
+      'Set each stage job’s negotiated rate and areas before the client can sign — Hospital Set adds the Stryker addendum automatically.',
+  },
 ]
 
 export default function PaperworkToolsIndex() {

@@ -41,6 +41,7 @@ export default function ClientPortalV2() {
   const [booking, setBooking] = useState<V2Booking | null>(null)
   const [paperwork, setPaperwork] = useState<V2Paperwork | null>(null)
   const [intake, setIntake] = useState<V2Intake>(EMPTY_INTAKE)
+  const [intakePersisted, setIntakePersisted] = useState(false)
   const [agreementState, setAgreementState] = useState<V2AgreementState | null>(null)
   const [done, setDone] = useState<V2Done>({ agreement: false, lcdw: false, studio: false, coi: false, cc: false })
   const [locked, setLocked] = useState(false)
@@ -76,6 +77,7 @@ export default function ClientPortalV2() {
         // Collect-once seed: persisted intake wins; otherwise pre-fill from
         // the booking's contact + company so the client starts pre-populated.
         const saved = intakeData?.intake
+        setIntakePersisted(!!saved)
         const person = bk.person
         setIntake({
           fullName: saved?.fullName ?? [person?.firstName, person?.lastName].filter(Boolean).join(' '),
@@ -139,13 +141,13 @@ export default function ClientPortalV2() {
     if (loading || initialised || !booking) return
     setInitialised(true)
     if (allDone) return
-    if (!detailsDone && !locked) {
+    if ((!detailsDone || !intakePersisted) && !locked) {
       setOpenKey('details')
       return
     }
     const firstTodo = docKeys.find((k) => !done[k])
     setOpenKey(firstTodo || null)
-  }, [loading, initialised, booking, allDone, detailsDone, locked, docKeys, done])
+  }, [loading, initialised, booking, allDone, detailsDone, intakePersisted, locked, docKeys, done])
 
   const toggle = (key: OpenKey) => setOpenKey((cur) => (cur === key ? null : key))
 
@@ -172,6 +174,7 @@ export default function ClientPortalV2() {
       })
       if (!r.ok) return false
       setIntake(next)
+      setIntakePersisted(true)
       const firstTodo = docKeys.find((k) => !done[k])
       setOpenKey(firstTodo || null)
       return true
@@ -283,7 +286,7 @@ export default function ClientPortalV2() {
           </p>
         )}
 
-        <DetailsCard intake={intake} onSave={saveIntake} open={openKey === 'details'} onToggle={() => toggle('details')} />
+        <DetailsCard intake={intake} persisted={intakePersisted} onSave={saveIntake} open={openKey === 'details'} onToggle={() => toggle('details')} />
 
         {showAgreement && (
           <RentalAgreementCard
@@ -321,6 +324,7 @@ export default function ClientPortalV2() {
             token={token}
             booking={booking}
             paperwork={paperwork}
+            signerName={intake.fullName}
             done={done.studio}
             locked={locked}
             open={openKey === 'studio'}
