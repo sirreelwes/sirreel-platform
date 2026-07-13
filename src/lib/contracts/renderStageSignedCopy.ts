@@ -38,6 +38,7 @@ export function buildStageSignedCopyProps(request: RequestForRender, signoff: an
       complexAreasIncluded: Array.isArray(snap.complexAreasIncluded) ? snap.complexAreasIncluded : undefined,
       ledWallTechLabel: snap.ledWall?.techLabel || undefined,
       prelitSets: Array.isArray(snap.prelitSets) ? snap.prelitSets : [],
+      dayDates: snap.dayDates && typeof snap.dayDates === 'object' ? snap.dayDates : undefined,
       ratePerDay: snap.ratePerDay || '',
       otRate: snap.otRate || '300',
       prepDays: snap.prepDays || '',

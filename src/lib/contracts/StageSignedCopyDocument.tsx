@@ -45,6 +45,9 @@ export interface StageSignedCopyProps {
      *  Wall add-on was on (e.g. "SirReel LED technician scheduled"). */
     ledWallTechLabel?: string
     prelitSets: string[]
+    /** Scheduled calendar dates per day type (yyyy-mm-dd, picked only),
+     *  frozen at signing. Absent on older records — line omitted. */
+    dayDates?: Record<string, string[]>
     ratePerDay: string
     otRate: string
     prepDays: string
@@ -162,6 +165,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
   },
   metaValue: { fontFamily: SERIF_BOLD, fontSize: 10.5, marginTop: 1, color: C.ink },
+  metaDates: { fontSize: 7.5, color: C.muted, marginTop: 1.5 },
 
   // ── Sections ──────────────────────────────────────────────────────
   sectionWrap: { marginTop: 10, marginBottom: 5 },
@@ -257,6 +261,15 @@ const fmtDateTime = (iso: string) =>
       })} PT`
     : '—'
 
+const fmtDayDate = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+function DayDates({ dates }: { dates?: string[] }) {
+  const picked = (dates || []).filter(Boolean)
+  if (!picked.length) return null
+  return <Text style={styles.metaDates}>{picked.map(fmtDayDate).join(' · ')}</Text>
+}
+
 /** Repeating dark brand band + gold rule — every page of the document. */
 function BrandBand({ title, date }: { title: string; date: string }) {
   return (
@@ -332,24 +345,28 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
             <View style={styles.metaCell}>
               <Text style={styles.metaLabel}>Prep Days</Text>
               <Text style={styles.metaValue}>{terms.prepDays}</Text>
+              <DayDates dates={terms.dayDates?.prep} />
             </View>
           ) : null}
           {terms.shootDays ? (
             <View style={styles.metaCell}>
               <Text style={styles.metaLabel}>Shoot Days</Text>
               <Text style={styles.metaValue}>{terms.shootDays}</Text>
+              <DayDates dates={terms.dayDates?.shoot} />
             </View>
           ) : null}
           {terms.strikeDays ? (
             <View style={styles.metaCell}>
               <Text style={styles.metaLabel}>Strike Days</Text>
               <Text style={styles.metaValue}>{terms.strikeDays}</Text>
+              <DayDates dates={terms.dayDates?.strike} />
             </View>
           ) : null}
           {terms.darkDays ? (
             <View style={styles.metaCell}>
               <Text style={styles.metaLabel}>Dark Days</Text>
               <Text style={styles.metaValue}>{terms.darkDays}</Text>
+              <DayDates dates={terms.dayDates?.dark} />
             </View>
           ) : null}
         </View>

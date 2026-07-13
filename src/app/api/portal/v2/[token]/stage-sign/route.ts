@@ -127,6 +127,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           ? { on: true, tech: sd.ledWallTech, techLabel: LED_WALL_TECH_LABELS[sd.ledWallTech as LedWallTech] || '' }
           : null,
         prelitSets: sd?.prelitSets || [],
+        // Scheduled calendar dates per day type (picked slots only),
+        // frozen at signing like every other term.
+        dayDates: Object.fromEntries(
+          ['prep', 'shoot', 'strike', 'dark'].map((k) => [k, (sd?.dayDates?.[k] || []).filter(Boolean)]),
+        ),
         ratePerDay: sd?.ratePerDay,
         otRate: sd?.otRate || '300',
         prepDays: sd?.prepDays || '',

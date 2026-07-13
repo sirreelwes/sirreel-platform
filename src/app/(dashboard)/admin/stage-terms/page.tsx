@@ -58,6 +58,21 @@ interface Row {
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
 
+type DayType = 'prep' | 'shoot' | 'strike' | 'dark'
+const DAY_TYPES: { key: DayType; label: string }[] = [
+  { key: 'prep', label: 'Prep' },
+  { key: 'shoot', label: 'Shoot' },
+  { key: 'strike', label: 'Strike' },
+  { key: 'dark', label: 'Dark' },
+]
+const emptyDayDates = (): Record<DayType, string[]> => ({ prep: [], shoot: [], strike: [], dark: [] })
+/** yyyy-mm-dd + n days (UTC-safe for date-only strings). */
+const addDaysIso = (iso: string, n: number): string => {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 function StatusChip({ row }: { row: Row }) {
   if (row.signed) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700">✓ Signed</span>
   if (row.termsReady) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-700">Ready to sign</span>
@@ -81,6 +96,7 @@ export default function StageTermsPage() {
   const [strikeDays, setStrikeDays] = useState('')
   const [darkDays, setDarkDays] = useState('')
   const [notes, setNotes] = useState('')
+  const [dayDates, setDayDates] = useState<Record<DayType, string[]>>(emptyDayDates())
   const [complexAreas, setComplexAreas] = useState<ComplexArea[]>(defaultComplexAreas())
   const [customAreaName, setCustomAreaName] = useState('')
   const [ledWall, setLedWall] = useState(false)
@@ -164,6 +180,14 @@ export default function StageTermsPage() {
     setStrikeDays(sd.strikeDays || '')
     setDarkDays(sd.darkDays || '')
     setNotes(sd.notes || '')
+    {
+      const dd = emptyDayDates()
+      for (const t of DAY_TYPES) {
+        const arr = sd.dayDates?.[t.key]
+        if (Array.isArray(arr)) dd[t.key] = arr.map((x: any) => (typeof x === 'string' ? x : ''))
+      }
+      setDayDates(dd)
+    }
     setComplexAreas(d.complexAreas || normalizeComplexAreas(sd.complexAreas))
     setCustomAreaName('')
     setLedWall(!!sd.ledWall)
@@ -178,6 +202,43 @@ export default function StageTermsPage() {
     setPrelitSets((cur) => cur.filter((s) => s !== key || sets.includes(key) === false))
   }
 
+  const dayCount = (type: DayType): number => {
+    const raw = { prep: prepDays, shoot: shootDays, strike: strikeDays, dark: darkDays }[type]
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? Math.min(n, 60) : 0
+  }
+
+  // Count change: resize that type's slots, preserving chosen dates.
+  // New tail slots default to consecutive days after the last chosen
+  // date (a convenience only — every slot stays overridable).
+  const resizeDaySlots = (type: DayType, countStr: string) => {
+    const n = (() => { const x = parseInt(countStr, 10); return Number.isFinite(x) && x > 0 ? Math.min(x, 60) : 0 })()
+    setDayDates((cur) => {
+      const kept = cur[type].slice(0, n)
+      while (kept.length < n) {
+        const last = [...kept].reverse().find((d) => d)
+        kept.push(last ? addDaysIso(last, kept.length - kept.findLastIndex((d) => d) ) : '')
+      }
+      return { ...cur, [type]: kept }
+    })
+  }
+
+  // Pick a date: set the slot, then default any EMPTY later slots to
+  // consecutive days after it. Filled slots are never overwritten —
+  // non-consecutive schedules are fully allowed.
+  const pickDayDate = (type: DayType, idx: number, value: string) => {
+    setDayDates((cur) => {
+      const arr = [...cur[type]]
+      arr[idx] = value
+      if (value) {
+        for (let j = idx + 1; j < arr.length; j++) {
+          if (!arr[j]) arr[j] = addDaysIso(value, j - idx)
+        }
+      }
+      return { ...cur, [type]: arr }
+    })
+  }
+
   const save = async () => {
     if (!selected) return
     setSaving(true)
@@ -186,7 +247,11 @@ export default function StageTermsPage() {
       const r = await fetch(`/api/paperwork/${selected.token}/stage-terms`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes, complexAreas, ledWall, ledWallTech: ledWallTech || null }),
+        body: JSON.stringify({
+          sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes, complexAreas, ledWall,
+          ledWallTech: ledWallTech || null,
+          dayDates: Object.fromEntries(DAY_TYPES.map((t) => [t.key, dayDates[t.key].slice(0, dayCount(t.key))])),
+        }),
       })
       const d = await r.json()
       if (!r.ok) {
@@ -500,21 +565,49 @@ export default function StageTermsPage() {
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Prep days</label>
-                      <input value={prepDays} onChange={(e) => setPrepDays(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                      <input value={prepDays} onChange={(e) => { setPrepDays(e.target.value); resizeDaySlots('prep', e.target.value) }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Shoot days</label>
-                      <input value={shootDays} onChange={(e) => setShootDays(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                      <input value={shootDays} onChange={(e) => { setShootDays(e.target.value); resizeDaySlots('shoot', e.target.value) }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Strike days</label>
-                      <input value={strikeDays} onChange={(e) => setStrikeDays(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                      <input value={strikeDays} onChange={(e) => { setStrikeDays(e.target.value); resizeDaySlots('strike', e.target.value) }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Dark days</label>
-                      <input value={darkDays} onChange={(e) => setDarkDays(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                      <input value={darkDays} onChange={(e) => { setDarkDays(e.target.value); resizeDaySlots('dark', e.target.value) }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                     </div>
                   </div>
+
+                  {DAY_TYPES.some((t) => dayCount(t.key) > 0) && (
+                    <div>
+                      <div className="text-[11px] font-semibold text-gray-600 mb-1">Schedule (calendar dates per day)</div>
+                      <p className="text-[11px] text-gray-400 mb-2">
+                        Dates default to consecutive days after the first pick — override any of them freely (gaps are fine).
+                      </p>
+                      <div className="space-y-2">
+                        {DAY_TYPES.filter((t) => dayCount(t.key) > 0).map((t) => (
+                          <div key={t.key} className="flex items-start gap-2">
+                            <span className="text-[11px] font-semibold text-gray-500 w-12 pt-2">{t.label}</span>
+                            <div className="flex flex-wrap gap-1.5 flex-1">
+                              {Array.from({ length: dayCount(t.key) }, (_, i) => (
+                                <input
+                                  key={i}
+                                  type="date"
+                                  value={dayDates[t.key][i] || ''}
+                                  onChange={(e) => pickDayDate(t.key, i, e.target.value)}
+                                  className={`border rounded-lg px-2 py-1.5 text-[12px] focus:outline-none focus:border-gray-400 ${dayDates[t.key][i] ? 'border-gray-200 text-gray-800' : 'border-amber-300 bg-amber-50 text-gray-500'}`}
+                                  title={`${t.label} day ${i + 1}`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Notes (shown on the contract)</label>

@@ -252,6 +252,28 @@ export function StudioContractCard({
             ) : null
           })()}
 
+          {(() => {
+            const dd = sd?.dayDates || {}
+            const fmtD = (iso: string) =>
+              new Date(iso + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+            const rows = [
+              ['Prep', dd.prep], ['Shoot', dd.shoot], ['Strike', dd.strike], ['Dark', dd.dark],
+            ].filter(([, arr]) => Array.isArray(arr) && (arr as string[]).some(Boolean)) as [string, string[]][]
+            return rows.length > 0 ? (
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Schedule</div>
+                <div className="space-y-0.5 text-xs text-gray-700">
+                  {rows.map(([label, arr]) => (
+                    <div key={label}>
+                      <span className="font-semibold">{label}: </span>
+                      {arr.filter(Boolean).map(fmtD).join(', ')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null
+          })()}
+
           {sd?.notes && (
             <div className="text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg p-2">
               <span className="font-bold">Notes: </span>

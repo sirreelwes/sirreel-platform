@@ -100,6 +100,23 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     // entries are capped/sanitized.
     if (Array.isArray(body.complexAreas)) next.complexAreas = normalizeComplexAreas(body.complexAreas)
 
+    // Scheduled dates per day type — count-driven date pickers in the
+    // editor. Each entry is a yyyy-mm-dd string (or '' for an unpicked
+    // slot); counts stay the manual source of truth for how many slots
+    // exist. Purely descriptive schedule data — no gate impact.
+    if (body.dayDates && typeof body.dayDates === 'object') {
+      const clean: Record<string, string[]> = {}
+      for (const k of ['prep', 'shoot', 'strike', 'dark']) {
+        const arr = (body.dayDates as any)[k]
+        if (Array.isArray(arr)) {
+          clean[k] = arr
+            .slice(0, 60)
+            .map((d: any) => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ''))
+        }
+      }
+      next.dayDates = clean
+    }
+
     // LED Wall add-on (sub-option of Lankershim Studio) + required tech fork.
     if (typeof body.ledWall === 'boolean') next.ledWall = body.ledWall
     if (body.ledWallTech === 'sirreel' || body.ledWallTech === 'client') next.ledWallTech = body.ledWallTech
