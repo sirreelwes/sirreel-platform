@@ -2070,7 +2070,7 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ====================================
+// =============================
 // 14. PAPERWORK REQUESTS
 // ====================================
 
@@ -4820,4 +4820,34 @@ model SiteSetting {
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("sr_site_settings")
+}
+
+// =============================================
+// PORTAL V2 — guided "collect-once" client portal
+// =============================================
+
+/// One row per paperwork token: the single "Your details" intake the
+/// v2 portal captures once and threads into every document card.
+/// Keyed by the PaperworkRequest token (validated in the API route —
+/// intentionally no FK so this table stays fully additive).
+model PortalV2Intake {
+  id       String  @id @default(uuid())
+  token    String  @unique
+  fullName String? @map("full_name")
+  title    String?
+  company  String?
+  email    String?
+  phone    String?
+
+  // Billing block — threaded into the CC-auth card
+  billingAddress1 String? @map("billing_address1")
+  billingAddress2 String? @map("billing_address2")
+  billingCity     String? @map("billing_city")
+  billingState    String? @map("billing_state")
+  billingZip      String? @map("billing_zip")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("portal_v2_intake")
 }
