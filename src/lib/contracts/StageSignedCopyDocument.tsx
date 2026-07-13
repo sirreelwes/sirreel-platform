@@ -121,9 +121,20 @@ const styles = StyleSheet.create({
   },
 })
 
+// Signature timestamps render in Pacific time with an explicit zone
+// label — the server runs in UTC, and an unlabeled UTC time on the
+// document of record reads as the wrong signing time (found when a
+// 1:30 PM PT signing printed as "8:30 PM").
 const fmtDateTime = (iso: string) =>
   iso
-    ? new Date(iso).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+    ? `${new Date(iso).toLocaleString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'America/Los_Angeles',
+      })} PT`
     : '—'
 
 function Brand({ title, date }: { title: string; date: string }) {
