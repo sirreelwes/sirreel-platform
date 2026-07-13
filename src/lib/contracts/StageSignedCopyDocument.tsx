@@ -32,6 +32,9 @@ export interface StageSignedCopyProps {
      *  current area list for records signed before labels were
      *  snapshotted. */
     setLabels?: Record<string, string>
+    /** Included complex amenities frozen at signing (labels). Absent on
+     *  records signed before complex areas existed — section is omitted. */
+    complexAreasIncluded?: string[]
     prelitSets: string[]
     ratePerDay: string
     otRate: string
@@ -204,6 +207,15 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
             </View>
           ) : null}
         </View>
+        {terms.complexAreasIncluded && terms.complexAreasIncluded.length > 0 ? (
+          <View>
+            <Text style={styles.sectionTitle}>Complex Areas Included</Text>
+            <Text style={styles.para}>
+              The following shared complex areas are included with this agreement:{' '}
+              {terms.complexAreasIncluded.join(', ')}.
+            </Text>
+          </View>
+        ) : null}
         {terms.notes ? <Text style={styles.notes}>Notes: {terms.notes}</Text> : null}
 
         <Text style={styles.sectionTitle}>Terms & Conditions</Text>

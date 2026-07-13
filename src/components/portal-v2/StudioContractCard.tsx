@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { TSX } from '@/lib/brand/tsxTokens'
 import { STUDIO_TERMS } from './terms'
-import { stageAreaLabel, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
+import { stageAreaLabel, STRYKER_TRIGGER_KEY, includedComplexAreaLabels } from '@/lib/contracts/stageAreas'
 import {
   STRYKER_MMA_TITLE,
   STRYKER_EXHIBIT_A,
@@ -222,6 +222,22 @@ export function StudioContractCard({
               )}
             </div>
           )}
+          {(() => {
+            const amenities = includedComplexAreaLabels(sd?.complexAreas)
+            return amenities.length > 0 ? (
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Complex areas included</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {amenities.map((label) => (
+                    <span key={label} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-50 border border-gray-100 text-xs text-gray-700">
+                      ✓ {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null
+          })()}
+
           {sd?.notes && (
             <div className="text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg p-2">
               <span className="font-bold">Notes: </span>

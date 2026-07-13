@@ -15,7 +15,15 @@
  */
 
 import { useEffect, useState } from 'react'
-import { STAGE_AREAS, STRYKER_TRIGGER_KEY, isRetiredAreaKey, stageAreaLabel } from '@/lib/contracts/stageAreas'
+import {
+  STAGE_AREAS,
+  STRYKER_TRIGGER_KEY,
+  isRetiredAreaKey,
+  stageAreaLabel,
+  defaultComplexAreas,
+  normalizeComplexAreas,
+  type ComplexArea,
+} from '@/lib/contracts/stageAreas'
 
 interface Row {
   token: string
@@ -56,6 +64,8 @@ export default function StageTermsPage() {
   const [strikeDays, setStrikeDays] = useState('')
   const [darkDays, setDarkDays] = useState('')
   const [notes, setNotes] = useState('')
+  const [complexAreas, setComplexAreas] = useState<ComplexArea[]>(defaultComplexAreas())
+  const [customAreaName, setCustomAreaName] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [emailSentAt, setEmailSentAt] = useState<string | null>(null)
@@ -85,6 +95,8 @@ export default function StageTermsPage() {
     setStrikeDays(sd.strikeDays || '')
     setDarkDays(sd.darkDays || '')
     setNotes(sd.notes || '')
+    setComplexAreas(d.complexAreas || normalizeComplexAreas(sd.complexAreas))
+    setCustomAreaName('')
     setEmailSentAt(d.readyToSignEmailSentAt || null)
   }
 
@@ -101,7 +113,7 @@ export default function StageTermsPage() {
       const r = await fetch(`/api/paperwork/${selected.token}/stage-terms`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes }),
+        body: JSON.stringify({ sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes, complexAreas }),
       })
       const d = await r.json()
       if (!r.ok) {
@@ -226,6 +238,71 @@ export default function StageTermsPage() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] font-semibold text-gray-600 mb-1">Complex areas (included amenities)</div>
+                    <p className="text-[11px] text-gray-400 mb-2">
+                      Shared complex amenities — descriptive only, no fees. Included areas render on the studio contract; toggled-off areas don&rsquo;t appear.
+                    </p>
+                    <div className="space-y-1.5">
+                      {complexAreas.map((area, idx) => (
+                        <div key={area.key} className="flex items-center justify-between gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={area.included}
+                              onChange={() =>
+                                setComplexAreas((cur) => cur.map((a, i) => (i === idx ? { ...a, included: !a.included } : a)))
+                              }
+                              className="w-4 h-4 accent-gray-900"
+                            />
+                            <span className={`text-sm truncate ${area.included ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+                              {area.label}
+                            </span>
+                            {area.custom && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">custom</span>
+                            )}
+                          </label>
+                          <span className={`text-[10px] font-bold flex-shrink-0 ${area.included ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {area.included ? 'INCLUDED' : 'NOT INCLUDED'}
+                          </span>
+                          {area.custom && (
+                            <button
+                              onClick={() => setComplexAreas((cur) => cur.filter((_, i) => i !== idx))}
+                              className="text-[11px] text-gray-400 hover:text-red-600 flex-shrink-0"
+                              title="Remove custom area"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        value={customAreaName}
+                        onChange={(e) => setCustomAreaName(e.target.value)}
+                        placeholder="Add a custom area (e.g. Wardrobe Trailer)"
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-gray-400"
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' || !customAreaName.trim()) return
+                          setComplexAreas((cur) => [...cur, { key: `custom-${Date.now()}`, label: customAreaName.trim(), included: true, custom: true }])
+                          setCustomAreaName('')
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          if (!customAreaName.trim()) return
+                          setComplexAreas((cur) => [...cur, { key: `custom-${Date.now()}`, label: customAreaName.trim(), included: true, custom: true }])
+                          setCustomAreaName('')
+                        }}
+                        disabled={!customAreaName.trim()}
+                        className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      >
+                        + Add
+                      </button>
                     </div>
                   </div>
 

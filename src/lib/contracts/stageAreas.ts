@@ -58,3 +58,63 @@ export function isRetiredAreaKey(key: string): boolean {
 }
 
 export const STAGE_AREA_KEYS = STAGE_AREAS.map((a) => a.key)
+
+// ─── Complex areas ──────────────────────────────────────────────────
+// Shared complex amenities (NOT the rented stage, NOT priced — the job
+// has a single overall price set elsewhere). Each toggles included /
+// not-included per job and only INCLUDED ones render on the studio
+// contract. Standard list defaults to included; agents can toggle any
+// off or add custom areas (name + toggle, no fee).
+
+export interface ComplexArea {
+  key: string
+  label: string
+  included: boolean
+  /** True for agent-added areas (not part of the standing list). */
+  custom?: boolean
+}
+
+export const STANDARD_COMPLEX_AREAS: { key: string; label: string }[] = [
+  { key: 'conference-room', label: 'Conference Room' },
+  { key: 'kitchen', label: 'Kitchen' },
+  { key: 'green-room-1', label: 'Green Room 1' },
+  { key: 'green-room-2', label: 'Green Room 2' },
+  { key: 'parking-gates-4-5', label: 'Parking (Gates 4 & 5)' },
+]
+
+/** Fresh default state: every standard amenity included. */
+export function defaultComplexAreas(): ComplexArea[] {
+  return STANDARD_COMPLEX_AREAS.map((a) => ({ ...a, included: true }))
+}
+
+/**
+ * Normalize a stored/submitted complexAreas value: seed missing standard
+ * entries (default included), keep saved toggles, keep custom entries.
+ * Tolerates null/garbage — always returns a well-formed list.
+ */
+export function normalizeComplexAreas(raw: unknown): ComplexArea[] {
+  const saved: ComplexArea[] = Array.isArray(raw)
+    ? (raw as any[])
+        .filter((a) => a && typeof a.label === 'string' && a.label.trim())
+        .map((a) => ({
+          key: typeof a.key === 'string' && a.key ? a.key.slice(0, 80) : `custom-${a.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`,
+          label: a.label.trim().slice(0, 100),
+          included: !!a.included,
+          custom: !!a.custom,
+        }))
+        .slice(0, 40)
+    : []
+  const byKey = new Map(saved.map((a) => [a.key, a]))
+  const standard = STANDARD_COMPLEX_AREAS.map(
+    (s) => byKey.get(s.key) ?? { ...s, included: true },
+  )
+  const customs = saved.filter((a) => !STANDARD_COMPLEX_AREAS.some((s) => s.key === a.key))
+  return [...standard, ...customs.map((c) => ({ ...c, custom: true }))]
+}
+
+/** Included-only labels, in display order — what the contract shows. */
+export function includedComplexAreaLabels(raw: unknown): string[] {
+  return normalizeComplexAreas(raw)
+    .filter((a) => a.included)
+    .map((a) => a.label)
+}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { sendStageReadyToSignEmail } from '@/lib/paperwork/stageReadyEmail'
-import { STAGE_AREA_KEYS, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
+import { STAGE_AREA_KEYS, STRYKER_TRIGGER_KEY, normalizeComplexAreas } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +51,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       termsReady: sets.length > 0 && !!sd?.ratePerDay,
       strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyToSignEmailSentAt: sd?.readyToSignEmailSentAt || null,
+      complexAreas: normalizeComplexAreas(sd?.complexAreas),
       stageDetails: sd,
       booking: request.booking,
     })
@@ -81,6 +82,10 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     for (const f of STRING_FIELDS) {
       if (typeof body[f] === 'string') next[f] = body[f].slice(0, 2000)
     }
+    // Complex amenities (included/not-included toggles, no fees) —
+    // normalized so the standing list is always complete and custom
+    // entries are capped/sanitized.
+    if (Array.isArray(body.complexAreas)) next.complexAreas = normalizeComplexAreas(body.complexAreas)
 
     await prisma.paperworkRequest.update({
       where: { token: params.token },
@@ -105,6 +110,7 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
       strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyEmail,
       readyToSignEmailSentAt: readyEmail?.sentAt || next.readyToSignEmailSentAt || null,
+      complexAreas: normalizeComplexAreas(next.complexAreas),
       stageDetails: next,
     })
   } catch (err: any) {

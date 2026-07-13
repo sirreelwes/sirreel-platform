@@ -49,6 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
         terms: {
           sets: Array.isArray(snap.sets) ? snap.sets : [],
           setLabels: snap.setLabels || undefined,
+          complexAreasIncluded: Array.isArray(snap.complexAreasIncluded) ? snap.complexAreasIncluded : undefined,
           prelitSets: Array.isArray(snap.prelitSets) ? snap.prelitSets : [],
           ratePerDay: snap.ratePerDay || '',
           otRate: snap.otRate || '300',

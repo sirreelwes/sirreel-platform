@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
-import { stageAreaLabel, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
+import { stageAreaLabel, STRYKER_TRIGGER_KEY, includedComplexAreaLabels } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         // relabeled later, the signed record (and its PDF) keeps
         // showing exactly what the client saw when they signed.
         setLabels: Object.fromEntries(sets.map((k) => [k, stageAreaLabel(k)])),
+        // Included complex amenities frozen at signing — the signed PDF
+        // renders these, never the live standing list.
+        complexAreasIncluded: includedComplexAreaLabels(sd?.complexAreas),
         prelitSets: sd?.prelitSets || [],
         ratePerDay: sd?.ratePerDay,
         otRate: sd?.otRate || '300',
