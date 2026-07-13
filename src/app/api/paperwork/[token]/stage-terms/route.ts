@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
+import { sendStageReadyToSignEmail } from '@/lib/paperwork/stageReadyEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       studioContractSigned: request.studioContractSigned,
       termsReady: sets.length > 0 && !!sd?.ratePerDay,
       strykerRequired: sets.includes('hospital'),
+      readyToSignEmailSentAt: sd?.readyToSignEmailSentAt || null,
       stageDetails: sd,
       booking: request.booking,
     })
@@ -68,6 +70,8 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
 
     const body = await req.json().catch(() => ({}))
     const existing = parseDetails(request.stageDetails) || {}
+    const existingSets: string[] = Array.isArray(existing.sets) ? existing.sets : []
+    const wasReady = existingSets.length > 0 && !!existing.ratePerDay
 
     const next: any = { ...existing }
     if (Array.isArray(body.sets)) next.sets = body.sets.filter((s: any) => typeof s === 'string' && KNOWN_SETS.includes(s))
@@ -84,10 +88,23 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     })
 
     const sets: string[] = next.sets || []
+    const termsReady = sets.length > 0 && !!next.ratePerDay
+
+    // Client notification: fires on the FIRST not-signable → signable
+    // transition only. The helper independently guards on the persisted
+    // readyToSignEmailSentAt stamp (and on already-signed / missing
+    // email), so later re-saves never re-send.
+    let readyEmail: { sent: boolean; to?: string; sentAt?: string; reason?: string } | null = null
+    if (!wasReady && termsReady) {
+      readyEmail = await sendStageReadyToSignEmail(params.token)
+    }
+
     return NextResponse.json({
       ok: true,
-      termsReady: sets.length > 0 && !!next.ratePerDay,
+      termsReady,
       strykerRequired: sets.includes('hospital'),
+      readyEmail,
+      readyToSignEmailSentAt: readyEmail?.sentAt || next.readyToSignEmailSentAt || null,
       stageDetails: next,
     })
   } catch (err: any) {

@@ -63,6 +63,8 @@ export default function StageTermsPage() {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [emailSentAt, setEmailSentAt] = useState<string | null>(null)
+  const [resending, setResending] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -88,6 +90,7 @@ export default function StageTermsPage() {
     setStrikeDays(sd.strikeDays || '')
     setDarkDays(sd.darkDays || '')
     setNotes(sd.notes || '')
+    setEmailSentAt(d.readyToSignEmailSentAt || null)
   }
 
   const toggleSet = (key: string) => {
@@ -110,11 +113,17 @@ export default function StageTermsPage() {
         setMessage(d.error || 'Save failed')
         return
       }
-      setMessage(
-        d.termsReady
-          ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' The Stryker Master Media Use Agreement will be required and separately signed (Hospital Set).' : ''}`
-          : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate.',
-      )
+      let msg = d.termsReady
+        ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' The Stryker Master Media Use Agreement will be required and separately signed (Hospital Set).' : ''}`
+        : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate.'
+      if (d.readyEmail?.sent) {
+        msg += ` ✉️ Ready-to-sign email sent to ${d.readyEmail.to}.`
+        setEmailSentAt(d.readyEmail.sentAt || null)
+      } else if (d.readyEmail && !d.readyEmail.sent) {
+        msg += ` ⚠️ Client email NOT sent: ${d.readyEmail.reason}.`
+      }
+      if (d.readyToSignEmailSentAt) setEmailSentAt(d.readyToSignEmailSentAt)
+      setMessage(msg)
       load()
     } finally {
       setSaving(false)
@@ -265,6 +274,38 @@ export default function StageTermsPage() {
                   >
                     {saving ? 'Saving…' : 'Save terms'}
                   </button>
+
+                  {(selected.termsReady || termsWouldBeReady) && (
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <div className="text-[11px] text-gray-400">
+                        {emailSentAt
+                          ? `Ready-to-sign email sent ${new Date(emailSentAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                          : 'Client has not been emailed yet'}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setResending(true)
+                          setMessage('')
+                          try {
+                            const r = await fetch(`/api/paperwork/${selected.token}/resend-signing-link`, { method: 'POST' })
+                            const d = await r.json()
+                            if (d.sent) {
+                              setEmailSentAt(d.sentAt || null)
+                              setMessage(`✉️ Signing link ${emailSentAt ? 're-sent' : 'sent'} to ${d.to}.`)
+                            } else {
+                              setMessage(`⚠️ Not sent: ${d.reason}`)
+                            }
+                          } finally {
+                            setResending(false)
+                          }
+                        }}
+                        disabled={resending}
+                        className="flex-shrink-0 py-1.5 px-3 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      >
+                        {resending ? 'Sending…' : emailSentAt ? 'Resend signing link' : 'Send signing link'}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

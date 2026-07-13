@@ -110,7 +110,7 @@ export function StudioContractCard({
       title="Studio Contract"
       subtitle="Standing sets license agreement"
       status={status}
-      statusLabel={done ? 'Signed' : !termsReady && !locked ? 'Awaiting terms' : undefined}
+      statusLabel={done ? 'Signed' : !termsReady && !locked ? 'Awaiting Terms Approval' : undefined}
       chips={hasHospital ? <ContextChip>Stryker agreement</ContextChip> : undefined}
       open={open}
       onToggle={onToggle}
