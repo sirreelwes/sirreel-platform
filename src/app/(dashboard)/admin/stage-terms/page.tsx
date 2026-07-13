@@ -23,6 +23,7 @@ import {
   stageAreaLabel,
   defaultComplexAreas,
   normalizeComplexAreas,
+  stageTermsReady,
   type ComplexArea,
 } from '@/lib/contracts/stageAreas'
 
@@ -107,6 +108,7 @@ export default function StageTermsPage() {
   const [emailSentAt, setEmailSentAt] = useState<string | null>(null)
   const [resending, setResending] = useState(false)
   const [signoff, setSignoff] = useState<{ signerName: string; signedAt: string; strykerSigned: boolean; signedPdfUrl: string | null } | null>(null)
+  const [savedSignable, setSavedSignable] = useState(false)
 
   const load = async (): Promise<Row[]> => {
     setLoading(true)
@@ -195,6 +197,7 @@ export default function StageTermsPage() {
     setLedWallPoFlaggedAt(sd.ledWallPo?.flaggedAt || null)
     setEmailSentAt(d.readyToSignEmailSentAt || null)
     setSignoff(d.signoff || null)
+    setSavedSignable(!!d.termsReady)
   }
 
   const toggleSet = (key: string) => {
@@ -268,6 +271,7 @@ export default function StageTermsPage() {
         msg += ` ⚠️ Client email NOT sent: ${d.readyEmail.reason}.`
       }
       if (d.readyToSignEmailSentAt) setEmailSentAt(d.readyToSignEmailSentAt)
+      setSavedSignable(!!d.termsReady)
       setMessage(msg)
       load()
     } finally {
@@ -276,7 +280,10 @@ export default function StageTermsPage() {
   }
 
   const ledWallActive = ledWall && sets.includes(LED_WALL_HOST_KEY)
-  const termsWouldBeReady = sets.length > 0 && !!ratePerDay.trim() && (!ledWallActive || !!ledWallTech)
+  // Single-source signable predicate — the same stageTermsReady the
+  // server gate / ready email / client card / stage-sign all use,
+  // evaluated against the editor draft.
+  const termsWouldBeReady = stageTermsReady({ sets, ratePerDay: ratePerDay.trim(), ledWall, ledWallTech })
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -626,10 +633,11 @@ export default function StageTermsPage() {
 
                   <button
                     onClick={save}
-                    disabled={saving}
-                    className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white rounded-xl text-sm font-semibold"
+                    disabled={saving || !termsWouldBeReady}
+                    title={termsWouldBeReady ? undefined : 'Terms must meet the signable bar first — see the note above.'}
+                    className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold"
                   >
-                    {saving ? 'Saving…' : 'Save terms'}
+                    {saving ? 'Saving…' : emailSentAt || savedSignable ? 'Change terms' : 'Save terms'}
                   </button>
 
                   {(selected.termsReady || termsWouldBeReady) && (
