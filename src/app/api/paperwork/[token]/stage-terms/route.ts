@@ -58,6 +58,14 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyToSignEmailSentAt: sd?.readyToSignEmailSentAt || null,
       complexAreas: normalizeComplexAreas(sd?.complexAreas),
+      signoff: sd?.signoff
+        ? {
+            signerName: sd.signoff.signerName || '',
+            signedAt: sd.signoff.signedAt || '',
+            strykerSigned: !!sd.signoff.stryker,
+            signedPdfUrl: sd.signoff.signedPdfUrl || null,
+          }
+        : null,
       stageDetails: sd,
       booking: request.booking,
     })

@@ -5,6 +5,7 @@ import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { COPY_RECIPIENTS } from '@/lib/email/copyRecipients'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import type { AgreementStatus } from '@prisma/client'
@@ -13,10 +14,6 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const PDF_MIME = 'application/pdf'
-const COPY_RECIPIENTS = {
-  sales: ['jose@sirreel.com', 'oliver@sirreel.com'],
-  billing: ['ana@sirreel.com'],
-}
 
 interface SignRequestBody {
   signerName?: unknown

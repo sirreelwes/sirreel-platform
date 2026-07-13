@@ -74,6 +74,7 @@ export default function StageTermsPage() {
   const [message, setMessage] = useState('')
   const [emailSentAt, setEmailSentAt] = useState<string | null>(null)
   const [resending, setResending] = useState(false)
+  const [signoff, setSignoff] = useState<{ signerName: string; signedAt: string; strykerSigned: boolean; signedPdfUrl: string | null } | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -105,6 +106,7 @@ export default function StageTermsPage() {
     setLedWallTech(sd.ledWallTech === 'sirreel' || sd.ledWallTech === 'client' ? sd.ledWallTech : '')
     setLedWallPoFlaggedAt(sd.ledWallPo?.flaggedAt || null)
     setEmailSentAt(d.readyToSignEmailSentAt || null)
+    setSignoff(d.signoff || null)
   }
 
   const toggleSet = (key: string) => {
@@ -207,8 +209,43 @@ export default function StageTermsPage() {
               </div>
 
               {selected.signed ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  This studio contract is already signed — terms are locked.
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="text-sm font-bold text-emerald-800">✓ Studio contract signed — terms are locked</div>
+                    {signoff && (
+                      <div className="mt-2 space-y-1 text-xs text-emerald-900">
+                        <div>
+                          <span className="text-emerald-700">Signer:</span> <span className="font-semibold">{signoff.signerName || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-emerald-700">Signed:</span>{' '}
+                          <span className="font-semibold">
+                            {signoff.signedAt
+                              ? new Date(signoff.signedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                              : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-emerald-700">Stryker MMA:</span>{' '}
+                          <span className="font-semibold">{signoff.strykerSigned ? 'Yes — signed separately' : 'No'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <a
+                    href={`/api/portal/v2/${selected.token}/stage-contract-pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-center py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold"
+                  >
+                    📄 View signed PDF
+                  </a>
+                  {signoff?.signedPdfUrl && (
+                    <div className="text-[11px] text-gray-400 text-center">
+                      Durable copy stored to Blob at signing{' '}
+                      <span title={signoff.signedPdfUrl}>✓</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
