@@ -112,7 +112,7 @@ export default function StageTermsPage() {
       }
       setMessage(
         d.termsReady
-          ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' Stryker addendum will be required (Hospital Set).' : ''}`
+          ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' The Stryker Master Media Use Agreement will be required and separately signed (Hospital Set).' : ''}`
           : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate.',
       )
       load()
@@ -129,7 +129,7 @@ export default function StageTermsPage() {
         <h1 className="text-2xl font-semibold text-gray-900">Stage contract terms</h1>
         <p className="text-sm text-gray-500 mt-1">
           Set each job&rsquo;s negotiated rate and areas — the client can&rsquo;t sign the studio contract until this is done. Hospital Set adds
-          the Stryker addendum automatically.
+          the Stryker Master Media Use Agreement automatically (separately signed by the client).
         </p>
       </header>
 
@@ -197,7 +197,7 @@ export default function StageTermsPage() {
                             <input type="checkbox" checked={sets.includes(opt.key)} onChange={() => toggleSet(opt.key)} className="w-4 h-4 accent-gray-900" />
                             <span className="text-sm text-gray-800">{opt.label}</span>
                             {opt.key === 'hospital' && sets.includes('hospital') && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">+ Stryker addendum</span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">+ Stryker agreement</span>
                             )}
                           </label>
                           {sets.includes(opt.key) && (

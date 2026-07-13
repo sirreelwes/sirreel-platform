@@ -61,7 +61,7 @@ export interface V2Booking {
   endDate?: string
   status: string
   depositAmount?: string | number | null
-  company?: { name?: string }
+  company?: { name?: string; billingAddress?: string | null }
   person?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string }
   agent?: { name?: string; email?: string }
 }

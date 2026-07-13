@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,18 +14,24 @@ export const dynamic = 'force-dynamic'
  *  1. Server-side GATE: the contract is only signable after a SirReel
  *     agent has prepared the negotiated stage terms — at minimum the
  *     areas (sets) and the day rate — in PaperworkRequest.stageDetails.
- *  2. Stryker addendum: when the hospital set is among the areas, the
- *     client must explicitly acknowledge the Stryker Master Media
- *     Agreement addendum, and that acknowledgment is recorded.
+ *  2. Stryker Master Media Use Agreement: when the hospital set is among
+ *     the areas, the FULL agreement (rendered from the single-source
+ *     template in @/lib/contracts/strykerAgreement) must be separately
+ *     acknowledged AND separately signed. The Stryker signature, printed
+ *     name, timestamp, and an exact populated-text snapshot are persisted
+ *     alongside the studio-contract signature.
  *
- * The signoff (signer, Stryker ack, signature, and a snapshot of the
+ * The signoff (signer, signatures, Stryker block, and a snapshot of the
  * terms as signed) is merged into the stageDetails JSON under `signoff`
  * — extra keys there are ignored by every other reader of the column.
  * Completion flags mirror the legacy studio step exactly.
  */
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
   try {
-    const request = await prisma.paperworkRequest.findUnique({ where: { token: params.token } })
+    const request = await prisma.paperworkRequest.findUnique({
+      where: { token: params.token },
+      include: { booking: { include: { company: true } } },
+    })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
     let sd: any = null
@@ -48,19 +55,51 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       return NextResponse.json({ error: 'Terms must be accepted' }, { status: 400 })
     }
     const requiresStryker = sets.includes('hospital')
-    if (requiresStryker && !body.strykerAcknowledged) {
-      return NextResponse.json({ error: 'The Stryker addendum must be acknowledged for hospital-set bookings' }, { status: 400 })
+    const strykerSignature = typeof body.strykerSignatureData === 'string' ? body.strykerSignatureData : ''
+    if (requiresStryker && (!body.strykerAcknowledged || !strykerSignature.trim())) {
+      return NextResponse.json(
+        { error: 'The Stryker Master Media Use Agreement must be acknowledged and separately signed for hospital-set bookings' },
+        { status: 400 },
+      )
     }
 
     const now = new Date()
     const ip = req.headers.get('x-forwarded-for') || 'unknown'
+
+    // Rebuild the populated Stryker text server-side so the persisted
+    // snapshot is exactly what the template renders for this job — the
+    // client never supplies contract text.
+    const fmtLong = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    // endDate is a date-only column (UTC midnight) — format in UTC so the
+    // return date never rolls back a day on servers in other timezones.
+    const fmtLongUTC = (d: Date) =>
+      d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    const strykerFields = requiresStryker
+      ? {
+          producerName: request.booking?.company?.name || 'Producer',
+          producerAddress: request.booking?.company?.billingAddress || '',
+          projectTitle: request.booking?.jobName || '',
+          agreementDate: fmtLong(now),
+          returnDate: request.booking?.endDate ? fmtLongUTC(new Date(request.booking.endDate)) : '',
+        }
+      : null
+
     const signoff = {
       signerName: typeof body.signerName === 'string' ? body.signerName.slice(0, 200) : '',
-      strykerAcknowledged: !!body.strykerAcknowledged,
       strykerRequired: requiresStryker,
       signatureData: typeof body.signatureData === 'string' ? body.signatureData : '',
       signedAt: now.toISOString(),
       ip,
+      stryker: strykerFields
+        ? {
+            acknowledged: !!body.strykerAcknowledged,
+            printedName: typeof body.strykerPrintedName === 'string' ? body.strykerPrintedName.slice(0, 200) : '',
+            signatureData: strykerSignature,
+            signedAt: now.toISOString(),
+            fields: strykerFields,
+            textSnapshot: renderStrykerPlainText(strykerFields),
+          }
+        : null,
       termsSnapshot: {
         sets,
         prelitSets: sd?.prelitSets || [],

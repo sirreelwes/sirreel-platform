@@ -71,8 +71,6 @@ export const STUDIO_TERMS: { heading: string; text: string }[] = [
   { heading: '14. Miscellaneous.', text: `Producer shall not assign this Agreement without Licensor consent. Producer shall indemnify and hold harmless Licensor from any claims arising from Producer's use of the Property. This Agreement is governed by California law with venue in Los Angeles County.` },
 ]
 
-export const STRYKER_ADDENDUM = { heading: 'Stryker Addendum.', text: `By using the Hospital Set, Producer acknowledges the Stryker Master Media Agreement and agrees to its terms regarding Stryker medical equipment on set.` }
-
 export const CC_GUARANTEE_TEXT = `This Credit Card Authorization form guarantees the payment of all fees due SirReel Studio Services according to the Rental Agreement. This credit card may be used for Charges and Deposits, Cancellation Fees, Damage to Premises and Equipment, Past Due Balances, Fines, Parking Fees and all fees incurred during a given project/production. I agree that the cardholder is a Personal Guarantor of the charges here described and summarized.`
 
 export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`

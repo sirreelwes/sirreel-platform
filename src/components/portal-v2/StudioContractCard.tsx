@@ -1,9 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { TSX } from '@/lib/brand/tsxTokens'
-import { STUDIO_TERMS, STRYKER_ADDENDUM, STAGE_SET_LABELS } from './terms'
+import { STUDIO_TERMS, STAGE_SET_LABELS } from './terms'
+import {
+  STRYKER_MMA_TITLE,
+  STRYKER_EXHIBIT_A,
+  renderStrykerParagraphs,
+} from '@/lib/contracts/strykerAgreement'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Paperwork } from './types'
 
@@ -48,6 +53,9 @@ export function StudioContractCard({
 }) {
   const [agreed, setAgreed] = useState(false)
   const [strykerAcknowledged, setStrykerAcknowledged] = useState(false)
+  const [strykerSig, setStrykerSig] = useState<string | null>(null)
+  const [strykerPrintedName, setStrykerPrintedName] = useState('')
+  const [strykerNameSeeded, setStrykerNameSeeded] = useState(false)
   const [sig, setSig] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -68,6 +76,34 @@ export function StudioContractCard({
 
   const status = done ? 'done' : locked ? 'locked' : !termsReady ? 'pending' : 'todo'
 
+  // Stryker MMA merge fields — populated from the job/client record. The
+  // server rebuilds the same text at signing for the persisted snapshot.
+  const producerName = booking.company?.name || 'Producer'
+  const fmtLong = (d?: string) =>
+    d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
+  // endDate is date-only (UTC midnight) — format in UTC so the return
+  // date shown to the client matches the booking's calendar date.
+  const fmtLongUTC = (d?: string) =>
+    d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : ''
+  const strykerParagraphs = hasHospital
+    ? renderStrykerParagraphs({
+        producerName,
+        producerAddress: booking.company?.billingAddress || '',
+        projectTitle: booking.jobName,
+        agreementDate: fmtLong(new Date().toISOString()),
+        returnDate: fmtLongUTC(booking.endDate),
+      })
+    : []
+
+  // Pre-fill the Stryker printed name from the collect-once intake once.
+  useEffect(() => {
+    if (strykerNameSeeded || !signerName) return
+    setStrykerPrintedName((v) => v || signerName)
+    setStrykerNameSeeded(true)
+  }, [signerName, strykerNameSeeded])
+
+  const strykerComplete = !hasHospital || (strykerAcknowledged && !!strykerSig && !!strykerPrintedName.trim())
+
   return (
     <CardShell
       icon="🎬"
@@ -75,7 +111,7 @@ export function StudioContractCard({
       subtitle="Standing sets license agreement"
       status={status}
       statusLabel={done ? 'Signed' : !termsReady && !locked ? 'Awaiting terms' : undefined}
-      chips={hasHospital ? <ContextChip>Stryker addendum</ContextChip> : undefined}
+      chips={hasHospital ? <ContextChip>Stryker agreement</ContextChip> : undefined}
       open={open}
       onToggle={onToggle}
       actionLabel="Review & sign"
@@ -83,7 +119,20 @@ export function StudioContractCard({
       {locked && !done ? (
         <LockedNote title="Studio Contract" />
       ) : done ? (
-        <DoneNote title="Studio Contract Signed" sub="Signed & on file with SirReel" />
+        <div className="space-y-3">
+          <DoneNote
+            title="Studio Contract Signed"
+            sub={hasHospital ? 'Studio contract + Stryker agreement on file with SirReel' : 'Signed & on file with SirReel'}
+          />
+          {sd?.signoff && (
+            <a
+              href={`/api/portal/v2/${token}/stage-contract-pdf`}
+              className="block text-center py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold"
+            >
+              Download signed copy (PDF)
+            </a>
+          )}
+        </div>
       ) : !termsReady ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
           <span className="text-xl">⏳</span>
@@ -187,11 +236,6 @@ export function StudioContractCard({
                   <strong>{t.heading}</strong> {t.text}
                 </p>
               ))}
-              {hasHospital && (
-                <p>
-                  <strong>{STRYKER_ADDENDUM.heading}</strong> {STRYKER_ADDENDUM.text}
-                </p>
-              )}
             </div>
           </div>
 
@@ -201,11 +245,46 @@ export function StudioContractCard({
           </label>
 
           {hasHospital && (
-            <div className="rounded-xl border p-3" style={{ borderColor: '#D4A547', backgroundColor: 'rgba(212,165,71,0.06)' }}>
-              <div className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: '#8a6a1f' }}>
-                Stryker addendum — required for the Hospital Set
+            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: '#D4A547', backgroundColor: 'rgba(212,165,71,0.06)' }}>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8a6a1f' }}>
+                  Required for the Hospital Set · Signed separately
+                </div>
+                <h3 className="font-bold text-gray-900 mt-1">{STRYKER_MMA_TITLE}</h3>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  Production / Show Title: <span className="font-semibold text-gray-700">{booking.jobName}</span>
+                </div>
               </div>
-              <p className="text-xs text-gray-600 leading-relaxed mb-2">{STRYKER_ADDENDUM.text}</p>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 border border-gray-200 rounded-xl p-3 bg-white text-xs text-gray-600 leading-relaxed">
+                {strykerParagraphs.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+                <div className="pt-1">
+                  <div className="font-bold text-gray-800 mb-1.5">Exhibit A</div>
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-left text-gray-400">
+                        <th className="pb-1 pr-2 font-semibold">Product Description</th>
+                        <th className="pb-1 pr-2 font-semibold">Product No.</th>
+                        <th className="pb-1 pr-2 font-semibold">Qty</th>
+                        <th className="pb-1 font-semibold">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {STRYKER_EXHIBIT_A.map((r) => (
+                        <tr key={r.productNo} className="border-t border-gray-100">
+                          <td className="py-1 pr-2">{r.description}</td>
+                          <td className="py-1 pr-2">{r.productNo}</td>
+                          <td className="py-1 pr-2">{r.quantity}</td>
+                          <td className="py-1">{r.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -214,14 +293,33 @@ export function StudioContractCard({
                   className="mt-0.5 w-4 h-4 accent-gray-900"
                 />
                 <span className="text-sm text-gray-700 font-medium">
-                  I acknowledge the Stryker Master Media Agreement addendum and agree to its terms regarding Stryker medical equipment on set.
+                  I have read and agree to the Stryker Master Media Use Agreement above on behalf of {producerName}.
                 </span>
               </label>
+
+              <div>
+                <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Printed name (Stryker agreement signer) *</label>
+                <input
+                  value={strykerPrintedName}
+                  onChange={(e) => setStrykerPrintedName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-gray-400"
+                />
+              </div>
+
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                  Stryker Master Media Use Agreement — Signature
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Sign here on behalf of {producerName}. This signature is separate from the studio contract signature below.
+                </p>
+                <SigCanvas onChange={setStrykerSig} placeholder="Sign the Stryker agreement here" />
+              </div>
             </div>
           )}
 
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Authorized Signature</div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Studio Contract — Authorized Signature</div>
             <p className="text-xs text-gray-500 mb-2">
               I am an Authorized Representative of the Producer and I understand and accept the terms and conditions in this contract.
             </p>
@@ -240,6 +338,8 @@ export function StudioContractCard({
                   body: JSON.stringify({
                     studioAgreed: agreed,
                     strykerAcknowledged,
+                    strykerSignatureData: strykerSig || '',
+                    strykerPrintedName,
                     signerName,
                     signatureData: sig || '',
                   }),
@@ -256,7 +356,7 @@ export function StudioContractCard({
                 setSubmitting(false)
               }
             }}
-            disabled={!agreed || (hasHospital && !strykerAcknowledged) || !sig || submitting}
+            disabled={!agreed || !strykerComplete || !sig || submitting}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ backgroundColor: TSX.ink }}
           >
