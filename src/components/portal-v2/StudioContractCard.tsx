@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { TSX } from '@/lib/brand/tsxTokens'
 import { STUDIO_TERMS } from './terms'
-import { stageAreaLabel, STRYKER_TRIGGER_KEY, includedComplexAreaLabels } from '@/lib/contracts/stageAreas'
+import {
+  stageAreaContractLabel,
+  STRYKER_TRIGGER_KEY,
+  includedComplexAreaLabels,
+  stageTermsReady,
+  ledWallSelected,
+  LED_WALL_TECH_LABELS,
+  type LedWallTech,
+} from '@/lib/contracts/stageAreas'
 import {
   STRYKER_MMA_TITLE,
   STRYKER_EXHIBIT_A,
@@ -71,9 +79,9 @@ export function StudioContractCard({
   const prelitSets: string[] = sd?.prelitSets || []
   const hasHospital = sets.includes(STRYKER_TRIGGER_KEY)
 
-  // Agent-prepared terms gate: rate and areas are negotiated per job, so
-  // the contract is only signable once both exist on the request.
-  const termsReady = sets.length > 0 && !!sd?.ratePerDay
+  // Agent-prepared terms gate (shared logic): rented stage + rate, and a
+  // technician choice whenever the LED Wall add-on is on.
+  const termsReady = stageTermsReady(sd)
 
   const status = done ? 'done' : locked ? 'locked' : !termsReady ? 'pending' : 'todo'
 
@@ -175,12 +183,18 @@ export function StudioContractCard({
                   <div key={s} className="flex items-center gap-2 text-sm">
                     <span>🎬</span>
                     <span>
-                      {stageAreaLabel(s)}
+                      {stageAreaContractLabel(s, sd)}
                       {prelitSets.includes(s) ? ' (Pre-lit)' : ''}
                     </span>
                   </div>
                 ))}
               </div>
+              {ledWallSelected(sd) && sd?.ledWallTech && (
+                <div className="mt-1.5 text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5">
+                  <span className="font-semibold">LED Wall technician: </span>
+                  {LED_WALL_TECH_LABELS[sd.ledWallTech as LedWallTech]}
+                </div>
+              )}
             </div>
           )}
 

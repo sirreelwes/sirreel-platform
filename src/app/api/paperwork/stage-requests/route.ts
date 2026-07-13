@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
-import { STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
+import { STRYKER_TRIGGER_KEY, stageTermsReady, ledWallSelected } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +41,8 @@ export async function GET(_req: NextRequest) {
         startDate: r.booking?.startDate || null,
         endDate: r.booking?.endDate || null,
         signed: r.studioContractSigned,
-        termsReady: sets.length > 0 && !!sd?.ratePerDay,
+        termsReady: stageTermsReady(sd),
+        ledWall: ledWallSelected(sd),
         strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
         sets,
         ratePerDay: sd?.ratePerDay || '',

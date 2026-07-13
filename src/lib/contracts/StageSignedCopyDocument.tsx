@@ -35,6 +35,9 @@ export interface StageSignedCopyProps {
     /** Included complex amenities frozen at signing (labels). Absent on
      *  records signed before complex areas existed — section is omitted. */
     complexAreasIncluded?: string[]
+    /** LED Wall technician arrangement frozen at signing, when the LED
+     *  Wall add-on was on (e.g. "SirReel LED technician scheduled"). */
+    ledWallTechLabel?: string
     prelitSets: string[]
     ratePerDay: string
     otRate: string
@@ -207,6 +210,12 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
             </View>
           ) : null}
         </View>
+        {terms.ledWallTechLabel ? (
+          <Text style={styles.para}>
+            <Text style={styles.paraBold}>LED Wall technician: </Text>
+            {terms.ledWallTechLabel}
+          </Text>
+        ) : null}
         {terms.complexAreasIncluded && terms.complexAreasIncluded.length > 0 ? (
           <View>
             <Text style={styles.sectionTitle}>Complex Areas Included</Text>

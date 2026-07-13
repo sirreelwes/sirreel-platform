@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildStageReadyToSignEmail } from '@/lib/email/templates/stageReadyToSign'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
+import { stageTermsReady } from '@/lib/contracts/stageAreas'
 
 /**
  * Client "ready to sign" notification for the v2 stage contract.
@@ -42,9 +43,7 @@ export async function sendStageReadyToSignEmail(
   } catch {
     sd = null
   }
-  const sets: string[] = Array.isArray(sd?.sets) ? sd.sets : []
-  const termsReady = sets.length > 0 && !!sd?.ratePerDay
-  if (!termsReady) return { sent: false, reason: 'Terms are not complete (area + rate required)' }
+  if (!stageTermsReady(sd)) return { sent: false, reason: 'Terms are not complete (stage + rate required; LED Wall needs a tech choice)' }
   if (sd?.readyToSignEmailSentAt && !opts.force) {
     return { sent: false, reason: `Already sent ${sd.readyToSignEmailSentAt}` }
   }

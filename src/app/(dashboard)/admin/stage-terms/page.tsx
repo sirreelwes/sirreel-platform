@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import {
   STAGE_AREAS,
   STRYKER_TRIGGER_KEY,
+  LED_WALL_HOST_KEY,
   isRetiredAreaKey,
   stageAreaLabel,
   defaultComplexAreas,
@@ -66,6 +67,9 @@ export default function StageTermsPage() {
   const [notes, setNotes] = useState('')
   const [complexAreas, setComplexAreas] = useState<ComplexArea[]>(defaultComplexAreas())
   const [customAreaName, setCustomAreaName] = useState('')
+  const [ledWall, setLedWall] = useState(false)
+  const [ledWallTech, setLedWallTech] = useState<'' | 'sirreel' | 'client'>('')
+  const [ledWallPoFlaggedAt, setLedWallPoFlaggedAt] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [emailSentAt, setEmailSentAt] = useState<string | null>(null)
@@ -97,6 +101,9 @@ export default function StageTermsPage() {
     setNotes(sd.notes || '')
     setComplexAreas(d.complexAreas || normalizeComplexAreas(sd.complexAreas))
     setCustomAreaName('')
+    setLedWall(!!sd.ledWall)
+    setLedWallTech(sd.ledWallTech === 'sirreel' || sd.ledWallTech === 'client' ? sd.ledWallTech : '')
+    setLedWallPoFlaggedAt(sd.ledWallPo?.flaggedAt || null)
     setEmailSentAt(d.readyToSignEmailSentAt || null)
   }
 
@@ -113,7 +120,7 @@ export default function StageTermsPage() {
       const r = await fetch(`/api/paperwork/${selected.token}/stage-terms`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes, complexAreas }),
+        body: JSON.stringify({ sets, prelitSets, ratePerDay, otRate, prepDays, shootDays, strikeDays, darkDays, notes, complexAreas, ledWall, ledWallTech: ledWallTech || null }),
       })
       const d = await r.json()
       if (!r.ok) {
@@ -122,7 +129,7 @@ export default function StageTermsPage() {
       }
       let msg = d.termsReady
         ? `Saved — the studio contract is now signable in the client portal.${d.strykerRequired ? ' The Stryker Master Media Use Agreement will be required and separately signed (Hospital Set).' : ''}`
-        : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate.'
+        : 'Saved, but the contract is still NOT signable — it needs at least one area and a day rate (and a technician choice if the LED Wall is on).'
       if (d.readyEmail?.sent) {
         msg += ` ✉️ Ready-to-sign email sent to ${d.readyEmail.to}.`
         setEmailSentAt(d.readyEmail.sentAt || null)
@@ -137,7 +144,8 @@ export default function StageTermsPage() {
     }
   }
 
-  const termsWouldBeReady = sets.length > 0 && !!ratePerDay.trim()
+  const ledWallActive = ledWall && sets.includes(LED_WALL_HOST_KEY)
+  const termsWouldBeReady = sets.length > 0 && !!ratePerDay.trim() && (!ledWallActive || !!ledWallTech)
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -215,26 +223,58 @@ export default function StageTermsPage() {
                     )}
                     <div className="space-y-2">
                       {STAGE_AREAS.map((opt) => (
-                        <div key={opt.key} className="flex items-center gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer flex-1">
-                            <input type="checkbox" checked={sets.includes(opt.key)} onChange={() => toggleSet(opt.key)} className="w-4 h-4 accent-gray-900" />
-                            <span className="text-sm text-gray-800">{opt.label}</span>
-                            {opt.key === STRYKER_TRIGGER_KEY && sets.includes(STRYKER_TRIGGER_KEY) && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">+ Stryker agreement</span>
-                            )}
-                          </label>
-                          {sets.includes(opt.key) && (
-                            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500">
-                              <input
-                                type="checkbox"
-                                checked={prelitSets.includes(opt.key)}
-                                onChange={() =>
-                                  setPrelitSets((cur) => (cur.includes(opt.key) ? cur.filter((s) => s !== opt.key) : [...cur, opt.key]))
-                                }
-                                className="w-3.5 h-3.5 accent-gray-900"
-                              />
-                              Pre-lit
+                        <div key={opt.key}>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                              <input type="checkbox" checked={sets.includes(opt.key)} onChange={() => toggleSet(opt.key)} className="w-4 h-4 accent-gray-900" />
+                              <span className="text-sm text-gray-800">{opt.label}</span>
+                              {opt.key === STRYKER_TRIGGER_KEY && sets.includes(STRYKER_TRIGGER_KEY) && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">+ Stryker agreement</span>
+                              )}
                             </label>
+                            {sets.includes(opt.key) && (
+                              <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={prelitSets.includes(opt.key)}
+                                  onChange={() =>
+                                    setPrelitSets((cur) => (cur.includes(opt.key) ? cur.filter((s) => s !== opt.key) : [...cur, opt.key]))
+                                  }
+                                  className="w-3.5 h-3.5 accent-gray-900"
+                                />
+                                Pre-lit
+                              </label>
+                            )}
+                          </div>
+                          {opt.key === LED_WALL_HOST_KEY && sets.includes(LED_WALL_HOST_KEY) && (
+                            <div className="ml-6 mt-1.5 rounded-lg border border-gray-200 bg-gray-50 p-2.5 space-y-2">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={ledWall} onChange={(e) => setLedWall(e.target.checked)} className="w-4 h-4 accent-gray-900" />
+                                <span className="text-sm font-semibold text-gray-800">LED Wall</span>
+                                <span className="text-[11px] text-gray-400">add-on — renders as &ldquo;Lankershim Studio with the LED Wall&rdquo;</span>
+                              </label>
+                              {ledWall && (
+                                <>
+                                  <div className="text-[11px] font-semibold text-gray-600">LED technician (required) *</div>
+                                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                                    <input type="radio" name="ledWallTech" checked={ledWallTech === 'sirreel'} onChange={() => setLedWallTech('sirreel')} className="accent-gray-900" />
+                                    Schedule SirReel LED technician
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                                    <input type="radio" name="ledWallTech" checked={ledWallTech === 'client'} onChange={() => setLedWallTech('client')} className="accent-gray-900" />
+                                    Client provides their own LED technician
+                                  </label>
+                                  {ledWallTech === 'sirreel' && (
+                                    <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                                      Flagged: a SirReel LED technician is needed for this job (scheduling handled separately).
+                                    </div>
+                                  )}
+                                  <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                    📌 PO marker{ledWallPoFlaggedAt ? ` (flagged ${new Date(ledWallPoFlaggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ' (set on save)'}: $1,000 LED Wall purchase order owed to Angelo Belarmino / XR Stages. Flag only — nothing is billed or payable from here.
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       ))}
@@ -341,7 +381,9 @@ export default function StageTermsPage() {
                   <div className={`rounded-lg p-3 text-xs ${termsWouldBeReady ? 'bg-blue-50 border border-blue-200 text-blue-700' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
                     {termsWouldBeReady
                       ? `On save, the studio contract becomes signable in the client portal${sets.includes(STRYKER_TRIGGER_KEY) ? ' with the Stryker Master Media Use Agreement required' : ''}.`
-                      : 'Needs at least one area and a day rate before the client can sign.'}
+                      : ledWallActive && !ledWallTech
+                        ? 'LED Wall is on — choose the technician arrangement before the client can sign.'
+                        : 'Needs at least one area and a day rate before the client can sign.'}
                   </div>
 
                   {message && <div className="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-2.5">{message}</div>}

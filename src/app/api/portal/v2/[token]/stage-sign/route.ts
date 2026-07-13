@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
-import { stageAreaLabel, STRYKER_TRIGGER_KEY, includedComplexAreaLabels } from '@/lib/contracts/stageAreas'
+import {
+  stageAreaContractLabel,
+  STRYKER_TRIGGER_KEY,
+  includedComplexAreaLabels,
+  stageTermsReady,
+  ledWallSelected,
+  LED_WALL_TECH_LABELS,
+  type LedWallTech,
+} from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,8 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     const sets: string[] = Array.isArray(sd?.sets) ? sd.sets : []
-    const termsReady = sets.length > 0 && !!sd?.ratePerDay
-    if (!termsReady) {
+    if (!stageTermsReady(sd)) {
       return NextResponse.json(
         { error: 'Stage terms are not finalized yet. Your SirReel agent must set the rate and areas before this contract can be signed.' },
         { status: 409 },
@@ -106,10 +113,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         // Labels frozen at signing time — if the area list is ever
         // relabeled later, the signed record (and its PDF) keeps
         // showing exactly what the client saw when they signed.
-        setLabels: Object.fromEntries(sets.map((k) => [k, stageAreaLabel(k)])),
+        setLabels: Object.fromEntries(sets.map((k) => [k, stageAreaContractLabel(k, sd)])),
         // Included complex amenities frozen at signing — the signed PDF
         // renders these, never the live standing list.
         complexAreasIncluded: includedComplexAreaLabels(sd?.complexAreas),
+        // LED Wall add-on + required technician fork, frozen at signing.
+        ledWall: ledWallSelected(sd)
+          ? { on: true, tech: sd.ledWallTech, techLabel: LED_WALL_TECH_LABELS[sd.ledWallTech as LedWallTech] || '' }
+          : null,
         prelitSets: sd?.prelitSets || [],
         ratePerDay: sd?.ratePerDay,
         otRate: sd?.otRate || '300',

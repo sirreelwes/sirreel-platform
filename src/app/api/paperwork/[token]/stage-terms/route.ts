@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { sendStageReadyToSignEmail } from '@/lib/paperwork/stageReadyEmail'
-import { STAGE_AREA_KEYS, STRYKER_TRIGGER_KEY, normalizeComplexAreas } from '@/lib/contracts/stageAreas'
+import {
+  STAGE_AREA_KEYS,
+  STRYKER_TRIGGER_KEY,
+  normalizeComplexAreas,
+  stageTermsReady,
+  ledWallSelected,
+} from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +54,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
     return NextResponse.json({
       contractType: request.contractType,
       studioContractSigned: request.studioContractSigned,
-      termsReady: sets.length > 0 && !!sd?.ratePerDay,
+      termsReady: stageTermsReady(sd),
       strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyToSignEmailSentAt: sd?.readyToSignEmailSentAt || null,
       complexAreas: normalizeComplexAreas(sd?.complexAreas),
@@ -71,8 +77,7 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
 
     const body = await req.json().catch(() => ({}))
     const existing = parseDetails(request.stageDetails) || {}
-    const existingSets: string[] = Array.isArray(existing.sets) ? existing.sets : []
-    const wasReady = existingSets.length > 0 && !!existing.ratePerDay
+    const wasReady = stageTermsReady(existing)
 
     const next: any = { ...existing }
     if (Array.isArray(body.sets)) next.sets = body.sets.filter((s: any) => typeof s === 'string' && STAGE_AREA_KEYS.includes(s))
@@ -87,13 +92,34 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     // entries are capped/sanitized.
     if (Array.isArray(body.complexAreas)) next.complexAreas = normalizeComplexAreas(body.complexAreas)
 
+    // LED Wall add-on (sub-option of Lankershim Studio) + required tech fork.
+    if (typeof body.ledWall === 'boolean') next.ledWall = body.ledWall
+    if (body.ledWallTech === 'sirreel' || body.ledWallTech === 'client') next.ledWallTech = body.ledWallTech
+    else if (body.ledWallTech === '' || body.ledWallTech === null) delete next.ledWallTech
+
+    // LED Wall PO marker — NON-MONETARY flag only (no payable, no invoice
+    // line, no price change). Lives here so the future Payables system can
+    // pick it up off stageDetails. Set once while the LED Wall is on;
+    // removed if the LED Wall is turned off before signing.
+    if (ledWallSelected(next)) {
+      next.ledWallPo = next.ledWallPo || {
+        kind: 'LED_WALL_PO_PLACEHOLDER',
+        amountUsd: 1000,
+        owedTo: 'Angelo Belarmino / XR Stages',
+        note: '$1,000 LED Wall purchase order owed — placeholder flag for the future Payables system. Not a payable, not billed.',
+        flaggedAt: new Date().toISOString(),
+      }
+    } else {
+      delete next.ledWallPo
+    }
+
     await prisma.paperworkRequest.update({
       where: { token: params.token },
       data: { stageDetails: JSON.stringify(next) },
     })
 
     const sets: string[] = next.sets || []
-    const termsReady = sets.length > 0 && !!next.ratePerDay
+    const termsReady = stageTermsReady(next)
 
     // Client notification: fires on the FIRST not-signable → signable
     // transition only. The helper independently guards on the persisted

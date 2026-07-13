@@ -26,12 +26,56 @@ export interface StageArea {
 export const STAGE_AREAS: StageArea[] = [
   { key: 'hospital', label: 'Hospital Set' },
   { key: 'police', label: 'Police Set' },
-  { key: 'led', label: 'LED Stage' },
+  // Key 'led' kept stable through the "LED Stage" → "Lankershim Studio"
+  // rename (July 2026): every stored stageDetails.sets entry resolves to
+  // the new label automatically; already-signed snapshots keep their
+  // frozen "LED Stage" label.
+  { key: 'led', label: 'Lankershim Studio' },
   { key: 'blackbox', label: 'Black Box' },
+  // Reactivated (was retired as "Morgue / Laboratory") — old unsigned
+  // records with key 'morgue' now resolve to the current label.
+  { key: 'morgue', label: 'Morgue Set' },
 ]
 
 /** The one — and only — area key that requires the Stryker MMA. */
 export const STRYKER_TRIGGER_KEY = 'hospital'
+
+/** The stage that can host the LED Wall add-on (not a standalone stage). */
+export const LED_WALL_HOST_KEY = 'led'
+
+export type LedWallTech = 'sirreel' | 'client'
+
+export const LED_WALL_TECH_LABELS: Record<LedWallTech, string> = {
+  sirreel: 'SirReel LED technician scheduled',
+  client: 'Client provides their own LED technician',
+}
+
+/** True when the LED Wall add-on applies: host stage selected + toggle on. */
+export function ledWallSelected(sd: any): boolean {
+  const sets: string[] = Array.isArray(sd?.sets) ? sd.sets : []
+  return sets.includes(LED_WALL_HOST_KEY) && !!sd?.ledWall
+}
+
+/** Contract display label for a rented stage, LED Wall aware. */
+export function stageAreaContractLabel(key: string, sd: any): string {
+  if (key === LED_WALL_HOST_KEY && ledWallSelected(sd)) {
+    return `${stageAreaLabel(key)} with the LED Wall`
+  }
+  return stageAreaLabel(key)
+}
+
+/**
+ * SINGLE source for the "signable" gate: at least one rented stage +
+ * a day rate, AND — when the LED Wall is on — the required technician
+ * fork must be answered. Used by the agent tool, both paperwork API
+ * routes, the ready-to-sign email, the client card, and stage-sign.
+ */
+export function stageTermsReady(sd: any): boolean {
+  const sets: string[] = Array.isArray(sd?.sets) ? sd.sets : []
+  if (sets.length === 0 || !sd?.ratePerDay) return false
+  if (ledWallSelected(sd) && sd?.ledWallTech !== 'sirreel' && sd?.ledWallTech !== 'client') return false
+  return true
+}
 
 const LABELS: Record<string, string> = Object.fromEntries(STAGE_AREAS.map((a) => [a.key, a.label]))
 
@@ -41,7 +85,8 @@ const LABELS: Record<string, string> = Object.fromEntries(STAGE_AREAS.map((a) =>
  * Never shown as selectable options.
  */
 const RETIRED_LABELS: Record<string, string> = {
-  morgue: 'Morgue / Laboratory',
+  // (empty — 'morgue' was retired July 2026 then reactivated as
+  // "Morgue Set". Keep this map for future retirements.)
 }
 
 /**
