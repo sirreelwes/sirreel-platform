@@ -1,6 +1,7 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
-import { STUDIO_TERMS, STAGE_SET_LABELS } from '@/components/portal-v2/terms'
+import { STUDIO_TERMS } from '@/components/portal-v2/terms'
+import { stageAreaLabel } from './stageAreas'
 import {
   STRYKER_MMA_TITLE,
   STRYKER_EXHIBIT_A,
@@ -27,6 +28,10 @@ export interface StageSignedCopyProps {
   rentalEnd: string
   terms: {
     sets: string[]
+    /** Labels frozen at signing time (key → label). Falls back to the
+     *  current area list for records signed before labels were
+     *  snapshotted. */
+    setLabels?: Record<string, string>
     prelitSets: string[]
     ratePerDay: string
     otRate: string
@@ -161,7 +166,9 @@ export function StageSignedCopyDocument(props: StageSignedCopyProps) {
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>Sets</Text>
             <Text style={styles.metaValue}>
-              {terms.sets.map((s) => `${STAGE_SET_LABELS[s] || s}${terms.prelitSets.includes(s) ? ' (Pre-lit)' : ''}`).join(', ') || '—'}
+              {terms.sets
+                .map((s) => `${terms.setLabels?.[s] || stageAreaLabel(s)}${terms.prelitSets.includes(s) ? ' (Pre-lit)' : ''}`)
+                .join(', ') || '—'}
             </Text>
           </View>
           <View style={styles.metaCell}>

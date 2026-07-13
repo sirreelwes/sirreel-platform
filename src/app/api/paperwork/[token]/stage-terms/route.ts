@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { sendStageReadyToSignEmail } from '@/lib/paperwork/stageReadyEmail'
+import { STAGE_AREA_KEYS, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,6 @@ export const dynamic = 'force-dynamic'
  */
 
 const STRING_FIELDS = ['ratePerDay', 'otRate', 'prepDays', 'shootDays', 'strikeDays', 'darkDays', 'notes'] as const
-const KNOWN_SETS = ['hospital', 'morgue', 'police']
 
 async function requireAgent() {
   const session = await getServerSession()
@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       contractType: request.contractType,
       studioContractSigned: request.studioContractSigned,
       termsReady: sets.length > 0 && !!sd?.ratePerDay,
-      strykerRequired: sets.includes('hospital'),
+      strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyToSignEmailSentAt: sd?.readyToSignEmailSentAt || null,
       stageDetails: sd,
       booking: request.booking,
@@ -74,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     const wasReady = existingSets.length > 0 && !!existing.ratePerDay
 
     const next: any = { ...existing }
-    if (Array.isArray(body.sets)) next.sets = body.sets.filter((s: any) => typeof s === 'string' && KNOWN_SETS.includes(s))
+    if (Array.isArray(body.sets)) next.sets = body.sets.filter((s: any) => typeof s === 'string' && STAGE_AREA_KEYS.includes(s))
     if (Array.isArray(body.prelitSets)) {
       next.prelitSets = body.prelitSets.filter((s: any) => typeof s === 'string' && (next.sets || []).includes(s))
     }
@@ -102,7 +102,7 @@ export async function PUT(req: NextRequest, { params }: { params: { token: strin
     return NextResponse.json({
       ok: true,
       termsReady,
-      strykerRequired: sets.includes('hospital'),
+      strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
       readyEmail,
       readyToSignEmailSentAt: readyEmail?.sentAt || next.readyToSignEmailSentAt || null,
       stageDetails: next,

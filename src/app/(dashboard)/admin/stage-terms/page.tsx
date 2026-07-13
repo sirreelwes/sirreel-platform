@@ -15,12 +15,7 @@
  */
 
 import { useEffect, useState } from 'react'
-
-const SET_OPTIONS = [
-  { key: 'hospital', label: 'Hospital Set' },
-  { key: 'morgue', label: 'Morgue / Laboratory' },
-  { key: 'police', label: 'Police Station / Jail' },
-]
+import { STAGE_AREAS, STRYKER_TRIGGER_KEY, isRetiredAreaKey, stageAreaLabel } from '@/lib/contracts/stageAreas'
 
 interface Row {
   token: string
@@ -199,13 +194,20 @@ export default function StageTermsPage() {
                 <>
                   <div>
                     <div className="text-[11px] font-semibold text-gray-600 mb-2">Areas to be used *</div>
+                    {sets.some(isRetiredAreaKey) && (
+                      <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">
+                        This job was saved with retired area{sets.filter(isRetiredAreaKey).length > 1 ? 's' : ''}:{' '}
+                        <span className="font-semibold">{sets.filter(isRetiredAreaKey).map(stageAreaLabel).join(', ')}</span>. They stay on
+                        the record until you re-save — selecting from the current list below replaces them.
+                      </div>
+                    )}
                     <div className="space-y-2">
-                      {SET_OPTIONS.map((opt) => (
+                      {STAGE_AREAS.map((opt) => (
                         <div key={opt.key} className="flex items-center gap-4">
                           <label className="flex items-center gap-2 cursor-pointer flex-1">
                             <input type="checkbox" checked={sets.includes(opt.key)} onChange={() => toggleSet(opt.key)} className="w-4 h-4 accent-gray-900" />
                             <span className="text-sm text-gray-800">{opt.label}</span>
-                            {opt.key === 'hospital' && sets.includes('hospital') && (
+                            {opt.key === STRYKER_TRIGGER_KEY && sets.includes(STRYKER_TRIGGER_KEY) && (
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">+ Stryker agreement</span>
                             )}
                           </label>
@@ -261,7 +263,7 @@ export default function StageTermsPage() {
 
                   <div className={`rounded-lg p-3 text-xs ${termsWouldBeReady ? 'bg-blue-50 border border-blue-200 text-blue-700' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
                     {termsWouldBeReady
-                      ? `On save, the studio contract becomes signable in the client portal${sets.includes('hospital') ? ' with the Stryker addendum required' : ''}.`
+                      ? `On save, the studio contract becomes signable in the client portal${sets.includes(STRYKER_TRIGGER_KEY) ? ' with the Stryker Master Media Use Agreement required' : ''}.`
                       : 'Needs at least one area and a day rate before the client can sign.'}
                   </div>
 

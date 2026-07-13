@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
         rentalEnd: fmtDate(request.booking?.endDate),
         terms: {
           sets: Array.isArray(snap.sets) ? snap.sets : [],
+          setLabels: snap.setLabels || undefined,
           prelitSets: Array.isArray(snap.prelitSets) ? snap.prelitSets : [],
           ratePerDay: snap.ratePerDay || '',
           otRate: snap.otRate || '300',

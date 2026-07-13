@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
+import { STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,7 @@ export async function GET(_req: NextRequest) {
         endDate: r.booking?.endDate || null,
         signed: r.studioContractSigned,
         termsReady: sets.length > 0 && !!sd?.ratePerDay,
-        strykerRequired: sets.includes('hospital'),
+        strykerRequired: sets.includes(STRYKER_TRIGGER_KEY),
         sets,
         ratePerDay: sd?.ratePerDay || '',
       }

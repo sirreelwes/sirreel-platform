@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
+import { stageAreaLabel, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     if (!body.studioAgreed) {
       return NextResponse.json({ error: 'Terms must be accepted' }, { status: 400 })
     }
-    const requiresStryker = sets.includes('hospital')
+    const requiresStryker = sets.includes(STRYKER_TRIGGER_KEY)
     const strykerSignature = typeof body.strykerSignatureData === 'string' ? body.strykerSignatureData : ''
     if (requiresStryker && (!body.strykerAcknowledged || !strykerSignature.trim())) {
       return NextResponse.json(
@@ -102,6 +103,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         : null,
       termsSnapshot: {
         sets,
+        // Labels frozen at signing time — if the area list is ever
+        // relabeled later, the signed record (and its PDF) keeps
+        // showing exactly what the client saw when they signed.
+        setLabels: Object.fromEntries(sets.map((k) => [k, stageAreaLabel(k)])),
         prelitSets: sd?.prelitSets || [],
         ratePerDay: sd?.ratePerDay,
         otRate: sd?.otRate || '300',

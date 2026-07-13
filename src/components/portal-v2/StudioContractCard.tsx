@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { TSX } from '@/lib/brand/tsxTokens'
-import { STUDIO_TERMS, STAGE_SET_LABELS } from './terms'
+import { STUDIO_TERMS } from './terms'
+import { stageAreaLabel, STRYKER_TRIGGER_KEY } from '@/lib/contracts/stageAreas'
 import {
   STRYKER_MMA_TITLE,
   STRYKER_EXHIBIT_A,
@@ -68,7 +69,7 @@ export function StudioContractCard({
   }
   const sets: string[] = sd?.sets || []
   const prelitSets: string[] = sd?.prelitSets || []
-  const hasHospital = sets.includes('hospital')
+  const hasHospital = sets.includes(STRYKER_TRIGGER_KEY)
 
   // Agent-prepared terms gate: rate and areas are negotiated per job, so
   // the contract is only signable once both exist on the request.
@@ -174,7 +175,7 @@ export function StudioContractCard({
                   <div key={s} className="flex items-center gap-2 text-sm">
                     <span>🎬</span>
                     <span>
-                      {STAGE_SET_LABELS[s] || s}
+                      {stageAreaLabel(s)}
                       {prelitSets.includes(s) ? ' (Pre-lit)' : ''}
                     </span>
                   </div>

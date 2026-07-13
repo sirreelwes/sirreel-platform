@@ -75,8 +75,5 @@ export const CC_GUARANTEE_TEXT = `This Credit Card Authorization form guarantees
 
 export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`
 
-export const STAGE_SET_LABELS: Record<string, string> = {
-  hospital: 'Hospital Set',
-  morgue: 'Morgue / Laboratory',
-  police: 'Police Station / Jail',
-}
+// Stage area keys/labels moved to the single source in
+// src/lib/contracts/stageAreas.ts (stageAreaLabel / STAGE_AREAS).
