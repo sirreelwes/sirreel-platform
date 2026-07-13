@@ -375,6 +375,21 @@ export default function GanttPage() {
   const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  // STAGES-department category ids — gates the modal's "Stage terms"
+  // button (department detection, never name matching). Failure to load
+  // simply hides the button; nothing else depends on it.
+  const [stageCategoryIds, setStageCategoryIds] = useState<Set<string>>(new Set())
+  const [stageTermsPending, setStageTermsPending] = useState(false)
+  const [stageTermsErr, setStageTermsErr] = useState('')
+  useEffect(() => {
+    fetch('/api/scheduling/categories')
+      .then((r) => r.json())
+      .then((d) => {
+        const ids = (d.categories || []).filter((c: any) => c.department === 'STAGES').map((c: any) => c.id)
+        setStageCategoryIds(new Set(ids))
+      })
+      .catch(() => {})
+  }, [])
   const [actionPending, setActionPending] = useState<null | 'status' | 'release' | 'promote' | 'dates'>(null)
   // Reschedule (date-edit) local draft + buffer-encroachment warning, seeded
   // from the selected bar. Mirrors the status control's owner gating.
@@ -1012,11 +1027,11 @@ export default function GanttPage() {
 
   const onBarClick = useCallback((b: any, unit: any) => {
     if (suppressBarClick.current) { suppressBarClick.current = false; return }
-    setSelected({ ...b, unitName: unit.unitName, isUnit: true, holdRank: 1 })
+    setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: 1 })
   }, [])
 
   const onBackupClick = useCallback((b: any, unit: any, rank: number) => {
-    setSelected({ ...b, unitName: unit.unitName, isUnit: true, holdRank: rank, isBackup: true })
+    setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
   }, [])
 
   // ── Booked-in-window sort + divider rows ──
@@ -1523,6 +1538,44 @@ export default function GanttPage() {
               </div>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
+
+            {/* Stage paperwork entry — shown ONLY for STAGES-department
+                holds (department-gated, not name-matched). Additive:
+                touches nothing else in this modal. */}
+            {selected.bookingId && selected.categoryId && stageCategoryIds.has(selected.categoryId) && (
+              <div className="mb-3 -mt-1">
+                <button
+                  onClick={async () => {
+                    setStageTermsErr('')
+                    setStageTermsPending(true)
+                    try {
+                      const r = await fetch('/api/paperwork/stage-requests/ensure', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: selected.bookingId }),
+                      })
+                      const d = await r.json()
+                      if (!r.ok) {
+                        setStageTermsErr(d.error || 'Could not start stage paperwork')
+                        return
+                      }
+                      window.location.href = `/admin/stage-terms?token=${d.token}`
+                    } catch (err: any) {
+                      setStageTermsErr(err?.message || 'Could not start stage paperwork')
+                    } finally {
+                      setStageTermsPending(false)
+                    }
+                  }}
+                  disabled={stageTermsPending}
+                  className="w-full text-left px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                >
+                  <span className="text-[12px] font-semibold text-amber-800">
+                    🎬 {stageTermsPending ? 'Opening stage terms…' : 'Stage terms — set rate & areas, start the contract →'}
+                  </span>
+                </button>
+                {stageTermsErr && <div className="mt-1 text-[11px] text-red-600">{stageTermsErr}</div>}
+              </div>
+            )}
 
             {selected.isUnit ? (
               <div className="space-y-1 text-[12px]">

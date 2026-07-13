@@ -48,7 +48,47 @@ export async function GET(_req: NextRequest) {
         ratePerDay: sd?.ratePerDay || '',
       }
     })
-    return NextResponse.json({ requests: rows })
+    // "Needs stage paperwork": bookings holding a STAGES-department item
+    // with NO stage|both PaperworkRequest yet — the chicken-and-egg gap
+    // (a brand-new held stage job can't appear in the request list above
+    // until an agent lands it via /ensure). Read-only here: nothing is
+    // created on display. Wrapped so a failure never breaks the main list.
+    let needsPaperwork: any[] = []
+    try {
+      const orphans = await prisma.booking.findMany({
+        where: {
+          archivedAt: null,
+          status: { notIn: ['CANCELLED', 'ARCHIVED', 'RETURNED'] },
+          items: { some: { category: { department: 'STAGES' } } },
+          paperworkRequests: { none: { contractType: { in: ['stage', 'both'] } } },
+        },
+        orderBy: { startDate: 'desc' },
+        take: 50,
+        include: {
+          company: { select: { name: true } },
+          person: { select: { firstName: true, lastName: true, email: true } },
+          items: { include: { category: { select: { name: true, department: true } } } },
+          paperworkRequests: { select: { contractType: true }, take: 1 },
+        },
+      })
+      needsPaperwork = orphans.map((b) => ({
+        bookingId: b.id,
+        jobName: b.jobName,
+        company: b.company?.name || '',
+        contactName: [b.person?.firstName, b.person?.lastName].filter(Boolean).join(' '),
+        contactEmail: b.person?.email || '',
+        startDate: b.startDate,
+        endDate: b.endDate,
+        status: b.status,
+        fromPlanyo: !!b.planyoCartId,
+        stageItems: b.items.filter((i) => i.category?.department === 'STAGES').map((i) => i.category?.name || ''),
+        hasVehiclesRequest: b.paperworkRequests.some((r) => r.contractType === 'vehicles'),
+      }))
+    } catch (err) {
+      console.error('[paperwork/stage-requests] needs-paperwork query failed (list unaffected):', err)
+    }
+
+    return NextResponse.json({ requests: rows, needsPaperwork })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

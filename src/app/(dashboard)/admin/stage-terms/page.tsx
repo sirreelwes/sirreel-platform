@@ -26,6 +26,20 @@ import {
   type ComplexArea,
 } from '@/lib/contracts/stageAreas'
 
+interface NeedsRow {
+  bookingId: string
+  jobName: string
+  company: string
+  contactName: string
+  contactEmail: string
+  startDate: string | null
+  endDate: string | null
+  status: string
+  fromPlanyo: boolean
+  stageItems: string[]
+  hasVehiclesRequest: boolean
+}
+
 interface Row {
   token: string
   sentTo: string
@@ -52,6 +66,8 @@ function StatusChip({ row }: { row: Row }) {
 
 export default function StageTermsPage() {
   const [rows, setRows] = useState<Row[]>([])
+  const [needs, setNeeds] = useState<NeedsRow[]>([])
+  const [ensuring, setEnsuring] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Row | null>(null)
 
@@ -76,14 +92,62 @@ export default function StageTermsPage() {
   const [resending, setResending] = useState(false)
   const [signoff, setSignoff] = useState<{ signerName: string; signedAt: string; strykerSigned: boolean; signedPdfUrl: string | null } | null>(null)
 
-  const load = () => {
+  const load = async (): Promise<Row[]> => {
     setLoading(true)
-    fetch('/api/paperwork/stage-requests')
-      .then((r) => r.json())
-      .then((d) => setRows(d.requests || []))
-      .finally(() => setLoading(false))
+    try {
+      const d = await fetch('/api/paperwork/stage-requests').then((r) => r.json())
+      setRows(d.requests || [])
+      setNeeds(d.needsPaperwork || [])
+      return d.requests || []
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(load, [])
+  useEffect(() => {
+    // Deep link (?token=...) from the gantt modal's Stage terms button —
+    // auto-open that request's editor after the first load.
+    load().then((fresh) => {
+      const token = new URLSearchParams(window.location.search).get('token')
+      if (!token) return
+      const row = fresh.find((r) => r.token === token)
+      if (row) openEditor(row)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Explicit agent action: land an orphaned stage hold in this workflow.
+  // Nothing is created on mere display — only on this click. Errors
+  // surface as a message and never break the list.
+  const ensureAndOpen = async (n: NeedsRow) => {
+    setEnsuring(n.bookingId)
+    setMessage('')
+    try {
+      const r = await fetch('/api/paperwork/stage-requests/ensure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: n.bookingId }),
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        setMessage(`⚠️ Could not start paperwork for ${n.jobName}: ${d.error || 'unknown error'}`)
+        return
+      }
+      let msg = d.outcome === 'upgraded'
+        ? `Existing vehicles paperwork upgraded to vehicles + stage for ${n.jobName}.`
+        : d.outcome === 'existing'
+          ? `${n.jobName} already had stage paperwork — opened it.`
+          : `Stage paperwork started for ${n.jobName} — set the terms below.`
+      if (d.warning) msg += ` ⚠️ ${d.warning}`
+      setMessage(msg)
+      const fresh = await load()
+      const row = fresh.find((x) => x.token === d.token)
+      if (row) await openEditor(row)
+    } catch (err: any) {
+      setMessage(`⚠️ Could not start paperwork for ${n.jobName}: ${err?.message || 'network error'}`)
+    } finally {
+      setEnsuring(null)
+    }
+  }
 
   const openEditor = async (row: Row) => {
     setSelected(row)
@@ -158,6 +222,48 @@ export default function StageTermsPage() {
           the Stryker Master Media Use Agreement automatically (separately signed by the client).
         </p>
       </header>
+
+      {needs.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-200 flex items-center justify-between">
+            <div className="text-sm font-semibold text-amber-800">⚠ Needs stage paperwork ({needs.length})</div>
+            <div className="text-[11px] text-amber-700">Held stage jobs with no contract started — click one to begin</div>
+          </div>
+          <div className="divide-y divide-amber-100 max-h-[300px] overflow-y-auto">
+            {needs.map((n) => (
+              <button
+                key={n.bookingId}
+                onClick={() => ensureAndOpen(n)}
+                disabled={ensuring !== null}
+                className="w-full text-left px-4 py-3 hover:bg-amber-100/60 transition-colors disabled:opacity-60"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-gray-900 truncate">{n.jobName}</div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {n.hasVehiclesRequest && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">has vehicles paperwork</span>
+                    )}
+                    {n.fromPlanyo && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">Planyo</span>}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white border border-amber-300 text-amber-700">
+                      {ensuring === n.bookingId ? 'Starting…' : 'Start stage paperwork →'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {n.company && `${n.company} · `}
+                  {fmt(n.startDate)} – {fmt(n.endDate)} · {n.status.toLowerCase()}
+                  {n.contactName && ` · ${n.contactName}`}
+                  {!n.contactEmail && <span className="text-red-500 font-semibold"> · no client email</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {message && !selected && (
+        <div className="mb-4 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-2.5">{message}</div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Request list */}

@@ -28,7 +28,7 @@ export async function GET() {
       reservableOnGantt: true,
       assets: { some: {} },
     },
-    select: { id: true, name: true, slug: true, totalUnits: true, planyoResourceId: true },
+    select: { id: true, name: true, slug: true, totalUnits: true, planyoResourceId: true, department: true },
     orderBy: { name: 'asc' },
   })
   return NextResponse.json({ ok: true, categories })
