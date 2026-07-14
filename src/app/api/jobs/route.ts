@@ -109,6 +109,9 @@ export async function GET(req: NextRequest) {
       include: {
         company: { select: { id: true, name: true } },
         agent: { select: { id: true, name: true } },
+        // Physical-return attribution — RETURNED cards show who marked
+        // the job back. returnedAt itself is a Job scalar (spread below).
+        returnedBy: { select: { id: true, name: true } },
         jobContacts: {
           include: {
             person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
@@ -201,9 +204,11 @@ export async function GET(req: NextRequest) {
     })
 
     // Kanban manual placements (side table, presentation-only). One
-    // query for the whole page of jobs.
+    // query for the whole page of jobs. PREJOB/OUT only — RETURNED is
+    // semantic (Job.returnedAt) now; legacy 'RETURNED' override rows
+    // from before the cutover are ignored on read.
     const overrides = await prisma.jobBoardOverride.findMany({
-      where: { jobId: { in: jobs.map((j) => j.id) } },
+      where: { jobId: { in: jobs.map((j) => j.id) }, phase: { in: ['PREJOB', 'OUT'] } },
       select: { jobId: true, phase: true },
     })
     const overrideByJob = new Map(overrides.map((o) => [o.jobId, o.phase]))

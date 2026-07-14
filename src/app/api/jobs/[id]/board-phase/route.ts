@@ -4,17 +4,22 @@ import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
-const PHASES = new Set(['PREJOB', 'OUT', 'RETURNED'])
+const PHASES = new Set(['PREJOB', 'OUT'])
 
 /**
- * POST /api/jobs/[id]/board-phase — manual kanban placement.
+ * POST /api/jobs/[id]/board-phase — manual kanban placement, PREJOB↔OUT
+ * only.
  *
- * Body: { phase: 'PREJOB' | 'OUT' | 'RETURNED' | null }. Non-null
- * upserts the side-table override; null clears it (card reverts to the
+ * Body: { phase: 'PREJOB' | 'OUT' | null }. Non-null upserts the
+ * side-table override; null clears it (card reverts to the
  * date/cadence-derived column). PRESENTATION ONLY — never touches
  * Job.status or any Booking. This is the interim stand-in until real
- * checkout/check-in events exist; those triggers will replace writes
- * to sr_job_board_overrides and the table gets dropped.
+ * checkout events exist; those triggers will replace writes to
+ * sr_job_board_overrides and the table gets dropped.
+ *
+ * RETURNED is no longer a valid phase here — physical return is
+ * semantic state on the Job itself (Job.returnedAt via mark-returned /
+ * unmark-returned), not a presentation override.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
@@ -23,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const body = await req.json().catch(() => ({}))
   const phase = body.phase === null ? null : typeof body.phase === 'string' ? body.phase : undefined
   if (phase === undefined || (phase !== null && !PHASES.has(phase))) {
-    return NextResponse.json({ error: "phase must be 'PREJOB' | 'OUT' | 'RETURNED' | null" }, { status: 400 })
+    return NextResponse.json({ error: "phase must be 'PREJOB' | 'OUT' | null" }, { status: 400 })
   }
 
   const job = await prisma.job.findUnique({ where: { id: params.id }, select: { id: true } })

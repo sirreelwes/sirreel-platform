@@ -33,6 +33,9 @@ export async function GET(
       include: {
         company: true,
         agent: { select: { id: true, name: true, email: true } },
+        // Physical-return attribution (Job.returnedAt is a scalar and
+        // flows through the spread; the relation needs the include).
+        returnedBy: { select: { id: true, name: true } },
         jobContacts: {
           include: { person: true },
           orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }],

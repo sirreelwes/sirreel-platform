@@ -35,6 +35,14 @@ function fmtDate(d: string | Date | null | undefined) {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Physical-return receipt — a real timestamp, so include the time.
+function fmtDateTime(d: string | null | undefined) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '—';
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function fmtMoney(n: number | null | undefined) {
   if (n == null) return '—';
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -154,6 +162,10 @@ interface JobDetail {
     createdAt: string;
     title: string;
   } | null;
+  // Physical return — semantic "gear is back" marker, set via
+  // mark-returned. Separate axis from status (WRAPPED = lifecycle close).
+  returnedAt: string | null;
+  returnedBy: { id: string; name: string } | null;
 }
 
 interface JobBooking {
@@ -217,6 +229,7 @@ export default function JobDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [statusSaving, setStatusSaving] = useState(false);
+  const [returnSaving, setReturnSaving] = useState(false);
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
@@ -269,6 +282,26 @@ export default function JobDetailPage() {
       alert(e instanceof Error ? e.message : 'Failed to update status');
     } finally {
       setStatusSaving(false);
+    }
+  };
+
+  // Physical-return toggle — mirrors the board's INTO/OUT-of-RETURNED
+  // moves. mark sets returnedAt + who; unmark is the undo.
+  const setReturned = async (returned: boolean) => {
+    setReturnSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${id}/${returned ? 'mark-returned' : 'unmark-returned'}`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to update return state');
+      }
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update return state');
+    } finally {
+      setReturnSaving(false);
     }
   };
 
@@ -382,6 +415,14 @@ export default function JobDetailPage() {
               >
                 {job.status}
               </span>
+              {job.returnedAt && (
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-emerald-950/40 text-emerald-300 border-emerald-900"
+                  title={`Physically returned ${fmtDateTime(job.returnedAt)}${job.returnedBy ? ` · marked by ${job.returnedBy.name}` : ''}`}
+                >
+                  Returned
+                </span>
+              )}
             </div>
             <h1 className="text-2xl font-semibold text-white mt-1 truncate">{job.name}</h1>
             <Link
@@ -424,6 +465,36 @@ export default function JobDetailPage() {
               ))}
             </select>
             <CopyCoiLinkButton jobId={job.id} variant="dark" />
+            {/* Physical return — semantic action, separate from the
+                status lifecycle above. The v1 stand-in for warehouse
+                check-in; mirrors the board's RETURNED column moves. */}
+            {job.returnedAt ? (
+              <div className="flex flex-col items-end gap-0.5 text-right">
+                <div className="text-[11px] text-emerald-400 font-semibold">
+                  ✓ Returned {fmtDateTime(job.returnedAt)}
+                </div>
+                {job.returnedBy && (
+                  <div className="text-[10px] text-zinc-500">marked by {job.returnedBy.name}</div>
+                )}
+                <button
+                  onClick={() => setReturned(false)}
+                  disabled={returnSaving}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 disabled:opacity-50"
+                  title="Undo — clear the physical-return mark"
+                >
+                  undo
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setReturned(true)}
+                disabled={returnSaving}
+                className="text-xs font-semibold bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                title="The gear is physically back — sets the returned timestamp billing and inspections key off"
+              >
+                {returnSaving ? 'Saving…' : 'Mark returned'}
+              </button>
+            )}
           </div>
         </div>
 

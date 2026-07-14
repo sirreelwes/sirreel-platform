@@ -12,6 +12,25 @@ Append-only record of shipped changes. Newest at top. Each entry: SHA, commit su
 
 Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cube } })` destroyed the real audit row for Wes's live $175→$200 Cube Truck edit (the rate survived; the `RateChangeLog` entry was lost and had to be reconstructed).
 
+## 2026-07-14
+
+- `job-returned-semantic` — RETURNED on the Jobs board now means "physically back," nothing else. New `Job.returnedAt` + `Job.returnedById` (FK → User, additive `db push`), set/cleared by `POST /api/jobs/[id]/mark-returned` (404 missing, 409 already set) and `unmark-returned`. Board: the RETURNED column is gated solely on `returnedAt` — the envelope-end auto-RETURNED derivation is deleted; past-end unreturned jobs stay in OUT with a distinct dark-red OVERDUE treatment (`border-red-900` band + "Overdue · not returned" pill, clearly heavier than the red returning-today band). Card ‹ › moves INTO RETURNED call mark-returned and OUT of RETURNED call unmark-returned; `sr_job_board_overrides` is PREJOB↔OUT-only now (route rejects RETURNED; legacy RETURNED rows ignored on read). RETURNED cards show the return timestamp + who marked it, with undo; /jobs/[id] mirrors the action (Returned badge, Mark returned / undo in the header). Rationale: billing head-start, inspections, and future check-in icons key off physical return — a passed end date proves nothing came back. The warehouse check-in flow will write this same field; the manual action is its v1 stand-in. Former auto-RETURNED jobs reappear in OUT as OVERDUE until marked by hand — expected.
+- `2752baa` — Suggested-Job hint on unfiled pipeline threads: pipeline surfaces a "looks like Job X" affordance so unfiled threads land in the right Job instead of rotting unfiled.
+- `f48198e` — Job-as-root step 6: email-in-Job — threads live inside Jobs. The Job detail page owns its email threads; correspondence is findable from the Job, not just the inbox.
+- `1ae3ec9` — Jobs page → three-column kanban board (Prejob / Out / Returned): date/cadence-derived placement + per-card ‹ › manual moves backed by the presentation-only `sr_job_board_overrides` side table with `manual · reset`.
+- `e592bcc` — Step 5 policy: name-anchored ambiguity — create sibling over blind attach. When the Planyo import can't confidently match a cart to an existing Job, it mints a sibling Job rather than guess-attaching to the wrong one.
+- `38620a5` — Job-as-root step 5: Planyo import resolves each cart to a Job — imported carts stop being Job-less orphans.
+- `8a12276` — Pipeline replied-state: never-silent recording, visible markers, send guard. First staff reply is recorded on the inquiry (respondedAt/respondedBy), surfaced in the pipeline, and the send path guards against silent double-replies.
+- `cd83d12` — Job-as-root step 4: Quick Reply + inquiry conversion resolve the Job explicitly, never auto-create — kills the accidental-duplicate-Job path from the reply flow.
+
+## 2026-07-13
+
+- `53811f4` — Job-as-root step 3: gantt +Hold resolves the Job before the hold — holds can no longer be created Job-less from the gantt.
+- `7b8a419` — Job-as-root step 2: `resolveJob` primitive + JobResolverModal — the one shared "which Job is this?" resolver every entry point (holds, replies, imports, invites) now flows through.
+- `8029152` — Job-as-root step 1: NEW status + minimal-facts lead creation + lead queue — a lead becomes a Job at first contact with just a name, so everything downstream hangs off a Job from day one.
+- `6d82540` — Email polish: agent first names in client copy + client signed-confirmation email.
+- `ee84173` — Portal fix: don't lock the portal read-only for CONFIRMED/ACTIVE bookings — clients could get frozen out of paperwork mid-engagement.
+
 ## 2026-06-25
 
 - `coi-copy-link-button` â added a "Copy COI link" button on the company detail page (/crm/[id], in the header action row by the COI status) and the job detail page (/jobs/[id], dark header action column). One click calls the existing authed `GET /api/coi/link?companyId=|jobId=`, copies the returned `/coi/<token>` no-login upload URL to the clipboard, and shows an inline "Link copied ✓" confirmation (mirrors CopyIntakeLinkButton's pattern — no global toast). Failure shows inline "Couldn't generate — retry"; never throws into render; clipboard-blocked fallback prompts the URL. Shared `CopyCoiLinkButton` component with light/dark variants using existing lt-* / zinc design tokens. `npx tsc --noEmit` clean.

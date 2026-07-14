@@ -1993,6 +1993,7 @@ model User {
   agentOrders     Order[]    @relation("OrderAgent")
   agentActivities Activity[] @relation("ActivityAgent")
   jobsAsAgent     Job[]      @relation("JobAgent")
+  jobsMarkedReturned Job[]   @relation("JobReturnedBy")
   lotChecks       LotCheck[] @relation("LotCheckedBy")
 
   uploadedContractReviews ContractReview[] @relation("ContractReviewUploader")
@@ -3557,11 +3558,19 @@ model Job {
   planyoCartId   String?        @unique @map("planyo_cart_id")
   estimatedValue Decimal?       @map("estimated_value") @db.Decimal(12, 2)
   notes          String?        @db.Text
+  // Physical-return marker — "the gear is back at the warehouse."
+  // Deliberately NOT a JobStatus value (WRAPPED = lifecycle close, not
+  // physical return). Set/cleared by POST /api/jobs/[id]/mark-returned
+  // and unmark-returned; the future warehouse check-in flow writes this
+  // same field. The Jobs board's RETURNED column keys off it exclusively.
+  returnedAt     DateTime?      @map("returned_at")
+  returnedById   String?        @map("returned_by_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
   company               Company                @relation(fields: [companyId], references: [id])
   agent                 User                   @relation("JobAgent", fields: [agentId], references: [id])
+  returnedBy            User?                  @relation("JobReturnedBy", fields: [returnedById], references: [id])
   productionTypeProfile ProductionTypeProfile? @relation("JobProductionTypeProfile", fields: [productionTypeProfileId], references: [id])
   orders      Order[]
   bookings    Booking[]

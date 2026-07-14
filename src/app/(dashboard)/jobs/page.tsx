@@ -9,16 +9,21 @@
  * apply over the board — cards render in whichever column they place.
  *
  * COLUMN PLACEMENT (real data, no fabrication):
- *   1. Manual override (sr_job_board_overrides side table) wins — the
- *      interim stand-in until checkout/check-in events exist. Those
- *      triggers will later replace the override writes entirely.
+ *   0. RETURNED = Job.returnedAt != null. ONLY that — physical return
+ *      is semantic state set via mark-returned (the manual v1 of the
+ *      future warehouse check-in flow). A passed end date proves
+ *      nothing returned, so nothing else auto-derives into RETURNED.
+ *   1. Manual override (sr_job_board_overrides side table, PREJOB↔OUT
+ *      only) wins next — the interim stand-in until checkout events
+ *      exist. Those triggers will later replace the override writes.
  *   2. Order-driven cadence (server rollup) when the job has live
- *      orders: picking-* → PREJOB, on-rental/returning-* → OUT,
- *      returned/invoiced → RETURNED.
+ *      orders: picking-* → PREJOB, on-rental/returning-* → OUT.
+ *      returned/invoiced/wrapped WITHOUT returnedAt stay in OUT with
+ *      the OVERDUE treatment until someone confirms the physical return.
  *   3. Date fallback (jobs with no orders — all Planyo imports today):
  *      Job.startDate/endDate, else the booking envelope from the API.
- *      end < today → RETURNED · start ≤ today ≤ end → OUT · else PREJOB.
- *   NEW/QUOTED/HOLD/LOST always sit in PREJOB; WRAPPED in RETURNED.
+ *      start ≤ today → OUT (past-end = OUT + OVERDUE) · else PREJOB.
+ *   NEW/QUOTED/HOLD/LOST always sit in PREJOB.
  *
  * Cards link to the existing `/jobs/[id]` detail page.
  */
@@ -203,7 +208,13 @@ interface JobRow {
   // job's bookings; hasDelivery = any booking with a delivery address.
   bookingWindow?: { start: string | null; end: string | null } | null
   hasDelivery?: boolean
-  boardPhaseOverride?: BoardColumn | null
+  // PREJOB/OUT presentation override only — the API filters out legacy
+  // RETURNED rows.
+  boardPhaseOverride?: 'PREJOB' | 'OUT' | null
+  // Physical return — semantic, set via mark-returned. Sole gate into
+  // the RETURNED column.
+  returnedAt?: string | null
+  returnedBy?: { id: string; name: string } | null
 }
 
 // ─── Kanban board ────────────────────────────────────────────────
@@ -227,11 +238,17 @@ function jobWindow(j: JobRow): { start: string | null; end: string | null } {
 }
 
 function deriveColumn(j: JobRow, today: string): BoardColumn {
-  if (j.status === 'WRAPPED') return 'RETURNED'
-  if (j.status !== 'ACTIVE') return 'PREJOB' // NEW / QUOTED / HOLD / LOST
+  // Physical return is the ONLY path into RETURNED. Billing head-start,
+  // inspections, and the future check-in icons all key off returnedAt —
+  // a passed end date proves nothing came back.
+  if (j.returnedAt) return 'RETURNED'
+  if (j.status !== 'ACTIVE' && j.status !== 'WRAPPED') return 'PREJOB' // NEW / QUOTED / HOLD / LOST
   const c = j.cadence?.state
   if (c === 'on-rental' || c === 'returning-tmw' || c === 'returning-today') return 'OUT'
-  if (c === 'returned' || c === 'invoiced') return 'RETURNED'
+  // Orders say returned/invoiced (or the job is WRAPPED) but nobody
+  // confirmed the physical return — stay in OUT with the OVERDUE
+  // treatment until someone marks it back.
+  if (c === 'returned' || c === 'invoiced' || c === 'wrapped') return 'OUT'
   if (c === 'picking-tmw' || c === 'picking-today') return 'PREJOB'
   // cadence 'booked' with real orders = genuinely future → PREJOB.
   if ((j._count?.orders ?? 0) > 0) return 'PREJOB'
@@ -239,8 +256,7 @@ function deriveColumn(j: JobRow, today: string): BoardColumn {
   // ("needs dates"), never OUT.
   const w = jobWindow(j)
   if (!w.start || !w.end) return 'PREJOB'
-  if (w.end < today) return 'RETURNED'
-  if (w.start <= today) return 'OUT'
+  if (w.start <= today) return 'OUT' // past-end included → OUT + OVERDUE
   return 'PREJOB'
 }
 
@@ -252,6 +268,9 @@ function outUrgency(j: JobRow, today: string, tomorrow: string): OutUrgency {
   if (c === 'returning-today') return 'today'
   if (c === 'returning-tmw') return 'tomorrow'
   if (c === 'on-rental') return 'active'
+  // Orders closed out (or job WRAPPED) without a physical-return mark —
+  // the whole reason this card is still in OUT. Always OVERDUE.
+  if (c === 'returned' || c === 'invoiced' || c === 'wrapped') return 'overdue'
   const end = jobWindow(j).end
   if (!end) return 'active'
   if (end < today) return 'overdue'
@@ -260,23 +279,26 @@ function outUrgency(j: JobRow, today: string, tomorrow: string): OutUrgency {
   return 'active'
 }
 
+// OVERDUE = past-end and NOT marked returned. Deliberately darker and
+// heavier than the red "returning today" band — this card needs a
+// human to confirm the gear is back (or chase it).
 const OUT_BAND: Record<OutUrgency, string> = {
   active:   'border-emerald-400',
   tomorrow: 'border-orange-400',
   today:    'border-red-500',
-  overdue:  'border-red-600',
+  overdue:  'border-red-900',
 }
 const OUT_LABEL: Record<OutUrgency, string> = {
   active:   'On rental',
   tomorrow: 'Returning tomorrow',
   today:    'Returning today',
-  overdue:  'Return overdue',
+  overdue:  'Overdue · not returned',
 }
 const OUT_PILL: Record<OutUrgency, string> = {
   active:   'bg-emerald-100 text-emerald-700',
   tomorrow: 'bg-orange-100 text-orange-700',
   today:    'bg-red-100 text-red-700',
-  overdue:  'bg-red-200 text-red-800',
+  overdue:  'bg-red-900 text-white',
 }
 
 // PREJOB sub-state band (spec): yellow=NEW · orange=QUOTED ·
@@ -346,6 +368,14 @@ function fmtDate(d: string | null) {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
+// Returned receipt — a real timestamp (mark-returned), so show the time.
+function fmtDateTime(d: string | null) {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
 function fmtMoney(n: number | null | undefined) {
   if (n == null || n === 0) return '—'
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -404,26 +434,56 @@ export default function JobsListPage() {
     () =>
       jobs.map((job) => {
         const derived = deriveColumn(job, today)
-        const column: BoardColumn = (job.boardPhaseOverride as BoardColumn | null) ?? derived
+        // returnedAt trumps everything (deriveColumn already returns
+        // RETURNED for it); the PREJOB/OUT override only applies to
+        // not-yet-returned cards.
+        const column: BoardColumn = job.returnedAt ? 'RETURNED' : (job.boardPhaseOverride ?? derived)
         return { job, derived, column }
       }),
     [jobs, today],
   )
 
-  // Manual move — writes the presentation-only override (or clears it
-  // with phase null) and updates the card in place. This is where the
-  // future checkout/check-in event triggers plug in instead.
+  // Card moves. INTO RETURNED = semantic mark-returned (the gear is
+  // physically back); OUT of RETURNED = unmark (undo). PREJOB↔OUT moves
+  // write the presentation-only override (null clears it) — that's
+  // where the future checkout event triggers plug in instead.
   const [movingId, setMovingId] = useState<string | null>(null)
-  const moveJob = async (job: JobRow, target: BoardColumn | null, _derived?: BoardColumn) => {
+  const moveJob = async (job: JobRow, target: BoardColumn | null) => {
     setMovingId(job.id)
     try {
+      if (target === 'RETURNED') {
+        const res = await fetch(`/api/jobs/${job.id}/mark-returned`, { method: 'POST' })
+        if (res.ok) {
+          const d = await res.json()
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === job.id ? { ...j, returnedAt: d.returnedAt, returnedBy: d.returnedBy ?? null } : j,
+            ),
+          )
+        }
+        return
+      }
+      if (job.returnedAt) {
+        // Any move off a returned card (including undo, target=null)
+        // clears the physical-return mark; the card reverts to its
+        // derived/override column — usually OUT with OVERDUE.
+        const res = await fetch(`/api/jobs/${job.id}/unmark-returned`, { method: 'POST' })
+        if (res.ok) {
+          setJobs((prev) =>
+            prev.map((j) => (j.id === job.id ? { ...j, returnedAt: null, returnedBy: null } : j)),
+          )
+        }
+        return
+      }
       const res = await fetch(`/api/jobs/${job.id}/board-phase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phase: target }),
       })
       if (res.ok) {
-        setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, boardPhaseOverride: target } : j)))
+        setJobs((prev) =>
+          prev.map((j) => (j.id === job.id ? { ...j, boardPhaseOverride: target as 'PREJOB' | 'OUT' | null } : j)),
+        )
       }
     } finally {
       setMovingId(null)
@@ -529,7 +589,7 @@ export default function JobsListPage() {
                         today={today}
                         tomorrow={tomorrow}
                         moving={movingId === j.id}
-                        onMove={(target) => moveJob(j, target, derived)}
+                        onMove={(target) => moveJob(j, target)}
                       />
                     ))}
                     {/* FUTURE: the rich fleet/warehouse check-in icon
@@ -582,9 +642,9 @@ function JobCard({
     pillLabel = OUT_LABEL[u]
     pillCls = OUT_PILL[u]
   } else if (column === 'RETURNED') {
-    band = 'border-zinc-400'
-    pillLabel = j.status === 'WRAPPED' ? 'Wrapped' : 'Returned'
-    pillCls = 'bg-zinc-200 text-zinc-700'
+    band = 'border-emerald-500'
+    pillLabel = 'Returned'
+    pillCls = 'bg-emerald-100 text-emerald-700'
   } else {
     const pb = prejobBand(j)
     band = pb.band
@@ -671,10 +731,31 @@ function JobCard({
         </div>
       )}
 
-      {/* RETURNED shows closeout pips; the other columns keep the full
+      {/* RETURNED shows the physical-return receipt (when + who, with
+          undo) and closeout pips; the other columns keep the full
           paperwork/billing chip strip. */}
       {column === 'RETURNED' ? (
-        <div className="mt-1.5">
+        <div className="mt-1.5 space-y-1">
+          {j.returnedAt && (
+            <div className="flex items-center gap-1 flex-wrap text-[10.5px] leading-snug">
+              <span className="text-emerald-700 font-semibold">✓ Returned</span>
+              <span className="text-lt-fg2">{fmtDateTime(j.returnedAt)}</span>
+              {j.returnedBy && (
+                <>
+                  <span className="text-lt-fg3">·</span>
+                  <span className="text-lt-fg2">{j.returnedBy.name}</span>
+                </>
+              )}
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(null) }}
+                disabled={moving}
+                title="Undo — clear the physical-return mark"
+                className="ml-auto text-[9px] text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-40"
+              >
+                undo
+              </button>
+            </div>
+          )}
           <CloseoutPips billing={j.billing} />
         </div>
       ) : (
@@ -691,7 +772,10 @@ function JobCard({
           )}
         </span>
         <span className="ml-auto inline-flex items-center gap-1">
-          {overridden && (
+          {/* Override reset is a PREJOB/OUT affair — a returned card's
+              placement comes from returnedAt, undone via its own
+              `undo` control above. */}
+          {overridden && column !== 'RETURNED' && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(null) }}
               disabled={moving}
