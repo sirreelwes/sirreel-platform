@@ -43,9 +43,9 @@ interface HoldBody {
   jobId?: string
   /** Name for a NEW Job to create as part of this hold. Mutually exclusive with jobId. */
   newJobName?: string
-  /** Legacy display name — accepted for backward compat but normally
-   *  derived from the resolved Job. When neither jobId nor newJobName
-   *  is set, this is the only signal we have for Booking.jobName. */
+  /** Legacy display name — still accepted in the payload but ignored:
+   *  Booking.jobName is always derived from the resolved Job (jobId
+   *  lookup or newJobName create). Bare jobName without a Job is 400. */
   jobName?: string
   productionName?: string | null
   priority?: 'STANDARD' | 'HIGH' | 'LOW'
@@ -114,18 +114,23 @@ export async function POST(req: NextRequest) {
   if (!body.companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 })
   if (!body.personId) return NextResponse.json({ error: 'personId required' }, { status: 400 })
 
-  // Job linkage. New holds must declare a Job — either an existing one
-  // (jobId) or a new one to create (newJobName). Legacy callers that
-  // only pass jobName (no FK) are still accepted but produce a Booking
-  // with no Job linkage (jobId NULL) — that path mirrors the pre-Job
-  // bookings already in the DB.
+  // Job linkage (Job-as-root). Every hold must resolve to a Job: an
+  // existing one (jobId — the gantt +Hold resolver flow) or one created
+  // in this tx (newJobName — Quick Reply, until it converts to the
+  // resolver too). The old tolerance for a bare display-only jobName
+  // (Booking with jobId NULL, mirroring pre-Job legacy rows) is CLOSED
+  // — no caller uses it, and new job-less bookings are exactly what
+  // the Job-as-root model exists to prevent.
   const wantsExisting = !!body.jobId
   const wantsCreate = !!body.newJobName?.trim()
   if (wantsExisting && wantsCreate) {
     return NextResponse.json({ error: 'pass either jobId or newJobName, not both' }, { status: 400 })
   }
-  if (!wantsExisting && !wantsCreate && !body.jobName?.trim()) {
-    return NextResponse.json({ error: 'jobId, newJobName, or jobName required' }, { status: 400 })
+  if (!wantsExisting && !wantsCreate) {
+    return NextResponse.json(
+      { error: 'jobId or newJobName required — every hold must belong to a Job' },
+      { status: 400 },
+    )
   }
 
   // Resolve agentId — body, then the authenticated actor (already fetched by

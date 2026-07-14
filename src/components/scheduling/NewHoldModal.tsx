@@ -14,12 +14,19 @@
  *
  * V1 scope: requires an existing Company + Person in CRM. Inline
  * create comes later. Agent defaults from session on the server side.
+ *
+ * Job-as-root (step 3): the Job is resolved BEFORE the hold exists.
+ * The Job field opens JobResolverModal seeded with this modal's live
+ * context (dates, company, contact); the agent picks an existing Job
+ * or creates one there (createJobFromDraft, status NEW). Either way
+ * the hold submit always carries a real jobId — the holds route's
+ * inline newJobName creation is no longer used from this flow.
  */
 
 import { useState } from 'react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { ContactPicker, type ContactPickerValue } from '@/components/shared/ContactPicker'
-import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
+import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
 
 interface AvailabilitySummary {
@@ -125,17 +132,13 @@ export function NewHoldModal({
     defaultCompany ?? (defaultJob ? { id: defaultJob.companyId, name: defaultJob.companyName } : null),
   )
   const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT)
-  const [job, setJob] = useState<JobPickerValue>(
-    defaultJob
-      ? {
-          jobId: defaultJob.id,
-          jobCode: defaultJob.jobCode,
-          name: defaultJob.name,
-          mode: 'selected_existing',
-          company: { id: defaultJob.companyId, name: defaultJob.companyName },
-        }
-      : EMPTY_JOB_PICKER_VALUE,
+  // The resolved Job — always a REAL row by the time it lands here
+  // (existing pick, or created via the resolver's createJobFromDraft
+  // path). No "creating_new by name" limbo state anymore.
+  const [job, setJob] = useState<{ jobId: string; jobCode: string; name: string } | null>(
+    defaultJob ? { jobId: defaultJob.id, jobCode: defaultJob.jobCode, name: defaultJob.name } : null,
   )
+  const [resolverOpen, setResolverOpen] = useState(false)
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
@@ -161,35 +164,41 @@ export function NewHoldModal({
     /^\d{4}-\d{2}-\d{2}$/.test(endDateInput) &&
     endDateInput >= startDateInput
 
-  const jobReady =
-    (job.mode === 'selected_existing' && !!job.jobId) ||
-    (job.mode === 'creating_new' && job.name.trim().length > 0)
-
   const canSubmit =
     !!company &&
     contact.mode === 'selected_existing' &&
     contact.personId &&
-    jobReady &&
+    !!job &&
     quantity > 0 &&
     datesValid &&
     !submitting
 
+  // JobResolverModal callback — the agent either picked an existing Job
+  // or created one inside the resolver; both arrive with a real id. If
+  // the Job's company differs from the picked company, follow the Job:
+  // the holds route rejects a job/company mismatch, and the Job is the
+  // root object.
+  function onJobResolved(r: ResolvedJob) {
+    setJob({ jobId: r.id, jobCode: r.jobCode, name: r.name })
+    if (r.companyId && company?.id !== r.companyId) {
+      setCompany({ id: r.companyId, name: r.companyName || '' })
+    }
+    setResolverOpen(false)
+  }
+
   async function submit(bufferOverride: boolean) {
     if (!company || contact.mode !== 'selected_existing' || !contact.personId) return
-    if (!jobReady) return
+    if (!job) return
     setSubmitting(true)
     setHardError(null)
     if (!bufferOverride) setBufferWarning(null)
     try {
-      // Server side picks ONE of these two paths:
-      //   jobId → attach Booking to existing Job (Booking.jobId = id)
-      //   newJobName → create Job in same tx, stamp Booking.jobId
+      // Job is always resolved up front (Job-as-root) — the payload
+      // always carries jobId; the route's newJobName branch is not
+      // used from this flow anymore.
       // productionName intentionally omitted from new holds — it was
       // redundant with jobName; the column stays for legacy rows.
-      const jobPayload =
-        job.mode === 'selected_existing' && job.jobId
-          ? { jobId: job.jobId, jobName: job.name }
-          : { newJobName: job.name.trim(), jobName: job.name.trim() }
+      const jobPayload = { jobId: job.jobId, jobName: job.name }
 
       const res = await fetch('/api/scheduling/holds', {
         method: 'POST',
@@ -423,15 +432,34 @@ export function NewHoldModal({
 
           <div>
             <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Job</span>
-            <JobPicker
-              value={job}
-              onChange={setJob}
-              companyId={company?.id ?? null}
-              placeholder="Search jobs by name or code, or type a new name…"
-            />
+            {job ? (
+              <div className="flex items-center justify-between gap-2 rounded border border-zinc-300 bg-zinc-50 px-3 py-2">
+                <div className="text-sm text-zinc-900 truncate">
+                  <span className="font-mono text-xs text-zinc-500 mr-1.5">[{job.jobCode}]</span>
+                  {job.name}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setResolverOpen(true)}
+                  className="text-xs font-medium text-amber-700 hover:text-amber-800 flex-shrink-0"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setResolverOpen(true)}
+                disabled={!company}
+                className="w-full text-left rounded border border-dashed border-zinc-400 px-3 py-2 text-sm text-zinc-700 hover:border-amber-500 hover:text-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Find or create Job…
+              </button>
+            )}
             <p className="text-[11px] text-zinc-500 mt-1">
-              Pick an existing job for this client, or type a new name and choose
-              &ldquo;Create new job&rdquo; to start fresh.
+              {company
+                ? 'Every hold lives inside a Job — we check this client’s open jobs against these dates before creating a new one.'
+                : 'Pick the company first — jobs are matched per client.'}
             </p>
           </div>
 
@@ -484,6 +512,27 @@ export function NewHoldModal({
           )}
         </footer>
       </div>
+
+      {/* Job resolver — seeded with everything this modal already
+          knows (dates, company, contact) so rung ③ (company + date
+          overlap) ranks the client's open jobs before anything is
+          created. Renders after the hold dialog → stacks on top. */}
+      {resolverOpen && (
+        <JobResolverModal
+          context={{
+            companyId: company?.id ?? null,
+            companyName: company?.name ?? null,
+            contactEmail: (contact.mode === 'selected_existing' && contact.email) || null,
+            contactName: contact.name || null,
+            contactPhone: contact.phone || null,
+            jobNameHint: job?.name ?? null,
+            dates: datesValid ? { start: startDateInput, end: endDateInput } : null,
+            sourceRef: 'gantt:+hold',
+          }}
+          onResolved={onJobResolved}
+          onClose={() => setResolverOpen(false)}
+        />
+      )}
     </div>
   )
 }

@@ -36,6 +36,7 @@ export interface ResolvedJob {
   id: string
   jobCode: string
   name: string
+  companyId?: string | null
   companyName?: string | null
   /** True when the agent chose "Create new Job". */
   created: boolean
@@ -46,6 +47,7 @@ interface Candidate {
   jobCode: string
   name: string
   status: string
+  companyId: string | null
   companyName: string | null
   startDate: string | null
   endDate: string | null
@@ -136,7 +138,8 @@ export function JobResolverModal({
           .slice(0, 6)
           .map((j: any) => ({
             jobId: j.id, jobCode: j.jobCode, name: j.name, status: j.status,
-            companyName: j.company?.name ?? null, startDate: j.startDate, endDate: j.endDate,
+            companyId: j.company?.id ?? null, companyName: j.company?.name ?? null,
+            startDate: j.startDate, endDate: j.endDate,
             agentName: j.agent?.name ?? null, score: 0, reasons: ['search result'],
           })),
       )
@@ -148,7 +151,7 @@ export function JobResolverModal({
     const all = [...(result?.candidates || []), ...searchHits]
     const j = all.find((c) => c.jobId === selectedId)
     if (!j) return
-    onResolved({ id: j.jobId, jobCode: j.jobCode, name: j.name, companyName: j.companyName, created: false })
+    onResolved({ id: j.jobId, jobCode: j.jobCode, name: j.name, companyId: j.companyId, companyName: j.companyName, created: false })
   }
 
   const createNew = async () => {
@@ -174,6 +177,7 @@ export function JobResolverModal({
       if (!r.ok) throw new Error(d.error || 'Failed to create job')
       onResolved({
         id: d.job.id, jobCode: d.job.jobCode, name: d.job.name,
+        companyId: d.job.company?.id ?? d.job.companyId ?? null,
         companyName: d.job.company?.name ?? dCompany, created: true,
       })
     } catch (e: any) {

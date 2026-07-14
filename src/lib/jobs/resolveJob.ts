@@ -51,6 +51,7 @@ export interface RankedJobCandidate {
   jobCode: string
   name: string
   status: JobStatus
+  companyId: string | null
   companyName: string | null
   startDate: string | null
   endDate: string | null
@@ -254,7 +255,7 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
         select: {
           id: true, jobCode: true, name: true, status: true,
           startDate: true, endDate: true,
-          company: { select: { name: true } },
+          company: { select: { id: true, name: true } },
           agent: { select: { name: true } },
         },
       })
@@ -265,6 +266,7 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
       jobCode: j.jobCode,
       name: j.name,
       status: j.status,
+      companyId: (j.company as { id?: string } | null)?.id ?? null,
       companyName: j.company?.name ?? null,
       startDate: fmtDate(j.startDate),
       endDate: fmtDate(j.endDate),
