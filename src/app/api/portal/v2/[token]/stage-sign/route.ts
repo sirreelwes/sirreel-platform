@@ -5,6 +5,8 @@ import { renderStrykerPlainText } from '@/lib/contracts/strykerAgreement'
 import { renderStageSignedCopyPdf } from '@/lib/contracts/renderStageSignedCopy'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { internalCopyRecipients } from '@/lib/email/copyRecipients'
+import { buildStageSignedConfirmationEmail } from '@/lib/email/templates/stageSignedConfirmation'
+import { firstNameOf } from '@/lib/email/names'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
 import {
   stageAreaContractLabel,
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   try {
     const request = await prisma.paperworkRequest.findUnique({
       where: { token: params.token },
-      include: { booking: { include: { company: true, agent: true } } },
+      include: { booking: { include: { company: true, agent: true, person: true } } },
     })
     if (!request) return NextResponse.json({ error: 'Invalid token' }, { status: 404 })
 
@@ -235,6 +237,43 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         if (!result.ok) console.error('[portal/v2/stage-sign] internal email failed (signing unaffected):', result.reason)
       } catch (err) {
         console.error('[portal/v2/stage-sign] internal email threw (signing unaffected):', err)
+      }
+
+      // 3. Client signed-confirmation — the CLIENT's copy, separate from
+      //    and in addition to the staff notification above. Reuses the
+      //    SAME pdfBuffer rendered once at the top of this block. Skips
+      //    gracefully when no client email is on file; failures log and
+      //    never affect the signing (or the staff send, which already
+      //    completed independently above).
+      try {
+        const clientTo = (request.sentTo || request.booking?.person?.email || '').trim()
+        if (!clientTo) {
+          console.warn('[portal/v2/stage-sign] no client email on file — signed-confirmation skipped')
+        } else {
+          const jobName = request.booking?.jobName || ''
+          const email = buildStageSignedConfirmationEmail({
+            clientFirstName: request.booking?.person?.firstName || '',
+            jobName,
+            agentFirstName: firstNameOf(request.booking?.agent?.name),
+          })
+          const clientResult = await sendAgreementEmail({
+            label: 'portal/v2/stage-sign client confirmation',
+            to: [clientTo],
+            replyTo: request.booking?.agent?.email || undefined,
+            subject: email.subject,
+            html: email.html,
+            text: email.text,
+            attachments: [
+              {
+                filename: `sirreel-studio-contract-${(jobName || 'signed').replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 60)}.pdf`,
+                content: pdfBuffer,
+              },
+            ],
+          })
+          if (!clientResult.ok) console.error('[portal/v2/stage-sign] client confirmation failed (signing unaffected):', clientResult.reason)
+        }
+      } catch (err) {
+        console.error('[portal/v2/stage-sign] client confirmation threw (signing unaffected):', err)
       }
     } catch (err) {
       console.error('[portal/v2/stage-sign] post-sign PDF render failed (signing unaffected):', err)

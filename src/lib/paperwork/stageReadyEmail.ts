@@ -3,6 +3,7 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { buildStageReadyToSignEmail } from '@/lib/email/templates/stageReadyToSign'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
 import { stageTermsReady } from '@/lib/contracts/stageAreas'
+import { firstNameOf } from '@/lib/email/names'
 
 /**
  * Client "ready to sign" notification for the v2 stage contract.
@@ -55,6 +56,7 @@ export async function sendStageReadyToSignEmail(
     firstName: request.booking?.person?.firstName || '',
     jobName: request.booking?.jobName || '',
     portalLink: `${portalBaseUrl()}/portal/v2/${token}`,
+    agentFirstName: firstNameOf(request.booking?.agent?.name),
   })
 
   const result = await sendAgreementEmail({

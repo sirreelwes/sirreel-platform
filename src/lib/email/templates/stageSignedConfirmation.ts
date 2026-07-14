@@ -1,13 +1,11 @@
 /**
- * "Your stage contract is ready to sign" — sent to the client the first
- * time a SirReel agent saves stage terms that make the studio contract
- * signable in the v2 paperwork portal (area + rate set). Copy provided
- * by Wes verbatim; visual language mirrors portalInvite.ts (dark header
- * with the white wordmark, gold accent, light-mode lock, table layout).
- *
- * Sent through sendAgreementEmail (Resend) — same infrastructure as the
- * other agreement/contract touchpoints. Once-only guard lives with the
- * caller (stageDetails.readyToSignEmailSentAt), not here.
+ * Client "signed confirmation" — sent to the CLIENT right after they
+ * complete signing the stage/studio contract, with their signed PDF
+ * attached. Copy provided by Wes verbatim; branding mirrors the other
+ * client touchpoints (dark header, white wordmark, gold rule,
+ * light-mode lock). SEPARATE from and in addition to the internal
+ * staff notification — Reply-To is the assigned agent so replies land
+ * with them directly.
  */
 
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
@@ -16,17 +14,14 @@ const FOOTER_PHONE = '(888) 477-7335'
 const GOLD = '#D4A547'
 const DARK = '#0a0a0a'
 
-export interface StageReadyToSignEmailInput {
-  firstName: string
+export interface StageSignedConfirmationInput {
+  clientFirstName: string
   jobName: string
-  /** Full v2 portal URL (https://tsx.sirreel.com/portal/v2/<token>). */
-  portalLink: string
-  /** Assigned agent's first name ("Wes", "Jose") — falls back to
-   *  "your SirReel agent" in copy when absent. */
+  /** Assigned agent's first name — falls back to "your SirReel agent". */
   agentFirstName?: string | null
 }
 
-export interface StageReadyToSignEmail {
+export interface StageSignedConfirmationEmail {
   subject: string
   html: string
   text: string
@@ -36,25 +31,22 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-export function buildStageReadyToSignEmail(input: StageReadyToSignEmailInput): StageReadyToSignEmail {
-  const firstName = escapeHtml(input.firstName || 'there')
+export function buildStageSignedConfirmationEmail(input: StageSignedConfirmationInput): StageSignedConfirmationEmail {
+  const firstName = escapeHtml(input.clientFirstName || 'there')
   const jobName = escapeHtml(input.jobName || 'your production')
-  const portalLink = input.portalLink
   const agentRef = (input.agentFirstName || '').trim() || 'your SirReel agent'
   const agentRefHtml = escapeHtml(agentRef)
 
-  const subject = 'Your SirReel stage contract is ready to sign'
+  const subject = `Your signed SirReel contract for ${input.jobName || 'your production'}`
 
   const text = [
-    `Hi ${input.firstName || 'there'},`,
+    `Hi ${input.clientFirstName || 'there'},`,
     ``,
-    `Good news — ${agentRef} has finalized the terms for ${input.jobName || 'your production'}, and your studio contract is ready to sign.`,
+    `Thanks — your studio contract for ${input.jobName || 'your production'} is signed and complete. Your signed copy is attached for your records.`,
     ``,
-    `Everything's set up in your portal: your negotiated rate, the sets you'll be using, and any required agreements. Take a look and sign whenever you're ready.`,
+    `If anything looks off, just reply — this reaches ${agentRef} directly.`,
     ``,
-    `Review & sign your contract: ${portalLink}`,
-    ``,
-    `Questions or something look off? Just reply to this email.`,
+    `We're looking forward to having you at SirReel.`,
     ``,
     `Thanks,`,
     `The SirReel Team`,
@@ -71,7 +63,7 @@ export function buildStageReadyToSignEmail(input: StageReadyToSignEmailInput): S
      inversion bug this prevents. -->
 <meta name="color-scheme" content="light" />
 <meta name="supported-color-schemes" content="light" />
-<title>Your SirReel stage contract is ready to sign</title>
+<title>Your signed SirReel contract</title>
 <style type="text/css">
   :root { color-scheme: light; supported-color-schemes: light; }
 </style>
@@ -82,9 +74,8 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <![endif]-->
 </head>
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
-  <!-- Preheader (hidden in body, shown in inbox preview) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    Your terms for ${jobName} are finalized — your studio contract is ready to sign.
+    Your studio contract for ${jobName} is signed and complete — signed copy attached.
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">
@@ -111,7 +102,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
               <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
-                Ready to sign.
+                Signed &amp; complete.
               </h1>
             </td>
           </tr>
@@ -121,36 +112,21 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             <td style="padding:24px 36px 8px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
               <p style="margin:0 0 16px;">
-                Good news &mdash; ${agentRefHtml} has finalized the terms for <strong>${jobName}</strong>, and your studio contract is ready to sign.
+                Thanks &mdash; your studio contract for <strong>${jobName}</strong> is signed and complete. Your signed copy is attached for your records.
               </p>
               <p style="margin:0 0 16px;">
-                Everything&rsquo;s set up in your portal: your negotiated rate, the sets you&rsquo;ll be using, and any required agreements. Take a look and sign whenever you&rsquo;re ready.
+                If anything looks off, just reply &mdash; this reaches ${agentRefHtml} directly.
               </p>
-            </td>
-          </tr>
-
-          <!-- ── CTA ───────────────────────────────────────────────── -->
-          <tr>
-            <td style="padding:16px 36px 8px;text-align:center;">
-              <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:48px;v-text-anchor:middle;width:280px;" arcsize="12%" stroke="f" fillcolor="${GOLD}">
-                <w:anchorlock/>
-                <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;">Review &amp; sign your contract &rarr;</center>
-              </v:roundrect>
-              <![endif]-->
-              <!--[if !mso]><!-- -->
-              <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;padding:14px 32px;border-radius:6px;">
-                Review &amp; sign your contract &rarr;
-              </a>
-              <!--<![endif]-->
+              <p style="margin:0 0 16px;">
+                We&rsquo;re looking forward to having you at SirReel.
+              </p>
             </td>
           </tr>
 
           <!-- ── Sign-off ──────────────────────────────────────────── -->
           <tr>
-            <td style="padding:24px 36px 32px;font-size:14px;line-height:1.55;color:#333333;">
-              <p style="margin:0 0 6px;">Questions or something look off? Just reply to this email.</p>
-              <p style="margin:12px 0 0;">
+            <td style="padding:8px 36px 32px;font-size:14px;line-height:1.55;color:#333333;">
+              <p style="margin:0;">
                 Thanks,<br />
                 <strong style="color:#1a1a1a;">The SirReel Team</strong>
               </p>
