@@ -264,14 +264,18 @@ async function sendSyncAlert(
   // confirm the pick — same review posture as the company matcher.
   if (newCarts.jobAmbiguous.length) {
     lines.push('')
-    lines.push(`★ *Imported carts with ambiguous Job match — ${newCarts.jobAmbiguous.length}* (best candidate attached; please confirm)`)
+    lines.push(`★ *Imported carts needing Job confirmation — ${newCarts.jobAmbiguous.length}*`)
     for (const j of newCarts.jobAmbiguous) {
-      lines.push(`  • cart=${j.cart} · ${j.bookingNumber} → attached [${j.jobCode ?? '?'}] "${j.jobName ?? '?'}" (score ${j.score ?? '?'})`)
-      if (j.candidates?.length) {
-        lines.push(
-          '    other candidates: ' +
-            j.candidates.slice(1).map((c) => `[${c.jobCode}] "${c.name}" (${c.score})`).join(' | '),
-        )
+      if (j.mode === 'attached') {
+        lines.push(`  • cart=${j.cart} · ${j.bookingNumber} → attached [${j.jobCode ?? '?'}] "${j.jobName ?? '?'}" (score ${j.score ?? '?'}) — confirm the pick`)
+        if (j.candidates?.length) {
+          lines.push(
+            '    other candidates: ' +
+              j.candidates.slice(1).map((c) => `[${c.jobCode}] "${c.name}" (${c.score})`).join(' | '),
+          )
+        }
+      } else {
+        lines.push(`  • cart=${j.cart} · ${j.bookingNumber} → created NEW [${j.jobCode ?? '?'}] "${j.jobName ?? '?'}" — possible sibling of ${(j.candidates ?? []).map((c) => `[${c.jobCode}] "${c.name}"`).join(' | ') || '?'} (merge if same production)`)
       }
     }
   }

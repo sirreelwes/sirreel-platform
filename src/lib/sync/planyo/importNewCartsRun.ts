@@ -72,11 +72,14 @@ export interface NewCartImportRunResult {
   /** Job-as-root step 5 — per-cart Job resolution outcomes. */
   jobsAttached: number
   jobsCreated: number
-  /** CANDIDATES-bucket attachments: best candidate attached, but a
-   *  human should confirm — routed to the Slack import lane. */
+  /** CANDIDATES-bucket outcomes needing human confirmation — routed to
+   *  the Slack import lane. mode 'attached' = name/cart-anchored best
+   *  candidate attached; 'created_sibling' = company+dates-only match,
+   *  new Job created instead (possible sibling of the candidates). */
   jobAmbiguous: Array<{
     cart: string
     bookingNumber: string
+    mode: 'attached' | 'created_sibling'
     jobCode: string | null
     jobName: string | null
     score?: number
@@ -249,11 +252,13 @@ export async function importNewCartsRun(
             await writeJobResolutionEvent(opts.runId, cart, jobRes)
             if (jobRes.action === 'CREATED_NEW') result.jobsCreated++
             else if (jobRes.action === 'ATTACHED_EXISTING' || jobRes.action === 'ALREADY_LINKED') result.jobsAttached++
-            else if (jobRes.action === 'ATTACHED_AMBIGUOUS') {
-              result.jobsAttached++
+            else if (jobRes.action === 'ATTACHED_AMBIGUOUS' || jobRes.action === 'CREATED_NEW_SIBLING') {
+              if (jobRes.action === 'ATTACHED_AMBIGUOUS') result.jobsAttached++
+              else result.jobsCreated++
               result.jobAmbiguous.push({
                 cart,
                 bookingNumber: jobRes.bookingNumber,
+                mode: jobRes.action === 'ATTACHED_AMBIGUOUS' ? 'attached' : 'created_sibling',
                 jobCode: jobRes.jobCode,
                 jobName: jobRes.jobName,
                 score: jobRes.score,

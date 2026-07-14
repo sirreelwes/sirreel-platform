@@ -16,10 +16,15 @@ import { resolveJob, createJobFromDraft } from '@/lib/jobs/resolveJob'
  *   - resolveJob → NO_MATCH                → createJobFromDraft
  *     (status ACTIVE — an imported cart is confirmed booked work, not
  *     a lead; NEW would flood the lead queue) and attach
- *   - resolveJob → CANDIDATES (ambiguous)  → attach the BEST candidate
- *     but return ATTACHED_AMBIGUOUS so the caller FLAGS it to the
- *     Slack import lane for human review — same posture as the cart
- *     company-matcher (machine discovers, human confirms).
+ *   - resolveJob → CANDIDATES (ambiguous)  → NAME-ANCHORED policy
+ *     (Wes, Jul 14): attach the best candidate ONLY when its match is
+ *     anchored by a name or cart rung (ATTACHED_AMBIGUOUS — flagged
+ *     for confirmation). When the only signal is company + overlapping
+ *     dates, the differing Planyo Job_Name is strong evidence of a
+ *     DISTINCT production (the Echobend case: four different shoots,
+ *     same client, same week) — create a new Job instead and flag it
+ *     as a possible sibling (CREATED_NEW_SIBLING). A wrong create is a
+ *     cheap merge later; a wrong attach means untangling bookings.
  *
  * Idempotency: (1) the jobId short-circuit above; (2) resolveJob's
  * rung ② — planyoCartId on the Job or a sibling Booking scores 90, so
@@ -34,6 +39,7 @@ export type CartJobAction =
   | 'ATTACHED_EXISTING'
   | 'CREATED_NEW'
   | 'ATTACHED_AMBIGUOUS'
+  | 'CREATED_NEW_SIBLING'
   | 'SKIPPED_NO_SIGNALS'
 
 export interface CartJobResolution {
@@ -117,10 +123,14 @@ export async function resolveJobForImportedBooking(
     await prisma.booking.updateMany({ where: { id: booking.id, jobId: null }, data: { jobId } })
   }
 
-  if (r.bucket === 'NO_MATCH') {
+  const createAndAttach = async (action: 'CREATED_NEW' | 'CREATED_NEW_SIBLING'): Promise<CartJobResolution> => {
     const draftName = booking.jobName?.trim() || r.draft.name || `Planyo cart ${booking.planyoCartId ?? '?'}`
+    const siblingCandidates =
+      action === 'CREATED_NEW_SIBLING'
+        ? r.candidates.slice(0, 5).map((c) => ({ jobCode: c.jobCode, name: c.name, score: c.score, reasons: c.reasons }))
+        : undefined
     if (dryRun) {
-      return { ...base, action: 'CREATED_NEW', jobId: null, jobCode: '(dry-run)', jobName: draftName }
+      return { ...base, action, jobId: null, jobCode: '(dry-run)', jobName: draftName, candidates: siblingCandidates }
     }
     const created = await createJobFromDraft(
       {
@@ -145,31 +155,49 @@ export async function resolveJobForImportedBooking(
     await attach(created.job.id)
     return {
       ...base,
-      action: 'CREATED_NEW',
+      action,
       jobId: created.job.id,
       jobCode: created.job.jobCode,
       jobName: created.job.name,
+      candidates: siblingCandidates,
     }
   }
 
-  // CLEAN_MATCH or CANDIDATES — attach the top candidate either way;
-  // CANDIDATES additionally gets flagged by the caller.
+  if (r.bucket === 'NO_MATCH') {
+    return createAndAttach('CREATED_NEW')
+  }
+
   const top = r.candidates[0]
+
+  if (r.bucket === 'CLEAN_MATCH') {
+    await attach(top.jobId)
+    return {
+      ...base,
+      action: 'ATTACHED_EXISTING',
+      jobId: dryRun ? null : top.jobId,
+      jobCode: top.jobCode,
+      jobName: top.name,
+      score: top.score,
+      reasons: top.reasons,
+    }
+  }
+
+  // CANDIDATES — name-anchored policy. Rung reasons are module-internal
+  // constants of resolveJob: '②' starts with "Planyo cart", '⑤' starts
+  // with "job name". Company+dates alone is NOT an attach anchor.
+  const anchored = top.reasons.some((why) => why.startsWith('Planyo cart') || why.startsWith('job name'))
+  if (!anchored) {
+    return createAndAttach('CREATED_NEW_SIBLING')
+  }
   await attach(top.jobId)
-  const common = {
+  return {
     ...base,
+    action: 'ATTACHED_AMBIGUOUS',
     jobId: dryRun ? null : top.jobId,
     jobCode: top.jobCode,
     jobName: top.name,
     score: top.score,
     reasons: top.reasons,
-  }
-  if (r.bucket === 'CLEAN_MATCH') {
-    return { ...common, action: 'ATTACHED_EXISTING' }
-  }
-  return {
-    ...common,
-    action: 'ATTACHED_AMBIGUOUS',
     candidates: r.candidates.slice(0, 5).map((c) => ({
       jobCode: c.jobCode,
       name: c.name,
