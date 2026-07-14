@@ -159,14 +159,50 @@ export async function recordQuickReplyOnThread(input: {
     const now = new Date()
     const inbound = await prisma.emailMessage.findUnique({
       where: { id: input.inboundEmailMessageId },
-      select: { id: true, threadId: true, emailAccountId: true },
+      select: {
+        id: true,
+        threadId: true,
+        emailAccountId: true,
+        subject: true,
+        sentAt: true,
+        gmailMessageId: true,
+      },
     })
-    if (!inbound?.threadId) return null
+    if (!inbound) return null
+
+    // Inbounds without a thread row (pre-thread-tracking ingests) used to
+    // short-circuit here — the reply went out but NOTHING was recorded, so
+    // the card lingered looking untouched and a second agent could
+    // double-reply. Mint the thread now instead. Upserting on the
+    // inbound's gmailMessageId converges with a later real Gmail sync of
+    // the same thread (Gmail thread ids equal the first message's id)
+    // rather than duplicating it.
+    let threadId = inbound.threadId
+    if (!threadId) {
+      const minted = await prisma.emailThread.upsert({
+        where: { gmailThreadId: inbound.gmailMessageId },
+        create: {
+          gmailThreadId: inbound.gmailMessageId,
+          subject: inbound.subject,
+          lastMessageAt: inbound.sentAt,
+          messageCount: 1,
+          lastInboundAt: inbound.sentAt,
+          lastDirection: 'INBOUND',
+        },
+        update: {},
+        select: { id: true },
+      })
+      await prisma.emailMessage.update({
+        where: { id: inbound.id },
+        data: { threadId: minted.id },
+      })
+      threadId = minted.id
+    }
 
     const created = await prisma.emailMessage.create({
       data: {
         emailAccountId: inbound.emailAccountId,
-        threadId: inbound.threadId,
+        threadId,
         // Synthetic id — Quick Replies have no Gmail message. Prefixed so
         // the row is recognizable and can never collide with real Gmail ids.
         gmailMessageId: `quick-reply-${randomUUID()}`,
@@ -190,7 +226,7 @@ export async function recordQuickReplyOnThread(input: {
     // Replies are sent "now" so this send is the latest message by
     // construction — a plain set is safe.
     const thread = await prisma.emailThread.update({
-      where: { id: inbound.threadId },
+      where: { id: threadId },
       data: {
         lastMessageAt: now,
         messageCount: { increment: 1 },

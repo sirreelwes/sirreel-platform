@@ -99,6 +99,11 @@ interface SuggestionRecord {
   company: { id: string; name: string } | null
   person: { id: string; firstName: string; lastName: string; email: string } | null
   threadMessageCount?: number
+  // Present only on rows from the `responded` stream — the latest
+  // outbound on the thread (Quick Reply or Gmail-synced staff reply).
+  // Drives the emerald "Replied by … · when" marker.
+  repliedBy?: string | null
+  repliedAt?: string | null
 }
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -160,6 +165,9 @@ export function NewInboundColumn({
   const searchParams = useSearchParams()
   const [inquiries, setInquiries] = useState<PersistentInquiry[] | null>(null)
   const [suggestions, setSuggestions] = useState<SuggestionRecord[] | null>(null)
+  // Suggestion threads the team already replied to — kept visible in the
+  // muted "Responded" block with attribution instead of vanishing.
+  const [respondedSuggestions, setRespondedSuggestions] = useState<SuggestionRecord[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [drawerEmailId, setDrawerEmailId] = useState<string | null>(null)
   // Quick Reply launched straight from a suggestion row (same modal the
@@ -187,6 +195,7 @@ export function NewInboundColumn({
       // Same convention as InquiriesSection.
       const sug = (sugData?.newInquiries ?? sugData?.suggestions ?? []) as SuggestionRecord[]
       setSuggestions(sug)
+      setRespondedSuggestions((sugData?.responded ?? []) as SuggestionRecord[])
       setLastUpdatedAt(new Date())
     })
   }, [])
@@ -340,8 +349,9 @@ export function NewInboundColumn({
   // hidden, since they're still open leads awaiting capture/convert.
   const pendingInquiries = (inquiries ?? []).filter((i) => !i.respondedAt)
   const respondedInquiries = (inquiries ?? []).filter((i) => !!i.respondedAt)
+  const respondedCount = respondedInquiries.length + respondedSuggestions.length
   const pendingCount = pendingInquiries.length + (suggestions?.length ?? 0)
-  const totalCount = pendingCount + respondedInquiries.length
+  const totalCount = pendingCount + respondedCount
   const isLoading = inquiries === null || suggestions === null
 
   return (
@@ -357,7 +367,7 @@ export function NewInboundColumn({
           <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             {isLoading
               ? '…'
-              : `${pendingCount} pending${respondedInquiries.length > 0 ? ` · ${respondedInquiries.length} responded` : ''}`}
+              : `${pendingCount} pending${respondedCount > 0 ? ` · ${respondedCount} responded` : ''}`}
           </span>
           {lastUpdatedAt && (
             <span className="block text-[10px] text-gray-400 mt-0.5 normal-case tracking-normal font-normal">
@@ -423,7 +433,7 @@ export function NewInboundColumn({
             {/* Responded — team replied on the thread; still open leads.
                 Muted block below pending, mirroring the pending/muted
                 split the suggested-inquiries stream uses for follow-ups. */}
-            {respondedInquiries.length > 0 && (
+            {respondedCount > 0 && (
               <>
                 <div className="pt-2 pb-0.5 flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
@@ -434,16 +444,41 @@ export function NewInboundColumn({
                   </span>
                   <div className="flex-1 border-t border-gray-100" />
                 </div>
-                {respondedInquiries.map((row) => (
-                  <PersistentCard
-                    key={`inq-${row.id}`}
-                    inquiry={row}
-                    busy={busyId === row.id}
-                    onCapture={() => capturePersistent(row.id)}
-                    onAddOn={() => setAddOnInquiry(row)}
-                    onDismiss={() => dismissPersistent(row.id)}
-                  />
-                ))}
+                {(() => {
+                  type RespondedItem =
+                    | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
+                    | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
+                  const merged: RespondedItem[] = [
+                    ...respondedInquiries.map((row) => ({
+                      kind: 'persistent' as const, row, sortKey: row.respondedAt ?? row.createdAt,
+                    })),
+                    ...respondedSuggestions.map((row) => ({
+                      kind: 'suggestion' as const, row, sortKey: row.repliedAt ?? row.sentAt,
+                    })),
+                  ].sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
+                  return merged.map((item) =>
+                    item.kind === 'persistent' ? (
+                      <PersistentCard
+                        key={`inq-${item.row.id}`}
+                        inquiry={item.row}
+                        busy={busyId === item.row.id}
+                        onCapture={() => capturePersistent(item.row.id)}
+                        onAddOn={() => setAddOnInquiry(item.row)}
+                        onDismiss={() => dismissPersistent(item.row.id)}
+                      />
+                    ) : (
+                      <SuggestionCard
+                        key={`sug-${item.row.emailId}`}
+                        suggestion={item.row}
+                        busy={busyId === item.row.emailId}
+                        onOpen={() => setDrawerEmailId(item.row.emailId)}
+                        onCapture={() => captureSuggestion(item.row.emailId)}
+                        onQuickReply={() => setQuickReplyEmailId(item.row.emailId)}
+                        onDismiss={() => dismissSuggestion(item.row.emailId)}
+                      />
+                    ),
+                  );
+                })()}
               </>
             )}
           </div>
@@ -776,6 +811,12 @@ function SuggestionCard({
         <div className="mt-0.5 text-[11px] text-gray-500">
           {suggestion.company?.name ?? 'Unknown company'}
           {contactName ? ` · ${contactName}` : ''}
+        </div>
+      )}
+      {suggestion.repliedAt && (
+        <div className="mt-1 text-[11px] font-medium text-emerald-700">
+          Replied by {suggestion.repliedBy ? staffFirstName(suggestion.repliedBy) : 'team'} ·{' '}
+          {repliedAtLabel(suggestion.repliedAt)}
         </div>
       )}
       {suggestion.snippet && (

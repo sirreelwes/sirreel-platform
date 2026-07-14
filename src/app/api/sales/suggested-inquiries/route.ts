@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 const LOOKBACK_DAYS = 14;
 const PAGE_SIZE = 12;
 const HIDDEN_LIST_LIMIT = 60;
+const RESPONDED_LIMIT = 8;
 
 // Inbound emails that look like inquiries and haven't been considered yet.
 // "Considered" = either captured (Inquiry created from this email) or
@@ -28,6 +29,12 @@ const HIDDEN_LIST_LIMIT = 60;
 //   - hidden: candidates excluded by classifyInquiryForPipeline (Cognito
 //     paperwork, damage reports, COIs, AI-detected rejections/confirmations).
 //     Surfaced in a count + expandable panel so reps can spot false negatives.
+//   - responded: inquiry-looking emails whose thread is OUTBOUND-last (a
+//     Quick Reply or a Gmail-synced staff reply already went out). These
+//     used to vanish from the list entirely; now they're returned with
+//     repliedBy/repliedAt (latest outbound on the thread) so the card can
+//     stay visible with a "Replied by … ·  when" marker instead of looking
+//     like it was never handled.
 export async function GET() {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000);
 
@@ -128,6 +135,19 @@ export async function GET() {
     (e) => !respondedTo(e) && !consideredMap.has(e.id) && dedupByThread(e),
   );
 
+  // Responded stream — same considered/dedup discipline, opposite
+  // direction test. Separate seen-set: a thread is either OUTBOUND-last
+  // or not, so the two streams can't overlap.
+  const seenRespondedThreads = new Set<string>();
+  const respondedCandidates = emails.filter((e) => {
+    if (!respondedTo(e) || consideredMap.has(e.id)) return false;
+    if (e.threadId) {
+      if (seenRespondedThreads.has(e.threadId)) return false;
+      seenRespondedThreads.add(e.threadId);
+    }
+    return true;
+  });
+
   // Classify each candidate. AI extraction is the primary signal when
   // available; subject-prefix fallback otherwise. Paperwork / damage /
   // COI fall into `hidden` so the sales section shows only real leads.
@@ -143,6 +163,37 @@ export async function GET() {
 
   const included = classified.filter((c) => c.result.include);
   const hiddenAll = classified.filter((c) => !c.result.include);
+
+  // Responded: classify with the same gate (only real leads), then pull
+  // the latest outbound per thread for the "Replied by … · when" marker.
+  const respondedIncluded = respondedCandidates
+    .map((e) => ({
+      email: e,
+      result: classifyInquiryForPipeline({
+        subject: e.subject,
+        inReplyTo: e.inReplyTo,
+        extractedData: e.extractedData,
+        extractionConfidence: e.extractionConfidence,
+      }),
+    }))
+    .filter((c) => c.result.include)
+    .slice(0, RESPONDED_LIMIT);
+  const respondedThreadIds = respondedIncluded
+    .map((c) => c.email.threadId)
+    .filter((v): v is string => !!v);
+  const latestOutboundByThread = new Map<string, { fromAddress: string; sentAt: Date }>();
+  if (respondedThreadIds.length > 0) {
+    const outs = await prisma.emailMessage.findMany({
+      where: { threadId: { in: respondedThreadIds }, direction: 'outbound' },
+      orderBy: { sentAt: 'desc' },
+      select: { threadId: true, fromAddress: true, sentAt: true },
+    });
+    for (const o of outs) {
+      if (o.threadId && !latestOutboundByThread.has(o.threadId)) {
+        latestOutboundByThread.set(o.threadId, { fromAddress: o.fromAddress, sentAt: o.sentAt });
+      }
+    }
+  }
 
   const toRecord = (e: typeof emails[number]) => ({
     emailId: e.id,
@@ -185,6 +236,14 @@ export async function GET() {
     suggestions: newInquiries,
     newInquiries,
     followUps,
+    responded: respondedIncluded.map((c) => {
+      const latest = c.email.threadId ? latestOutboundByThread.get(c.email.threadId) : undefined;
+      return {
+        ...toRecord(c.email),
+        repliedBy: latest?.fromAddress ?? null,
+        repliedAt: latest?.sentAt ?? c.email.thread?.lastOutboundAt ?? null,
+      };
+    }),
     hidden: {
       counts: hiddenCounts,
       items: hiddenItems,

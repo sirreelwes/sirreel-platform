@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
@@ -39,6 +40,47 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'recipient email required' }, { status: 400 })
   }
   const message: string | null = typeof body.message === 'string' ? body.message : null
+
+  // Send-time double-reply guard. Between the card render and this click,
+  // the thread may have gone OUTBOUND-last (another agent's Quick Reply, or
+  // a Gmail-synced staff reply). Stop with 409 { alreadyReplied } so the
+  // review modal can ask "send anyway?" — a confirmed resubmit carries
+  // confirmDuplicate: true and skips the check.
+  if (payload.inboundEmailMessageId && body.confirmDuplicate !== true) {
+    try {
+      const inbound = await prisma.emailMessage.findUnique({
+        where: { id: payload.inboundEmailMessageId },
+        select: { threadId: true },
+      })
+      if (inbound?.threadId) {
+        const thread = await prisma.emailThread.findUnique({
+          where: { id: inbound.threadId },
+          select: { id: true, lastDirection: true, lastOutboundAt: true },
+        })
+        if (thread?.lastDirection === 'OUTBOUND') {
+          const lastOut = await prisma.emailMessage.findFirst({
+            where: { threadId: thread.id, direction: 'outbound' },
+            orderBy: { sentAt: 'desc' },
+            select: { fromAddress: true, sentAt: true },
+          })
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'already-replied',
+              alreadyReplied: {
+                by: lastOut?.fromAddress ?? null,
+                at: (lastOut?.sentAt ?? thread.lastOutboundAt)?.toISOString() ?? null,
+              },
+            },
+            { status: 409 },
+          )
+        }
+      }
+    } catch (err) {
+      // Guard is advisory — never block a legitimate send on a check error.
+      console.warn('[quick-reply send] already-replied guard failed (non-blocking):', err)
+    }
+  }
 
   const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
   const { subject, html, text } = composeQuickReply({

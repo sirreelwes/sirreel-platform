@@ -251,6 +251,11 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
   const [sendState, setSendState] = useState<'idle' | 'in-flight' | 'sent'>('idle');
   const sendInFlightRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  // Already-replied guard (quick-reply 409): someone replied on this thread
+  // since the modal opened. Non-null renders the warning banner and turns
+  // the Send button into "Send anyway" (the resubmit carries
+  // confirmDuplicate so the server skips the guard once).
+  const [dupWarning, setDupWarning] = useState<{ by: string | null; at: string | null } | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   // Personal-note textarea state. Empty = templated-only (the
@@ -355,12 +360,29 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     setSendState('in-flight');
     setError(null);
     try {
+      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '') as Record<string, unknown>;
+      // Second pass after an already-replied 409: the agent clicked
+      // "Send anyway" — carry the confirmation so the server skips the
+      // duplicate guard.
+      if (dupWarning) sendBody.confirmDuplicate = true;
       const res = await fetch(endpoints.send, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '')),
+        body: JSON.stringify(sendBody),
       });
       const json = await res.json().catch(() => ({}));
+      if (res.status === 409 && json?.error === 'already-replied') {
+        // Someone replied on this thread since the modal opened (another
+        // agent's Quick Reply or a Gmail-synced staff reply). Don't send —
+        // surface who/when and rearm the button as "Send anyway".
+        setDupWarning({
+          by: typeof json?.alreadyReplied?.by === 'string' ? json.alreadyReplied.by : null,
+          at: typeof json?.alreadyReplied?.at === 'string' ? json.alreadyReplied.at : null,
+        });
+        sendInFlightRef.current = false;
+        setSendState('idle');
+        return;
+      }
       if (!res.ok || json?.ok === false) {
         setError(json?.error || 'Send failed');
         // Failure: release the latch so the agent can retry.
@@ -461,6 +483,14 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
           {!loading && error && (
             <div className="text-xs text-red-300 bg-red-900/20 border border-red-900/60 rounded px-3 py-2">
               {error}
+            </div>
+          )}
+
+          {dupWarning && (
+            <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/60 rounded px-3 py-2">
+              <span className="font-bold">Already replied</span> — {dupWarning.by || 'a teammate'} sent a reply on
+              this thread{dupWarning.at ? ` at ${new Date(dupWarning.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}.
+              Sending again may double-message the client. Use <span className="font-semibold">Send anyway</span> only if this adds something new.
             </div>
           )}
 
@@ -775,7 +805,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
             disabled={!preview || sendLocked || loading}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
-            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : 'Send'}
+            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : dupWarning ? 'Send anyway' : 'Send'}
           </button>
         </div>
       </div>
