@@ -32,6 +32,7 @@ export interface QuickReplyInputs {
   inboundEmailMessageId: string | null;
 }
 
+
 export function buildQuickReplyInputs(messages: QuickReplyThreadMsg[]): QuickReplyInputs {
   return {
     emailText: (messages || [])
@@ -48,6 +49,7 @@ export function buildQuickReplyInputs(messages: QuickReplyThreadMsg[]): QuickRep
 /** Fetch a thread by emailId, then open QuickReplyModal with the shared inputs. */
 export function QuickReplyLauncher({ emailId, onClose, onSent }: { emailId: string; onClose: () => void; onSent?: () => void }) {
   const [messages, setMessages] = useState<QuickReplyThreadMsg[] | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function QuickReplyLauncher({ emailId, onClose, onSent }: { emailId: stri
         if (!active) return;
         if (d?.error) { setError(d.error); return; }
         setMessages((d?.messages ?? []) as QuickReplyThreadMsg[]);
+        setThreadId((d?.thread?.id as string | undefined) ?? null);
       })
       .catch(() => active && setError('Failed to load the email thread.'));
     return () => { active = false; };
@@ -87,6 +90,7 @@ export function QuickReplyLauncher({ emailId, onClose, onSent }: { emailId: stri
       emailText={inputs.emailText}
       defaultRecipientEmail={inputs.defaultRecipientEmail}
       inboundEmailMessageId={inputs.inboundEmailMessageId}
+      threadId={threadId}
       onClose={onClose}
       onSent={() => { onSent?.(); onClose(); }}
     />

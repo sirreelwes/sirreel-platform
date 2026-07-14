@@ -1638,10 +1638,19 @@ model EmailThread {
   lastOutboundAt DateTime? @map("last_outbound_at")
   lastDirection  String?   @map("last_direction")
 
+  /// Job-as-root step 6 — email-in-Job. The thread lives inside this
+  /// Job once an operator explicitly attaches it (ThreadDrawer /
+  /// Quick Reply / inquiry conversion). Plain column, no relation —
+  /// keeps the Job model untouched; queried by index. New messages on
+  /// the thread inherit automatically (they join via threadId).
+  /// Activates resolveJob rung ① (threadId → Job, score 100).
+  jobId String? @map("job_id")
+
   // Relations
   messages EmailMessage[]
 
   @@index([lastDirection, lastInboundAt])
+  @@index([jobId])
   @@map("email_threads")
 }
 

@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import {
   loadWelcomeInquiryContext,
   composeWelcomeEmail,
@@ -92,6 +93,10 @@ export async function POST(req: NextRequest) {
       create: { token, inquiryId, personId: ctx.person.id, expiresAt, jobId },
       update: { token, personId: ctx.person.id, expiresAt, jobId },
     })
+
+    // Email-in-Job: the agent resolved the Job in the resolver before
+    // this send — file the inquiry's source thread in it (fill-only).
+    await attachInquiryThreadToJob(inquiryId, jobId)
 
     const { subject, html, text } = composeWelcomeEmail({
       ctx,

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { nextOrderNumber } from '@/lib/orders'
+import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import {
@@ -186,6 +187,10 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
       .catch(() => {})
     return landing
   }
+
+  // Email-in-Job: make sure the inquiry's source thread is filed in the
+  // Job (fill-only; usually already done at welcome-send time).
+  await attachInquiryThreadToJob(inquiry.id, resolvedJob.id)
 
   // Paperwork ready — same baseline path the portal/send-paperwork use.
   // Best-effort: a render hiccup never blocks the client's landing.

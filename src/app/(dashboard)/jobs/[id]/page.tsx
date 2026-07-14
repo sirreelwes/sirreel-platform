@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 
@@ -847,6 +848,9 @@ export default function JobDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Email threads filed in this Job (email-in-Job, step 6). */}
+      <JobEmailThreads jobId={job.id} />
 
       {/* Notes */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">

@@ -34,6 +34,10 @@ interface Props {
   defaultRecipientName?: string | null;
   /** EmailMessage id of the inbound being replied to — drives CRM capture on send. */
   inboundEmailMessageId?: string | null;
+  /** EmailThread id (email-in-Job) — feeds resolver rung ① (a thread
+   *  already filed in a Job is a CLEAN_MATCH) and lets the resolved Job
+   *  auto-file the thread (fill-only) after the agent's pick. */
+  threadId?: string | null;
   onClose: () => void;
   onSent?: () => void;
 }
@@ -45,7 +49,7 @@ const STATUS_PILL: Record<Line['status'], string> = {
 };
 const STATUS_LABEL: Record<Line['status'], string> = { available: 'Available', tight: 'Tight', short: 'Spoken for' };
 
-export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecipientName, inboundEmailMessageId, onClose, onSent }: Props) {
+export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecipientName, inboundEmailMessageId, threadId, onClose, onSent }: Props) {
   const [phase, setPhase] = useState<'parsing' | 'ready' | 'error'>('parsing');
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
@@ -200,6 +204,15 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     }
     // Keep the reply copy in sync with the Job the holds actually live in.
     setJobName(r.name);
+    // Email-in-Job: file this thread in the resolved Job (fill-only —
+    // a thread an operator already filed elsewhere is left alone).
+    if (threadId) {
+      void fetch(`/api/email-threads/${encodeURIComponent(threadId)}/job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: r.id, onlyIfUnfiled: true }),
+      }).catch(() => {});
+    }
     setResolverOpen(false);
     void proceed(resolved, companyId);
   };
@@ -214,6 +227,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           contactName: recipientName || null,
           jobNameHint: jobName?.trim() || null,
           dates: pickup && ret ? { start: pickup.slice(0, 10), end: ret.slice(0, 10) } : null,
+          threadId: threadId ?? null,
           sourceRef: 'sales:quick-reply',
         }}
         onResolved={onJobResolved}

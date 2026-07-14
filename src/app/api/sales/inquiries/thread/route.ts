@@ -25,7 +25,15 @@ export async function GET(req: NextRequest) {
   });
   if (!email) return NextResponse.json({ error: 'email not found' }, { status: 404 });
 
-  let thread: { id: string; subject: string | null; lastDirection: string | null } | null = null;
+  let thread:
+    | {
+        id: string;
+        subject: string | null;
+        lastDirection: string | null;
+        jobId?: string | null;
+        job?: { id: string; jobCode: string; name: string } | null;
+      }
+    | null = null;
   let messages: Array<{
     id: string;
     fromAddress: string;
@@ -66,7 +74,7 @@ export async function GET(req: NextRequest) {
     const [t, msgs] = await Promise.all([
       prisma.emailThread.findUnique({
         where: { id: email.threadId },
-        select: { id: true, subject: true, lastDirection: true },
+        select: { id: true, subject: true, lastDirection: true, jobId: true },
       }),
       prisma.emailMessage.findMany({
         where: { threadId: email.threadId },
@@ -76,6 +84,15 @@ export async function GET(req: NextRequest) {
     ]);
     thread = t;
     messages = msgs;
+    // Email-in-Job: surface the filed Job so the drawer can render the
+    // attachment chip (plain column — resolve the Job by id here).
+    if (t?.jobId) {
+      const job = await prisma.job.findUnique({
+        where: { id: t.jobId },
+        select: { id: true, jobCode: true, name: true },
+      });
+      thread = { ...t, job: job ?? null };
+    }
   } else {
     // No thread — just return the single message.
     const single = await prisma.emailMessage.findUnique({

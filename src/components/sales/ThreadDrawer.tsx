@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FormTypeBadge, type FormType } from './FormTypeBadge';
 import { QuickReplyModal } from './QuickReplyModal';
 import { buildQuickReplyInputs } from './QuickReplyLauncher';
+import { JobResolverModal } from '@/components/shared/JobResolverModal';
 
 interface ExtractedMessage {
   contact: { name: string | null; email: string | null; phone: string | null; title: string | null };
@@ -62,7 +63,13 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
 
 interface ThreadResponse {
   email: { id: string; subject: string; threadId: string | null };
-  thread: { id: string; subject: string | null; lastDirection: string | null } | null;
+  thread: {
+    id: string;
+    subject: string | null;
+    lastDirection: string | null;
+    jobId?: string | null;
+    job?: { id: string; jobCode: string; name: string } | null;
+  } | null;
   messages: ThreadMessage[];
   considered: { inquiryId: string; status: string } | null;
 }
@@ -263,6 +270,11 @@ export function ThreadDrawer(props: Props) {
   const [error, setError] = useState('');
   const [rawOpen, setRawOpen] = useState<Record<string, boolean>>({});
   const [showQuickReply, setShowQuickReply] = useState(false);
+  // Email-in-Job: the thread's filed Job. Seeded from the thread fetch;
+  // updated in place on attach/detach.
+  const [threadJob, setThreadJob] = useState<{ id: string; jobCode: string; name: string } | null>(null);
+  const [showJobResolver, setShowJobResolver] = useState(false);
+  const [jobBusy, setJobBusy] = useState(false);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -283,7 +295,10 @@ export function ThreadDrawer(props: Props) {
         .then((r) => r.json())
         .then((d: ThreadResponse | { error: string }) => {
           if ('error' in d) setError(d.error);
-          else setData(d);
+          else {
+            setData(d);
+            setThreadJob(d.thread?.job ?? null);
+          }
           setLoading(false);
         })
         .catch(() => {
@@ -367,6 +382,32 @@ export function ThreadDrawer(props: Props) {
     window.addEventListener('keydown', onTab);
     return () => window.removeEventListener('keydown', onTab);
   }, [openKey]);
+
+  // Email-in-Job: explicit attach/detach on the thread. Attach opens the
+  // JobResolverModal (ranked candidates from the thread's extracted
+  // company/contact/project); detach clears jobId. New messages inherit
+  // by joining the thread — no per-message filing.
+  const setThreadJobOnServer = useCallback(
+    async (jobId: string | null) => {
+      const threadDbId = data?.thread?.id;
+      if (!threadDbId) return;
+      setJobBusy(true);
+      try {
+        const r = await fetch(`/api/email-threads/${encodeURIComponent(threadDbId)}/job`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId }),
+        });
+        const d = await r.json();
+        if (r.ok && d.ok) {
+          setThreadJob(jobId ? { id: d.jobId, jobCode: d.jobCode, name: d.jobName } : null);
+        }
+      } finally {
+        setJobBusy(false);
+      }
+    },
+    [data],
+  );
 
   const goToInquiry = useCallback(() => {
     if (!data?.considered?.inquiryId) return;
@@ -488,6 +529,41 @@ export function ThreadDrawer(props: Props) {
             ✕
           </button>
         </div>
+
+        {/* Email-in-Job strip — where this thread is filed. */}
+        {mode === 'inquiry' && data?.thread && (
+          <div className="px-5 py-2 border-b border-gray-100 bg-gray-50/60 flex items-center gap-2 text-[11px]">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Job</span>
+            {threadJob ? (
+              <>
+                <a
+                  href={`/jobs/${threadJob.id}`}
+                  className="font-semibold text-emerald-700 hover:underline truncate"
+                >
+                  [{threadJob.jobCode}] {threadJob.name}
+                </a>
+                <button
+                  onClick={() => setThreadJobOnServer(null)}
+                  disabled={jobBusy}
+                  className="ml-auto text-[10px] text-gray-400 hover:text-rose-600 underline underline-offset-2 disabled:opacity-40"
+                >
+                  detach
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowJobResolver(true)}
+                  disabled={jobBusy}
+                  className="font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2 disabled:opacity-40"
+                >
+                  Attach to Job…
+                </button>
+                <span className="text-gray-400">replies on this thread will follow it into the Job</span>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {loading && (
@@ -771,8 +847,37 @@ export function ThreadDrawer(props: Props) {
             emailText={qr.emailText}
             defaultRecipientEmail={qr.defaultRecipientEmail}
             inboundEmailMessageId={qr.inboundEmailMessageId}
+            threadId={data?.thread?.id ?? null}
             onClose={() => setShowQuickReply(false)}
             onSent={() => setShowQuickReply(false)}
+          />
+        );
+      })()}
+
+      {showJobResolver && data?.thread && (() => {
+        // Seed the resolver from the thread's extracted signals — first
+        // inbound message's Quick Read (company, contact, project) plus
+        // the thread id itself (rung ① when already filed elsewhere).
+        const firstInbound = (data.messages || []).find(
+          (m) => m.direction === 'inbound' || m.direction === 'INBOUND',
+        );
+        const ex = firstInbound?.extractedData ?? null;
+        return (
+          <JobResolverModal
+            context={{
+              threadId: data.thread.id,
+              companyName: ex?.company ?? null,
+              contactEmail: ex?.contact?.email ?? (firstInbound ? parseAddress(firstInbound.fromAddress) : null),
+              contactName: ex?.contact?.name ?? null,
+              contactPhone: ex?.contact?.phone ?? null,
+              jobNameHint: ex?.jobIntent?.projectName ?? data.thread.subject ?? data.email.subject ?? null,
+              sourceRef: 'email:thread-drawer',
+            }}
+            onResolved={(r) => {
+              setShowJobResolver(false);
+              void setThreadJobOnServer(r.id);
+            }}
+            onClose={() => setShowJobResolver(false)}
           />
         );
       })()}

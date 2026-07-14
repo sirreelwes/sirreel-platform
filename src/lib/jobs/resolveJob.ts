@@ -18,8 +18,7 @@ import { nextJobCode } from '@/lib/jobs/nextJobCode'
  * "New Job".
  *
  * Ranking ladder (each rung annotates its reason on the candidate):
- *   ① email thread already attached to a Job   (stub until
- *      email-in-Job lands EmailThread.jobId — build step 6)
+ *   ① email thread already attached to a Job (EmailThread.jobId)
  *   ② planyoCartId on the Job or one of its Bookings
  *   ③ same company + date overlap (±7 days), status not WRAPPED/LOST
  *   ④ same contact person on JobContact
@@ -140,10 +139,20 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
     bag.set(jobId, cur)
   }
 
-  // ① email thread → Job. EmailThread has no jobId yet (email-in-Job is
-  //   build step 6); the rung is wired so callers can pass threadId now
-  //   and start ranking the moment the column lands.
-  //   Intentionally a no-op today.
+  // ① email thread → Job (email-in-Job, step 6). ctx.threadId accepts
+  //   EmailThread.id OR the raw Gmail thread id (ingest paths disagree
+  //   on which they hand around). An attached thread is the strongest
+  //   identity signal there is — the operator explicitly filed it.
+  if (ctx.threadId) {
+    const t = await prisma.emailThread.findFirst({
+      where: {
+        OR: [{ id: ctx.threadId }, { gmailThreadId: ctx.threadId }],
+        jobId: { not: null },
+      },
+      select: { jobId: true },
+    })
+    if (t?.jobId) add(t.jobId, RUNG_SCORES.thread, 'this email thread is already attached to the job')
+  }
 
   // ② planyoCartId on Job or its Bookings
   if (ctx.planyoCartId) {

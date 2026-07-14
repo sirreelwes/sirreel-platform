@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import type { InquiryStatus } from '@prisma/client'
 
 type Params = { params: Promise<{ id: string }> }
@@ -111,6 +112,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         convertedJob: { select: { id: true, jobCode: true, name: true } },
       },
     })
+
+    // Email-in-Job (step 6): conversion is where the agent explicitly
+    // resolved the Job — file the inquiry's source email thread in it
+    // (fill-only, best-effort).
+    if (typeof body.convertedJobId === 'string' && body.convertedJobId) {
+      await attachInquiryThreadToJob(id, body.convertedJobId)
+    }
 
     return NextResponse.json({
       inquiry: {
