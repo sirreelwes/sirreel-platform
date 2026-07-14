@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import type { LineItemDepartment } from '@prisma/client'
 import {
   loadCatalogForSnippet,
@@ -638,9 +639,27 @@ export async function POST(req: NextRequest) {
     const dedupedContacts = dedupContacts(rawContacts)
     const contacts = await enrichContacts(dedupedContacts)
 
-    // Client matching — same fuzzy strategy as before, just kept inline.
+    // Client matching — the resolver's companyNameKey discipline first
+    // (exact normalized-key match, ambiguity FLAGGED via the shared
+    // resolveCompanyByNameKey), with the legacy contains-cascade kept
+    // only as a fuzzy fallback for prefill. clientMatchMeta tells
+    // consumers whether the top hit is safe to adopt without asking
+    // (exact = a single key match); fuzzy hits are NEVER auto-picked.
     let clientMatch: { id: string; name: string; tier: string; coiOnFile: boolean; defaultAgentId: string | null }[] = []
+    let clientMatchMeta: { exact: boolean; ambiguity: string | null } = { exact: false, ambiguity: null }
     if (parsed.clientName) {
+      const keyed = await resolveCompanyByNameKey(parsed.clientName)
+      if (keyed.matches.length > 0) {
+        const rows = await prisma.company.findMany({
+          where: { id: { in: keyed.matches.map((m) => m.id) } },
+          select: { id: true, name: true, tier: true, coiOnFile: true, defaultAgentId: true },
+        })
+        const rank = new Map(keyed.matches.map((m, i) => [m.id, i]))
+        clientMatch = rows.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+        clientMatchMeta = { exact: keyed.matches.length === 1, ambiguity: keyed.ambiguity }
+      }
+    }
+    if (parsed.clientName && clientMatch.length === 0) {
       const stripSuffixes = (s: string) =>
         s
           .toLowerCase()
@@ -680,6 +699,7 @@ export async function POST(req: NextRequest) {
       parsed,
       items,
       clientMatch,
+      clientMatchMeta,
       contacts,
     })
   } catch (err: unknown) {

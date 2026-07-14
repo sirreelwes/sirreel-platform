@@ -76,10 +76,17 @@ interface ResolveResult {
 
 export function JobResolverModal({
   context,
+  draftExtras,
   onResolved,
   onClose,
 }: {
   context: ResolverContext
+  /** Extra JobDraft fields (productionType, profile, notes,
+   *  estimatedValue, contacts[{personId,role,isPrimary}]) merged into
+   *  the create-new POST by wizard callers. Never affects ranking or
+   *  the agent's new-vs-existing choice; the modal's own editable
+   *  fields (name/company/contact/status) always win. */
+  draftExtras?: Record<string, unknown>
   onResolved: (job: ResolvedJob) => void
   onClose: () => void
 }) {
@@ -162,6 +169,7 @@ export function JobResolverModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...(draftExtras ?? {}),
           name: dName,
           companyId: result?.resolvedCompany && dCompany === result.resolvedCompany.name ? result.resolvedCompany.id : undefined,
           companyName: dCompany,

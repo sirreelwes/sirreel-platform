@@ -125,10 +125,12 @@ export type EmailReviewTarget =
     }
   | { kind: 'followup-job'; jobId: string; message?: string | null }
   | { kind: 'quick-reply'; payload: QuickReplyPayload; message?: string | null }
-  // Welcome / Job Begin invite — server derives everything from the inquiry;
-  // the send mints the WelcomeInvite token, and the Job is created only when
-  // the client clicks "Get Paperwork Started".
-  | { kind: 'welcome'; inquiryId: string; message?: string | null };
+  // Welcome / Job Begin invite — server derives recipient/company/agent
+  // from the inquiry. jobId is the AGENT-resolved Job (Job-as-root step
+  // 4, picked in the JobResolverModal before this modal opens); the send
+  // stores it on the invite, and the client's click mints the Order
+  // inside that Job.
+  | { kind: 'welcome'; inquiryId: string; jobId: string; message?: string | null };
 
 interface Props {
   target: EmailReviewTarget | null;
@@ -205,6 +207,7 @@ function buildPreviewBody(
   // inquiry; only the id + the agent's words travel in the body.
   if (target.kind === 'welcome') {
     base.inquiryId = target.inquiryId;
+    base.jobId = target.jobId;
     base.customMessage = customMessage.trim() || null;
   }
   return base;

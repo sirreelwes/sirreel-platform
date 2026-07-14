@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { getServerSession } from "next-auth";
-import type { JobRole, ProductionType } from "@prisma/client";
-import { recomputeMostCommonProductionTypeProfile } from "@/lib/companies/recomputeMostCommonProductionTypeProfile";
 import { resolveDataScope, orderScopeWhere } from "@/lib/auth/scope";
 
 export async function GET(req: NextRequest) {
@@ -65,28 +63,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ orders, total, page, limit });
 }
 
-// Inline-Job payload accepted when the new-quote flow wants to create
-// a Job *and* its first Order in one shot. Mirrors POST /api/jobs but
-// drops companyId/agentId (taken from the order body) and id-generation
-// fields. When this is set, jobId must NOT be set — they're mutually
-// exclusive. Job+Order land in a single Prisma transaction so an
-// abandoned mid-write leaves nothing behind.
-interface InlineJobInput {
-  name: string;
-  productionType?: ProductionType;
-  productionTypeProfileId?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  notes?: string | null;
-  estimatedValue?: number | string | null;
-  contacts?: { personId: string; role: JobRole; isPrimary?: boolean }[];
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { companyId, jobId, bookingId, description, startDate, endDate, taxRate } = body;
-    const inlineJob: InlineJobInput | undefined = body.job;
     let { agentId } = body;
 
     // Fall back to logged-in user for agentId if not supplied
@@ -109,21 +89,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!jobId && !inlineJob) {
+    // Job-as-root (step 4): orders NEVER create Jobs. The inline `job`
+    // payload is CLOSED — the new-quote wizard resolves the Job through
+    // JobResolverModal (createJobFromDraft is the one creation home)
+    // before this endpoint is called.
+    if (!jobId) {
       return NextResponse.json(
-        { error: "Either jobId (existing) or job (inline create) is required" },
+        { error: "jobId required — resolve or create the Job first (Job-as-root)" },
         { status: 400 }
       );
     }
-    if (jobId && inlineJob) {
+    if (body.job) {
       return NextResponse.json(
-        { error: "Pass either jobId or job, not both" },
-        { status: 400 }
-      );
-    }
-    if (inlineJob && !inlineJob.name) {
-      return NextResponse.json(
-        { error: "job.name is required when creating an inline Job" },
+        { error: "inline job creation was removed — resolve the Job via the resolver, then pass jobId" },
         { status: 400 }
       );
     }
@@ -150,70 +128,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { order, createdJobId } = await prisma.$transaction(async (tx) => {
+    const { order } = await prisma.$transaction(async (tx) => {
       // Order number lives INSIDE the tx now that the per-day counter
       // backs it — a rolled-back order rolls back its number too, so
       // there are no daily-counter gaps from aborted creates.
       const orderNumber = await nextOrderNumber(tx);
-      let resolvedJobId = jobId as string | undefined;
-      let createdId: string | null = null;
-
-      if (inlineJob) {
-        // Same jobCode-bump pattern as POST /api/jobs — race-prone today
-        // but no worse than the existing path. Lives inside the tx so
-        // the Job is rolled back on Order failure.
-        const lastJob = await tx.job.findFirst({
-          orderBy: { createdAt: "desc" },
-          select: { jobCode: true },
-        });
-        const nextNum = lastJob
-          ? parseInt(lastJob.jobCode.replace("SR-JOB-", ""), 10) + 1
-          : 1;
-        const jobCode = `SR-JOB-${String(nextNum).padStart(4, "0")}`;
-
-        const created = await tx.job.create({
-          data: {
-            jobCode,
-            name: inlineJob.name,
-            companyId,
-            agentId,
-            productionType: inlineJob.productionType || "OTHER",
-            // Optional FK to the new ProductionTypeProfile lookup;
-            // empty string → null defensive against form defaults.
-            productionTypeProfileId:
-              typeof inlineJob.productionTypeProfileId === "string" &&
-              inlineJob.productionTypeProfileId
-                ? inlineJob.productionTypeProfileId
-                : null,
-            status: "QUOTED",
-            startDate: inlineJob.startDate ? new Date(inlineJob.startDate) : null,
-            endDate: inlineJob.endDate ? new Date(inlineJob.endDate) : null,
-            notes: inlineJob.notes || null,
-            estimatedValue:
-              inlineJob.estimatedValue == null || inlineJob.estimatedValue === ""
-                ? null
-                : Number(inlineJob.estimatedValue),
-            ...(inlineJob.contacts && inlineJob.contacts.length > 0 && {
-              jobContacts: {
-                create: inlineJob.contacts.map((c) => ({
-                  personId: c.personId,
-                  role: c.role,
-                  isPrimary: !!c.isPrimary,
-                })),
-              },
-            }),
-          },
-        });
-        resolvedJobId = created.id;
-        createdId = created.id;
-      }
 
       const created = await tx.order.create({
         data: {
           orderNumber,
           companyId,
           agentId,
-          jobId: resolvedJobId!,
+          jobId,
           bookingId: bookingId || null,
           description: description || null,
           startDate: startDate ? new Date(startDate) : null,
@@ -225,22 +151,10 @@ export async function POST(req: NextRequest) {
           agent: { select: { id: true, name: true } },
         },
       });
-      return { order: created, createdJobId: createdId };
+      return { order: created };
     });
 
-    // If we created an inline Job, refresh the Company's most-common-
-    // profile cache OUTSIDE the tx so the new row is visible to the
-    // helper's findMany. Order-only creates (no inlineJob) skip — they
-    // don't change the company's profile distribution.
-    if (createdJobId) {
-      try {
-        await recomputeMostCommonProductionTypeProfile(companyId);
-      } catch (err) {
-        console.warn("[orders POST] recompute most-common profile failed:", err);
-      }
-    }
-
-    return NextResponse.json({ ...order, createdJobId }, { status: 201 });
+    return NextResponse.json({ ...order }, { status: 201 });
   } catch (error) {
     console.error("Create order error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";

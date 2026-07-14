@@ -23,11 +23,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { getServerSession } from 'next-auth'
 import { can } from '@/lib/permissions'
-import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,22 +37,17 @@ interface HoldBody {
   companyId?: string
   personId?: string
   agentId?: string
-  /** Existing Job to attach this Booking to. Mutually exclusive with newJobName. */
+  /** The Job this Booking lives in — REQUIRED (Job-as-root). Every
+   *  caller resolves the Job through the resolver BEFORE creating the
+   *  hold; this route creates no Jobs. */
   jobId?: string
-  /** Name for a NEW Job to create as part of this hold. Mutually exclusive with jobId. */
-  newJobName?: string
   /** Legacy display name — still accepted in the payload but ignored:
-   *  Booking.jobName is always derived from the resolved Job (jobId
-   *  lookup or newJobName create). Bare jobName without a Job is 400. */
+   *  Booking.jobName is always derived from the resolved Job. */
   jobName?: string
   productionName?: string | null
   priority?: 'STANDARD' | 'HIGH' | 'LOW'
   source?: 'WEBSITE' | 'PHONE' | 'EMAIL' | 'AGENT_DIRECT' | 'AI_AUTO' | 'PLANYO_BACKFILL'
   notes?: string | null
-  /** Optional FK to ProductionTypeProfile when newJobName creates an
-   *  inline Job. No UI surface yet; forward-compat for a future
-   *  quick-quote hold flow that picks a profile. */
-  productionTypeProfileId?: string | null
   bufferDays?: number
   bufferOverride?: boolean
   /** Hold rank — 1 = primary (default, capacity-gated); ≥2 = backup,
@@ -114,21 +107,21 @@ export async function POST(req: NextRequest) {
   if (!body.companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 })
   if (!body.personId) return NextResponse.json({ error: 'personId required' }, { status: 400 })
 
-  // Job linkage (Job-as-root). Every hold must resolve to a Job: an
-  // existing one (jobId — the gantt +Hold resolver flow) or one created
-  // in this tx (newJobName — Quick Reply, until it converts to the
-  // resolver too). The old tolerance for a bare display-only jobName
-  // (Booking with jobId NULL, mirroring pre-Job legacy rows) is CLOSED
-  // — no caller uses it, and new job-less bookings are exactly what
-  // the Job-as-root model exists to prevent.
-  const wantsExisting = !!body.jobId
-  const wantsCreate = !!body.newJobName?.trim()
-  if (wantsExisting && wantsCreate) {
-    return NextResponse.json({ error: 'pass either jobId or newJobName, not both' }, { status: 400 })
-  }
-  if (!wantsExisting && !wantsCreate) {
+  // Job linkage (Job-as-root). Every hold lives inside an EXISTING Job
+  // — every caller (gantt +Hold, Quick Reply) resolves the Job through
+  // the JobResolverModal BEFORE creating the hold. The inline
+  // newJobName creation and the bare-jobName tolerance are both CLOSED
+  // (step 3 closed jobName-only; step 4 closed newJobName once Quick
+  // Reply converted). This route creates no Jobs, ever.
+  if (!body.jobId) {
     return NextResponse.json(
-      { error: 'jobId or newJobName required — every hold must belong to a Job' },
+      { error: 'jobId required — resolve the Job (resolver modal) before creating a hold' },
+      { status: 400 },
+    )
+  }
+  if (typeof body === 'object' && body !== null && 'newJobName' in body && (body as Record<string, unknown>).newJobName) {
+    return NextResponse.json(
+      { error: 'inline job creation was removed — resolve the Job via the resolver, then pass jobId' },
       { status: 400 },
     )
   }
@@ -219,51 +212,17 @@ export async function POST(req: NextRequest) {
     const bookingNumber = await nextBookingNumber(year)
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Resolve Job. Existing → verify it belongs to companyId.
-        // Create → same jobCode bump pattern as POST /api/jobs;
-        // race-prone today but no worse than the existing path.
-        let resolvedJobId: string | null = null
-        let resolvedJobName: string = body.jobName?.trim() || ''
-        let createdJobId: string | null = null
-
-        if (wantsExisting) {
-          const existing = await tx.job.findUnique({
-            where: { id: body.jobId! },
-            select: { id: true, name: true, companyId: true },
-          })
-          if (!existing) throw new Error(`Job ${body.jobId} not found`)
-          if (existing.companyId !== body.companyId) {
-            throw new Error(`Job ${body.jobId} belongs to a different company`)
-          }
-          resolvedJobId = existing.id
-          resolvedJobName = existing.name
-        } else if (wantsCreate) {
-          const jobCode = await nextJobCode(tx)
-          const created = await tx.job.create({
-            data: {
-              jobCode,
-              name: body.newJobName!.trim(),
-              companyId: body.companyId!,
-              agentId: agentId!,
-              productionType: 'OTHER',
-              // Hold flow doesn't surface a profile picker in the UI
-              // yet — accepted from the body for forward-compat with a
-              // future quick-quote UI; null otherwise. Empty string →
-              // null defensive against form defaults.
-              productionTypeProfileId:
-                typeof body.productionTypeProfileId === 'string' && body.productionTypeProfileId
-                  ? body.productionTypeProfileId
-                  : null,
-              status: 'QUOTED',
-              startDate: start,
-              endDate: end,
-            },
-            select: { id: true, name: true },
-          })
-          resolvedJobId = created.id
-          resolvedJobName = created.name
-          createdJobId = created.id
+        // Resolve the (existing) Job — verify it belongs to companyId.
+        const existing = await tx.job.findUnique({
+          where: { id: body.jobId! },
+          select: { id: true, name: true, companyId: true },
+        })
+        if (!existing) throw new Error(`Job ${body.jobId} not found`)
+        if (existing.companyId !== body.companyId) {
+          throw new Error(`Job ${body.jobId} belongs to a different company`)
         }
+        const resolvedJobId = existing.id
+        const resolvedJobName = existing.name
 
         const booking = await tx.booking.create({
           data: {
@@ -294,20 +253,8 @@ export async function POST(req: NextRequest) {
           },
           select: { id: true, quantity: true, status: true, dailyRate: true, holdRank: true },
         })
-        return { booking, bookingItem, createdJobId }
+        return { booking, bookingItem }
       })
-
-      // Refresh the Company's most-common-profile cache when this hold
-      // created an inline Job. Outside the tx so the new row is visible
-      // to the helper's findMany. Holds that attached to an existing
-      // Job skip — they don't change the company's profile distribution.
-      if (result.createdJobId) {
-        try {
-          await recomputeMostCommonProductionTypeProfile(body.companyId!)
-        } catch (err) {
-          console.warn('[holds POST] recompute most-common profile failed:', err)
-        }
-      }
 
       return NextResponse.json(
         {
@@ -317,7 +264,6 @@ export async function POST(req: NextRequest) {
           // Department drives whether the new-hold flow opens the unit-pick
           // drawer (asset-bearing VEHICLES / STAGES only — not bulk supplies).
           department: category.department,
-          createdJobId: result.createdJobId,
           bufferOverrideUsed: Boolean(body.bufferOverride && qty > availability.freeCount && isPrimary),
           isBackup: !isPrimary,
           holdRank: effectiveRank,

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { LineItemDepartment, ProductionType, RateType } from '@prisma/client';
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker';
+import { JobResolverModal } from '@/components/shared/JobResolverModal';
 import { CompanyPicker, EMPTY_COMPANY_PICKER_VALUE, type CompanyPickerValue } from '@/components/shared/CompanyPicker';
 import { LineItemRowActions } from '@/components/lineItems/LineItemRowActions';
 import { LineItemUndoToast, type LineItemUndoToastState } from '@/components/lineItems/LineItemUndoToast';
@@ -1386,7 +1387,22 @@ function NewQuotePageInner() {
   // gate against the TSX welcome+quote template.
   type CreateAction = 'draft' | 'preview' | 'download' | 'send';
 
-  const createQuote = async (action: CreateAction = 'draft') => {
+  // ── Job-as-root (step 4): the resolver replaces inline job creation.
+  // A typed-but-unresolved job name at save time opens JobResolverModal
+  // (ranked existing candidates for this client + dates); the agent
+  // picks or creates (createJobFromDraft, status NEW), then the save
+  // re-enters with a REAL jobId. pendingActionRef carries the clicked
+  // action across the modal; pendingJobExtrasRef carries the wizard's
+  // job details (production type, profile, notes, contacts) into the
+  // create draft so nothing the rep filled in is lost.
+  const [jobResolverOpen, setJobResolverOpen] = useState(false);
+  const pendingActionRef = useRef<CreateAction>('draft');
+  const pendingJobExtrasRef = useRef<Record<string, unknown> | null>(null);
+
+  const createQuote = async (
+    action: CreateAction = 'draft',
+    resolvedJob?: { jobId: string; name: string; companyId: string | null; created: boolean },
+  ) => {
     if (!canCreate) return;
     setCreating(true);
     try {
@@ -1419,90 +1435,23 @@ function NewQuotePageInner() {
       // the closure copy here so the prune is in effect for this
       // call.
       const itemsForSave = cleanItems;
-      let companyId: string;
-      let inlineJob: {
-        name: string;
-        productionType: ProductionType;
-        productionTypeProfileId: string | null;
-        startDate: string | null;
-        endDate: string | null;
-        notes: string | null;
-        contacts: { personId: string; role: SuggestedJobRole; isPrimary: boolean }[];
-      } | null = null;
-      let existingJobId: string | null = null;
 
-      if (job.mode === 'selected_existing' && job.jobId) {
-        existingJobId = job.jobId;
-        // company comes off the picked Job (which carries it). Falls
-        // back to the form's selectedClientId if for any reason the
-        // picker dropped it (shouldn't happen — every Job has a co).
-        companyId = job.company?.id ?? selectedClientId;
-      } else {
-        // Resolve / create company. Source the create-name from the
-        // CompanyPicker when in creating_new mode (STEP 1B) — the
-        // legacy fallback to parsed.clientName covers older save paths
-        // that haven't gone through the picker yet.
-        let finalClientId = selectedClientId;
-        const createName =
-          companyPick.mode === 'creating_new' ? companyPick.name :
-          (selectedClientId === '__new__' ? parsed?.clientName ?? null : null);
-        if (selectedClientId === '__new__' && createName) {
-          const coRes = await fetch('/api/crm/companies', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: createName,
-              tier: 'NEW',
-              billingEmail: parsed?.contactEmail || null,
-            }),
-          });
-          // Surface the dupe-guard near-match response (STEP 1B). The
-          // API returns 409 with `existing` when a normalized-key
-          // collision is detected; we ask the rep to confirm, and
-          // either re-submit with allowNearMatch=true OR adopt the
-          // existing row. Never silent-create through a near-match.
-          if (coRes.status === 409) {
-            const data = await coRes.json().catch(() => ({}));
-            const existing = data?.existing as { id: string; name: string } | undefined;
-            if (existing) {
-              const pick = confirm(
-                `A company with a similar name already exists: "${existing.name}".\n\n` +
-                `OK = use the existing company\n` +
-                `Cancel = create "${createName}" anyway (confirm intentional)`,
-              );
-              if (pick) {
-                finalClientId = existing.id;
-              } else {
-                const retry = await fetch('/api/crm/companies', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    name: createName,
-                    tier: 'NEW',
-                    billingEmail: parsed?.contactEmail || null,
-                    allowNearMatch: true,
-                  }),
-                });
-                if (!retry.ok) { alert('Failed to create new company'); setCreating(false); return; }
-                const co = await retry.json();
-                finalClientId = co.id;
-              }
-            } else {
-              alert('Failed to create new company'); setCreating(false); return;
-            }
-          } else if (!coRes.ok) {
-            alert('Failed to create new company'); setCreating(false); return;
-          } else {
-            const co = await coRes.json();
-            finalClientId = co.id;
-          }
-        }
-        companyId = finalClientId;
-
-        // Materialize Person rows for any new/create_new contacts before
-        // calling POST /api/orders (the inline job payload needs Person
-        // IDs). Existing matches and "merge" decisions reuse the
-        // existing Person ID; their CRM records are never modified.
+      // ── Job-as-root: the Job must be REAL before the Order exists. ──
+      // Either the picker already holds an existing Job, or the
+      // resolver just returned one (resolvedJob — an existing pick or a
+      // Job created via createJobFromDraft). A typed-but-unresolved
+      // name opens the resolver and this save re-enters from onResolved.
+      const eff =
+        resolvedJob ??
+        (job.mode === 'selected_existing' && job.jobId
+          ? { jobId: job.jobId, name: job.name, companyId: job.company?.id ?? selectedClientId, created: false }
+          : null);
+      if (!eff) {
+        // Materialize Person rows for included contacts first — the
+        // resolver's create-new draft attaches them as JobContacts with
+        // their parsed roles (createJobFromDraft contacts passthrough).
+        // Existing matches and "merge" decisions reuse the existing
+        // Person ID; their CRM records are never modified.
         const jobContacts: { personId: string; role: SuggestedJobRole; isPrimary: boolean }[] = [];
         for (const c of contacts.filter((x) => x.include && x.email)) {
           let personId: string | null = null;
@@ -1549,34 +1498,33 @@ function NewQuotePageInner() {
             jobContacts.push({ personId, role: c.role, isPrimary: false });
           }
         }
-
-        inlineJob = {
-          name: job.name.trim(),
+        pendingJobExtrasRef.current = {
           productionType: newJobProductionType,
           productionTypeProfileId: newJobProductionTypeProfileId,
-          startDate: editing.startDate || null,
-          endDate: editing.endDate || null,
           notes: newJobNotes.trim() || null,
           contacts: jobContacts,
         };
+        pendingActionRef.current = action;
+        setJobResolverOpen(true);
+        return; // finally{} clears `creating`; onResolved re-enters
       }
+      const existingJobId = eff.jobId;
+      const companyId = eff.companyId ?? selectedClientId;
 
-      // Single POST creates Order — and (when inlineJob is set) the Job
-      // too, inside one Prisma transaction. If anything fails between
-      // them, nothing persists. An abandoned quote that never clicks
-      // Save creates nothing at all (the prior flow created the Job
-      // eagerly before the Order).
+      // Single POST creates the Order inside the already-resolved Job
+      // (inline job creation is gone — the resolver made the Job real
+      // BEFORE this point; an abandoned quote leaves at most a NEW lead
+      // Job, which is exactly what Job-as-root wants a lead to be).
       const orderRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyId,
-          ...(existingJobId ? { jobId: existingJobId } : { job: inlineJob }),
-          // Unified job control: the picker's `name` is the source of
-          // truth for both the Job (when creating new) and the Order's
-          // description. Falls back to the agent's notes or a generic
-          // label so saved orders always have something readable.
-          description: job.name?.trim() || editing.productionName?.trim() || editing.notes || 'Quote from AI extraction',
+          jobId: existingJobId,
+          // The resolved Job's name doubles as the Order description.
+          // Falls back to the agent's notes or a generic label so saved
+          // orders always have something readable.
+          description: eff.name?.trim() || editing.productionName?.trim() || editing.notes || 'Quote from AI extraction',
           startDate: editing.startDate || null,
           endDate: editing.endDate || null,
           notes: editing.notes || null,
@@ -1591,9 +1539,8 @@ function NewQuotePageInner() {
         return;
       }
       const order = await orderRes.json();
-      // jobId for downstream inquiry-PATCH — comes from either the
-      // existing job we attached to or the newly-created one.
-      const jobId: string = existingJobId ?? order.createdJobId ?? order.jobId;
+      // jobId for downstream inquiry-PATCH — always the resolved Job.
+      const jobId: string = existingJobId;
 
       // Add line items (already pruned of trailing empty rows).
       // Package metadata (instanceId / header flag / packageId / modified
@@ -1649,10 +1596,11 @@ function NewQuotePageInner() {
         });
       }
 
-      // Mark inquiry CONVERTED if we came from one (and we created a
-      // new Job — attaching to an existing Job means the Inquiry was
-      // serving a different purpose, leave its status alone).
-      if (inquiry && job.mode === 'creating_new') {
+      // Mark inquiry CONVERTED if we came from one (and the agent chose
+      // "Create new" in the resolver — attaching to an existing Job
+      // means the Inquiry was serving a different purpose, leave its
+      // status alone).
+      if (inquiry && eff.created) {
         try {
           await fetch(`/api/inquiries/${inquiry.id}`, {
             method: 'PATCH',
@@ -2079,7 +2027,7 @@ function NewQuotePageInner() {
                 {candidateJobs.length > 0
                   ? `${candidateJobs.length} existing Job${candidateJobs.length === 1 ? '' : 's'} for this client — pick one, or type a new name.`
                   : selectedClientId && selectedClientId !== '__new__'
-                    ? 'No matching Jobs — typing creates a new one on save.'
+                    ? 'No matching Jobs — a typed name opens the Job check on save (pick or create there).'
                     : 'Pick a Client Company first to surface matching Jobs.'}
               </p>
             </div>
@@ -2093,6 +2041,40 @@ function NewQuotePageInner() {
                   : 'Search by job name or code, or type a new name…'
               }
             />
+
+            {/* Job-as-root: save-time resolver. Ranked candidates for
+                this client + dates; the agent picks or creates, then
+                the save continues automatically with the real jobId. */}
+            {jobResolverOpen && (
+              <JobResolverModal
+                context={{
+                  companyId: selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null,
+                  companyName:
+                    companyPick.mode === 'creating_new'
+                      ? companyPick.name
+                      : companyPick.name || parsed?.clientName || null,
+                  contactEmail: contacts.find((c) => c.include && c.email)?.email || parsed?.contactEmail || null,
+                  jobNameHint: job.name?.trim() || null,
+                  dates: editing.startDate && editing.endDate ? { start: editing.startDate, end: editing.endDate } : null,
+                  sourceRef: 'orders:new-quote',
+                }}
+                draftExtras={pendingJobExtrasRef.current ?? undefined}
+                onResolved={(r) => {
+                  setJobResolverOpen(false);
+                  setJob({
+                    jobId: r.id,
+                    jobCode: r.jobCode,
+                    name: r.name,
+                    mode: 'selected_existing',
+                    company: r.companyId ? { id: r.companyId, name: r.companyName || '' } : job.company,
+                  });
+                  void createQuote(pendingActionRef.current, {
+                    jobId: r.id, name: r.name, companyId: r.companyId ?? null, created: r.created,
+                  });
+                }}
+                onClose={() => setJobResolverOpen(false)}
+              />
+            )}
 
             {/* Recommendations: list of this client's open Jobs, only
                 shown while nothing has been picked/typed yet. Clicking

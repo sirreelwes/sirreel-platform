@@ -13,9 +13,8 @@
  *       | { kind: 'existing', companyId: string }
  *       | { kind: 'new', name: string, tier?, billingEmail? },
  *     jobDecision:
- *       | { kind: 'existing', jobId: string }
- *       | { kind: 'new', name: string, productionType?, productionTypeProfileId?,
- *           startDate?, endDate?, notes?, estimatedValue? },
+ *       | { kind: 'existing', jobId: string }   // ONLY — Job-as-root: the
+ *           wizard resolves/creates the Job via JobResolverModal first,
  *     contactsDecision: Array<
  *       | { kind: 'existing_person', personId, role, isPrimary? }
  *       | { kind: 'new_person', firstName, lastName, email, phone?, title?, source?, role, isPrimary? }
@@ -43,7 +42,6 @@
  *
  * Reused helpers (no duplication of the POST line-items logic):
  *   - nextOrderNumber              (tx-scoped order numbering)
- *   - recomputeMostCommonProductionTypeProfile (post-tx, only when job created)
  *   - computeLineTotal             (single source of truth for line math)
  *   - rentalDays                   (days fallback when dates set but billableDays missing)
  *   - checkHoldFeasibility         (capacity pre-flight)
@@ -64,8 +62,7 @@ import { computeLineTotal } from '@/lib/orders/billing'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
-import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
-import { nextJobCode } from '@/lib/jobs/nextJobCode'
+
 
 export const dynamic = 'force-dynamic'
 
@@ -80,18 +77,11 @@ interface CompanyDecisionNew {
 }
 type CompanyDecision = CompanyDecisionExisting | CompanyDecisionNew
 
+// Job-as-root (step 4): from-parse NEVER creates Jobs — the wizard
+// resolves the Job through JobResolverModal (createJobFromDraft is the
+// one creation home) before calling this endpoint. Only 'existing'.
 interface JobDecisionExisting { kind: 'existing'; jobId: string }
-interface JobDecisionNew {
-  kind: 'new'
-  name: string
-  productionType?: ProductionType
-  productionTypeProfileId?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  notes?: string | null
-  estimatedValue?: number | string | null
-}
-type JobDecision = JobDecisionExisting | JobDecisionNew
+type JobDecision = JobDecisionExisting
 
 interface ContactExisting {
   kind: 'existing_person'
@@ -185,6 +175,13 @@ export async function POST(req: NextRequest) {
   if (!companyDecision || !jobDecision) {
     return NextResponse.json({ error: 'companyDecision + jobDecision required' }, { status: 400 })
   }
+  // Job-as-root (step 4): inline job creation is CLOSED here.
+  if (jobDecision.kind !== 'existing' || !jobDecision.jobId) {
+    return NextResponse.json(
+      { error: "jobDecision must be { kind: 'existing', jobId } — resolve or create the Job via the resolver first" },
+      { status: 400 },
+    )
+  }
   // Empty items[] is valid (blank-mode wizard creates an empty DRAFT
   // and the rep adds lines on /orders/[id]). Just normalize the array
   // shape so the loop below is a no-op when nothing was parsed.
@@ -236,47 +233,14 @@ export async function POST(req: NextRequest) {
         companyCreated = true
       }
 
-      // 2) Job — resolve or create. POST /api/orders treats this as
-      //    mandatory; mirror that.
-      let jobId: string
-      let jobCreated = false
-      if (jobDecision.kind === 'existing') {
-        const job = await tx.job.findUnique({
-          where: { id: jobDecision.jobId },
-          select: { id: true },
-        })
-        if (!job) throw new Error(`job ${jobDecision.jobId} not found`)
-        jobId = job.id
-      } else {
-        if (!jobDecision.name?.trim()) throw new Error('new job name required')
-        // Robust SR-JOB-NNNN generation (ignores malformed codes); lives
-        // inside the tx so a failed Order rolls back the Job.
-        const jobCode = await nextJobCode(tx)
-        const created = await tx.job.create({
-          data: {
-            jobCode,
-            name: jobDecision.name.trim(),
-            companyId,
-            agentId: callingUser.id,
-            productionType: jobDecision.productionType ?? 'OTHER',
-            productionTypeProfileId:
-              typeof jobDecision.productionTypeProfileId === 'string' && jobDecision.productionTypeProfileId
-                ? jobDecision.productionTypeProfileId
-                : null,
-            status: 'QUOTED',
-            startDate: jobDecision.startDate ? new Date(jobDecision.startDate) : null,
-            endDate: jobDecision.endDate ? new Date(jobDecision.endDate) : null,
-            notes: jobDecision.notes ?? null,
-            estimatedValue:
-              jobDecision.estimatedValue == null || jobDecision.estimatedValue === ''
-                ? null
-                : Number(jobDecision.estimatedValue),
-          },
-          select: { id: true },
-        })
-        jobId = created.id
-        jobCreated = true
-      }
+      // 2) Job — existing ONLY (Job-as-root: the resolver made it real
+      //    before this endpoint was called; inline creation is CLOSED).
+      const job = await tx.job.findUnique({
+        where: { id: jobDecision.jobId },
+        select: { id: true },
+      })
+      if (!job) throw new Error(`job ${jobDecision.jobId} not found`)
+      const jobId = job.id
 
       // 3) Contacts — Persons first (create new ones), then JobContacts.
       //    Additive on existing jobs; the wizard is responsible for
@@ -300,6 +264,15 @@ export async function POST(req: NextRequest) {
             })
             personId = person.id
           }
+          // Skip-if-exists: the resolver's createJobFromDraft may have
+          // already attached this person (e.g. as the primary lead
+          // contact) — @@unique([jobId, personId, role]) would throw
+          // and roll back the whole order create.
+          const dupe = await tx.jobContact.findUnique({
+            where: { jobId_personId_role: { jobId, personId, role: c.role } },
+            select: { id: true },
+          })
+          if (dupe) continue
           await tx.jobContact.create({
             data: {
               jobId,
@@ -533,7 +506,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      return { orderId: order.id, jobCreated, companyCreated, companyId, warnings }
+      return { orderId: order.id, companyCreated, companyId, warnings }
     })
 
     // Post-tx: self-healing totals recompute against canonical
@@ -544,17 +517,6 @@ export async function POST(req: NextRequest) {
       await recalcOrderTotals(result.orderId)
     } catch (err) {
       console.warn('[orders/from-parse] recalc totals failed:', err)
-    }
-
-    // Post-tx: refresh the Company's most-common production-type
-    // profile cache when we minted a new Job under it. Same hygiene
-    // POST /api/orders runs.
-    if (result.jobCreated) {
-      try {
-        await recomputeMostCommonProductionTypeProfile(result.companyId)
-      } catch (err) {
-        console.warn('[orders/from-parse] recompute most-common profile failed:', err)
-      }
     }
 
     return NextResponse.json(

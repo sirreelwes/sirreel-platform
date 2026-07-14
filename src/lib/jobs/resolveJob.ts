@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { JobStatus, Prisma } from '@prisma/client'
 import { companyNameKey } from '@/lib/companies/normalize'
+import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 
@@ -116,17 +117,10 @@ export async function resolveJob(ctx: ResolveJobContext): Promise<ResolveJobResu
       select: { id: true, name: true },
     })
   } else if (ctx.companyName?.trim()) {
-    const key = companyNameKey(ctx.companyName.trim())
-    if (key) {
-      const all = await prisma.company.findMany({ select: { id: true, name: true } })
-      const matches = all.filter((c) => companyNameKey(c.name) === key)
-      if (matches.length >= 1) {
-        resolvedCompany = matches[0]
-        if (matches.length > 1) {
-          companyAmbiguity = `${matches.length} companies match "${ctx.companyName.trim()}" — showing "${matches[0].name}"; verify before creating`
-        }
-      }
-    }
+    // Shared key-match discipline (also used by parse-quote).
+    const keyed = await resolveCompanyByNameKey(ctx.companyName)
+    resolvedCompany = keyed.company
+    companyAmbiguity = keyed.ambiguity
   }
 
   // ── Person resolution (existing merge-safe resolver; never creates) ─

@@ -10,10 +10,18 @@
  *      → getCategoryAvailability) — the reply text is built FROM these numbers
  *   3. optional soft holds via the SAME hold path (POST /api/scheduling/holds)
  *   4. review + send through the SAME gate (EmailReviewModal) — nothing auto-sends
+ *
+ * Job-as-root (step 4): soft holds no longer auto-create a Job. Before
+ * any hold is created, the JobResolverModal opens — seeded with the
+ * parsed company/contact/name/dates — and the agent explicitly picks an
+ * existing Job or creates one (createJobFromDraft, status NEW). A second
+ * email about the same shoot ranks the first email's Job as a candidate
+ * instead of silently spawning a duplicate.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
+import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal';
 
 interface MatchedProduct { id: string; type: string; name: string }
 interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
@@ -52,6 +60,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [holdable, setHoldable] = useState<{ companyId: string; personId: string } | null>(null);
 
   const [softHold, setSoftHold] = useState(true);
+  // The resolved Job the soft holds will live in — always a REAL row
+  // (agent-picked or agent-created via the resolver). Never auto-set.
+  const [job, setJob] = useState<{ jobId: string; jobCode: string; name: string } | null>(null);
+  const [resolverOpen, setResolverOpen] = useState(false);
   // Fold a request for the prod company + project name into the reply.
   // Default ON when the parse gave us neither — that's the "missing info" case.
   const [askForDetails, setAskForDetails] = useState(false);
@@ -88,7 +100,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
       // Soft-hold needs an existing company + person (the parse resolves both
       // when the client is already in the CRM). Otherwise it's skipped.
-      const companyId: string | null = Array.isArray(pj.clientMatch) && pj.clientMatch[0]?.id ? pj.clientMatch[0].id : null;
+      // Only an EXACT key match is adopted (clientMatchMeta.exact) —
+      // fuzzy candidates are never blind-picked; the Job resolver is
+      // where the agent settles company questions.
+      const companyId: string | null =
+        pj.clientMatchMeta?.exact === true && Array.isArray(pj.clientMatch) && pj.clientMatch[0]?.id
+          ? pj.clientMatch[0].id
+          : null;
       const contact = Array.isArray(pj.contacts) ? pj.contacts.find((c: { existing_person_id?: string | null }) => c.existing_person_id) : null;
       const personId: string | null = contact?.existing_person_id ?? null;
       const canHold = !!companyId && !!personId && assetCats.length > 0 && !!parsed.startDate && !!parsed.endDate;
@@ -125,38 +143,84 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     inboundEmailMessageId: inboundEmailMessageId ?? null,
   });
 
-  const createSoftHolds = async () => {
+  // Every hold attaches to the agent-resolved Job — the route's inline
+  // newJobName creation is gone; jobId is always real by this point.
+  // companyId is passed explicitly (not read from state) so a resolve
+  // that just re-pointed the company isn't lost to a stale closure.
+  const createSoftHolds = async (resolved: { jobId: string; name: string }, companyId: string) => {
     if (!holdable) return;
     setHoldStatus('Creating soft holds…');
-    let jobId: string | null = null;
     let created = 0;
-    const label = jobName || clientName || 'Inquiry hold';
     for (const c of cats) {
       const line = lines.find((l) => l.id === c.id);
       const isBackup = !!line && line.status !== 'available'; // tight/short queue behind as backups
       const body: Record<string, unknown> = {
         categoryId: c.id, startDate: pickup, endDate: ret, quantity: c.quantity,
-        companyId: holdable.companyId, personId: holdable.personId,
-        jobName: label, bufferDays: 1, bufferOverride: true, isBackup,
-        ...(jobId ? { jobId } : { newJobName: label }),
+        companyId, personId: holdable.personId,
+        jobId: resolved.jobId, jobName: resolved.name,
+        bufferDays: 1, bufferOverride: true, isBackup,
         notes: 'Soft hold from Quick Reply — pending client confirmation.',
       };
       try {
         const r = await fetch('/api/scheduling/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const j = await r.json();
-        if (r.ok && j.ok) { created++; if (j.createdJobId) jobId = j.createdJobId; }
+        if (r.ok && j.ok) created++;
       } catch { /* best-effort; reported in the count */ }
     }
     setHoldStatus(`Created ${created} of ${cats.length} soft hold${cats.length === 1 ? '' : 's'} — spoken-for on the gantt.`);
   };
 
-  const reviewAndSend = async () => {
-    if (!recipientEmail) return;
+  const proceed = async (resolved: { jobId: string; name: string } | null, companyId: string | null) => {
     setWorking(true);
-    if (softHold && holdable) await createSoftHolds();
+    if (softHold && holdable && resolved) await createSoftHolds(resolved, companyId ?? holdable.companyId);
     setReviewTarget({ kind: 'quick-reply', payload: buildPayload() });
     setWorking(false);
   };
+
+  const reviewAndSend = () => {
+    if (!recipientEmail) return;
+    // Soft holds need a Job (Job-as-root). If the agent hasn't resolved
+    // one yet, open the resolver — the send continues from onJobResolved.
+    if (softHold && holdable && !job) {
+      setResolverOpen(true);
+      return;
+    }
+    void proceed(job, holdable?.companyId ?? null);
+  };
+
+  const onJobResolved = (r: ResolvedJob) => {
+    const resolved = { jobId: r.id, jobCode: r.jobCode, name: r.name };
+    setJob(resolved);
+    // The Job is the root object: if the agent attached to a Job under a
+    // different company, the holds follow the Job's company (the holds
+    // route rejects a job/company mismatch).
+    const companyId = r.companyId ?? holdable?.companyId ?? null;
+    if (holdable && companyId && holdable.companyId !== companyId) {
+      setHoldable({ ...holdable, companyId });
+    }
+    // Keep the reply copy in sync with the Job the holds actually live in.
+    setJobName(r.name);
+    setResolverOpen(false);
+    void proceed(resolved, companyId);
+  };
+
+  if (resolverOpen) {
+    return (
+      <JobResolverModal
+        context={{
+          companyId: holdable?.companyId ?? null,
+          companyName: clientName?.trim() || null,
+          contactEmail: recipientEmail || null,
+          contactName: recipientName || null,
+          jobNameHint: jobName?.trim() || null,
+          dates: pickup && ret ? { start: pickup.slice(0, 10), end: ret.slice(0, 10) } : null,
+          sourceRef: 'sales:quick-reply',
+        }}
+        onResolved={onJobResolved}
+        onClose={() => setResolverOpen(false)}
+      />
+    );
+  }
 
   if (reviewTarget) {
     return (
@@ -260,6 +324,24 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                   {!holdable && <span className="block text-[11px] text-gray-400 mt-0.5">Unavailable — add the client &amp; contact to the CRM first (or no dated categories detected).</span>}
                 </span>
               </label>
+
+              {softHold && holdable && (
+                <div className="text-[12px] pl-6 -mt-2">
+                  {job ? (
+                    <span className="text-gray-700">
+                      Holds go into <span className="font-mono text-[11px] text-gray-500">[{job.jobCode}]</span>{' '}
+                      <span className="font-medium">{job.name}</span>
+                      <button type="button" onClick={() => setResolverOpen(true)} className="ml-2 text-[11px] font-medium text-emerald-700 hover:text-emerald-800">
+                        Change
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">
+                      You&rsquo;ll pick or create the Job for these holds when you hit send — we check for an existing Job on this shoot first.
+                    </span>
+                  )}
+                </div>
+              )}
 
               {holdStatus && <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">{holdStatus}</div>}
             </>

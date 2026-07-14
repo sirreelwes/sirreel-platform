@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
+import { JobResolverModal } from '@/components/shared/JobResolverModal'
 
 type InquiryStatus = 'NEW' | 'CONVERTED' | 'DISMISSED'
 type InquirySource = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
@@ -106,9 +107,12 @@ export default function InquiryDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionPending, setActionPending] = useState<null | 'dismiss' | 'assign'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  // Welcome / Job Begin email — pre-drafted, agent-edited, confirm-to-send in
-  // EmailReviewModal. The Job is created only when the client clicks the
-  // "Get Paperwork Started" button in the email's landing page.
+  // Welcome / Job Begin email — Job-as-root (step 4): the agent FIRST
+  // resolves the Job in the JobResolverModal (ranked existing candidates
+  // for this inquiry's company/contact/dates, or create-new → status
+  // NEW), THEN reviews + sends in EmailReviewModal. The client's click
+  // mints the Order inside that already-resolved Job.
+  const [welcomeResolverOpen, setWelcomeResolverOpen] = useState(false)
   const [welcomeTarget, setWelcomeTarget] = useState<EmailReviewTarget | null>(null)
   const [welcomeFlash, setWelcomeFlash] = useState<string | null>(null)
 
@@ -242,9 +246,10 @@ export default function InquiryDetailPage() {
                 </button>
                 {/* Welcome / Job Begin — needs the inquiry qualified (person
                     with email + company); the preview endpoint surfaces a
-                    readable error otherwise. Job mints on the CLIENT's click. */}
+                    readable error otherwise. The agent resolves the Job
+                    HERE (Job-as-root); the client's click mints the Order. */}
                 <button
-                  onClick={() => setWelcomeTarget({ kind: 'welcome', inquiryId: inquiry.id })}
+                  onClick={() => setWelcomeResolverOpen(true)}
                   disabled={actionPending != null}
                   className="text-xs font-semibold border border-amber-600/60 text-amber-500 hover:bg-amber-600/10 px-3 py-1.5 rounded-lg disabled:opacity-40"
                 >
@@ -357,13 +362,39 @@ export default function InquiryDetailPage() {
         </details>
       )}
 
+      {/* Job-as-root: the agent settles new-vs-existing BEFORE the email
+          is even drafted — the resolved jobId rides on the welcome target
+          and gets stored on the invite at send. */}
+      {welcomeResolverOpen && (
+        <JobResolverModal
+          context={{
+            companyId: inquiry.company?.id ?? null,
+            companyName: inquiry.company?.name ?? null,
+            contactEmail: inquiry.person?.email ?? null,
+            contactName: inquiry.person ? `${inquiry.person.firstName} ${inquiry.person.lastName}`.trim() : null,
+            jobNameHint: inquiry.title,
+            dates:
+              inquiry.preferredStartDate && inquiry.preferredEndDate
+                ? { start: inquiry.preferredStartDate.slice(0, 10), end: inquiry.preferredEndDate.slice(0, 10) }
+                : null,
+            sourceRef: 'sales:welcome',
+          }}
+          draftExtras={inquiry.estimatedValue != null ? { estimatedValue: inquiry.estimatedValue } : undefined}
+          onResolved={(r) => {
+            setWelcomeResolverOpen(false)
+            setWelcomeTarget({ kind: 'welcome', inquiryId: inquiry.id, jobId: r.id })
+          }}
+          onClose={() => setWelcomeResolverOpen(false)}
+        />
+      )}
+
       {/* Welcome / Job Begin review + confirm-send */}
       <EmailReviewModal
         target={welcomeTarget}
         onClose={() => setWelcomeTarget(null)}
         onSent={(info) => {
           setWelcomeTarget(null)
-          setWelcomeFlash(`Welcome sent to ${info.recipient} — the job is created when they click “Get Paperwork Started”.`)
+          setWelcomeFlash(`Welcome sent to ${info.recipient} — their paperwork portal opens inside the resolved Job when they click “Get Paperwork Started”.`)
           window.setTimeout(() => setWelcomeFlash(null), 8000)
         }}
       />

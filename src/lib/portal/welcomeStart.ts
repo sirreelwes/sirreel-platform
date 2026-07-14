@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma'
-import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { nextOrderNumber } from '@/lib/orders'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
@@ -13,11 +12,12 @@ import {
  * POST /api/portal/welcome/[token]/start (kept in a lib so the route stays a
  * thin wrapper and the verification harness exercises the REAL code path).
  *
- * FIRST click, one transaction: atomically claim the invite → create Job from
- * the Inquiry → create Order (DRAFT; portalSlug auto-mints — the portal
- * container) → Inquiry CONVERTED + convertedJobId → stamp the invite. After
- * the tx (best-effort): baseline agreement generated + released, then a fresh
- * magic link into the job portal.
+ * FIRST click, one transaction: atomically claim the invite → create the
+ * Order (DRAFT; portalSlug auto-mints — the portal container) inside the
+ * Job the AGENT resolved at send time (invite.jobId — Job-as-root step 4;
+ * this lib creates NO Job) → Inquiry CONVERTED + convertedJobId → stamp
+ * the invite. After the tx (best-effort): baseline agreement generated +
+ * released, then a fresh magic link into the job portal.
  *
  * IDEMPOTENCY (layered):
  *   1. Atomic claim — updateMany({ id, usedAt: null }) → exactly one
@@ -44,6 +44,7 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
       id: true,
       expiresAt: true,
       usedAt: true,
+      jobId: true,
       createdJobId: true,
       createdOrderId: true,
       personId: true,
@@ -77,9 +78,24 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
   if (invite.expiresAt < new Date()) return landing
 
   const inquiry = invite.inquiry
-  if (!inquiry.companyId || !inquiry.assignedToId) {
-    // Should not happen (the send route enforces + pins these).
-    console.error('[welcome/start] inquiry missing company/agent:', inquiry.id)
+  if (!inquiry.assignedToId) {
+    // Should not happen (the send route pins the agent).
+    console.error('[welcome/start] inquiry missing agent:', inquiry.id)
+    return landing
+  }
+  // Job-as-root: the Job was resolved by the agent at SEND time. An
+  // invite without one predates step 4 — it can't mint; the agent
+  // re-sends the welcome (which now requires the resolver).
+  if (!invite.jobId) {
+    console.error('[welcome/start] invite has no resolved Job (pre-Job-as-root invite) — re-send the welcome:', invite.id)
+    return landing
+  }
+  const resolvedJob = await prisma.job.findUnique({
+    where: { id: invite.jobId },
+    select: { id: true, companyId: true },
+  })
+  if (!resolvedJob) {
+    console.error('[welcome/start] resolved Job missing:', invite.jobId)
     return landing
   }
   // Inquiry already converted by another path (e.g. Convert to quote after
@@ -119,46 +135,44 @@ export async function startWelcomeInvite(token: string): Promise<WelcomeStartRes
     return landing
   }
 
-  // ── The mint — Job + Order + conversion + stamp, one transaction. ──
+  // ── The mint — Order + conversion + stamp, one transaction. The Job
+  //    already exists (agent-resolved at send); no Job is created here. ──
   let orderId: string
   let portalSlug: string
   try {
     const minted = await prisma.$transaction(async (tx) => {
-      const jobCode = await nextJobCode(tx)
-      const job = await tx.job.create({
-        data: {
-          jobCode,
-          name: inquiry.title,
-          companyId: inquiry.companyId!,
-          agentId: inquiry.assignedToId!,
-          status: 'QUOTED',
-          startDate: inquiry.preferredStartDate,
-          endDate: inquiry.preferredEndDate,
-          estimatedValue: inquiry.estimatedValue,
-          // inquiry linkage lives on Inquiry.convertedJobId (set below).
-        },
-        select: { id: true },
-      })
+      // A NEW lead with a portal + Order underway is a quoted job now.
+      await tx.job.updateMany({ where: { id: resolvedJob.id, status: 'NEW' }, data: { status: 'QUOTED' } })
       const orderNumber = await nextOrderNumber(tx)
       const order = await tx.order.create({
         data: {
           orderNumber,
-          companyId: inquiry.companyId!,
+          // The Job is the root object — the Order follows ITS company
+          // (the agent may have attached this inquiry to a Job under a
+          // different company than the inquiry's original guess).
+          companyId: resolvedJob.companyId,
           agentId: inquiry.assignedToId!,
-          jobId: job.id,
+          jobId: resolvedJob.id,
           taxRate: 0,
           startDate: inquiry.preferredStartDate,
           endDate: inquiry.preferredEndDate,
         },
         select: { id: true, portalSlug: true },
       })
+      // Inquiry.convertedJobId is @unique — when the agent attached this
+      // inquiry to a Job that ALREADY converted another inquiry (the
+      // duplicate-shoot case), mark CONVERTED without the link.
+      const linkHolder = await tx.inquiry.findFirst({
+        where: { convertedJobId: resolvedJob.id, NOT: { id: inquiry.id } },
+        select: { id: true },
+      })
       await tx.inquiry.update({
         where: { id: inquiry.id },
-        data: { status: 'CONVERTED', convertedJobId: job.id },
+        data: linkHolder ? { status: 'CONVERTED' } : { status: 'CONVERTED', convertedJobId: resolvedJob.id },
       })
       await tx.welcomeInvite.update({
         where: { id: invite.id },
-        data: { createdJobId: job.id, createdOrderId: order.id },
+        data: { createdJobId: resolvedJob.id, createdOrderId: order.id },
       })
       return { orderId: order.id, portalSlug: order.portalSlug }
     })

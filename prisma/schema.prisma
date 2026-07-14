@@ -3697,6 +3697,9 @@ model WelcomeInvite {
   personId       String    @map("person_id")
   person         Person    @relation("WelcomeInvitePerson", fields: [personId], references: [id])
   expiresAt      DateTime  @map("expires_at")
+  /// Agent-resolved Job (Job-as-root step 4) — set at SEND time via the
+  /// resolver; the client's click mints only the Order inside this Job.
+  jobId          String?   @map("job_id")
   createdJobId   String?   @map("created_job_id")
   createdOrderId String?   @map("created_order_id")
   createdAt      DateTime  @default(now()) @map("created_at")

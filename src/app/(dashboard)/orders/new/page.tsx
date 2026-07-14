@@ -51,6 +51,7 @@ import {
   EMPTY_JOB_PICKER_VALUE,
   type JobPickerValue,
 } from '@/components/shared/JobPicker'
+import { JobResolverModal } from '@/components/shared/JobResolverModal'
 import { LineItemDescriptionCombobox, type CatalogHit } from '@/components/orders/LineItemDescriptionCombobox'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -223,12 +224,18 @@ function NewOrderWizardInner() {
 
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
+  // Job-as-root (step 4): a typed new job name routes through the
+  // resolver at create time — the agent picks an existing Job or
+  // creates one (status NEW) there; the draft continues with a real
+  // jobId. from-parse's inline job creation is gone.
+  const [jobResolverOpen, setJobResolverOpen] = useState(false)
 
   // ── Parse handlers ────────────────────────────────────────────────
   const applyParseResult = useCallback((data: {
     parsed?: ParsedTop
     items?: Array<Omit<ResolvedItem, 'localId' | 'confirmed' | 'parseOrigin'>>
     clientMatch?: ClientCandidate[]
+    clientMatchMeta?: { exact: boolean; ambiguity: string | null }
     contacts?: unknown
   }) => {
     setParsed(data.parsed ?? null)
@@ -246,8 +253,10 @@ function NewOrderWizardInner() {
     if (data.parsed?.startDate && !startDate) setStartDate(data.parsed.startDate)
     if (data.parsed?.endDate && !endDate) setEndDate(data.parsed.endDate)
     if (data.parsed?.notes && !notes) setNotes(data.parsed.notes)
-    // Auto-pick the company when there's exactly one fuzzy hit.
-    if (Array.isArray(data.clientMatch) && data.clientMatch.length === 1 && companyPick.mode === 'searching') {
+    // Auto-pick the company ONLY on an exact single key match
+    // (clientMatchMeta.exact) — fuzzy hits stay as candidates the rep
+    // picks explicitly (flag-on-ambiguity discipline, Job-as-root step 4).
+    if (data.clientMatchMeta?.exact && Array.isArray(data.clientMatch) && data.clientMatch.length === 1 && companyPick.mode === 'searching') {
       const c = data.clientMatch[0]
       setCompanyPick({
         companyId: c.id, name: c.name, mode: 'selected_existing',
@@ -466,29 +475,33 @@ function NewOrderWizardInner() {
   const allConfirmed = unconfirmedCount === 0
   const canCreate = companyDecided && jobDecided && allConfirmed && !creating
 
-  const createDraft = async () => {
-    if (!canCreate) return
+  const createDraft = async (resolved?: { jobId: string; companyId: string | null }) => {
+    if (!resolved && !canCreate) return
+    if (creating) return
+    // Job-as-root: the Job must be REAL before the Order exists. A
+    // typed-but-unresolved name opens the resolver; the create
+    // re-enters from onResolved with the agent's pick (or the Job the
+    // resolver just created via createJobFromDraft).
+    const effJobId = resolved?.jobId ?? (job.mode === 'selected_existing' && job.jobId ? job.jobId : null)
+    if (!effJobId) {
+      setJobResolverOpen(true)
+      return
+    }
     setCreating(true); setCreateError('')
     try {
+      // The resolved Job's company wins (the Job is the root object);
+      // otherwise the rep's explicit company pick stands.
       const companyDecision =
-        companyPick.mode === 'selected_existing' && companyPick.companyId
-          ? { kind: 'existing' as const, companyId: companyPick.companyId }
-          : {
-              kind: 'new' as const,
-              name: companyPick.name.trim(),
-              billingEmail: parsed?.contactEmail || null,
-            }
-      const jobDecision =
-        job.mode === 'selected_existing' && job.jobId
-          ? { kind: 'existing' as const, jobId: job.jobId }
-          : {
-              kind: 'new' as const,
-              name: job.name.trim(),
-              productionType: newJobProductionType,
-              startDate: startDate || null,
-              endDate: endDate || null,
-              notes: notes || null,
-            }
+        resolved?.companyId
+          ? { kind: 'existing' as const, companyId: resolved.companyId }
+          : companyPick.mode === 'selected_existing' && companyPick.companyId
+            ? { kind: 'existing' as const, companyId: companyPick.companyId }
+            : {
+                kind: 'new' as const,
+                name: companyPick.name.trim(),
+                billingEmail: parsed?.contactEmail || null,
+              }
+      const jobDecision = { kind: 'existing' as const, jobId: effJobId }
       // Contacts: only the rep-confirmed `include` rows go through.
       // 'merge' decisions adopt the existing CRM Person via
       // candidate_person_id; 'create_new' (default for new + possible-
@@ -1124,13 +1137,43 @@ function NewOrderWizardInner() {
             </button>
             <button
               type="button"
-              onClick={createDraft}
+              onClick={() => createDraft()}
               disabled={!canCreate}
               className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-bold rounded-lg"
             >
               {creating ? 'Creating…' : 'Create draft & open →'}
             </button>
           </div>
+
+          {/* Job-as-root: create-time resolver. Ranked candidates for
+              this client + dates; the agent picks or creates, then the
+              draft create continues with the real jobId. Contacts still
+              attach via from-parse's contactsDecision. */}
+          {jobResolverOpen && (
+            <JobResolverModal
+              context={{
+                companyId: companyPick.mode === 'selected_existing' ? companyPick.companyId : null,
+                companyName: companyPick.name || parsed?.clientName || null,
+                contactEmail: contacts.find((c) => c.include && c.email)?.email || parsed?.contactEmail || null,
+                jobNameHint: job.name?.trim() || null,
+                dates: startDate && endDate ? { start: startDate, end: endDate } : null,
+                sourceRef: 'orders:new',
+              }}
+              draftExtras={{ productionType: newJobProductionType, notes: notes || null }}
+              onResolved={(r) => {
+                setJobResolverOpen(false)
+                setJob({
+                  jobId: r.id,
+                  jobCode: r.jobCode,
+                  name: r.name,
+                  mode: 'selected_existing',
+                  company: r.companyId ? { id: r.companyId, name: r.companyName || '' } : job.company,
+                })
+                void createDraft({ jobId: r.id, companyId: r.companyId ?? null })
+              }}
+              onClose={() => setJobResolverOpen(false)}
+            />
+          )}
         </div>
       </div>
     </div>
