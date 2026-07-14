@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { NewJobLauncher } from '@/components/jobs/NewJobLauncher'
 
 const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
 type JobStatus = (typeof JOB_STATUSES)[number]
@@ -292,7 +293,10 @@ export default function JobsListPage() {
       <div className="max-w-7xl mx-auto space-y-4">
         <header className="flex items-end justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-semibold text-lt-fg">Jobs</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold text-lt-fg">Jobs</h1>
+              <NewJobLauncher />
+            </div>
             <p className="text-sm text-lt-fg2 mt-0.5">
               Productions and quotes that own one or more Orders. Click a row for detail.
             </p>

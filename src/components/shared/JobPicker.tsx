@@ -10,8 +10,14 @@
  * downstream endpoint, which does the Job-create inside a
  * transaction.
  *
- * Scope: by default, searches existing OPEN Jobs (status IN QUOTED,
- * ACTIVE, HOLD) for the given company. Falls back to "all open jobs"
+ * Scope: by default, searches existing OPEN Jobs (status IN NEW,
+ * QUOTED, ACTIVE, HOLD) for the given company.
+ *
+ * Job-as-root step 2: this picker is now a thin sibling of the full
+ * JobResolverModal (components/shared/JobResolverModal) — same value
+ * contract, and flows that have richer context (dates, contact,
+ * thread) should open the modal instead; its outcome maps 1:1 onto
+ * JobPickerValue (created jobs come back as selected_existing). Falls back to "all open jobs"
  * when no company is selected yet — so the picker still works in
  * flows that haven't bound a company. WRAPPED + LOST are excluded
  * (the user doesn't want to attach a new hold to a wrapped show).
@@ -62,7 +68,8 @@ const EMPTY: JobPickerValue = {
   company: null,
 }
 
-const OPEN_STATUSES = 'QUOTED,ACTIVE,HOLD'
+// NEW leads are exactly the jobs you'd attach work to — include them.
+const OPEN_STATUSES = 'NEW,QUOTED,ACTIVE,HOLD'
 
 export function JobPicker({
   value,

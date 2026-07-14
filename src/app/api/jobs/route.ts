@@ -16,8 +16,7 @@ import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
-import { companyNameKey } from '@/lib/companies/normalize'
-import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
+import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 
 export const dynamic = 'force-dynamic'
 
@@ -381,131 +380,54 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Job-as-root step 1: minimal-facts lead creation ──────────────
-    // A Job from just { name, companyName, contactName, contactPhone,
-    // contactEmail } — no companyId required. Company resolves via the
-    // EXISTING companyNameKey normalizer (link on match, create on
-    // none; multi-match links the first and notes the ambiguity — the
-    // full resolver primitive is a later build). Person resolves via
-    // the EXISTING resolvePersonByEmail (merge/alias-safe); phone and
-    // email live on the PERSON record, never copied onto the Job. The
-    // contact attaches as the Job's primary JobContact.
-    let resolvedCompanyId: string | null = companyId || null
-    let companyResolution: string | null = null
-    let contactWarning: string | null = null
-    let leadContactPersonId: string | null = null
-    const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : ''
-    const contactName = typeof body.contactName === 'string' ? body.contactName.trim() : ''
-    const contactPhone = typeof body.contactPhone === 'string' ? body.contactPhone.trim() : ''
-    const contactEmail = typeof body.contactEmail === 'string' ? normalizeEmail(body.contactEmail) : ''
-
-    if (!resolvedCompanyId && companyName) {
-      const key = companyNameKey(companyName)
-      const all = await prisma.company.findMany({ select: { id: true, name: true } })
-      const matches = all.filter((c) => companyNameKey(c.name) === key)
-      if (matches.length >= 1) {
-        resolvedCompanyId = matches[0].id
-        companyResolution =
-          matches.length === 1
-            ? `matched existing company "${matches[0].name}"`
-            : `AMBIGUOUS: ${matches.length} companies match "${companyName}" — linked "${matches[0].name}"; disambiguate when the Job resolver ships`
-      } else {
-        const created = await prisma.company.create({
-          data: {
-            name: companyName,
-            notes: `created from new-job lead on ${new Date().toISOString().slice(0, 10)}`,
-          },
-          select: { id: true, name: true },
-        })
-        resolvedCompanyId = created.id
-        companyResolution = `created new company "${created.name}"`
-      }
+    if (!agentId) {
+      return NextResponse.json({ error: 'agentId required (no session user)' }, { status: 400 })
     }
-
-    if (contactEmail) {
-      const existing = await resolvePersonByEmail(contactEmail)
-      if (existing) {
-        leadContactPersonId = existing.id
-        // Enrichment rule (same as captureFromEmail): fill EMPTY fields
-        // only — never overwrite what the CRM already knows.
-        if (contactPhone && !existing.phone) {
-          await prisma.person.update({ where: { id: existing.id }, data: { phone: contactPhone } })
-        }
-      } else {
-        const parts = contactName.split(/\s+/).filter(Boolean)
-        const created = await prisma.person.create({
-          data: {
-            firstName: parts[0] || '(unknown)',
-            lastName: parts.slice(1).join(' ') || '',
-            email: contactEmail,
-            phone: contactPhone || null,
-          },
-          select: { id: true },
-        })
-        leadContactPersonId = created.id
-      }
-    } else if (contactName || contactPhone) {
-      contactWarning =
-        'Contact not saved: an email address is required to create or match a person record (dedup anchor). Add one on the Job later.'
-    }
-
-    if (!name || !resolvedCompanyId || !agentId) {
+    if (!name || (!companyId && !(typeof body.companyName === 'string' && body.companyName.trim()))) {
       return NextResponse.json(
-        {
-          error: 'name, companyId (or companyName), and agentId are required',
-          gotName: !!name,
-          gotCompanyId: !!resolvedCompanyId,
-          gotAgentId: !!agentId,
-        },
+        { error: 'name and companyId (or companyName) are required' },
         { status: 400 }
       )
     }
 
-    // Generate next jobCode (SR-JOB-0001 pattern) — robust against
-    // malformed/non-matching codes; see nextJobCode for the why.
-    const jobCode = await nextJobCode(prisma)
-
-    const combinedNotes = [notes, companyResolution ? `[company: ${companyResolution}]` : null]
-      .filter(Boolean)
-      .join('\n') || null
-
-    const job = await prisma.job.create({
-      data: {
-        jobCode,
+    // Creation lives in ONE place (Job-as-root step 2): the same
+    // createJobFromDraft the resolver modal uses. This route is now a
+    // thin HTTP shell over it — company resolve-or-create via
+    // companyNameKey, person via resolvePersonByEmail, jobCode via
+    // nextJobCode, all inside the module.
+    const result = await createJobFromDraft(
+      {
         name,
-        companyId: resolvedCompanyId,
-        productionType: productionType || 'OTHER',
-        // Optional FK to the new ProductionTypeProfile lookup. Empty
-        // string → null so the form-default of '' doesn't FK-error.
-        productionTypeProfileId:
-          typeof productionTypeProfileId === 'string' && productionTypeProfileId
-            ? productionTypeProfileId
-            : null,
+        companyId: companyId || null,
+        companyName: typeof body.companyName === 'string' ? body.companyName : null,
+        contactName: typeof body.contactName === 'string' ? body.contactName : null,
+        contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
+        contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        // legacy callers that omit status keep getting QUOTED; the
+        // resolver modal passes NEW explicitly.
         status: status || 'QUOTED',
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        agentId,
-        notes: combinedNotes,
-        estimatedValue:
-          estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),
-        ...(contacts && contacts.length > 0
-          ? {
-              jobContacts: {
-                create: contacts.map((c: any) => ({
-                  personId: c.personId,
-                  role: c.role,
-                  isPrimary: c.isPrimary || false,
-                })),
-              },
-            }
-          : leadContactPersonId
-            ? {
-                jobContacts: {
-                  create: [{ personId: leadContactPersonId, role: 'OTHER', isPrimary: true }],
-                },
-              }
-            : {}),
+        notes: notes || null,
+        productionType: productionType || null,
+        productionTypeProfileId: productionTypeProfileId || null,
+        estimatedValue: estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),
+        contacts,
       },
+      agentId,
+    )
+
+    // Refresh the Company's most-common-profile cache (awaited — see
+    // note in git history; Vercel kills detached promises).
+    try {
+      await recomputeMostCommonProductionTypeProfile(result.job.companyId)
+    } catch (err) {
+      console.warn('[jobs POST] recompute most-common profile failed:', err)
+    }
+
+    // Re-fetch with the include shape callers expect (company/agent/contacts).
+    const job = await prisma.job.findUnique({
+      where: { id: result.job.id },
       include: {
         company: { select: { id: true, name: true } },
         agent: { select: { id: true, name: true } },
@@ -513,27 +435,13 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Refresh the Company's most-common-profile cache. Awaited (not
-    // fire-and-forget) so the Company row is consistent on the
-    // response — Vercel cuts off promises after the response is
-    // returned, so detached recompute would risk being killed mid-
-    // query. Negligible latency (one indexed findMany + one update).
-    try {
-      await recomputeMostCommonProductionTypeProfile(resolvedCompanyId)
-    } catch (err) {
-      // Don't block the Job-create response on a cache-refresh failure;
-      // the next Job-create or a manual backfill will reconcile.
-      console.warn('[jobs POST] recompute most-common profile failed:', err)
-    }
-
     return NextResponse.json(
       {
-        job: {
-          ...job,
-          estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
-        },
-        ...(companyResolution ? { companyResolution } : {}),
-        ...(contactWarning ? { contactWarning } : {}),
+        job: job
+          ? { ...job, estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue) }
+          : result.job,
+        ...(result.companyResolution ? { companyResolution: result.companyResolution } : {}),
+        ...(result.contactWarning ? { contactWarning: result.contactWarning } : {}),
       },
       { status: 201 }
     )
