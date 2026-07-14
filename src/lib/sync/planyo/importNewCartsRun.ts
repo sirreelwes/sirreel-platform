@@ -43,6 +43,10 @@ import {
   applyCartImport,
   type CartImportPlan,
 } from './importNewCart'
+import {
+  resolveJobForImportedBooking,
+  type CartJobResolution,
+} from './resolveJobForBooking'
 
 export interface FlaggedNewCart {
   cart: string
@@ -65,6 +69,19 @@ export interface FlaggedNewCart {
 export interface NewCartImportRunResult {
   imported: number
   flagged: FlaggedNewCart[]
+  /** Job-as-root step 5 — per-cart Job resolution outcomes. */
+  jobsAttached: number
+  jobsCreated: number
+  /** CANDIDATES-bucket attachments: best candidate attached, but a
+   *  human should confirm — routed to the Slack import lane. */
+  jobAmbiguous: Array<{
+    cart: string
+    bookingNumber: string
+    jobCode: string | null
+    jobName: string | null
+    score?: number
+    candidates?: { jobCode: string; name: string; score: number }[]
+  }>
   skippedCancelled: number
   skippedPastOnly: number
   skippedNoiseOnly: number
@@ -100,6 +117,9 @@ export async function importNewCartsRun(
   const result: NewCartImportRunResult = {
     imported: 0,
     flagged: [],
+    jobsAttached: 0,
+    jobsCreated: 0,
+    jobAmbiguous: [],
     skippedCancelled: 0,
     skippedPastOnly: 0,
     skippedNoiseOnly: 0,
@@ -218,6 +238,31 @@ export async function importNewCartsRun(
         if (!opts.dryRun) {
           const r = await applyCartImport(plan, prisma, makeBookingNumberGenerator())
           await writeImportEvent(opts.runId, cart, plan, r.bookingId)
+
+          // Job-as-root step 5: resolve the imported Booking into a Job
+          // (attach existing / create ACTIVE / attach-best + flag on
+          // ambiguity). Isolated like everything else per-cart — a
+          // resolution failure leaves the Booking importable-but-Job-less
+          // (the backfill posture), never tanks the import.
+          try {
+            const jobRes = await resolveJobForImportedBooking(r.bookingId)
+            await writeJobResolutionEvent(opts.runId, cart, jobRes)
+            if (jobRes.action === 'CREATED_NEW') result.jobsCreated++
+            else if (jobRes.action === 'ATTACHED_EXISTING' || jobRes.action === 'ALREADY_LINKED') result.jobsAttached++
+            else if (jobRes.action === 'ATTACHED_AMBIGUOUS') {
+              result.jobsAttached++
+              result.jobAmbiguous.push({
+                cart,
+                bookingNumber: jobRes.bookingNumber,
+                jobCode: jobRes.jobCode,
+                jobName: jobRes.jobName,
+                score: jobRes.score,
+                candidates: jobRes.candidates?.map((c) => ({ jobCode: c.jobCode, name: c.name, score: c.score })),
+              })
+            }
+          } catch (jobErr) {
+            result.errors.push({ cart, error: `job resolution failed: ${(jobErr as Error).message}` })
+          }
         }
         result.imported++
       } else {
@@ -310,6 +355,33 @@ async function writeFlagEvent(
         cartCustomerEmail: plan.cartCustomerEmail,
         flagReasons: plan.flagReasons,
         candidates: plan.multiMatchCandidates ?? [],
+      } as unknown as Prisma.InputJsonValue,
+    },
+  })
+}
+
+async function writeJobResolutionEvent(
+  runId: string,
+  cart: string,
+  res: CartJobResolution,
+): Promise<void> {
+  await prisma.planyoSyncEvent.create({
+    data: {
+      runId,
+      op: 'NO_CHANGE',
+      planyoCartId: cart,
+      bookingId: res.bookingId,
+      detail: `[CART_JOB_RESOLVED] cart=${cart} action=${res.action} job=${res.jobCode ?? '?'}${res.action === 'ATTACHED_AMBIGUOUS' ? ' NEEDS_REVIEW' : ''}`,
+      after: {
+        jobResolution: {
+          action: res.action,
+          jobId: res.jobId,
+          jobCode: res.jobCode,
+          jobName: res.jobName,
+          score: res.score ?? null,
+          reasons: res.reasons ?? [],
+          candidates: res.candidates ?? [],
+        },
       } as unknown as Prisma.InputJsonValue,
     },
   })

@@ -69,6 +69,9 @@ export async function GET(req: NextRequest) {
   let newCarts: NewCartImportRunResult = {
     imported: 0,
     flagged: [],
+    jobsAttached: 0,
+    jobsCreated: 0,
+    jobAmbiguous: [],
     skippedCancelled: 0,
     skippedPastOnly: 0,
     skippedNoiseOnly: 0,
@@ -127,6 +130,7 @@ export async function GET(req: NextRequest) {
   const shouldAlert =
     candidates.length > 0 ||
     newCarts.flagged.length > 0 ||
+    newCarts.jobAmbiguous.length > 0 ||
     newCarts.errors.length > 0 ||
     newCartsFatalError !== null ||
     apply.outcome !== 'SUCCESS'
@@ -146,6 +150,9 @@ export async function GET(req: NextRequest) {
     newCarts: {
       imported: newCarts.imported,
       flagged: newCarts.flagged.length,
+      jobsAttached: newCarts.jobsAttached,
+      jobsCreated: newCarts.jobsCreated,
+      jobAmbiguous: newCarts.jobAmbiguous.length,
       errors: newCarts.errors.length,
       skippedCancelled: newCarts.skippedCancelled,
       skippedPastOnly: newCarts.skippedPastOnly,
@@ -247,7 +254,26 @@ async function sendSyncAlert(
 
   if (newCarts.imported > 0) {
     lines.push('')
-    lines.push(`_New carts imported this run — ${newCarts.imported}_`)
+    lines.push(
+      `_New carts imported this run — ${newCarts.imported} (jobs: ${newCarts.jobsAttached} attached, ${newCarts.jobsCreated} created)_`,
+    )
+  }
+
+  // Job-as-root step 5: ambiguous Job attachments. The best candidate
+  // WAS attached (bookings never stay Job-less), but a human should
+  // confirm the pick — same review posture as the company matcher.
+  if (newCarts.jobAmbiguous.length) {
+    lines.push('')
+    lines.push(`★ *Imported carts with ambiguous Job match — ${newCarts.jobAmbiguous.length}* (best candidate attached; please confirm)`)
+    for (const j of newCarts.jobAmbiguous) {
+      lines.push(`  • cart=${j.cart} · ${j.bookingNumber} → attached [${j.jobCode ?? '?'}] "${j.jobName ?? '?'}" (score ${j.score ?? '?'})`)
+      if (j.candidates?.length) {
+        lines.push(
+          '    other candidates: ' +
+            j.candidates.slice(1).map((c) => `[${c.jobCode}] "${c.name}" (${c.score})`).join(' | '),
+        )
+      }
+    }
   }
 
   if (newFlagged.length) {
