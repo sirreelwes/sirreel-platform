@@ -106,7 +106,7 @@ export function LockedNote({ title }: { title: string }) {
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
       <div className="text-2xl mb-1">🔒</div>
       <div className="font-bold text-sm text-gray-800">{title} — Locked</div>
-      <div className="text-xs mt-0.5 text-gray-500">This rental has been confirmed. Documents are read-only.</div>
+      <div className="text-xs mt-0.5 text-gray-500">This booking is no longer active. Documents are read-only.</div>
     </div>
   )
 }

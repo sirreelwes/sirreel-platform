@@ -72,7 +72,16 @@ export default function ClientPortalV2() {
           coi: !!(req?.coiReceived && req?.wcReceived),
           cc: !!req?.creditCardAuth,
         })
-        setLocked(['CONFIRMED', 'ACTIVE', 'COMPLETE', 'CLOSED'].includes(bk.status))
+        // Lock the portal read-only ONLY for genuinely terminal bookings.
+        // A CONFIRMED/ACTIVE booking must stay signable — stage holds
+        // (Planyo imports and gantt 'Booked' alike) routinely carry
+        // CONFIRMED before any paperwork exists, and the whole point of
+        // the portal is collecting signatures on those jobs. Signed docs
+        // already lock themselves via their per-doc done states. (The
+        // legacy portal's copied condition also listed 'COMPLETE'/'CLOSED',
+        // which aren't BookingStatus values, while missing the real
+        // terminal states below.)
+        setLocked(['CANCELLED', 'ARCHIVED', 'RETURNED'].includes(bk.status))
 
         // Collect-once seed: persisted intake wins; otherwise pre-fill from
         // the booking's contact + company so the client starts pre-populated.
