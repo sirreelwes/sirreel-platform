@@ -16,6 +16,8 @@ import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
+import { companyNameKey } from '@/lib/companies/normalize'
+import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,7 +112,7 @@ export async function GET(req: NextRequest) {
         agent: { select: { id: true, name: true } },
         jobContacts: {
           include: {
-            person: { select: { id: true, firstName: true, lastName: true, email: true } },
+            person: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
           },
         },
         orders: {
@@ -325,6 +327,7 @@ export async function GET(req: NextRequest) {
               firstName: primaryContact.person.firstName,
               lastName: primaryContact.person.lastName,
               email: primaryContact.person.email,
+              phone: (primaryContact.person as { phone?: string | null }).phone ?? null,
               role: primaryContact.role,
               isPrimary: primaryContact.isPrimary,
             }
@@ -378,12 +381,80 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!name || !companyId || !agentId) {
+    // ── Job-as-root step 1: minimal-facts lead creation ──────────────
+    // A Job from just { name, companyName, contactName, contactPhone,
+    // contactEmail } — no companyId required. Company resolves via the
+    // EXISTING companyNameKey normalizer (link on match, create on
+    // none; multi-match links the first and notes the ambiguity — the
+    // full resolver primitive is a later build). Person resolves via
+    // the EXISTING resolvePersonByEmail (merge/alias-safe); phone and
+    // email live on the PERSON record, never copied onto the Job. The
+    // contact attaches as the Job's primary JobContact.
+    let resolvedCompanyId: string | null = companyId || null
+    let companyResolution: string | null = null
+    let contactWarning: string | null = null
+    let leadContactPersonId: string | null = null
+    const companyName = typeof body.companyName === 'string' ? body.companyName.trim() : ''
+    const contactName = typeof body.contactName === 'string' ? body.contactName.trim() : ''
+    const contactPhone = typeof body.contactPhone === 'string' ? body.contactPhone.trim() : ''
+    const contactEmail = typeof body.contactEmail === 'string' ? normalizeEmail(body.contactEmail) : ''
+
+    if (!resolvedCompanyId && companyName) {
+      const key = companyNameKey(companyName)
+      const all = await prisma.company.findMany({ select: { id: true, name: true } })
+      const matches = all.filter((c) => companyNameKey(c.name) === key)
+      if (matches.length >= 1) {
+        resolvedCompanyId = matches[0].id
+        companyResolution =
+          matches.length === 1
+            ? `matched existing company "${matches[0].name}"`
+            : `AMBIGUOUS: ${matches.length} companies match "${companyName}" — linked "${matches[0].name}"; disambiguate when the Job resolver ships`
+      } else {
+        const created = await prisma.company.create({
+          data: {
+            name: companyName,
+            notes: `created from new-job lead on ${new Date().toISOString().slice(0, 10)}`,
+          },
+          select: { id: true, name: true },
+        })
+        resolvedCompanyId = created.id
+        companyResolution = `created new company "${created.name}"`
+      }
+    }
+
+    if (contactEmail) {
+      const existing = await resolvePersonByEmail(contactEmail)
+      if (existing) {
+        leadContactPersonId = existing.id
+        // Enrichment rule (same as captureFromEmail): fill EMPTY fields
+        // only — never overwrite what the CRM already knows.
+        if (contactPhone && !existing.phone) {
+          await prisma.person.update({ where: { id: existing.id }, data: { phone: contactPhone } })
+        }
+      } else {
+        const parts = contactName.split(/\s+/).filter(Boolean)
+        const created = await prisma.person.create({
+          data: {
+            firstName: parts[0] || '(unknown)',
+            lastName: parts.slice(1).join(' ') || '',
+            email: contactEmail,
+            phone: contactPhone || null,
+          },
+          select: { id: true },
+        })
+        leadContactPersonId = created.id
+      }
+    } else if (contactName || contactPhone) {
+      contactWarning =
+        'Contact not saved: an email address is required to create or match a person record (dedup anchor). Add one on the Job later.'
+    }
+
+    if (!name || !resolvedCompanyId || !agentId) {
       return NextResponse.json(
         {
-          error: 'name, companyId, and agentId are required',
+          error: 'name, companyId (or companyName), and agentId are required',
           gotName: !!name,
-          gotCompanyId: !!companyId,
+          gotCompanyId: !!resolvedCompanyId,
           gotAgentId: !!agentId,
         },
         { status: 400 }
@@ -394,11 +465,15 @@ export async function POST(req: NextRequest) {
     // malformed/non-matching codes; see nextJobCode for the why.
     const jobCode = await nextJobCode(prisma)
 
+    const combinedNotes = [notes, companyResolution ? `[company: ${companyResolution}]` : null]
+      .filter(Boolean)
+      .join('\n') || null
+
     const job = await prisma.job.create({
       data: {
         jobCode,
         name,
-        companyId,
+        companyId: resolvedCompanyId,
         productionType: productionType || 'OTHER',
         // Optional FK to the new ProductionTypeProfile lookup. Empty
         // string → null so the form-default of '' doesn't FK-error.
@@ -410,18 +485,26 @@ export async function POST(req: NextRequest) {
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         agentId,
-        notes,
+        notes: combinedNotes,
         estimatedValue:
           estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),
-        ...(contacts && contacts.length > 0 && {
-          jobContacts: {
-            create: contacts.map((c: any) => ({
-              personId: c.personId,
-              role: c.role,
-              isPrimary: c.isPrimary || false,
-            })),
-          },
-        }),
+        ...(contacts && contacts.length > 0
+          ? {
+              jobContacts: {
+                create: contacts.map((c: any) => ({
+                  personId: c.personId,
+                  role: c.role,
+                  isPrimary: c.isPrimary || false,
+                })),
+              },
+            }
+          : leadContactPersonId
+            ? {
+                jobContacts: {
+                  create: [{ personId: leadContactPersonId, role: 'OTHER', isPrimary: true }],
+                },
+              }
+            : {}),
       },
       include: {
         company: { select: { id: true, name: true } },
@@ -436,7 +519,7 @@ export async function POST(req: NextRequest) {
     // returned, so detached recompute would risk being killed mid-
     // query. Negligible latency (one indexed findMany + one update).
     try {
-      await recomputeMostCommonProductionTypeProfile(companyId)
+      await recomputeMostCommonProductionTypeProfile(resolvedCompanyId)
     } catch (err) {
       // Don't block the Job-create response on a cache-refresh failure;
       // the next Job-create or a manual backfill will reconcile.
@@ -449,6 +532,8 @@ export async function POST(req: NextRequest) {
           ...job,
           estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         },
+        ...(companyResolution ? { companyResolution } : {}),
+        ...(contactWarning ? { contactWarning } : {}),
       },
       { status: 201 }
     )
@@ -582,6 +667,7 @@ function round2(n: number): number {
 // and the most-urgent wins; if that event is a return AND other orders
 // are still out, the rollup is flagged partial.
 export type CadenceState =
+  | 'new'
   | 'quoted'
   | 'hold'
   | 'lost'
@@ -658,6 +744,7 @@ function rollupCadence(
   tomorrow: string,
 ): { state: CadenceState; partial: boolean } {
   // Pre-booked commercial states bypass operational derivation.
+  if (jobStatus === 'NEW') return { state: 'new', partial: false }
   if (jobStatus === 'QUOTED') return { state: 'quoted', partial: false }
   if (jobStatus === 'HOLD') return { state: 'hold', partial: false }
   if (jobStatus === 'LOST') return { state: 'lost', partial: false }

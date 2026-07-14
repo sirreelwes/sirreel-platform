@@ -14,13 +14,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
-const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
+const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
 type JobStatus = (typeof JOB_STATUSES)[number]
 
 type Filter = 'all' | JobStatus | 'orphans'
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
+  { id: 'NEW', label: 'New' },
   { id: 'QUOTED', label: 'Quoted' },
   { id: 'ACTIVE', label: 'Active' },
   { id: 'HOLD', label: 'Hold' },
@@ -34,6 +35,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 // and a saturated left-edge bar tint. Static class strings so
 // Tailwind's content scanner sees them.
 type CadenceState =
+  | 'new'
   | 'quoted'
   | 'hold'
   | 'lost'
@@ -48,6 +50,7 @@ type CadenceState =
   | 'wrapped'
 
 const CADENCE_LABEL: Record<CadenceState, string> = {
+  new:             'New',
   quoted:          'Quoted',
   hold:            'Hold',
   lost:            'Lost',
@@ -63,6 +66,7 @@ const CADENCE_LABEL: Record<CadenceState, string> = {
 }
 
 const CADENCE_PILL: Record<CadenceState, string> = {
+  new:             'bg-sky-100 text-sky-700',
   quoted:          'bg-pill-quoted-bg text-pill-quoted-fg',
   hold:            'bg-pill-hold-bg text-pill-hold-fg',
   lost:            'bg-pill-lost-bg text-pill-lost-fg',
@@ -82,6 +86,7 @@ const CADENCE_PILL: Record<CadenceState, string> = {
 // up. Pre-booked rows share one muted bar (`cadence-pre-bar`) since
 // their pill already carries the commercial color in `pill.*`.
 const CADENCE_BAR: Record<CadenceState, string> = {
+  new:             'border-sky-400',
   quoted:          'border-cadence-pre-bar',
   hold:            'border-cadence-pre-bar',
   lost:            'border-cadence-pre-bar',
@@ -155,6 +160,7 @@ interface JobRow {
   name: string
   status: JobStatus
   startDate: string | null
+  createdAt: string
   endDate: string | null
   orderTotal: number
   estimatedValue: number | null
@@ -164,6 +170,7 @@ interface JobRow {
     firstName: string
     lastName: string
     email: string
+    phone?: string | null
     role: string
     isPrimary: boolean
   } | null
@@ -442,6 +449,31 @@ export default function JobsListPage() {
                       <span className="text-lt-fg3">·</span>
                       <span>{j.agent?.name || '—'}</span>
                     </div>
+
+                    {/* Job-as-root step 1 — NEW rows work as a lead queue:
+                        contact reachability, age, and a next-action hint. */}
+                    {j.status === 'NEW' && (
+                      <div className="mt-1 text-[11px] flex items-center gap-1.5 flex-wrap leading-snug">
+                        {j.primaryContact?.email && <span className="text-lt-fg2">{j.primaryContact.email}</span>}
+                        {j.primaryContact?.phone && (
+                          <>
+                            <span className="text-lt-fg3">·</span>
+                            <span className="text-lt-fg2">{j.primaryContact.phone}</span>
+                          </>
+                        )}
+                        {(j.primaryContact?.email || j.primaryContact?.phone) && <span className="text-lt-fg3">·</span>}
+                        <span className="text-lt-fg3">
+                          {(() => {
+                            const days = Math.floor((Date.now() - new Date(j.createdAt).getTime()) / 86_400_000)
+                            return days === 0 ? 'today' : `${days}d old`
+                          })()}
+                        </span>
+                        <span className="text-lt-fg3">·</span>
+                        <span className="font-semibold text-sky-700">
+                          {!j.startDate ? 'needs dates' : orderCount === 0 ? 'needs quote' : 'ready to quote'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Sub-row: paperwork buttons + billing chip. The
                         component reads everything it needs off the
