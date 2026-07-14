@@ -275,6 +275,15 @@ export function ThreadDrawer(props: Props) {
   const [threadJob, setThreadJob] = useState<{ id: string; jobCode: string; name: string } | null>(null);
   const [showJobResolver, setShowJobResolver] = useState(false);
   const [jobBusy, setJobBusy] = useState(false);
+  // Suggested Job for an UNFILED thread — one resolver call per thread
+  // open, ranked from the thread's own signals (extracted company/
+  // contact/project). Render-only: attaching always takes the agent's
+  // click; nothing auto-files. Keyed by thread id so drawer reuse
+  // across threads never shows a stale suggestion.
+  const [jobSuggestion, setJobSuggestion] = useState<{
+    threadKey: string;
+    candidate: { jobId: string; jobCode: string; name: string; score: number; reasons: string[] } | null;
+  } | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -340,6 +349,48 @@ export function ThreadDrawer(props: Props) {
       Promise.all([threadReq, previewReq]).finally(() => setLoading(false));
     }
   }, [mode, emailId, orderId]);
+
+  // Suggested-Job lookup for unfiled threads. Same context the attach
+  // resolver modal uses; runs once per thread open (or after detach).
+  useEffect(() => {
+    if (mode !== 'inquiry') return;
+    const t = data?.thread;
+    if (!t || threadJob) return;
+    if (jobSuggestion?.threadKey === t.id) return;
+    const firstInbound = (data?.messages || []).find(
+      (m) => m.direction === 'inbound' || m.direction === 'INBOUND',
+    );
+    const ex = firstInbound?.extractedData ?? null;
+    let active = true;
+    fetch('/api/jobs/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        threadId: t.id,
+        companyName: ex?.company ?? null,
+        contactEmail: ex?.contact?.email ?? (firstInbound ? parseAddress(firstInbound.fromAddress) : null),
+        jobNameHint: ex?.jobIntent?.projectName ?? t.subject ?? null,
+        sourceRef: 'email:thread-suggest',
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return;
+        const top = d?.bucket !== 'NO_MATCH' && Array.isArray(d?.candidates) ? d.candidates[0] : null;
+        setJobSuggestion({
+          threadKey: t.id,
+          candidate: top
+            ? { jobId: top.jobId, jobCode: top.jobCode, name: top.name, score: top.score, reasons: top.reasons ?? [] }
+            : null,
+        });
+      })
+      .catch(() => {
+        if (active) setJobSuggestion({ threadKey: t.id, candidate: null });
+      });
+    return () => {
+      active = false;
+    };
+  }, [mode, data, threadJob, jobSuggestion]);
 
   // Esc to close.
   useEffect(() => {
@@ -548,6 +599,30 @@ export function ThreadDrawer(props: Props) {
                   className="ml-auto text-[10px] text-gray-400 hover:text-rose-600 underline underline-offset-2 disabled:opacity-40"
                 >
                   detach
+                </button>
+              </>
+            ) : jobSuggestion?.threadKey === data.thread.id && jobSuggestion.candidate ? (
+              <>
+                <span className="text-gray-400">suggested:</span>
+                <span
+                  className="font-semibold text-gray-800 truncate"
+                  title={`score ${jobSuggestion.candidate.score} — ${jobSuggestion.candidate.reasons.join(' · ')}`}
+                >
+                  [{jobSuggestion.candidate.jobCode}] {jobSuggestion.candidate.name}
+                </span>
+                <button
+                  onClick={() => setThreadJobOnServer(jobSuggestion.candidate!.jobId)}
+                  disabled={jobBusy}
+                  className="font-bold text-emerald-700 hover:text-emerald-800 underline underline-offset-2 disabled:opacity-40"
+                >
+                  {jobBusy ? 'Attaching…' : 'Attach'}
+                </button>
+                <button
+                  onClick={() => setShowJobResolver(true)}
+                  disabled={jobBusy}
+                  className="ml-auto text-[10px] text-gray-400 hover:text-gray-700 underline underline-offset-2 disabled:opacity-40"
+                >
+                  other…
                 </button>
               </>
             ) : (
