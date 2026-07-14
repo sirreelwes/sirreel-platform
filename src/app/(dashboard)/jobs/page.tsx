@@ -1,14 +1,26 @@
 'use client'
 
 /**
- * Jobs — list view.
+ * Jobs — three-column kanban board (PREJOB / OUT / RETURNED).
  *
  * UI on the existing `GET /api/jobs`. Status chips drive the `statuses`
- * param; the `Orphans` chip uses the server-side `orphans=1` filter
- * (QUOTED jobs with no sent/durable order — surfaces abandoned quotes).
- * Search hits jobName + jobCode; `Mine` flips `mine=1`.
+ * param; the `Orphans` chip uses the server-side `orphans=1` filter;
+ * Search hits jobName + jobCode; `Mine` flips `mine=1`. All filters
+ * apply over the board — cards render in whichever column they place.
  *
- * Rows link to the existing `/jobs/[id]` detail page.
+ * COLUMN PLACEMENT (real data, no fabrication):
+ *   1. Manual override (sr_job_board_overrides side table) wins — the
+ *      interim stand-in until checkout/check-in events exist. Those
+ *      triggers will later replace the override writes entirely.
+ *   2. Order-driven cadence (server rollup) when the job has live
+ *      orders: picking-* → PREJOB, on-rental/returning-* → OUT,
+ *      returned/invoiced → RETURNED.
+ *   3. Date fallback (jobs with no orders — all Planyo imports today):
+ *      Job.startDate/endDate, else the booking envelope from the API.
+ *      end < today → RETURNED · start ≤ today ≤ end → OUT · else PREJOB.
+ *   NEW/QUOTED/HOLD/LOST always sit in PREJOB; WRAPPED in RETURNED.
+ *
+ * Cards link to the existing `/jobs/[id]` detail page.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -187,6 +199,100 @@ interface JobRow {
   blindPickup?: boolean
   blindReturn?: boolean
   _count?: { orders: number }
+  // Board inputs (see docblock). bookingWindow = min/max across the
+  // job's bookings; hasDelivery = any booking with a delivery address.
+  bookingWindow?: { start: string | null; end: string | null } | null
+  hasDelivery?: boolean
+  boardPhaseOverride?: BoardColumn | null
+}
+
+// ─── Kanban board ────────────────────────────────────────────────
+
+type BoardColumn = 'PREJOB' | 'OUT' | 'RETURNED'
+const BOARD_COLUMNS: BoardColumn[] = ['PREJOB', 'OUT', 'RETURNED']
+
+const COLUMN_META: Record<BoardColumn, { title: string; hint: string }> = {
+  PREJOB:   { title: 'Prejob',   hint: 'quotes, leads & booked — nothing out yet' },
+  OUT:      { title: 'Out',      hint: 'items with the client' },
+  RETURNED: { title: 'Returned', hint: 'items back — closeout' },
+}
+
+// Effective window for date-derived placement: the Job's own dates,
+// falling back to the booking envelope.
+function jobWindow(j: JobRow): { start: string | null; end: string | null } {
+  return {
+    start: j.startDate?.slice(0, 10) ?? j.bookingWindow?.start ?? null,
+    end: j.endDate?.slice(0, 10) ?? j.bookingWindow?.end ?? null,
+  }
+}
+
+function deriveColumn(j: JobRow, today: string): BoardColumn {
+  if (j.status === 'WRAPPED') return 'RETURNED'
+  if (j.status !== 'ACTIVE') return 'PREJOB' // NEW / QUOTED / HOLD / LOST
+  const c = j.cadence?.state
+  if (c === 'on-rental' || c === 'returning-tmw' || c === 'returning-today') return 'OUT'
+  if (c === 'returned' || c === 'invoiced') return 'RETURNED'
+  if (c === 'picking-tmw' || c === 'picking-today') return 'PREJOB'
+  // cadence 'booked' with real orders = genuinely future → PREJOB.
+  if ((j._count?.orders ?? 0) > 0) return 'PREJOB'
+  // No orders (Planyo imports) → place by dates. No dates → PREJOB
+  // ("needs dates"), never OUT.
+  const w = jobWindow(j)
+  if (!w.start || !w.end) return 'PREJOB'
+  if (w.end < today) return 'RETURNED'
+  if (w.start <= today) return 'OUT'
+  return 'PREJOB'
+}
+
+// OUT-column return urgency, from the order cadence when present,
+// else the effective end date. green=active · orange=tomorrow · red=today.
+type OutUrgency = 'active' | 'tomorrow' | 'today' | 'overdue'
+function outUrgency(j: JobRow, today: string, tomorrow: string): OutUrgency {
+  const c = j.cadence?.state
+  if (c === 'returning-today') return 'today'
+  if (c === 'returning-tmw') return 'tomorrow'
+  if (c === 'on-rental') return 'active'
+  const end = jobWindow(j).end
+  if (!end) return 'active'
+  if (end < today) return 'overdue'
+  if (end === today) return 'today'
+  if (end === tomorrow) return 'tomorrow'
+  return 'active'
+}
+
+const OUT_BAND: Record<OutUrgency, string> = {
+  active:   'border-emerald-400',
+  tomorrow: 'border-orange-400',
+  today:    'border-red-500',
+  overdue:  'border-red-600',
+}
+const OUT_LABEL: Record<OutUrgency, string> = {
+  active:   'On rental',
+  tomorrow: 'Returning tomorrow',
+  today:    'Returning today',
+  overdue:  'Return overdue',
+}
+const OUT_PILL: Record<OutUrgency, string> = {
+  active:   'bg-emerald-100 text-emerald-700',
+  tomorrow: 'bg-orange-100 text-orange-700',
+  today:    'bg-red-100 text-red-700',
+  overdue:  'bg-red-200 text-red-800',
+}
+
+// PREJOB sub-state band (spec): yellow=NEW · orange=QUOTED ·
+// teal=booked/ACTIVE-not-yet-out · muted for HOLD/LOST.
+function prejobBand(j: JobRow): { band: string; label: string; pill: string } {
+  switch (j.status) {
+    case 'NEW':    return { band: 'border-yellow-400', label: 'New',    pill: 'bg-yellow-100 text-yellow-800' }
+    case 'QUOTED': return { band: 'border-orange-400', label: 'Quoted', pill: 'bg-orange-100 text-orange-700' }
+    case 'HOLD':   return { band: 'border-zinc-300',   label: 'Hold',   pill: 'bg-zinc-100 text-zinc-600' }
+    case 'LOST':   return { band: 'border-zinc-200',   label: 'Lost',   pill: 'bg-zinc-100 text-zinc-400' }
+    default: {
+      const c = j.cadence?.state
+      const label = c === 'picking-today' ? 'Picking up today' : c === 'picking-tmw' ? 'Picking up tomorrow' : 'Booked'
+      return { band: 'border-teal-400', label, pill: 'bg-teal-100 text-teal-700' }
+    }
+  }
 }
 
 // Color-coded paperwork buttons (replaces the prior all-neutral
@@ -284,6 +390,46 @@ export default function JobsListPage() {
     return `${jobs.length} job${jobs.length === 1 ? '' : 's'}`
   }, [loading, error, jobs.length])
 
+  // Board placement — today/tomorrow computed the same way the API's
+  // cadence rollup does (UTC date strings compared against @db.Date).
+  const { today, tomorrow } = useMemo(() => {
+    const t = new Date()
+    t.setUTCHours(0, 0, 0, 0)
+    const tm = new Date(t)
+    tm.setUTCDate(tm.getUTCDate() + 1)
+    return { today: t.toISOString().slice(0, 10), tomorrow: tm.toISOString().slice(0, 10) }
+  }, [])
+
+  const placed = useMemo(
+    () =>
+      jobs.map((job) => {
+        const derived = deriveColumn(job, today)
+        const column: BoardColumn = (job.boardPhaseOverride as BoardColumn | null) ?? derived
+        return { job, derived, column }
+      }),
+    [jobs, today],
+  )
+
+  // Manual move — writes the presentation-only override (or clears it
+  // with phase null) and updates the card in place. This is where the
+  // future checkout/check-in event triggers plug in instead.
+  const [movingId, setMovingId] = useState<string | null>(null)
+  const moveJob = async (job: JobRow, target: BoardColumn | null, _derived?: BoardColumn) => {
+    setMovingId(job.id)
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/board-phase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phase: target }),
+      })
+      if (res.ok) {
+        setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, boardPhaseOverride: target } : j)))
+      }
+    } finally {
+      setMovingId(null)
+    }
+  }
+
   return (
     // Phase 7 — light-motif pilot. Page bg overrides the shell's
     // default until the rollout converts the rest of the app. Token
@@ -346,175 +492,245 @@ export default function JobsListPage() {
           </div>
         </div>
 
-        {/* Jobs list — roomy stacked rows. The earlier 9-column table
-            was dense and required column-header scanning; the list
-            puts the agent's three core questions per job (what is it,
-            where in the cadence, what does paperwork+billing look
-            like) on three distinct visual lanes. Full-height left
-            cadence bar; whole row clickable as a Link. */}
-        <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden divide-y divide-lt-hairline">
-          {jobs.length === 0 && !loading && (
-            <div className="px-4 py-8 text-center text-lt-fg3 text-sm">
-              {filter === 'orphans'
-                ? 'No abandoned QUOTED jobs. Good housekeeping.'
-                : 'No jobs match.'}
-            </div>
-          )}
-          {jobs.map((j) => {
-            const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
-            // Cadence rollup drives the left-edge bar + the merged
-            // status label. Server falls back to JobStatus for
-            // pre-booked Jobs (quoted/hold/lost) and short-circuits
-            // wrapped Jobs.
-            const cadenceState: CadenceState = j.cadence?.state ?? (
-              j.status === 'QUOTED' ? 'quoted'
-                : j.status === 'HOLD' ? 'hold'
-                : j.status === 'LOST' ? 'lost'
-                : j.status === 'WRAPPED' ? 'wrapped'
-                : 'booked'
-            )
-            const partial = !!j.cadence?.partial
-            const cadenceLabel = formatCadenceLabel(cadenceState, partial)
-            const barCls = CADENCE_BAR[cadenceState]
-            const orderCount = j._count?.orders ?? 0
-            return (
-              <Link
-                key={j.id}
-                href={`/jobs/${j.id}`}
-                className={`flex items-stretch hover:bg-lt-inner transition-colors border-l-4 ${barCls}`}
-              >
-                <div className="flex-1 min-w-0 pl-4 pr-4 py-3 flex items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    {/* Line 1: code above title; title = "Job · Client".
-                        Inline icon badges (blind + L&D) follow the title. */}
-                    <div className="text-[10px] font-mono uppercase tracking-wider text-lt-fg3">
-                      {j.jobCode}
-                    </div>
-                    <div className="mt-0.5 flex items-baseline gap-1.5 flex-wrap">
-                      <span className="text-[15px] font-medium text-lt-fg leading-tight">
-                        {j.name}
-                        {j.company?.name && (
-                          <>
-                            <span className="text-lt-fg3 font-normal"> · </span>
-                            <span className="text-lt-fg2 font-normal">{j.company.name}</span>
-                          </>
-                        )}
-                      </span>
-                      {j.hasLD && (
-                        <span
-                          className="text-chip-bad-fg text-[10px] leading-none"
-                          title="Loss & Damage claim open"
-                          aria-label="L&D claim open"
-                        >
-                          ▲
-                        </span>
-                      )}
-                      {/* Blind handoff markers. Eye-off glyphs sit
-                          inline after the title so an agent can tell
-                          pickup vs return at a glance without hover. */}
-                      {j.blindPickup && (
-                        <span
-                          className="text-lt-fg2 text-[11px] leading-none"
-                          title="Blind pickup — client picks up the unit themselves"
-                          aria-label="Blind pickup"
-                        >
-                          ⊘↗
-                        </span>
-                      )}
-                      {j.blindReturn && (
-                        <span
-                          className="text-lt-fg2 text-[11px] leading-none"
-                          title="Blind return — client returns the unit themselves"
-                          aria-label="Blind return"
-                        >
-                          ⊘↙
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Metadata: client · contact (role) · N order(s) · agent.
-                        Renders as a single muted line that wraps on narrow
-                        viewports. The client appears here as the canonical
-                        full name (the title's version may be visually
-                        de-emphasized but this line is the metadata source). */}
-                    <div className="mt-1 text-[11.5px] text-lt-fg2 flex items-center gap-1.5 flex-wrap leading-snug">
-                      <span className="text-lt-fg2">{j.company?.name || '—'}</span>
-                      <span className="text-lt-fg3">·</span>
-                      {j.primaryContact ? (
-                        <span>
-                          {j.primaryContact.firstName} {j.primaryContact.lastName}
-                          <span className="ml-1 text-[10px] text-lt-fg3 uppercase tracking-wider">({j.primaryContact.role})</span>
-                        </span>
-                      ) : (
-                        <span className="text-lt-fg3">no contact</span>
-                      )}
-                      <span className="text-lt-fg3">·</span>
-                      <span>{orderCount} order{orderCount === 1 ? '' : 's'}</span>
-                      <span className="text-lt-fg3">·</span>
-                      <span>{j.agent?.name || '—'}</span>
-                    </div>
-
-                    {/* Job-as-root step 1 — NEW rows work as a lead queue:
-                        contact reachability, age, and a next-action hint. */}
-                    {j.status === 'NEW' && (
-                      <div className="mt-1 text-[11px] flex items-center gap-1.5 flex-wrap leading-snug">
-                        {j.primaryContact?.email && <span className="text-lt-fg2">{j.primaryContact.email}</span>}
-                        {j.primaryContact?.phone && (
-                          <>
-                            <span className="text-lt-fg3">·</span>
-                            <span className="text-lt-fg2">{j.primaryContact.phone}</span>
-                          </>
-                        )}
-                        {(j.primaryContact?.email || j.primaryContact?.phone) && <span className="text-lt-fg3">·</span>}
-                        <span className="text-lt-fg3">
-                          {(() => {
-                            const days = Math.floor((Date.now() - new Date(j.createdAt).getTime()) / 86_400_000)
-                            return days === 0 ? 'today' : `${days}d old`
-                          })()}
-                        </span>
-                        <span className="text-lt-fg3">·</span>
-                        <span className="font-semibold text-sky-700">
-                          {!j.startDate ? 'needs dates' : orderCount === 0 ? 'needs quote' : 'ready to quote'}
-                        </span>
+        {/* Kanban board — three columns, cards = Jobs. Placement rules
+            live in deriveColumn(); manual moves write the side-table
+            override via POST /api/jobs/[id]/board-phase. */}
+        {loading && jobs.length === 0 ? (
+          <div className="bg-lt-card border border-lt-hairline rounded-xl px-4 py-8 text-center text-lt-fg3 text-sm">
+            Loading…
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="bg-lt-card border border-lt-hairline rounded-xl px-4 py-8 text-center text-lt-fg3 text-sm">
+            {filter === 'orphans' ? 'No abandoned QUOTED jobs. Good housekeeping.' : 'No jobs match.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+            {BOARD_COLUMNS.map((col) => {
+              const colJobs = placed.filter((pj) => pj.column === col)
+              return (
+                <div key={col} className="bg-lt-inner/50 border border-lt-hairline rounded-xl">
+                  <div className="px-3 pt-3 pb-2 flex items-baseline gap-2">
+                    <h2 className="text-sm font-bold text-lt-fg uppercase tracking-wider">{COLUMN_META[col].title}</h2>
+                    <span className="text-xs text-lt-fg3">{colJobs.length}</span>
+                    <span className="ml-auto text-[10px] text-lt-fg3">{COLUMN_META[col].hint}</span>
+                  </div>
+                  <div className="px-2 pb-2 space-y-2">
+                    {colJobs.length === 0 && (
+                      <div className="px-2 py-6 text-center text-[11px] text-lt-fg3 border border-dashed border-lt-hairline rounded-lg">
+                        Nothing here.
                       </div>
                     )}
-
-                    {/* Sub-row: paperwork buttons + billing chip. The
-                        component reads everything it needs off the
-                        rollups; tones are state-keyed. */}
-                    <div className="mt-2">
-                      <SubRowChips
-                        paperwork={j.paperwork}
-                        billing={j.billing}
-                        hasStageScope={!!j.hasStageScope}
+                    {colJobs.map(({ job: j, derived }) => (
+                      <JobCard
+                        key={j.id}
+                        job={j}
+                        column={col}
+                        derived={derived}
+                        today={today}
+                        tomorrow={tomorrow}
+                        moving={movingId === j.id}
+                        onMove={(target) => moveJob(j, target, derived)}
                       />
-                    </div>
-                  </div>
-
-                  {/* Right side: stacked status pill above the $value.
-                      Right-aligned, doesn't shrink. */}
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${CADENCE_PILL[cadenceState]}`}
-                    >
-                      {partial && (
-                        <span className="text-[11px] leading-none" aria-hidden="true">◐</span>
-                      )}
-                      {cadenceLabel}
-                    </span>
-                    <span className="text-[14px] font-mono font-medium text-lt-fg whitespace-nowrap">
-                      {fmtMoney(value)}
-                      {j.orderTotal === 0 && j.estimatedValue != null && (
-                        <span className="ml-1 text-[9px] text-lt-fg3 uppercase">est</span>
-                      )}
-                    </span>
+                    ))}
+                    {/* FUTURE: the rich fleet/warehouse check-in icon
+                        language lands here once check-in data exists —
+                        deliberately not fabricated from today's data. */}
+                    {col === 'RETURNED' && colJobs.length > 0 && (
+                      <div className="px-2 py-1.5 text-[10px] text-lt-fg3 text-center">
+                        Fleet check-in status icons arrive with warehouse check-in tracking.
+                      </div>
+                    )}
                   </div>
                 </div>
-              </Link>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+// ─── Card ────────────────────────────────────────────────────────
+
+function JobCard({
+  job: j,
+  column,
+  derived,
+  today,
+  tomorrow,
+  moving,
+  onMove,
+}: {
+  job: JobRow
+  column: BoardColumn
+  derived: BoardColumn
+  today: string
+  tomorrow: string
+  moving: boolean
+  onMove: (target: BoardColumn | null) => void
+}) {
+  const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
+
+  // Band + status pill are column-specific.
+  let band: string
+  let pillLabel: string
+  let pillCls: string
+  if (column === 'OUT') {
+    const u = outUrgency(j, today, tomorrow)
+    band = OUT_BAND[u]
+    pillLabel = OUT_LABEL[u]
+    pillCls = OUT_PILL[u]
+  } else if (column === 'RETURNED') {
+    band = 'border-zinc-400'
+    pillLabel = j.status === 'WRAPPED' ? 'Wrapped' : 'Returned'
+    pillCls = 'bg-zinc-200 text-zinc-700'
+  } else {
+    const pb = prejobBand(j)
+    band = pb.band
+    pillLabel = pb.label
+    pillCls = pb.pill
+  }
+
+  const w = jobWindow(j)
+  const overridden = j.boardPhaseOverride != null
+  const idx = BOARD_COLUMNS.indexOf(column)
+  const leftTarget = idx > 0 ? BOARD_COLUMNS[idx - 1] : null
+  const rightTarget = idx < BOARD_COLUMNS.length - 1 ? BOARD_COLUMNS[idx + 1] : null
+
+  const moveBtn = (target: BoardColumn, arrow: string, title: string) => (
+    <button
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // Moving TO the derived column just clears the override.
+        onMove(target === derived ? null : target)
+      }}
+      disabled={moving}
+      title={title}
+      className="px-1.5 py-0.5 rounded border border-lt-hairline text-lt-fg3 hover:text-lt-fg hover:border-lt-fg2 disabled:opacity-40 text-[11px] leading-none"
+    >
+      {arrow}
+    </button>
+  )
+
+  return (
+    <Link
+      href={`/jobs/${j.id}`}
+      className={`block bg-lt-card border border-lt-hairline border-l-4 ${band} rounded-lg px-3 py-2.5 hover:bg-lt-inner transition-colors`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[9px] font-mono uppercase tracking-wider text-lt-fg3">{j.jobCode}</span>
+        {j.hasDelivery && column !== 'RETURNED' && (
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500 text-white" title="Delivery — a booking on this job has a delivery address">
+            Delivery
+          </span>
+        )}
+        {j.hasLD && (
+          <span className="text-chip-bad-fg text-[10px] leading-none" title="Loss & Damage claim open">▲</span>
+        )}
+        <span className={`ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${pillCls}`}>
+          {pillLabel}
+        </span>
+      </div>
+
+      <div className="mt-1 text-[13px] font-medium text-lt-fg leading-tight">
+        {j.name}
+        {j.company?.name && (
+          <>
+            <span className="text-lt-fg3 font-normal"> · </span>
+            <span className="text-lt-fg2 font-normal">{j.company.name}</span>
+          </>
+        )}
+      </div>
+
+      <div className="mt-0.5 text-[10.5px] text-lt-fg2 flex items-center gap-1 flex-wrap leading-snug">
+        {j.primaryContact ? (
+          <span>{j.primaryContact.firstName} {j.primaryContact.lastName}</span>
+        ) : (
+          <span className="text-lt-fg3">no contact</span>
+        )}
+        <span className="text-lt-fg3">·</span>
+        <span>{j.agent?.name || '—'}</span>
+        {(w.start || w.end) && (
+          <>
+            <span className="text-lt-fg3">·</span>
+            <span className="text-lt-fg3">{fmtDate(w.start)} → {fmtDate(w.end)}</span>
+          </>
+        )}
+      </div>
+
+      {/* Lead-queue hint carried over from the flat list. */}
+      {j.status === 'NEW' && (
+        <div className="mt-1 text-[10.5px] flex items-center gap-1 flex-wrap leading-snug">
+          {j.primaryContact?.email && <span className="text-lt-fg2">{j.primaryContact.email}</span>}
+          <span className="text-lt-fg3">·</span>
+          <span className="font-semibold text-yellow-700">
+            {!j.startDate && !j.bookingWindow?.start ? 'needs dates' : (j._count?.orders ?? 0) === 0 ? 'needs quote' : 'ready to quote'}
+          </span>
+        </div>
+      )}
+
+      {/* RETURNED shows closeout pips; the other columns keep the full
+          paperwork/billing chip strip. */}
+      {column === 'RETURNED' ? (
+        <div className="mt-1.5">
+          <CloseoutPips billing={j.billing} />
+        </div>
+      ) : (
+        <div className="mt-1.5">
+          <SubRowChips paperwork={j.paperwork} billing={j.billing} hasStageScope={!!j.hasStageScope} />
+        </div>
+      )}
+
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <span className="text-[12.5px] font-mono font-medium text-lt-fg">
+          {fmtMoney(value)}
+          {j.orderTotal === 0 && j.estimatedValue != null && (
+            <span className="ml-1 text-[8px] text-lt-fg3 uppercase">est</span>
+          )}
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1">
+          {overridden && (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(null) }}
+              disabled={moving}
+              title="Clear manual placement — card returns to its computed column"
+              className="text-[9px] text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-40"
+            >
+              manual · reset
+            </button>
+          )}
+          {leftTarget && moveBtn(leftTarget, '‹', `Move to ${COLUMN_META[leftTarget].title}`)}
+          {rightTarget && moveBtn(rightTarget, '›', `Move to ${COLUMN_META[rightTarget].title}`)}
+        </span>
+      </div>
+    </Link>
+  )
+}
+
+// RETURNED closeout pips — invoiced? paid? straight off the billing
+// rollup (reconciled Invoice columns only; no payment math here).
+function CloseoutPips({ billing }: { billing: BillingRollup | undefined }) {
+  const state = billing?.state ?? 'NOT_INVOICED'
+  const invoiced = state !== 'NOT_INVOICED' && state !== 'DRAFT'
+  const paid = state === 'PAID'
+  const pip = (label: string, on: boolean, badWhenOff: boolean) => (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+        on ? 'bg-chip-good-bg text-chip-good-fg' : badWhenOff ? 'bg-chip-warn-bg text-chip-warn-fg' : 'border border-dashed border-chip-muted-border text-chip-muted-fg'
+      }`}
+    >
+      {on ? '✓' : '−'} {label}
+    </span>
+  )
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {pip('Invoiced', invoiced, true)}
+      {pip('Paid', paid, invoiced)}
+      {billing && billing.balanceDue > 0 && (
+        <span className="text-[10px] text-chip-bad-fg font-semibold">{fmtMoney(billing.balanceDue)} due</span>
+      )}
     </div>
   )
 }

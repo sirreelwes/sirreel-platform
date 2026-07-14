@@ -190,10 +190,23 @@ export async function GET(req: NextRequest) {
           },
         },
         _count: { select: { orders: true } },
+        // Board placement inputs — booking envelope dates (fallback when
+        // the Job itself is date-less) and the delivery signal.
+        bookings: {
+          select: { startDate: true, endDate: true, deliveryAddress: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
     })
+
+    // Kanban manual placements (side table, presentation-only). One
+    // query for the whole page of jobs.
+    const overrides = await prisma.jobBoardOverride.findMany({
+      where: { jobId: { in: jobs.map((j) => j.id) } },
+      select: { jobId: true, phase: true },
+    })
+    const overrideByJob = new Map(overrides.map((o) => [o.jobId, o.phase]))
 
     // Cadence rollup needs today + tomorrow as YYYY-MM-DD strings to
     // compare against Order.startDate/endDate (`@db.Date`, which Prisma
@@ -314,10 +327,28 @@ export async function GET(req: NextRequest) {
         return (oo.signedAgreements || []).some((a) => a.contractType === 'STAGE_CONTRACT')
       })
 
-      const { orders, coiChecks: _ignoreCoi, ...rest } = j
+      // Booking envelope: min start / max end across the job's bookings
+      // — the placement fallback for jobs with no live orders (all the
+      // Planyo imports today). Delivery = any booking with an address.
+      const bStarts = j.bookings.map((b) => b.startDate).filter((d): d is Date => !!d)
+      const bEnds = j.bookings.map((b) => b.endDate).filter((d): d is Date => !!d)
+      const bookingWindow =
+        bStarts.length || bEnds.length
+          ? {
+              start: bStarts.length ? new Date(Math.min(...bStarts.map((d) => d.getTime()))).toISOString().slice(0, 10) : null,
+              end: bEnds.length ? new Date(Math.max(...bEnds.map((d) => d.getTime()))).toISOString().slice(0, 10) : null,
+            }
+          : null
+      const hasDelivery = j.bookings.some((b) => !!b.deliveryAddress?.trim())
+
+      const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, ...rest } = j
       void _ignoreCoi
+      void _ignoreBookings
       return {
         ...rest,
+        bookingWindow,
+        hasDelivery,
+        boardPhaseOverride: overrideByJob.get(j.id) ?? null,
         estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
         orderTotal,
         primaryContact: primaryContact

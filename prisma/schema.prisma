@@ -3797,6 +3797,21 @@ model InquiryCapture {
   @@map("sr_inquiry_captures")
 }
 
+/// Kanban board manual placement (Jobs page). PRESENTATION STATE ONLY —
+/// deliberately a standalone side table with no relation into Job so the
+/// Job/Booking domain models stay untouched. An agent dragging a card
+/// overrides the date-derived column; a real checkout/check-in event
+/// system later replaces this table entirely (drop it then).
+model JobBoardOverride {
+  id      String   @id @default(uuid())
+  jobId   String   @unique @map("job_id")
+  phase   String // 'PREJOB' | 'OUT' | 'RETURNED'
+  movedBy String?  @map("moved_by")
+  movedAt DateTime @default(now()) @map("moved_at")
+
+  @@map("sr_job_board_overrides")
+}
+
 model JobContact {
   id        String   @id @default(uuid())
   jobId     String   @map("job_id")
