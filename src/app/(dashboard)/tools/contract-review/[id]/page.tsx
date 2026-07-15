@@ -35,6 +35,14 @@ interface ReviewRecord {
   aiRiskLevel: string | null;
   aiRecommendation: string | null;
   annotationManifest: any;
+  clauseMessages?: Array<{
+    id: string;
+    clauseKey: string;
+    role: string;
+    content: string;
+    createdAt: string;
+    createdBy: { id: string; name: string } | null;
+  }>;
   humanDecision: string;
   humanDecisionNote: string | null;
   humanDecisionAt: string | null;
@@ -505,6 +513,8 @@ export default function ContractReviewDetailPage() {
         secondRoundClauses={secondRoundClauses}
         onToggleSecondRound={handleToggleSecondRound}
         manifest={record.annotationManifest ?? null}
+        reviewId={record.id}
+        discussions={record.clauseMessages || []}
       />
 
       {/* Per-clause decision summary + Generate button */}

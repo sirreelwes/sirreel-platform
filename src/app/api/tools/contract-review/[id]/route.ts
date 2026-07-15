@@ -34,6 +34,19 @@ export async function GET(
       uploadedBy: { select: { id: true, name: true, email: true } },
       humanDecisionBy: { select: { id: true, name: true, email: true } },
       counterGeneratedBy: { select: { id: true, name: true, email: true } },
+      // Per-clause Discuss threads — persisted for audit, grouped by
+      // clauseKey client-side.
+      clauseMessages: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          clauseKey: true,
+          role: true,
+          content: true,
+          createdAt: true,
+          createdBy: { select: { id: true, name: true } },
+        },
+      },
       changeDecisions: {
         orderBy: { changeIndex: 'asc' },
         include: {

@@ -2002,6 +2002,7 @@ model User {
   changeDecisionsDecided  ReviewChangeDecision[] @relation("ChangeDecisionDecider")
   uploadedCoiChecks       CoiCheck[]       @relation("CoiCheckUploader")
   decidedCoiChecks        CoiCheck[]       @relation("CoiCheckDecider")
+  reviewClauseMessages    ReviewClauseMessage[] @relation("ReviewClauseMessageAuthor")
   assignedInquiries       Inquiry[]        @relation("InquiryAssignedTo")
 
   followUpsSent    QuoteFollowUp[] @relation("FollowUpSentBy")
@@ -3964,6 +3965,7 @@ model ContractReview {
   humanDecisionBy    User?    @relation("ContractReviewDecider", fields: [humanDecisionById], references: [id])
   counterGeneratedBy User?    @relation("CounterPdfGenerator", fields: [counterGeneratedById], references: [id])
   changeDecisions    ReviewChangeDecision[]
+  clauseMessages     ReviewClauseMessage[]
   signedAgreement    SignedAgreement?
 
   @@index([jobId])
@@ -3999,6 +4001,30 @@ model ReviewChangeDecision {
   @@index([reviewId])
   @@index([decision])
   @@map("sr_review_change_decisions")
+}
+
+// Per-clause Discuss thread on a contract review — the operator asks
+// Claude questions about one flagged clause, tests positions, and
+// requests draft counter language. Persisted for audit and shown on
+// the review record. NOTHING here ever reaches the client: applying a
+// drafted counter is an explicit UI action that only seeds the normal
+// ReviewChangeDecision COUNTER flow. clauseKey is the AI change's
+// `clause` ref (e.g. "7", "Fleet 4(b)"), falling back to "#<index>"
+// when the ref is empty — refs can repeat in pathological outputs, in
+// which case those changes share a thread (acceptable for discussion).
+model ReviewClauseMessage {
+  id          String         @id @default(uuid())
+  reviewId    String         @map("review_id")
+  review      ContractReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  clauseKey   String         @map("clause_key")
+  role        String // 'user' | 'assistant'
+  content     String         @db.Text
+  createdById String?        @map("created_by_id") // null for assistant turns
+  createdBy   User?          @relation("ReviewClauseMessageAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([reviewId, clauseKey, createdAt])
+  @@map("sr_review_clause_messages")
 }
 
 enum AgreementDocumentType {

@@ -44,6 +44,16 @@ const DECISION_BADGE: Record<ClauseDecisionValue, { label: string; cls: string }
   REJECT: { label: 'Reject', cls: 'bg-red-600 text-white' },
 };
 
+/** One persisted Discuss message, as serialized by the API. */
+export interface DiscussMessage {
+  id: string;
+  clauseKey: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  createdBy?: { id: string; name: string } | null;
+}
+
 interface ReviewResultPanelProps {
   review: any;
   /** When provided, per-clause decision controls render. Keyed by changeIndex. */
@@ -58,6 +68,16 @@ interface ReviewResultPanelProps {
    * AI's transcription so the reviewer can spot divergence.
    */
   manifest?: MarkupManifest | null;
+  /** Enables the per-clause Discuss thread (POST [id]/discuss). */
+  reviewId?: string;
+  /** Persisted Discuss messages for the whole review (all clause keys). */
+  discussions?: DiscussMessage[];
+}
+
+/** Thread key for a change — its clause ref, or "#<index>" when empty. */
+function discussKeyFor(change: any, changeIndex: number): string {
+  const ref = String(change?.clause ?? '').trim();
+  return ref || `#${changeIndex}`;
 }
 
 export function ReviewResultPanel({
@@ -67,9 +87,20 @@ export function ReviewResultPanel({
   secondRoundClauses,
   onToggleSecondRound,
   manifest,
+  reviewId,
+  discussions,
 }: ReviewResultPanelProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [baselineOpen, setBaselineOpen] = useState<Record<number, boolean>>({});
+  // Discuss threads keyed by clauseKey; seeded from the persisted
+  // messages once, then appended to locally as turns complete.
+  const [threads, setThreads] = useState<Record<string, DiscussMessage[]>>(() => {
+    const grouped: Record<string, DiscussMessage[]> = {};
+    for (const m of discussions || []) (grouped[m.clauseKey] ||= []).push(m);
+    return grouped;
+  });
+  const appendToThread = (clauseKey: string, msgs: DiscussMessage[]) =>
+    setThreads((prev) => ({ ...prev, [clauseKey]: [...(prev[clauseKey] || []), ...msgs] }));
 
   if (!review) return null;
   const interactive = !!decisions && !!onDecisionChange;
@@ -189,6 +220,29 @@ export function ReviewResultPanel({
                       <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Suggested Counter</div>
                       <div>{change.suggestedCounter}</div>
                     </div>
+                  )}
+
+                  {/* Per-clause Discuss thread — internal only, nothing
+                      here reaches the client. Applying a draft is an
+                      explicit click that seeds the COUNTER decision. */}
+                  {reviewId && change.type !== 'auto_approved' && (
+                    <DiscussPanel
+                      reviewId={reviewId}
+                      clauseKey={discussKeyFor(change, i)}
+                      changeIndex={i}
+                      messages={threads[discussKeyFor(change, i)] || []}
+                      onNewMessages={(msgs) => appendToThread(discussKeyFor(change, i), msgs)}
+                      onApplyCounter={
+                        interactive
+                          ? (draft) =>
+                              onDecisionChange!(i, {
+                                decision: 'COUNTER',
+                                counterLanguage: draft,
+                                note: decision.note,
+                              })
+                          : undefined
+                      }
+                    />
                   )}
 
                   {interactive && (
@@ -332,6 +386,162 @@ export function ReviewResultPanel({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── Per-clause Discuss thread ──────────────────────────────────────
+
+const COUNTER_DRAFT_RE = /<counter-draft>([\s\S]*?)<\/counter-draft>/g;
+
+/** Split assistant content into prose and counter-draft segments. */
+function parseAssistantContent(content: string): Array<{ kind: 'text' | 'draft'; text: string }> {
+  const segments: Array<{ kind: 'text' | 'draft'; text: string }> = [];
+  let last = 0;
+  for (const m of content.matchAll(COUNTER_DRAFT_RE)) {
+    const before = content.slice(last, m.index).trim();
+    if (before) segments.push({ kind: 'text', text: before });
+    const draft = m[1].trim();
+    if (draft) segments.push({ kind: 'draft', text: draft });
+    last = (m.index ?? 0) + m[0].length;
+  }
+  const tail = content.slice(last).trim();
+  if (tail) segments.push({ kind: 'text', text: tail });
+  return segments.length > 0 ? segments : [{ kind: 'text', text: content }];
+}
+
+function DiscussPanel({
+  reviewId,
+  clauseKey,
+  changeIndex,
+  messages,
+  onNewMessages,
+  onApplyCounter,
+}: {
+  reviewId: string;
+  clauseKey: string;
+  changeIndex: number;
+  messages: DiscussMessage[];
+  onNewMessages: (msgs: DiscussMessage[]) => void;
+  /** Absent in read-only contexts — the Apply button hides. */
+  onApplyCounter?: (draft: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [appliedFor, setAppliedFor] = useState<string | null>(null);
+
+  const send = async () => {
+    const message = draft.trim();
+    if (!message || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tools/contract-review/${reviewId}/discuss`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clauseKey, changeIndex, message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'Failed to send');
+        return;
+      }
+      onNewMessages([data.userMessage, data.assistantMessage]);
+      setDraft('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-2.5 py-2 text-left"
+      >
+        <span className="font-bold text-gray-500 uppercase text-[9px]">
+          💬 Discuss with Claude{messages.length > 0 ? ` (${messages.length})` : ''}
+        </span>
+        <span className="text-[10px] text-gray-400">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-2.5 pb-2.5 space-y-2">
+          <div className="text-[10px] text-gray-400 leading-snug">
+            Internal discussion — nothing here is sent to the client. Ask about this clause, test
+            positions, or request draft counter language; drafts get an explicit Apply button.
+          </div>
+          {messages.length > 0 && (
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              {messages.map((m) =>
+                m.role === 'assistant' ? (
+                  <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-lg p-2 space-y-1.5 mr-6">
+                    {parseAssistantContent(m.content).map((seg, si) =>
+                      seg.kind === 'text' ? (
+                        <div key={si} className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {seg.text}
+                        </div>
+                      ) : (
+                        <div key={si} className="border border-amber-300 bg-amber-50 rounded-lg p-2 space-y-1.5">
+                          <div className="font-bold text-amber-700 uppercase text-[9px]">Draft counter clause</div>
+                          <div className="text-[11px] text-gray-800 whitespace-pre-wrap leading-relaxed">{seg.text}</div>
+                          {onApplyCounter && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onApplyCounter(seg.text);
+                                setAppliedFor(`${m.id}:${si}`);
+                              }}
+                              className="text-[10px] font-bold px-2 py-1 rounded bg-amber-500 text-white hover:bg-amber-600"
+                            >
+                              {appliedFor === `${m.id}:${si}`
+                                ? '✓ Applied — review & save your decision'
+                                : 'Apply as Counter text'}
+                            </button>
+                          )}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                ) : (
+                  <div key={m.id} className="bg-sky-50 border border-sky-100 rounded-lg p-2 ml-6">
+                    <div className="text-[9px] font-semibold text-sky-700 mb-0.5">
+                      {m.createdBy?.name || 'Operator'}
+                    </div>
+                    <div className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+          {error && <div className="text-[10px] text-red-600 font-semibold">{error}</div>}
+          <div className="flex gap-1.5 items-end">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              rows={2}
+              placeholder="Ask about this clause, or request draft counter language… (⌘↵ to send)"
+              className="flex-1 bg-white border border-gray-300 rounded-lg p-2 text-[11px] text-gray-900 resize-y focus:outline-none focus:border-amber-500"
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || !draft.trim()}
+              className="text-[11px] font-bold px-3 py-2 rounded-lg bg-gray-900 text-white hover:bg-black disabled:opacity-40"
+            >
+              {sending ? '…' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

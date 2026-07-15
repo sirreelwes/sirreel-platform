@@ -200,19 +200,23 @@ export interface BuildPromptOptions {
   secondRoundClauses?: string[]
 }
 
-export async function buildContractReviewSystemPrompt(_opts?: BuildPromptOptions): Promise<string> {
-  let playbook = ''
+/** The negotiation playbook markdown, or '' when the file is missing. */
+export async function loadNegotiationPlaybook(): Promise<string> {
   try {
-    playbook = (await readFile(PLAYBOOK_PATH, 'utf8')).trim()
+    return (await readFile(PLAYBOOK_PATH, 'utf8')).trim()
   } catch (err) {
     console.warn(
       '[contract-review] negotiation playbook not found at',
       PLAYBOOK_PATH,
       err instanceof Error ? err.message : err,
     )
-    return BASE_SYSTEM_PROMPT
+    return ''
   }
+}
 
+export async function buildContractReviewSystemPrompt(_opts?: BuildPromptOptions): Promise<string> {
+  const playbook = await loadNegotiationPlaybook()
+  if (!playbook) return BASE_SYSTEM_PROMPT
   return BASE_SYSTEM_PROMPT + PLAYBOOK_USAGE_HEADER + playbook
 }
 
