@@ -34,6 +34,7 @@ interface ReviewRecord {
   aiResponse: any;
   aiRiskLevel: string | null;
   aiRecommendation: string | null;
+  annotationManifest: any;
   humanDecision: string;
   humanDecisionNote: string | null;
   humanDecisionAt: string | null;
@@ -503,6 +504,7 @@ export default function ContractReviewDetailPage() {
         onDecisionChange={handleDecisionChange}
         secondRoundClauses={secondRoundClauses}
         onToggleSecondRound={handleToggleSecondRound}
+        manifest={record.annotationManifest ?? null}
       />
 
       {/* Per-clause decision summary + Generate button */}

@@ -3931,6 +3931,18 @@ model ContractReview {
   aiRiskLevel      String? @map("ai_risk_level")
   aiRecommendation String? @map("ai_recommendation")
 
+  // Deterministic PDF markup extraction (MarkupManifest in
+  // src/lib/contracts/annotationManifest.ts): verbatim text under each
+  // strike annotation + client FreeText insertions. Ground truth the AI
+  // and the review UI are both held to — origin: review ef015a5a, where
+  // Preview /Line strikes never touch the text layer and the model's
+  // `proposed` silently retained struck phrases.
+  annotationManifest Json? @map("annotation_manifest")
+  // Prior aiResponse snapshots, newest last. Appended by the rerun
+  // route before overwriting aiResponse so a re-run never destroys the
+  // audit trail of what the operator previously saw.
+  aiResponseHistory  Json? @map("ai_response_history")
+
   humanDecision     ReviewDecision @default(PENDING) @map("human_decision")
   humanDecisionNote String?        @map("human_decision_note") @db.Text
   humanDecisionById String?        @map("human_decision_by_id")

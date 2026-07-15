@@ -4,6 +4,7 @@ import { put } from '@vercel/blob'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { runContractReviewAi } from '@/lib/contracts/runReview'
+import { buildAnnotationManifest, type MarkupManifest } from '@/lib/contracts/annotationManifest'
 
 export async function POST(req: NextRequest) {
   try {
@@ -83,10 +84,21 @@ export async function POST(req: NextRequest) {
       contentType: 'application/pdf',
     })
 
+    // Deterministic markup pre-pass — strike/insertion ground truth from
+    // the PDF's annotation objects. Extraction failure must never block
+    // a review; the AI call just runs without the ground-truth block.
+    let annotationManifest: MarkupManifest | null = null
+    try {
+      annotationManifest = await buildAnnotationManifest(Buffer.from(bytes))
+    } catch (err) {
+      console.warn('[contract-review] annotation manifest extraction failed:', err)
+    }
+
     const result = await runContractReviewAi({
       uploadedBase64,
       companyName,
       secondRoundClauses,
+      annotationManifest,
     })
 
     if (!result.ok) {
@@ -121,11 +133,14 @@ export async function POST(req: NextRequest) {
         aiRiskLevel: typeof review.riskLevel === 'string' ? review.riskLevel : null,
         aiRecommendation:
           typeof review.recommendation === 'string' ? review.recommendation : null,
+        annotationManifest: annotationManifest
+          ? (JSON.parse(JSON.stringify(annotationManifest)) as object)
+          : undefined,
       },
       select: { id: true },
     })
 
-    return NextResponse.json({ ok: true, review, reviewRecordId: reviewRecord.id })
+    return NextResponse.json({ ok: true, review, reviewRecordId: reviewRecord.id, annotationManifest })
   } catch (err: any) {
     console.error('[contract-review]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

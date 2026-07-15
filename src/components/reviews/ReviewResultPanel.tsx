@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
+import { clauseMatches, type MarkupManifest } from '@/lib/contracts/annotationManifest';
 
 const BASELINE_BY_REF = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c]));
 
@@ -51,6 +52,12 @@ interface ReviewResultPanelProps {
   /** Clause refs the operator has marked for second-round negotiation. Drives the per-clause toggle UI. */
   secondRoundClauses?: string[];
   onToggleSecondRound?: (clauseRef: string, next: boolean) => void;
+  /**
+   * Deterministic PDF markup extraction (strikes + insertions). When
+   * present, each clause card shows the raw ground truth next to the
+   * AI's transcription so the reviewer can spot divergence.
+   */
+  manifest?: MarkupManifest | null;
 }
 
 export function ReviewResultPanel({
@@ -59,6 +66,7 @@ export function ReviewResultPanel({
   onDecisionChange,
   secondRoundClauses,
   onToggleSecondRound,
+  manifest,
 }: ReviewResultPanelProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [baselineOpen, setBaselineOpen] = useState<Record<number, boolean>>({});
@@ -170,10 +178,11 @@ export function ReviewResultPanel({
                   )}
                   <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Original</div><div>{change.original}</div></div>
                   <div>
-                    <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Client&apos;s redlined text</div>
-                    <div className="text-[10px] opacity-60 mb-1">This text is rendered verbatim into the counter-PDF if you Accept this change.</div>
+                    <div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Client proposed (AI-transcribed)</div>
+                    <div className="text-[10px] opacity-60 mb-1">The AI&apos;s read of the client&apos;s post-redline clause. Rendered verbatim into the counter-PDF if you Accept — check it against the markup ground truth below.</div>
                     <div className="bg-white/50 rounded-lg p-2">{change.proposed || <span className="opacity-50 italic">No clause text extracted.</span>}</div>
                   </div>
+                  <ClauseMarkupGroundTruth manifest={manifest} clauseRef={clauseRef} />
                   <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Reasoning</div><div className="opacity-80">{change.reasoning}</div></div>
                   {change.suggestedCounter && (
                     <div className="bg-white/50 rounded-lg p-2">
@@ -323,6 +332,54 @@ export function ReviewResultPanel({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Raw markup ground truth for one clause — the verbatim spans the
+ * client physically struck and the notes they inserted, straight from
+ * the PDF annotation objects (no AI involved). Renders nothing when the
+ * manifest is absent or has no entries for this clause.
+ */
+function ClauseMarkupGroundTruth({
+  manifest,
+  clauseRef,
+}: {
+  manifest: MarkupManifest | null | undefined;
+  clauseRef: string;
+}) {
+  if (!manifest || !clauseRef) return null;
+  const struck = manifest.struck.filter((s) => clauseMatches(s.clauseGuess, clauseRef));
+  const inserted = manifest.inserted.filter((n) => clauseMatches(n.clauseGuess, clauseRef));
+  if (struck.length === 0 && inserted.length === 0) return null;
+  return (
+    <div className="bg-white border border-gray-300 rounded-lg p-2.5">
+      <div className="font-bold text-gray-500 uppercase text-[9px] mb-1">
+        Markup ground truth (extracted from PDF annotations)
+      </div>
+      {struck.length > 0 && (
+        <div className="space-y-0.5 mb-1.5">
+          <div className="text-[9px] font-semibold text-red-600 uppercase">Client struck</div>
+          {struck.map((s, idx) => (
+            <div key={idx} className="text-[11px] text-gray-700">
+              <span className="line-through decoration-red-500 decoration-2">{s.text}</span>
+              <span className="text-gray-400 ml-1.5 text-[9px]">p{s.page}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {inserted.length > 0 && (
+        <div className="space-y-0.5">
+          <div className="text-[9px] font-semibold text-emerald-700 uppercase">Client inserted</div>
+          {inserted.map((n, idx) => (
+            <div key={idx} className="text-[11px] text-emerald-800">
+              “{n.text}”
+              <span className="text-gray-400 ml-1.5 text-[9px]">p{n.page}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

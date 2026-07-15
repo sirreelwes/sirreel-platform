@@ -13,6 +13,13 @@ import {
 } from '@/lib/contracts/reviewPrompt'
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
+import {
+  clauseMatches,
+  formatManifestForPrompt,
+  manifestHasMarkup,
+  normalizeForMatch,
+  type MarkupManifest,
+} from '@/lib/contracts/annotationManifest'
 
 const STANDARD_AGREEMENT_PATH = path.join(
   process.cwd(),
@@ -21,12 +28,24 @@ const STANDARD_AGREEMENT_PATH = path.join(
   'sirreel-rental-agreement.pdf'
 )
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Native fetch (undici) instead of the SDK 0.39 node-fetch shim — the
+// shim read-ETIMEDOUTs on this route's multi-MB base64 PDF uploads
+// (reproduced locally; native fetch completes the same request in
+// seconds). Node ≥18 everywhere we run, so globalThis.fetch always exists.
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, fetch: globalThis.fetch as any })
 
 export interface RunReviewInput {
   uploadedBase64: string
   companyName?: string
   secondRoundClauses?: string[]
+  /**
+   * Deterministic markup extraction of the uploaded PDF (see
+   * annotationManifest.ts). When present with markup, it is fed to the
+   * AI as a ground-truth content block and drives the retained-strike /
+   * dropped-insertion guardrails. Null/absent = no annotations found or
+   * extraction unavailable — the review runs as before.
+   */
+  annotationManifest?: MarkupManifest | null
 }
 
 export type RunReviewResult =
@@ -45,7 +64,7 @@ function baselineClauseText(): string {
 }
 
 export async function runContractReviewAi(input: RunReviewInput): Promise<RunReviewResult> {
-  const { uploadedBase64, companyName, secondRoundClauses } = input
+  const { uploadedBase64, companyName, secondRoundClauses, annotationManifest } = input
 
   let standardBase64: string
   try {
@@ -99,6 +118,13 @@ Compare the redlined document against the baseline per your instructions. Output
     { type: 'text', text: userText },
   ]
 
+  // Annotation ground truth — deterministic strike/insertion extraction.
+  // Third content block so the model is held to the physical markup, not
+  // the clean text layer (which still contains every struck word).
+  if (annotationManifest && manifestHasMarkup(annotationManifest)) {
+    content.push({ type: 'text', text: formatManifestForPrompt(annotationManifest) })
+  }
+
   const response = await client.messages.create({
     model: REVIEW_MODEL,
     max_tokens: 8000,
@@ -120,7 +146,7 @@ Compare the redlined document against the baseline per your instructions. Output
     }
   }
 
-  applyPostAiGuardrails(review)
+  applyPostAiGuardrails(review, annotationManifest)
   return { ok: true, review, rawText: text }
 }
 
@@ -132,7 +158,7 @@ const PREFERRED_INDEMNITY_COUNTER = `Lessee/Renter ("You") agree to defend, inde
  * regex-scan its output too — a flag is the difference between an operator
  * catching a deal-breaker and SirReel silently shipping a bad counter-PDF.
  */
-export function applyPostAiGuardrails(review: any): void {
+export function applyPostAiGuardrails(review: any, annotationManifest?: MarkupManifest | null): void {
   if (!review || !Array.isArray(review.changes)) return
 
   const baselineByRef = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c.body]))
@@ -193,6 +219,57 @@ export function applyPostAiGuardrails(review: any): void {
           ch.operatorReviewReason ||
           'Client redline narrows indemnity scope to third-party claims only — Non-Negotiable Hard Limit per playbook §1.'
         thirdPartyFlaggedClauses.push(String(ch.clause ?? '1'))
+      }
+    }
+  }
+
+  // ── Annotation ground-truth consistency (flag-only, never rewrite) ──
+  // A struck span still present verbatim in the clause's `proposed`, or
+  // a client-inserted note absent from the change entirely, means the
+  // model's resolution disagrees with the physical markup. We NEVER
+  // auto-edit legal language here — the operator gets a named flag.
+  if (annotationManifest && manifestHasMarkup(annotationManifest)) {
+    for (const ch of review.changes) {
+      if (ch.type === 'auto_approved') continue
+      const ref = String(ch.clause ?? '').trim()
+      const proposedNorm = normalizeForMatch(typeof ch.proposed === 'string' ? ch.proposed : '')
+      if (proposedNorm) {
+        const retained = annotationManifest.struck.filter((s) => {
+          const spanNorm = normalizeForMatch(s.text)
+          // Short fragments ("carrier.") false-positive on normal prose;
+          // only enforce spans with real phrase weight.
+          if (spanNorm.length < 10) return false
+          if (!clauseMatches(s.clauseGuess, ref)) return false
+          return proposedNorm.includes(spanNorm)
+        })
+        if (retained.length > 0) {
+          ch.needsOperatorReview = true
+          const spans = retained.map((s) => `"${s.text}"`).join(', ')
+          const msg = `Markup mismatch: the client physically struck ${spans} (clause ${ref}) but \`proposed\` still contains it. Verify against the source PDF before using this text.`
+          ch.operatorReviewReason = ch.operatorReviewReason ? `${ch.operatorReviewReason} ${msg}` : msg
+        }
+      }
+      // Inserted notes anchored to this clause should surface somewhere
+      // in the change (proposed, description, or reasoning).
+      const combinedNorm = normalizeForMatch(
+        [ch.proposed, ch.description, ch.reasoning]
+          .filter((v) => typeof v === 'string')
+          .join(' '),
+      )
+      const droppedNotes = annotationManifest.inserted.filter((n) => {
+        if (!clauseMatches(n.clauseGuess, ref)) return false
+        const sig = normalizeForMatch(n.text)
+          .split(' ')
+          .filter((w) => w.length > 4)
+        if (sig.length === 0) return false
+        const present = sig.filter((w) => combinedNorm.includes(w)).length
+        return present / sig.length < 0.5
+      })
+      if (droppedNotes.length > 0) {
+        ch.needsOperatorReview = true
+        const notes = droppedNotes.map((n) => `"${n.text}"`).join(', ')
+        const msg = `Markup mismatch: the client inserted a note near clause ${ref} (${notes}) that this change does not account for.`
+        ch.operatorReviewReason = ch.operatorReviewReason ? `${ch.operatorReviewReason} ${msg}` : msg
       }
     }
   }
