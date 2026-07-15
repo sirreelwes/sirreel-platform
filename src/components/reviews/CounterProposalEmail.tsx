@@ -66,13 +66,22 @@ export function CounterProposalEmail({
     }
   };
 
-  const mailtoHref = (() => {
+  // RFC 6068: mailto URLs take percent-encoding ONLY. URLSearchParams is
+  // form-encoding — it turns spaces into "+", which mail clients render
+  // literally ("Hi+there"). Build the href by hand with
+  // encodeURIComponent, and normalize line breaks to \r\n (the RFC's
+  // line separator) before encoding. Copy-email is unaffected — it uses
+  // the raw subject/body, not this href.
+  const mailto = useMemo(() => {
     const to = primaryContact?.email?.trim() || '';
-    const params = new URLSearchParams();
-    params.set('subject', subject);
-    params.set('body', body);
-    return `mailto:${encodeURIComponent(to)}?${params.toString()}`;
-  })();
+    const crlfBody = body.replace(/\r\n|\r|\n/g, '\r\n');
+    const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(crlfBody)}`;
+    // Long mailto URLs get silently truncated (or dropped) by OS/mail
+    // clients — commonly around the ~2000-char mark. Rather than let a
+    // legal email lose its tail invisibly, disable the link and point at
+    // Copy email.
+    return { href, tooLong: href.length > 1800 };
+  }, [primaryContact?.email, subject, body]);
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 mt-3">
@@ -122,12 +131,21 @@ export function CounterProposalEmail({
             Reset to default
           </button>
         )}
-        <a
-          href={mailtoHref}
-          className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-[11px] font-bold rounded-lg"
-        >
-          Open in mail
-        </a>
+        {mailto.tooLong ? (
+          <span
+            title="This email is too long for a mailto link — mail clients truncate long URLs. Use Copy email instead."
+            className="px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-400 text-[11px] font-bold rounded-lg cursor-not-allowed select-none"
+          >
+            Open in mail — too long, use Copy email
+          </span>
+        ) : (
+          <a
+            href={mailto.href}
+            className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-[11px] font-bold rounded-lg"
+          >
+            Open in mail
+          </a>
+        )}
         <button
           type="button"
           onClick={copyToClipboard}

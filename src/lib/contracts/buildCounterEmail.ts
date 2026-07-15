@@ -1,4 +1,28 @@
 import type { AiChange, ChangeDecisionValue } from './ContractDocument'
+import { CANONICAL_CLAUSES } from './contractClauses'
+
+const CANONICAL_REFS = new Set(CANONICAL_CLAUSES.map((c) => c.ref))
+
+/**
+ * Client-ADDED clauses (mutual indemnity riders, "Rights in Recordings",
+ * etc.) have no SirReel baseline counterpart, so the accepted/countered/
+ * retained buckets — which are phrased around modifying OUR clauses —
+ * read wrong for them and previously dropped them from the summary
+ * entirely. Detect them by the AI's "-new" ref convention or a numeric
+ * ref beyond the canonical clause set.
+ */
+function isAddedClauseRef(ref: string): boolean {
+  const r = ref.trim()
+  if (/(^|[-\s])new$/i.test(r)) return true
+  const m = /^(\d{1,3})$/.exec(r)
+  if (m && !CANONICAL_REFS.has(m[1])) return true
+  return false
+}
+
+/** Display form for an added-clause ref: "30-new" → "30", "Fleet-new" → "Fleet". */
+function displayAddedRef(ref: string): string {
+  return ref.trim().replace(/[-\s]new$/i, '')
+}
 
 export interface CounterEmailDecision {
   clauseRef: string
@@ -91,7 +115,10 @@ function collectUserNotes(args: BuildCounterEmailArgs): UserNote[] {
     if (d.decision !== 'COUNTER' && d.decision !== 'REJECT') continue
     const note = (d.note || '').trim()
     if (!note) continue
-    items.push({ ref: d.clauseRef, text: note })
+    items.push({
+      ref: isAddedClauseRef(d.clauseRef) ? displayAddedRef(d.clauseRef) : d.clauseRef,
+      text: note,
+    })
   }
   items.sort((a, b) => {
     const [an, as] = refSortKey(a.ref)
@@ -105,9 +132,22 @@ function collectUserNotes(args: BuildCounterEmailArgs): UserNote[] {
 export function buildCounterEmail(args: BuildCounterEmailArgs): BuiltCounterEmail {
   const subject = buildSubject(args)
 
-  const accepted = args.decisions.filter((d) => d.decision === 'ACCEPT').map((d) => d.clauseRef)
-  const countered = args.decisions.filter((d) => d.decision === 'COUNTER').map((d) => d.clauseRef)
-  const rejected = args.decisions.filter((d) => d.decision === 'REJECT').map((d) => d.clauseRef)
+  // Split original-clause modifications from client-ADDED clauses — the
+  // buckets below are phrased around SirReel's own clauses, and added
+  // clauses get their own summary line so every decided clause appears.
+  const decided = args.decisions.filter(
+    (d) => d.decision === 'ACCEPT' || d.decision === 'COUNTER' || d.decision === 'REJECT',
+  )
+  const original = decided.filter((d) => !isAddedClauseRef(d.clauseRef))
+  const added = decided.filter((d) => isAddedClauseRef(d.clauseRef))
+
+  const accepted = original.filter((d) => d.decision === 'ACCEPT').map((d) => d.clauseRef)
+  const countered = original.filter((d) => d.decision === 'COUNTER').map((d) => d.clauseRef)
+  const rejected = original.filter((d) => d.decision === 'REJECT').map((d) => d.clauseRef)
+
+  const addedAccepted = added.filter((d) => d.decision === 'ACCEPT').map((d) => displayAddedRef(d.clauseRef))
+  const addedCountered = added.filter((d) => d.decision === 'COUNTER').map((d) => displayAddedRef(d.clauseRef))
+  const addedRejected = added.filter((d) => d.decision === 'REJECT').map((d) => displayAddedRef(d.clauseRef))
   const userNotes = collectUserNotes(args)
 
   const greetingName = firstName(args.primaryContact?.fullName ?? null)
@@ -133,6 +173,21 @@ export function buildCounterEmail(args: BuildCounterEmailArgs): BuiltCounterEmai
     summaryLines.push(
       `Original language retained: ${formatRefList(rejected)} — these clauses sit inside our existing insurance coverage and policy structure, and modifying them would affect our ability to underwrite the rental as currently insured. We've kept the SirReel baseline language for that reason.`
     )
+  }
+  // Client-added clauses — every decided one appears here, phrased for
+  // clauses that have no SirReel baseline counterpart.
+  if (addedAccepted.length > 0 || addedCountered.length > 0 || addedRejected.length > 0) {
+    const parts: string[] = []
+    if (addedAccepted.length > 0) {
+      parts.push(`we're glad to include ${formatRefList(addedAccepted)} as you drafted`)
+    }
+    if (addedCountered.length > 0) {
+      parts.push(`we've offered adjusted language for ${formatRefList(addedCountered)} in the counter-proposal`)
+    }
+    if (addedRejected.length > 0) {
+      parts.push(`we aren't able to include ${formatRefList(addedRejected)}, as ${addedRejected.length === 1 ? 'it falls' : 'they fall'} outside the framework our insurance and operating policies support`)
+    }
+    summaryLines.push(`On your added clauses: ${parts.join('; ')}.`)
   }
 
   const closing =
