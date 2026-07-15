@@ -32,6 +32,10 @@
 
 const CATEGORY_TO_SHORT: Record<string, string> = {
   'Cube Truck': 'Cube',
+  // 2026-07 rename: the HQ category "Cube Truck" became "SuperCube
+  // Truck" (assets stayed "Cube N"). Keep BOTH keys — Planyo-side
+  // strings and older callers still say "Cube Truck".
+  'SuperCube Truck': 'Cube',
   'Cargo Van w/ Liftgate': 'Cargo',
   'Cargo Van w/o Liftgate': 'Cargo',
   'Passenger Van': 'Pass',

@@ -37,6 +37,7 @@ import {
   planyoLocalTimeToLADate,
 } from './dateConvention'
 import type { PlanyoLine } from './planyoClient'
+import { normalizePlanyoUnitName } from '@/lib/scheduling/planyoNameNormalizer'
 
 export type CrmBucket =
   | 'CLEAN_MATCH'
@@ -87,6 +88,25 @@ export interface BookingItemDraft {
   lineCount: number // number of Planyo lines feeding this hold
 }
 
+/**
+ * Per-line unit binding resolved at PLAN time from Planyo's
+ * `unit_assignment` (Planyo resources are per-category; the physical
+ * unit rides in this string). Applied as a native BookingAssignment —
+ * the durable record that survives Planyo's retirement. Lines that
+ * don't resolve import exactly as before (item stays REQUESTED) plus
+ * a log line.
+ */
+export interface UnitBindingDraft {
+  planyoReservationId: string
+  categoryId: string
+  categoryName: string
+  rawUnit: string
+  normalizedUnit: string
+  isBackupHold: boolean
+  startLA: string
+  endLA: string
+}
+
 export interface ReservationDraft {
   planyoReservationId: string
   planyoCartId: string
@@ -116,6 +136,7 @@ export interface CartImportPlan {
   bookingDraft: BookingDraft
   bookingItemDrafts: BookingItemDraft[]
   reservationDrafts: ReservationDraft[]
+  unitBindingDrafts: UnitBindingDraft[]
   // Surfaced metadata
   cartCustomerName: string
   cartCustomerEmail: string
@@ -311,6 +332,7 @@ export async function planCartImport(
 
   // ── BookingItem aggregation (group lines by AssetCategory) ──
   const byCategory = new Map<string, BookingItemDraft>()
+  const unitBindingDrafts: UnitBindingDraft[] = []
   for (const l of lines) {
     const resId = parseInt(String(l.resource_id ?? 0), 10)
     const cat = crosswalk.get(resId)
@@ -326,6 +348,23 @@ export async function planCartImport(
         quantity: 1,
         dailyRate: cat.dailyRate,
         lineCount: 1,
+      })
+    }
+    // Per-line unit identity → native assignment draft. Resolution to
+    // an Asset row happens at apply time (needs the DB); the plan just
+    // carries the normalized candidate.
+    const rawUnit = (l.unit_assignment ?? '').trim()
+    if (rawUnit) {
+      const { normalized, isBackupHold } = normalizePlanyoUnitName(rawUnit, cat.name)
+      unitBindingDrafts.push({
+        planyoReservationId: String(l.reservation_id),
+        categoryId: cat.id,
+        categoryName: cat.name,
+        rawUnit,
+        normalizedUnit: normalized,
+        isBackupHold,
+        startLA: planyoLocalTimeToLADate(l.start_time) ?? startLA,
+        endLA: planyoLocalTimeToLADate(l.end_time) ?? endLA,
       })
     }
   }
@@ -364,6 +403,7 @@ export async function planCartImport(
     bookingDraft,
     bookingItemDrafts,
     reservationDrafts,
+    unitBindingDrafts,
     cartCustomerName: `${customerFirst} ${customerLast}`.trim(),
     cartCustomerEmail: customerEmail,
     cartCompanyName,
@@ -460,9 +500,10 @@ export async function applyCartImport(
       select: { id: true },
     })
 
-    // 5. BookingItem rows
+    // 5. BookingItem rows (ids captured for unit binding below)
+    const itemByCategory = new Map<string, { id: string; quantity: number; assigned: number }>()
     for (const item of plan.bookingItemDrafts) {
-      await tx.bookingItem.create({
+      const created = await tx.bookingItem.create({
         data: {
           bookingId: booking.id,
           categoryId: item.categoryId,
@@ -471,7 +512,54 @@ export async function applyCartImport(
           status: 'REQUESTED',
           holdRank: 1,
         },
+        select: { id: true },
       })
+      itemByCategory.set(item.categoryId, { id: created.id, quantity: item.quantity, assigned: 0 })
+    }
+
+    // 5b. Native unit binding — Planyo's per-line unit_assignment
+    // resolved to an Asset and written as a BookingAssignment (the
+    // durable native record; survives Planyo's retirement). Any line
+    // that doesn't resolve imports exactly as before — item stays
+    // REQUESTED — plus a log line. Backup holds (2ND/3RD HOLD) are
+    // never auto-bound; promotion is a manual operator action.
+    for (const b of plan.unitBindingDrafts) {
+      const slot = itemByCategory.get(b.categoryId)
+      if (!slot) continue
+      if (b.isBackupHold) {
+        console.log(`[planyo-import] cart ${plan.cart}: backup hold "${b.rawUnit}" (${b.categoryName}) left unbound — manual promotion path`)
+        continue
+      }
+      const assets = await tx.asset.findMany({
+        where: { categoryId: b.categoryId, unitName: b.normalizedUnit, isActive: true },
+        select: { id: true },
+      })
+      if (assets.length !== 1) {
+        console.log(`[planyo-import] cart ${plan.cart}: unit "${b.rawUnit}" → "${b.normalizedUnit}" matched ${assets.length} assets in ${b.categoryName} — left unassigned`)
+        continue
+      }
+      if (slot.assigned >= slot.quantity) {
+        console.log(`[planyo-import] cart ${plan.cart}: item ${b.categoryName} already at capacity (${slot.quantity}) — skipping bind of "${b.rawUnit}"`)
+        continue
+      }
+      await tx.bookingAssignment.create({
+        data: {
+          bookingItemId: slot.id,
+          assetId: assets[0].id,
+          startDate: laDateToDbDate(b.startLA),
+          endDate: laDateToDbDate(b.endLA),
+          status: 'ASSIGNED',
+        },
+      })
+      slot.assigned += 1
+    }
+    // Flip items to ASSIGNED only on FULL coverage — partial coverage
+    // stays REQUESTED so the stale-holds worklist still surfaces it
+    // (same rule as POST /booking-items/[id]/assign).
+    for (const slot of itemByCategory.values()) {
+      if (slot.assigned >= slot.quantity && slot.assigned > 0) {
+        await tx.bookingItem.update({ where: { id: slot.id }, data: { status: 'ASSIGNED' } })
+      }
     }
 
     // 6. Reservation rows (mirror)

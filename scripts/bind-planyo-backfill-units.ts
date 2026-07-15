@@ -66,7 +66,14 @@ const NAME_ALIASES: Record<string, string> = {
 const RESOURCE_NAME_CROSSWALK: Record<string, string> = {
   'Cargo Vans w/ Liftgate': 'Cargo Van w/ Liftgate',
   'Cargo Vans w/o Liftgate': 'Cargo Van w/o Liftgate',
-  'ProScout Van / VTR': 'ProScout / VTR',
+  // 2026-07 category renames in HQ (Planyo strings unchanged):
+  // "ProScout / VTR" → "ProScout / VideoVan", "Cube Truck" →
+  // "SuperCube Truck" (assets stayed "Cube N").
+  'ProScout Van / VTR': 'ProScout / VideoVan',
+  'Cube Truck': 'SuperCube Truck',
+  // Planyo resource 119962 "DLUX" is seeded to the HQ restroom-trailer
+  // category (assets "DLUX 1..4").
+  DLUX: '2 Unit Restroom Trailer',
 }
 
 // Resource names we deliberately do not bind (per
