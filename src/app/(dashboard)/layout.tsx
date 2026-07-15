@@ -8,7 +8,7 @@ import { UserRole } from '@prisma/client';
 import { getPermissions, getNavSections, isSalesRole, isFleetYardRole } from '@/lib/permissions';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
-import { QuickCreateMenu } from '@/components/shell/QuickCreateMenu';
+import { NewJobLauncher } from '@/components/jobs/NewJobLauncher';
 import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
 import {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
@@ -257,16 +257,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar — global chrome across all (dashboard) surfaces.
-            Carries the global "+ New" entry point right-aligned. The
-            left side previously held a row of placeholder KPI badges
-            (Fleet/Active/Pending/Maint/Revenue) wired to hardcoded
-            literals — pulled because the numbers were lies; real KPIs
-            will land on the Dashboard page itself, not the global
-            chrome. StatBadge (below) is intentionally kept for that
-            future use. Height stays h-12 so main content doesn't
-            reflow across every page. */}
+            Carries the ONE global create entry point: "+ New Job"
+            (canonical-Job consolidation, 2026-07-15). Quotes and
+            reservations are created from INSIDE a Job (see
+            JobQuickActions on /jobs/[id]); the old "+ New" menu's
+            New Reservation / New Task entries moved to job detail and
+            the gantt respectively. The left side previously held
+            placeholder KPI badges — pulled because the numbers were
+            lies; StatBadge (below) is kept for that future use.
+            Height stays h-12 so main content doesn't reflow. */}
         <header className="h-12 px-4 border-b border-gray-100 flex items-center justify-end flex-shrink-0 bg-white">
-          <QuickCreateMenu />
+          <NewJobLauncher buttonClassName="bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
         </header>
 
         {/* Content + AI */}

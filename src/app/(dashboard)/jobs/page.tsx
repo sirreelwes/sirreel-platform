@@ -30,7 +30,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { NewJobLauncher } from '@/components/jobs/NewJobLauncher'
 
 const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
 type JobStatus = (typeof JOB_STATUSES)[number]
@@ -497,22 +496,15 @@ export default function JobsListPage() {
     // pages stay untouched.
     <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-7xl mx-auto space-y-4">
-        <header className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-lt-fg">Jobs</h1>
-              <NewJobLauncher />
-            </div>
-            <p className="text-sm text-lt-fg2 mt-0.5">
-              Productions and quotes that own one or more Orders. Click a row for detail.
-            </p>
-          </div>
-          <Link
-            href="/orders/new-quote"
-            className="text-xs font-semibold bg-lt-fg hover:bg-black text-white px-3 py-1.5 rounded-lg transition-colors"
-          >
-            + New quote
-          </Link>
+        {/* Creation lives in ONE place: the global "+ New Job" in the
+            top bar (canonical-Job consolidation). Quotes/reservations
+            are created from inside a Job on /jobs/[id]. */}
+        <header>
+          <h1 className="text-2xl font-semibold text-lt-fg">Jobs</h1>
+          <p className="text-sm text-lt-fg2 mt-0.5">
+            Productions and quotes that own one or more Orders. Click a row for detail. Create with
+            the &ldquo;+ New Job&rdquo; button above; quotes and reservations are added inside the Job.
+          </p>
         </header>
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">

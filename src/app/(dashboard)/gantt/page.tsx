@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
+import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
 import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
@@ -317,6 +318,12 @@ export default function GanttPage() {
   const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; tier: string; x: number; y: number }>(null)
   // Asset summary panel — opened by clicking a unit's NAME (asset view).
   const [summaryAssetId, setSummaryAssetId] = useState<string | null>(null)
+  // Standalone "+ New Task" (delivery/pickup DispatchTask, orderId null).
+  // Rehomed here from the retired top-bar "+ New" menu (canonical-Job
+  // consolidation) — the task lands in this page's needs-assignment
+  // lane, so the gantt is its natural entry point. Sales-gated same as
+  // the endpoint.
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
@@ -1177,6 +1184,15 @@ export default function GanttPage() {
               <button key={w} onClick={() => setWeeks(w)} className={`px-2 py-1 rounded-md text-[10px] font-semibold ${weeks === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{w}W</button>
             ))}
           </div>
+          {canBindUnit && (
+            <button
+              onClick={() => setNewTaskOpen(true)}
+              className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-semibold"
+              title="Delivery / pickup task (no order) — lands in the needs-assignment lane"
+            >
+              + New Task
+            </button>
+          )}
         </div>
       </div>
 
@@ -1771,8 +1787,9 @@ export default function GanttPage() {
       )}
 
       {/* +Hold modal — opens from an asset-row click only
-          (asset-bound). The category-only entry point now lives on
-          the global "+ New" menu in the dashboard top bar. */}
+          (asset-bound). The category-only entry point lives on the
+          Job detail page ("+ New reservation" in JobQuickActions) —
+          reservations are created from inside a Job. */}
       {holdModal && (
         <NewHoldModal
           categoryId={holdModal.categoryId}
@@ -1786,6 +1803,19 @@ export default function GanttPage() {
           onClose={() => setHoldModal(null)}
           onCreated={() => {
             setHoldModal(null)
+            refreshTimeline()
+          }}
+        />
+      )}
+
+      {/* Standalone task creation — rehomed from the retired top-bar
+          "+ New" menu. onCreated refreshes so the PENDING task shows
+          in the needs-assignment lane immediately. */}
+      {newTaskOpen && (
+        <NewTaskModal
+          onClose={() => setNewTaskOpen(false)}
+          onCreated={() => {
+            setNewTaskOpen(false)
             refreshTimeline()
           }}
         />

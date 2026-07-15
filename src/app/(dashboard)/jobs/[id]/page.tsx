@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
+import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 
@@ -431,6 +432,20 @@ export default function JobDetailPage() {
             >
               {job.company.name}
             </Link>
+            {/* In-Job creation — the ONLY place quotes/reservations are
+                created (canonical-Job consolidation). Job pre-seeded. */}
+            <div className="mt-3">
+              <JobQuickActions
+                job={{
+                  id: job.id,
+                  jobCode: job.jobCode,
+                  name: job.name,
+                  company: job.company,
+                  startDate: job.startDate,
+                  endDate: job.endDate,
+                }}
+              />
+            </div>
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
                 <span>Originated from</span>

@@ -365,12 +365,42 @@ function NewQuotePageInner() {
   // Round-trip from /crm?selectForQuote=1 — when the user picks a
   // company over there, they're sent back here with this param set.
   const clientCompanyIdFromUrl = search.get('clientCompanyId');
+  // Deep-link from the Job detail "+ New quote" action (canonical-Job
+  // consolidation) — the Job decision arrives already made.
+  const jobIdFromUrl = search.get('jobId');
 
   // Job decision is deferred until AFTER AI parse — see candidateJobs
   // fetch + JobPicker render below. Default mode is `searching` so
   // save stays blocked until the user explicitly picks an existing
   // Job or commits to creating a new one.
   const [job, setJob] = useState<JobPickerValue>(EMPTY_JOB_PICKER_VALUE);
+
+  // ?jobId= prefill — one-shot, and never clobbers a user pick or a
+  // restored draft that already carries a Job (the setter's guard
+  // checks mode/jobId at apply time, not fetch time).
+  const jobPrefillFired = useRef(false);
+  useEffect(() => {
+    if (!jobIdFromUrl || jobPrefillFired.current) return;
+    jobPrefillFired.current = true;
+    fetch(`/api/jobs/${jobIdFromUrl}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const j = d?.job;
+        if (!j?.id) return;
+        setJob((prev) =>
+          prev.mode !== 'searching' || prev.jobId
+            ? prev
+            : {
+                jobId: j.id,
+                jobCode: j.jobCode,
+                name: j.name,
+                mode: 'selected_existing',
+                company: j.company ? { id: j.company.id, name: j.company.name } : null,
+              },
+        );
+      })
+      .catch(() => {});
+  }, [jobIdFromUrl]);
   const [candidateJobs, setCandidateJobs] = useState<AttachableJob[]>([]);
 
   const [inquiry, setInquiry] = useState<InquiryRecord | null>(null);

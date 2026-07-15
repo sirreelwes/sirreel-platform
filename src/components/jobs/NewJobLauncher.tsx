@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 
-export function NewJobLauncher() {
+export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string } = {}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [resolving, setResolving] = useState(false)
@@ -43,7 +43,7 @@ export function NewJobLauncher() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold"
+        className={buttonClassName ?? 'px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold'}
       >
         + New Job
       </button>
