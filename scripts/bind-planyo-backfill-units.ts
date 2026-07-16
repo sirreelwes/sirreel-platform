@@ -49,7 +49,7 @@
 import { readFileSync } from 'fs'
 import path from 'path'
 import { PrismaClient } from '@prisma/client'
-import { normalizePlanyoUnitName } from '../src/lib/scheduling/planyoNameNormalizer'
+import { normalizePlanyoUnitName, PLANYO_UNIT_CATEGORY_OVERRIDES } from '../src/lib/scheduling/planyoNameNormalizer'
 
 // ── Same crosswalk + routing rules as the import script ─────────────
 // Kept in lockstep manually; this script intentionally does NOT import
@@ -289,7 +289,20 @@ async function main() {
 
     // 5. Asset lookup (with alias fallback)
     const lookupName = NAME_ALIASES[norm.normalized] ?? norm.normalized
-    const assetBucket = assetsByCatAndName.get(`${cat.id}|${lookupName}`) ?? []
+    let assetBucket = assetsByCatAndName.get(`${cat.id}|${lookupName}`) ?? []
+    // Cross-category override (ruling A, 2026-07-15): Planyo's stale
+    // categorization files some units under the wrong category. When
+    // the unit isn't in the resolved category AND an explicit override
+    // names its real home, look there. The BookingItem stays the
+    // reservation's own category (step 6) — the item is the hold, the
+    // asset is physical reality.
+    if (assetBucket.length === 0) {
+      const overrideCatName = PLANYO_UNIT_CATEGORY_OVERRIDES[lookupName]
+      const overrideCat = overrideCatName ? categoryByName.get(overrideCatName) : null
+      if (overrideCat) {
+        assetBucket = assetsByCatAndName.get(`${overrideCat.id}|${lookupName}`) ?? []
+      }
+    }
     if (assetBucket.length === 0) {
       rows.push({
         ...base,

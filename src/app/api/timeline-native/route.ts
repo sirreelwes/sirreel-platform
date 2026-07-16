@@ -234,8 +234,26 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // ── Build units[] — one per Asset that has at least one
-  //    assignment overlapping the window. ──
+  // ── Build units[] — the FULL active fleet roster, assignments
+  //    overlaid as bars. An idle unit is an EMPTY ROW, not an absent
+  //    one — empty rows are what dispatch scans for availability
+  //    (origin: 2026-07-15, Oliver reported idle Cubes/Cargos/Pass
+  //    vans missing from the calendar because rows were derived from
+  //    assignments only). Category gate is reservableOnGantt so TEST
+  //    rigs stay off the board. Keyed by assetId, NOT unitName —
+  //    "Cargo 22"/"Cargo 25" exist as distinct assets in BOTH cargo
+  //    categories and must not collapse into one row. ──
+  const rosterAssets = await prisma.asset.findMany({
+    where: { isActive: true, category: { reservableOnGantt: true } },
+    select: {
+      id: true,
+      unitName: true,
+      categoryId: true,
+      tier: true,
+      category: { select: { id: true, name: true } },
+    },
+  })
+
   const assignments = await prisma.bookingAssignment.findMany({
     where: {
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
@@ -288,15 +306,28 @@ export async function GET(req: NextRequest) {
       bookings: Array<Record<string, unknown>>
     }
   >()
+  // Seed every roster unit as an (initially empty) row.
+  for (const r of rosterAssets) {
+    unitMap.set(r.id, {
+      unitName: r.unitName,
+      assetId: r.id, // needed by gantt row-click → +Hold flow (asset binding)
+      categoryId: r.categoryId, // needed by gantt row-click → +Hold flow (modal category prop)
+      cat: mapCategoryName(r.category?.name ?? ''),
+      tier: r.tier, // condition tier → gantt dot color (Best/Good/Workhorse)
+      resourceName: r.category?.name ?? '',
+      bookings: [] as Array<Record<string, unknown>>,
+    })
+  }
   for (const a of assignments) {
-    const unitName = a.asset.unitName
     const cat = mapCategoryName(a.asset.category?.name ?? '')
-    const slot = unitMap.get(unitName) ?? {
-      unitName,
-      assetId: a.asset.id, // needed by gantt row-click → +Hold flow (asset binding)
-      categoryId: a.asset.categoryId, // needed by gantt row-click → +Hold flow (modal category prop)
+    // Assigned unit outside the roster (e.g. non-reservable category)
+    // still gets its row — an existing booking must never disappear.
+    const slot = unitMap.get(a.asset.id) ?? {
+      unitName: a.asset.unitName,
+      assetId: a.asset.id,
+      categoryId: a.asset.categoryId,
       cat,
-      tier: a.asset.tier, // condition tier → gantt dot color (Best/Good/Workhorse)
+      tier: a.asset.tier,
       resourceName: a.asset.category?.name ?? '',
       bookings: [] as Array<Record<string, unknown>>,
     }
@@ -324,7 +355,7 @@ export async function GET(req: NextRequest) {
       qty: 1,
       holdRank: a.bookingItem.holdRank,
     })
-    unitMap.set(unitName, slot)
+    unitMap.set(a.asset.id, slot)
   }
 
   // ── Unit N/A (out-of-service) — OPEN MaintenanceRecord windows (SCHEDULED /
@@ -362,9 +393,10 @@ export async function GET(req: NextRequest) {
     const arr = naByAsset.get(m.asset.id) ?? []
     arr.push({ recordId: m.id, start: ymd(m.startDate), end: m.endDate ? ymd(m.endDate) : null, kind, title: m.title })
     naByAsset.set(m.asset.id, arr)
-    // Surface a booking-less out-of-service unit as its own row.
-    if (!unitMap.has(m.asset.unitName)) {
-      unitMap.set(m.asset.unitName, {
+    // Surface a booking-less out-of-service unit as its own row (only
+    // relevant for units outside the roster — roster rows already exist).
+    if (!unitMap.has(m.asset.id)) {
+      unitMap.set(m.asset.id, {
         unitName: m.asset.unitName,
         assetId: m.asset.id,
         categoryId: m.asset.categoryId,

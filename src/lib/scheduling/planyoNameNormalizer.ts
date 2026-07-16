@@ -30,6 +30,23 @@
  * Pure function — no I/O.
  */
 
+/**
+ * Cross-category unit overrides — Planyo's categorization is stale for
+ * these units: it files them under "Cargo Vans w/o Liftgate" but the
+ * physical vans live in HQ's "Cargo Van w/ Liftgate" category. Ruling
+ * by Wes 2026-07-15: bind to the HQ w/-Liftgate assets. Keyed by
+ * NORMALIZED unit name; consulted ONLY after a zero-match in the
+ * reservation's own resolved category (Cargo 22/25 exist in w/o and
+ * resolve normally — deliberately absent here). Applies to both the
+ * ongoing importer and the backfill binder. Dies at Planyo cutover.
+ */
+export const PLANYO_UNIT_CATEGORY_OVERRIDES: Record<string, string> = {
+  'Cargo 20': 'Cargo Van w/ Liftgate',
+  'Cargo 21': 'Cargo Van w/ Liftgate',
+  'Cargo 23': 'Cargo Van w/ Liftgate',
+  'Cargo 24': 'Cargo Van w/ Liftgate',
+}
+
 const CATEGORY_TO_SHORT: Record<string, string> = {
   'Cube Truck': 'Cube',
   // 2026-07 rename: the HQ category "Cube Truck" became "SuperCube

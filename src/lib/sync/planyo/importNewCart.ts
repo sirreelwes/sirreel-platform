@@ -37,7 +37,7 @@ import {
   planyoLocalTimeToLADate,
 } from './dateConvention'
 import type { PlanyoLine } from './planyoClient'
-import { normalizePlanyoUnitName } from '@/lib/scheduling/planyoNameNormalizer'
+import { normalizePlanyoUnitName, PLANYO_UNIT_CATEGORY_OVERRIDES } from '@/lib/scheduling/planyoNameNormalizer'
 
 export type CrmBucket =
   | 'CLEAN_MATCH'
@@ -530,10 +530,23 @@ export async function applyCartImport(
         console.log(`[planyo-import] cart ${plan.cart}: backup hold "${b.rawUnit}" (${b.categoryName}) left unbound — manual promotion path`)
         continue
       }
-      const assets = await tx.asset.findMany({
+      let assets = await tx.asset.findMany({
         where: { categoryId: b.categoryId, unitName: b.normalizedUnit, isActive: true },
         select: { id: true },
       })
+      // Cross-category override (ruling A, 2026-07-15): Planyo files
+      // some units under a stale category; the override names the
+      // unit's real HQ home. The BookingItem stays the line's own
+      // category — the item is the hold, the asset is physical reality.
+      if (assets.length === 0) {
+        const overrideCatName = PLANYO_UNIT_CATEGORY_OVERRIDES[b.normalizedUnit]
+        if (overrideCatName) {
+          assets = await tx.asset.findMany({
+            where: { unitName: b.normalizedUnit, isActive: true, category: { name: overrideCatName } },
+            select: { id: true },
+          })
+        }
+      }
       if (assets.length !== 1) {
         console.log(`[planyo-import] cart ${plan.cart}: unit "${b.rawUnit}" → "${b.normalizedUnit}" matched ${assets.length} assets in ${b.categoryName} — left unassigned`)
         continue
