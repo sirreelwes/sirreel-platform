@@ -198,20 +198,38 @@ export async function GET(req: NextRequest) {
     string,
     {
       orders: Array<{ id: string; orderNumber: string; status: string }>
-      units: Array<{ unitName: string; category: string }>
+      units: Array<{ unitName: string; category: string; bookingNumber: string }>
     }
   >()
+  // A Job's units frequently span MULTIPLE bookings (e.g. "Hills": two
+  // bookings, one Cube each), so sibling units are computed at the JOB
+  // level — every assigned unit across all of the job's bookings, with
+  // the booking number carried for context. Job-less bookings fall back
+  // to their own booking's units.
+  const jobUnits = new Map<string, Array<{ unitName: string; category: string; bookingNumber: string }>>()
+  for (const b of bookings) {
+    if (!b.job?.id) continue
+    const arr = jobUnits.get(b.job.id) ?? []
+    for (const it of b.items) {
+      for (const a of it.assignments) {
+        arr.push({ unitName: a.asset.unitName, category: it.category?.name ?? '', bookingNumber: b.bookingNumber })
+      }
+    }
+    jobUnits.set(b.job.id, arr)
+  }
+
   for (const b of bookings) {
     // Union of the job's orders (the real linkage) and any directly
     // booking-linked orders, deduped by id.
     const orderById = new Map<string, { id: string; orderNumber: string; status: string }>()
     for (const o of b.job?.orders ?? []) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
     for (const o of b.orders) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
+    const ownUnits = b.items.flatMap((it) =>
+      it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '', bookingNumber: b.bookingNumber })),
+    )
     bookingExtras.set(b.id, {
       orders: [...orderById.values()],
-      units: b.items.flatMap((it) =>
-        it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
-      ),
+      units: b.job?.id ? jobUnits.get(b.job.id) ?? ownUnits : ownUnits,
     })
   }
 
@@ -268,6 +286,11 @@ export async function GET(req: NextRequest) {
       // (see bookingExtras above).
       orders: bookingExtras.get(b.id)?.orders ?? [],
       hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0,
+      // Units on the same JOB but on other bookings — a job's fleet
+      // often spans multiple bookings (one per unit).
+      otherJobUnits: (b.job?.id ? jobUnits.get(b.job.id) ?? [] : []).filter(
+        (u) => u.bookingNumber !== b.bookingNumber,
+      ),
       startDate: ymd(b.startDate),
       endDate: ymd(b.endDate),
       color: CAT_COLORS[firstCatKey] ?? CAT_COLORS.general,
@@ -398,12 +421,14 @@ export async function GET(req: NextRequest) {
       qty: 1,
       holdRank: a.bookingItem.holdRank,
       // Job context for the reservation detail: clickable orders (with
-      // hasOrder driving the 📄 bar indicator) and the booking's other
-      // assigned units ("also reserved on this booking").
+      // hasOrder driving the 📄 bar indicator) and the JOB's other
+      // assigned units — across ALL of the job's bookings, not just
+      // this one. Only this bar's own (unit, booking) entry is
+      // excluded, so the same unit on another booking still shows.
       orders: bookingExtras.get(a.bookingItem.booking.id)?.orders ?? [],
       hasOrder: (bookingExtras.get(a.bookingItem.booking.id)?.orders.length ?? 0) > 0,
       siblingUnits: (bookingExtras.get(a.bookingItem.booking.id)?.units ?? []).filter(
-        (u) => u.unitName !== a.asset.unitName,
+        (u) => !(u.unitName === a.asset.unitName && u.bookingNumber === a.bookingItem.booking.bookingNumber),
       ),
     })
     unitMap.set(a.asset.id, slot)

@@ -1642,12 +1642,15 @@ export default function GanttPage() {
                 )}
                 {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
                   <div className="pt-2">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Also reserved on this booking</div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Other units on this job</div>
                     <div className="flex flex-wrap gap-1">
                       {selected.siblingUnits.map((u: any, i: number) => (
                         <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
                           {u.unitName}
                           {u.category && <span className="text-gray-400"> · {u.category}</span>}
+                          {u.bookingNumber && u.bookingNumber !== selected.cartId && (
+                            <span className="text-gray-400"> · {u.bookingNumber}</span>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -1832,7 +1835,21 @@ export default function GanttPage() {
                     })}
                   </div>
                 )}
-                <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Units on this job</div>
+                {Array.isArray(selected.otherJobUnits) && selected.otherJobUnits.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Other units on this job (other reservations)</div>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {selected.otherJobUnits.map((u: any, i: number) => (
+                        <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                          {u.unitName}
+                          {u.category && <span className="text-gray-400"> · {u.category}</span>}
+                          <span className="text-gray-400"> · {u.bookingNumber}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Units on this reservation</div>
                 {selected.items?.map((item: any, i: number) => (
                   <div key={i} className="flex justify-between py-2 border-b border-gray-100 last:border-0 text-[12px]">
                     <div>
