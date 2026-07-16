@@ -146,14 +146,26 @@ export async function GET(req: NextRequest) {
       // Native Job linkage (Booking.jobId FK, added in the JobPicker
       // commit). NULL on legacy/Planyo-imported Bookings — the UI
       // hides the "Open job →" affordance when jobId is null.
-      job: { select: { id: true, jobCode: true } },
+      // job.orders: orders live on the JOB (Order.jobId is required;
+      // Order.bookingId is unused in practice — zero rows carry it),
+      // so the booking's orders are its job's orders.
+      job: {
+        select: {
+          id: true,
+          jobCode: true,
+          orders: {
+            where: { status: { not: 'CANCELLED' } },
+            select: { id: true, orderNumber: true, status: true },
+          },
+        },
+      },
       company: { select: { id: true, name: true } },
       person: { select: { id: true, firstName: true, lastName: true } },
       agent: { select: { id: true, name: true } },
-      // Blind-pickup flag lives on the linked Order(s). Booking→orders is
-      // 1-to-many in the schema (≈1 in practice); a bar is "blind pickup" if
-      // ANY linked order is flagged. Only meaningful for booked-status bars.
-      orders: { select: { blindPickup: true } },
+      // Linked Order(s) — id/number/status feed the clickable order
+      // links in the reservation detail + the 📄 bar indicator;
+      // blindPickup keeps its existing "any order flagged" semantics.
+      orders: { select: { id: true, orderNumber: true, status: true, blindPickup: true } },
       adminNotes: true,
       items: {
         select: {
@@ -177,6 +189,31 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { startDate: 'asc' },
   })
+
+  // ── Per-booking extras: orders (clickable in detail panels) and the
+  //    full assigned-unit list ("which asset is the order loaded onto" /
+  //    sibling reservations). Derived from the bookings query above and
+  //    joined into units[].bookings by bookingId. ──
+  const bookingExtras = new Map<
+    string,
+    {
+      orders: Array<{ id: string; orderNumber: string; status: string }>
+      units: Array<{ unitName: string; category: string }>
+    }
+  >()
+  for (const b of bookings) {
+    // Union of the job's orders (the real linkage) and any directly
+    // booking-linked orders, deduped by id.
+    const orderById = new Map<string, { id: string; orderNumber: string; status: string }>()
+    for (const o of b.job?.orders ?? []) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
+    for (const o of b.orders) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
+    bookingExtras.set(b.id, {
+      orders: [...orderById.values()],
+      units: b.items.flatMap((it) =>
+        it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
+      ),
+    })
+  }
 
   // ── Build jobs[] — one per Booking. ──
   const jobs = bookings.map((b) => {
@@ -226,6 +263,11 @@ export async function GET(req: NextRequest) {
       status,
       stage: status,
       blindPickup: b.orders.some((o) => o.blindPickup),
+      // Clickable order links for the job detail modal; hasOrder drives
+      // the 📄 indicator on job-view bars. Sourced via the Job join
+      // (see bookingExtras above).
+      orders: bookingExtras.get(b.id)?.orders ?? [],
+      hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0,
       startDate: ymd(b.startDate),
       endDate: ymd(b.endDate),
       color: CAT_COLORS[firstCatKey] ?? CAT_COLORS.general,
@@ -355,6 +397,14 @@ export async function GET(req: NextRequest) {
       adminNotes: '',
       qty: 1,
       holdRank: a.bookingItem.holdRank,
+      // Job context for the reservation detail: clickable orders (with
+      // hasOrder driving the 📄 bar indicator) and the booking's other
+      // assigned units ("also reserved on this booking").
+      orders: bookingExtras.get(a.bookingItem.booking.id)?.orders ?? [],
+      hasOrder: (bookingExtras.get(a.bookingItem.booking.id)?.orders.length ?? 0) > 0,
+      siblingUnits: (bookingExtras.get(a.bookingItem.booking.id)?.units ?? []).filter(
+        (u) => u.unitName !== a.asset.unitName,
+      ),
     })
     unitMap.set(a.asset.id, slot)
   }

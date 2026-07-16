@@ -252,6 +252,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
               }}
             >
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                {b.hasOrder && <span title="Order attached to this reservation">📄 </span>}
                 {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
               </span>
             </div>
@@ -1213,6 +1214,10 @@ export default function GanttPage() {
           <div className="w-3 h-2 rounded-sm border border-black/5 bg-emerald-100" />
           <span className="text-gray-500">Unit on a job today</span>
         </div>
+        <div className="flex items-center gap-1">
+          <span>📄</span>
+          <span className="text-gray-500">Order attached</span>
+        </div>
       </div>
 
       {/* Gantt — single scroll container.
@@ -1494,6 +1499,7 @@ export default function GanttPage() {
                           onClick={() => setSelected(job)}
                         >
                           <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
+                            {job.hasOrder && <span title="Order attached">📄 </span>}
                             {job.company} · {job.items?.length} unit{job.items?.length !== 1 ? 's' : ''}
                           </span>
                         </div>
@@ -1610,6 +1616,42 @@ export default function GanttPage() {
                 </div>
                 {selected.adminNotes && (
                   <div className="py-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 mt-2">{selected.adminNotes}</div>
+                )}
+
+                {/* Job context — clickable orders on this booking (with the
+                    unit(s) they're loaded onto) + the booking's other
+                    reserved units. Everything on the job, one click away. */}
+                {Array.isArray(selected.orders) && selected.orders.length > 0 && (
+                  <div className="pt-2">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Orders on this job</div>
+                    {selected.orders.map((o: any) => (
+                      <Link
+                        key={o.id}
+                        href={`/orders/${o.id}`}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 mb-1"
+                      >
+                        <span className="text-[12px] font-semibold text-blue-700">📄 {o.orderNumber}</span>
+                        <span className="text-[10px] text-gray-500 truncate">
+                          {String(o.status || '').replace(/_/g, ' ').toLowerCase()} · loaded on {selected.unitName}
+                          {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 &&
+                            ` + ${selected.siblingUnits.map((u: any) => u.unitName).join(', ')}`} →
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
+                  <div className="pt-2">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Also reserved on this booking</div>
+                    <div className="flex flex-wrap gap-1">
+                      {selected.siblingUnits.map((u: any, i: number) => (
+                        <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                          {u.unitName}
+                          {u.category && <span className="text-gray-400"> · {u.category}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* Hold lifecycle actions.
@@ -1765,6 +1807,31 @@ export default function GanttPage() {
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Orders on the job — clickable, with the units they're
+                    loaded onto. */}
+                {Array.isArray(selected.orders) && selected.orders.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Orders</div>
+                    {selected.orders.map((o: any) => {
+                      const loadedOn = (selected.items || [])
+                        .map((it: any) => it.unit)
+                        .filter((u: string) => u && u !== '(unassigned)')
+                      return (
+                        <Link
+                          key={o.id}
+                          href={`/orders/${o.id}`}
+                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 mb-1"
+                        >
+                          <span className="text-[12px] font-semibold text-blue-700">📄 {o.orderNumber}</span>
+                          <span className="text-[10px] text-gray-500 truncate">
+                            {String(o.status || '').replace(/_/g, ' ').toLowerCase()}
+                            {loadedOn.length > 0 && ` · loaded on ${loadedOn.join(', ')}`} →
+                          </span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Units on this job</div>
                 {selected.items?.map((item: any, i: number) => (
                   <div key={i} className="flex justify-between py-2 border-b border-gray-100 last:border-0 text-[12px]">

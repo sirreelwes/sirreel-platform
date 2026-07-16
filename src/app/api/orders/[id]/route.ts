@@ -28,6 +28,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
           // here lets the UI disable the button + show a tooltip
           // BEFORE the rep clicks (rather than after the fact).
           _count: { select: { paperworkRequests: true } },
+          // Reserved units — which specific assets this order is loaded
+          // onto (booking items → assignments → asset). Drives the
+          // "Reserved units" card on the order detail page.
+          items: {
+            select: {
+              quantity: true,
+              status: true,
+              category: { select: { name: true } },
+              assignments: {
+                select: {
+                  startDate: true,
+                  endDate: true,
+                  status: true,
+                  asset: { select: { id: true, unitName: true } },
+                },
+              },
+            },
+          },
         },
       },
       jobContact: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -44,6 +62,31 @@ export async function GET(_req: NextRequest, { params }: Params) {
               isPrimary: true,
               person: {
                 select: { id: true, firstName: true, lastName: true, email: true },
+              },
+            },
+          },
+          // Reserved units for this order, via the Job join — orders
+          // hang off Jobs, and the Job's bookings carry the actual
+          // asset assignments. (Order.bookingId is unused in practice.)
+          bookings: {
+            where: { archivedAt: null, status: { not: 'CANCELLED' } },
+            select: {
+              id: true,
+              bookingNumber: true,
+              items: {
+                select: {
+                  quantity: true,
+                  status: true,
+                  category: { select: { name: true } },
+                  assignments: {
+                    select: {
+                      startDate: true,
+                      endDate: true,
+                      status: true,
+                      asset: { select: { id: true, unitName: true } },
+                    },
+                  },
+                },
               },
             },
           },

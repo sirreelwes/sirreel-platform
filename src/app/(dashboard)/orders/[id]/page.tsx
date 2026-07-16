@@ -80,9 +80,41 @@ type Order = {
     jobName: string;
     productionName: string | null;
     _count: { paperworkRequests: number };
+    // Reserved units — which assets this order is loaded onto.
+    items?: Array<{
+      quantity: number;
+      status: string;
+      category: { name: string } | null;
+      assignments: Array<{
+        startDate: string;
+        endDate: string;
+        status: string;
+        asset: { id: string; unitName: string };
+      }>;
+    }>;
   } | null;
   jobContact: { id: string; firstName: string; lastName: string; email: string } | null;
-  job: { id: string; jobCode: string; name: string; jobContacts: JobContactRow[] } | null;
+  job: {
+    id: string;
+    jobCode: string;
+    name: string;
+    jobContacts: JobContactRow[];
+    bookings?: Array<{
+      id: string;
+      bookingNumber: string;
+      items: Array<{
+        quantity: number;
+        status: string;
+        category: { name: string } | null;
+        assignments: Array<{
+          startDate: string;
+          endDate: string;
+          status: string;
+          asset: { id: string; unitName: string };
+        }>;
+      }>;
+    }>;
+  } | null;
   lineItems: LineItem[];
   invoices: {
     id: string; invoiceNumber: string; status: string; total: string;
@@ -1806,8 +1838,40 @@ export default function OrderDetailPage() {
             </p>
           </div>
           <div><span className="text-lt-fg3">Linked Booking</span><p className="text-lt-fg mt-0.5">
-            {order.booking ? <a href={`/jobs/${order.booking.id}`} className="text-lt-fg hover:text-black">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
-          </p></div>
+            {/* Booking numbers live on the schedule — the old link sent
+                a Booking id to /jobs/[id], which 404s. */}
+            {order.booking ? <a href="/gantt" title="View on the schedule" className="text-lt-fg hover:text-black hover:underline underline-offset-2">{order.booking.bookingNumber}</a> : <span className="text-lt-fg3">None</span>}
+          </p>
+          {(() => {
+            // Reserved units via the Job join (orders hang off Jobs; the
+            // Job's bookings carry asset assignments), unioned with any
+            // directly-linked booking, deduped by unit.
+            const raw = [
+              ...(order.job?.bookings ?? []).flatMap((bk) =>
+                bk.items.flatMap((it) =>
+                  it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
+                ),
+              ),
+              ...(order.booking?.items ?? []).flatMap((it) =>
+                it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
+              ),
+            ];
+            const units = [...new Map(raw.map((u) => [u.unitName + '|' + u.category, u])).values()];
+            if (units.length === 0) return null;
+            return (
+              <div className="mt-1.5">
+                <span className="text-lt-fg3 text-xs">Reserved units</span>
+                <span className="flex flex-wrap gap-1 mt-0.5">
+                  {units.map((u, i) => (
+                    <span key={i} title={u.category} className="text-xs px-2 py-0.5 rounded bg-lt-inner border border-lt-hairline text-lt-fg">
+                      🚚 {u.unitName}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            );
+          })()}
+          </div>
         </div>
       </div>
 
