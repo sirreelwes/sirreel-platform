@@ -383,6 +383,28 @@ export default function GanttPage() {
   const [assignBookingItemId, setAssignBookingItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<any>(null)
+  // Reservation-context fetch for the detail pop-up — job paperwork
+  // (rental agreement / COI / LCDW / CC auth / WC), balance due, and
+  // the checkout driver for the clicked assignment. Lazy so the
+  // timeline payload stays lean.
+  const [resContext, setResContext] = useState<any>(null)
+  const [resContextLoading, setResContextLoading] = useState(false)
+  const selectedBookingId = selected?.bookingId ?? null
+  const selectedAssignmentId = selected?.assignmentId ?? null
+  useEffect(() => {
+    setResContext(null)
+    if (!selectedBookingId) return
+    let cancelled = false
+    setResContextLoading(true)
+    const params = new URLSearchParams({ bookingId: selectedBookingId })
+    if (selectedAssignmentId) params.set('assignmentId', selectedAssignmentId)
+    fetch(`/api/scheduling/reservation-context?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.ok) setResContext(d) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setResContextLoading(false) })
+    return () => { cancelled = true }
+  }, [selectedBookingId, selectedAssignmentId])
   // STAGES-department category ids — gates the modal's "Stage terms"
   // button (department detection, never name matching). Failure to load
   // simply hides the button; nothing else depends on it.
@@ -1515,9 +1537,11 @@ export default function GanttPage() {
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center" onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl w-[480px] max-w-[95vw] p-5 shadow-2xl border border-gray-200" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-2xl w-[720px] max-w-[95vw] max-h-[88vh] overflow-y-auto p-5 shadow-2xl border border-gray-200 relative" onClick={e => e.stopPropagation()}>
+            {/* Status ribbon — same palette as the bar the user clicked. */}
+            <div className={`absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl ${barColor(selected.status, selected.blindPickup).bg}`} />
+            <div className="flex justify-between items-start mb-4 pt-1">
               <div>
                 {selected.isUnit ? (
                   <>
@@ -1640,6 +1664,9 @@ export default function GanttPage() {
                     ))}
                   </div>
                 )}
+                <ReservationPaperwork ctx={resContext} loading={resContextLoading} />
+                <DriverCard checkout={resContext?.checkout} loading={resContextLoading} unitName={selected.unitName} />
+
                 {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
                   <div className="pt-2">
                     <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Other units on this job</div>
@@ -1810,6 +1837,7 @@ export default function GanttPage() {
               </div>
             ) : (
               <div className="space-y-2">
+                <ReservationPaperwork ctx={resContext} loading={resContextLoading} />
                 {/* Orders on the job — clickable, with the units they're
                     loaded onto. */}
                 {Array.isArray(selected.orders) && selected.orders.length > 0 && (
@@ -2036,6 +2064,131 @@ export default function GanttPage() {
             {naErr && <div className="px-3 py-1 text-[10px] text-rose-600">{naErr}</div>}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ─── Reservation pop-up: job paperwork panel ────────────────────────
+// Colorful compliance chips fed by /api/scheduling/reservation-context.
+// Tones: emerald = good, amber = pending, red = problem, dashed gray =
+// no signal yet. LCDW / CC-auth / WC exist only on the booking's
+// PaperworkRequest completion flags — "unknown" means no paperwork
+// request has been sent for this booking at all.
+function PaperChip({ label, value, tone }: { label: string; value: string; tone: 'good' | 'warn' | 'bad' | 'muted' }) {
+  const cls =
+    tone === 'good' ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+    : tone === 'warn' ? 'bg-amber-50 border-amber-300 text-amber-800'
+    : tone === 'bad' ? 'bg-red-50 border-red-300 text-red-700'
+    : 'bg-white border-dashed border-gray-300 text-gray-400'
+  const icon = tone === 'good' ? '✓' : tone === 'warn' ? '⏱' : tone === 'bad' ? '⚠' : '−'
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-semibold ${cls}`}>
+      <span aria-hidden="true">{icon}</span>
+      <span className="uppercase tracking-wide text-[9px] opacity-70">{label}</span>
+      <span>{value}</span>
+    </span>
+  )
+}
+
+function ReservationPaperwork({ ctx, loading }: { ctx: any; loading: boolean }) {
+  if (loading && !ctx) {
+    return <div className="py-2 text-[11px] text-gray-400">Loading job paperwork…</div>
+  }
+  if (!ctx?.paperwork) return null
+  const p = ctx.paperwork
+  const rentalTone = p.rental === 'signed' ? 'good' : p.rental === 'sent' ? 'warn' : 'bad'
+  const coiTone = p.coi === 'verified' ? 'good' : p.coi === 'pending' ? 'warn' : p.coi === 'missing' ? 'bad' : 'bad'
+  const lcdwTone = p.lcdw === 'accepted' ? 'good' : p.lcdw === 'pending' ? 'warn' : 'muted'
+  const ccTone = p.ccAuth === 'done' ? 'good' : p.ccAuth === 'pending' ? 'warn' : 'muted'
+  const wcTone = p.wc === 'received' ? 'good' : p.wc === 'pending' ? 'warn' : 'muted'
+  const coiExp = p.coiExpires ? new Date(p.coiExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+  return (
+    <div className="pt-2">
+      <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Job paperwork</div>
+      <div className="flex flex-wrap gap-1.5">
+        <PaperChip label="Rental" value={p.rental === 'signed' ? 'Signed' : p.rental === 'sent' ? 'Sent' : 'Missing'} tone={rentalTone} />
+        <PaperChip
+          label="COI"
+          value={
+            p.coi === 'verified' ? `Verified${coiExp ? ` · exp ${coiExp}` : ''}`
+            : p.coi === 'pending' ? 'Pending'
+            : p.coi === 'expired' ? 'Expired'
+            : p.coi === 'rejected' ? 'Rejected'
+            : 'Missing'
+          }
+          tone={coiTone}
+        />
+        <PaperChip label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
+        <PaperChip label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
+        <PaperChip label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
+        {typeof ctx.balanceDue === 'number' && ctx.balanceDue > 0 && (
+          <PaperChip label="Balance" value={`$${Math.round(ctx.balanceDue).toLocaleString('en-US')} due`} tone="bad" />
+        )}
+        {ctx.unionStatus && ctx.unionStatus !== 'UNKNOWN' && (
+          <PaperChip label="Union" value={String(ctx.unionStatus).replace(/_/g, ' ').toLowerCase()} tone="good" />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Reservation pop-up: checkout driver card ───────────────────────
+// Who physically has (or had) the unit — from the CheckoutRecord on
+// the clicked BookingAssignment. Violet card while out, emerald once
+// returned; flagged drivers get a red banner with the reason.
+function DriverCard({ checkout, loading, unitName }: { checkout: any; loading: boolean; unitName?: string }) {
+  if (loading && checkout === undefined) return null
+  const fmt = (d: string | Date | null | undefined) =>
+    d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
+  if (!checkout) {
+    return (
+      <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
+        🚚 Not checked out yet — no driver on record for {unitName || 'this unit'}.
+      </div>
+    )
+  }
+  const d = checkout.driver
+  const returned = !!checkout.returnTime
+  const initials = d?.name
+    ? d.name.split(/\s+/).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '—'
+  return (
+    <div className={`mt-2 rounded-xl border p-3 ${returned ? 'bg-emerald-50 border-emerald-200' : 'bg-violet-50 border-violet-200'}`}>
+      <div className="flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0 ${returned ? 'bg-emerald-500' : 'bg-violet-500'}`}>
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold text-gray-900 truncate">
+            {d?.name || `Checked out by ${checkout.checkedOutBy}`}
+            {d?.type && (
+              <span className="ml-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-white/70 text-gray-600 border border-gray-200">
+                {String(d.type).toLowerCase()} driver
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
+            {d?.phone && <a href={`tel:${String(d.phone).replace(/[^\d+]/g, '')}`} className="hover:underline font-mono">{d.phone}</a>}
+            {typeof d?.totalCheckouts === 'number' && d.totalCheckouts > 0 && <span>{d.totalCheckouts} checkout{d.totalCheckouts === 1 ? '' : 's'}</span>}
+          </div>
+        </div>
+        <span className={`text-[9px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider flex-shrink-0 ${returned ? 'bg-emerald-600 text-white' : 'bg-violet-600 text-white'}`}>
+          {returned ? 'Returned' : 'Out now'}
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-gray-600">
+        <div><span className="text-gray-400">Out:</span> {fmt(checkout.checkoutTime) || '—'}{checkout.mileageOut != null && ` · ${checkout.mileageOut.toLocaleString()} mi`}{checkout.fuelOut && ` · fuel ${checkout.fuelOut}`}</div>
+        {returned ? (
+          <div><span className="text-gray-400">In:</span> {fmt(checkout.returnTime)}{checkout.mileageIn != null && ` · ${checkout.mileageIn.toLocaleString()} mi`}{checkout.fuelIn && ` · fuel ${checkout.fuelIn}`}{checkout.returnedTo && ` · to ${checkout.returnedTo}`}</div>
+        ) : (
+          <div><span className="text-gray-400">By:</span> {checkout.checkedOutBy}</div>
+        )}
+      </div>
+      {d?.flagged && (
+        <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-red-100 border border-red-300 text-[11px] text-red-800 font-semibold">
+          ⚠ Flagged driver{d.flagReason ? ` — ${d.flagReason}` : ''}
+        </div>
       )}
     </div>
   )
