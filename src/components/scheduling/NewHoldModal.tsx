@@ -12,8 +12,13 @@
  *   409 { error: 'buffer-encroachment',
  *         needsOverride: true }        → yellow banner with "Force" button
  *
- * V1 scope: requires an existing Company + Person in CRM. Inline
- * create comes later. Agent defaults from session on the server side.
+ * Inline CRM create (2026-07-16, Wes): a brand-new client can be
+ * handled entirely inside this modal — "+ New company" POSTs
+ * /api/crm/companies (with its near-match 409 discipline surfaced as
+ * "use existing / create anyway"), and the ContactPicker's
+ * creating_new mode is honored: name from the picker + email/phone
+ * inputs here, POSTed to /api/crm/people (+ affiliation) at submit,
+ * before the hold. Agent defaults from session on the server side.
  *
  * Job-as-root (step 3): the Job is resolved BEFORE the hold exists.
  * The Job field opens JobResolverModal seeded with this modal's live
@@ -132,6 +137,14 @@ export function NewHoldModal({
     defaultCompany ?? (defaultJob ? { id: defaultJob.companyId, name: defaultJob.companyName } : null),
   )
   const [contact, setContact] = useState<ContactPickerValue>(EMPTY_CONTACT)
+  // Inline "+ New company" mini-form. nearMatch carries the 409 body
+  // from /api/crm/companies so the agent explicitly chooses "use
+  // existing" or "create anyway" — never an auto-merge.
+  const [creatingCompany, setCreatingCompany] = useState(false)
+  const [newCompanyName, setNewCompanyName] = useState('')
+  const [companyBusy, setCompanyBusy] = useState(false)
+  const [companyError, setCompanyError] = useState<string | null>(null)
+  const [companyNearMatch, setCompanyNearMatch] = useState<{ id: string; name: string; message: string } | null>(null)
   // The resolved Job — always a REAL row by the time it lands here
   // (existing pick, or created via the resolver's createJobFromDraft
   // path). No "creating_new by name" limbo state anymore.
@@ -164,10 +177,18 @@ export function NewHoldModal({
     /^\d{4}-\d{2}-\d{2}$/.test(endDateInput) &&
     endDateInput >= startDateInput
 
+  // Contact is ready either as an existing pick OR as an inline create
+  // (full name — the people endpoint requires first + last — and a
+  // plausible email; phone optional).
+  const contactReady =
+    (contact.mode === 'selected_existing' && !!contact.personId) ||
+    (contact.mode === 'creating_new' &&
+      contact.name.trim().split(/\s+/).length >= 2 &&
+      /\S+@\S+\.\S+/.test(contact.email.trim()))
+
   const canSubmit =
     !!company &&
-    contact.mode === 'selected_existing' &&
-    contact.personId &&
+    contactReady &&
     !!job &&
     quantity > 0 &&
     datesValid &&
@@ -186,13 +207,88 @@ export function NewHoldModal({
     setResolverOpen(false)
   }
 
+  // "+ New company" — creates via the CRM endpoint, which returns a
+  // 409 near_match when a similarly-named company exists; the agent
+  // explicitly chooses "use existing" or "create anyway".
+  async function createCompany(allowNearMatch: boolean) {
+    const name = newCompanyName.trim()
+    if (!name) return
+    setCompanyBusy(true)
+    setCompanyError(null)
+    if (!allowNearMatch) setCompanyNearMatch(null)
+    try {
+      const res = await fetch('/api/crm/companies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, allowNearMatch }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (res.status === 409 && json?.existing) {
+        setCompanyNearMatch({
+          id: json.existing.id,
+          name: json.existing.name,
+          message: json.message || 'A company with a similar name already exists.',
+        })
+        return
+      }
+      if (!res.ok || !json?.id) {
+        setCompanyError(json?.error || 'Could not create the company.')
+        return
+      }
+      setCompany({ id: json.id, name: json.name })
+      setCreatingCompany(false)
+      setNewCompanyName('')
+      setCompanyNearMatch(null)
+    } finally {
+      setCompanyBusy(false)
+    }
+  }
+
   async function submit(bufferOverride: boolean) {
-    if (!company || contact.mode !== 'selected_existing' || !contact.personId) return
+    if (!company || !contactReady) return
     if (!job) return
     setSubmitting(true)
     setHardError(null)
     if (!bufferOverride) setBufferWarning(null)
     try {
+      // Inline contact create — the Person must exist before the hold
+      // (the holds route requires personId). On success the picker
+      // flips to selected_existing so a retry (e.g. buffer Force)
+      // never double-creates.
+      let personId = contact.personId
+      if (contact.mode === 'creating_new') {
+        const parts = contact.name.trim().split(/\s+/)
+        const personRes = await fetch('/api/crm/people', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: parts[0],
+            lastName: parts.slice(1).join(' '),
+            email: contact.email.trim(),
+            phone: contact.phone.trim() || undefined,
+            source: 'hold_inline',
+          }),
+        })
+        const personJson = await personRes.json().catch(() => ({}))
+        if (!personRes.ok || !personJson?.id) {
+          setHardError(personJson?.error || 'Could not create the new contact — check the email (it may already exist in CRM).')
+          setSubmitting(false)
+          return
+        }
+        personId = personJson.id
+        // Affiliation ties the new person to the company for CRM
+        // hygiene; a failure here shouldn't kill the hold.
+        await fetch('/api/crm/affiliations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ personId, companyId: company.id, isCurrent: true }),
+        }).catch(() => {})
+        setContact({ ...contact, mode: 'selected_existing', personId })
+      }
+      if (!personId) {
+        setSubmitting(false)
+        return
+      }
       // Job is always resolved up front (Job-as-root) — the payload
       // always carries jobId; the route's newJobName branch is not
       // used from this flow anymore.
@@ -209,7 +305,7 @@ export function NewHoldModal({
           endDate: endDateInput,
           quantity,
           companyId: company.id,
-          personId: contact.personId,
+          personId,
           ...jobPayload,
           notes: notes.trim() || null,
           bufferDays,
@@ -417,16 +513,99 @@ export function NewHoldModal({
               selectedName={company?.name ?? null}
               onChange={(id, name) => setCompany(id ? { id, name } : null)}
             />
+            {!creatingCompany ? (
+              <button
+                type="button"
+                onClick={() => { setCreatingCompany(true); setCompanyError(null); setCompanyNearMatch(null) }}
+                className="text-xs font-medium text-amber-700 hover:text-amber-800 mt-1"
+              >
+                + New company
+              </button>
+            ) : (
+              <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCompanyName}
+                    onChange={(e) => { setNewCompanyName(e.target.value); setCompanyNearMatch(null); setCompanyError(null) }}
+                    placeholder="New company name…"
+                    autoFocus
+                    className="flex-1 rounded border-zinc-300 text-sm px-2 py-1.5"
+                  />
+                  <button
+                    type="button"
+                    disabled={!newCompanyName.trim() || companyBusy}
+                    onClick={() => void createCompany(false)}
+                    className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1.5 rounded disabled:opacity-50"
+                  >
+                    {companyBusy ? '…' : 'Create'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreatingCompany(false); setNewCompanyName(''); setCompanyNearMatch(null); setCompanyError(null) }}
+                    className="text-xs text-zinc-500 hover:text-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {companyNearMatch && (
+                  <div className="text-xs text-amber-800 space-y-1.5">
+                    <div>{companyNearMatch.message}</div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCompany({ id: companyNearMatch.id, name: companyNearMatch.name })
+                          setCreatingCompany(false); setNewCompanyName(''); setCompanyNearMatch(null)
+                        }}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        Use “{companyNearMatch.name}”
+                      </button>
+                      <button
+                        type="button"
+                        disabled={companyBusy}
+                        onClick={() => void createCompany(true)}
+                        className="font-semibold underline underline-offset-2 disabled:opacity-50"
+                      >
+                        Create anyway
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {companyError && <div className="text-xs text-red-600">{companyError}</div>}
+              </div>
+            )}
           </div>
 
           <div>
             <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Contact (person)</span>
             <ContactPicker value={contact} onChange={setContact} />
             {contact.mode === 'creating_new' && (
-              <p className="text-xs text-amber-700 mt-1">
-                Inline-create of new contacts is not supported in the +Hold flow yet — pick an existing contact, or
-                create the contact in CRM first.
-              </p>
+              <div className="mt-2 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="email"
+                    value={contact.email}
+                    onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                    placeholder="Email (required)"
+                    className="rounded border-zinc-300 text-sm px-2 py-1.5"
+                  />
+                  <input
+                    type="tel"
+                    value={contact.phone}
+                    onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                    placeholder="Phone (optional)"
+                    className="rounded border-zinc-300 text-sm px-2 py-1.5"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  New contact — added to CRM (and linked to the company) when you create the hold.
+                  {contact.name.trim().split(/\s+/).length < 2 && (
+                    <span className="text-amber-700"> Enter a first and last name.</span>
+                  )}
+                </p>
+              </div>
             )}
           </div>
 

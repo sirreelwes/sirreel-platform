@@ -14,6 +14,8 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 ## 2026-07-16
 
+- `hold-inline-crm-create` — the new-reservation modal (NewHoldModal) can now onboard a brand-new client end to end. "+ New company" under the company field POSTs `/api/crm/companies` — its near-match 409 surfaces as an explicit "Use existing / Create anyway" choice (resolver discipline, no auto-merge) — and selects the created row. The ContactPicker's existing `creating_new` mode is now honored instead of blocked: email (required) + phone inputs appear, and at submit the Person is created via `/api/crm/people` (+ `/api/crm/affiliations` link to the company) before the hold POST; the picker then flips to selected_existing so a buffer-Force retry never double-creates. Full-name + email validation gates the submit button. No API changes — both endpoints existed with session guards.
+
 - `gantt-canonical-order` — removed the "N idle in this window" divider row AND the two-tier booked-above-idle float behind it: units render in canonical order (category, then numeric unitName) regardless of in-window activity. The emerald name cell + the row's bars carry the activity signal.
 
 - `gantt-active-cell-color` — clarified ruling (supersedes `gantt-no-idle-filter` below, same day): INACTIVE (isActive=false) units are NOT listed on the gantt at all — the isActive filters in /api/timeline-native are restored (roster, assignment overlay, maintenance). Whether a listed unit is on a job is shown by COLOR, not membership: the unit-name cell turns emerald (`bg-emerald-100` + emerald text) when the unit has a non-cancelled bar covering today, stays gray when idle; tooltip says which, and a legend entry explains the swatch. 87 rows.
