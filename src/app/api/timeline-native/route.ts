@@ -239,12 +239,14 @@ export async function GET(req: NextRequest) {
   //    one — empty rows are what dispatch scans for availability
   //    (origin: 2026-07-15, Oliver reported idle Cubes/Cargos/Pass
   //    vans missing from the calendar because rows were derived from
-  //    assignments only). Category gate is reservableOnGantt so TEST
-  //    rigs stay off the board. Keyed by assetId, NOT unitName —
+  //    assignments only). Per Wes 2026-07-16: NO isActive filter —
+  //    every asset renders in order whether active or idle; nothing
+  //    drops off the board. Category gate is reservableOnGantt so
+  //    TEST rigs stay off. Keyed by assetId, NOT unitName —
   //    "Cargo 22"/"Cargo 25" exist as distinct assets in BOTH cargo
   //    categories and must not collapse into one row. ──
   const rosterAssets = await prisma.asset.findMany({
-    where: { isActive: true, category: { reservableOnGantt: true } },
+    where: { category: { reservableOnGantt: true } },
     select: {
       id: true,
       unitName: true,
@@ -259,11 +261,8 @@ export async function GET(req: NextRequest) {
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       startDate: { lte: to },
       endDate: { gte: from },
-      // Out-of-fleet units (terminal status → isActive=false) drop off the
-      // board entirely — history stays in the DB, viewable on Fleet's
-      // Inactive tab. isActive is the canonical signal (the fleet status
-      // PATCH keeps it in lockstep with terminal statuses).
-      asset: { isActive: true },
+      // No isActive filter (Wes 2026-07-16) — idle/retired units render
+      // like any other, so their assignment history shows too.
     },
     select: {
       id: true,
@@ -375,8 +374,7 @@ export async function GET(req: NextRequest) {
       status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
       startDate: { lte: to },
       OR: [{ endDate: null }, { endDate: { gte: from } }],
-      // Same out-of-fleet exclusion as the assignments query above.
-      asset: { isActive: true },
+      // No isActive filter (Wes 2026-07-16) — same rule as the roster.
     },
     select: {
       id: true,
