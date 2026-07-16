@@ -1041,10 +1041,12 @@ export default function GanttPage() {
     setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
   }, [])
 
-  // ── Booked-in-window sort + divider rows ──
-  // Two-tier: any asset with a booking overlapping the CURRENTLY
-  // VISIBLE window floats above idle assets. Within each tier the
-  // API's category+unitName ordering is preserved (stable sort).
+  // ── Row entries ──
+  // Units render in canonical order (category, then numeric unitName)
+  // regardless of activity — per Wes 2026-07-16, all assets show in
+  // order whether active or idle; the emerald name-cell + the bars in
+  // the row carry the activity signal. The old two-tier booked-above-
+  // idle float and its "N idle in this window" divider are removed.
   // Recomputes only on filteredUnits / window changes — not every
   // horizontal-scroll frame.
   // ── Each unit's bookings split into primary (holdRank=1 OR
@@ -1076,14 +1078,9 @@ export default function GanttPage() {
       }
       return { primary, backup }
     }
-    const isBookedInWindow = (u: any) =>
-      Array.isArray(u.bookings) && u.bookings.some((b: any) => b && b.start <= visibleEnd && b.end >= visibleStart)
     // Canonical unit order — MUST match the server sort (timeline-native):
-    // category order, then numeric unitName. Applied as the tiebreaker AFTER the
-    // booked/idle class, so BOTH sections are strictly numerical per class and
-    // the order is deterministic regardless of how units arrive (rather than a
-    // stable split that merely trusted the incoming order). A reassign settles
-    // the moved vehicle into its sorted spot — no positional row swap.
+    // category order, then numeric unitName. A reassign settles the moved
+    // vehicle into its sorted spot — no positional row swap.
     const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
     const canonicalCmp = (a: any, b: any) => {
       const ca = catOrder.indexOf(a.cat)
@@ -1091,15 +1088,7 @@ export default function GanttPage() {
       if (ca !== cb) return ca - cb
       return String(a.unitName).localeCompare(String(b.unitName), undefined, { numeric: true })
     }
-    const sorted = [...filteredUnits].sort((a, b) => {
-      const av = isBookedInWindow(a) ? 0 : 1
-      const bv = isBookedInWindow(b) ? 0 : 1
-      if (av !== bv) return av - bv
-      return canonicalCmp(a, b)
-    })
-    let booked = 0
-    for (const u of sorted) if (isBookedInWindow(u)) booked++
-    const idle = sorted.length - booked
+    const sorted = [...filteredUnits].sort(canonicalCmp)
     const entries: RowEntry[] = []
 
     // Top lane: unassigned holds. Filter to ones overlapping the
@@ -1132,14 +1121,11 @@ export default function GanttPage() {
       entries.push({ type: 'taskBand', tasks: stacked, bandHeight: maxStack * TASK_SLOT + 6 })
     }
 
-    for (let i = 0; i < sorted.length; i++) {
-      if (i === booked && booked > 0 && idle > 0) {
-        entries.push({ type: 'divider', label: `${idle} idle in this window`, accent: 'idle' })
-      }
-      const split = splitBookings(sorted[i])
-      entries.push({ type: 'unit', unit: sorted[i], primaryBookings: split.primary, backupBookings: split.backup })
+    for (const u of sorted) {
+      const split = splitBookings(u)
+      entries.push({ type: 'unit', unit: u, primaryBookings: split.primary, backupBookings: split.backup })
     }
-    return { rowEntries: entries, bookedCount: booked, idleCount: idle }
+    return { rowEntries: entries }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredUnits, unassignedHolds, catFilter, weeks, startDate, totalDays])
 
