@@ -1064,6 +1064,37 @@ export default function GanttPage() {
     setSelected({ ...b, unitName: unit.unitName, categoryId: (b as any).categoryId ?? unit.categoryId, isUnit: true, holdRank: rank, isBackup: true })
   }, [])
 
+  // "Other units on this job" chip click — switch the open pop-up to
+  // that sibling asset's reservation. Finds the unit row carrying a
+  // booking with the sibling's booking number (unitName alone is not
+  // unique — Cargo 22/25 exist in both cargo categories, so the
+  // booking match disambiguates) and re-selects exactly as a bar
+  // click would.
+  const switchToSibling = useCallback(
+    (sib: { unitName: string; bookingNumber?: string }) => {
+      for (const u of units) {
+        if (u.unitName !== sib.unitName) continue
+        const bookings: any[] = Array.isArray(u.bookings) ? u.bookings : []
+        const b = sib.bookingNumber
+          ? bookings.find((bb) => bb.cartId === sib.bookingNumber)
+          : bookings[0]
+        if (b) {
+          const rank = typeof b.holdRank === 'number' ? b.holdRank : 1
+          setSelected({
+            ...b,
+            unitName: u.unitName,
+            categoryId: b.categoryId ?? u.categoryId,
+            isUnit: true,
+            holdRank: rank,
+            isBackup: rank >= 2,
+          })
+          return
+        }
+      }
+    },
+    [units],
+  )
+
   // ── Row entries ──
   // Units render in canonical order (category, then numeric unitName)
   // regardless of activity — per Wes 2026-07-16, all assets show in
@@ -1669,16 +1700,23 @@ export default function GanttPage() {
 
                 {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
                   <div className="pt-2">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Other units on this job</div>
-                    <div className="flex flex-wrap gap-1">
+                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Other units on this job</div>
+                    <div className="flex flex-wrap gap-1.5">
                       {selected.siblingUnits.map((u: any, i: number) => (
-                        <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => switchToSibling(u)}
+                          title={`Switch to ${u.unitName}'s reservation`}
+                          className="text-[13px] font-bold text-gray-900 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-colors"
+                        >
                           {u.unitName}
-                          {u.category && <span className="text-gray-400"> · {u.category}</span>}
+                          {u.category && <span className="font-medium text-gray-500"> · {u.category}</span>}
                           {u.bookingNumber && u.bookingNumber !== selected.cartId && (
-                            <span className="text-gray-400"> · {u.bookingNumber}</span>
+                            <span className="font-medium text-gray-500"> · {u.bookingNumber}</span>
                           )}
-                        </span>
+                          <span className="text-gray-400 ml-1">→</span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1865,14 +1903,21 @@ export default function GanttPage() {
                 )}
                 {Array.isArray(selected.otherJobUnits) && selected.otherJobUnits.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">Other units on this job (other reservations)</div>
-                    <div className="flex flex-wrap gap-1 mb-2">
+                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Other units on this job (other reservations)</div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
                       {selected.otherJobUnits.map((u: any, i: number) => (
-                        <span key={i} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => switchToSibling(u)}
+                          title={`Switch to ${u.unitName}'s reservation`}
+                          className="text-[13px] font-bold text-gray-900 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-colors"
+                        >
                           {u.unitName}
-                          {u.category && <span className="text-gray-400"> · {u.category}</span>}
-                          <span className="text-gray-400"> · {u.bookingNumber}</span>
-                        </span>
+                          {u.category && <span className="font-medium text-gray-500"> · {u.category}</span>}
+                          <span className="font-medium text-gray-500"> · {u.bookingNumber}</span>
+                          <span className="text-gray-400 ml-1">→</span>
+                        </button>
                       ))}
                     </div>
                   </div>
