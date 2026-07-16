@@ -1221,6 +1221,12 @@ export default function GanttPage() {
             <span className="text-gray-500">{TIER_LABELS[t]}</span>
           </div>
         ))}
+        {/* Unit-name cell color — on a job today vs idle. */}
+        <span className="text-gray-300">|</span>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-2 rounded-sm border border-black/5 bg-emerald-100" />
+          <span className="text-gray-500">Unit on a job today</span>
+        </div>
       </div>
 
       {/* Gantt — single scroll container.
@@ -1292,9 +1298,17 @@ export default function GanttPage() {
                   )
                 }
                 const hasBackups = entry.backupBookings.length > 0
+                // Active = the unit has a non-cancelled bar covering today
+                // (on a job right now). Idle units keep the default cell —
+                // active vs idle is read from this color + the bars in the
+                // row, never from roster membership (Wes 2026-07-16).
+                const todayYmd = new Date().toISOString().slice(0, 10)
+                const onJobToday = ((entry.unit.bookings || []) as any[]).some(
+                  (b) => b.status !== 'cancelled' && b.start <= todayYmd && todayYmd <= b.end,
+                )
                 return (
                   <div key={`u-${entry.unit.assetId}`}>
-                    <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-50">
+                    <div className={`h-8 border-b border-gray-100 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}>
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ background: TIER_COLORS[entry.unit.tier] || '#9ca3af' }}
@@ -1304,10 +1318,10 @@ export default function GanttPage() {
                       <div
                         className="min-w-0 cursor-pointer group"
                         onClick={(e) => { e.stopPropagation(); setSummaryAssetId(entry.unit.assetId) }}
-                        title="Vehicle summary"
+                        title={onJobToday ? 'On a job today — vehicle summary' : 'Idle today — vehicle summary'}
                       >
-                        <div className="text-[11px] font-semibold text-gray-900 truncate group-hover:underline">{entry.unit.unitName}</div>
-                        <div className="text-[9px] text-gray-400 truncate">{entry.unit.resourceName}</div>
+                        <div className={`text-[11px] font-semibold truncate group-hover:underline ${onJobToday ? 'text-emerald-900' : 'text-gray-900'}`}>{entry.unit.unitName}</div>
+                        <div className={`text-[9px] truncate ${onJobToday ? 'text-emerald-700' : 'text-gray-400'}`}>{entry.unit.resourceName}</div>
                       </div>
                       {(() => {
                         const na = (entry.unit.naWindows || []) as any[]
