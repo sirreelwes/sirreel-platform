@@ -14,6 +14,11 @@
  *    NOT qualify (the CRM is full of stale RentalWorks imports).
  *  - UNKNOWN (or details unconfigured) → agent-queue Inquiry, nothing
  *    sent.
+ *  - EVERY request notifies billing@ (known = sales signal, unknown =
+ *    follow-up, exception = never-vanish). The notification NEVER
+ *    contains the banking details — reference only.
+ *  - An internal exception still lands in the queue (Inquiry) and in
+ *    billing@'s inbox; the client-facing response stays uniform.
  *  - Rate-limited per IP AND per submitted email (3/hour each).
  */
 
@@ -26,6 +31,8 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 
+const BILLING_INBOX = 'billing@sirreel.com'
+
 const UNIFORM_RESPONSE = {
   ok: true,
   message:
@@ -36,6 +43,33 @@ const RATE: { windowMs: number; max: number } = { windowMs: 60 * 60 * 1000, max:
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
+/**
+ * Billing notification — fires on EVERY path (auto-sent / queued /
+ * error). Same pattern as the COI upload team email. NEVER includes
+ * the banking details themselves; reference only. Failure is logged
+ * and never changes the client-facing response or blocks anything.
+ */
+async function notifyBilling(subject: string, lines: string[]): Promise<void> {
+  try {
+    const html = `<p>${lines.map(escapeHtml).join('<br/>')}</p>`
+    const text = lines.join('\n')
+    const result = await sendAgreementEmail({
+      to: [BILLING_INBOX],
+      subject,
+      html,
+      text,
+      label: 'payment-info-notify',
+    })
+    if (!result.ok) console.error('[payment-info] billing notify failed:', result.reason)
+  } catch (err) {
+    console.error('[payment-info] billing notify threw:', err)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
 
@@ -44,7 +78,8 @@ export async function POST(req: NextRequest) {
     website?: unknown
   } | null
 
-  // Honeypot — bots get the uniform response, nothing happens.
+  // Honeypot — bots get the uniform response, nothing happens (no
+  // billing notify either; bot noise doesn't belong in the inbox).
   if (body && typeof body.website === 'string' && body.website.trim().length > 0) {
     return NextResponse.json(UNIFORM_RESPONSE)
   }
@@ -72,17 +107,38 @@ export async function POST(req: NextRequest) {
         id: true,
         email: true,
         firstName: true,
+        lastName: true,
         jobContacts: {
-          select: { job: { select: { status: true } } },
+          select: {
+            job: {
+              select: {
+                status: true,
+                jobCode: true,
+                name: true,
+                company: { select: { name: true } },
+              },
+            },
+          },
         },
       },
     })) as
-      | { id: string; email: string; firstName: string | null; jobContacts: Array<{ job: { status: string } }> }
+      | {
+          id: string
+          email: string
+          firstName: string | null
+          lastName: string | null
+          jobContacts: Array<{
+            job: { status: string; jobCode: string; name: string; company: { name: string } | null }
+          }>
+        }
       | null
 
-    const qualifies =
-      !!person &&
-      person.jobContacts.some((jc) => ['QUOTED', 'ACTIVE', 'WRAPPED'].includes(jc.job.status))
+    const qualifyingJobs = person
+      ? person.jobContacts
+          .map((jc) => jc.job)
+          .filter((j) => ['QUOTED', 'ACTIVE', 'WRAPPED'].includes(j.status))
+      : []
+    const qualifies = qualifyingJobs.length > 0
 
     const settings = await prisma.siteSetting.findUnique({
       where: { id: 'singleton' },
@@ -115,6 +171,22 @@ export async function POST(req: NextRequest) {
       if (!sent.ok) {
         console.error('[payment-info] send failed for person', person.id, sent)
       }
+      // Sales signal — the client is at the paying stage. Reference
+      // only; the banking details are never repeated here.
+      const personName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || 'name unknown'
+      const j = qualifyingJobs[0]
+      await notifyBilling(
+        sent.ok
+          ? `Payment info sent — ${personName} (${j.company?.name ?? 'company unknown'})`
+          : `Payment info send FAILED — ${personName} (${j.company?.name ?? 'company unknown'})`,
+        [
+          sent.ok
+            ? `Payment info sent to ${person.email} (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}).`
+            : `Payment info delivery to ${person.email} FAILED (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}) — follow up manually.`,
+          `Requested via the public form by: ${submitted}`,
+          `This is a sales signal — the client is at the paying stage.`,
+        ],
+      )
     } else {
       // UNKNOWN (or details unconfigured) — agent queue, send NOTHING.
       await prisma.inquiry.create({
@@ -122,7 +194,7 @@ export async function POST(req: NextRequest) {
           source: 'WEB_FORM',
           status: 'NEW',
           title: 'Payment info request',
-          description: `Payment info / ACH request from the public site.\n\nSubmitted email: ${submitted}\nOn file: ${person ? `person ${person.id} (no qualifying job)` : 'no match'}\n\nVerify the requester and send payment details manually.`,
+          description: `Payment info / ACH request from the public site.\n\nSubmitted email: ${submitted}\nOn file: ${person ? `person ${person.id} (no qualifying job)` : 'no match'}${details ? '' : '\nNOTE: payment details are not configured in /admin/payment-info — nothing can auto-send until they are.'}\n\nVerify the requester and send payment details manually.`,
           ...(person ? { personId: person.id } : {}),
         },
       })
@@ -137,11 +209,34 @@ export async function POST(req: NextRequest) {
           newValues: { queued: true, at: new Date().toISOString() },
         },
       })
+      await notifyBilling(`Payment info requested — ${submitted} (routed to pipeline)`, [
+        `Payment info requested by ${submitted} — ${person ? 'on file but no qualifying job' : 'no match'}, routed to the pipeline for follow-up.`,
+        details ? 'Nothing was auto-sent.' : 'Nothing was auto-sent — payment details are NOT configured in /admin/payment-info.',
+      ])
     }
   } catch (err) {
-    // Even on internal failure the public response stays uniform — the
-    // error is ours to chase in logs, not a signal to the requester.
+    // NEVER-VANISH path: even on internal failure the request must
+    // land in the queue AND in billing@'s inbox. The client-facing
+    // response stays uniform regardless; each recovery step is
+    // independently guarded so one failure can't suppress the others.
     console.error('[payment-info] request handling failed:', err)
+    try {
+      await prisma.inquiry.create({
+        data: {
+          source: 'WEB_FORM',
+          status: 'NEW',
+          title: 'Payment info request',
+          description: `Payment info / ACH request from the public site — INTERNAL ERROR during processing; nothing was auto-sent.\n\nSubmitted email: ${submitted}\nError: ${err instanceof Error ? err.message : String(err)}\n\nVerify the requester and send payment details manually.`,
+        },
+      })
+    } catch (inqErr) {
+      console.error('[payment-info] error-path inquiry create failed:', inqErr)
+    }
+    await notifyBilling(`Payment info request ERROR — ${submitted}`, [
+      `Payment info requested by ${submitted}, but processing hit an internal error and nothing was auto-sent.`,
+      `An inquiry was filed in the pipeline; verify the requester and follow up manually.`,
+      `Error: ${err instanceof Error ? err.message : String(err)}`,
+    ])
   }
 
   return NextResponse.json(UNIFORM_RESPONSE)
