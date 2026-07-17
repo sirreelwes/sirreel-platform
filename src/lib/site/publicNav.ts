@@ -118,7 +118,7 @@ export const PUBLIC_NAV: NavEntry[] = [
         heading: 'Billing',
         items: [
           // SENSITIVE — request-only, never a public file link.
-          { label: 'Payment Info & ACH', href: contactPrefillHref('Payment info request'), mode: 'request' },
+          { label: 'Payment Info & ACH', href: '/payment-info', mode: 'request' },
           // NOTE: Credit-Card Authorization is intentionally NOT listed.
           // Card authorization is handled in CardPointe (future integration);
           // SirReel never collects, stores, or serves card data.
