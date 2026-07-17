@@ -29,6 +29,7 @@ import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
 import { fetchPaymentAttachments } from '@/lib/email/paymentInfoAttachments'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
 export const dynamic = 'force-dynamic'
 
@@ -144,23 +145,40 @@ export async function POST(req: NextRequest) {
     const settings = await prisma.siteSetting.findUnique({
       where: { id: 'singleton' },
       select: {
-        paymentDetails: true,
         paymentPayeeName: true,
+        paymentBankName: true,
+        paymentAccountType: true,
+        paymentAccountNumber: true,
+        paymentRoutingAch: true,
+        paymentRoutingWire: true,
+        paymentRemittanceEmail: true,
+        paymentBankAddress: true,
+        paymentInstructions: true,
         paymentAchFormKey: true,
         paymentAchFormFilename: true,
         paymentBankInfoKey: true,
         paymentBankInfoFilename: true,
       },
     })
-    const details = settings?.paymentDetails?.trim() || null
+    const paymentRecord: PaymentDetailsRecord = {
+      payeeName: settings?.paymentPayeeName ?? null,
+      bankName: settings?.paymentBankName ?? null,
+      accountType: settings?.paymentAccountType ?? null,
+      accountNumber: settings?.paymentAccountNumber ?? null,
+      routingAch: settings?.paymentRoutingAch ?? null,
+      routingWire: settings?.paymentRoutingWire ?? null,
+      remittanceEmail: settings?.paymentRemittanceEmail ?? null,
+      bankAddress: settings?.paymentBankAddress ?? null,
+      instructions: settings?.paymentInstructions ?? null,
+    }
+    const details = isPaymentConfigured(paymentRecord) ? paymentRecord : null
 
     if (qualifies && person && details) {
       // KNOWN — send to the RESOLVED on-file address, never the
       // submitted string (they can differ via aliases/merges).
       const email = buildPaymentInfoEmail({
         firstName: person.firstName,
-        payeeName: settings?.paymentPayeeName ?? null,
-        paymentDetails: details,
+        details,
       })
       // Private-Blob PDF attachments — a fetch failure NEVER blocks the
       // email; dropped slots are named and billing@ is told below.

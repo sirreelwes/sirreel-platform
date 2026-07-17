@@ -4900,14 +4900,23 @@ model SiteSetting {
   /// request-only (routed to the contact intake, never a file link), and
   /// Credit-Card Authorization is CardPointe's domain — SirReel never
   /// collects, stores, or serves card data, so there is no field for it.
-  /// Payment / ACH details — ADMIN-MANAGED, delivered by EMAIL ONLY via
-  /// the /payment-info request flow (Wes ruled A). NEVER rendered in any
-  /// HTML response, never a public file, never client-reachable. Plain
-  /// text, forwardable to an AP department. Changes are audit-logged.
-  paymentDetails          String? @map("payment_details") @db.Text
-  /// Canonical payee name rendered in the payment-info email (do NOT
-  /// hardcode a company name in the template). Admin-managed.
+  /// STRUCTURED payment / ACH details — ADMIN-MANAGED, delivered by
+  /// EMAIL ONLY via the /payment-info request flow (Wes ruled A). NEVER
+  /// rendered in any HTML response, never a public file, never
+  /// client-reachable. The old free-text `paymentDetails` blob was
+  /// removed (never populated) — these fields are the ONLY entry path.
+  /// Routing numbers are ABA-validated (9 digits + mod-10) at save.
+  /// Changes are audit-logged by FIELD NAME only, never values.
+  /// paymentPayeeName is the canonical payee / account-holder name.
   paymentPayeeName        String? @map("payment_payee_name")
+  paymentBankName         String? @map("payment_bank_name")
+  paymentAccountType      String? @map("payment_account_type")
+  paymentAccountNumber    String? @map("payment_account_number")
+  paymentRoutingAch       String? @map("payment_routing_ach")
+  paymentRoutingWire      String? @map("payment_routing_wire")
+  paymentRemittanceEmail  String? @map("payment_remittance_email")
+  paymentBankAddress      String? @map("payment_bank_address") @db.Text
+  paymentInstructions     String? @map("payment_instructions") @db.Text
   /// Two PRIVATE-Blob PDF attachments for the payment-info email —
   /// "ACH Payment Information Form (bank)" and "ACH / Wire Banking
   /// Information (SirReel)". Stored blobKey (server-side fetch) +

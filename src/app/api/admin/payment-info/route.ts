@@ -22,6 +22,7 @@ import { del } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-admin'
 import { uploadPrivateImage } from '@/lib/blob/uploadPrivateImage'
+import { validatePaymentDetails } from '@/lib/payments/paymentDetails'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,8 +42,15 @@ export async function GET() {
   const s = await prisma.siteSetting.findUnique({
     where: { id: SINGLETON },
     select: {
-      paymentDetails: true,
       paymentPayeeName: true,
+      paymentBankName: true,
+      paymentAccountType: true,
+      paymentAccountNumber: true,
+      paymentRoutingAch: true,
+      paymentRoutingWire: true,
+      paymentRemittanceEmail: true,
+      paymentBankAddress: true,
+      paymentInstructions: true,
       paymentAchFormFilename: true,
       paymentAchFormKey: true,
       paymentBankInfoFilename: true,
@@ -50,8 +58,17 @@ export async function GET() {
     },
   })
   return NextResponse.json({
-    paymentDetails: s?.paymentDetails ?? '',
-    payeeName: s?.paymentPayeeName ?? '',
+    details: {
+      payeeName: s?.paymentPayeeName ?? '',
+      bankName: s?.paymentBankName ?? '',
+      accountType: s?.paymentAccountType ?? '',
+      accountNumber: s?.paymentAccountNumber ?? '',
+      routingAch: s?.paymentRoutingAch ?? '',
+      routingWire: s?.paymentRoutingWire ?? '',
+      remittanceEmail: s?.paymentRemittanceEmail ?? '',
+      bankAddress: s?.paymentBankAddress ?? '',
+      instructions: s?.paymentInstructions ?? '',
+    },
     // Filenames + presence only — the blob keys never leave the server.
     attachments: {
       'ach-form': { filename: s?.paymentAchFormFilename ?? null, present: !!s?.paymentAchFormKey },
@@ -64,45 +81,57 @@ export async function PUT(req: NextRequest) {
   const gate = await requireAdmin()
   if (gate instanceof NextResponse) return gate
 
-  const body = (await req.json().catch(() => null)) as
-    | { paymentDetails?: unknown; payeeName?: unknown }
-    | null
-  if (!body || typeof body.paymentDetails !== 'string') {
-    return NextResponse.json({ error: 'paymentDetails (string) required' }, { status: 400 })
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'JSON body required' }, { status: 400 })
   }
-  const nextDetails = body.paymentDetails.slice(0, 5000)
-  const nextPayee =
-    typeof body.payeeName === 'string' ? body.payeeName.trim().slice(0, 200) : undefined
 
-  const prior = await prisma.siteSetting.findUnique({
-    where: { id: SINGLETON },
-    select: { paymentDetails: true, paymentPayeeName: true },
-  })
+  // Validate the STRUCTURED record — FAIL on invalid, never warn-and-allow.
+  const validated = validatePaymentDetails(body)
+  if (!validated.ok) {
+    return NextResponse.json({ error: validated.error, field: validated.field }, { status: 400 })
+  }
+  const r = validated.record
 
   await prisma.siteSetting.upsert({
     where: { id: SINGLETON },
     create: {
       id: SINGLETON,
-      paymentDetails: nextDetails.trim() || null,
-      ...(nextPayee !== undefined ? { paymentPayeeName: nextPayee || null } : {}),
+      paymentPayeeName: r.payeeName,
+      paymentBankName: r.bankName,
+      paymentAccountType: r.accountType,
+      paymentAccountNumber: r.accountNumber,
+      paymentRoutingAch: r.routingAch,
+      paymentRoutingWire: r.routingWire,
+      paymentRemittanceEmail: r.remittanceEmail,
+      paymentBankAddress: r.bankAddress,
+      paymentInstructions: r.instructions,
     },
     update: {
-      paymentDetails: nextDetails.trim() || null,
-      ...(nextPayee !== undefined ? { paymentPayeeName: nextPayee || null } : {}),
+      paymentPayeeName: r.payeeName,
+      paymentBankName: r.bankName,
+      paymentAccountType: r.accountType,
+      paymentAccountNumber: r.accountNumber,
+      paymentRoutingAch: r.routingAch,
+      paymentRoutingWire: r.routingWire,
+      paymentRemittanceEmail: r.remittanceEmail,
+      paymentBankAddress: r.bankAddress,
+      paymentInstructions: r.instructions,
     },
   })
 
-  // Change log — LENGTHS only (the values are banking details).
+  // Change log — which FIELDS were set, never any values.
   await prisma.auditLog.create({
     data: {
       userId: gate.user.id,
       action: 'admin.payment_details_updated',
       entityType: 'SiteSetting',
       entityId: SINGLETON,
-      oldValues: { detailsLength: prior?.paymentDetails?.length ?? 0, hadPayee: !!prior?.paymentPayeeName },
+      oldValues: {},
       newValues: {
-        detailsLength: nextDetails.trim().length,
-        payeeSet: nextPayee !== undefined ? !!nextPayee : undefined,
+        fieldsSet: Object.entries(r)
+          .filter(([, v]) => !!v)
+          .map(([k]) => k),
         at: new Date().toISOString(),
       },
     },

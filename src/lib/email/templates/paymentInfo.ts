@@ -6,10 +6,15 @@
  * to their AP department — no images required to read the details, no
  * expiring links).
  *
- * Brand: dark header + SirReel wordmark, gold rules, label/value rows
- * for the details, a distinct callout for the fraud warning. Matches
- * the client-portal look (quoteSend / thankYou).
+ * Rows are rendered directly from the STRUCTURED record — no blob
+ * parsing. Blank optional fields are omitted entirely (not empty rows).
+ *
+ * Brand: dark header + SirReel wordmark, gold rule, label/value rows,
+ * a distinct callout for the fraud warning. Matches the client-portal
+ * look (quoteSend / thankYou).
  */
+
+import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
 const GOLD = '#D4A547'
 const SLATE = '#0f172a'
@@ -27,65 +32,35 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Parse the admin-entered details into label/value rows for the HTML
- * artifact. A line "Routing number: 12345" splits on the FIRST colon
- * into a label + value; a line with no colon renders full-width (a
- * heading or free note). Blank lines become spacers. The plain-text
- * alternative keeps the raw lines verbatim so nothing is lost or
- * reworded between the two parts.
+ * Ordered label→value rows built straight from the structured record.
+ * Blank/optional fields drop out here so they never render as empty
+ * rows. Payee is rendered as the first (bold) row.
  */
-interface DetailRow {
-  kind: 'pair' | 'full' | 'spacer'
-  label?: string
-  value?: string
-  text?: string
-}
-
-function parseDetailRows(details: string): DetailRow[] {
-  return details
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((raw): DetailRow => {
-      const line = raw.trim()
-      if (!line) return { kind: 'spacer' }
-      const idx = line.indexOf(':')
-      // Treat as a label/value pair only when the colon isn't at the
-      // very start/end and the label is short-ish (a real field name).
-      if (idx > 0 && idx < line.length - 1 && idx <= 40) {
-        return { kind: 'pair', label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() }
-      }
-      return { kind: 'full', text: line }
-    })
-}
-
-function renderDetailRowsHtml(rows: DetailRow[]): string {
-  const cells = rows
-    .map((r) => {
-      if (r.kind === 'spacer') return `<tr><td colspan="2" style="height:8px;"></td></tr>`
-      if (r.kind === 'full') {
-        return `<tr><td colspan="2" style="padding:5px 0;font-size:14px;font-weight:700;color:#1f2937;">${escapeHtml(r.text!)}</td></tr>`
-      }
-      return `<tr>
-        <td style="padding:6px 14px 6px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#6b7280;white-space:nowrap;vertical-align:top;">${escapeHtml(r.label!)}</td>
-        <td style="padding:6px 0;font-size:14px;color:#111827;font-weight:600;">${escapeHtml(r.value!)}</td>
-      </tr>`
-    })
-    .join('')
-  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">${cells}</table>`
+function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = []
+  const push = (label: string, value: string | null) => {
+    if (value && value.trim()) rows.push({ label, value: value.trim() })
+  }
+  push('Payee', r.payeeName)
+  push('Bank name', r.bankName)
+  push('Account type', r.accountType)
+  push('Account number', r.accountNumber)
+  push('Routing number (ACH)', r.routingAch)
+  push('Routing number (Wire)', r.routingWire)
+  push('Remittance email', r.remittanceEmail)
+  push('Bank address', r.bankAddress)
+  push('Additional instructions', r.instructions)
+  return rows
 }
 
 export function buildPaymentInfoEmail(input: {
   firstName: string | null
-  /** Canonical payee name (SiteSetting.paymentPayeeName) — rendered in
-   *  the email; NOT hardcoded in the template. */
-  payeeName: string | null
-  /** Admin-managed plain-text details (SiteSetting.paymentDetails). */
-  paymentDetails: string
+  details: PaymentDetailsRecord
 }): { subject: string; html: string; text: string } {
   const first = input.firstName?.trim() || 'there'
-  const payee = input.payeeName?.trim() || null
+  const payee = input.details.payeeName?.trim() || null
   const subject = 'SirReel — payment information'
-  const rows = parseDetailRows(input.paymentDetails.trim())
+  const rows = detailRows(input.details)
 
   // ── Plain-text alternative — same details + same warning verbatim ──
   const text = [
@@ -95,8 +70,7 @@ export function buildPaymentInfoEmail(input: {
       ? `As requested, here is ${payee}'s payment information. Feel free to forward this to your accounts-payable team.`
       : 'As requested, here is SirReel’s payment information. Feel free to forward this to your accounts-payable team.',
     '',
-    ...(payee ? [`Payee: ${payee}`, ''] : []),
-    input.paymentDetails.trim(),
+    ...rows.map((row) => `${row.label}: ${row.value}`),
     '',
     `IMPORTANT: ${FRAUD_WARNING}`,
     '',
@@ -104,13 +78,14 @@ export function buildPaymentInfoEmail(input: {
     payee ? `\n${payee}` : '\nSirReel Studio Services',
   ].join('\n')
 
-  const payeeRowHtml = payee
-    ? `<tr>
-        <td style="padding:6px 14px 6px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#6b7280;white-space:nowrap;vertical-align:top;">Payee</td>
-        <td style="padding:6px 0;font-size:14px;color:#111827;font-weight:700;">${escapeHtml(payee)}</td>
-       </tr>
-       <tr><td colspan="2" style="height:8px;"></td></tr>`
-    : ''
+  const rowsHtml = rows
+    .map(
+      (row, i) => `<tr>
+        <td style="padding:6px 14px 6px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#6b7280;white-space:nowrap;vertical-align:top;">${escapeHtml(row.label)}</td>
+        <td style="padding:6px 0;font-size:14px;color:#111827;font-weight:${i === 0 ? 700 : 600};">${escapeHtml(row.value)}</td>
+      </tr>`,
+    )
+    .join('')
 
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f4f2;">
   <div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
@@ -132,9 +107,8 @@ export function buildPaymentInfoEmail(input: {
         <div style="padding:18px 20px;background:#faf9f6;">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 12px;">Payment details</div>
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
-            ${payeeRowHtml}
+            ${rowsHtml}
           </table>
-          ${renderDetailRowsHtml(rows)}
         </div>
       </div>
 

@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * /admin/payment-info — Wes sets/updates the payment & ACH details the
- * public request flow emails to verified clients, the canonical payee
- * name, and two PRIVATE-Blob PDF attachments. ADMIN-only (the API
- * enforces requireAdmin). Details/attachments are never rendered on any
- * public surface; the PDFs have no public route — they're emailed only.
+ * /admin/payment-info — Wes sets/updates the STRUCTURED payment & ACH
+ * details the public request flow emails to verified clients, plus two
+ * PRIVATE-Blob PDF attachments. ADMIN-only (the API enforces
+ * requireAdmin). Details/attachments are never rendered on any public
+ * surface; the PDFs have no public route — they're emailed only.
  *
- * The details field is deliberately NOT inside a <form> and has no
- * Enter-to-submit binding, so multi-line entry works normally; it also
- * carries password-manager opt-outs so banking details are never
- * captured by 1Password/LastPass/etc.
+ * There is EXACTLY ONE way to enter banking details: these structured
+ * fields (the old free-text blob is gone). Routing numbers are
+ * ABA-validated server-side. All fields carry password-manager
+ * opt-outs so banking details are never captured by a manager, and the
+ * fields are NOT inside a <form> so nothing submits on Enter.
  */
 
 import { useEffect, useState } from 'react';
@@ -21,15 +22,38 @@ interface SlotState {
   filename: string | null;
   present: boolean;
 }
-
 const SLOT_LABELS: Record<SlotKey, string> = {
   'ach-form': 'ACH Payment Information Form (bank)',
   'bank-info': 'ACH / Wire Banking Information (SirReel)',
 };
 
+interface Details {
+  payeeName: string;
+  bankName: string;
+  accountType: string;
+  accountNumber: string;
+  routingAch: string;
+  routingWire: string;
+  remittanceEmail: string;
+  bankAddress: string;
+  instructions: string;
+}
+const EMPTY: Details = {
+  payeeName: '', bankName: '', accountType: '', accountNumber: '',
+  routingAch: '', routingWire: '', remittanceEmail: '', bankAddress: '', instructions: '',
+};
+
+// Shared password-manager / autofill opt-outs for every field.
+const HARDEN = {
+  autoComplete: 'off',
+  spellCheck: false,
+  'data-1p-ignore': true,
+  'data-lpignore': 'true',
+  'data-form-type': 'other',
+} as const;
+
 export default function AdminPaymentInfoPage() {
-  const [details, setDetails] = useState('');
-  const [payee, setPayee] = useState('');
+  const [d, setD] = useState<Details>(EMPTY);
   const [slots, setSlots] = useState<Record<SlotKey, SlotState>>({
     'ach-form': { filename: null, present: false },
     'bank-info': { filename: null, present: false },
@@ -38,15 +62,15 @@ export default function AdminPaymentInfoPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<string | null>(null);
   const [busySlot, setBusySlot] = useState<SlotKey | null>(null);
 
   const load = () =>
     fetch('/api/admin/payment-info')
       .then((r) => r.json())
-      .then((d) => {
-        if (typeof d.paymentDetails === 'string') setDetails(d.paymentDetails);
-        if (typeof d.payeeName === 'string') setPayee(d.payeeName);
-        if (d.attachments) setSlots(d.attachments);
+      .then((data) => {
+        if (data.details) setD({ ...EMPTY, ...data.details });
+        if (data.attachments) setSlots(data.attachments);
         setLoaded(true);
       })
       .catch(() => setError('Could not load current settings.'));
@@ -55,18 +79,22 @@ export default function AdminPaymentInfoPage() {
     void load();
   }, []);
 
+  const set = (k: keyof Details) => (v: string) => setD((prev) => ({ ...prev, [k]: v }));
+
   const save = async () => {
     setSaving(true);
     setError(null);
+    setErrorField(null);
     try {
       const res = await fetch('/api/admin/payment-info', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentDetails: details, payeeName: payee }),
+        body: JSON.stringify(d),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error || 'Save failed');
+        setErrorField(json.field || null);
         return;
       }
       setSavedAt(new Date().toLocaleTimeString());
@@ -110,59 +138,75 @@ export default function AdminPaymentInfoPage() {
     }
   };
 
+  const field = (
+    key: keyof Details,
+    label: string,
+    opts: { required?: boolean; placeholder?: string; hint?: string } = {},
+  ) => (
+    <label className="block">
+      <span className="text-xs uppercase tracking-wide text-lt-fg3 font-semibold">
+        {label} {opts.required ? <span className="text-red-500">*</span> : <span className="text-lt-fg3 normal-case">(optional)</span>}
+      </span>
+      <input
+        type="text"
+        value={d[key]}
+        disabled={!loaded}
+        onChange={(e) => set(key)(e.target.value)}
+        placeholder={opts.placeholder}
+        {...HARDEN}
+        className={`mt-1.5 w-full bg-lt-inner border rounded-lg p-2.5 text-sm text-lt-fg focus:outline-none focus:border-lt-fg2 ${
+          errorField === key ? 'border-red-400' : 'border-lt-hairline'
+        }`}
+      />
+      {opts.hint && <span className="text-[11px] text-lt-fg3 mt-0.5 block">{opts.hint}</span>}
+    </label>
+  );
+
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <header>
         <h1 className="text-2xl font-semibold text-lt-fg">Payment Info &amp; ACH</h1>
         <p className="text-sm text-lt-fg2 mt-1 max-w-[72ch]">
-          These details, the payee name, and any attached PDFs are <b>emailed — never displayed</b> — to
-          verified clients who request them via the public &ldquo;Payments made simple.&rdquo; page.
-          Unknown requesters become pipeline inquiries instead. Every change is logged.
+          These details, plus any attached PDFs, are <b>emailed — never displayed</b> — to verified
+          clients who request them via the public &ldquo;Payments made simple.&rdquo; page. Unknown
+          requesters become pipeline inquiries instead. Changes are logged (field names only).
         </p>
       </header>
 
-      {/* Payee name (rendered in the email; not hardcoded in the template) */}
-      <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-3">
-        <label className="block">
-          <span className="text-xs uppercase tracking-wide text-lt-fg3 font-semibold">Payee name</span>
-          <input
-            type="text"
-            value={payee}
-            disabled={!loaded}
-            onChange={(e) => setPayee(e.target.value)}
-            placeholder="e.g. SirReel Production Vehicles, Inc."
-            autoComplete="off"
-            spellCheck={false}
-            data-1p-ignore
-            data-lpignore="true"
-            className="mt-2 w-full bg-lt-inner border border-lt-hairline rounded-lg p-2.5 text-sm text-lt-fg focus:outline-none focus:border-lt-fg2"
-          />
-        </label>
-
+      {/* Structured banking fields — the ONLY entry path */}
+      <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 space-y-4">
+        {field('payeeName', 'Payee / account holder name', { required: true, placeholder: 'SirReel Production Vehicles, Inc.', hint: 'The name AP matches against the bank account.' })}
+        {field('bankName', 'Bank name', { required: true, placeholder: 'e.g. Chase' })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {field('accountType', 'Account type', { required: true, placeholder: 'Checking' })}
+          {field('accountNumber', 'Account number', { required: true, placeholder: 'digits only', hint: 'Digits only.' })}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {field('routingAch', 'Routing number (ACH)', { required: true, placeholder: '9 digits', hint: '9-digit ABA — validated on save.' })}
+          {field('routingWire', 'Routing number (Wire)', { required: true, placeholder: '9 digits', hint: '9-digit ABA — validated on save.' })}
+        </div>
+        {field('remittanceEmail', 'Remittance email', { required: true, placeholder: 'ap@sirreel.com' })}
+        {field('bankAddress', 'Bank address', { placeholder: 'Street, city, state ZIP' })}
         <label className="block">
           <span className="text-xs uppercase tracking-wide text-lt-fg3 font-semibold">
-            Payment details (one field per line, e.g. &ldquo;Routing number: 123456789&rdquo;)
+            Additional instructions <span className="text-lt-fg3 normal-case">(optional)</span>
           </span>
           <textarea
-            value={details}
-            onChange={(e) => setDetails(e.target.value)}
-            rows={12}
+            value={d.instructions}
             disabled={!loaded}
-            placeholder={'Bank name: …\nAccount name: …\nRouting number: …\nAccount number: …\nRemittance email: …'}
-            // Multi-line entry works: no form wrapper, no Enter handler.
-            // Password-manager opt-outs keep banking details out of
-            // 1Password/LastPass; spellcheck off avoids underlining codes.
-            autoComplete="off"
-            spellCheck={false}
-            data-1p-ignore
-            data-lpignore="true"
-            data-form-type="other"
-            className="mt-2 w-full bg-lt-inner border border-lt-hairline rounded-lg p-3 text-sm text-lt-fg font-mono leading-relaxed focus:outline-none focus:border-lt-fg2"
+            onChange={(e) => set('instructions')(e.target.value)}
+            rows={3}
+            placeholder="SWIFT/BIC, intermediary bank, beneficiary address — edge cases only."
+            {...HARDEN}
+            className="mt-1.5 w-full bg-lt-inner border border-lt-hairline rounded-lg p-2.5 text-sm text-lt-fg leading-relaxed focus:outline-none focus:border-lt-fg2"
           />
+          <span className="text-[11px] text-lt-fg3 mt-0.5 block">
+            For edge cases only — not a home for the core details above.
+          </span>
         </label>
+
         <div className="text-[12px] text-lt-fg3 leading-relaxed">
-          Lines with a &ldquo;Label: value&rdquo; shape render as clean rows in the email. The fraud
-          warning is appended automatically as a callout: &ldquo;{FRAUD_WARNING}&rdquo;
+          The fraud warning is appended automatically as a callout in the email: &ldquo;{FRAUD_WARNING}&rdquo;
         </div>
         <div className="flex items-center gap-3">
           <button
