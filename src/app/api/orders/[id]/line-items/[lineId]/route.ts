@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
+import { computeDays } from "@/lib/orders/days";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
 import { routeDepartment } from "@/lib/orders/bookOrder";
@@ -95,6 +96,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
         returnDate !== undefined
           ? (returnDate ? new Date(returnDate) : null)
           : existingForDates?.returnDate ?? null;
+      // Keep the server-derived reference in step with date edits.
+      if (effectivePickup && effectiveReturn) {
+        data.computedDays = computeDays(effectivePickup, effectiveReturn);
+      }
       if (
         effectivePickup &&
         effectiveReturn &&

@@ -63,6 +63,7 @@ export async function POST(
     pickupDate: li.pickupDate,
     returnDate: li.returnDate,
     billableDays: li.billableDays,
+    computedDays: li.computedDays ?? null,
     lineTotal: Number(li.lineTotal),
     isDiscount: li.type === 'DISCOUNT',
     // Fee-catalog lines render in their own "Fees" section (last),

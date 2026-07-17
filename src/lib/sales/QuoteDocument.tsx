@@ -79,6 +79,11 @@ export interface QuoteLineItem {
    *  this line. The Send Quote validator should block firm-total
    *  sends when any non-EXPENDABLE line carries null. */
   billableDays: number | null
+  /** Server-derived rental-period day count (pickup→return). When
+   *  billableDays differs, the PDF prints the concession explicitly —
+   *  "Billable days: N (rental period X–Y)" — never a silent lower
+   *  number. */
+  computedDays?: number | null
   lineTotal: number
   isDiscount?: boolean
   /** type=FEE lines (fee catalog) — rendered in their own "Fees"
@@ -633,6 +638,13 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                         {fmtDate(item.pickupDate)} – {fmtDate(item.returnDate)}
                       </Text>
                     )}
+                    {item.billableDays != null &&
+                      item.computedDays != null &&
+                      item.billableDays !== item.computedDays && (
+                        <Text style={styles.dateNote}>
+                          Billable days: {item.billableDays} (rental period {fmtDate(item.pickupDate)} – {fmtDate(item.returnDate)}, {item.computedDays} days)
+                        </Text>
+                      )}
                   </View>
                   <Text style={styles.colQty}>{item.quantity}</Text>
                   <Text style={styles.colDays}>{item.billableDays ?? 'TBD'}</Text>

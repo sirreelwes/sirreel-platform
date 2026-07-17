@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { findPendingDayClaims } from '@/lib/orders/dayClaimGate';
 import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
@@ -173,6 +174,23 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // unchanged-status writes saves a DB roundtrip.
     let priorStatus: OrderStatus | null = null;
     if (status !== undefined) {
+      // Shoot-days gate (Wes ruling B): an order with PENDING claims on
+      // gear/vehicle lines cannot reach APPROVED (or beyond). Stage
+      // lines never block. Server-side state-machine enforcement — the
+      // UI hint is a courtesy.
+      if (status === 'APPROVED' || status === 'BOOKED') {
+        const pending = await findPendingDayClaims(id);
+        if (pending.length > 0) {
+          return NextResponse.json(
+            {
+              error: 'pending day claims',
+              reason: `${pending.length} line${pending.length === 1 ? ' has' : 's have'} an unresolved shoot-days claim — resolve in the order's claims panel first.`,
+              pendingLines: pending.map((l) => ({ id: l.id, description: l.description, claimedDays: l.claimedDays, computedDays: l.computedDays })),
+            },
+            { status: 409 },
+          );
+        }
+      }
       data.status = status;
       // Phase 1 sales pipeline: keep quoteStatus in lockstep with status
       // and stamp the sales-stage timestamps on first transition.

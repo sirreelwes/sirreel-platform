@@ -389,6 +389,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     addToCart,
     setQty,
     setDates,
+    setClaimedDays,
     removeLine,
     mergeOrderLines,
     unmergeOrder,
@@ -638,6 +639,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
             qty: l.qty,
             pickupDate: l.pickupDate,
             returnDate: l.returnDate,
+            // Shoot-days CLAIM — a request the agent confirms in HQ.
+            // The server ignores it for pricing.
+            claimedDays: l.claimedDays ?? null,
           })),
           notes: form.notes.trim() || null,
           // Honeypot — server also enforces empty.
@@ -1180,6 +1184,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                 onSetQty={setQty}
                 onRemove={removeLine}
                 onSetLineDates={setLineDatesTouched}
+                onSetClaimedDays={setClaimedDays}
                 onCascadeCategoryDates={(p, r) => cascadeCategoryDates(categoryLines, p, r)}
               />
             ))
@@ -1189,6 +1194,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
           <div className="flex justify-between items-baseline mb-1">
             <span className="font-bold text-sm uppercase tracking-wider" style={{ fontFamily: 'Archivo, sans-serif' }}>Est. total</span>
             <span className="font-black text-2xl text-[#a37f2c] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>{fmtTotal(totalEstimate)}</span>
+          </div>
+          <div className="text-[10.5px] text-[#8b857a] mb-1">
+            Provisional — your agent confirms final pricing and billable days.
           </div>
           {hasPriceOnQuote && (
             <div className="text-[11.5px] text-[#8b857a] mb-2.5">
@@ -1875,7 +1883,7 @@ function CartSidebar({
 
             const renderLine = (l: CartLine) => {
               const isRental = isRentalLine(l)
-              const days = isRental ? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
+              const days = isRental ? l.claimedDays ?? rentalDaysBetween(l.pickupDate, l.returnDate) : 1
               return (
                 <div key={l.cartLineId} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#191919]">
                   <div className="flex-1 min-w-0">
@@ -1965,6 +1973,7 @@ function CategorySection({
   onSetQty,
   onRemove,
   onSetLineDates,
+  onSetClaimedDays,
   onCascadeCategoryDates,
 }: {
   category: string
@@ -1973,6 +1982,7 @@ function CategorySection({
   onSetQty: (cartLineId: string, q: number) => void
   onRemove: (cartLineId: string) => void
   onSetLineDates: (cartLineId: string, pickup: string, returnD: string) => void
+  onSetClaimedDays: (cartLineId: string, claimed: number | null) => void
   onCascadeCategoryDates: (pickup: string, returnD: string) => void
 }) {
   // Default = most common (pickup,return) tuple in the category, else
@@ -2050,6 +2060,7 @@ function CategorySection({
           touched={touchedLineIds.has(l.cartLineId)}
           onSetQty={(q) => onSetQty(l.cartLineId, q)}
           onSetDates={(p, r) => onSetLineDates(l.cartLineId, p, r)}
+          onSetClaimedDays={(n) => onSetClaimedDays(l.cartLineId, n)}
           onRemove={() => onRemove(l.cartLineId)}
         />
       ))}
@@ -2062,16 +2073,19 @@ function ReviewRow({
   touched,
   onSetQty,
   onSetDates,
+  onSetClaimedDays,
   onRemove,
 }: {
   line: CartLine
   touched: boolean
   onSetQty: (q: number) => void
   onSetDates: (pickup: string, returnD: string) => void
+  onSetClaimedDays: (claimed: number | null) => void
   onRemove: () => void
 }) {
   const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
-  const days = isRental ? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
+  const computedDays = rentalDaysBetween(line.pickupDate, line.returnDate)
+  const days = isRental ? line.claimedDays ?? computedDays : 1
   return (
     <div className="py-3 border-b border-[#e4dfd4]">
       <div className="flex items-center gap-3">
@@ -2124,6 +2138,34 @@ function ReviewRow({
           remove
         </button>
       </div>
+      {isRental && (
+        <div className="mt-2 pl-0.5">
+          <div className="flex items-center gap-2 text-[12px]">
+            <span className="text-[#8b857a]">Shoot days:</span>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={line.claimedDays ?? computedDays}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10)
+                onSetClaimedDays(Number.isInteger(n) ? n : null)
+              }}
+              className="w-[64px] border-[1.5px] border-[#cdc7b9] bg-white rounded-md px-1.5 py-1 text-[12px] outline-none focus:border-[#0c0c0d]"
+              aria-label="Shoot days"
+            />
+            <span className="text-[#8b857a]">of a {computedDays}-day rental</span>
+            {line.claimedDays != null && (
+              <span className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-[#a37f2c] bg-[#f6efdc] rounded px-1.5 py-px">
+                Pending agent review
+              </span>
+            )}
+          </div>
+          <div className="text-[10.5px] text-[#8b857a] mt-1 leading-snug">
+            We only charge for days you&rsquo;re working. Your agent will confirm.
+          </div>
+        </div>
+      )}
     </div>
   )
 }

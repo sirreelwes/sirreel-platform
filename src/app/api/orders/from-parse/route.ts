@@ -59,6 +59,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/orders'
 import { computeLineTotal } from '@/lib/orders/billing'
+import { computeDays } from '@/lib/orders/days'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
@@ -439,6 +440,7 @@ export async function POST(req: NextRequest) {
             rateOverridden: rr.rateOverridden,
             quantity,
             billableDays: days,
+            computedDays: computeDays(pickupResolved, returnResolved),
             lineTotal: Math.round(lineTotal * 100) / 100,
             notes: seededNotes,
             department,

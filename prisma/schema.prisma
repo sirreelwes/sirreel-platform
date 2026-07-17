@@ -2200,6 +2200,19 @@ enum LineItemType {
   DISCOUNT
 }
 
+// Shoot-days claim lifecycle (Wes ruling B, 2026-07-17). The client
+// may CLAIM fewer working days than the rental period on gear/vehicle
+// lines; the claim never prices anything by itself — an agent approves
+// (billableDays = claimedDays), adjusts (any value, above OR below —
+// SirReel has final say), or it stays PENDING and blocks the order
+// from reaching APPROVED.
+enum DayClaimStatus {
+  NONE
+  PENDING
+  APPROVED
+  ADJUSTED
+}
+
 enum LineItemDepartment {
   VEHICLES
   COMMUNICATIONS
@@ -2860,6 +2873,21 @@ model OrderLineItem {
   // when any non-EXPENDABLE line has NULL billableDays — see the
   // Send Quote validator.
   billableDays    Int?               @default(1) @map("days")
+  // ── Shoot-days claim (Wes ruling B) ────────────────────────────
+  // computedDays: server-derived max(1, returnDate − pickupDate) —
+  //   never client-writable; the reference number. Nullable only for
+  //   legacy rows pending backfill.
+  // claimedDays: the client's shoot-days REQUEST from the public
+  //   form. NEVER prices anything on its own.
+  // Price resolution: billableDays ?? computedDays. billableDays is
+  //   AUTHORITATIVE when set (agent-approved; may exceed claimedDays
+  //   or computedDays — no clamping, SirReel has final say). The
+  //   pre-existing NULL-billableDays "rate-card / dates-TBD" semantic
+  //   in computeLineTotal is unchanged.
+  computedDays    Int?               @map("computed_days")
+  claimedDays     Int?               @map("claimed_days")
+  claimStatus     DayClaimStatus     @default(NONE) @map("claim_status")
+  claimNote       String?            @map("claim_note") @db.Text
   lineTotal       Decimal            @db.Decimal(12, 2)
   // Phase 2: AI-extracted client modifier preserved verbatim (e.g.
   // "no surveillance kits"). Displayed in italics in the builder; never

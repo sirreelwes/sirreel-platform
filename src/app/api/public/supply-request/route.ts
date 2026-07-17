@@ -51,6 +51,8 @@ interface CartLineIn {
   qty?: unknown
   pickupDate?: unknown
   returnDate?: unknown
+  /** Client shoot-days claim (gear/vehicle rentals only) — a REQUEST. */
+  claimedDays?: unknown
 }
 interface SubmitBody {
   contact?: { name?: unknown; email?: unknown; phone?: unknown; role?: unknown }
@@ -124,11 +126,22 @@ async function verifyTurnstile(token: string | null, ip: string): Promise<boolea
   }
 }
 
+// Ruled formula (Wes, shoot-days claim build): computedDays =
+// max(1, returnDate − pickupDate) — EXCLUSIVE count. Matches
+// src/lib/orders/days.ts computeDays(); keep in lockstep.
 function rentalDaysBetween(start: string, end: string): number {
   const s = new Date(`${start}T00:00:00Z`).getTime()
   const e = new Date(`${end}T00:00:00Z`).getTime()
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
-  return Math.max(1, Math.round((e - s) / 86_400_000) + 1)
+  return Math.max(1, Math.round((e - s) / 86_400_000))
+}
+
+// Client shoot-days CLAIM — a REQUEST, never a price. Bounded sanity
+// only; approval happens agent-side in HQ.
+function sanitizeClaim(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? parseInt(v, 10) : NaN
+  if (!Number.isInteger(n) || n < 1 || n > 365) return null
+  return n
 }
 
 export async function POST(req: NextRequest) {
@@ -196,6 +209,7 @@ export async function POST(req: NextRequest) {
     qty: number
     pickupDate: string
     returnDate: string
+    claimedDays: number | null
   }
   const lines: ParsedLine[] = []
   for (const raw of body.cart) {
@@ -209,7 +223,7 @@ export async function POST(req: NextRequest) {
     if (!pickupDate) return bad(400, 'each cart line needs pickupDate (YYYY-MM-DD)')
     const returnDate = isYmd(raw.returnDate) ? (raw.returnDate as string) : pickupDate
     if (returnDate < pickupDate) return bad(400, 'returnDate must be on or after pickupDate')
-    lines.push({ itemKind, itemId, qty, pickupDate, returnDate })
+    lines.push({ itemKind, itemId, qty, pickupDate, returnDate, claimedDays: sanitizeClaim(raw.claimedDays) })
   }
 
   // ── Resolve catalog rows per kind ─────────────────────────
@@ -291,6 +305,9 @@ export async function POST(req: NextRequest) {
         pickupDate: l.pickupDate,
         returnDate: l.returnDate,
         days,
+        // Claim recorded verbatim (≠ computed only); NEVER used in
+        // lineTotal here — the agent approves it into billableDays in HQ.
+        claimedDays: l.claimedDays != null && l.claimedDays !== days ? l.claimedDays : null,
         lineTotal,
         priceOnQuote: unitPrice === 0,
       }
@@ -312,6 +329,7 @@ export async function POST(req: NextRequest) {
       pickupDate: l.pickupDate,
       returnDate: l.returnDate,
       days: isRental ? days : null,
+      claimedDays: isRental && l.claimedDays != null && l.claimedDays !== days ? l.claimedDays : null,
       lineTotal,
       priceOnQuote: false,
     }

@@ -72,6 +72,11 @@ export interface CartLine extends CartLineDisplayInfo {
   ownerOrderId?: string
   associatedOrderIds?: string[]
   modifiedByUser?: boolean
+  /** Shoot-days CLAIM (Wes ruling B) — the client's requested working-day
+   *  count for gear/vehicle rentals. A REQUEST the agent confirms in HQ;
+   *  shown-provisional only, never a price by itself. undefined/null =
+   *  no claim (bill the full rental period). */
+  claimedDays?: number | null
 }
 
 export interface AddToCartArgs extends CartLineDisplayInfo {
@@ -187,6 +192,25 @@ export function useSupplyCart() {
     })
   }, [])
 
+  /** Set/clear the line's shoot-days claim. Clamped 1..computed-days-
+   *  is deliberately NOT enforced here — it's a request; server + agent
+   *  sanity-check it. Values equal to the computed span clear the claim. */
+  const setClaimedDays = useCallback((cartLineId: string, claimed: number | null) => {
+    setCart((prev) => {
+      const line = prev.get(cartLineId)
+      if (!line) return prev
+      const computed = rentalDaysBetween(line.pickupDate, line.returnDate)
+      const normalized =
+        claimed == null || !Number.isInteger(claimed) || claimed < 1 || claimed > 365 || claimed === computed
+          ? null
+          : claimed
+      if ((line.claimedDays ?? null) === normalized) return prev
+      const next = new Map(prev)
+      next.set(cartLineId, { ...line, claimedDays: normalized, modifiedByUser: true })
+      return next
+    })
+  }, [])
+
   const removeLine = useCallback((cartLineId: string) => {
     setCart((prev) => {
       if (!prev.has(cartLineId)) return prev
@@ -241,6 +265,7 @@ export function useSupplyCart() {
     addToCart,
     setQty,
     setDates,
+    setClaimedDays,
     removeLine,
     mergeOrderLines,
     unmergeOrder,
@@ -325,11 +350,15 @@ export function applyUnmergeOrder(
 }
 
 /** Days inclusive between pickup and return (min 1). */
+// Ruled formula: computedDays = max(1, returnDate − pickupDate),
+// EXCLUSIVE count. Matches src/lib/orders/days.ts computeDays() and the
+// server snapshot in /api/public/supply-request — keep all three in
+// lockstep.
 export function rentalDaysBetween(pickup: string, returnD: string): number {
   const s = new Date(`${pickup}T00:00:00Z`).getTime()
   const e = new Date(`${returnD}T00:00:00Z`).getTime()
   if (!Number.isFinite(s) || !Number.isFinite(e)) return 1
-  return Math.max(1, Math.round((e - s) / 86_400_000) + 1)
+  return Math.max(1, Math.round((e - s) / 86_400_000))
 }
 
 /** Per-line $ estimate — matches the server snapshot math in
@@ -339,6 +368,9 @@ export function rentalDaysBetween(pickup: string, returnD: string): number {
 export function lineEstimate(line: CartLine): number {
   if (line.price === 0) return 0
   const isRental = line.itemKind === 'VEHICLE' || line.type === 'EQUIPMENT'
-  const days = isRental ? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
+  // PROVISIONAL: a shoot-days claim shows its effect in the estimate so
+  // the client sees what they're requesting — the server never prices
+  // from this; the agent confirms in HQ.
+  const days = isRental ? line.claimedDays ?? rentalDaysBetween(line.pickupDate, line.returnDate) : 1
   return line.price * line.qty * days
 }

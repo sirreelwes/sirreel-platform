@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
+import { computeDays, isClaimEligible, sanitizeClaimedDays } from "@/lib/orders/days";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const {
       type, description, inventoryItemId, assetCategoryId,
       startDate, endDate, rateType = "DAILY", rate, quantity = 1, notes,
-      department, qualifier, billableDays, pickupDate, returnDate,
+      department, qualifier, billableDays, pickupDate, returnDate, claimedDays,
       // Package metadata. Headers carry packageId + isPackageHeader=true;
       // members share packageInstanceId. The line-total math is unchanged —
       // header rate drives the price; members come through as rate=0.
@@ -428,6 +429,19 @@ export async function POST(req: NextRequest, { params }: Params) {
         rateOverridden: rateResolution.rateOverridden,
         quantity: effectiveQuantity,
         billableDays: days,
+        // Shoot-days authority (Wes ruling B): computedDays is the
+        // server-derived reference; claimedDays is the client's
+        // REQUEST (eligible gear/vehicle lines only) and lands
+        // PENDING — it never prices anything until an agent writes
+        // billableDays via the day-claims endpoint.
+        computedDays: computeDays(pickupResolved, returnResolved),
+        ...(() => {
+          const claim = sanitizeClaimedDays(claimedDays)
+          const eligible = isClaimEligible({ type: effectiveType, department: resolvedDepartment })
+          return claim != null && eligible
+            ? { claimedDays: claim, claimStatus: 'PENDING' as const }
+            : {}
+        })(),
         lineTotal: Math.round(lineTotal * 100) / 100,
         notes: seededNotes,
         department: resolvedDepartment,

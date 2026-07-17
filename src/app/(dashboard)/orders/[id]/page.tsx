@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { getPermissions } from "@/lib/permissions";
@@ -2048,6 +2049,26 @@ export default function OrderDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Shoot-days claims (Wes ruling B) — renders only when lines
+          carry claims; PENDING claims block APPROVED server-side. */}
+      <DayClaimsPanel
+        orderId={order.id}
+        lines={(order.lineItems as any[]).map((li) => ({
+          id: li.id,
+          description: li.description,
+          type: li.type,
+          department: li.department,
+          pickupDate: String(li.pickupDate),
+          returnDate: String(li.returnDate),
+          computedDays: li.computedDays ?? null,
+          claimedDays: li.claimedDays ?? null,
+          claimStatus: li.claimStatus ?? 'NONE',
+          claimNote: li.claimNote ?? null,
+          billableDays: li.billableDays ?? null,
+        }))}
+        onChanged={() => void fetchOrder()}
+      />
 
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">

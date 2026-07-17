@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { findPendingDayClaims } from '@/lib/orders/dayClaimGate'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
@@ -259,11 +260,22 @@ export async function POST(
       select: { status: true, sentAt: true, wonAt: true, lostAt: true },
     })
     if (cur && (cur.status === 'QUOTE_SENT' || cur.status === 'DRAFT')) {
-      const sync = computeQuoteStatusSync('APPROVED', cur)
-      await prisma.order.update({
-        where: { id: orderRow.id },
-        data: { status: 'APPROVED', ...sync },
-      })
+      // Shoot-days gate (Wes ruling B): the signature is recorded
+      // regardless, but the order does NOT advance to APPROVED while a
+      // gear/vehicle line carries a PENDING claim — the agent resolves
+      // the claim in HQ and then approves. Stage lines never block.
+      const pendingClaims = await findPendingDayClaims(orderRow.id)
+      if (pendingClaims.length > 0) {
+        console.warn(
+          `[portal/agreement/sign] order ${orderRow.id} signed but held pre-APPROVED: ${pendingClaims.length} pending shoot-days claim(s)`,
+        )
+      } else {
+        const sync = computeQuoteStatusSync('APPROVED', cur)
+        await prisma.order.update({
+          where: { id: orderRow.id },
+          data: { status: 'APPROVED', ...sync },
+        })
+      }
     }
   } catch (err) {
     console.error('[portal/agreement/sign] APPROVED transition failed:', err)

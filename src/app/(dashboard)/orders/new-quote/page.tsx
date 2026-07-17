@@ -60,6 +60,10 @@ interface ResolvedItem {
    *  "$X/day · total on dates" instead of a fake 1-day total.
    *  See computeLineTotal() in src/lib/orders/billing.ts. */
   billableDays: number | null;
+  /** Client shoot-days CLAIM from the public order form (cart
+   *  conversion) — a REQUEST persisted on the line as PENDING; never
+   *  prices anything until the agent confirms. */
+  claimedDays?: number | null;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null;
@@ -193,6 +197,8 @@ interface SupplyOrderInquiryMetadata {
     qty?: number;
     quantity?: number;
     days: number | null;
+    /** Client shoot-days CLAIM captured by the public form. */
+    claimedDays?: number | null;
     pickupDate?: string;
     returnDate?: string;
     lineTotal: number;
@@ -842,6 +848,7 @@ function NewQuotePageInner() {
                 department: 'VEHICLES' as const,
                 rateType: 'DAILY' as const,
                 billableDays: line.days ?? 1,
+                claimedDays: line.claimedDays ?? null,
                 matchedProduct: acId ? { id: acId, type: 'ASSET_CATEGORY' as const, name: line.name } : null,
               };
             }
@@ -853,6 +860,7 @@ function NewQuotePageInner() {
               department: (line.department ?? 'PRO_SUPPLIES') as ResolvedItem['department'],
               rateType: isExpendable ? ('FLAT' as const) : ('DAILY' as const),
               billableDays: isExpendable ? 1 : line.days ?? 1,
+              claimedDays: isExpendable ? null : line.claimedDays ?? null,
               matchedProduct: { id: line.itemId, type: 'INVENTORY' as const, name: line.name },
             };
           });
@@ -1603,6 +1611,7 @@ function NewQuotePageInner() {
             pickupDate: it.pickupDate,
             returnDate: it.returnDate,
             billableDays: it.billableDays,
+            claimedDays: it.claimedDays ?? null,
             packageInstanceId: it.packageInstanceId ?? null,
             packageId: it.packageId ?? null,
             isPackageHeader: !!it.isPackageHeader,
