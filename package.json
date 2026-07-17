@@ -24,6 +24,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@auth/prisma-adapter": "^1.6.0",
+    "@napi-rs/canvas": "^0.1.100",
     "@prisma/client": "^6.4.0",
     "@react-pdf/renderer": "^4.5.1",
     "@sendgrid/mail": "^8.1.4",

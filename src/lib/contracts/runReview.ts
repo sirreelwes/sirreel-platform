@@ -14,10 +14,13 @@ import {
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import {
+  buildAnnotationManifest,
   clauseMatches,
+  extractPdfTextLayer,
   formatManifestForPrompt,
   manifestHasMarkup,
   normalizeForMatch,
+  renderPdfPageImages,
   type MarkupManifest,
 } from '@/lib/contracts/annotationManifest'
 
@@ -35,21 +38,21 @@ const STANDARD_AGREEMENT_PATH = path.join(
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, fetch: globalThis.fetch as any })
 
 export interface RunReviewInput {
-  uploadedBase64: string
+  /**
+   * The client's uploaded PDF. The review is CANONICALLY MULTIMODAL:
+   * from this buffer the pipeline ALWAYS derives all three inputs —
+   * TEXT LAYER (pdfjs extraction), ANNOTATION GROUND TRUTH (the
+   * markup manifest), and VISUAL GROUND TRUTH (every page rasterized
+   * to an image). If ANY of the three fails to build, the review
+   * fails loudly — never silently degrades to a subset.
+   */
+  uploadedPdf: Buffer
   companyName?: string
   secondRoundClauses?: string[]
-  /**
-   * Deterministic markup extraction of the uploaded PDF (see
-   * annotationManifest.ts). When present with markup, it is fed to the
-   * AI as a ground-truth content block and drives the retained-strike /
-   * dropped-insertion guardrails. Null/absent = no annotations found or
-   * extraction unavailable — the review runs as before.
-   */
-  annotationManifest?: MarkupManifest | null
 }
 
 export type RunReviewResult =
-  | { ok: true; review: any; rawText: string }
+  | { ok: true; review: any; rawText: string; annotationManifest: MarkupManifest }
   | { ok: false; error: string; rawOutput?: string; status: number }
 
 const THIRD_PARTY_AUTO_FLAG_REASON =
@@ -64,7 +67,35 @@ function baselineClauseText(): string {
 }
 
 export async function runContractReviewAi(input: RunReviewInput): Promise<RunReviewResult> {
-  const { uploadedBase64, companyName, secondRoundClauses, annotationManifest } = input
+  const { uploadedPdf, companyName, secondRoundClauses } = input
+
+  // ── The three canonical inputs. Each failure is FATAL and named —
+  //    a review must never silently run on a subset (origin: review
+  //    fd97acb0, where the manifest pre-pass threw in prod, the catch
+  //    swallowed it, and a flattened counter-PDF was declared
+  //    "identical to baseline, 0 changes"). ──
+  let annotationManifest: MarkupManifest
+  let textLayerPages: string[]
+  let pageImages: Array<{ page: number; jpegBase64: string }>
+  try {
+    annotationManifest = await buildAnnotationManifest(uploadedPdf)
+  } catch (err) {
+    console.error('[contract-review] FATAL: annotation manifest pre-pass failed:', err)
+    return { ok: false, status: 500, error: `Annotation pre-pass failed — review aborted (never runs without it): ${err instanceof Error ? err.message : String(err)}` }
+  }
+  try {
+    textLayerPages = await extractPdfTextLayer(uploadedPdf)
+  } catch (err) {
+    console.error('[contract-review] FATAL: text-layer extraction failed:', err)
+    return { ok: false, status: 500, error: `Text-layer extraction failed — review aborted (never runs without it): ${err instanceof Error ? err.message : String(err)}` }
+  }
+  try {
+    pageImages = await renderPdfPageImages(uploadedPdf)
+  } catch (err) {
+    console.error('[contract-review] FATAL: page rasterization failed:', err)
+    return { ok: false, status: 500, error: `Page rasterization failed — review aborted (never runs without it): ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const redlineSourceUnknown = !manifestHasMarkup(annotationManifest)
 
   let standardBase64: string
   try {
@@ -98,11 +129,7 @@ export async function runContractReviewAi(input: RunReviewInput): Promise<RunRev
 
   const secondRoundHeader = formatSecondRoundClausesForUserPrompt(secondRoundClauses)
 
-  const userText = `The first attached PDF is the client's redlined version of our rental agreement (look for red text, strikethroughs, and underlined additions).
-
-The second PDF is SirReel's clean standard rental agreement baseline.
-
-${companyName ? `Client company: "${companyName}".\n\n` : ''}${secondRoundHeader}When you draft \`suggestedCounter\` for any change, use the per-clause Preferred language from the playbook above as the source of truth (or the Acceptable Fallback for any clause listed in SECOND-ROUND CLAUSES). When the playbook has no entry for a clause, fall back to the baseline clause text below for voice, structure, and defined terms. The text in \`suggestedCounter\` will be rendered verbatim into the counter-PDF as the operative clause language — it must read as a complete contract clause, not as guidance or commentary. Strategic reasoning belongs in \`counterReasoning\`.
+  const userText = `${companyName ? `Client company: "${companyName}".\n\n` : ''}${secondRoundHeader}When you draft \`suggestedCounter\` for any change, use the per-clause Preferred language from the playbook above as the source of truth (or the Acceptable Fallback for any clause listed in SECOND-ROUND CLAUSES). When the playbook has no entry for a clause, fall back to the baseline clause text below for voice, structure, and defined terms. The text in \`suggestedCounter\` will be rendered verbatim into the counter-PDF as the operative clause language — it must read as a complete contract clause, not as guidance or commentary. Strategic reasoning belongs in \`counterReasoning\`.
 
 === SIRREEL BASELINE CLAUSE TEXT (canonical source of truth absent playbook coverage) ===
 
@@ -110,20 +137,35 @@ ${baselineClauseText()}
 
 === END BASELINE CLAUSE TEXT ===
 
-Compare the redlined document against the baseline per your instructions. Output ONLY the JSON object — no preamble, no markdown fences.`
+Compare the client document (provided above as THREE labeled inputs: TEXT LAYER, VISUAL GROUND TRUTH page images, ANNOTATION GROUND TRUTH) against the attached baseline PDF per your instructions. Cross-check every clause across all three inputs and fill \`sourceAgreement\` on every change. Output ONLY the JSON object — no preamble, no markdown fences.`
+
+  // Canonical three-input assembly. The baseline stays a PDF document
+  // block (it is the reference, not the subject); the CLIENT document
+  // arrives ONLY as the three explicit inputs so nothing is implicit.
+  const textLayerBlock =
+    `=== INPUT 1/3: TEXT LAYER (pdfjs extraction of the client document) ===\n\n` +
+    `NOTE: PDF annotations (strikethroughs drawn over text, margin notes) do NOT alter this text — struck words still appear here as normal text.\n\n` +
+    textLayerPages.map((t, i) => `[page ${i + 1}]\n${t}`).join('\n\n') +
+    `\n\n=== END TEXT LAYER ===`
+
+  const annotationBlock = manifestHasMarkup(annotationManifest)
+    ? `=== INPUT 3/3: ANNOTATION GROUND TRUTH ===\n\n${formatManifestForPrompt(annotationManifest)}`
+    : `=== INPUT 3/3: ANNOTATION GROUND TRUTH ===\n\nZERO annotations were extracted from this PDF — REDLINE SOURCE UNKNOWN. This does NOT mean the document is clean: redlines are frequently FLATTENED (Word tracked-changes exported to PDF, scans, or regenerated documents), leaving no annotation objects. Do NOT conclude "no changes proposed" from the absence of annotations. Instead, diff the TEXT LAYER against the baseline clause-by-clause and inspect the VISUAL page images for strikethrough glyphs, colored text, margin notes, or layout differences. Flag \`needsOperatorReview\` on anything ambiguous.`
 
   const content: any[] = [
-    { type: 'document', source: { type: 'base64', media_type: 'application/pdf' as const, data: uploadedBase64 } },
     { type: 'document', source: { type: 'base64', media_type: 'application/pdf' as const, data: standardBase64 } },
+    { type: 'text', text: textLayerBlock },
+    {
+      type: 'text',
+      text: `=== INPUT 2/3: VISUAL GROUND TRUTH — the client document rendered page-by-page (${pageImages.length} page${pageImages.length === 1 ? '' : 's'}) follows. LOOK at every page: strikethroughs, red/colored text, handwriting, stamps, margin notes. ===`,
+    },
+    ...pageImages.map((img) => ({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/jpeg' as const, data: img.jpegBase64 },
+    })),
+    { type: 'text', text: annotationBlock },
     { type: 'text', text: userText },
   ]
-
-  // Annotation ground truth — deterministic strike/insertion extraction.
-  // Third content block so the model is held to the physical markup, not
-  // the clean text layer (which still contains every struck word).
-  if (annotationManifest && manifestHasMarkup(annotationManifest)) {
-    content.push({ type: 'text', text: formatManifestForPrompt(annotationManifest) })
-  }
 
   const response = await client.messages.create({
     model: REVIEW_MODEL,
@@ -146,8 +188,18 @@ Compare the redlined document against the baseline per your instructions. Output
     }
   }
 
+  // Server-side deterministic stamp — never trust the model to
+  // self-report its input conditions.
+  if (review && typeof review === 'object') {
+    review._meta = {
+      ...(review._meta || {}),
+      multimodal: { textLayerPages: textLayerPages.length, pageImages: pageImages.length, annotations: annotationManifest.struck.length + annotationManifest.inserted.length },
+      redlineSourceUnknown,
+    }
+  }
+
   applyPostAiGuardrails(review, annotationManifest)
-  return { ok: true, review, rawText: text }
+  return { ok: true, review, rawText: text, annotationManifest }
 }
 
 const PREFERRED_INDEMNITY_COUNTER = `Lessee/Renter ("You") agree to defend, indemnify, and hold SirReel Production Vehicles, Inc. dba SirReel Studio Rentals, our agents, employees, assignees, suppliers, sub-lessors and sub-renters ("Us" or "We") harmless from and against any and all claims, actions, causes of action, demands, rights, verifiable damages of any kind, costs, expenses and compensation whatsoever including court costs and reasonable outside attorneys' fees ("Claims"), in any way arising from, or in connection with, the Vehicles and Equipment rented/leased (which vehicles and equipment, together, are referred to in this document as "Equipment"), including, without limitation, as a result of its use, maintenance, or possession, irrespective of the cause of the Claim, except to the extent caused by Our gross negligence or willful misconduct, or by a pre-existing latent or structural defect actually known by Lessor and not disclosed to You, from the time You take care, custody or control of the Equipment until the Equipment is returned to Our care, custody and control.`
@@ -271,6 +323,20 @@ export function applyPostAiGuardrails(review: any, annotationManifest?: MarkupMa
         const msg = `Markup mismatch: the client inserted a note near clause ${ref} (${notes}) that this change does not account for.`
         ch.operatorReviewReason = ch.operatorReviewReason ? `${ch.operatorReviewReason} ${msg}` : msg
       }
+    }
+  }
+
+  // ── Three-source reconciliation (flag-only, never auto-resolve) ──
+  // The model reports what each input showed per clause; a declared
+  // disagreement always reaches the operator. We never pick a winner
+  // and never rewrite legal text.
+  for (const ch of review.changes) {
+    if (ch.type === 'auto_approved') continue
+    const sa = ch.sourceAgreement
+    if (sa && sa.agree === false) {
+      ch.needsOperatorReview = true
+      const msg = `Source disagreement — text layer: "${String(sa.textLayer ?? '').slice(0, 120)}" · manifest: "${String(sa.manifest ?? '').slice(0, 120)}" · image: "${String(sa.image ?? '').slice(0, 120)}". Verify against the source PDF; do not trust any single reading.`
+      ch.operatorReviewReason = ch.operatorReviewReason ? `${ch.operatorReviewReason} ${msg}` : msg
     }
   }
 

@@ -19,35 +19,11 @@
  * match no text are reported in `unmapped` rather than guessed at.
  */
 
-export interface StruckSpan {
-  page: number
-  /** Verbatim words physically under the strike, reading order. */
-  text: string
-  kind: 'strikeout' | 'line' | 'ink'
-  /** Best-effort clause the strike falls in (e.g. "7", "Fleet 4"), null when unanchored. */
-  clauseGuess: string | null
-}
-
-export interface InsertedNote {
-  page: number
-  text: string
-  clauseGuess: string | null
-}
-
-export interface UnmappedGraphic {
-  page: number
-  kind: string
-  note: string
-}
-
-export interface MarkupManifest {
-  version: 1
-  pages: number
-  struck: StruckSpan[]
-  inserted: InsertedNote[]
-  unmapped: UnmappedGraphic[]
-  extractedAt: string
-}
+/* Types + pure helpers live in markupShared.ts (client-safe); this
+ * module holds the server-only PDF engine (pdfjs + native canvas) and
+ * re-exports the shared surface for existing server-side importers. */
+export * from './markupShared'
+import { type InsertedNote, type MarkupManifest, type StruckSpan, type UnmappedGraphic } from './markupShared'
 
 interface Word {
   x0: number
@@ -66,6 +42,8 @@ interface TextLine {
 }
 
 const HEADING_RE = /^(\d{1,2})\.\s+\S/
+
+
 
 /**
  * Build the manifest from a PDF buffer. pdfjs-dist is imported
@@ -298,73 +276,74 @@ function normalizeInkStroke(stroke: any): { x: number; y: number }[] {
   return stroke.map((p: any) => ({ x: p.x, y: p.y }))
 }
 
-/** True when the manifest carries any redline signal worth acting on. */
-export function manifestHasMarkup(m: MarkupManifest | null | undefined): boolean {
-  return !!m && (m.struck.length > 0 || m.inserted.length > 0)
+/**
+ * TEXT LAYER extraction — one reading-order string per page. This is
+ * the first of the three canonical review inputs (text layer,
+ * annotation manifest, page images). Throws on failure — the caller
+ * must fail loudly, never degrade.
+ */
+export async function extractPdfTextLayer(pdf: Buffer | Uint8Array): Promise<string[]> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const doc = await pdfjs.getDocument({
+    data: pdf instanceof Buffer ? new Uint8Array(pdf) : pdf,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  }).promise
+  const pages: string[] = []
+  for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
+    const page = await doc.getPage(pageNo)
+    const tc = await page.getTextContent()
+    // Group items into y-lines (PDF origin bottom-left → higher y first).
+    const lines: Array<{ y: number; parts: Array<{ x: number; str: string }> }> = []
+    for (const item of tc.items as any[]) {
+      if (!item.str || !item.str.trim()) continue
+      const y: number = item.transform[5]
+      const x: number = item.transform[4]
+      const line = lines.find((l) => Math.abs(l.y - y) < 3)
+      if (line) line.parts.push({ x, str: item.str })
+      else lines.push({ y, parts: [{ x, str: item.str }] })
+    }
+    lines.sort((a, b) => b.y - a.y)
+    pages.push(
+      lines
+        .map((l) => l.parts.sort((a, b) => a.x - b.x).map((p) => p.str).join(' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .join('\n'),
+    )
+  }
+  await doc.destroy()
+  return pages
 }
 
 /**
- * Loose clause matching between a manifest clauseGuess and the AI's
- * `clause` ref (which can be "7", a grouping "1-3", or "Fleet 4(b)").
+ * VISUAL GROUND TRUTH — rasterize EVERY page to a JPEG via pdfjs +
+ * @napi-rs/canvas. Third canonical review input. Throws on any page
+ * failure — the caller must fail loudly, never degrade to text-only.
  */
-export function clauseMatches(guess: string | null, changeRef: string | null | undefined): boolean {
-  if (!guess || !changeRef) return false
-  const g = guess.trim().toLowerCase()
-  const r = String(changeRef).trim().toLowerCase()
-  if (g === r) return true
-  // "Fleet 4" vs "Fleet 4(b)"
-  if (r.startsWith(g) || g.startsWith(r)) return true
-  // numeric guess inside a grouped ref like "1-3"
-  const gn = Number(g)
-  const range = r.match(/^(\d{1,2})\s*[-–]\s*(\d{1,2})$/)
-  if (Number.isInteger(gn) && range) {
-    return gn >= Number(range[1]) && gn <= Number(range[2])
+export async function renderPdfPageImages(
+  pdf: Buffer | Uint8Array,
+  opts: { scale?: number; quality?: number } = {},
+): Promise<Array<{ page: number; jpegBase64: string }>> {
+  const scale = opts.scale ?? 1.6 // ~115 DPI on US Letter — readable, size-sane
+  const quality = opts.quality ?? 80
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { createCanvas } = await import('@napi-rs/canvas')
+  const doc = await pdfjs.getDocument({
+    data: pdf instanceof Buffer ? new Uint8Array(pdf) : pdf,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  }).promise
+  const out: Array<{ page: number; jpegBase64: string }> = []
+  for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
+    const page = await doc.getPage(pageNo)
+    const viewport = page.getViewport({ scale })
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+    const ctx = canvas.getContext('2d')
+    await page.render({ canvasContext: ctx as any, viewport } as any).promise
+    out.push({ page: pageNo, jpegBase64: canvas.toBuffer('image/jpeg', quality).toString('base64') })
   }
-  return false
+  await doc.destroy()
+  if (out.length === 0) throw new Error('rasterization produced zero pages')
+  return out
 }
 
-/** Whitespace/quote/punctuation-tolerant normalization for containment checks. */
-export function normalizeForMatch(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[^a-z0-9$&'" ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-/**
- * The ground-truth content block inserted into the AI call. Kept
- * separate from the system prompt so re-runs on annotation-free PDFs
- * add nothing.
- */
-export function formatManifestForPrompt(m: MarkupManifest): string {
-  if (!manifestHasMarkup(m)) return ''
-  const lines: string[] = [
-    '=== ANNOTATION GROUND TRUTH (deterministic extraction from the PDF annotation objects) ===',
-    '',
-    "The client's redline lives in PDF annotations that do NOT alter the text layer — the plain text you read still contains every struck word. The list below was extracted programmatically by mapping each strike annotation's geometry to the words physically under it. Treat it as authoritative over the text layer.",
-    '',
-  ]
-  if (m.struck.length > 0) {
-    lines.push('PHYSICALLY STRUCK TEXT — the client deleted these exact spans. `proposed` for the affected clause MUST NOT contain them (write the surviving clause text after the deletion):')
-    for (const s of m.struck) {
-      lines.push(`- page ${s.page}${s.clauseGuess ? ` (clause ${s.clauseGuess})` : ''}: "${s.text}"`)
-    }
-    lines.push('')
-  }
-  if (m.inserted.length > 0) {
-    lines.push("CLIENT-INSERTED NOTES (FreeText annotations — includes handwritten-style margin notes AND form-field fill-ins like names/addresses; use judgment on which are redline changes). Where a note modifies a clause, reflect it in that clause's `proposed` and discuss it in `reasoning`:")
-    for (const n of m.inserted) {
-      lines.push(`- page ${n.page}${n.clauseGuess ? ` (near clause ${n.clauseGuess})` : ''}: "${n.text}"`)
-    }
-    lines.push('')
-  }
-  if (m.unmapped.length > 0) {
-    lines.push(`UNMAPPED GRAPHICS (${m.unmapped.length}): ${m.unmapped.map((u) => `p${u.page} ${u.kind} (${u.note})`).join('; ')}. These carry no extracted text — check them visually.`)
-    lines.push('')
-  }
-  lines.push('=== END ANNOTATION GROUND TRUTH ===')
-  return lines.join('\n')
-}

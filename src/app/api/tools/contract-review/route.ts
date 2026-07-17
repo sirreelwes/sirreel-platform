@@ -4,7 +4,6 @@ import { put } from '@vercel/blob'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { runContractReviewAi } from '@/lib/contracts/runReview'
-import { buildAnnotationManifest, type MarkupManifest } from '@/lib/contracts/annotationManifest'
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +41,6 @@ export async function POST(req: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer()
-    const uploadedBase64 = Buffer.from(bytes).toString('base64')
     const isPdf = file.type === 'application/pdf'
 
     if (!isPdf) {
@@ -84,21 +82,14 @@ export async function POST(req: NextRequest) {
       contentType: 'application/pdf',
     })
 
-    // Deterministic markup pre-pass — strike/insertion ground truth from
-    // the PDF's annotation objects. Extraction failure must never block
-    // a review; the AI call just runs without the ground-truth block.
-    let annotationManifest: MarkupManifest | null = null
-    try {
-      annotationManifest = await buildAnnotationManifest(Buffer.from(bytes))
-    } catch (err) {
-      console.warn('[contract-review] annotation manifest extraction failed:', err)
-    }
-
+    // Canonically multimodal — runContractReviewAi derives ALL THREE
+    // inputs (text layer, annotation manifest, page images) from the
+    // buffer and FAILS LOUDLY if any can't be built. No pre-pass here,
+    // no silent degradation (origin: review fd97acb0).
     const result = await runContractReviewAi({
-      uploadedBase64,
+      uploadedPdf: Buffer.from(bytes),
       companyName,
       secondRoundClauses,
-      annotationManifest,
     })
 
     if (!result.ok) {
@@ -133,14 +124,14 @@ export async function POST(req: NextRequest) {
         aiRiskLevel: typeof review.riskLevel === 'string' ? review.riskLevel : null,
         aiRecommendation:
           typeof review.recommendation === 'string' ? review.recommendation : null,
-        annotationManifest: annotationManifest
-          ? (JSON.parse(JSON.stringify(annotationManifest)) as object)
-          : undefined,
+        // Always persisted — the manifest is built on every review
+        // (an empty one is meaningful: redline source unknown).
+        annotationManifest: JSON.parse(JSON.stringify(result.annotationManifest)) as object,
       },
       select: { id: true },
     })
 
-    return NextResponse.json({ ok: true, review, reviewRecordId: reviewRecord.id, annotationManifest })
+    return NextResponse.json({ ok: true, review, reviewRecordId: reviewRecord.id, annotationManifest: result.annotationManifest })
   } catch (err: any) {
     console.error('[contract-review]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

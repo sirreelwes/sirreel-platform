@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
   if (isPdf) {
     try {
       const result = await runContractReviewAi({
-        uploadedBase64: buffer.toString('base64'),
+        uploadedPdf: buffer,
         companyName: orderRow.company?.name || '',
       })
       if (result.ok) {

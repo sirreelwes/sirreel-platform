@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { CANONICAL_CLAUSES } from '@/lib/contracts/contractClauses';
-import { clauseMatches, type MarkupManifest } from '@/lib/contracts/annotationManifest';
+import { clauseMatches, type MarkupManifest } from '@/lib/contracts/markupShared';
 
 const BASELINE_BY_REF = new Map(CANONICAL_CLAUSES.map((c) => [c.ref, c]));
 
@@ -109,6 +109,22 @@ export function ReviewResultPanel({
 
   return (
     <div className="space-y-4">
+      {/* REDLINE SOURCE UNKNOWN — the PDF carried zero annotations, so
+          the markup (if any) is flattened into the page. Stamped
+          server-side, never by the model. */}
+      {review._meta?.redlineSourceUnknown && (
+        <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3">
+          <div className="text-2xl">🔍</div>
+          <div>
+            <div className="text-sm font-bold text-amber-900">Redline source unknown — zero PDF annotations</div>
+            <p className="text-[12px] text-amber-800 mt-0.5 leading-relaxed">
+              This document carries no annotation objects. That does NOT mean it&apos;s clean — tracked changes
+              exported from Word, scans, and regenerated PDFs arrive flattened. The analysis relied on the
+              text-layer diff and rendered page images instead. Verify against the source PDF before deciding.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Summary */}
       <div className={`rounded-2xl p-5 border ${
         review.recommendation === 'reject' ? 'bg-red-50 border-red-200' :
@@ -213,6 +229,7 @@ export function ReviewResultPanel({
                     <div className="text-[10px] opacity-60 mb-1">The AI&apos;s read of the client&apos;s post-redline clause. Rendered verbatim into the counter-PDF if you Accept — check it against the markup ground truth below.</div>
                     <div className="bg-white/50 rounded-lg p-2">{change.proposed || <span className="opacity-50 italic">No clause text extracted.</span>}</div>
                   </div>
+                  <SourceAgreementPanel sa={change.sourceAgreement} />
                   <ClauseMarkupGroundTruth manifest={manifest} clauseRef={clauseRef} />
                   <div><div className="font-bold opacity-50 uppercase text-[9px] mb-0.5">Reasoning</div><div className="opacity-80">{change.reasoning}</div></div>
                   {change.suggestedCounter && (
@@ -540,6 +557,48 @@ function DiscussPanel({
               {sending ? '…' : 'Send'}
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Three-source reconciliation panel — what the TEXT LAYER, ANNOTATION
+ * manifest, and PAGE IMAGE each showed for this clause, per the model's
+ * required sourceAgreement report. Green when all three agree; red with
+ * a disagreement callout when they don't (the guardrail also forces
+ * needsOperatorReview in that case). Never auto-resolved.
+ */
+function SourceAgreementPanel({ sa }: { sa: any }) {
+  if (!sa || typeof sa !== 'object') return null;
+  const agree = sa.agree === true;
+  const rows: Array<[string, string]> = [
+    ['Text layer', String(sa.textLayer ?? '—')],
+    ['Annotations', String(sa.manifest ?? '—')],
+    ['Page image', String(sa.image ?? '—')],
+  ];
+  return (
+    <div className={`rounded-lg border p-2.5 ${agree ? 'bg-white border-gray-200' : 'bg-red-50 border-red-300'}`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className={`font-bold uppercase text-[9px] ${agree ? 'text-gray-500' : 'text-red-700'}`}>
+          Source cross-check (text · annotations · image)
+        </div>
+        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${agree ? 'bg-emerald-100 text-emerald-700' : 'bg-red-600 text-white'}`}>
+          {agree ? '✓ All three agree' : '⚠ Sources disagree'}
+        </span>
+      </div>
+      <div className="space-y-0.5">
+        {rows.map(([label, text]) => (
+          <div key={label} className="flex gap-2 text-[11px]">
+            <span className={`flex-shrink-0 w-20 font-semibold ${agree ? 'text-gray-400' : 'text-red-600'}`}>{label}</span>
+            <span className={agree ? 'text-gray-700' : 'text-red-800'}>{text}</span>
+          </div>
+        ))}
+      </div>
+      {!agree && (
+        <div className="mt-1.5 text-[10px] text-red-700 font-semibold">
+          Do not accept this clause without checking the source PDF — the three readings conflict.
         </div>
       )}
     </div>

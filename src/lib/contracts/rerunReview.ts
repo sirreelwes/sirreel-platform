@@ -1,7 +1,7 @@
 import { get } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { runContractReviewAi } from '@/lib/contracts/runReview'
-import { buildAnnotationManifest, type MarkupManifest } from '@/lib/contracts/annotationManifest'
+import { type MarkupManifest } from '@/lib/contracts/annotationManifest'
 
 export interface RerunInput {
   reviewId: string
@@ -59,22 +59,16 @@ export async function rerunContractReview(input: RerunInput): Promise<RerunResul
     return { ok: false, error: 'Failed to load original file', status: 500 }
   }
 
-  // Deterministic markup pre-pass. Extraction failure never blocks the
-  // re-run — the AI call just runs without the ground-truth block.
-  let annotationManifest: MarkupManifest | null = null
-  try {
-    annotationManifest = await buildAnnotationManifest(fileBuffer)
-  } catch (err) {
-    console.warn('[contract-review][rerun] annotation manifest extraction failed:', err)
-  }
-
+  // Canonically multimodal — runContractReviewAi derives ALL THREE
+  // inputs (text layer, annotation manifest, page images) from the
+  // buffer and FAILS LOUDLY if any can't be built.
   const result = await runContractReviewAi({
-    uploadedBase64: fileBuffer.toString('base64'),
+    uploadedPdf: fileBuffer,
     companyName: record.company?.name || '',
     secondRoundClauses,
-    annotationManifest,
   })
   if (!result.ok) return result
+  const annotationManifest: MarkupManifest = result.annotationManifest
 
   const review = result.review
   if (review && typeof review === 'object') {
@@ -104,9 +98,7 @@ export async function rerunContractReview(input: RerunInput): Promise<RerunResul
       aiResponse: review,
       aiRiskLevel: typeof review.riskLevel === 'string' ? review.riskLevel : null,
       aiRecommendation: typeof review.recommendation === 'string' ? review.recommendation : null,
-      annotationManifest: annotationManifest
-        ? (JSON.parse(JSON.stringify(annotationManifest)) as object)
-        : undefined,
+      annotationManifest: JSON.parse(JSON.stringify(annotationManifest)) as object,
       aiResponseHistory: history,
     },
   })
