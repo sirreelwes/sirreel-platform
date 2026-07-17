@@ -1,6 +1,7 @@
 import { Archivo, Hanken_Grotesk } from 'next/font/google'
 import { PublicSiteNav } from '@/components/site/PublicSiteNav'
 import { PublicSiteFooter } from '@/components/site/PublicSiteFooter'
+import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 import { hasPublishedSpaces } from '@/lib/site/spaces'
 
 /**
@@ -46,6 +47,9 @@ export default async function PublicSiteLayout({ children }: { children: React.R
       <PublicSiteNav liveStudioLinks={liveStudioLinks} />
       <main className="flex-1">{children}</main>
       <PublicSiteFooter />
+      {/* After-hours AI assistant — floating chat on every public page.
+          Handles FAQs + verified access-code release (server-side auth). */}
+      <PublicAssistantWidget />
     </div>
   )
 }

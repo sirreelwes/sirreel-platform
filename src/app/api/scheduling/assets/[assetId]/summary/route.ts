@@ -44,6 +44,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       model: true,
       mileage: true,
       notes: true,
+      accessCode: true,
       isActive: true,
       category: { select: { id: true, name: true, imageUrl: true } },
       maintenanceRecords: {
@@ -140,7 +141,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "JSON body required" }, { status: 400 });
   }
-  const data: { notes?: string | null; tier?: AssetTier } = {};
+  const data: { notes?: string | null; tier?: AssetTier; accessCode?: string | null } = {};
   if ("notes" in body) {
     if (body.notes !== null && typeof body.notes !== "string") {
       return NextResponse.json({ error: "notes must be a string or null" }, { status: 400 });
@@ -153,8 +154,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
     data.tier = body.tier as AssetTier;
   }
+  if ("accessCode" in body) {
+    // Per-vehicle keypad/lockbox code — released to verified drivers by
+    // the after-hours assistant. Fleet-editable here; capped to the
+    // column width. Trim to null on empty.
+    if (body.accessCode !== null && typeof body.accessCode !== "string") {
+      return NextResponse.json({ error: "accessCode must be a string or null" }, { status: 400 });
+    }
+    const code = typeof body.accessCode === "string" ? body.accessCode.trim().slice(0, 40) : "";
+    data.accessCode = code ? code : null;
+  }
   if (Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "nothing to update (notes and/or tier)" }, { status: 400 });
+    return NextResponse.json({ error: "nothing to update (notes, tier, and/or accessCode)" }, { status: 400 });
   }
 
   const exists = await prisma.asset.findUnique({ where: { id: assetId }, select: { id: true } });
@@ -165,7 +176,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const updated = await prisma.asset.update({
     where: { id: assetId },
     data,
-    select: { id: true, notes: true, tier: true },
+    select: { id: true, notes: true, tier: true, accessCode: true },
   });
   return NextResponse.json({ ok: true, asset: updated });
 }

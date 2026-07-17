@@ -153,6 +153,12 @@ model Asset {
   bitCertificateUrl       String?   @map("bit_certificate_url")
   bitCertificateExpiresAt DateTime? @map("bit_certificate_expires_at") @db.Date
 
+  // Per-vehicle keypad / lockbox access code — INTERNAL. Released to
+  // clients ONLY through the after-hours assistant's server-side driver
+  // verification (name + vehicle match against the active booking) or
+  // by an agent verbally. Never rendered on any public/portal surface.
+  accessCode String? @map("access_code") @db.VarChar(40)
+
   // Integration IDs
   rentalworksAssetId String? @map("rentalworks_asset_id")
   damageIdRef        String? @map("damage_id_ref")

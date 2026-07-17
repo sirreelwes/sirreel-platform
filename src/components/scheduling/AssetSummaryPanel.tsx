@@ -57,6 +57,8 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
   const [photoOk, setPhotoOk] = useState(true)
   const [notesDraft, setNotesDraft] = useState('')
   const [notesDirty, setNotesDirty] = useState(false)
+  const [codeDraft, setCodeDraft] = useState('')
+  const [codeDirty, setCodeDirty] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -69,6 +71,8 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
       setData(json.asset)
       setNotesDraft(json.asset.notes ?? '')
       setNotesDirty(false)
+      setCodeDraft(json.asset.accessCode ?? '')
+      setCodeDirty(false)
       setPhotoIdx(0)
       setPhotoOk(true)
     } catch (e) {
@@ -95,6 +99,7 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
       if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `save failed (${res.status})`)
       setData((d: any) => (d ? { ...d, ...json.asset } : d))
       if ('notes' in body) setNotesDirty(false)
+      if ('accessCode' in body) setCodeDirty(false)
       onChanged?.()
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e))
@@ -289,6 +294,39 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
                   <div className="text-[12px] text-gray-700 whitespace-pre-wrap">{data.notes || <span className="text-gray-400 italic">No notes.</span>}</div>
                 )}
               </div>
+
+              {/* Vehicle access code — released to verified drivers by the
+                  after-hours site assistant. Fleet-only edit; never shown
+                  on any public/portal surface. */}
+              {canEdit && (
+                <div className="mt-4">
+                  <div className="text-[9px] uppercase tracking-wide text-gray-400 font-semibold mb-1">
+                    Access code <span className="text-gray-300 normal-case">· released to verified drivers after-hours</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={codeDraft}
+                      placeholder="e.g. 4821#"
+                      autoComplete="off"
+                      spellCheck={false}
+                      data-1p-ignore
+                      data-lpignore="true"
+                      onChange={(e) => { setCodeDraft(e.target.value); setCodeDirty(true) }}
+                      className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[12px] font-mono text-gray-900 placeholder:text-gray-300"
+                    />
+                    {codeDirty && (
+                      <button
+                        onClick={() => patch({ accessCode: codeDraft })}
+                        disabled={saving}
+                        className="text-[11px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40 flex-shrink-0"
+                      >
+                        {saving ? 'Saving…' : 'Save code'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {err && <p className="text-xs text-rose-600 mt-3">{err}</p>}
             </div>
