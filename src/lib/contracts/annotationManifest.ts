@@ -46,12 +46,51 @@ const HEADING_RE = /^(\d{1,2})\.\s+\S/
 
 
 /**
+ * pdfjs loader shared by all three engine entry points. Pins the
+ * fake-worker path to the traced node_modules file when it exists
+ * (Vercel lambda: /var/task/node_modules/…) — pdfjs otherwise resolves
+ * pdf.worker.mjs relative to pdf.mjs at runtime, an import nft can't
+ * see, which is how the worker went missing from the serverless bundle.
+ * Works together with next.config's outputFileTracingIncludes.
+ */
+/** Words whose center falls inside ANY of the quads (±tolerance). */
+function wordsInQuads(
+  quads: Array<{ x0: number; y0: number; x1: number; y1: number }>,
+  words: Word[],
+): Word[] {
+  const hit: Word[] = []
+  for (const q of quads) {
+    for (const w of words) {
+      const wcx = (w.x0 + w.x1) / 2
+      const wcy = w.y + w.h / 2
+      if (wcx > q.x0 - 1 && wcx < q.x1 + 1 && wcy > q.y0 - 3 && wcy < q.y1 + 3) hit.push(w)
+    }
+  }
+  return hit
+}
+
+async function loadPdfjs() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  try {
+    const path = await import('node:path')
+    const fs = await import('node:fs')
+    const candidate = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs')
+    if (fs.existsSync(candidate) && pdfjs.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc = candidate
+    }
+  } catch {
+    // Non-Node runtime — pdfjs's default resolution applies.
+  }
+  return pdfjs
+}
+
+/**
  * Build the manifest from a PDF buffer. pdfjs-dist is imported
  * dynamically so this module's types/helpers stay importable from
  * client components without dragging the PDF engine into the bundle.
  */
 export async function buildAnnotationManifest(pdf: Buffer | Uint8Array): Promise<MarkupManifest> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfjs = await loadPdfjs()
   const doc = await pdfjs.getDocument({
     data: pdf instanceof Buffer ? new Uint8Array(pdf) : pdf,
     isEvalSupported: false,
@@ -121,7 +160,16 @@ export async function buildAnnotationManifest(pdf: Buffer | Uint8Array): Promise
 
     // ── annotations ──
     const annots = await page.getAnnotations()
+    // iOS Quartz (AppendMode) markup carries a /Popup companion per
+    // annotation, and pdfjs surfaces that popup AS A SECOND annotation
+    // wearing the parent's subtype (observed: StrikeOut 46R + clone
+    // 47R with identical quads, where 47R is 46R's popupRef and its
+    // own id — the popup object itself). Skip every annotation whose
+    // id is referenced as a popupRef; without this each strike counts
+    // twice (Black Dog return: 13 spans instead of the true 7).
+    const popupIds = new Set((annots as any[]).map((a) => a.popupRef).filter(Boolean))
     for (const a of annots as any[]) {
+      if (a.id && popupIds.has(a.id)) continue
       const subtype: string = a.subtype
       const contents: string =
         (a.contentsObj && typeof a.contentsObj.str === 'string' && a.contentsObj.str) ||
@@ -146,16 +194,28 @@ export async function buildAnnotationManifest(pdf: Buffer | Uint8Array): Promise
       }
 
       if (subtype === 'StrikeOut') {
-        const quads = normalizeQuadPoints(a.quadPoints)
-        const hit: Word[] = []
-        for (const q of quads) {
-          for (const w of words) {
-            const wcx = (w.x0 + w.x1) / 2
-            const wcy = w.y + w.h / 2
-            if (wcx > q.x0 - 1 && wcx < q.x1 + 1 && wcy > q.y0 - 3 && wcy < q.y1 + 3) hit.push(w)
-          }
-        }
+        // QuadPoints give exact text-anchored rects — one quad per
+        // text line, so a multi-line strike carries several quads.
+        // EVERY quad is mapped; the hit set spans them all.
+        const hit = wordsInQuads(normalizeQuadPoints(a.quadPoints), words)
         pushStruck(struck, unmapped, pageNo, 'strikeout', hit)
+        continue
+      }
+
+      if (subtype === 'Underline' || subtype === 'Highlight') {
+        // QuadPoint-anchored like StrikeOut, but the semantics are NOT
+        // deletion — underline typically marks added/emphasized text,
+        // highlight marks attention. Word-mapped and surfaced verbatim
+        // (in `unmapped` so nothing ever reads them as a strike).
+        const hit = wordsInQuads(normalizeQuadPoints(a.quadPoints), words)
+        const text = [...hit].sort((x, y) => y.y - x.y || x.x0 - y.x0).map((w) => w.text).join(' ')
+        unmapped.push({
+          page: pageNo,
+          kind: subtype.toLowerCase(),
+          note: text
+            ? `${subtype.toLowerCase()}d text (emphasis/possible addition, NOT a deletion): "${text}"`
+            : `${subtype} annotation with no text under it`,
+        })
         continue
       }
 
@@ -205,7 +265,9 @@ export async function buildAnnotationManifest(pdf: Buffer | Uint8Array): Promise
       }
 
       if (subtype === 'Stamp') {
-        unmapped.push({ page: pageNo, kind: 'stamp', note: 'stamp graphic (signature/initials image) — visual only' })
+        // SIGNATURE/INK — initials or signature image. Carries NO text
+        // semantics and is NEVER an edit; reported for visual context only.
+        unmapped.push({ page: pageNo, kind: 'signature-ink', note: 'SIGNATURE/INK stamp (initials or signature image) — not an edit' })
         continue
       }
       // Widgets, Squares (form boxes), Links etc. carry no redline meaning.
@@ -283,7 +345,7 @@ function normalizeInkStroke(stroke: any): { x: number; y: number }[] {
  * must fail loudly, never degrade.
  */
 export async function extractPdfTextLayer(pdf: Buffer | Uint8Array): Promise<string[]> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfjs = await loadPdfjs()
   const doc = await pdfjs.getDocument({
     data: pdf instanceof Buffer ? new Uint8Array(pdf) : pdf,
     isEvalSupported: false,
@@ -326,7 +388,7 @@ export async function renderPdfPageImages(
 ): Promise<Array<{ page: number; jpegBase64: string }>> {
   const scale = opts.scale ?? 1.6 // ~115 DPI on US Letter — readable, size-sane
   const quality = opts.quality ?? 80
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const pdfjs = await loadPdfjs()
   const { createCanvas } = await import('@napi-rs/canvas')
   const doc = await pdfjs.getDocument({
     data: pdf instanceof Buffer ? new Uint8Array(pdf) : pdf,
