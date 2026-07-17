@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
+import { fetchPaymentAttachments } from '@/lib/email/paymentInfoAttachments'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
@@ -142,19 +143,39 @@ export async function POST(req: NextRequest) {
 
     const settings = await prisma.siteSetting.findUnique({
       where: { id: 'singleton' },
-      select: { paymentDetails: true },
+      select: {
+        paymentDetails: true,
+        paymentPayeeName: true,
+        paymentAchFormKey: true,
+        paymentAchFormFilename: true,
+        paymentBankInfoKey: true,
+        paymentBankInfoFilename: true,
+      },
     })
     const details = settings?.paymentDetails?.trim() || null
 
     if (qualifies && person && details) {
       // KNOWN — send to the RESOLVED on-file address, never the
       // submitted string (they can differ via aliases/merges).
-      const email = buildPaymentInfoEmail({ firstName: person.firstName, paymentDetails: details })
+      const email = buildPaymentInfoEmail({
+        firstName: person.firstName,
+        payeeName: settings?.paymentPayeeName ?? null,
+        paymentDetails: details,
+      })
+      // Private-Blob PDF attachments — a fetch failure NEVER blocks the
+      // email; dropped slots are named and billing@ is told below.
+      const { attachments, dropped } = await fetchPaymentAttachments({
+        achFormKey: settings?.paymentAchFormKey ?? null,
+        achFormFilename: settings?.paymentAchFormFilename ?? null,
+        bankInfoKey: settings?.paymentBankInfoKey ?? null,
+        bankInfoFilename: settings?.paymentBankInfoFilename ?? null,
+      })
       const sent = await sendAgreementEmail({
         to: [person.email],
         subject: email.subject,
         html: email.html,
         text: email.text,
+        attachments: attachments.length > 0 ? attachments : undefined,
         label: 'payment-info',
       })
       await prisma.auditLog.create({
@@ -165,7 +186,14 @@ export async function POST(req: NextRequest) {
           entityType: 'Person',
           entityId: person.id,
           oldValues: { submittedEmail: submitted },
-          newValues: { sentTo: person.email, sendOk: sent.ok, at: new Date().toISOString() },
+          // Counts/filenames only — never the details or file contents.
+          newValues: {
+            sentTo: person.email,
+            sendOk: sent.ok,
+            attachmentsSent: attachments.length,
+            attachmentsDropped: dropped.length,
+            at: new Date().toISOString(),
+          },
         },
       })
       if (!sent.ok) {
@@ -184,6 +212,12 @@ export async function POST(req: NextRequest) {
             ? `Payment info sent to ${person.email} (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}).`
             : `Payment info delivery to ${person.email} FAILED (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}) — follow up manually.`,
           `Requested via the public form by: ${submitted}`,
+          attachments.length > 0
+            ? `${attachments.length} PDF attachment(s) included.`
+            : 'No PDF attachments were configured.',
+          ...(dropped.length > 0
+            ? [`⚠ ATTACHMENTS DROPPED (fetch failed, inline details still sent): ${dropped.join('; ')}. Re-check the files in /admin/payment-info.`]
+            : []),
           `This is a sales signal — the client is at the paying stage.`,
         ],
       )

@@ -4905,6 +4905,18 @@ model SiteSetting {
   /// HTML response, never a public file, never client-reachable. Plain
   /// text, forwardable to an AP department. Changes are audit-logged.
   paymentDetails          String? @map("payment_details") @db.Text
+  /// Canonical payee name rendered in the payment-info email (do NOT
+  /// hardcode a company name in the template). Admin-managed.
+  paymentPayeeName        String? @map("payment_payee_name")
+  /// Two PRIVATE-Blob PDF attachments for the payment-info email —
+  /// "ACH Payment Information Form (bank)" and "ACH / Wire Banking
+  /// Information (SirReel)". Stored blobKey (server-side fetch) +
+  /// original filename (attachment name). NEVER served by any public
+  /// route/proxy — private storage + email attachment ONLY.
+  paymentAchFormKey       String? @map("payment_ach_form_key")
+  paymentAchFormFilename  String? @map("payment_ach_form_filename")
+  paymentBankInfoKey      String? @map("payment_bank_info_key")
+  paymentBankInfoFilename String? @map("payment_bank_info_filename")
 
   formCoiUrl              String? @map("form_coi_url")
   formW9Url               String? @map("form_w9_url")
