@@ -169,7 +169,10 @@ Compare the client document (provided above as THREE labeled inputs: TEXT LAYER,
 
   const response = await client.messages.create({
     model: REVIEW_MODEL,
-    max_tokens: 8000,
+    // 20k — the multimodal output contract (per-change sourceAgreement
+    // + full clause transcriptions) overflows 8k on heavily-marked
+    // documents, truncating the JSON mid-object (Black Dog return).
+    max_tokens: 20000,
     system: systemPrompt,
     messages: [{ role: 'user', content }],
   })
