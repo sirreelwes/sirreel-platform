@@ -72,6 +72,36 @@ async function notifyBilling(subject: string, lines: string[]): Promise<void> {
   }
 }
 
+/**
+ * Additive Action-Queue visibility — surface the request as a
+ * dashboard Alert (the "⚡ Needs Attention" engine) so it doesn't live
+ * only in the pipeline Inquiry + billing@ inbox. High severity: a
+ * client trying to pay. No expires_at — the unmatched one MUST NOT rot;
+ * it stays until an operator dismisses it. Never contains banking
+ * details. Failure never blocks the response or the Inquiry write.
+ */
+async function emitPaymentInfoAlert(input: {
+  kind: 'sent' | 'unmatched'
+  title: string
+  body: string
+  link: string | null
+}): Promise<void> {
+  try {
+    await prisma.alert.create({
+      data: {
+        type: 'payment_info_request',
+        title: input.title,
+        body: input.body,
+        severity: 'high',
+        link: input.link,
+        // expires_at intentionally null — must not auto-vanish.
+      },
+    })
+  } catch (err) {
+    console.error('[payment-info] action-queue alert failed:', err)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
 
@@ -114,10 +144,11 @@ export async function POST(req: NextRequest) {
           select: {
             job: {
               select: {
+                id: true,
                 status: true,
                 jobCode: true,
                 name: true,
-                company: { select: { name: true } },
+                company: { select: { id: true, name: true } },
               },
             },
           },
@@ -130,7 +161,7 @@ export async function POST(req: NextRequest) {
           firstName: string | null
           lastName: string | null
           jobContacts: Array<{
-            job: { status: string; jobCode: string; name: string; company: { name: string } | null }
+            job: { id: string; status: string; jobCode: string; name: string; company: { id: string; name: string } | null }
           }>
         }
       | null
@@ -239,9 +270,18 @@ export async function POST(req: NextRequest) {
           `This is a sales signal — the client is at the paying stage.`,
         ],
       )
+      // Action-Queue item — send happened; the action is a light-touch
+      // confirm, not a re-send.
+      const clientLabel = j.company?.name || personName
+      await emitPaymentInfoAlert({
+        kind: 'sent',
+        title: `Payment info sent to ${clientLabel} — confirm received / follow up`,
+        body: `Requested by ${submitted} · job ${j.jobCode} · ${new Date().toLocaleString('en-US')}${sent.ok ? '' : ' · ⚠ email delivery FAILED, follow up manually'}`,
+        link: j.id ? `/jobs/${j.id}` : j.company?.id ? `/crm/${j.company.id}` : null,
+      })
     } else {
       // UNKNOWN (or details unconfigured) — agent queue, send NOTHING.
-      await prisma.inquiry.create({
+      const inquiry = await prisma.inquiry.create({
         data: {
           source: 'WEB_FORM',
           status: 'NEW',
@@ -249,6 +289,7 @@ export async function POST(req: NextRequest) {
           description: `Payment info / ACH request from the public site.\n\nSubmitted email: ${submitted}\nOn file: ${person ? `person ${person.id} (no qualifying job)` : 'no match'}${details ? '' : '\nNOTE: payment details are not configured in /admin/payment-info — nothing can auto-send until they are.'}\n\nVerify the requester and send payment details manually.`,
           ...(person ? { personId: person.id } : {}),
         },
+        select: { id: true },
       })
       await prisma.auditLog.create({
         data: {
@@ -265,6 +306,14 @@ export async function POST(req: NextRequest) {
         `Payment info requested by ${submitted} — ${person ? 'on file but no qualifying job' : 'no match'}, routed to the pipeline for follow-up.`,
         details ? 'Nothing was auto-sent.' : 'Nothing was auto-sent — payment details are NOT configured in /admin/payment-info.',
       ])
+      // Action-Queue item — nothing sent; this is the one that must not
+      // rot. Links to the pipeline Inquiry detail.
+      await emitPaymentInfoAlert({
+        kind: 'unmatched',
+        title: `Payment info requested by ${submitted} — no match, needs manual follow-up`,
+        body: `Nothing was sent · ${person ? 'on file but no qualifying job' : 'no CRM match'} · ${new Date().toLocaleString('en-US')}`,
+        link: `/inquiries/${inquiry.id}`,
+      })
     }
   } catch (err) {
     // NEVER-VANISH path: even on internal failure the request must
@@ -272,15 +321,18 @@ export async function POST(req: NextRequest) {
     // response stays uniform regardless; each recovery step is
     // independently guarded so one failure can't suppress the others.
     console.error('[payment-info] request handling failed:', err)
+    let errorInquiryId: string | null = null
     try {
-      await prisma.inquiry.create({
+      const inq = await prisma.inquiry.create({
         data: {
           source: 'WEB_FORM',
           status: 'NEW',
           title: 'Payment info request',
           description: `Payment info / ACH request from the public site — INTERNAL ERROR during processing; nothing was auto-sent.\n\nSubmitted email: ${submitted}\nError: ${err instanceof Error ? err.message : String(err)}\n\nVerify the requester and send payment details manually.`,
         },
+        select: { id: true },
       })
+      errorInquiryId = inq.id
     } catch (inqErr) {
       console.error('[payment-info] error-path inquiry create failed:', inqErr)
     }
@@ -289,6 +341,13 @@ export async function POST(req: NextRequest) {
       `An inquiry was filed in the pipeline; verify the requester and follow up manually.`,
       `Error: ${err instanceof Error ? err.message : String(err)}`,
     ])
+    // Action-Queue item — a failed request must never vanish.
+    await emitPaymentInfoAlert({
+      kind: 'unmatched',
+      title: `Payment info requested by ${submitted} — no match, needs manual follow-up`,
+      body: `Internal error during processing · nothing was sent · ${new Date().toLocaleString('en-US')}`,
+      link: errorInquiryId ? `/inquiries/${errorInquiryId}` : null,
+    })
   }
 
   return NextResponse.json(UNIFORM_RESPONSE)

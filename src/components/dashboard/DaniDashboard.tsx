@@ -1,6 +1,7 @@
 'use client'
 
 import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWidget'
+import { NeedsAttentionAlerts } from '@/components/dashboard/NeedsAttentionAlerts'
 
 import { useState, useEffect } from 'react'
 
@@ -291,6 +292,12 @@ export default function DaniDashboard({ userName }: { userName: string }) {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Action Queue — high-priority items (e.g. payment-info requests)
+          surface here for Dani + Wes. Renders nothing when empty. */}
+      <div className="mb-4">
+        <NeedsAttentionAlerts />
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-4">

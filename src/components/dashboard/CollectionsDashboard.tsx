@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { NeedsAttentionAlerts } from '@/components/dashboard/NeedsAttentionAlerts';
 
 function fDate(ds: string): string {
   if (!ds) return '';
@@ -106,6 +107,12 @@ export default function CollectionsDashboard() {
           className="px-4 py-2 rounded-lg bg-black text-white text-[12px] font-bold hover:bg-gray-800">
           + Log Payment
         </button>
+      </div>
+
+      {/* Action Queue — payment-info requests (billing owns follow-up)
+          surface here. Renders nothing when empty. */}
+      <div className="mb-5">
+        <NeedsAttentionAlerts />
       </div>
 
       {/* KPIs */}
