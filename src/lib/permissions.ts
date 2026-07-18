@@ -315,6 +315,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
     {
       label: 'Sales & Ops',
       items: [
+        // Top-level Action Items surface — the id 'action-items' is
+        // special-cased in the layout to render an unhandled-count badge
+        // fed by the same engine (/api/action-items?count=1).
+        { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
         { id: 'pipeline', label: 'Pipeline', icon: 'TrendingUp', href: '/sales/pipeline' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },

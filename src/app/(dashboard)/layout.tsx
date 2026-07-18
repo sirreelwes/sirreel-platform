@@ -14,7 +14,7 @@ import {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
-  CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2, Circle, Banknote, type LucideIcon,
+  CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2, Circle, Banknote, ListChecks, type LucideIcon,
 } from 'lucide-react';
 
 // Maps the `icon` name carried by each NavItem to its lucide component.
@@ -23,7 +23,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
   CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2,
-  Banknote,
+  Banknote, ListChecks,
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -43,6 +43,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [aiOpen, setAiOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
+  // Action Items unhandled-count badge — same engine as the tab.
+  const [actionItemCount, setActionItemCount] = useState(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -50,6 +52,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (saved) setViewAsRole(saved as UserRole);
     }
   }, []);
+
+  // Poll the badge count. Refetch on navigation so a dismiss on the
+  // Action Items page updates the sidebar without a reload.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let cancelled = false;
+    fetch('/api/action-items?count=1')
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && d.ok) setActionItemCount(d.count || 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [status, pathname]);
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -179,6 +193,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       }`}
                     />
                     <span className="truncate">{item.label}</span>
+                    {/* Unhandled-count badge, fed by the Action Items
+                        engine. Only the 'action-items' entry carries it. */}
+                    {item.id === 'action-items' && actionItemCount > 0 && (
+                      <span className={`ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                        isActive ? 'bg-[#1a1a1a] text-[#c9a24b]' : 'bg-red-500 text-white'
+                      }`}>
+                        {actionItemCount > 99 ? '99+' : actionItemCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

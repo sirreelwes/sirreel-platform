@@ -3527,6 +3527,25 @@ model DismissedEmail {
   @@map("dismissed_emails")
 }
 
+/// Per-user dismissal side-row for the Action Items engine — the same
+/// pattern as DismissedEmail, generalized. This is NOT an action-item
+/// store (items always come from their existing source: Alerts,
+/// Orders, bookings/paperwork_requests, …); it records only that a
+/// user "marked handled" a DERIVED item that has no per-item mutable
+/// record of its own. EVENT items dismiss on their underlying record
+/// instead (Alert.dismissed_by, Inquiry status) and don't use this.
+/// itemKey is the provider's stable item id (e.g. "coi:{bookingId}").
+model ActionItemDismissal {
+  id          String   @id @default(uuid())
+  itemKey     String   @map("item_key")
+  userEmail   String   @map("user_email")
+  dismissedAt DateTime @default(now()) @map("dismissed_at")
+
+  @@unique([itemKey, userEmail])
+  @@index([userEmail])
+  @@map("action_item_dismissals")
+}
+
 model EodReport {
   id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   date           DateTime  @unique @db.Date
