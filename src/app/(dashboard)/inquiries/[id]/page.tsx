@@ -18,6 +18,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
 import { JobResolverModal } from '@/components/shared/JobResolverModal'
+import { PaymentDetailsSendPanel } from '@/components/inquiries/PaymentDetailsSendPanel'
 
 type InquiryStatus = 'NEW' | 'CONVERTED' | 'DISMISSED'
 type InquirySource = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
@@ -192,6 +193,13 @@ export default function InquiryDetailPage() {
   // code expected 'supply-order'. Matching both renders the structured cart for
   // new and already-submitted order-form inquiries.
   const isSupplyOrder = meta?.kind === 'production-order' || meta?.kind === 'supply-order'
+  // Payment-info requests are typed by their fixed title (set by the
+  // /payment-info route). They get a payment-specific action — the
+  // sales-lead buttons would wrongly spin up a Job/quote from a payment
+  // request.
+  const isPaymentInfo = inquiry.title.trim().toLowerCase() === 'payment info request'
+  const paymentSentAt = (meta as Record<string, unknown> | null)?.paymentDetailsSentAt as string | undefined
+  const paymentSentTo = (meta as Record<string, unknown> | null)?.paymentDetailsSentTo as string | undefined
   const refCode = inquiry.id.slice(0, 8).toUpperCase()
   const cart = isSupplyOrder ? meta?.cart ?? [] : []
   const isClosed = inquiry.status !== 'NEW'
@@ -244,31 +252,52 @@ export default function InquiryDetailPage() {
                 >
                   {actionPending === 'dismiss' ? 'Dismissing…' : 'Dismiss'}
                 </button>
-                {/* Welcome / Job Begin — needs the inquiry qualified (person
-                    with email + company); the preview endpoint surfaces a
-                    readable error otherwise. The agent resolves the Job
-                    HERE (Job-as-root); the client's click mints the Order. */}
-                <button
-                  onClick={() => setWelcomeResolverOpen(true)}
-                  disabled={actionPending != null}
-                  className="text-xs font-semibold border border-amber-600/60 text-amber-500 hover:bg-amber-600/10 px-3 py-1.5 rounded-lg disabled:opacity-40"
-                >
-                  Send Welcome →
-                </button>
-                <Link
-                  href={`/orders/new-quote?inquiryId=${inquiry.id}`}
-                  className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg"
-                >
-                  Convert to quote →
-                </Link>
+                {/* Payment-info requests do NOT get the sales-lead
+                    actions — a payment request must never spin up a
+                    Job/quote. Their action is the payment panel below. */}
+                {!isPaymentInfo && (
+                  <>
+                    {/* Welcome / Job Begin — needs the inquiry qualified (person
+                        with email + company); the preview endpoint surfaces a
+                        readable error otherwise. The agent resolves the Job
+                        HERE (Job-as-root); the client's click mints the Order. */}
+                    <button
+                      onClick={() => setWelcomeResolverOpen(true)}
+                      disabled={actionPending != null}
+                      className="text-xs font-semibold border border-amber-600/60 text-amber-500 hover:bg-amber-600/10 px-3 py-1.5 rounded-lg disabled:opacity-40"
+                    >
+                      Send Welcome →
+                    </button>
+                    <Link
+                      href={`/orders/new-quote?inquiryId=${inquiry.id}`}
+                      className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg"
+                    >
+                      Convert to quote →
+                    </Link>
+                  </>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {!isClosed && (
+        {!isClosed && !isPaymentInfo && (
           <div className="mt-2 text-[11px] text-zinc-500 text-right">
             Converting creates a Job in the sales pipeline and moves this inquiry to Converted.
+          </div>
+        )}
+
+        {/* Payment-info action panel — replaces the sales-lead flow. */}
+        {isPaymentInfo && !isClosed && (
+          <div className="mt-3">
+            <PaymentDetailsSendPanel inquiryId={inquiry.id} onSent={load} />
+          </div>
+        )}
+
+        {/* Payment-specific resolved banner (NOT "converted to quote"). */}
+        {isPaymentInfo && paymentSentAt && (
+          <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
+            ✓ Payment details sent{paymentSentTo ? ` to ${paymentSentTo}` : ''} on {fmtDateTime(paymentSentAt)}.
           </div>
         )}
 
