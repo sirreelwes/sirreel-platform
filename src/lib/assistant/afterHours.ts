@@ -114,12 +114,11 @@ export async function verifyAndRelease(input: {
   let jobId: string | null = null
   let jobCodeOk = false
   if (jobCodeRaw) {
-    const n = normAlnum(jobCodeRaw)
-    // Stored canonical form is "XXXX-XXXX" (8 alnum). Rebuild + unique-lookup.
-    if (n.length === 8) {
-      const canonical = `${n.slice(0, 4)}-${n.slice(4)}`
+    // Job codes are 5-digit numbers — strip whatever the caller added around them.
+    const digits = jobCodeRaw.replace(/\D/g, '')
+    if (digits.length === 5) {
       const hit = await prisma.job.findUnique({
-        where: { assistantAuthCode: canonical },
+        where: { assistantAuthCode: digits },
         select: { id: true },
       })
       if (hit) {

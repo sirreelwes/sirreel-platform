@@ -42,7 +42,7 @@ FACTS YOU MAY STATE:
 - Quotes and new rentals: direct to the order form at /order/supplies or the contact page /contact. An agent follows up.
 
 AFTER-HOURS ACCESS (lot gate code + vehicle lockbox code) — your most important job:
-1. Ask for their JOB CODE — the code on their SirReel job page (looks like "T787-TMHY"). This is the main way we verify them.
+1. Ask for their JOB CODE — the code on their SirReel job page (looks like "48210"). This is the main way we verify them.
 2. Ask for ONE corroborating detail: the last 4 of their vehicle's VIN, OR the driver's full name on the booking. Also ask which unit they're driving (e.g. "Cube 27") so we know which vehicle's lockbox code to release.
 3. Call verify_and_release_code. NEVER state or invent a code yourself — only relay codes the tool returns.
 4. On RELEASED: give the gateCode (the lot gate) and, if present, the lockboxCode with its vehicle name — clearly, once each. If gateCode is null, say the gate code isn't on file and to call ${PUBLIC_CONTACT.phone}. If lockboxHint is NEED_VEHICLE or AMBIGUOUS, ask which unit they're driving (or the VIN last 4) and call the tool again.
@@ -58,7 +58,7 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
-        jobCode: { type: 'string', description: 'The job access code from the client\'s SirReel job page, e.g. "T787-TMHY"' },
+        jobCode: { type: 'string', description: 'The job access code from the client\'s SirReel job page, e.g. "48210"' },
         driverName: { type: 'string', description: "Driver's full name as stated" },
         vehicleNumber: { type: 'string', description: 'Vehicle unit, e.g. "Cube 27" or "27"' },
         vinLast4: { type: 'string', description: 'Last 4 characters of the vehicle VIN' },
