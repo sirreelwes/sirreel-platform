@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { ASSISTANT_MODEL } from '@/lib/ai/models'
-import { verifyDriverForAccessCode, fileAfterHoursCallback } from '@/lib/assistant/afterHours'
+import { verifyAndRelease, fileAfterHoursCallback } from '@/lib/assistant/afterHours'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 export const dynamic = 'force-dynamic'
@@ -41,29 +41,29 @@ FACTS YOU MAY STATE:
 - Payment/ACH details: NEVER state them. Direct people to sirreel.com/payment-info (details are emailed to the address on file).
 - Quotes and new rentals: direct to the order form at /order/supplies or the contact page /contact. An agent follows up.
 
-LOST VEHICLE ACCESS CODE — your most important job. Mirror the agent script:
-1. Ask for the driver's full name (first and last) and which vehicle they're driving (unit number, e.g. "Cube 27").
-2. Optionally ask what job/production they're working on if the tool asks for a tie-breaker.
-3. Call verify_driver_and_release_code. NEVER state or invent a code yourself — only relay a code the tool returns.
-4. If the tool returns RELEASED, give the code clearly, once, with the vehicle name.
-5. If verification fails (NAME_MISMATCH / VEHICLE_NOT_FOUND / NO_ACTIVE_RENTAL), do NOT reveal whether the vehicle exists or who is on the booking. Say you couldn't verify them, and offer: (a) call ${PUBLIC_CONTACT.phone}, or (b) file a callback with file_callback_request (collect name, phone/email, and a short message). If they mention a QR code sticker in the vehicle's glove box, tell them to call the number printed with it — QR verification is handled by an agent.
-6. NO_CODE_ON_FILE: apologize, say the team has been notified and they should call ${PUBLIC_CONTACT.phone}.
+AFTER-HOURS ACCESS (lot gate code + vehicle lockbox code) — your most important job:
+1. Ask for their JOB CODE — the code on their SirReel job page (looks like "T787-TMHY"). This is the main way we verify them.
+2. Ask for ONE corroborating detail: the last 4 of their vehicle's VIN, OR the driver's full name on the booking. Also ask which unit they're driving (e.g. "Cube 27") so we know which vehicle's lockbox code to release.
+3. Call verify_and_release_code. NEVER state or invent a code yourself — only relay codes the tool returns.
+4. On RELEASED: give the gateCode (the lot gate) and, if present, the lockboxCode with its vehicle name — clearly, once each. If gateCode is null, say the gate code isn't on file and to call ${PUBLIC_CONTACT.phone}. If lockboxHint is NEED_VEHICLE or AMBIGUOUS, ask which unit they're driving (or the VIN last 4) and call the tool again.
+5. On NOT_VERIFIED: do NOT reveal whether any job/vehicle exists or who is on the booking. Say you couldn't verify them, and offer: (a) call ${PUBLIC_CONTACT.phone}, or (b) file a callback with file_callback_request (collect name, phone/email, and a short message). If they mention a QR code sticker in the vehicle's glove box, tell them to call the number printed with it — QR verification is handled by an agent.
 
 STYLE: brief, warm, practical. One question at a time. Never make up policy, pricing, or availability. Anything you can't answer → offer the phone number or a callback. Refuse anything unrelated to SirReel.`
 
 const TOOLS: Anthropic.Tool[] = [
   {
-    name: 'verify_driver_and_release_code',
+    name: 'verify_and_release_code',
     description:
-      "Verify an after-hours caller against SirReel's active rentals and, on success, release the vehicle's access code. Call ONLY after collecting the driver's full name and the vehicle unit number.",
+      "Verify an after-hours caller against SirReel's active rentals and, on success, release the lot GATE code and the vehicle LOCKBOX code. Best signal is the JOB CODE (from the client's SirReel job page) plus one corroborator (VIN last-4 or the driver's full name). The unit number pins which vehicle's lockbox code to release. Call once you have a job code plus one other detail, or (fallback) a unit number plus the driver's name.",
     input_schema: {
       type: 'object' as const,
       properties: {
+        jobCode: { type: 'string', description: 'The job access code from the client\'s SirReel job page, e.g. "T787-TMHY"' },
         driverName: { type: 'string', description: "Driver's full name as stated" },
         vehicleNumber: { type: 'string', description: 'Vehicle unit, e.g. "Cube 27" or "27"' },
-        jobName: { type: 'string', description: 'Production/job name if stated (optional tie-breaker)' },
+        vinLast4: { type: 'string', description: 'Last 4 characters of the vehicle VIN' },
       },
-      required: ['driverName', 'vehicleNumber'],
+      required: [],
     },
   },
   {
@@ -126,17 +126,20 @@ export async function POST(req: NextRequest) {
       for (const block of response.content) {
         if (block.type !== 'tool_use') continue
         let resultPayload: unknown
-        if (block.name === 'verify_driver_and_release_code') {
-          const inp = block.input as { driverName?: string; vehicleNumber?: string; jobName?: string }
-          resultPayload =
-            inp.driverName && inp.vehicleNumber
-              ? await verifyDriverForAccessCode({
-                  driverName: String(inp.driverName).slice(0, 200),
-                  vehicleNumber: String(inp.vehicleNumber).slice(0, 60),
-                  jobName: inp.jobName ? String(inp.jobName).slice(0, 200) : null,
-                  ip,
-                })
-              : { result: 'INVALID_INPUT' }
+        if (block.name === 'verify_and_release_code') {
+          const inp = block.input as {
+            jobCode?: string
+            driverName?: string
+            vehicleNumber?: string
+            vinLast4?: string
+          }
+          resultPayload = await verifyAndRelease({
+            jobCode: inp.jobCode ? String(inp.jobCode).slice(0, 40) : null,
+            driverName: inp.driverName ? String(inp.driverName).slice(0, 200) : null,
+            vehicleNumber: inp.vehicleNumber ? String(inp.vehicleNumber).slice(0, 60) : null,
+            vinLast4: inp.vinLast4 ? String(inp.vinLast4).slice(0, 20) : null,
+            ip,
+          })
         } else if (block.name === 'file_callback_request') {
           const inp = block.input as { name?: string; contact?: string; message?: string }
           resultPayload =

@@ -1,30 +1,36 @@
 /**
  * After-hours assistant — server-side verification + escalation.
  *
- * SECURITY MODEL: the vehicle access code NEVER enters the AI prompt.
- * The model calls the verify tool with what the caller typed; THIS
- * module decides deterministically whether the code is released, and
- * only a passing verification puts the code into the tool result.
- * Every attempt (released or denied) is audit-logged and notifies the
- * team inbox.
+ * SECURITY MODEL: no code (gate or lockbox) EVER enters the AI prompt.
+ * The model calls the verify tool with what the caller typed; THIS module
+ * decides deterministically whether to release, and only a passing
+ * verification puts a code into the tool result. Every attempt (released
+ * or denied) is audit-logged and notifies the team inbox.
  *
- * VERIFICATION (mirrors the human agent script — "what job are you
- * on, which vehicle are you driving"):
- *   1. Vehicle: the stated unit resolves to exactly ONE active asset
- *      carrying a BookingAssignment whose window covers today (±1 day
- *      grace) on a non-cancelled booking.
- *   2. Name: the stated driver name token-matches a person attached to
- *      that booking — the booking contact, the job's contacts, or a
- *      driver on a checkout record for the assignment.
- *   3. Optional job-name tie-breaker when provided.
- * Match → code released (if one is on file). No match → the assistant
- * offers the callback path; nothing is revealed.
+ * VERIFICATION — factor-based. The caller proves who they are with a
+ * combination of:
+ *   • Job code   — the random per-job code shown on the client's Portal
+ *                  v2 job page (Job.assistantAuthCode). The strong factor.
+ *   • VIN last-4 — last four of an active vehicle's VIN (corroborating;
+ *                  also pins WHICH vehicle for the lockbox code).
+ *   • Driver name — token-match against the booking's contacts / checkout
+ *                  drivers (corroborating; also the legacy factor).
+ * Release bar (Phase 1, hard-coded — a future admin policy can tune it):
+ *   (job code + [VIN last-4 OR name])  OR  (legacy: unit number + name).
+ *
+ * ON PASS we release two secrets, both behind the same bar:
+ *   • Gate code   — the standing lot code (SiteSetting.gateCode).
+ *   • Lockbox code — the per-vehicle code (Asset.accessCode) once the
+ *                    specific vehicle is pinned.
+ * Failures collapse to a single NOT_VERIFIED so the assistant never leaks
+ * whether a job/vehicle exists or who is on a booking.
  */
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
-const TEAM_INBOX = 'hello@sirreel.com'
+const TEAM_INBOX = 'rentals@sirreel.com'
+const GRACE_DAYS = 1
 
 function normTokens(s: string): string[] {
   return s
@@ -43,21 +49,43 @@ function nameMatches(provided: string, candidate: string): boolean {
   return shorter.every((t) => longer.includes(t))
 }
 
-export type VerifyResult =
-  | { result: 'RELEASED'; code: string; vehicle: string; jobName: string }
-  | { result: 'NO_CODE_ON_FILE'; vehicle: string }
-  | { result: 'VEHICLE_NOT_FOUND' }
-  | { result: 'VEHICLE_AMBIGUOUS'; candidates: string[] }
-  | { result: 'NO_ACTIVE_RENTAL'; vehicle: string }
-  | { result: 'NAME_MISMATCH'; vehicle: string }
+/** Strip everything but A–Z/0–9 and uppercase — for comparing codes/VINs. */
+function normAlnum(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
 
-export async function verifyDriverForAccessCode(input: {
-  driverName: string
-  vehicleNumber: string
-  jobName?: string | null
+type ResolvedAsset = {
+  id: string
+  unitName: string
+  vin: string | null
+  accessCode: string | null
+  categoryName: string
+}
+
+export type ReleaseResult =
+  | {
+      result: 'RELEASED'
+      jobName: string
+      gateCode: string | null // the standing lot gate code; null = not on file
+      lockboxCode: string | null // per-vehicle code; null = not resolved / none on file
+      vehicle: string | null // unit name the lockbox code belongs to
+      lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE'
+      lockboxCandidates?: string[]
+    }
+  | { result: 'NOT_VERIFIED' }
+
+export async function verifyAndRelease(input: {
+  jobCode?: string | null
+  vehicleNumber?: string | null
+  vinLast4?: string | null
+  driverName?: string | null
   ip: string
-}): Promise<VerifyResult> {
-  const { driverName, vehicleNumber, jobName, ip } = input
+}): Promise<ReleaseResult> {
+  const jobCodeRaw = input.jobCode?.trim() || ''
+  const vehicleNumber = input.vehicleNumber?.trim() || ''
+  const vinLast4 = normAlnum(input.vinLast4 || '').slice(-4)
+  const driverName = input.driverName?.trim() || ''
+  const ip = input.ip
 
   const audit = async (action: string, extra: Record<string, unknown>) => {
     try {
@@ -68,7 +96,12 @@ export async function verifyDriverForAccessCode(input: {
           action,
           entityType: 'Asset',
           entityId: (extra.assetId as string) ?? 'unresolved',
-          oldValues: { driverName, vehicleNumber, jobName: jobName ?? null },
+          oldValues: {
+            jobCodeProvided: Boolean(jobCodeRaw),
+            vehicleNumber: vehicleNumber || null,
+            vinLast4: vinLast4 || null,
+            driverName: driverName || null,
+          },
           newValues: { ...extra, at: new Date().toISOString() },
         },
       })
@@ -77,54 +110,92 @@ export async function verifyDriverForAccessCode(input: {
     }
   }
 
-  // ── 1. Resolve the vehicle ──
-  const tokens = normTokens(vehicleNumber)
-  const digits = tokens.find((t) => /^\d+$/.test(t)) ?? null
-  const assets = await prisma.asset.findMany({
-    where: {
-      isActive: true,
-      ...(digits
-        ? { unitName: { contains: digits } }
-        : { unitName: { contains: vehicleNumber.trim(), mode: 'insensitive' } }),
-    },
-    select: { id: true, unitName: true, accessCode: true, category: { select: { name: true } } },
-  })
-  // Digit containment over-matches ("2" hits 12/20/…): require exact
-  // trailing number when digits were given.
-  const matched = digits
-    ? assets.filter((a) => {
-        const m = a.unitName.match(/(\d+)\s*$/)
-        return m?.[1] === digits
+  // ── 1. Resolve the job from the job code (the strong factor) ──
+  let jobId: string | null = null
+  let jobCodeOk = false
+  if (jobCodeRaw) {
+    const n = normAlnum(jobCodeRaw)
+    // Stored canonical form is "XXXX-XXXX" (8 alnum). Rebuild + unique-lookup.
+    if (n.length === 8) {
+      const canonical = `${n.slice(0, 4)}-${n.slice(4)}`
+      const hit = await prisma.job.findUnique({
+        where: { assistantAuthCode: canonical },
+        select: { id: true },
       })
-    : assets
-
-  if (matched.length === 0) {
-    await audit('public.access_code_denied', { reason: 'vehicle_not_found' })
-    return { result: 'VEHICLE_NOT_FOUND' }
+      if (hit) {
+        jobId = hit.id
+        jobCodeOk = true
+      }
+    }
   }
 
-  // ── 2. Find the active assignment window per candidate asset ──
+  // ── 2. Optionally resolve candidate vehicles by unit number ──
+  let matchedAssetIds: string[] | null = null
+  if (vehicleNumber) {
+    const tokens = normTokens(vehicleNumber)
+    const digits = tokens.find((t) => /^\d+$/.test(t)) ?? null
+    const assets = await prisma.asset.findMany({
+      where: {
+        isActive: true,
+        ...(digits
+          ? { unitName: { contains: digits } }
+          : { unitName: { contains: vehicleNumber, mode: 'insensitive' } }),
+      },
+      select: { id: true, unitName: true },
+    })
+    // Digit containment over-matches ("2" hits 12/20/…) — require exact
+    // trailing number when digits were given.
+    const matched = digits
+      ? assets.filter((a) => a.unitName.match(/(\d+)\s*$/)?.[1] === digits)
+      : assets
+    matchedAssetIds = matched.map((a) => a.id)
+  }
+
+  const vehicleResolvedLegacy = Boolean(matchedAssetIds && matchedAssetIds.length)
+
+  // Nothing to anchor on → can't verify.
+  if (!jobId && !vehicleResolvedLegacy) {
+    await audit('public.access_denied', { reason: 'no_resolvable_job_or_vehicle' })
+    return { result: 'NOT_VERIFIED' }
+  }
+
+  // ── 3. Find active assignments for the anchor (job and/or vehicle) ──
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
-  const graceStart = new Date(today); graceStart.setUTCDate(graceStart.getUTCDate() + 1)
-  const graceEnd = new Date(today); graceEnd.setUTCDate(graceEnd.getUTCDate() - 1)
+  const graceStart = new Date(today)
+  graceStart.setUTCDate(graceStart.getUTCDate() + GRACE_DAYS)
+  const graceEnd = new Date(today)
+  graceEnd.setUTCDate(graceEnd.getUTCDate() - GRACE_DAYS)
 
   const assignments = await prisma.bookingAssignment.findMany({
     where: {
-      assetId: { in: matched.map((a) => a.id) },
       status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
       startDate: { lte: graceStart },
       endDate: { gte: graceEnd },
-      bookingItem: { booking: { status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null } },
+      ...(matchedAssetIds && matchedAssetIds.length ? { assetId: { in: matchedAssetIds } } : {}),
+      bookingItem: {
+        booking: {
+          status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+          archivedAt: null,
+          ...(jobId ? { jobId } : {}),
+        },
+      },
     },
     select: {
-      id: true,
       assetId: true,
+      asset: {
+        select: {
+          id: true,
+          unitName: true,
+          vin: true,
+          accessCode: true,
+          category: { select: { name: true } },
+        },
+      },
       bookingItem: {
         select: {
           booking: {
             select: {
-              id: true,
               jobName: true,
               person: { select: { firstName: true, lastName: true } },
               job: {
@@ -137,89 +208,131 @@ export async function verifyDriverForAccessCode(input: {
           },
         },
       },
-      checkoutRecords: {
-        select: { driver: { select: { firstName: true, lastName: true } } },
-      },
+      checkoutRecords: { select: { driver: { select: { firstName: true, lastName: true } } } },
     },
   })
 
   if (assignments.length === 0) {
-    await audit('public.access_code_denied', { reason: 'no_active_rental', assetId: matched[0].id })
-    return { result: 'NO_ACTIVE_RENTAL', vehicle: matched[0].unitName }
+    await audit('public.access_denied', { reason: 'no_active_rental', jobCodeOk })
+    // A correct job code with no live window is a real person worth a heads-up.
+    if (jobCodeOk) await notifyDenied(ip, 'no active rental window', { jobCodeOk, vinLast4Ok: false, nameOk: false })
+    return { result: 'NOT_VERIFIED' }
   }
 
-  // Multiple distinct assets active with the same number (e.g. Cargo 22
-  // exists twice) → ask the model to clarify by category.
-  const activeAssetIds = [...new Set(assignments.map((a) => a.assetId))]
-  if (activeAssetIds.length > 1) {
-    const names = matched
-      .filter((a) => activeAssetIds.includes(a.id))
-      .map((a) => `${a.unitName} (${a.category.name})`)
-    await audit('public.access_code_denied', { reason: 'vehicle_ambiguous', candidates: names })
-    return { result: 'VEHICLE_AMBIGUOUS', candidates: names }
+  // ── 4. Evaluate corroborating factors over the active set ──
+  const assetsById = new Map<string, ResolvedAsset>()
+  for (const a of assignments) {
+    assetsById.set(a.asset.id, {
+      id: a.asset.id,
+      unitName: a.asset.unitName,
+      vin: a.asset.vin,
+      accessCode: a.asset.accessCode,
+      categoryName: a.asset.category.name,
+    })
   }
+  const assets = [...assetsById.values()]
 
-  const asset = matched.find((a) => a.id === activeAssetIds[0])!
-  const assetAssignments = assignments.filter((a) => a.assetId === asset.id)
+  const vinMatches = vinLast4
+    ? assets.filter((a) => a.vin && normAlnum(a.vin).endsWith(vinLast4))
+    : []
+  const vinLast4Ok = vinMatches.length > 0
 
-  // ── 3. Name (and optional job) check across the booking's people ──
-  let matchedBooking: { jobName: string } | null = null
-  for (const asg of assetAssignments) {
-    const b = asg.bookingItem.booking
-    if (jobName && jobName.trim()) {
-      const jn = (b.job?.name ?? b.jobName ?? '').toLowerCase()
-      if (!jn.includes(jobName.trim().toLowerCase()) && !jobName.trim().toLowerCase().includes(jn)) {
-        // stated job doesn't match this booking — keep scanning others
+  let nameOk = false
+  if (driverName) {
+    for (const asg of assignments) {
+      const b = asg.bookingItem.booking
+      const cands: string[] = []
+      if (b.person) cands.push(`${b.person.firstName ?? ''} ${b.person.lastName ?? ''}`)
+      for (const jc of b.job?.jobContacts ?? []) {
+        cands.push(`${jc.person.firstName ?? ''} ${jc.person.lastName ?? ''}`)
+      }
+      for (const cr of asg.checkoutRecords) {
+        if (cr.driver) cands.push(`${cr.driver.firstName} ${cr.driver.lastName}`)
+      }
+      if (cands.some((c) => nameMatches(driverName, c))) {
+        nameOk = true
+        break
       }
     }
-    const candidates: string[] = []
-    if (b.person) candidates.push(`${b.person.firstName ?? ''} ${b.person.lastName ?? ''}`)
-    for (const jc of b.job?.jobContacts ?? []) {
-      candidates.push(`${jc.person.firstName ?? ''} ${jc.person.lastName ?? ''}`)
-    }
-    for (const cr of asg.checkoutRecords) {
-      if (cr.driver) candidates.push(`${cr.driver.firstName} ${cr.driver.lastName}`)
-    }
-    if (candidates.some((c) => nameMatches(driverName, c))) {
-      matchedBooking = { jobName: b.job?.name ?? b.jobName }
-      break
-    }
   }
 
-  if (!matchedBooking) {
-    await audit('public.access_code_denied', { reason: 'name_mismatch', assetId: asset.id })
-    await notifyTeam(`After-hours code DENIED — ${asset.unitName}`, [
-      `Access-code request for ${asset.unitName} was DENIED (name mismatch).`,
-      `Stated driver: ${driverName}${jobName ? ` · stated job: ${jobName}` : ''}`,
-      `IP: ${ip}. The assistant offered the callback path.`,
-    ])
-    return { result: 'NAME_MISMATCH', vehicle: asset.unitName }
+  // Release bar. Job code is the strong factor; it needs one corroborator.
+  // The legacy unit+name path stays open for a substitute returner who
+  // wasn't handed the job code.
+  const authed =
+    (jobCodeOk && (vinLast4Ok || nameOk)) || (!jobCodeOk && vehicleResolvedLegacy && nameOk)
+
+  if (!authed) {
+    await audit('public.access_denied', {
+      reason: 'insufficient_factors',
+      jobCodeOk,
+      vinLast4Ok,
+      nameOk,
+    })
+    await notifyDenied(ip, 'insufficient factors', { jobCodeOk, vinLast4Ok, nameOk })
+    return { result: 'NOT_VERIFIED' }
   }
 
-  if (!asset.accessCode?.trim()) {
-    await audit('public.access_code_denied', { reason: 'no_code_on_file', assetId: asset.id })
-    await notifyTeam(`After-hours code request — no code on file for ${asset.unitName}`, [
-      `${driverName} verified OK for ${asset.unitName} (${matchedBooking.jobName}) but NO access code is on file for the unit.`,
-      `Set it in the vehicle summary panel. IP: ${ip}.`,
-    ])
-    return { result: 'NO_CODE_ON_FILE', vehicle: asset.unitName }
+  const booking0 = assignments[0].bookingItem.booking
+  const jobName = booking0.job?.name ?? booking0.jobName ?? 'your job'
+
+  // ── 5. Resolve releasables ──
+  // Gate code — the lot-level singleton.
+  const settings = await prisma.siteSetting.findFirst({ select: { gateCode: true } })
+  const gateCode = settings?.gateCode?.trim() || null
+
+  // Lockbox — pin exactly one vehicle. Prefer the VIN-matched asset, else
+  // the unit-number match, else (job-code path) the job's active vehicles.
+  const lockboxCandidates: ResolvedAsset[] = vinMatches.length
+    ? vinMatches
+    : vehicleResolvedLegacy
+      ? assets.filter((a) => matchedAssetIds!.includes(a.id))
+      : assets
+
+  let target: ResolvedAsset | null = null
+  let lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE' = 'OK'
+  let lockboxCode: string | null = null
+  if (lockboxCandidates.length === 1) {
+    target = lockboxCandidates[0]
+    lockboxCode = target.accessCode?.trim() || null
+    if (!lockboxCode) lockboxHint = 'NO_CODE_ON_FILE'
+  } else if (lockboxCandidates.length === 0) {
+    lockboxHint = 'NEED_VEHICLE'
+  } else {
+    lockboxHint = 'AMBIGUOUS'
   }
 
-  await audit('public.access_code_released', {
-    assetId: asset.id,
-    releasedFor: driverName,
-    jobName: matchedBooking.jobName,
+  const verifiedBy = [jobCodeOk && 'job code', vinLast4Ok && 'VIN last-4', nameOk && 'driver name']
+    .filter(Boolean)
+    .join(' + ')
+
+  await audit('public.access_released', {
+    assetId: target?.id ?? 'gate-only',
+    releasedGate: Boolean(gateCode),
+    releasedLockbox: Boolean(lockboxCode),
+    vehicle: target?.unitName ?? null,
+    jobName,
+    verifiedBy,
   })
-  await notifyTeam(`After-hours code released — ${asset.unitName}`, [
-    `Access code for ${asset.unitName} released to ${driverName} (${matchedBooking.jobName}) via the site assistant.`,
-    `Verified: driver name matched the booking's contacts. IP: ${ip}.`,
-    `The code itself is not repeated in this email.`,
+  await notifyTeam(`After-hours access released — ${jobName}`, [
+    `Access released via the site assistant for ${jobName}.`,
+    `Gate code: ${gateCode ? 'released' : 'NOT on file'} · Lockbox (${target?.unitName ?? 'n/a'}): ${
+      lockboxCode ? 'released' : lockboxHint
+    }.`,
+    `Verified by: ${verifiedBy}. IP: ${ip}.`,
+    `The codes themselves are not repeated in this email.`,
   ])
+
   return {
     result: 'RELEASED',
-    code: asset.accessCode.trim(),
-    vehicle: asset.unitName,
-    jobName: matchedBooking.jobName,
+    jobName,
+    gateCode,
+    lockboxCode,
+    vehicle: target?.unitName ?? null,
+    lockboxHint,
+    ...(lockboxHint === 'AMBIGUOUS'
+      ? { lockboxCandidates: lockboxCandidates.map((a) => `${a.unitName} (${a.categoryName})`) }
+      : {}),
   }
 }
 
@@ -259,7 +372,28 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 }
 
+async function notifyDenied(
+  ip: string,
+  reason: string,
+  factors: { jobCodeOk: boolean; vinLast4Ok: boolean; nameOk: boolean },
+): Promise<void> {
+  await notifyTeam(`After-hours access DENIED`, [
+    `An after-hours access request was DENIED (${reason}).`,
+    `Factors matched — job code: ${factors.jobCodeOk ? 'yes' : 'no'}, VIN last-4: ${
+      factors.vinLast4Ok ? 'yes' : 'no'
+    }, driver name: ${factors.nameOk ? 'yes' : 'no'}.`,
+    `IP: ${ip}. The assistant offered the callback path.`,
+  ])
+}
+
 async function notifyTeam(subject: string, lines: string[]): Promise<void> {
+  // Kill-switch for the build/testing phase — set ASSISTANT_SUPPRESS_NOTIFY=1
+  // to avoid emailing rentals@ while we exercise the flow. Unset in prod so
+  // the team is notified for real.
+  if (process.env.ASSISTANT_SUPPRESS_NOTIFY === '1') {
+    console.log(`[after-hours] notify suppressed (${subject})`)
+    return
+  }
   try {
     const result = await sendAgreementEmail({
       to: [TEAM_INBOX],

@@ -256,6 +256,25 @@ export default function ClientPortalV2() {
         </div>
       </div>
 
+      {/* After-hours access code — read-only; give to the driver */}
+      {booking.job?.assistantAuthCode && (
+        <div className="max-w-xl mx-auto px-5 pt-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-gray-500">
+              After-hours access code
+            </div>
+            <div className="mt-1 font-mono text-[22px] font-bold tracking-[0.2em] text-gray-900">
+              {booking.job.assistantAuthCode}
+            </div>
+            <p className="mt-1.5 text-[12px] text-gray-500 leading-snug">
+              Share this with your driver. If they need the gate code or a vehicle lockbox
+              code after hours, they can give this code to the SirReel assistant at
+              sirreel.com to verify — no need to reach an agent.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Progress tracker */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-100">
         <div className="max-w-xl mx-auto px-5 py-3">

@@ -3600,6 +3600,13 @@ model PaymentLog {
 model Job {
   id             String         @id @default(uuid())
   jobCode        String         @unique @map("job_code")
+  // Random, high-entropy after-hours authentication factor — surfaced to
+  // the client on their Portal v2 job page and presented to the SirReel
+  // Assistant to help release the gate/lockbox code. DELIBERATELY separate
+  // from `jobCode` (which is the sequential, guessable SR-JOB-0001 business
+  // ID — unfit as a secret). Nullable so existing rows are unaffected until
+  // backfilled; unique because it's a lookup key.
+  assistantAuthCode String?      @unique @map("assistant_auth_code")
   name           String
   companyId      String         @map("company_id")
   productionType ProductionType @default(OTHER) @map("production_type")
@@ -4916,6 +4923,18 @@ model SiteSetting {
   heroVideoUrl       String?  @map("hero_video_url")
   /// Optional lighter MP4 served under ~768px (private blob URL).
   heroVideoMobileUrl String?  @map("hero_video_mobile_url")
+
+  /// Standing lot GATE CODE — the single code shared by all drivers until
+  /// it's physically reprogrammed at the gate. This field only RECORDS the
+  /// current value so the after-hours assistant can release it on a passing
+  /// verification; changing it here does NOT change the physical gate.
+  /// Sales agents (AGENT) + admins may edit it; edits are audit-logged by
+  /// field name (mirroring the payment-info convention) plus who/when below.
+  /// Released ONLY through server-side driver verification, never rendered
+  /// on any public/portal surface.
+  gateCode            String?   @map("gate_code")
+  gateCodeUpdatedAt   DateTime? @map("gate_code_updated_at")
+  gateCodeUpdatedById String?   @map("gate_code_updated_by_id")
 
   /// PUBLIC downloadable forms (PDF, private blob URLs) — served via the
   /// public proxy /api/public/forms/[slot]. Managed at /admin/forms.

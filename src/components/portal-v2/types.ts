@@ -64,6 +64,9 @@ export interface V2Booking {
   company?: { name?: string; billingAddress?: string | null }
   person?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string }
   agent?: { name?: string; email?: string }
+  // The after-hours access code lives on the Job and is shown to the client
+  // here so they can hand it to their driver. Read-only in the portal.
+  job?: { assistantAuthCode?: string | null; jobCode?: string; name?: string } | null
 }
 
 export interface V2Paperwork {

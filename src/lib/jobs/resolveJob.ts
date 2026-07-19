@@ -4,6 +4,7 @@ import { companyNameKey } from '@/lib/companies/normalize'
 import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
+import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 
 /**
  * The Job-as-root keystone: every entry point (gantt drag, email
@@ -381,9 +382,11 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
   }
 
   const jobCode = await nextJobCode(prisma)
+  const assistantAuthCode = await generateAssistantAuthCode(prisma)
   const job = await prisma.job.create({
     data: {
       jobCode,
+      assistantAuthCode,
       name: draft.name.trim(),
       companyId,
       productionType: (draft.productionType as never) || 'OTHER',

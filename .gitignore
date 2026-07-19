@@ -39,6 +39,7 @@ scripts/*
 !scripts/rw-rate-gap-fill.ts
 !scripts/bind-planyo-backfill-units.ts
 !scripts/merge-proscout-vtr-dup.ts
+!scripts/backfill-assistant-auth-code.ts
 .env.local.bak
 .gcp-service-account.json
 .e2e-scratch/

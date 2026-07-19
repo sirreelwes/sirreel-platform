@@ -283,6 +283,16 @@ export function can(input: UserRole | PermissionsUser, permission: keyof Permiss
   return getPermissions(input)[permission];
 }
 
+// After-hours Assistant config surface (standing gate code, per-job auth
+// codes, release audit log). Full access for ADMIN, AGENT (sales — they
+// hand the code to production), and MANAGER (Hugo). Kept as a standalone
+// gate rather than a Permissions column so we don't thread a new field
+// through every role object; the page/API enforce with it, and the server
+// guard lives in src/lib/assistant/requireAssistantAccess.ts.
+export function canAccessAssistantConfig(role: UserRole): boolean {
+  return role === UserRole.ADMIN || role === UserRole.AGENT || role === UserRole.MANAGER;
+}
+
 // Navigation items per role
 export type NavItem = { id: string; label: string; icon: string; href: string };
 export type NavSection = { label: string | null; items: NavItem[] };
@@ -394,6 +404,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },
+        { id: 'assistant', label: 'Assistant', icon: 'Bot', href: '/admin/assistant' },
         { id: 'forms', label: 'Forms', icon: 'FileText', href: '/admin/forms' },
         { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
         { id: 'home-tiles', label: 'Home Tiles', icon: 'LayoutDashboard', href: '/admin/home-tiles' },

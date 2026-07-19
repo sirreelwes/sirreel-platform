@@ -11,7 +11,11 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
             company: true,
             person: true,
             agent: true,
-            items: { include: { category: true } }
+            items: { include: { category: true } },
+            // Client-facing: the after-hours job code lives on the Job and
+            // is meant to be shown to the client on their portal. Narrow
+            // select — never widen to asset internals.
+            job: { select: { assistantAuthCode: true, jobCode: true, name: true } }
           }
         }
       }
