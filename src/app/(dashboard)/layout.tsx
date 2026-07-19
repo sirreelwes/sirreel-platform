@@ -30,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN:      'Admin',
   MANAGER:    'Manager',
   AGENT:      'Sales',
+  BILLING:    'Billing',
   FLEET_TECH: 'Fleet',
   DISPATCHER: 'Deliveries & Pickups',
   DRIVER:     'Driver',
@@ -258,6 +259,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <option value="">Admin (default)</option>
                       <option value="MANAGER">Manager</option>
                       <option value="AGENT">Sales Agent</option>
+                      <option value="BILLING">Billing</option>
                       <option value="DISPATCHER">Deliveries &amp; Pickups</option>
                       <option value="FLEET_TECH">Fleet Tech</option>
                       <option value="DRIVER">Driver</option>

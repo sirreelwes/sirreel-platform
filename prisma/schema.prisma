@@ -1899,6 +1899,11 @@ enum UserRole {
   ADMIN
   MANAGER
   AGENT
+  // Collections / accounts-receivable role (Ana, primary). Distinct from
+  // AGENT so billing exceptions (payment-info follow-ups, future overdue
+  // chases) scope to BILLING + admin, NOT to every sales agent. Any
+  // number of users may hold it — a second holder is just User.role=BILLING.
+  BILLING
   // DISPATCHER is retired/vestigial: no users hold it, the `dispatch` perm is
   // gone, and all its gates were repointed to canAssignAssets. The enum VALUE
   // is intentionally kept — dropping it requires a full Postgres enum-type

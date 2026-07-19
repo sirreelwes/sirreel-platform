@@ -138,6 +138,25 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canSendEmail: true, canEditCompany: false, canManageUsers: false,
   },
 
+  // Ana — collections / accounts-receivable. Same operational surface
+  // as a non-salesOnly AGENT (billing, CRM, orders, pipeline visibility)
+  // so moving her off AGENT loses nothing; the role exists so billing
+  // Action Items scope to BILLING + admin, not to every sales agent.
+  BILLING: {
+    calendar: true, gantt: true, bookings: true, pipeline: true, maintenance: false,
+    fleet: false, crm: true, claims: false,
+    reporting: false, ai: true, tasks: false, inspections: false, coverage: false,
+    warehouse: false, billing: true, subRentals: true,
+    seeClientNames: true, seeClientContact: true, seeProductionInfo: true,
+    seeDriverInfo: true, seePricing: true,
+    seeRevenue: false, seeAllBookings: false, seeOtherAgents: false,
+    seeMaintCost: false, seeEmailHistory: true,
+    canCreateBooking: true, canConfirmBooking: false, canCancelBooking: false,
+    canAssignAssets: false, canChangeAssetStatus: false, canCreateMaintenance: false,
+    canManageDrivers: false, canProcessCheckout: false, canManageClaims: false,
+    canSendEmail: true, canEditCompany: false, canManageUsers: false,
+  },
+
   // Julian, Chris — fleet associates. Calendar/gantt with production co + job visible, NOT client contacts
   FLEET_TECH: {
     calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: true,

@@ -5,10 +5,25 @@
  * the signed-in user. Results are aggregated, filtered by mine/all
  * role scope and per-user dismissals, and priority-sorted.
  *
- * Providers wired this goal (framework proof — not all types):
- *   - payment-info (EVENT)  — payment_info_request Alerts
+ * Providers wired (framework proof — not all types):
+ *   - payment-info (EVENT)  — payment_info_request Alerts, split by path
  *   - coi-missing  (DERIVED)— bookings still missing a COI
  *   - quote-aging  (DERIVED)— open quotes gone quiet
+ *
+ * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
+ * every provider): a billing/ops item is something the system COULD
+ * NOT auto-clear. A path the system already handled never becomes a
+ * task for the owning role — it is at most a low-priority FYI for the
+ * originating team. The payment-info provider shows the shape: the
+ * auto-sent path is a LOW sales FYI (ownerRole AGENT+admin), the
+ * unmatched/exception path is a HIGH billing task (ownerRole
+ * BILLING+admin). Future providers follow suit:
+ *   - Shoot-days claims → only PENDING (agent hasn't ruled) escalate;
+ *     APPROVED/ADJUSTED already handled, no item.
+ *   - Overdue chase → only past-due-with-no-payment-plan escalate;
+ *     paid / on-plan invoices never create a billing task.
+ * The rule keeps each role's "mine" tab to genuine exceptions, not a
+ * log of the system doing its job.
  *
  * MIGRATION PLAN for the remaining worklists (planned, NOT built here):
  *   - Stage-paperwork worklist (/api/admin/paperwork-summary raw SQL:
