@@ -101,6 +101,10 @@ export function JobResolverModal({
   // new-job draft (editable)
   const [dName, setDName] = useState('')
   const [dCompany, setDCompany] = useState('')
+  const [dCompanyId, setDCompanyId] = useState<string | null>(null)
+  const [companyResults, setCompanyResults] = useState<{ id: string; name: string }[]>([])
+  const [companySearching, setCompanySearching] = useState(false)
+  const [companyOpen, setCompanyOpen] = useState(false)
   const [dContactName, setDContactName] = useState('')
   const [dContactEmail, setDContactEmail] = useState('')
   const [dContactPhone, setDContactPhone] = useState('')
@@ -120,6 +124,8 @@ export function JobResolverModal({
         if (d.bucket === 'CLEAN_MATCH' && d.candidates[0]) setSelectedId(d.candidates[0].jobId)
         setDName(d.draft.name || context.jobNameHint || '')
         setDCompany(d.draft.companyName || '')
+        // Pre-link when the resolver already matched a company from context.
+        setDCompanyId(d.resolvedCompany?.id ?? null)
         setDContactName(d.draft.contactName || '')
         setDContactEmail(d.draft.contactEmail || '')
         setDContactPhone(d.draft.contactPhone || '')
@@ -154,6 +160,33 @@ export function JobResolverModal({
     return () => clearTimeout(t)
   }, [search, path, result])
 
+  const searchCompanies = async (q: string) => {
+    setDCompany(q)
+    setDCompanyId(null) // typing invalidates any prior pick
+    setCompanyOpen(true)
+    if (q.trim().length < 1) {
+      setCompanyResults([]); setCompanySearching(false)
+      return
+    }
+    setCompanySearching(true)
+    try {
+      const res = await fetch(`/api/companies?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setCompanyResults(data.companies || [])
+    } catch {
+      setCompanyResults([])
+    } finally {
+      setCompanySearching(false)
+    }
+  }
+  const pickCompany = (c: { id: string; name: string }) => {
+    setDCompany(c.name); setDCompanyId(c.id); setCompanyResults([]); setCompanyOpen(false)
+  }
+  // Keep the typed name as a NEW company (id null → server creates it).
+  const useTypedCompanyAsNew = () => {
+    setDCompanyId(null); setCompanyResults([]); setCompanyOpen(false)
+  }
+
   const confirmExisting = () => {
     const all = [...(result?.candidates || []), ...searchHits]
     const j = all.find((c) => c.jobId === selectedId)
@@ -171,7 +204,7 @@ export function JobResolverModal({
         body: JSON.stringify({
           ...(draftExtras ?? {}),
           name: dName,
-          companyId: result?.resolvedCompany && dCompany === result.resolvedCompany.name ? result.resolvedCompany.id : undefined,
+          companyId: dCompanyId || undefined,
           companyName: dCompany,
           contactName: dContactName,
           contactEmail: dContactEmail,
@@ -304,11 +337,33 @@ export function JobResolverModal({
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Job name *</label>
                   <input value={dName} onChange={(e) => setDName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Production company *</label>
-                  <input value={dCompany} onChange={(e) => setDCompany(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
-                  {result?.resolvedCompany && dCompany === result.resolvedCompany.name && (
-                    <div className="text-[10px] text-emerald-600 mt-0.5">✓ matches existing company record</div>
+                  <input
+                    value={dCompany}
+                    onChange={(e) => searchCompanies(e.target.value)}
+                    onFocus={() => { if (dCompany.trim().length > 0 && !dCompanyId) setCompanyOpen(true) }}
+                    placeholder="Search existing or type a new company…"
+                    autoComplete="off"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                  />
+                  {dCompanyId && (
+                    <div className="text-[10px] text-emerald-600 mt-0.5">✓ existing company — will be linked, not duplicated</div>
+                  )}
+                  {companyOpen && dCompany.trim().length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">
+                      {companySearching && <div className="px-3 py-2 text-xs text-gray-400">Searching…</div>}
+                      {!companySearching && companyResults.map((c) => (
+                        <button key={c.id} type="button" onClick={() => pickCompany(c)} className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-gray-50">
+                          {c.name}
+                        </button>
+                      ))}
+                      {!companySearching && !companyResults.some((c) => c.name.toLowerCase() === dCompany.trim().toLowerCase()) && (
+                        <button type="button" onClick={useTypedCompanyAsNew} className="w-full text-left px-3 py-2 text-sm text-sky-700 hover:bg-sky-50 border-t border-gray-100">
+                          ＋ Create new company: “{dCompany.trim()}”
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
