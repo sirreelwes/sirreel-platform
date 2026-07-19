@@ -212,7 +212,8 @@ export async function POST(req: NextRequest) {
         details,
       })
       // Private-Blob PDF attachments — a fetch failure NEVER blocks the
-      // email; dropped slots are named and billing@ is told below.
+      // email; dropped slots are recorded in the audit row below (the
+      // auto-sent path no longer notifies billing@ — Wes ruled B).
       const { attachments, dropped } = await fetchPaymentAttachments({
         achFormKey: settings?.paymentAchFormKey ?? null,
         achFormFilename: settings?.paymentAchFormFilename ?? null,
@@ -248,28 +249,15 @@ export async function POST(req: NextRequest) {
       if (!sent.ok) {
         console.error('[payment-info] send failed for person', person.id, sent)
       }
-      // Sales signal — the client is at the paying stage. Reference
-      // only; the banking details are never repeated here.
       const personName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || 'name unknown'
       const j = qualifyingJobs[0]
-      await notifyBilling(
-        sent.ok
-          ? `Payment info sent — ${personName} (${j.company?.name ?? 'company unknown'})`
-          : `Payment info send FAILED — ${personName} (${j.company?.name ?? 'company unknown'})`,
-        [
-          sent.ok
-            ? `Payment info sent to ${person.email} (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}).`
-            : `Payment info delivery to ${person.email} FAILED (${personName}, ${j.company?.name ?? 'company unknown'}, job ${j.jobCode}) — follow up manually.`,
-          `Requested via the public form by: ${submitted}`,
-          attachments.length > 0
-            ? `${attachments.length} PDF attachment(s) included.`
-            : 'No PDF attachments were configured.',
-          ...(dropped.length > 0
-            ? [`⚠ ATTACHMENTS DROPPED (fetch failed, inline details still sent): ${dropped.join('; ')}. Re-check the files in /admin/payment-info.`]
-            : []),
-          `This is a sales signal — the client is at the paying stage.`,
-        ],
-      )
+      // NO billing@ notification on the auto-sent path (Wes ruled B,
+      // 2026-07-19): the system already handled this — it's a sales
+      // FYI, not billing work — so pinging billing@ here only dilutes
+      // their signal. billing@ fires ONLY on the unmatched/no-match
+      // and internal-exception paths below. A failed delivery here is
+      // still surfaced (console.error + the Action-Queue alert body
+      // flags it), just not to billing@.
       // Action-Queue item — send happened; the action is a light-touch
       // confirm, not a re-send.
       const clientLabel = j.company?.name || personName
