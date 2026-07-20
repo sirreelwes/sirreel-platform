@@ -842,7 +842,7 @@ export default function JobDetailPage() {
       <div id="orders" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-white">Orders</h2>
-          <span className="text-xs text-zinc-500">{job.orders.length} total · click to expand scope</span>
+          <span className="text-xs text-zinc-500">{job.orders.length} total · row expands · open for full order</span>
         </div>
         {job.orders.length === 0 ? (
           <div className="text-sm text-zinc-500">No orders on this job yet.</div>
@@ -860,7 +860,7 @@ export default function JobDetailPage() {
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
                   >
                     <span className="text-zinc-500 text-xs w-3">{expanded ? '▾' : '▸'}</span>
-                    <span className="font-mono text-xs text-zinc-300">{o.orderNumber}</span>
+                    <span className="font-mono text-sm font-semibold text-white">{o.orderNumber}</span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-400'}`}
                     >
@@ -884,9 +884,9 @@ export default function JobDetailPage() {
                     <Link
                       href={`/orders/${o.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-xs text-amber-500 hover:text-amber-400 ml-2"
+                      className="ml-2 shrink-0 rounded-md border border-amber-700/50 bg-amber-950/30 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-900/40 hover:border-amber-600 transition-colors"
                     >
-                      Open →
+                      Open order →
                     </Link>
                   </button>
 
