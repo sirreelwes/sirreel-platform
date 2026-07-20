@@ -101,7 +101,7 @@ export function ContactForm({ defaultMessage = '' }: { defaultMessage?: string }
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="How can we help?"
+        placeholder="Tell us about your production — what you need and when…"
         aria-label="Message"
         rows={5}
         maxLength={5000}

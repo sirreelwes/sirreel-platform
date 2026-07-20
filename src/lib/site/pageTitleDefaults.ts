@@ -10,7 +10,7 @@
 export const PAGE_TITLE_DEFAULTS = {
   standingSets: 'Turnkey standing sets',
   vehicles: 'Production vehicles, ready to roll',
-  contact: 'Let’s get your production rolling.',
+  contact: 'How can we help?',
 } as const
 
 export type PageTitleKey = keyof typeof PAGE_TITLE_DEFAULTS
