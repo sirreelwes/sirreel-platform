@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStage, STUDIO_ADDRESS, STUDIO_AMENITIES } from '@/lib/site/stages'
+import VehicleGallery from '@/components/site/VehicleGallery'
 
 /**
  * Public stage detail — /stages/[slug]. Content from src/lib/site/stages.ts.
@@ -34,15 +34,12 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
       </Link>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
-        {/* Image / placeholder */}
-        {s.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={s.photo} alt={s.name} className="w-full rounded-[18px] border border-[#e4dfd4] object-cover bg-[#f0eadb]" />
-        ) : (
-          <div className="w-full aspect-[4/3] rounded-[18px] border border-[#e4dfd4] bg-gradient-to-br from-[#1a1a1c] to-[#0c0c0d] flex items-center justify-center">
-            <Image src="/s-logo-white.png" alt="" aria-hidden width={1118} height={1065} className="h-24 w-auto opacity-20" />
-          </div>
-        )}
+        {/* Gallery */}
+        <VehicleGallery
+          photos={(s.gallery ?? (s.photo ? [s.photo] : [])).map((src, i) => ({ id: String(i), src }))}
+          fallbackSrc={s.photo ?? null}
+          alt={s.name}
+        />
 
         <div>
           <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f]" style={{ fontFamily: 'Archivo, sans-serif' }}>

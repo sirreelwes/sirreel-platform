@@ -25,8 +25,10 @@ export interface StageArea {
   specs: StageSpec[]
   /** External link instead of a /stages/[slug] detail (e.g. Standing Sets). */
   href?: string
-  /** Optional public image path; falls back to the S-mark placeholder. */
+  /** Optional hero image path (card + detail fallback). */
   photo?: string
+  /** Gallery images for the detail page (hero first). */
+  gallery?: string[]
   cta?: string
 }
 
@@ -43,6 +45,7 @@ export const STAGES: StageArea[] = [
   {
     slug: 'lankershim-sound-stage',
     photo: '/images/stages/sound-stage.jpg',
+    gallery: ['/images/stages/sound-stage.jpg', '/images/stages/led-volume.jpg', '/images/stages/greenroom.jpg'],
     name: 'Lankershim Sound Stage',
     eyebrow: 'Sound Stage',
     idealFor: 'Film, TV & commercial shoots',
@@ -61,6 +64,7 @@ export const STAGES: StageArea[] = [
   {
     slug: 'led-volume-stage',
     photo: '/images/stages/led-volume.jpg',
+    gallery: ['/images/stages/led-volume.jpg', '/images/stages/sound-stage.jpg', '/images/stages/greenroom.jpg'],
     name: 'LED / Volume Stage',
     eyebrow: 'Virtual Production',
     idealFor: 'Large photo shoots, commercials, podcasts & music videos',
@@ -95,6 +99,7 @@ export const STAGES: StageArea[] = [
   {
     slug: 'black-box',
     photo: '/images/stages/black-box.jpg',
+    gallery: ['/images/stages/black-box.jpg'],
     name: 'Black Box',
     eyebrow: 'Flexible Stage',
     idealFor: 'Tabletop, product & controlled-lighting work',
