@@ -736,15 +736,10 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       {/* ── HEADER ────────────────────────────────────────────── */}
       <header className={`sticky top-0 z-40 bg-[#0c0c0d] text-white border-b border-black ${focusHideMobile}`}>
         <div className="max-w-[1480px] mx-auto px-5 h-[68px] flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="font-black text-2xl tracking-tight whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Sir<span className="text-[#c39a3f]">Reel</span>
-            </div>
-            <div className="hidden sm:block w-px h-6 bg-zinc-700" />
-            <div className="hidden sm:block text-[12px] font-semibold uppercase tracking-[0.14em] text-[#a8a294] whitespace-nowrap" style={{ fontFamily: 'Archivo, sans-serif' }}>
-              Studio Services
-            </div>
-          </div>
+          <Link href={PUBLIC_HOME_URL} aria-label="SirReel Studio Services — Home" className="flex items-center min-w-0 py-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/sirreel-logo-white.png" alt="SirReel Studio Services" className="h-8 sm:h-9 w-auto" />
+          </Link>
           <div className="flex items-center gap-3.5">
             {signInHref && (
               <Link
