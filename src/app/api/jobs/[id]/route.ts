@@ -40,6 +40,11 @@ export async function GET(
           include: { person: true },
           orderBy: [{ isPrimary: 'desc' }, { role: 'asc' }],
         },
+        coiChecks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, coverageVerified: true, policyExpiryDate: true, humanDecision: true, createdAt: true },
+        },
         orders: {
           orderBy: { createdAt: 'desc' },
           select: {

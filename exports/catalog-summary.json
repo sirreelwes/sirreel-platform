@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-06-04T15:41:59.110Z",
+  "totals": {
+    "InventoryItem": 780,
+    "AssetCategory": 17,
+    "VehicleCategory": 13,
+    "grand": 810
+  },
+  "codeCoverage": {
+    "InventoryItem_withCode": 780,
+    "InventoryItem_withoutCode": 0,
+    "AssetCategory_withSlug": 17
+  },
+  "categoryCounts": {
+    "InventoryItem": {
+      "Production Supplies": 264,
+      "Grip Equipment": 148,
+      "Lighting Equipment": 103,
+      "Electrical Equipment": 71,
+      "Tools & Cleaning": 21,
+      "PPE": 16,
+      "Lights & Power": 15,
+      "Safety & Traffic": 15,
+      "Tables & Chairs": 13,
+      "Dollies & Carts": 12,
+      "Vehicle Outfitting": 12,
+      "Communications": 11,
+      "Expendables": 11,
+      "Climate Controls": 9,
+      "Craft Services & Catering": 9,
+      "Tents & Accessories": 9,
+      "Wardrobe & Makeup": 8,
+      "Basecamp Basics": 7,
+      "Health & Safety": 7,
+      "Ladders": 7,
+      "Safe Sets Equipment": 7,
+      "Effects": 5
+    },
+    "AssetCategory": {
+      "Camera Cube": 1,
+      "Cargo Van w/ Liftgate": 1,
+      "Cargo Van w/o Liftgate": 1,
+      "Cube Truck": 1,
+      "DLUX": 1,
+      "DLUX (NorCal)": 1,
+      "Lankershim Studios": 1,
+      "Passenger Van": 1,
+      "PopVan": 1,
+      "ProScout / VTR": 1,
+      "Scissor Lift": 1,
+      "Stakebed": 1,
+      "Studios": 1,
+      "TEST capacity-1 stage": 1,
+      "TEST capacity-2 stage": 1,
+      "UTAH Vehicles": 1,
+      "Wardrobe": 1
+    },
+    "VehicleCategory": {
+      "12-Passenger Van": 1,
+      "15-Passenger Van": 1,
+      "Cargo Van": 1,
+      "Cargo w/Lift Gate": 1,
+      "Cube Truck": 1,
+      "Hair / Makeup Trailer": 1,
+      "Honeywagon": 1,
+      "PopVan": 1,
+      "Production Trailer": 1,
+      "Star / Talent Trailer": 1,
+      "Supercube": 1,
+      "Video Van / ProScout Sprinter": 1,
+      "Wardrobe Trailer": 1
+    }
+  }
+}

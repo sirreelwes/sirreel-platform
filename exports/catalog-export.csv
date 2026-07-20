@@ -1,0 +1,811 @@
+id,type,department,category,name,existingCode,description,isActive,notes
+0acce38f-8723-4ab6-b8ca-59b1fc410814,InventoryItem,PRO_SUPPLIES,Basecamp Basics,Butt Cans,BAS-BUTT-CANS,,true,
+1f146c12-78a9-4410-a84b-3d89de59dc13,InventoryItem,PRO_SUPPLIES,Basecamp Basics,Furniture Pads,BAS-FURNITURE-PADS,,true,
+0c37d2ff-604a-4073-a250-6f3e07fd60f1,InventoryItem,PRO_SUPPLIES,Basecamp Basics,"Recycle Bins, 32 gal",BAS-RECYCLE-BINS-32-GAL,,true,
+6354caa1-a6ba-441d-8ffe-e05e815c06d4,InventoryItem,PRO_SUPPLIES,Basecamp Basics,"Rubber Mats, 3'x5'",BAS-RUBBER-MATS-3X5,,true,
+06676d9a-8346-4ed6-89f8-18175a5e6d01,InventoryItem,PRO_SUPPLIES,Basecamp Basics,"Tarp, Large",BAS-TARP-LARGE,,true,
+9be6faa1-6622-4ae0-92e9-287b169709b8,InventoryItem,PRO_SUPPLIES,Basecamp Basics,"Tarp, Medium",BAS-TARP-MEDIUM,,true,
+c1640043-4840-4679-b7f2-27fd63bb3dcb,InventoryItem,PRO_SUPPLIES,Basecamp Basics,"Trash Cans, Large",BAS-TRASH-CANS-LARGE,,true,
+84bdd136-2330-4229-a99f-cbb5c9f200ed,InventoryItem,PRO_SUPPLIES,Climate Controls,"Air Conditioner, 1.5-ton",CLI-AIR-CONDITIONER-1-5-TON,,true,
+c02df3c9-0e3c-4f95-9331-18926a2c5295,InventoryItem,PRO_SUPPLIES,Climate Controls,"Fan, ""Box""",CLI-FAN-BOX,,true,
+801654df-f120-4c5f-8864-f9307edd7db2,InventoryItem,PRO_SUPPLIES,Climate Controls,"Fan, ""Utility""",CLI-FAN-UTILITY,,true,
+fab9af32-7789-43a7-b006-9146d2dbdd60,InventoryItem,PRO_SUPPLIES,Climate Controls,"Heater, Dish",CLI-HEATER-DISH,,true,
+616f9be5-1d0d-4327-8670-7f875ba2826c,InventoryItem,PRO_SUPPLIES,Climate Controls,"Heater, Propane",CLI-HEATER-PROPANE,,true,
+27a97365-2aef-4bc9-9123-253fe8de3a6b,InventoryItem,PRO_SUPPLIES,Climate Controls,"Hose, 50' garden",CLI-HOSE-50-GARDEN,,true,
+940638d9-4a1f-4846-9c61-7fe718adafa7,InventoryItem,PRO_SUPPLIES,Climate Controls,"Misters, 10 gallon",CLI-MISTERS-10-GALLON,,true,
+ce570cc3-4d3c-47d7-ac75-431c98847321,InventoryItem,PRO_SUPPLIES,Climate Controls,"Propane Tank, extra",CLI-PROPANE-TANK-EXTRA,,true,
+b6fbfb68-e392-4657-8950-c10667353f86,InventoryItem,PRO_SUPPLIES,Climate Controls,"Umbrella, Golf",CLI-UMBRELLA-GOLF,,true,
+9cc48682-17da-40ed-b19f-1c8133a0ba4b,InventoryItem,PRO_SUPPLIES,Communications,Boom Box,COM-BOOM-BOX,,true,
+5a7a291a-b8cc-4571-9c73-ee712b9ff1ba,InventoryItem,PRO_SUPPLIES,Communications,Bullhorn,COM-BULLHORN,,true,
+81103213-a966-4d0e-aafe-3ab23f434afe,InventoryItem,PRO_SUPPLIES,Communications,Conference Phone Bluetooth Speaker,COM-CONFERENCE-PHONE-BLUETOOTH-SPEAKER,,true,
+9b7e028b-c71a-480e-b13a-8c631dc216f9,InventoryItem,PRO_SUPPLIES,Communications,Hand Mics,COM-HAND-MICS,,true,
+5b2effbc-827c-4a8d-aaec-a552e6001f74,InventoryItem,PRO_SUPPLIES,Communications,"Headset, ""Drive-Thru""",COM-HEADSET-DRIVE-THRU,,true,
+9fd46179-5baa-474e-acfa-6c2092ffc7aa,InventoryItem,PRO_SUPPLIES,Communications,K12 Anchor Speaker,COM-K12-ANCHOR-SPEAKER,,true,
+8d53c0bf-a807-4ad1-8136-6a5ce4bb9a31,InventoryItem,PRO_SUPPLIES,Communications,"Konftel ""Ego"" Conf. Call Spkr.",COM-KONFTEL-EGO-CONF-CALL-SPKR,,true,
+e812cd84-ade9-42fc-8a70-5329e6016c48,InventoryItem,PRO_SUPPLIES,Communications,"Microphone, XLR",COM-MICROPHONE-XLR,,true,
+7f638ba1-04c6-4119-aa7d-8b80ba174058,InventoryItem,PRO_SUPPLIES,Communications,Mobile Internet MiFi,COM-MOBILE-INTERNET-MIFI,,true,
+9cb18a34-b15f-4dbb-b716-efc01e14ac1a,InventoryItem,PRO_SUPPLIES,Communications,Motorola CP200 Radio,COM-MOTOROLA-CP200-RADIO,,true,
+81d66922-ae0d-4665-871f-b6cc8b8118fa,InventoryItem,PRO_SUPPLIES,Communications,Surveillance Kit,COM-SURVEILLANCE-KIT,,true,
+14ddef9c-ac26-4f5c-93d4-dfbc8a7a7d31,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Coffee Maker, 100 cup",CRA-COFFEE-MAKER-100-CUP,,true,
+42d89177-4f86-49b6-a9dc-6c226754bb1b,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Coffee Thermos, Large (2qt)",CRA-COFFEE-THERMOS-LARGE-2QT,,true,
+c572ed85-eee6-4ced-a3ef-a9e62a310d06,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Cooler, 100 qt",CRA-COOLER-100-QT,,true,
+2807643c-a400-470f-9913-876aa88648a1,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Cooler, 48 qt",CRA-COOLER-48-QT,,true,
+db23bb84-2507-4270-a5bd-942a5ddd2999,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Cooler, 68 qt",CRA-COOLER-68-QT,,true,
+fb1db9db-b416-48ee-86cc-4802900849db,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Cooler, ""Gatorade""",CRA-COOLER-GATORADE,,true,
+4de22cc1-8921-40c5-b511-2b42a690decf,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,Tea Kettle (1.7 liter) - Electric,CRA-TEA-KETTLE-1-7-LITER-ELECTRIC,,true,
+da3e8ec3-6033-4866-ac50-a723af5df9d1,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,"Water Bottle, 5-gal",CRA-WATER-BOTTLE-5-GAL,,true,
+70c8703d-ef60-4e1a-b1d1-c3e2f628521f,InventoryItem,PRO_SUPPLIES,Craft Services & Catering,Water Dispenser,CRA-WATER-DISPENSER,,true,
+8a5283ad-c054-48c3-ba37-62ac6c410f2a,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Dolly, Furniture",DOL-DOLLY-FURNITURE,,true,
+03af65d4-e596-4a82-8334-996933ce9ae7,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Dolly, Handtruck (2-Wheel)",DOL-DOLLY-HANDTRUCK-2-WHEEL,,true,
+23150fe2-cb80-4484-a33e-4f0214ea80a9,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Dolly, Magliner Jr.",DOL-DOLLY-MAGLINER-JR,,true,
+e0a7d8ed-3c5d-477b-b7d3-167761c3913d,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Dolly, Magliner Sr.",DOL-DOLLY-MAGLINER-SR,,true,
+26de9dd8-cf60-4819-8882-a833a4d4655e,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Dolly, Magliner Sr. w/Shelf",DOL-DOLLY-MAGLINER-SR-W-SHELF,,true,
+d93fc6f9-25f0-42bc-9f4b-c6bd2e996b3f,InventoryItem,PRO_SUPPLIES,Dollies & Carts,Pallet Jack,DOL-PALLET-JACK,,true,
+36f41fda-884e-4850-b29b-685cb11c329b,InventoryItem,PRO_SUPPLIES,Dollies & Carts,Rubbermaid Cart,DOL-RUBBERMAID-CART,,true,
+8688e62f-8a6a-4d51-ad1b-9a07179066a4,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Steel Deck, 2x4",DOL-STEEL-DECK-2X4,,true,
+319b5ccb-b1f1-4d4d-8e37-df542ac736b7,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Steel Deck, 2x6",DOL-STEEL-DECK-2X6,,true,
+7d1fde30-3f74-4750-845e-6b62292726b7,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Steel Deck, 2x8",DOL-STEEL-DECK-2X8,,true,
+1fbe1a46-60ec-4f28-876e-82df96a85263,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Steel Deck, 4x4",DOL-STEEL-DECK-4X4,,true,
+15f6c96a-fbe6-4b99-9924-5c5be6ea1e20,InventoryItem,PRO_SUPPLIES,Dollies & Carts,"Steel Deck, 4x8",DOL-STEEL-DECK-4X8,,true,
+9828b6f1-d872-4eac-b240-d9bb091ed7cd,InventoryItem,PRO_SUPPLIES,Effects,DF50 Hazer,EFX-DF50-HAZER,,true,
+6c825e8d-8528-4e54-986f-cb13d66ff156,InventoryItem,PRO_SUPPLIES,Effects,"Fan, ""RE Fan"" w/stand",EFX-FAN-RE-FAN-W-STAND,,true,
+1872f6f4-9a4d-4dad-b509-d8c0148c7856,InventoryItem,PRO_SUPPLIES,Effects,"Roscoe Fluid, Bottle",EFX-ROSCOE-FLUID-BOTTLE,,true,
+8f73402c-7a0f-407b-b55d-dbe5c25a0d7c,InventoryItem,PRO_SUPPLIES,Effects,Roscoe Fogger 1900,EFX-ROSCOE-FOGGER-1900,,true,
+a610516f-5359-4297-b5d3-7b13d6a00073,InventoryItem,PRO_SUPPLIES,Effects,Roscoe V-Hazer (Water Based),EFX-ROSCOE-V-HAZER-WATER-BASED,,true,
+c61fc72c-6311-467b-a7b8-5e8827cc99fe,InventoryItem,GE,Electrical Equipment,10' DMX 5-PIN CABLE,10' DMX 5-PIN CABLE,,true,not publicVisible
+b4a336d1-cd9a-438f-8b86-a73a856fa069,InventoryItem,GE,Electrical Equipment,100' DMX 5-PIN CABLE,100' DMX 5-PIN CABLE,,true,not publicVisible
+74dd0bb8-e88d-4c76-bf8e-9bd9bc136b9e,InventoryItem,GE,Electrical Equipment,100A 220V BATES CABLE EXTENSION 25',100A 220V BATES CABLE EXTENSION 25',,true,not publicVisible
+62627b1a-3beb-495f-bfb4-baf7236cdf64,InventoryItem,GE,Electrical Equipment,100A 220V BATES CABLE EXTENSION 50',100A 220V BATES CABLE EXTENSION 50',,true,not publicVisible
+8169611e-583c-4d2e-916e-d05ddf547b32,InventoryItem,GE,Electrical Equipment,100A BATES CABLE EXTENSION 100',100A BATES CABLE EXTENSION 100',,true,not publicVisible
+0993ac73-cd40-4657-9cd7-6628c9299650,InventoryItem,GE,Electrical Equipment,100A BATES CABLE EXTENSION 25',100A BATES CABLE EXTENSION 25',,true,not publicVisible
+69016f85-512c-4ffa-ac10-2f8ede9aca52,InventoryItem,GE,Electrical Equipment,100A BATES CABLE EXTENSION 50',100A BATES CABLE EXTENSION 50',,true,not publicVisible
+d4708ab1-465e-4aa6-8bdf-d68a561202d4,InventoryItem,GE,Electrical Equipment,100 AMP DISTRO BOX (LUNCH BOX),102993,,true,not publicVisible
+4d653483-30d5-4cc5-a264-c91e4f7dfa82,InventoryItem,GE,Electrical Equipment,Honda 2000 Watt Generator,103537,,true,not publicVisible
+33a582ea-04e4-4647-9aa2-97d3b50de14d,InventoryItem,GE,Electrical Equipment,Honda 3000 Watt Generator,104424,,true,not publicVisible
+24aa7168-73be-4539-8051-4670f1606654,InventoryItem,GE,Electrical Equipment,Honda 6500 Watt Generator,104425,,true,not publicVisible
+52312d52-58f0-40f2-8d80-a290e51ceb08,InventoryItem,GE,Electrical Equipment,Dewalt - Flexvolt Charger,104458,,true,not publicVisible
+aab55123-a22d-4db1-bf27-005b6f66ecb0,InventoryItem,GE,Electrical Equipment,Dewalt - Flexvolt Charger (Dual),104459,Dewalt DCB102,true,not publicVisible
+1ed00d0d-2db7-440f-a954-71c182a611c4,InventoryItem,GE,Electrical Equipment,1K HOUSEHOLD DIMMER / HAND,104467,,true,not publicVisible
+b3d1b6f3-d44f-402c-9d41-6a549b133ea8,InventoryItem,GE,Electrical Equipment,100 AMP GANG BOX,104489,,true,not publicVisible
+25d7b31b-4642-438c-aad9-1809ac2ca035,InventoryItem,GE,Electrical Equipment,600 AMP DISTRO,104502,,true,not publicVisible
+a8dca090-7b98-4052-a686-30f435044741,InventoryItem,GE,Electrical Equipment,900 AMP DISTRO,104503,,true,not publicVisible
+80d47ee3-196f-4a15-b66b-759555284c04,InventoryItem,GE,Electrical Equipment,1200 AMP DISTRO(220V),104504,,true,not publicVisible
+3b38fb78-f9ff-49b5-97ec-55c5a36824e7,InventoryItem,GE,Electrical Equipment,1200 AMP SOCAPEX DISTRO(220V),104505,,true,not publicVisible
+368e8668-1405-4c91-9c5d-ca38b6c45f01,InventoryItem,GE,Electrical Equipment,6K SPACE LIGHT (SOCAPEX) HEAD,104511,,true,not publicVisible
+653a2d22-3df9-4557-903b-3b71bed2bc21,InventoryItem,GE,Electrical Equipment,ANTON BAUER - DUAL CHARGER 2702,104517,,true,not publicVisible
+55fb66dc-ccb9-4f81-a29b-0f031e6cdd10,InventoryItem,GE,Electrical Equipment,OPTICAL SPLITTER 5-WAY DMX,104533,,true,not publicVisible
+f277412b-2bba-4789-85bb-75457c47fab3,InventoryItem,GE,Electrical Equipment,650 VARIAC DIMMER,104538,,true,not publicVisible
+99d80a89-cd32-4921-b74d-a7af0f28062d,InventoryItem,GE,Electrical Equipment,12K DIMMER (DMX),104539,,true,not publicVisible
+6de9e358-e1e8-4574-8cbc-1858c4838f58,InventoryItem,GE,Electrical Equipment,60 AMP GANG BOX,104544,,true,not publicVisible
+ec118c4c-fd4f-40dc-8260-2b55ab79c54c,InventoryItem,GE,Electrical Equipment,Milwaukee - Rapid Charger,104997,,true,not publicVisible
+3fd3c15c-8456-45e0-af6b-dc4909cecd5d,InventoryItem,GE,Electrical Equipment,Dewalt - Flexvolt Charger (4 Port),105141,Dewalt DCB104,true,not publicVisible
+66001f23-c69d-4fbc-9c6c-39c5382a9f0c,InventoryItem,GE,Electrical Equipment,10ﬂ C-CLAMP W/JR. RECEIVER,10ﬂ C-CLAMP W/JR. RECEIVER,,true,not publicVisible
+9bd2e0fb-300d-4496-b387-f67273f5bce7,InventoryItem,GE,Electrical Equipment,10ﬂ C-CLAMP W/PIN,10ﬂ C-CLAMP W/PIN,,true,not publicVisible
+2cfedc97-2ea9-442e-8d81-1ae3ce2cd0a9,InventoryItem,GE,Electrical Equipment,"12"" C-CLAMP W/PIN","12"" C-CLAMP W/PIN",,true,not publicVisible
+f979a29a-5b0c-430a-ae13-147af6247789,InventoryItem,PRO_SUPPLIES,Electrical Equipment,"18"" X 24""  CELLO CUCOLORIS","18"" X 24""  CELLO CUCOLORIS",,true,not publicVisible
+91427226-e5b6-4192-a38a-662e0aa9bea5,InventoryItem,PRO_SUPPLIES,Electrical Equipment,"18"" X 24""  WOOD CUCOLORIS","18"" X 24""  WOOD CUCOLORIS",,true,not publicVisible
+3ee3ade4-ceb4-412b-91ca-91cbb602d42f,InventoryItem,PRO_SUPPLIES,Electrical Equipment,200W GLOBE (FEV),200W GLOBE (FEV),,true,not publicVisible
+843042f2-8064-4a1a-b68f-877329368a21,InventoryItem,GE,Electrical Equipment,25' DMX 5-PIN CABLE,25' DMX 5-PIN CABLE,,true,not publicVisible
+2e0630bd-925b-4a3e-b555-ef51afe30bd0,InventoryItem,GE,Electrical Equipment,25' EDISON CABLE (STINGER),25' EDISON CABLE (STINGER),,true,not publicVisible
+16ca089e-7865-4747-bd33-5b0ade36070c,InventoryItem,GE,Electrical Equipment,3 WIRE 100ft banded,3 WIRE 100ft banded,,true,not publicVisible
+874a94e3-ddf6-433b-b7bd-d3ea5e0eff3c,InventoryItem,GE,Electrical Equipment,4 WIRE CAMLOK CABLE BANDED 25',4 WIRE CAMLOK CABLE BANDED 25',,true,not publicVisible
+f259d8ea-3af0-4bc7-9914-be4a6415f27f,InventoryItem,GE,Electrical Equipment,4 WIRE CAMLOK CABLE BANDED 50',4 WIRE CAMLOK CABLE BANDED 50',,true,not publicVisible
+b0d04b4b-3e43-4f5f-8df8-9211ca3b99fc,InventoryItem,GE,Electrical Equipment,"4""C-CLAMP W/PIN","4""C-CLAMP W/PIN",,true,not publicVisible
+3315ba3f-1cfa-4c33-9fa9-300e8afb34d4,InventoryItem,GE,Electrical Equipment,4ﬂ C-CLAMP W/JR. RECEIVER,4ﬂ C-CLAMP W/JR. RECEIVER,,true,not publicVisible
+f8ed9397-9d66-40a4-9d58-d3eb75f2d361,InventoryItem,GE,Electrical Equipment,5' DMX 5-PIN CABLE,5' DMX 5-PIN CABLE,,true,not publicVisible
+e2f1bb8c-a43d-4409-862e-649e5e9dfeef,InventoryItem,GE,Electrical Equipment,50' DMX 5-PIN CABLE,50' DMX 5-PIN CABLE,,true,not publicVisible
+5f164f0f-b2e4-4155-8191-7c66760514ad,InventoryItem,GE,Electrical Equipment,50' EDISON CABLE (STINGER),50' EDISON CABLE (STINGER),,true,not publicVisible
+b1494a63-5874-4559-bce8-50cdea47dfeb,InventoryItem,GE,Electrical Equipment,"6""C-CLAMP W/JR. RECEIVER","6""C-CLAMP W/JR. RECEIVER",,true,not publicVisible
+7302492c-cf5d-4821-871b-3f0dd43a8d4e,InventoryItem,GE,Electrical Equipment,"6""C-CLAMP W/PIN","6""C-CLAMP W/PIN",,true,not publicVisible
+5160b4fb-40d8-4752-ba73-8a0f31828f2b,InventoryItem,GE,Electrical Equipment,60A BATES CABLE EXTENSION 25',60A BATES CABLE EXTENSION 25',,true,not publicVisible
+a9c27a8c-9238-4cbd-bf28-af44d50c6c61,InventoryItem,GE,Electrical Equipment,60A BATES CABLE EXTENSION 50',60A BATES CABLE EXTENSION 50',,true,not publicVisible
+44a30c8a-ddcf-4b6f-bbea-dd860a9fd7f2,InventoryItem,GE,Electrical Equipment,"8""C-CLAMP W/PIN","8""C-CLAMP W/PIN",,true,not publicVisible
+9fbbdad4-5e80-4afb-b0e0-ea57a3c31b60,InventoryItem,GE,Electrical Equipment,8ﬂ C-CLAMP W/JR. RECEIVER,8ﬂ C-CLAMP W/JR. RECEIVER,,true,not publicVisible
+327135f4-3d76-4761-a6ce-c66e4fb4625f,InventoryItem,GE,Electrical Equipment,BEADBOARD CLAMP HOLDER - DUCKBILL,BEADBOARD CLAMP HOLDER - DUCKBILL,,true,not publicVisible
+3a27d44c-ad09-4b4d-810b-9c46f9f865d1,InventoryItem,GE,Electrical Equipment,CARDELLINI CLAMP CENTER JAW,CARDELLINI CLAMP CENTER JAW,,true,not publicVisible
+ef8df81d-e6bc-44d3-9e95-785000ca7322,InventoryItem,GE,Electrical Equipment,CARDELLINI CLAMP END JAW,CARDELLINI CLAMP END JAW,,true,not publicVisible
+9a9a7337-b762-4dcc-acb0-31c8f189456e,InventoryItem,GE,Electrical Equipment,Clamp Light,Clamp Light,,true,not publicVisible
+a1bc598e-b19d-434b-85bf-bab3d79bfacf,InventoryItem,GE,Electrical Equipment,GATOR GRIP CLAMP W/PIN,GATOR GRIP CLAMP W/PIN,,true,not publicVisible
+5103bd4a-0b08-41d5-933f-727b96f90524,InventoryItem,GE,Electrical Equipment,GRID CLAMP W/ BABY RECEIVER,GRID CLAMP W/ BABY RECEIVER,,true,not publicVisible
+2eb94f96-fcb4-48ec-9db1-70533990db89,InventoryItem,GE,Electrical Equipment,GRID CLAMP W/EAR,GRID CLAMP W/EAR,,true,not publicVisible
+7647dab6-01be-433f-a096-111ef2eecdec,InventoryItem,GE,Electrical Equipment,GRID CLAMP W/JR. RECEIVER - HORIZONTAL,GRID CLAMP W/JR. RECEIVER - HORIZONTAL,,true,not publicVisible
+c664d447-5ff5-4d87-b89e-3b61bdab6d57,InventoryItem,GE,Electrical Equipment,Honda 7000 Watt Generator,Honda 7000 Watt Generator,,true,not publicVisible
+588d0d95-0b7a-426b-821a-edbf3f71116a,InventoryItem,GE,Electrical Equipment,LED TUBE POWER ADAPTER TO EDISON - SINGLE,LED TUBE POWER ADAPTER TO EDISON - SINGLE,,true,not publicVisible
+4ad71698-1538-4d0d-8d98-52bcf8599ab5,InventoryItem,GE,Electrical Equipment,Leaf Blower - Electric (Plug In),Leaf Blower - Electric (Plug In),,true,not publicVisible
+28883004-0341-42c7-9f93-e7dcd18fe618,InventoryItem,GE,Electrical Equipment,"Pressure Washer, Plug In","Pressure Washer, Plug In",,true,not publicVisible
+1d90c046-5512-41e4-aa75-e63013a85ba8,InventoryItem,GE,Electrical Equipment,SAFETY CABLE 3' (STEEL),SAFETY CABLE 3' (STEEL),,true,not publicVisible
+c85eeaf8-8a94-41a8-86c1-102499a691e7,InventoryItem,GE,Electrical Equipment,SOCAPEX CABLE 100',SOCAPEX CABLE 100',,true,not publicVisible
+f2966bdc-56aa-447d-8cab-66c3d7160a17,InventoryItem,GE,Electrical Equipment,SOCAPEX CABLE 25',SOCAPEX CABLE 25',,true,not publicVisible
+9bd9fce9-3dac-403f-8be7-1ed036906a11,InventoryItem,GE,Electrical Equipment,SOCAPEX CABLE 50',SOCAPEX CABLE 50',,true,not publicVisible
+53430fab-584c-4802-a032-a5a995a69955,InventoryItem,GE,Electrical Equipment,SOLID CHEESEBORO CLAMP (STEEL),SOLID CHEESEBORO CLAMP (STEEL),,true,not publicVisible
+101e0b88-4e45-45aa-8d6c-5665e1d5213d,InventoryItem,GE,Electrical Equipment,SPEED C-CLAMP 1ﬂ,SPEED C-CLAMP 1ﬂ,,true,not publicVisible
+0ecac413-d946-4d46-9cca-a54cfc42989f,InventoryItem,GE,Electrical Equipment,SWIVEL CHEESEBORO CLAMP (STEEL),SWIVEL CHEESEBORO CLAMP (STEEL),,true,not publicVisible
+bf8c0de3-c90c-47fe-9a81-220791878b46,InventoryItem,GE,Electrical Equipment,"UTAH - RAMP (2-PC.) ADJUSTABLE LENGTH,","UTAH - RAMP (2-PC.) ADJUSTABLE LENGTH,",,true,not publicVisible
+b17ee45b-12aa-4c22-bb13-ec717c96dc67,InventoryItem,COMMUNICATIONS,Electrical Equipment,"Wireless Internet, MiFi Hotspot (Verizon)","Wireless Internet, MiFi Hotspot (Verizon)",,true,not publicVisible
+a29dca8b-445d-4220-8ed1-7e4287b44217,InventoryItem,COMMUNICATIONS,Electrical Equipment,"Wireless Internet, Mifi Hotspot (AT&T)","Wireless Internet, Mifi Hotspot (AT&T)",,true,not publicVisible
+c9c725da-31da-45ba-a3a1-659c5bbad835,InventoryItem,PRO_SUPPLIES,Expendables,Booties (pair),EXP-BOOTIES-PAIR,,true,
+7bb0dc83-ba45-41bf-8a20-838fa8b2bc6b,InventoryItem,PRO_SUPPLIES,Expendables,"Caution Tape, Roll",EXP-CAUTION-TAPE-ROLL,,true,
+9acd220a-5604-4ae8-98ce-ed71df6b0786,InventoryItem,PRO_SUPPLIES,Expendables,"Hanger, Combo",EXP-HANGER-COMBO,,true,
+d66d2f98-ec4c-4f2e-9978-02c283d6868c,InventoryItem,PRO_SUPPLIES,Expendables,"Hanger, Pants",EXP-HANGER-PANTS,,true,
+27dcef43-0caf-4bf4-81d7-82a8e7544f2f,InventoryItem,PRO_SUPPLIES,Expendables,"Hanger, Shirts",EXP-HANGER-SHIRTS,,true,
+d69f95cb-a845-429e-803a-20481dc25a4e,InventoryItem,PRO_SUPPLIES,Expendables,"Layout Board, New",EXP-LAYOUT-BOARD-NEW,,true,
+3a4e3920-3175-4a73-9114-209beb6c611c,InventoryItem,PRO_SUPPLIES,Expendables,"Layout Board, Used",EXP-LAYOUT-BOARD-USED,,true,
+56aad6cd-9f17-421a-ae45-a448e4d55e39,InventoryItem,PRO_SUPPLIES,Expendables,"Paper Tape, 2"" Layout (roll)",EXP-PAPER-TAPE-2-LAYOUT-ROLL,,true,
+ec246322-5cd3-4981-9539-9f466f74ef3a,InventoryItem,PRO_SUPPLIES,Expendables,"Ram Board, Roll",EXP-RAM-BOARD-ROLL,,true,
+1eb0a6a6-6868-4939-bd3c-ae4df5d2e32e,InventoryItem,PRO_SUPPLIES,Expendables,"Trash Liners, 2x Roll Box",EXP-TRASH-LINERS-2X-ROLL-BOX,,true,
+79f1a85d-97ac-4bbf-a6d5-c7e31fa7505b,InventoryItem,PRO_SUPPLIES,Expendables,"Trash Liners, Roll",EXP-TRASH-LINERS-ROLL,,true,
+3c0b329f-6b28-4d97-861f-5008a3ce681f,InventoryItem,GE,Grip Equipment,#1 GRIP CLIP,#1 GRIP CLIP,,true,not publicVisible
+d30c7cef-7f7b-4c62-9a66-a46fe1d83ea1,InventoryItem,GE,Grip Equipment,#2 GRIP CLIP,#2 GRIP CLIP,,true,not publicVisible
+40127b1a-df65-4496-841c-c3075b045aee,InventoryItem,GE,Grip Equipment,#3 GRIP CLIP,#3 GRIP CLIP,,true,not publicVisible
+95b159ed-a8cf-4c56-b007-f9d060f19438,InventoryItem,GE,Grip Equipment,"1' SPEEDRAIL PIPE 1-1/4""","1' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+a2e28a97-cf3c-49e6-9953-5f6e311fddb0,InventoryItem,GE,Grip Equipment,"10' SPEEDRAIL PIPE 1-1/4""","10' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+0d514c24-70e3-4d08-985d-7e357ac083db,InventoryItem,GE,Grip Equipment,4' X 4' STEEL DECK,104412,,true,not publicVisible
+977af935-8930-44b1-9c57-2bc5efb9983d,InventoryItem,GE,Grip Equipment,"C-Stand 40""",104462,,true,not publicVisible
+06dcbe81-8edf-4899-a3d7-9cb5a87964c6,InventoryItem,GE,Grip Equipment,"Low C-Stand 20""",104463,,true,not publicVisible
+3602e250-d991-425a-9106-becdc11cf075,InventoryItem,GE,Grip Equipment,STAND -3-RISER COMBO (Electric),104464,,true,not publicVisible
+c0efa742-4e59-41df-98e1-c03380340792,InventoryItem,GE,Grip Equipment,"STAND - 3-RISER BEEFY BABY,STEEL",104465,,true,not publicVisible
+0a8b8438-ace2-4623-b8bb-97270ae87a94,InventoryItem,GE,Grip Equipment,STAND - 3 RISER HI ROLLER,104466,,true,not publicVisible
+a7070077-7877-4e1d-b306-5dc7f5a89908,InventoryItem,GE,Grip Equipment,STAND - 3 RISER HI HI ROLLER,104468,,true,not publicVisible
+52baaaae-1182-40a6-891e-133d13ca850a,InventoryItem,GE,Grip Equipment,"STAND - LOW COMBO W/4 1/2"" GRIP HEAD",104486,,true,not publicVisible
+5d9bfe24-c03f-4143-bf7e-b2cd651d05a4,InventoryItem,GE,Grip Equipment,PREEMIE BABY STAND,104487,,true,not publicVisible
+3efa4c0e-8764-473d-86c7-b2f453128acb,InventoryItem,GE,Grip Equipment,"STAND - 3-RISER COMBO W/ 4 1/2"" GRIP HEAD",104498,,true,not publicVisible
+d40b14ab-f5c7-4849-ab3d-ae6b9b786232,InventoryItem,GE,Grip Equipment,STAND - AVENGER LOW CRANK,104531,,true,not publicVisible
+819d3138-3243-40ea-a619-df5b5215fc24,InventoryItem,GE,Grip Equipment,"RUNAWAY STAND ""TURTLE""",104532,,true,not publicVisible
+e0b0a921-ca23-4756-a033-3e0e95615ac8,InventoryItem,GE,Grip Equipment,DOORWAY DOLLY (SKATE),105120,,true,not publicVisible
+c386b015-7f5e-4c5c-bbba-9f9dfdf06bbe,InventoryItem,GE,Grip Equipment,DOORWAY DOLLY (NON SKATE),105121,,true,not publicVisible
+9c40352b-bb6b-45ed-b009-3ce754d8c423,InventoryItem,GE,Grip Equipment,"12' SPEEDRAIL PIPE 1-1/4""","12' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+a6a89934-daca-46b9-a3b6-ac0e6728b97f,InventoryItem,GE,Grip Equipment,12' X 12' BLACK/WHITE GRIFFOLYN RAG,12' X 12' BLACK/WHITE GRIFFOLYN RAG,,true,not publicVisible
+9085b0e5-008e-4954-b845-6a2bae0b478b,InventoryItem,GE,Grip Equipment,12' X 12' CHINA (1/2) SILK RAG,12' X 12' CHINA (1/2) SILK RAG,,true,not publicVisible
+3f4ba5b6-bdd3-444f-ae7f-18245f59d28c,InventoryItem,GE,Grip Equipment,12' X 12' DOUBLE NET RAG,12' X 12' DOUBLE NET RAG,,true,not publicVisible
+8ae6791f-fa5e-43ba-8cf4-b4f83dee8172,InventoryItem,GE,Grip Equipment,12' X 12' FULL GRID RAG,12' X 12' FULL GRID RAG,,true,not publicVisible
+00107af6-e466-4aca-8724-37b5c9b3c7e3,InventoryItem,GE,Grip Equipment,12' X 12' LITE (1/2) GRID RAG,12' X 12' LITE (1/2) GRID RAG,,true,not publicVisible
+67934def-5af3-4862-9e38-fb2e79a4ffb4,InventoryItem,GE,Grip Equipment,12' X 12' QUARTER GRID RAG,12' X 12' QUARTER GRID RAG,,true,not publicVisible
+654097e4-72a2-48c8-bbcf-791dce6a701a,InventoryItem,GE,Grip Equipment,12' X 12' SINGLE NET RAG,12' X 12' SINGLE NET RAG,,true,not publicVisible
+af21ab17-98d4-44e1-bf8f-8b5e19a90622,InventoryItem,GE,Grip Equipment,12' X 12' SOLID BLACK RAG,12' X 12' SOLID BLACK RAG,,true,not publicVisible
+30c2d8af-d3a8-41e7-a2ff-b581e1715cac,InventoryItem,GE,Grip Equipment,12' X 12' ULTRABOUNCE RAG,12' X 12' ULTRABOUNCE RAG,,true,not publicVisible
+5172cd11-8630-4dec-822b-c6d609fd5d65,InventoryItem,GE,Grip Equipment,12' X 20' FULL GRID RAG,12' X 20' FULL GRID RAG,,true,not publicVisible
+18f2fbab-ae9d-4fb9-a254-3f15c1baa324,InventoryItem,GE,Grip Equipment,12' X 20' LITE (1/2) GRID RAG,12' X 20' LITE (1/2) GRID RAG,,true,not publicVisible
+faa8451c-d427-4ed7-92d5-f492be4edc78,InventoryItem,GE,Grip Equipment,12' X 20' QUARTER GRID RAG,12' X 20' QUARTER GRID RAG,,true,not publicVisible
+22b5c8ee-1f15-4bd3-b2d9-077e32e3f9a9,InventoryItem,GE,Grip Equipment,12' X 20' SOLID BLACK RAG,12' X 20' SOLID BLACK RAG,,true,not publicVisible
+1bfb3bb6-10f0-451c-a065-3a1639310747,InventoryItem,GE,Grip Equipment,12' X 20' ULTRABOUNCE RAG,12' X 20' ULTRABOUNCE RAG,,true,not publicVisible
+8866266e-357f-492a-8268-b2a2f658e345,InventoryItem,GE,Grip Equipment,12' X 30' SOLID BLACK RAG,12' X 30' SOLID BLACK RAG,,true,not publicVisible
+93e2f349-8914-4ef9-8571-af789afc4456,InventoryItem,GE,Grip Equipment,12ﬂ FURNITURE CLAMP,12ﬂ FURNITURE CLAMP,,true,not publicVisible
+fb6ef7ab-47f8-4629-a042-9ed5a9e6775a,InventoryItem,GE,Grip Equipment,"18 ""X 24""  SILK FLAG","18 ""X 24""  SILK FLAG",,true,not publicVisible
+f48daa4f-53e4-45bf-8f22-bb299d05930e,InventoryItem,GE,Grip Equipment,"18"" X 24""  EMPTY FRAMES","18"" X 24""  EMPTY FRAMES",,true,not publicVisible
+71a36bb6-6a51-4593-a621-ab30de3f19f2,InventoryItem,GE,Grip Equipment,"18"" X 24"" DOUBLE NET FLAG","18"" X 24"" DOUBLE NET FLAG",,true,not publicVisible
+70001fd2-f1a7-42d1-bb22-dcbd7ad8dda2,InventoryItem,GE,Grip Equipment,"18"" X 24"" SINGLE NET FLAG","18"" X 24"" SINGLE NET FLAG",,true,not publicVisible
+cb3a69d7-0965-4327-9e92-ab4e775219a6,InventoryItem,GE,Grip Equipment,"18"" X 24"" SOLID FLAG","18"" X 24"" SOLID FLAG",,true,not publicVisible
+6bc152ae-bd69-4796-83da-4121687c9010,InventoryItem,GE,Grip Equipment,"18"" X 48"" SOLID CUTTER","18"" X 48"" SOLID CUTTER",,true,not publicVisible
+bbe88719-bc62-47a3-8150-78fa5a959a95,InventoryItem,GE,Grip Equipment,18ﬂ FURNITURE CLAMP,18ﬂ FURNITURE CLAMP,,true,not publicVisible
+eaa54798-5d1b-4851-9722-3ba157625e77,InventoryItem,GE,Grip Equipment,2 1/2 GOBO HEAD,2 1/2 GOBO HEAD,,true,not publicVisible
+f67b545a-eb55-490e-a6ef-c261bb774e86,InventoryItem,GE,Grip Equipment,"2 1/2"" GRIP HEAD","2 1/2"" GRIP HEAD",,true,not publicVisible
+27c2bd2d-9621-4a12-b850-c3c20c87e977,InventoryItem,GE,Grip Equipment,"2' SPEEDRAIL PIPE 1-1/4""","2' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+d0a1f423-dfeb-4ba6-9387-7f87dbbf43f1,InventoryItem,GE,Grip Equipment,2' X 4' DOUBLE MEAT AX FLAG,2' X 4' DOUBLE MEAT AX FLAG,,true,not publicVisible
+40f67d68-d47a-45b4-83a9-27cd29bb4266,InventoryItem,GE,Grip Equipment,2' X 4' WALL SPREADER,2' X 4' WALL SPREADER,,true,not publicVisible
+cb988bba-ec8e-4798-8c4c-d3b5de560fde,InventoryItem,GE,Grip Equipment,"20' SPEEDRAIL PIPE 1-1/4""","20' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+bc7d007c-f7ef-4e8a-8ce4-312a4ae88c44,InventoryItem,GE,Grip Equipment,20' X 20' DOUBLE NET RAG,20' X 20' DOUBLE NET RAG,,true,not publicVisible
+76208f2b-428b-441d-8f6f-5c2306343af8,InventoryItem,GE,Grip Equipment,20' X 20' FULL GRID RAG (NOISY),20' X 20' FULL GRID RAG (NOISY),,true,not publicVisible
+d0e287ee-48a5-44f1-adeb-6c912304468a,InventoryItem,GE,Grip Equipment,20' X 20' LITE (1/2) GRID CLOTH RAG,20' X 20' LITE (1/2) GRID CLOTH RAG,,true,not publicVisible
+5d1d3b35-b29a-49b3-9fe9-80a582075f15,InventoryItem,GE,Grip Equipment,20' X 20' QUARTER GRID CLOTH RAG,20' X 20' QUARTER GRID CLOTH RAG,,true,not publicVisible
+4a85d3ae-e8c0-4493-aabe-3aa024c6cc41,InventoryItem,GE,Grip Equipment,20' X 20' SINGLE NET RAG,20' X 20' SINGLE NET RAG,,true,not publicVisible
+32ebba6b-98e4-4e6f-8f15-2f001615a0eb,InventoryItem,GE,Grip Equipment,20' X 20' SOLID BLACK RAG,20' X 20' SOLID BLACK RAG,,true,not publicVisible
+a92ce565-c5df-4bf2-8418-4c5734ad7d73,InventoryItem,GE,Grip Equipment,20' X 20' ULTRABOUNCE RAG,20' X 20' ULTRABOUNCE RAG,,true,not publicVisible
+be3019bf-eaf2-445f-9819-8c85d51bc4bb,InventoryItem,GE,Grip Equipment,"24""  X 60"" SOLID CUTTER","24""  X 60"" SOLID CUTTER",,true,not publicVisible
+c802ee10-8220-4c3b-bb94-61ef23fb0f99,InventoryItem,GE,Grip Equipment,"24"" X 36""  EMPTY FRAMES","24"" X 36""  EMPTY FRAMES",,true,not publicVisible
+8b1ca495-e78d-40dc-9e05-ef0212d0b3e1,InventoryItem,GE,Grip Equipment,"24"" X 36"" DOUBLE NET FLAG","24"" X 36"" DOUBLE NET FLAG",,true,not publicVisible
+ed35b45b-135b-429e-bb63-e2828f1612e0,InventoryItem,GE,Grip Equipment,"24"" X 36"" SILK FLAG","24"" X 36"" SILK FLAG",,true,not publicVisible
+5dd69711-b57e-410c-b034-13ebe38dca30,InventoryItem,GE,Grip Equipment,"24"" X 36"" SINGLE NET FLAG","24"" X 36"" SINGLE NET FLAG",,true,not publicVisible
+605d1daa-596d-46ae-8ca0-7013bb7577cb,InventoryItem,GE,Grip Equipment,"24"" X 36"" SOLID FLAG","24"" X 36"" SOLID FLAG",,true,not publicVisible
+0a3fce8e-8764-47bd-a7ff-db330f0cd4ae,InventoryItem,GE,Grip Equipment,"24"" X 48"" SINGLE MEAT AXE T-FLAG","24"" X 48"" SINGLE MEAT AXE T-FLAG",,true,not publicVisible
+aa5271f7-e2c4-4a0b-8016-d0965be39a2d,InventoryItem,GE,Grip Equipment,"24"" X 72"" SOLID CUTTER","24"" X 72"" SOLID CUTTER",,true,not publicVisible
+e8ce908b-3408-4e7a-8552-3b6eb22145c2,InventoryItem,GE,Grip Equipment,24ﬂ FURNITURE CLAMP,24ﬂ FURNITURE CLAMP,,true,not publicVisible
+6731b7f6-8486-4048-a4f1-fa1ac989c93d,InventoryItem,GE,Grip Equipment,25 LB. SANDBAG,25 LB. SANDBAG,,true,not publicVisible
+d1f265e7-c371-474d-9aac-98fb8ad6076c,InventoryItem,GE,Grip Equipment,"3' SPEEDRAIL PIPE 1-1/4""","3' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+f729aecd-6429-414d-9122-5d829c00dbbc,InventoryItem,GE,Grip Equipment,35 LB. SANDBAG,35 LB. SANDBAG,,true,not publicVisible
+b42440c2-d107-4870-9efe-c214ced55dbb,InventoryItem,GE,Grip Equipment,"4' SPEEDRAIL PIPE 1-1/4""","4' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+441583d1-36be-4dfb-813c-dfcc699deb9d,InventoryItem,GE,Grip Equipment,4' X 4' 1/2 GRID RAG,4' X 4' 1/2 GRID RAG,,true,not publicVisible
+08ba4020-57d5-4450-8d6a-8ba68279c1fd,InventoryItem,GE,Grip Equipment,4' X 4' 1/2 SOFT FROST RAG,4' X 4' 1/2 SOFT FROST RAG,,true,not publicVisible
+98bb3df7-5a1f-46ab-a39d-59327f5aaa88,InventoryItem,GE,Grip Equipment,4' X 4' BLACK WHITE GRIFF FLAG,4' X 4' BLACK WHITE GRIFF FLAG,,true,not publicVisible
+d3ea64a3-535f-455b-ab3f-d29acbd6d5cd,InventoryItem,GE,Grip Equipment,4' X 4' BLEACHED MUSLIN FLAG,4' X 4' BLEACHED MUSLIN FLAG,,true,not publicVisible
+2b3b76c4-7e73-4f48-83c1-4d512f6f227d,InventoryItem,GE,Grip Equipment,4' X 4' FULL GRID RAG,4' X 4' FULL GRID RAG,,true,not publicVisible
+02ef591f-7e33-4d30-b34d-eaa942db7520,InventoryItem,GE,Grip Equipment,4' X 4' POLY SILK RAG,4' X 4' POLY SILK RAG,,true,not publicVisible
+ee2093f8-f8b5-4842-959c-865607094851,InventoryItem,GE,Grip Equipment,4' X 4' SILVER LAME RAG,4' X 4' SILVER LAME RAG,,true,not publicVisible
+3409a387-8ead-4f00-9e48-51cc7549bb30,InventoryItem,GE,Grip Equipment,4' X 4' UNBLEACHED MUSLIN FLAG,4' X 4' UNBLEACHED MUSLIN FLAG,,true,not publicVisible
+0a363293-5236-41a7-bfc1-767bae8ad7bb,InventoryItem,GE,Grip Equipment,"48"" X 48"" DOUBLE NET FLAG","48"" X 48"" DOUBLE NET FLAG",,true,not publicVisible
+6bd2b0a0-cf57-4fa9-8e76-d88a2cb01a8f,InventoryItem,GE,Grip Equipment,"48"" X 48"" EMPTY FRAME","48"" X 48"" EMPTY FRAME",,true,not publicVisible
+0480c945-f6ed-406b-8802-456ad2721e7e,InventoryItem,GE,Grip Equipment,"48"" X 48"" SINGLE NET FLAG","48"" X 48"" SINGLE NET FLAG",,true,not publicVisible
+4bb664ea-3297-45e8-b945-0bd77a925a5d,InventoryItem,GE,Grip Equipment,"48"" X 48"" ULTRABOUNCE","48"" X 48"" ULTRABOUNCE",,true,not publicVisible
+28a2fad3-2a0e-4fcf-9f85-bccda1c69c5e,InventoryItem,GE,Grip Equipment,48' X 48' SOLID FLAG,48' X 48' SOLID FLAG,,true,not publicVisible
+d9333bc6-fb4e-4061-888f-69601e718832,InventoryItem,GE,Grip Equipment,"5' SPEEDRAIL PIPE 1-1/4""","5' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+633b1376-32a5-4e09-9281-e8ecd519209e,InventoryItem,GE,Grip Equipment,"6' SPEEDRAIL PIPE 1-1/4""","6' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+f0c0ed14-09b7-4342-a815-eec741c52a25,InventoryItem,GE,Grip Equipment,6' X 6' 1/2 SOFT FROST RAG,6' X 6' 1/2 SOFT FROST RAG,,true,not publicVisible
+0ac288e2-2e5c-44e7-9cbc-6ee261e41835,InventoryItem,GE,Grip Equipment,6' X 6' BLACK/WHITE GRIFF. RAG,6' X 6' BLACK/WHITE GRIFF. RAG,,true,not publicVisible
+b226ddf7-ac08-4317-9620-911634f92f0d,InventoryItem,GE,Grip Equipment,6' X 6' BLEACHED MUSLIN RAG,6' X 6' BLEACHED MUSLIN RAG,,true,not publicVisible
+fae6d317-d7a4-46b9-a4fe-58ddfb8afe8a,InventoryItem,GE,Grip Equipment,6' X 6' CHINA SILK RAG,6' X 6' CHINA SILK RAG,,true,not publicVisible
+36d3aa37-1eed-41ae-a264-eead1c3e81b9,InventoryItem,GE,Grip Equipment,6' X 6' CHROMA GREEN RAG,6' X 6' CHROMA GREEN RAG,,true,not publicVisible
+31954dda-a7a9-4494-88bf-c748f79f6029,InventoryItem,GE,Grip Equipment,6' X 6' DIGI GREEN RAG,6' X 6' DIGI GREEN RAG,,true,not publicVisible
+61383714-6897-4acc-89ff-5a4f114c995f,InventoryItem,GE,Grip Equipment,6' X 6' DOUBLE NET RAG,6' X 6' DOUBLE NET RAG,,true,not publicVisible
+d5cd6fab-b4cc-4f2c-b298-1ff31cfe1c71,InventoryItem,GE,Grip Equipment,6' X 6' FULL GRID RAG,6' X 6' FULL GRID RAG,,true,not publicVisible
+95e399d9-2aec-4421-b56c-ac2517369a63,InventoryItem,GE,Grip Equipment,6' X 6' GOLD GRIFFLON RAG,6' X 6' GOLD GRIFFLON RAG,,true,not publicVisible
+b397a3d2-d02c-4e3b-9b96-fd8e4d159730,InventoryItem,GE,Grip Equipment,6' X 6' GOLD LAME RAG,6' X 6' GOLD LAME RAG,,true,not publicVisible
+ec99ae7c-7cc2-43cc-b184-842990da7c6e,InventoryItem,GE,Grip Equipment,6' X 6' LITE (1/2) GRID RAG,6' X 6' LITE (1/2) GRID RAG,,true,not publicVisible
+bb8324f3-0111-4466-a4a5-2fcd05e490ab,InventoryItem,GE,Grip Equipment,6' X 6' POLY SILK RAG,6' X 6' POLY SILK RAG,,true,not publicVisible
+edcd3463-3c20-41e5-867c-761751e570ee,InventoryItem,GE,Grip Equipment,6' X 6' QUARTER GRID RAG,6' X 6' QUARTER GRID RAG,,true,not publicVisible
+3c173ee3-900b-4e61-b567-c4c5967216e2,InventoryItem,GE,Grip Equipment,6' X 6' QUARTER SILK RAG,6' X 6' QUARTER SILK RAG,,true,not publicVisible
+c3481ae7-e539-4583-808c-e802c9411f2a,InventoryItem,GE,Grip Equipment,6' X 6' SILVER & GOLD CHECKER RAG,6' X 6' SILVER & GOLD CHECKER RAG,,true,not publicVisible
+c81c0c9a-6254-49d0-83ec-3795c3c123d2,InventoryItem,GE,Grip Equipment,6' X 6' SILVER GRIFFLON RAG,6' X 6' SILVER GRIFFLON RAG,,true,not publicVisible
+0dbdb631-19d3-4d14-90bf-df0c654ec992,InventoryItem,GE,Grip Equipment,6' X 6' SILVER LAME RAG,6' X 6' SILVER LAME RAG,,true,not publicVisible
+9311fdb1-9ffb-4ea5-b0a8-f511c01fba93,InventoryItem,GE,Grip Equipment,6' X 6' SINGLE NET RAG,6' X 6' SINGLE NET RAG,,true,not publicVisible
+4f736400-e976-4590-936d-b82ae632ed79,InventoryItem,GE,Grip Equipment,6' X 6' SOLID BLACK RAG,6' X 6' SOLID BLACK RAG,,true,not publicVisible
+c87c1db9-3323-4be7-8baa-76aa04b833fb,InventoryItem,GE,Grip Equipment,6' X 6' ULTRABOUNCE RAG,6' X 6' ULTRABOUNCE RAG,,true,not publicVisible
+6e80de49-cf63-4a6f-bab2-e1ad08c338c2,InventoryItem,GE,Grip Equipment,6' X 6' UNBLEACHED MUSLIN RAG,6' X 6' UNBLEACHED MUSLIN RAG,,true,not publicVisible
+e4cb9d8f-8e1b-41dc-87d8-30e893d94ae9,InventoryItem,GE,Grip Equipment,6' X 8' FORREST NET,6' X 8' FORREST NET,,true,not publicVisible
+d376d139-28d0-42c2-b4cc-00dfd35800a1,InventoryItem,GE,Grip Equipment,"8' SPEEDRAIL PIPE 1-1/4""","8' SPEEDRAIL PIPE 1-1/4""",,true,not publicVisible
+232b956e-43db-4852-b0d7-70f83142ac81,InventoryItem,GE,Grip Equipment,8' X 12' SOLID BLACK RAG,8' X 12' SOLID BLACK RAG,,true,not publicVisible
+4d40164f-b901-4dd0-8382-4be2a3d6f019,InventoryItem,GE,Grip Equipment,8' X 8' 1/2 SOFT FROST RAG,8' X 8' 1/2 SOFT FROST RAG,,true,not publicVisible
+1dd56d7c-eaa1-46d0-99d1-c26a0597a03b,InventoryItem,GE,Grip Equipment,8' X 8' BLEACHED MUSLIN RAG,8' X 8' BLEACHED MUSLIN RAG,,true,not publicVisible
+8f5d1b3e-f8df-4ed4-a593-9f00d3e9ecdf,InventoryItem,GE,Grip Equipment,8' X 8' CHINA SILK RAG,8' X 8' CHINA SILK RAG,,true,not publicVisible
+152493e2-642e-491d-b2dc-257ad4a4d9f6,InventoryItem,GE,Grip Equipment,8' X 8' DOUBLE NET RAG,8' X 8' DOUBLE NET RAG,,true,not publicVisible
+6a58d573-768b-401e-8cdf-e188f0c05701,InventoryItem,GE,Grip Equipment,8' X 8' GOLD LAME RAG,8' X 8' GOLD LAME RAG,,true,not publicVisible
+9ec58796-d828-4240-bc72-c5061bfe97bf,InventoryItem,GE,Grip Equipment,8' X 8' GRIFFLON RAG,8' X 8' GRIFFLON RAG,,true,not publicVisible
+fe1ac9db-07db-4cbb-865e-cefc3aa94cfb,InventoryItem,GE,Grip Equipment,8' X 8' POLY SILK RAG,8' X 8' POLY SILK RAG,,true,not publicVisible
+cb6fd679-20ab-43c0-9bb8-d80b4a70567e,InventoryItem,GE,Grip Equipment,8' X 8' SILVER GOLD CHECKER RAG,8' X 8' SILVER GOLD CHECKER RAG,,true,not publicVisible
+b438b1ca-24ad-4fb2-a9a1-ff3a4a2168b7,InventoryItem,GE,Grip Equipment,8' X 8' SILVER LAME RAG,8' X 8' SILVER LAME RAG,,true,not publicVisible
+feb9ae38-7bf8-4cf1-9c72-f1c8edc8b483,InventoryItem,GE,Grip Equipment,8' X 8' SINGLE NET RAG,8' X 8' SINGLE NET RAG,,true,not publicVisible
+1f8eb4f6-1ebc-4ef5-bb79-76633b9cc7d6,InventoryItem,GE,Grip Equipment,8' X 8' SOLID BLACK RAG,8' X 8' SOLID BLACK RAG,,true,not publicVisible
+73d9237c-88eb-4793-af01-8f3a4d1a98e7,InventoryItem,GE,Grip Equipment,8' X 8' ULTRABOUNCE RAG,8' X 8' ULTRABOUNCE RAG,,true,not publicVisible
+b549f1b8-c6e8-42c9-a252-c12d77883611,InventoryItem,GE,Grip Equipment,8' X 8' UNBLEACHED MUSLIN RAG,8' X 8' UNBLEACHED MUSLIN RAG,,true,not publicVisible
+1dfbd218-754e-4fcf-8917-7090ea52997e,InventoryItem,GE,Grip Equipment,APPLE BOX - FULL,APPLE BOX - FULL,,true,not publicVisible
+aecf69e2-f801-4bc1-a4be-4a0737f0d25c,InventoryItem,GE,Grip Equipment,APPLE BOX - FULL (CHROMA GREEN),APPLE BOX - FULL (CHROMA GREEN),,true,not publicVisible
+13686eac-e044-426e-b413-da341969398d,InventoryItem,GE,Grip Equipment,APPLE BOX - HALF,APPLE BOX - HALF,,true,not publicVisible
+02485604-bdaa-4e17-9611-3769aa97edbf,InventoryItem,GE,Grip Equipment,APPLE BOX - PANCAKE,APPLE BOX - PANCAKE,,true,not publicVisible
+7e3e2544-3c26-4ce4-9cef-d8ca9a1441be,InventoryItem,GE,Grip Equipment,APPLE BOX - QUARTER,APPLE BOX - QUARTER,,true,not publicVisible
+33dee066-1da7-4b2d-bc3e-3c7fe53383c6,InventoryItem,GE,Grip Equipment,BABY GRID CLAMPS,BABY GRID CLAMPS,,true,not publicVisible
+ad91c0bf-04a5-42a8-a670-ffc4889e22ad,InventoryItem,GE,Grip Equipment,BABY GRID CLAMPS WITH ERARS,BABY GRID CLAMPS WITH ERARS,,true,not publicVisible
+2e03a02d-3b8d-490b-a48f-ea05e6fbe546,InventoryItem,GE,Grip Equipment,BABY OFFSET ARM,BABY OFFSET ARM,,true,not publicVisible
+09ffa864-7ab8-412a-85de-cd529a5dcc97,InventoryItem,GE,Grip Equipment,BABY PIPE HANGER - CLAMP,BABY PIPE HANGER - CLAMP,,true,not publicVisible
+0c09783c-d361-48a6-90a1-7b2551dce81b,InventoryItem,GE,Grip Equipment,BIG BEN CLAMP,BIG BEN CLAMP,,true,not publicVisible
+dbbd0d49-cb29-4689-a4f7-fb42eec92f8b,InventoryItem,GE,Grip Equipment,BOLT ON PIPE CLAMP,BOLT ON PIPE CLAMP,,true,not publicVisible
+94c183e0-f65a-4517-80ca-0ab181474489,InventoryItem,GE,Grip Equipment,Bolt Cutter,Bolt Cutter,,true,not publicVisible
+2e2a0cfa-895d-4615-b7cf-5033c9aa22e4,InventoryItem,GE,Grip Equipment,CHAIN VISE GRIP,CHAIN VISE GRIP,,true,not publicVisible
+d9f5d95d-73b3-4c73-bee7-d3b6b02af03d,InventoryItem,GE,Grip Equipment,CHAIN VISE GRIP W/PIN,CHAIN VISE GRIP W/PIN,,true,not publicVisible
+1008f08b-8e24-4ab6-ace0-1b65c0e85b00,InventoryItem,GE,Grip Equipment,DOT & FINGER BAG,DOT & FINGER BAG,,true,not publicVisible
+e8fd3822-f474-4469-b7c1-84c00f3c43cf,InventoryItem,GE,Grip Equipment,DROP CEILING CLIP W/PIN - SCISSOR,DROP CEILING CLIP W/PIN - SCISSOR,,true,not publicVisible
+b42eb9de-fd93-42fa-abfc-c8c7a04596f3,InventoryItem,GE,Grip Equipment,FLEX ARM,FLEX ARM,,true,not publicVisible
+e6e3d23d-3d21-44d6-9431-57a417715845,InventoryItem,GE,Grip Equipment,FLEX ARM EXTENTION,FLEX ARM EXTENTION,,true,not publicVisible
+ed2986ed-53ab-4c47-aeff-0ba34aeadb85,InventoryItem,GE,Grip Equipment,JR BOOM ARM,JR BOOM ARM,,true,not publicVisible
+dbe1da8f-f291-46cb-8725-15e53d43f879,InventoryItem,GE,Grip Equipment,JR. OFFSET ARM,JR. OFFSET ARM,,true,not publicVisible
+d7510484-57cf-4a16-8244-34b6c65ca56a,InventoryItem,GE,Grip Equipment,JR. PIPE HANGER - CLAMP,JR. PIPE HANGER - CLAMP,,true,not publicVisible
+66ff3502-5a6a-403a-abf9-d5e58e5eac6e,InventoryItem,GE,Grip Equipment,MAFER CLAMP,MAFER CLAMP,,true,not publicVisible
+dfdcd0b5-cf07-4721-8e03-3f4fd141da1a,InventoryItem,GE,Grip Equipment,MEAT AXE,MEAT AXE,,true,not publicVisible
+fd63ce32-3105-4923-9b38-4d099fcdf6c9,InventoryItem,GE,Grip Equipment,MENACE ARM KIT,MENACE ARM KIT,,true,not publicVisible
+d79c4b7f-d54f-446a-b95c-f9f08d31c64a,InventoryItem,GE,Grip Equipment,PUTTY KNIFE W/PIN,PUTTY KNIFE W/PIN,,true,not publicVisible
+6b0137b9-5e82-4657-a554-d05552a5b82b,InventoryItem,GE,Grip Equipment,STAND - MOMBO COMBO,STAND - MOMBO COMBO,,true,not publicVisible
+930e453e-4a32-4b85-9f7d-36b222bdc658,InventoryItem,GE,Grip Equipment,Standard Boom Box,Standard Boom Box,,true,not publicVisible
+caa23413-c445-43eb-8733-b52a910b3ba1,InventoryItem,PRO_SUPPLIES,Health & Safety,Non-Contact Thermometer,HEA-NON-CONTACT-THERMOMETER,,true,
+41034661-109a-4502-86a1-2e5db84e50a0,InventoryItem,PRO_SUPPLIES,Health & Safety,Paper Wristbands (10pk) - Blue,HEA-PAPER-WRISTBANDS-10PK-BLUE,,true,
+43cd9963-522b-4e44-b766-09783094080a,InventoryItem,PRO_SUPPLIES,Health & Safety,Paper Wristbands (10pk) - Orange,HEA-PAPER-WRISTBANDS-10PK-ORANGE,,true,
+1a0dcbe3-a814-45aa-a618-6bdbcb082a14,InventoryItem,PRO_SUPPLIES,Health & Safety,Paper Wristbands (10pk) - Pink,HEA-PAPER-WRISTBANDS-10PK-PINK,,true,
+b3ebbbec-8e2d-4ded-9d23-4ae30095bc5f,InventoryItem,PRO_SUPPLIES,Health & Safety,Paper Wristbands (10pk) - Red,HEA-PAPER-WRISTBANDS-10PK-RED,,true,
+49ef1375-a5f0-4502-82b4-54270cbb6ab0,InventoryItem,PRO_SUPPLIES,Health & Safety,Paper Wristbands (10pk) - Yellow,HEA-PAPER-WRISTBANDS-10PK-YELLOW,,true,
+6f22d933-3659-430d-8eec-fd8b11f8f900,InventoryItem,PRO_SUPPLIES,Health & Safety,Safe Sets Signage Pack,HEA-SAFE-SETS-SIGNAGE-PACK,,true,
+aeb18d70-4fdc-46d3-9f24-877edf5e6c00,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 10'",LAD-LADDER-10,,true,
+622b1723-1045-4ee0-84c4-595af4f14d68,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 12'",LAD-LADDER-12,,true,
+8cd19311-c97b-4795-987e-457b15752526,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 14'",LAD-LADDER-14,,true,
+59cdfa17-f6f5-442e-a956-ce6ec8a0d3de,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 6'",LAD-LADDER-6,,true,
+84c52e20-f993-4577-8b0d-35a769109a09,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 7'",LAD-LADDER-7,,true,
+1c80dfbb-0ce7-43a8-8723-7412c323da33,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, 8'",LAD-LADDER-8,,true,
+28ccc0d7-ef46-410f-a75f-a2d811d6389a,InventoryItem,PRO_SUPPLIES,Ladders,"Ladder, Step",LAD-LADDER-STEP,,true,
+127dce10-4158-4bc9-b4f3-abe21ae21ef7,InventoryItem,GE,Lighting Equipment,SUMO HEAD BI COLOR LED,102944,,true,not publicVisible
+5ce48035-45fa-46cd-a8fc-a31bb0ce791d,InventoryItem,GE,Lighting Equipment,FLUOTEC STUDIO 120 HEAD,103013,,true,not publicVisible
+3d23e0b8-1a19-468b-b9cc-e36990bff60d,InventoryItem,GE,Lighting Equipment,"VEGALUX 300 10"" BI-COLOR",103908,,true,not publicVisible
+ffc2a031-9e31-4614-a3eb-270c45aa31fd,InventoryItem,GE,Lighting Equipment,Worklight - Battery Powered (Pelican),104456,,true,not publicVisible
+7ae032f0-2497-4926-abdc-87467ff7c39d,InventoryItem,GE,Lighting Equipment,Worklight - Battery Powered (Dewalt),104457,Dewalt,true,not publicVisible
+811333b2-e3d9-4faa-9f68-ffef9237a20e,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60- LED,104460,,true,not publicVisible
+e4660fe3-7114-40ee-b575-c800f24e3372,InventoryItem,GE,Lighting Equipment,ASTERA 4' TITAN LED TUBE,104461,,true,not publicVisible
+43866933-4c48-4a6c-b38b-dfd7b2a6cd7e,InventoryItem,GE,Lighting Equipment,650W TWEENIE II HEAD - TYPE 4821,104469,,true,not publicVisible
+e4ce621c-bb52-4f88-ba97-6c92fc83bd8e,InventoryItem,GE,Lighting Equipment,ETC SOURCE 4 36 DEGREE LENS TUBE,104470,,true,not publicVisible
+cecdd5fb-5910-4eb4-aa05-001c35436be4,InventoryItem,GE,Lighting Equipment,KINO - 4 BANK BALLAST,104471,,true,not publicVisible
+147ee37a-7f21-4769-8db8-c62159eb6878,InventoryItem,GE,Lighting Equipment,ETC SOURCE 4 19 DEGREE LENS TUBE,104472,,true,not publicVisible
+2cae3791-5f88-4983-84b4-553690b4172a,InventoryItem,GE,Lighting Equipment,ETC SOURCE 4 26 DEGREE LENS TUBE,104473,,true,not publicVisible
+412824e1-522d-4aa5-89dc-5ec929f3f9dc,InventoryItem,GE,Lighting Equipment,ETC SOURCE 4 50 DEGREE LENS TUBE,104474,,true,not publicVisible
+ed7e84a8-8279-48c8-b7a4-51311baf16ba,InventoryItem,GE,Lighting Equipment,5K MOLE BABY SENIOR,104475,,true,not publicVisible
+96e781a2-de3f-4191-81f2-1261e722d5ea,InventoryItem,GE,Lighting Equipment,BABY 2K  MOLE HEAD,104477,,true,not publicVisible
+dd5cef3c-acf4-4696-9804-a2e5ebec1e2f,InventoryItem,GE,Lighting Equipment,"2K 8"" JUNIOR MOLE HEAD",104478,,true,not publicVisible
+5034822f-b86c-4c06-81dc-3190f55ff996,InventoryItem,GE,Lighting Equipment,1K MICKEY MOLE HEAD - TYPE 4081,104480,,true,not publicVisible
+89a63dd2-c75e-417d-a184-fadd49a3641e,InventoryItem,GE,Lighting Equipment,MOLEPAR 1K HEAD - TYPE 2271,104481,,true,not publicVisible
+90b711f4-b87d-4947-a3ee-b28d41582f15,InventoryItem,GE,Lighting Equipment,2K MIGHTY MOLE HEAD - TYPE 4091,104482,,true,not publicVisible
+e1f4ffab-0b6c-4d2a-925b-a903cb26130e,InventoryItem,GE,Lighting Equipment,BABY 10K  MOLE HEAD,104483,,true,not publicVisible
+06d16505-7f07-4180-b7c9-cd8f4bd892e2,InventoryItem,GE,Lighting Equipment,"2K BABY ""ZIP"" SOFTLITE",104484,,true,not publicVisible
+82be49d7-c3ce-4b0c-94f5-c93f54b84352,InventoryItem,GE,Lighting Equipment,1K PARCAN 64,104485,,true,not publicVisible
+4e4fe11e-7a47-4031-8a79-f18ba644109d,InventoryItem,GE,Lighting Equipment,ETC 750W SOURCE 4 LEKO HEAD,104488,,true,not publicVisible
+2c173baa-37c5-47af-ba26-1d88a05d0829,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60/S120 - PSU,104490,,true,not publicVisible
+680c8ede-4dc4-48bd-a5d7-9b256f02879a,InventoryItem,GE,Lighting Equipment,"QUARTZ SPEED RING 10""",104491,,true,not publicVisible
+32bee330-c2ad-41d2-9336-36396d397d37,InventoryItem,GE,Lighting Equipment,ARRI 300W HEAD,104492,,true,not publicVisible
+ba566bb4-c659-4534-a347-021d61525c14,InventoryItem,GE,Lighting Equipment,2K VARIAC (AC) DIMMER,104493,,true,not publicVisible
+57bae277-2f3f-40f8-a865-b581498e7d1b,InventoryItem,GE,Lighting Equipment,"4K BABY ""ZIP"" SOFTLITE",104494,,true,not publicVisible
+fe47baa1-22f0-4bc6-9a31-cc9d7d925364,InventoryItem,GE,Lighting Equipment,KINO FLO IMAGE 87 COMPLETE,104495,,true,not publicVisible
+f5fa5f8a-4828-4d93-8c56-a122a056ad26,InventoryItem,GE,Lighting Equipment,2K ARRI LITE PLUS OPEN FACE,104496,,true,not publicVisible
+2dfa3ed8-f6dc-48a7-8834-9ee3b2f72d90,InventoryItem,GE,Lighting Equipment,750W ARRI LITE PLUS OPEN FACE,104497,,true,not publicVisible
+7b29de40-b157-438d-a00f-d8886ebc48fe,InventoryItem,GE,Lighting Equipment,"1K BABY ""ZIP"" SOFTLITE",104499,,true,not publicVisible
+408f9a32-c63c-46f0-93a0-476249a9e197,InventoryItem,GE,Lighting Equipment,5K SKYPAN OPEN FACE,104500,,true,not publicVisible
+8c481d14-20f3-454c-8c68-543afc1d745c,InventoryItem,GE,Lighting Equipment,ASTERA BOX - ART7 RX/TX,104507,,true,not publicVisible
+2737ffad-bca6-417c-a143-fa8d4a09d1b3,InventoryItem,GE,Lighting Equipment,KINO CELEB 200,104518,,true,not publicVisible
+9280a21d-9916-4784-93b8-44bb05b48f6c,InventoryItem,GE,Lighting Equipment,Astera - Titan Charger Case (8-Place),104520,,true,not publicVisible
+bba66061-115e-4f87-b29d-d8c52fd6b103,InventoryItem,GE,Lighting Equipment,800W KF5600 JOKER / SOURCE 4 LEKO,104521,,true,not publicVisible
+304cfce5-4351-424c-a85d-b71ad37af33e,InventoryItem,GE,Lighting Equipment,Joker 400W Bug Head,104522,,true,not publicVisible
+e11e1178-baa9-4e51-9296-1acf2c181d6a,InventoryItem,GE,Lighting Equipment,Joker 400W Bug Ballast,104523,,true,not publicVisible
+41862b92-7dc1-43f1-bf5c-37571aa78235,InventoryItem,GE,Lighting Equipment,Joker 400W Bug - Case,104524,,true,not publicVisible
+bbe8a235-11e0-489b-bedf-012b65f95633,InventoryItem,GE,Lighting Equipment,KINO FLO IMAGE 80 COMPLETE,104525,,true,not publicVisible
+a3d2d67a-a430-4eaf-ae61-92aceda840a0,InventoryItem,GE,Lighting Equipment,KINO FLO IMAGE 80 - CASE,104526,,true,not publicVisible
+a85a76a7-3449-4cda-9adb-039cd3f30e09,InventoryItem,GE,Lighting Equipment,6K Barger Baglite 6 Light,104527,,true,not publicVisible
+3808242f-2602-4eed-803e-7ea26c61b1fd,InventoryItem,GE,Lighting Equipment,ASTRA 1X1 BI-COLOR - LITEPANEL,104534,,true,not publicVisible
+8a7ae462-238d-41b3-893b-90f691e49ad1,InventoryItem,GE,Lighting Equipment,9 LIGHT FAY HEAD - 5850 WATT,104535,,true,not publicVisible
+f89e327d-55c6-4194-91cc-b8c1bd9cdb13,InventoryItem,GE,Lighting Equipment,ARRI 150W HEAD,104536,,true,not publicVisible
+3ad6d23e-584c-4cd1-8674-9aae7ba44731,InventoryItem,GE,Lighting Equipment,ARRILITE 5K HEAD,104537,,true,not publicVisible
+cc6d9565-6d5b-45d7-a619-f64e1a9b2b91,InventoryItem,GE,Lighting Equipment,1K VARIAC (AC) DIMMER,104542,,true,not publicVisible
+71509969-14e6-4bb0-b9f8-734fbf673fd3,InventoryItem,GE,Lighting Equipment,125/200W LTM PAR HEAD,104543,,true,not publicVisible
+4f1478dd-ac81-47dc-97fc-ca8cd42db016,InventoryItem,GE,Lighting Equipment,"QUARTZ SPEED RING 13 1/2""",104545,,true,not publicVisible
+0da24bdd-587a-49d3-b958-29e3a01a81b4,InventoryItem,GE,Lighting Equipment,"QUARTZ SPEED RING 9""",104546,,true,not publicVisible
+624a1aff-aed5-40b8-8e77-69b85ea5d2de,InventoryItem,GE,Lighting Equipment,"QUARTZ SPEED RING 18""",104547,,true,not publicVisible
+48362aa6-79a0-4315-8f8d-b2acddef632e,InventoryItem,GE,Lighting Equipment,"VIDEO PRO SPEED RING 7 1/4""",104548,,true,not publicVisible
+41a619a9-4772-4a81-bfb2-b5d650ad9e82,InventoryItem,GE,Lighting Equipment,"VIDEO PRO SPEED RING 6 1/4""",104549,,true,not publicVisible
+51781eb7-d97f-421e-933b-398916190f80,InventoryItem,GE,Lighting Equipment,"VIDEO PRO SPEED RING 5 1/4""",104550,,true,not publicVisible
+d70093cc-b7e6-4238-9029-72215ac256bc,InventoryItem,GE,Lighting Equipment,KINO- 2 BANK BALLAST,104551,,true,not publicVisible
+194f1d3e-9f41-4b2a-bfd9-d1499a9daabf,InventoryItem,GE,Lighting Equipment,KINO - 4' SINGLE BANK HEAD,104552,,true,not publicVisible
+0e70e053-0702-46a0-832f-614b43bf1918,InventoryItem,GE,Lighting Equipment,KINO - 4' DOUBLE BANK HEAD,104553,,true,not publicVisible
+fe4c81ce-ef98-4122-99cf-36c97cf25478,InventoryItem,GE,Lighting Equipment,KINO - 4' FOUR BANK HEAD,104554,,true,not publicVisible
+78c7acf1-a752-4f71-a82f-713fb7440cfa,InventoryItem,GE,Lighting Equipment,KINO - 2' SINGLE BANK HEAD,104555,,true,not publicVisible
+a3e7bb67-e666-43f7-a35d-55f02d051598,InventoryItem,GE,Lighting Equipment,KINO - 2' DOUBLE BANK HEAD,104556,,true,not publicVisible
+ff5372f4-14d0-4d53-9d27-f9457bd16009,InventoryItem,GE,Lighting Equipment,KINO - 2' FOUR BANK HEAD,104557,,true,not publicVisible
+6828eddb-4032-4dc0-95e4-3321c26797f9,InventoryItem,GE,Lighting Equipment,KINO - 4 BANK MEGA BALLAST,104558,,true,not publicVisible
+c0b1650f-ad6b-465f-a800-0ef7e13306f7,InventoryItem,GE,Lighting Equipment,VEGALUX 200 HEAD TUNGSTEN,104559,,true,not publicVisible
+34f0adfc-7b93-4415-8002-b0479f155fc2,InventoryItem,GE,Lighting Equipment,VEGALUX 200 HEAD DAYLIGHT,104560,,true,not publicVisible
+7a579d05-82db-4731-8a24-fb52c1a1c7c1,InventoryItem,GE,Lighting Equipment,"2K - ""ZIP"" LIGHT EGG CRATE",104561,,true,not publicVisible
+fcbbc413-2dc4-4f90-a28e-0b76c4e2e668,InventoryItem,GE,Lighting Equipment,"4K ""ZIP"" LIGHT EGGCRATE",104562,,true,not publicVisible
+28f9eadb-59cf-42bc-8725-c58f09f25e45,InventoryItem,GE,Lighting Equipment,"4K ""SMALL"" ZIP SOFTLITE",104563,,true,not publicVisible
+b5ebdbbe-575a-475a-a153-36f31c597bfc,InventoryItem,GE,Lighting Equipment,10K QUARTZ GLOBE (DTY),10K QUARTZ GLOBE (DTY),,true,not publicVisible
+fa7b443b-da78-4303-8707-424281c715ad,InventoryItem,GE,Lighting Equipment,1639 (M) CHIMERA LIGHTBANK - SKYPANEL S60,1639 (M) CHIMERA LIGHTBANK - SKYPANEL S60,,true,not publicVisible
+a045da00-9c00-406f-8d4c-02b524f89931,InventoryItem,GE,Lighting Equipment,1K GLOBE (DXW),1K GLOBE (DXW),,true,not publicVisible
+a8071a2c-a407-48e3-afe8-d59b45e1f637,InventoryItem,GE,Lighting Equipment,1K GLOBE (FCM),1K GLOBE (FCM),,true,not publicVisible
+8b79d498-8c95-4b60-b709-bda6fd7bb879,InventoryItem,GE,Lighting Equipment,1K QUARTZ GLOBE (EGT),1K QUARTZ GLOBE (EGT),,true,not publicVisible
+8f2a925d-002a-4ae8-82d8-70f467891bef,InventoryItem,GE,Lighting Equipment,200 MIDGET BARN DOOR,200 MIDGET BARN DOOR,,true,not publicVisible
+07b35cab-ae48-4a57-bbc7-07ae590c4338,InventoryItem,GE,Lighting Equipment,2K GLOBE (FEY),2K GLOBE (FEY),,true,not publicVisible
+9d348d8e-0823-44fc-8253-3f4deffd560b,InventoryItem,GE,Lighting Equipment,2K QUARTZ GLOBE (CYX),2K QUARTZ GLOBE (CYX),,true,not publicVisible
+4156c9b9-c4ce-4b38-8188-dfef6ed07229,InventoryItem,GE,Lighting Equipment,5K QUARTZ GLOBE (DPY),5K QUARTZ GLOBE (DPY),,true,not publicVisible
+ffba3be2-1b4f-4c5a-bfb4-5048336b8d4a,InventoryItem,GE,Lighting Equipment,650W GLOBE (FRK),650W GLOBE (FRK),,true,not publicVisible
+0b8112f7-c677-4181-b84b-c12d7a03176f,InventoryItem,GE,Lighting Equipment,9 LIGHT FAY HEAD - TYPE 5541,9 LIGHT FAY HEAD - TYPE 5541,,true,not publicVisible
+f3bc23ea-f0b6-4158-86cf-750ad1927b47,InventoryItem,GE,Lighting Equipment,9 LIGHT MAXIBRUTE HEAD,9 LIGHT MAXIBRUTE HEAD,,true,not publicVisible
+d82b7f96-4166-4d7f-afad-e47a0bbeaa5e,InventoryItem,GE,Lighting Equipment,ARRI 300W SCRIM (5 PC SET),ARRI 300W SCRIM (5 PC SET),,true,not publicVisible
+c5480afc-19dc-4b98-a68d-e90c8fd562fc,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL REMOTE,ARRI SKYPANEL REMOTE,,true,not publicVisible
+3b00a5c8-c2eb-4e83-a9e2-36c4e630fca6,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60 - SNAPGRID 40 DEGREE,ARRI SKYPANEL S60 - SNAPGRID 40 DEGREE,,true,not publicVisible
+2f9fdceb-1e01-43a4-8991-3cc3115b9b1f,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE MED,ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE MED,,true,not publicVisible
+726c4a26-60e1-4a70-893d-4f4daca0bda8,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE SMALL,ARRI SKYPANEL S60 CONTROL GRID 40 DEGREE SMALL,,true,not publicVisible
+2d0e1b9f-27c0-448d-ba2a-c588dd3b1c06,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60 CONTROL GRID 50 DEGREE SMALL,ARRI SKYPANEL S60 CONTROL GRID 50 DEGREE SMALL,,true,not publicVisible
+18c8c3b1-000d-4b14-b130-ad1154e70dd1,InventoryItem,GE,Lighting Equipment,ARRI SKYPANEL S60-C MEDIUM/STANDARD DIFFUSION,ARRI SKYPANEL S60-C MEDIUM/STANDARD DIFFUSION,,true,not publicVisible
+aafe6d5a-93dd-48bd-b574-610ff9ade2c1,InventoryItem,GE,Lighting Equipment,BABY BABY 1K SCRIM (5-PIECE SET),BABY BABY 1K SCRIM (5-PIECE SET),,true,not publicVisible
+ebe6d800-28ea-4b4f-910b-8da89d5af94e,InventoryItem,GE,Lighting Equipment,Barricade with Lights,Barricade with Lights,,true,not publicVisible
+77789f9b-b52e-4f79-8abe-5597b37af74b,InventoryItem,GE,Lighting Equipment,LARGE QUARTZ PLUS CHIMERA BANK (8445),LARGE QUARTZ PLUS CHIMERA BANK (8445),,true,not publicVisible
+f5ac78fc-528b-42b0-a743-d2395052178c,InventoryItem,GE,Lighting Equipment,LED Flashlight,LED Flashlight,,true,not publicVisible
+665aada6-212e-4c3d-bc55-6401a1841b58,InventoryItem,GE,Lighting Equipment,LITEPANEL 1X1 CHIMERA BANK (1655) ASTRA,LITEPANEL 1X1 CHIMERA BANK (1655) ASTRA,,true,not publicVisible
+6ef35180-89d5-43db-a787-ece88332d681,InventoryItem,GE,Lighting Equipment,MEDIUM QUARTZ PLUS CHIMERA BANK (8435),MEDIUM QUARTZ PLUS CHIMERA BANK (8435),,true,not publicVisible
+58d85727-0786-41bc-b7ec-56cd8900fbd1,InventoryItem,GE,Lighting Equipment,MIDGET SCRIM (5-PIECE SET),MIDGET SCRIM (5-PIECE SET),,true,not publicVisible
+576ccd7c-be23-4549-b085-fa5a2094de59,InventoryItem,GE,Lighting Equipment,REGULAR 407 1K SCRIM (5-PIECE SET),REGULAR 407 1K SCRIM (5-PIECE SET),,true,not publicVisible
+0148b791-df29-43c6-8ed4-43579f46ac55,InventoryItem,GE,Lighting Equipment,SMALL QUARTZ PLUS CHIMERA BANK (8425),SMALL QUARTZ PLUS CHIMERA BANK (8425),,true,not publicVisible
+5fd291c3-0329-4eb6-ad28-2ba480e05b40,InventoryItem,GE,Lighting Equipment,SUMO LIGHTR SKIRT,SUMO LIGHTR SKIRT,,true,not publicVisible
+bd402947-bd36-44e6-b8f5-c503b84ace2e,InventoryItem,GE,Lighting Equipment,SUMO- BALLAST,SUMO- BALLAST,,true,not publicVisible
+503b1a73-7a26-42dc-ac81-dcd345bd86de,InventoryItem,GE,Lighting Equipment,Sledge Hammer 10 lbs,Sledge Hammer 10 lbs,,true,not publicVisible
+327cd095-875e-491c-9c7c-98ee267c7c15,InventoryItem,GE,Lighting Equipment,"UTAH - WORKLIGHT, DEWALT","UTAH - WORKLIGHT, DEWALT",,true,not publicVisible
+ce1b6c0c-1697-4e59-b1f1-f29e8bbe7b20,InventoryItem,GE,Lighting Equipment,Worklight - 500 Watt Halogen Double Headed,Worklight - 500 Watt Halogen Double Headed,,true,not publicVisible
+4bd9be3c-6be3-40fb-9745-e48f936c79c2,InventoryItem,GE,Lighting Equipment,Worklight - Battery Powered Worklight (Dewalt),Worklight - Battery Powered Worklight (Dewalt),,true,not publicVisible
+53cbb450-d942-4c9a-9083-4bb5dcc07502,InventoryItem,GE,Lighting Equipment,Worklight - Battery Powered Worklight PELICAN,Worklight - Battery Powered Worklight PELICAN,,true,not publicVisible
+dd8bbd10-3568-4781-8e30-70e669374eb2,InventoryItem,PRO_SUPPLIES,Lights & Power,Battery Pwr Worklight,POW-BATTERY-PWR-WORKLIGHT,,true,
+278af72b-0a18-4dbe-b4d4-a67db5a30e08,InventoryItem,PRO_SUPPLIES,Lights & Power,Cable Crossover,POW-CABLE-CROSSOVER,,true,
+08e0bc63-d12e-4286-9745-1bb42bc1b307,InventoryItem,PRO_SUPPLIES,Lights & Power,Clamp Light,POW-CLAMP-LIGHT,,true,
+e4b8ba98-8576-49da-8af3-9ebe8f9881a6,InventoryItem,PRO_SUPPLIES,Lights & Power,"Ext. Cord, 100'",POW-EXT-CORD-100,,true,
+35d912ed-6a54-440f-9724-33c6342e0dce,InventoryItem,PRO_SUPPLIES,Lights & Power,"Ext. Cord, 25'",POW-EXT-CORD-25,,true,
+83436de2-3c20-4ef6-aa62-90ea903dbfa3,InventoryItem,PRO_SUPPLIES,Lights & Power,"Ext. Cord, 50'",POW-EXT-CORD-50,,true,
+17c04ca4-4a0b-479f-be8f-0d901f20842a,InventoryItem,PRO_SUPPLIES,Lights & Power,"Flashlight, ""Mag""",POW-FLASHLIGHT-MAG,,true,
+56ba8fc3-3b97-477a-82a9-a992848a91e8,InventoryItem,PRO_SUPPLIES,Lights & Power,"Gas Can, 5-gal",POW-GAS-CAN-5-GAL,,true,
+9e87e624-6e6d-4775-ab76-fef77d6b6fc2,InventoryItem,PRO_SUPPLIES,Lights & Power,"Generator, 2000W",POW-GENERATOR-2000W,,true,
+ecf29c9d-0f4a-4498-9d3c-8f6a543e2f70,InventoryItem,PRO_SUPPLIES,Lights & Power,"Generator, 3000W",POW-GENERATOR-3000W,,true,
+0fa9cac9-0136-4586-95b0-f537f054d00d,InventoryItem,PRO_SUPPLIES,Lights & Power,"Generator, 6500W",POW-GENERATOR-6500W,,true,
+679393f2-f436-4ff2-b0a6-2f1e4aae3521,InventoryItem,PRO_SUPPLIES,Lights & Power,"Generator, 7000W",POW-GENERATOR-7000W,,true,
+87691e8f-3f02-4a26-91a1-6c9e8d2f6004,InventoryItem,PRO_SUPPLIES,Lights & Power,Power Inverter 250w,POW-POWER-INVERTER-250W,,true,
+894f261d-dbcd-4205-b4fb-9457ae5e1f55,InventoryItem,PRO_SUPPLIES,Lights & Power,Power Strip,POW-POWER-STRIP,,true,
+30f19c87-296a-4e4d-b94f-eaf050e04e53,InventoryItem,PRO_SUPPLIES,Lights & Power,Work Light w/stand,POW-WORK-LIGHT-W-STAND,,true,
+e38d9a1d-6109-4a87-aaac-ff6f6f5f7bf2,InventoryItem,PRO_SUPPLIES,PPE,70% Alcohol Wipe,PPE-70-ALCOHOL-WIPE,,true,
+d296b746-15be-42ce-ab7e-8a996bb8ef03,InventoryItem,PRO_SUPPLIES,PPE,Antiseptic Towelettes (100pk),PPE-ANTISEPTIC-TOWELETTES-100PK,,true,
+69a61b26-998c-4de6-9c27-9052c6f7cc7f,InventoryItem,PRO_SUPPLIES,PPE,Black KN95 Face Mask (10pk),PPE-BLACK-KN95-FACE-MASK-10PK,,true,
+29b0a1e1-c76d-4406-b6ca-c7cbc872c791,InventoryItem,PRO_SUPPLIES,PPE,Disinfectant Liquid,PPE-DISINFECTANT-LIQUID,,true,
+1cf6c513-72b8-49dd-8e93-2678d2b78b18,InventoryItem,PRO_SUPPLIES,PPE,Disinfectant Spray,PPE-DISINFECTANT-SPRAY,,true,
+142eb64f-dc40-40f4-a480-592c2f210efc,InventoryItem,PRO_SUPPLIES,PPE,Disposable Face Masks (50pk),PPE-DISPOSABLE-FACE-MASKS-50PK,,true,
+f7c85977-8c21-4533-b9ce-5e1cf12356eb,InventoryItem,PRO_SUPPLIES,PPE,Face Shield - Glasses (10pk),PPE-FACE-SHIELD-GLASSES-10PK,,true,
+c055f6b3-5b9c-4efb-96ee-06c529a9f31e,InventoryItem,PRO_SUPPLIES,PPE,Face Shield - Headband,PPE-FACE-SHIELD-HEADBAND,,true,
+15432ded-6b73-4979-bac5-6e0cfecb6078,InventoryItem,PRO_SUPPLIES,PPE,Hand Sanitizer (17oz),PPE-HAND-SANITIZER-17OZ,,true,
+d84e7985-69be-40ba-865d-af017057afb4,InventoryItem,PRO_SUPPLIES,PPE,Hand Sanitizer (33oz),PPE-HAND-SANITIZER-33OZ,,true,
+57898c21-8343-44fd-bf8e-b877f9980b46,InventoryItem,PRO_SUPPLIES,PPE,Hand Sanitizing Wipes (100pk),PPE-HAND-SANITIZING-WIPES-100PK,,true,
+11ebefff-bfae-4537-b681-fc9527183862,InventoryItem,PRO_SUPPLIES,PPE,Isolation Gown,PPE-ISOLATION-GOWN,,true,
+bc64e39a-46ed-48d0-8d21-699c3b18fcba,InventoryItem,PRO_SUPPLIES,PPE,Latex Gloves (50 pairs),PPE-LATEX-GLOVES-50-PAIRS,,true,
+1f8528d9-a558-42ee-b05a-cba4ae418c80,InventoryItem,PRO_SUPPLIES,PPE,Mini Alcohol Wipes (100pk),PPE-MINI-ALCOHOL-WIPES-100PK,,true,
+7f6a0663-114e-41fd-9ea3-57e8df0b30f2,InventoryItem,PRO_SUPPLIES,PPE,Safety Glasses,PPE-SAFETY-GLASSES,,true,
+d9497fa4-c429-4117-b7eb-b7baf2fc6fd8,InventoryItem,PRO_SUPPLIES,PPE,White N95 Face Mask (20pk),PPE-WHITE-N95-FACE-MASK-20PK,,true,
+9d6895f6-b18d-473f-8d6b-3c469c6f891f,InventoryItem,PRO_SUPPLIES,Production Supplies,"1 1/4"" SPEEDRAIL CORNER","1 1/4"" SPEEDRAIL CORNER",,true,not publicVisible
+e27c1a4d-d9be-4c04-986c-99d03ccc959d,InventoryItem,PRO_SUPPLIES,Production Supplies,"1"" SQUARE COUPLER","1"" SQUARE COUPLER",,true,not publicVisible
+5b54c6fc-3424-467f-84ab-6235d8b6bfa0,InventoryItem,PRO_SUPPLIES,Production Supplies,"1"" SQUARE EAR","1"" SQUARE EAR",,true,not publicVisible
+09792760-5c5c-45b6-a210-f661ace75dd3,InventoryItem,PRO_SUPPLIES,Production Supplies,"1""SQUARE CORNER","1""SQUARE CORNER",,true,not publicVisible
+2ead7827-703c-4355-b4f9-eac660822d5f,InventoryItem,PRO_SUPPLIES,Production Supplies,10' DOLLY TRACK SECTION (STEEL),10' DOLLY TRACK SECTION (STEEL),,true,not publicVisible
+7cc6c924-a7dd-4e8d-b309-963c32fe59d6,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 8',103179,,true,not publicVisible
+61954d15-9592-453d-9d29-8f06a40cf5c8,InventoryItem,COMMUNICATIONS,Production Supplies,Motorola CP200  UHF Radio (Analog),103733,,true,not publicVisible
+c97e8d22-cb9e-4e99-bb96-fd0108429b90,InventoryItem,PRO_SUPPLIES,Production Supplies,Heater - Mobile Propane,103845,,true,not publicVisible
+e59037a5-bae0-4b4e-afd5-94db363e7825,InventoryItem,PRO_SUPPLIES,Production Supplies,Wardrobe Steamer,103856,,true,not publicVisible
+4af7009e-489b-4d0d-a43f-c87dbec2c8d3,InventoryItem,PRO_SUPPLIES,Production Supplies,Rosco V-Hazer (Water Based),103859,,true,not publicVisible
+d61119ab-5af1-4de5-a601-28a22944a956,InventoryItem,COMMUNICATIONS,Production Supplies,Motorola CP200  UHF Radio (Digital),104387,,true,not publicVisible
+a994396b-cc08-42be-8f7b-2c7a25b55950,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy -10' x 10', Black",104388,,true,not publicVisible
+c56f9959-0ea2-4b12-a026-7172fcee8f76,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy -10' x 10', Blue",104389,,true,not publicVisible
+a5561fcf-e16b-4627-9e89-db580d41a140,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy -10' x 10', White",104390,,true,not publicVisible
+6001f3db-8db2-442d-902a-c0e65ec2d68f,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15', Black",104391,,true,not publicVisible
+cfb58e65-e48c-4fbc-98cd-927747566523,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15', Blue",104392,,true,not publicVisible
+188cf9f3-f014-4263-927b-8cd72bd54d51,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15', White",104393,,true,not publicVisible
+ad5d714e-47ad-4dc0-b17b-1c5010c3c230,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 20', Black",104395,,true,not publicVisible
+386b0934-dc56-4931-80ef-b9297953c95a,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 20, Blue",104396,,true,not publicVisible
+6b68e5ae-dc8b-40f5-9f84-0bda524fed5b,InventoryItem,PRO_SUPPLIES,Production Supplies,Air Conditioner - 1.5 Ton,104400,,true,not publicVisible
+957307b4-28e7-42a0-8bac-9eb94a993d57,InventoryItem,PRO_SUPPLIES,Production Supplies,Mister - 10 Gallon,104401,,true,not publicVisible
+bd86f468-c756-408d-96fb-f97594f01fb8,InventoryItem,COMMUNICATIONS,Production Supplies,Internet - Verizon Mifi,104402,,true,not publicVisible
+0e8bef3e-d41c-4843-bf04-047a019e62db,InventoryItem,PRO_SUPPLIES,Production Supplies,Boom Box (Dewalt),104404,,true,not publicVisible
+19649a15-b0d6-43a9-a01a-e90b2c668864,InventoryItem,PRO_SUPPLIES,Production Supplies,Speaker - QSC K12,104405,,true,not publicVisible
+5c3a9ed3-9061-4017-b6d9-472749c3d415,InventoryItem,PRO_SUPPLIES,Production Supplies,Bullhorn,104407,,true,not publicVisible
+c4f078ac-2513-47e3-8896-1e8793a4b918,InventoryItem,PRO_SUPPLIES,Production Supplies,"Coffee Maker, 100 Cup",104408,,true,not publicVisible
+3f7c13a4-eb42-4571-a61c-8d794650403d,InventoryItem,PRO_SUPPLIES,Production Supplies,Dolly - Magliner Sr,104409,,true,not publicVisible
+340e1aa6-04a5-4d93-acc4-257357a0c9df,InventoryItem,PRO_SUPPLIES,Production Supplies,Dolly - Magliner Jr,104410,,true,not publicVisible
+188334cb-920b-43c0-8bb8-46df7dd88c05,InventoryItem,PRO_SUPPLIES,Production Supplies,4' x 8' STEEL DECK,104411,,true,not publicVisible
+81a1f3c4-9e6c-4563-9a24-cce2eafe6c84,InventoryItem,PRO_SUPPLIES,Production Supplies,2' X 4' STEEL DECK,104413,,true,not publicVisible
+2fba5bed-25e7-43be-8196-4d2b9e371f87,InventoryItem,PRO_SUPPLIES,Production Supplies,2' X 6' STEEL DECK,104414,,true,not publicVisible
+af32d2e3-7c68-4e96-b391-8a5ddbdcb05a,InventoryItem,PRO_SUPPLIES,Production Supplies,2' X 8' STEEL DECK,104415,,true,not publicVisible
+d685ef0d-0543-49cb-a9ad-adff9d19275f,InventoryItem,PRO_SUPPLIES,Production Supplies,DF50 Hazer (Water Based),104417,,true,not publicVisible
+957c93b1-16ce-4f99-81a5-8d3d10592207,InventoryItem,PRO_SUPPLIES,Production Supplies,DF50 Hazer - Oil Based,104418,,true,not publicVisible
+4c0f5c1a-62ac-4580-91f5-7e65b3bebab1,InventoryItem,PRO_SUPPLIES,Production Supplies,Fan - Reel Effects 2 (RE 2),104419,,true,not publicVisible
+b9830920-cac2-4f79-a9cb-37a709d7b250,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 6',104420,,true,not publicVisible
+b5130e1d-17bc-42cb-bccc-2c27ce92a50f,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 10',104421,,true,not publicVisible
+72963a4b-12cf-48c1-a42d-88ec456f4a6a,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 12',104422,,true,not publicVisible
+b3f8cd8a-4a3e-4b48-a3f8-3bf2eccec55a,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 14',104423,,true,not publicVisible
+a4dc095f-c690-4faa-b821-4a9bae236069,InventoryItem,PRO_SUPPLIES,Production Supplies,1st Aid Kit (50 Person),104427,,true,not publicVisible
+2e9624aa-e779-408b-a25b-7fd0373514aa,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 8' x 8', White",104428,,true,not publicVisible
+4ff42476-f8f4-4b0a-b1e3-79c2feda8117,InventoryItem,PRO_SUPPLIES,Production Supplies,Leaf Blower - Plug In,104430,,true,not publicVisible
+c6886666-8ab4-46d1-8b46-df27c55ef94b,InventoryItem,PRO_SUPPLIES,Production Supplies,Leaf Blower - Battery Powered (Milwaukee M18),104432,,true,not publicVisible
+8ff6db5a-6ad3-4e06-ab32-62020ffde7ec,InventoryItem,PRO_SUPPLIES,Production Supplies,Make Up Mirror - Rolling,104433,,true,not publicVisible
+f774a72a-2a2f-48d1-b421-f583054f4827,InventoryItem,PRO_SUPPLIES,Production Supplies,"Make Up Mirror, Half (Table Top)",104434,,true,not publicVisible
+f68f5e62-95d6-4425-9fcb-fd08cdfd7861,InventoryItem,PRO_SUPPLIES,Production Supplies,Mirror - 6' Free Standing,104435,,true,not publicVisible
+eef2c390-6289-4fcb-a072-b4eee5095948,InventoryItem,PRO_SUPPLIES,Production Supplies,Ladder - 4',104454,,true,not publicVisible
+ea0415fc-b4cc-4fc3-bf3b-ffef8415865f,InventoryItem,PRO_SUPPLIES,Production Supplies,Fogger - Rosco Vapour,104455,,true,not publicVisible
+ef4a6b01-7d7a-4cfa-ba41-68542d7938f1,InventoryItem,PRO_SUPPLIES,Production Supplies,MINI MOLE HEAD - TYPE 2801 - INKIE,104476,,true,not publicVisible
+a3248cc8-3109-4e6a-9b6c-0896073981a7,InventoryItem,PRO_SUPPLIES,Production Supplies,MIDGET MOLE 200W HEAD - TYPE 2351,104479,,true,not publicVisible
+67bdb47d-0ac7-419d-91a0-f42190a491b6,InventoryItem,PRO_SUPPLIES,Production Supplies,"Fan - Stage 32""",104506,,true,not publicVisible
+608a1d25-9724-423e-be93-762ae7ddc210,InventoryItem,PRO_SUPPLIES,Production Supplies,LITEMAT 2 SERIES 2 COMPLETE,104508,,true,not publicVisible
+223ed9bf-4366-4bb7-ac75-6a0d464a6a29,InventoryItem,PRO_SUPPLIES,Production Supplies,LITEMAT 4  SERIES 2 COMPLETE,104509,,true,not publicVisible
+e4814f39-acb4-43a3-b693-fb1d62780c05,InventoryItem,PRO_SUPPLIES,Production Supplies,LITEMAT 4 PLUS HYBRID COMPLETE,104510,,true,not publicVisible
+b94b7160-fba2-4b0b-a465-8b3d0bbb1525,InventoryItem,PRO_SUPPLIES,Production Supplies,STIRRUP HANGER 5' TO 10',104512,,true,not publicVisible
+f61e4aff-8ba3-4c05-98c5-545ed32ada7b,InventoryItem,PRO_SUPPLIES,Production Supplies,DANA DOLLY,104513,,true,not publicVisible
+65a4776c-9a82-48d9-a70e-a9eb7a4b7e1f,InventoryItem,PRO_SUPPLIES,Production Supplies,STIRRUP HANGER 3' TO 6',104515,,true,not publicVisible
+6e53377a-696a-491e-9e73-1cdd75d888da,InventoryItem,PRO_SUPPLIES,Production Supplies,STIRRUP HANGER 4' TO 8',104516,,true,not publicVisible
+b80fb3fb-c6c4-42b0-9b07-bfb6203f3c6c,InventoryItem,PRO_SUPPLIES,Production Supplies,300W BETWEENIE HEAD - TYPE 3131,104519,,true,not publicVisible
+762b43bc-34ee-497f-a308-fee4f95667be,InventoryItem,PRO_SUPPLIES,Production Supplies,Air Scrubber (500 CFM),104528,,true,not publicVisible
+c279eb16-91f5-4b8a-aaeb-adf367c6b8d9,InventoryItem,PRO_SUPPLIES,Production Supplies,Air Scrubber (550 CFM),104529,,true,not publicVisible
+bbdc9c19-748d-455e-80bf-650fb243d34a,InventoryItem,PRO_SUPPLIES,Production Supplies,Air Scrubber (750 CFM),104540,,true,not publicVisible
+ec46e67e-e28f-44ce-b898-ecc82f7de975,InventoryItem,PRO_SUPPLIES,Production Supplies,Bose Sound Link Flex (Bluetooth),104541,Link Flex,true,not publicVisible
+3b9bf57b-8981-46ee-ae7e-1287e7475bf8,InventoryItem,PRO_SUPPLIES,Production Supplies,Dolly - Magliner Sr. with Shelf,104593,,true,not publicVisible
+19775401-ab04-41e3-bb7c-0a01f65863ba,InventoryItem,COMMUNICATIONS,Production Supplies,Internet - T-Mobile MiFi (5G),105020,,true,not publicVisible
+7527c9c4-b987-453a-b7bc-0afc45993bc1,InventoryItem,PRO_SUPPLIES,Production Supplies,150W GLOBE (ESP),150W GLOBE (ESP),,true,not publicVisible
+0cb68029-3e76-492c-a549-c9b686304ab9,InventoryItem,PRO_SUPPLIES,Production Supplies,"24"" X 36""  WOOD CUCOLORIS","24"" X 36""  WOOD CUCOLORIS",,true,not publicVisible
+483a06f5-4aa0-43d4-9d3f-a6a7903e2827,InventoryItem,PRO_SUPPLIES,Production Supplies,25' Cooling Hose w/bag,25' Cooling Hose w/bag,,true,not publicVisible
+02de3707-8a0d-4865-a4ce-e101276848e5,InventoryItem,PRO_SUPPLIES,Production Supplies,2X4 EAR FITTING,2X4 EAR FITTING,,true,not publicVisible
+660e1a75-a307-4bf9-89b1-b0b00dc6e27b,InventoryItem,PRO_SUPPLIES,Production Supplies,3' SPANSET,3' SPANSET,,true,not publicVisible
+c289b78b-a1b0-4f66-b51e-fd11a061334f,InventoryItem,PRO_SUPPLIES,Production Supplies,300W GLOBE (FKW),300W GLOBE (FKW),,true,not publicVisible
+233d54a9-d960-47b8-a91a-848366c5e758,InventoryItem,PRO_SUPPLIES,Production Supplies,4' DOLLY TRACK SECTION (STEEL),4' DOLLY TRACK SECTION (STEEL),,true,not publicVisible
+6dfae03c-ac14-4841-9cef-44b019b320f6,InventoryItem,PRO_SUPPLIES,Production Supplies,4' Folding Table,4' Folding Table,,true,not publicVisible
+e5407a61-6142-4c8d-bc30-4925c61c32c8,InventoryItem,PRO_SUPPLIES,Production Supplies,4' Table (Fold in Half),4' Table (Fold in Half),,true,not publicVisible
+ade3f529-042b-441a-aba9-011194b70a15,InventoryItem,PRO_SUPPLIES,Production Supplies,4' Table Linen - Black (Stretch),4' Table Linen - Black (Stretch),,true,not publicVisible
+4a9d0b8e-8b1a-4b59-ba5e-da89d8874028,InventoryItem,PRO_SUPPLIES,Production Supplies,4' Truck Shelf,4' Truck Shelf,,true,not publicVisible
+7aabd8b4-8188-4b51-9887-099897d4fe15,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' BEADBOARD GOLD / WHITE,4' X 4' BEADBOARD GOLD / WHITE,,true,not publicVisible
+7832498e-e7f7-4a17-8169-a0a48b44de11,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' BEADBOARD SILVER / WHITE,4' X 4' BEADBOARD SILVER / WHITE,,true,not publicVisible
+5134abb3-ead1-4614-bca0-2ef0105c6828,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' BEADBOARD WHITE / WHITE,4' X 4' BEADBOARD WHITE / WHITE,,true,not publicVisible
+91bb4d2c-1174-4c86-8407-71ffc458c7a7,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' CELLO CUCOLORIS,4' X 4' CELLO CUCOLORIS,,true,not publicVisible
+f3be3e95-2ccc-446f-b926-b016844984e4,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' GOLD LEAF,4' X 4' GOLD LEAF,,true,not publicVisible
+1047df8e-31e2-43eb-ad2f-36c639d5f6f8,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' SILVER LEAF,4' X 4' SILVER LEAF,,true,not publicVisible
+06bc075a-f559-43a6-8d7c-5d07b381b456,InventoryItem,PRO_SUPPLIES,Production Supplies,4' X 4' WOOD CUCOLORIS,4' X 4' WOOD CUCOLORIS,,true,not publicVisible
+c4bfc88e-6ea9-43b4-aada-d523f6a56ff7,InventoryItem,PRO_SUPPLIES,Production Supplies,4' x 8' Crash Pads,4' x 8' Crash Pads,,true,not publicVisible
+8eeb9258-ad9a-4fc9-a54a-e90ffd6614e4,InventoryItem,PRO_SUPPLIES,Production Supplies,"4' x 8' x 1"" Plywood Rental","4' x 8' x 1"" Plywood Rental",,true,not publicVisible
+27ba8f78-cc7e-43b0-b572-5ce9b11c3a76,InventoryItem,PRO_SUPPLIES,Production Supplies,"4' x 8' x 3/4"" Plywood Rental","4' x 8' x 3/4"" Plywood Rental",,true,not publicVisible
+31a5ad3c-60e3-4705-80a1-fff369d37ca6,InventoryItem,PRO_SUPPLIES,Production Supplies,420W GLOBE (EKB),420W GLOBE (EKB),,true,not publicVisible
+d1ba341d-8111-4dc2-950a-10431b9e66b1,InventoryItem,PRO_SUPPLIES,Production Supplies,5 Gallon Gas Can,5 Gallon Gas Can,,true,not publicVisible
+44c4d6a4-aebf-4569-8cab-21972d58e9b2,InventoryItem,PRO_SUPPLIES,Production Supplies,50' Garden Hose,50' Garden Hose,,true,not publicVisible
+d4f77901-ca37-4e95-b807-ee1c414f5ffd,InventoryItem,PRO_SUPPLIES,Production Supplies,575W HPL GLOBE,575W HPL GLOBE,,true,not publicVisible
+2945bdf5-a0e6-49b1-b214-2d75d762c076,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Folding Table,6' Folding Table,,true,not publicVisible
+4d425da8-ff15-48bf-998b-6bdc727b4f3a,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Table (Fold In Half),6' Table (Fold In Half),,true,not publicVisible
+a1de0b42-9f5f-44b9-b13f-131834820d6e,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Table Linen - Black (Event),6' Table Linen - Black (Event),,true,not publicVisible
+9c88fdad-1d73-45fe-adf7-3eb6ad5d33fc,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Table Linen - Black (Regular),6' Table Linen - Black (Regular),,true,not publicVisible
+f5c34027-3f3a-4a8d-afff-098df4f99ef7,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Table Linen - Black (Stretch),6' Table Linen - Black (Stretch),,true,not publicVisible
+185451fa-f727-45c1-a600-45818bba8cfe,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Table Linen - White,6' Table Linen - White,,true,not publicVisible
+bfe88ce9-73bd-4c10-9de3-11cd93ab4c3f,InventoryItem,PRO_SUPPLIES,Production Supplies,6' Wardrobe Mirror,6' Wardrobe Mirror,,true,not publicVisible
+996ed7d8-e581-44cb-a40e-055ef1bd1b4b,InventoryItem,PRO_SUPPLIES,Production Supplies,6' X 6' EGGCRATE - 40 DEG. LCD,6' X 6' EGGCRATE - 40 DEG. LCD,,true,not publicVisible
+7e605027-d9ee-435e-93b3-a56302d43988,InventoryItem,PRO_SUPPLIES,Production Supplies,750W HPL GLOBE,750W HPL GLOBE,,true,not publicVisible
+cae7b85e-dd05-4132-9f13-1800b4e65d80,InventoryItem,PRO_SUPPLIES,Production Supplies,8' DOLLY TRACK SECTION (STEEL),8' DOLLY TRACK SECTION (STEEL),,true,not publicVisible
+69c539db-12ae-4a3b-87f9-b0d994508d23,InventoryItem,PRO_SUPPLIES,Production Supplies,8' Folding Table,8' Folding Table,,true,not publicVisible
+3344b3ac-5de4-49d0-b166-ad4c7fb3c5ff,InventoryItem,PRO_SUPPLIES,Production Supplies,8' Table Linen - Black (Regular),8' Table Linen - Black (Regular),,true,not publicVisible
+daa42164-4efb-419d-93d8-feb9ddfe6154,InventoryItem,PRO_SUPPLIES,Production Supplies,8' Truck Shelf,8' Truck Shelf,,true,not publicVisible
+a3596362-6814-46fa-a461-1d12cb2fe5fe,InventoryItem,PRO_SUPPLIES,Production Supplies,8' X 8' EGGCRATE - 40 DEG. LCD,8' X 8' EGGCRATE - 40 DEG. LCD,,true,not publicVisible
+06a53f3b-7424-4b6a-8103-de49836a7eec,InventoryItem,EXPENDABLES,Production Supplies,ANTON BAUER  BATTERY,ANTON BAUER  BATTERY,,true,not publicVisible
+0d50b649-c54d-4949-91c4-9b2a118bba2d,InventoryItem,PRO_SUPPLIES,Production Supplies,"BABY NAIL-ON PLATE 2""","BABY NAIL-ON PLATE 2""",,true,not publicVisible
+8751b6ea-a7eb-4024-9db5-34cbf29b283f,InventoryItem,PRO_SUPPLIES,Production Supplies,BASSO BLOCK SET - HALF (12 PER SET),BASSO BLOCK SET - HALF (12 PER SET),,true,not publicVisible
+7d6fc6fc-7be7-4180-a415-9edc9a09a641,InventoryItem,PRO_SUPPLIES,Production Supplies,BOX OF 1 X 3 CRIBBING,BOX OF 1 X 3 CRIBBING,,true,not publicVisible
+84490611-0875-4e50-8639-d713caad404c,InventoryItem,PRO_SUPPLIES,Production Supplies,BOX OF 2 X 4 CRIBBING,BOX OF 2 X 4 CRIBBING,,true,not publicVisible
+51bc0eb5-82db-47a9-a54e-a21cd7c7b438,InventoryItem,PRO_SUPPLIES,Production Supplies,BOX OF 4ﬂ X 4ﬂ CRIBBING,BOX OF 4ﬂ X 4ﬂ CRIBBING,,true,not publicVisible
+92269789-2d64-400a-a2e7-f103a68e376e,InventoryItem,PRO_SUPPLIES,Production Supplies,BOX OF WEDGES,BOX OF WEDGES,,true,not publicVisible
+4292bd0b-9db2-4e41-9ccb-10845a7fc695,InventoryItem,PRO_SUPPLIES,Production Supplies,Bose Sound Link Flex (Bluetooth Speaker,Bose Sound Link Flex (Bluetooth Speaker,,true,not publicVisible
+a0ef7b5d-d243-42af-b2ce-6e1c9d87eda9,InventoryItem,PRO_SUPPLIES,Production Supplies,Bungee Strap,Bungee Strap,,true,not publicVisible
+76523cb7-0af2-4fcc-8e42-181f3e3d6d3b,InventoryItem,PRO_SUPPLIES,Production Supplies,Butt Cans,Butt Cans,,true,not publicVisible
+fa3a3159-2fa3-4915-aecc-688215709b33,InventoryItem,PRO_SUPPLIES,Production Supplies,CAMLOK SOFT 3-FER - (M/FFF),CAMLOK SOFT 3-FER - (M/FFF),,true,not publicVisible
+b8229977-af64-4e10-926e-ee384249b0ef,InventoryItem,PRO_SUPPLIES,Production Supplies,CAMLOK SOFT 3-FER GROUND,CAMLOK SOFT 3-FER GROUND,,true,not publicVisible
+aed8570f-8331-4738-a4e4-58466b3e9fbc,InventoryItem,PRO_SUPPLIES,Production Supplies,CUP BLOCK (EACH),CUP BLOCK (EACH),,true,not publicVisible
+3ef7a923-9eb7-42b3-8eab-2e26028feac3,InventoryItem,PRO_SUPPLIES,Production Supplies,CUP BLOCKS HOLDER (12 PER SET),CUP BLOCKS HOLDER (12 PER SET),,true,not publicVisible
+9cab27a5-d4ee-4cd1-a18a-a90ed5ceef30,InventoryItem,PRO_SUPPLIES,Production Supplies,Cal/Fed Osha Board,Cal/Fed Osha Board,,true,not publicVisible
+493e00a1-9c0a-4c50-97f4-423ef59d0130,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 10' Black,Canopy Tent Sidewall - 10' Black,,true,not publicVisible
+d5c0bb78-9a88-44ed-bee2-a4fc2f0e9a52,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 10' Blue,Canopy Tent Sidewall - 10' Blue,,true,not publicVisible
+5f0ef01e-e8ea-47b7-8d04-6c3e25ead855,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 10' White,Canopy Tent Sidewall - 10' White,,true,not publicVisible
+bfb292a5-d604-409e-a222-02093f79a1c3,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 15' Blue,Canopy Tent Sidewall - 15' Blue,,true,not publicVisible
+94fa872f-ed9b-430c-85b2-2cee48e99147,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 15' black,Canopy Tent Sidewall - 15' black,,true,not publicVisible
+69f5ed49-4573-412d-9864-2fa26a04b0bc,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 8' Black,Canopy Tent Sidewall - 8' Black,,true,not publicVisible
+59eae49b-2e0c-4247-a5ad-cf26010a2868,InventoryItem,PRO_SUPPLIES,Production Supplies,Canopy Tent Sidewall - 8' White,Canopy Tent Sidewall - 8' White,,true,not publicVisible
+55ba6e50-2fe0-4cea-bca9-8a84d16d6e16,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 10' Tent, Black","Caravan Canopy - 10' x 10' Tent, Black",,true,not publicVisible
+f1bc1fda-32b4-4d8c-83dc-245fb2e93237,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 10' Tent, Blue","Caravan Canopy - 10' x 10' Tent, Blue",,true,not publicVisible
+14819078-09db-40f0-9844-977f19faa619,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 10' Tent, White","Caravan Canopy - 10' x 10' Tent, White",,true,not publicVisible
+4745fd76-be74-4f31-b06f-24fc3a05bd3f,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15' Tent, Black","Caravan Canopy - 10' x 15' Tent, Black",,true,not publicVisible
+581e2349-addb-4f37-80c2-660183ce80d7,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15' Tent, Blue","Caravan Canopy - 10' x 15' Tent, Blue",,true,not publicVisible
+4a4a150a-ad67-4700-a7a2-b3bd43ca592d,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15' Tent, Grey","Caravan Canopy - 10' x 15' Tent, Grey",,true,not publicVisible
+154e8b87-4088-49e7-bb6a-011d43707346,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 15' Tent, White","Caravan Canopy - 10' x 15' Tent, White",,true,not publicVisible
+51362f97-3021-48cb-98cc-2053ad72aba0,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 20' Tent, Black","Caravan Canopy - 10' x 20' Tent, Black",,true,not publicVisible
+3dad7ce7-ee8e-40dc-add5-97ed208b0996,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 10' x 20' Tent, Blue","Caravan Canopy - 10' x 20' Tent, Blue",,true,not publicVisible
+1de0b106-1c5d-4702-86e2-efa5d5bf6ffe,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 8' x '8 Tent, Black","Caravan Canopy - 8' x '8 Tent, Black",,true,not publicVisible
+ccf1e14f-16ee-4ce6-9e84-01ac5d1b3a99,InventoryItem,PRO_SUPPLIES,Production Supplies,"Caravan Canopy - 8' x '8 Tent, White","Caravan Canopy - 8' x '8 Tent, White",,true,not publicVisible
+fb3d2e59-07f7-4848-a9da-9d62f8a393bd,InventoryItem,PRO_SUPPLIES,Production Supplies,"Chair Rack, Rolling","Chair Rack, Rolling",,true,not publicVisible
+5dae416f-7f9a-436e-bc5e-8e7d4efab131,InventoryItem,PRO_SUPPLIES,Production Supplies,"Cone - 18""","Cone - 18""",,true,not publicVisible
+a96ac49b-3f4d-469a-833e-748c419726aa,InventoryItem,PRO_SUPPLIES,Production Supplies,"Cone - 28""","Cone - 28""",,true,not publicVisible
+afbce16c-3dd8-4093-9f9c-f3417cce411d,InventoryItem,PRO_SUPPLIES,Production Supplies,"Cone - 36"" Delineators","Cone - 36"" Delineators",,true,not publicVisible
+bc16d23d-ebde-453e-a150-df7ee0bfb21c,InventoryItem,PRO_SUPPLIES,Production Supplies,Cooler - 100 QT (Large),Cooler - 100 QT (Large),,true,not publicVisible
+cc9f3bc1-77be-45b7-b16f-43288f288a86,InventoryItem,PRO_SUPPLIES,Production Supplies,Cooler - 48 QT (Small),Cooler - 48 QT (Small),,true,not publicVisible
+bf98686c-8445-4303-8dff-3c285aa6c59e,InventoryItem,PRO_SUPPLIES,Production Supplies,Cooler - 68 QT (Medium),Cooler - 68 QT (Medium),,true,not publicVisible
+675ace65-f2e8-4cbd-9d70-ad6f47efc3e9,InventoryItem,PRO_SUPPLIES,Production Supplies,Cooler - Gatorade,Cooler - Gatorade,,true,not publicVisible
+ad647392-1ed1-4cbd-bce9-0f75b08c2cbc,InventoryItem,PRO_SUPPLIES,Production Supplies,Corn Broom,Corn Broom,,true,not publicVisible
+40d17b1e-fc3f-4898-a4bc-ca07d277121c,InventoryItem,PRO_SUPPLIES,Production Supplies,D - Rings,D - Rings,,true,not publicVisible
+e205fbab-0eb8-44c2-93e9-2163ccc18077,InventoryItem,PRO_SUPPLIES,Production Supplies,DF50 Hazer Fuid,DF50 Hazer Fuid,,true,not publicVisible
+7d5ff5ee-415c-46f5-901e-f596a1b250be,InventoryItem,PRO_SUPPLIES,Production Supplies,DIRECTOR'S SHIELD,DIRECTOR'S SHIELD,,true,not publicVisible
+f61178a7-477e-4b52-b54a-a7fb51f6b368,InventoryItem,PRO_SUPPLIES,Production Supplies,DOORWAY DOLLY,DOORWAY DOLLY,,true,not publicVisible
+55bf4639-917b-457f-a75e-c8f90418485a,InventoryItem,PRO_SUPPLIES,Production Supplies,Director's Chair - Low,Director's Chair - Low,,true,not publicVisible
+13de05e1-b8e0-4d42-b31b-b5f02d8d1b29,InventoryItem,PRO_SUPPLIES,Production Supplies,Director's Chair - Tall,Director's Chair - Tall,,true,not publicVisible
+4887b682-7768-4f61-a62e-ae1f3254ce78,InventoryItem,PRO_SUPPLIES,Production Supplies,"Director's Chair Cart, Rolling","Director's Chair Cart, Rolling",,true,not publicVisible
+5438a584-72ad-4356-a0f5-608f24f52bbc,InventoryItem,PRO_SUPPLIES,Production Supplies,"Director's Chair Rack, Hanging","Director's Chair Rack, Hanging",,true,not publicVisible
+6fd367e5-b0d8-450d-9ef4-fcadf5895a56,InventoryItem,PRO_SUPPLIES,Production Supplies,Dolly - 2 Wheel Handtruck,Dolly - 2 Wheel Handtruck,,true,not publicVisible
+3e1edd9f-394d-4589-872c-f880cd16d491,InventoryItem,PRO_SUPPLIES,Production Supplies,Dolly - Furniture (4 Wheel),Dolly - Furniture (4 Wheel),,true,not publicVisible
+db994073-a700-4143-aa89-792e658c3001,InventoryItem,PRO_SUPPLIES,Production Supplies,Dust Mop,Dust Mop,,true,not publicVisible
+1b7e4ef7-f056-4afc-b874-ed79c3efc622,InventoryItem,PRO_SUPPLIES,Production Supplies,Dust Pan,Dust Pan,,true,not publicVisible
+70aedd70-0618-4440-be7f-96eee75888f6,InventoryItem,PRO_SUPPLIES,Production Supplies,ELECTROSTATIC SPRAYER CASE,ELECTROSTATIC SPRAYER CASE,,true,not publicVisible
+16c8eb00-cd12-450c-b4fa-3deebda50e1a,InventoryItem,PRO_SUPPLIES,Production Supplies,Extension Cord - 100',Extension Cord - 100',,true,not publicVisible
+58a5b1fd-02f7-44d2-a74e-f18650359977,InventoryItem,PRO_SUPPLIES,Production Supplies,Extension Cord - 25',Extension Cord - 25',,true,not publicVisible
+46f1aeca-0a77-4d7f-9148-9b9b87ef25d6,InventoryItem,PRO_SUPPLIES,Production Supplies,Extension Cord - 50',Extension Cord - 50',,true,not publicVisible
+2ad1e28e-ad0f-44ac-a909-80de74dbfc5f,InventoryItem,PRO_SUPPLIES,Production Supplies,Fan - Box,Fan - Box,,true,not publicVisible
+f640d0a7-17ee-4bce-bcc1-08bec9b06d85,InventoryItem,PRO_SUPPLIES,Production Supplies,Fan - Metal Utility,Fan - Metal Utility,,true,not publicVisible
+5ba1811c-0e9b-4852-ba10-c908958bbdf8,InventoryItem,PRO_SUPPLIES,Production Supplies,Fan - Reel Effects II,Fan - Reel Effects II,,true,not publicVisible
+9a8a2260-2834-40aa-9f41-5e36cd0c3e65,InventoryItem,PRO_SUPPLIES,Production Supplies,Fire Extinguisher Rack,Fire Extinguisher Rack,,true,not publicVisible
+e0855ec2-cdeb-4306-8aed-186d86111564,InventoryItem,PRO_SUPPLIES,Production Supplies,"First Aid Kit ""50 Person""","First Aid Kit ""50 Person""",,true,not publicVisible
+44c5fa42-29d1-4f7e-8bfd-91013492a4ca,InventoryItem,PRO_SUPPLIES,Production Supplies,Fold It Cart,Fold It Cart,,true,not publicVisible
+ff3d9336-e96c-4dbf-911f-0c6dc59930ee,InventoryItem,PRO_SUPPLIES,Production Supplies,Folding Chairs,Folding Chairs,,true,not publicVisible
+234fe866-46aa-4445-a9ba-582d9812bdc4,InventoryItem,PRO_SUPPLIES,Production Supplies,Furniture Pads,Furniture Pads,,true,not publicVisible
+68732c8e-a9cb-46e8-ad52-d60c038bbaf6,InventoryItem,PRO_SUPPLIES,Production Supplies,HAND SANITIZING STATION (40% OFF),HAND SANITIZING STATION (40% OFF),,true,not publicVisible
+f92e713f-0090-461e-be59-603db58e068b,InventoryItem,PRO_SUPPLIES,Production Supplies,HANDWASHING STATION (40% OFF),HANDWASHING STATION (40% OFF),,true,not publicVisible
+6efeceda-ddd9-49af-b6fb-cfd69f27d081,InventoryItem,PRO_SUPPLIES,Production Supplies,Hand Mics,Hand Mics,,true,not publicVisible
+c35d0d9c-6ff0-4ff7-bf29-c07a1df72c86,InventoryItem,PRO_SUPPLIES,Production Supplies,Hard Hats,Hard Hats,,true,not publicVisible
+63f0e166-21e8-4f85-a55d-f1b04fc59eff,InventoryItem,COMMUNICATIONS,Production Supplies,Headset w/ Boom Mic,Headset w/ Boom Mic,,true,not publicVisible
+80f8f92e-9c00-4fc4-b259-ed7758c2454f,InventoryItem,PRO_SUPPLIES,Production Supplies,Heater - Dish (Electrical),Heater - Dish (Electrical),,true,not publicVisible
+ec2deea7-0d7a-4592-a23a-0bae617d8db8,InventoryItem,PRO_SUPPLIES,Production Supplies,"Hollywood Director's Chair, Tall","Hollywood Director's Chair, Tall",,true,not publicVisible
+63b4e8c0-22d0-42e9-bef9-c983ebf8cc18,InventoryItem,PRO_SUPPLIES,Production Supplies,"Hudson Sprayer ""Pump""","Hudson Sprayer ""Pump""",,true,not publicVisible
+eea2d95b-f65c-4a25-8204-7aaf4844495e,InventoryItem,PRO_SUPPLIES,Production Supplies,Inverter - 250 Watt,Inverter - 250 Watt,,true,not publicVisible
+8dfc4d21-bee5-4a7b-8d6b-211d5ef3987e,InventoryItem,PRO_SUPPLIES,Production Supplies,Inverter - 300 Watt,Inverter - 300 Watt,,true,not publicVisible
+f70be420-abed-4fa4-ab0d-5dd7c05e7bd4,InventoryItem,PRO_SUPPLIES,Production Supplies,Iron,Iron,,true,not publicVisible
+9152f050-b118-4b47-8027-d608fd094b13,InventoryItem,PRO_SUPPLIES,Production Supplies,Ironing Board,Ironing Board,,true,not publicVisible
+5c98f983-67fa-493a-8537-d55a7153ed6d,InventoryItem,PRO_SUPPLIES,Production Supplies,JHOOK,JHOOK,,true,not publicVisible
+ebb215fd-f4cb-4c89-a777-868fadada86d,InventoryItem,PRO_SUPPLIES,Production Supplies,JR TO BABY ADAPTOR,JR TO BABY ADAPTOR,,true,not publicVisible
+49a6e68c-9e55-43ef-adea-7cb00324fae2,InventoryItem,PRO_SUPPLIES,Production Supplies,JR. NAIL-ON PLATE,JR. NAIL-ON PLATE,,true,not publicVisible
+b5fd38aa-471b-4bf6-ad1f-5dddcd90a7ae,InventoryItem,PRO_SUPPLIES,Production Supplies,"LADDER TRUSS BRACKET 1 1/4""","LADDER TRUSS BRACKET 1 1/4""",,true,not publicVisible
+8ca06670-6252-47e7-9d10-f0d39aa0132c,InventoryItem,PRO_SUPPLIES,Production Supplies,Laundry Tub/Cart,Laundry Tub/Cart,,true,not publicVisible
+01e013c2-4a50-42f4-9f49-a587f7a659ad,InventoryItem,EXPENDABLES,Production Supplies,Leaf Blower - Battery Powered,Leaf Blower - Battery Powered,,true,not publicVisible
+60554b5a-f68c-492f-a0e9-8997e11aeb89,InventoryItem,PRO_SUPPLIES,Production Supplies,Leaf Blower - Gas,Leaf Blower - Gas,,true,not publicVisible
+a4d1b300-19b8-4f96-8bda-857bb5df6c0c,InventoryItem,PRO_SUPPLIES,Production Supplies,Leaf Rake,Leaf Rake,,true,not publicVisible
+130de7b4-1686-43c7-acd1-ce2b4d34e153,InventoryItem,PRO_SUPPLIES,Production Supplies,Loco Mat - 3' x 5',Loco Mat - 3' x 5',,true,not publicVisible
+af5d2d92-1784-4812-9dba-6ffcd933791b,InventoryItem,PRO_SUPPLIES,Production Supplies,MEDIUM TARP,MEDIUM TARP,,true,not publicVisible
+730f0916-31ed-48d5-957a-9c4c1d0eea30,InventoryItem,PRO_SUPPLIES,Production Supplies,"MICROPHONE, 3 PIN","MICROPHONE, 3 PIN",,true,not publicVisible
+49a100cf-4ffa-4b39-b5d4-e0e4c408fbb5,InventoryItem,PRO_SUPPLIES,Production Supplies,MICROWAVE,MICROWAVE,,true,not publicVisible
+d6f399cf-f735-49a7-a3f7-d42a78f9700f,InventoryItem,PRO_SUPPLIES,Production Supplies,MINI REFRIGERATOR,MINI REFRIGERATOR,,true,not publicVisible
+e44787de-fdfa-45fa-a845-fedf9eb6d3ac,InventoryItem,PRO_SUPPLIES,Production Supplies,Milk Crate,Milk Crate,,true,not publicVisible
+34b0aaa1-1e9b-4a22-966a-ba72e937e09e,InventoryItem,PRO_SUPPLIES,Production Supplies,"Mop, Bucket & Ringer","Mop, Bucket & Ringer",,true,not publicVisible
+f7ef9d54-bfdc-4342-92f0-856ecaee0239,InventoryItem,COMMUNICATIONS,Production Supplies,Motorola CP200d  UHF Radio (Digital),Motorola CP200d  UHF Radio (Digital),,true,not publicVisible
+a8e73f06-994f-4f78-8d39-47d083e03c12,InventoryItem,PRO_SUPPLIES,Production Supplies,"NORMS PIN (5/8"" PIN TO 3/8"" PIN)","NORMS PIN (5/8"" PIN TO 3/8"" PIN)",,true,not publicVisible
+8e097fa5-0826-4e3d-b8e3-830e60571c81,InventoryItem,PRO_SUPPLIES,Production Supplies,Office Trash Can,Office Trash Can,,true,not publicVisible
+ef1126e7-cdff-4c33-87ee-025b238fab5b,InventoryItem,PRO_SUPPLIES,Production Supplies,PRINTER - HP OFFICE JET PRO 8028e,PRINTER - HP OFFICE JET PRO 8028e,,true,not publicVisible
+093b12c4-901c-4ffc-879f-b8fc29b2fb6d,InventoryItem,PRO_SUPPLIES,Production Supplies,PULLY FIXED 1/2,PULLY FIXED 1/2,,true,not publicVisible
+9cec3976-0cfc-4a24-bf0b-8309e50e56ce,InventoryItem,PRO_SUPPLIES,Production Supplies,PULLY FIXED 3/8,PULLY FIXED 3/8,,true,not publicVisible
+c84c7b33-208d-4e8d-9df7-2ba3bc3345bb,InventoryItem,PRO_SUPPLIES,Production Supplies,PULLY SWIVEL 1/2,PULLY SWIVEL 1/2,,true,not publicVisible
+ae7aaa9a-c414-434c-ba3d-f3b5b392c226,InventoryItem,PRO_SUPPLIES,Production Supplies,PULLY SWIVEL 3/8,PULLY SWIVEL 3/8,,true,not publicVisible
+1d7a81a0-69cc-41fc-999d-09ca7e52f884,InventoryItem,PRO_SUPPLIES,Production Supplies,"Pail, Plastic 5 Gallon","Pail, Plastic 5 Gallon",,true,not publicVisible
+ecb620a0-aef0-45f1-a91f-605b300681cd,InventoryItem,PRO_SUPPLIES,Production Supplies,Pallet Jack,Pallet Jack,,true,not publicVisible
+227816b6-79ca-4b2e-943f-97af4fb45688,InventoryItem,PRO_SUPPLIES,Production Supplies,Personal Folding Table,Personal Folding Table,,true,not publicVisible
+3e005a28-316f-492a-aa31-f31c0aba2ca9,InventoryItem,PRO_SUPPLIES,Production Supplies,Portable Pop Up Changing Tent,Portable Pop Up Changing Tent,,true,not publicVisible
+d887a1be-4d8c-4cc2-b3ec-3c4fcebbcd14,InventoryItem,PRO_SUPPLIES,Production Supplies,Power Strip,Power Strip,,true,not publicVisible
+02b1cc19-03e2-49c5-8540-6ff1f38a2f7b,InventoryItem,PRO_SUPPLIES,Production Supplies,Pruning Shears,Pruning Shears,,true,not publicVisible
+cbdd0fe5-650e-4894-8df6-b94d35cb5600,InventoryItem,PRO_SUPPLIES,Production Supplies,Push Broom,Push Broom,,true,not publicVisible
+3b0b4ee9-02b7-4200-ac9f-4f29ee49c7b5,InventoryItem,PRO_SUPPLIES,Production Supplies,Ratchet Straps,Ratchet Straps,,true,not publicVisible
+8cf36e4a-4e68-49cd-b830-6a8711eb1f9a,InventoryItem,PRO_SUPPLIES,Production Supplies,Road Sign - Men Working,Road Sign - Men Working,,true,not publicVisible
+0508d4db-b8d1-4a6b-8167-b7a434ffd6cc,InventoryItem,PRO_SUPPLIES,Production Supplies,Road Sign - Prepare to Stop,Road Sign - Prepare to Stop,,true,not publicVisible
+ae7c2d47-3609-4530-afb6-ab1909d0eb60,InventoryItem,PRO_SUPPLIES,Production Supplies,Road Sign - Road Work Ahead,Road Sign - Road Work Ahead,,true,not publicVisible
+2b1c284d-7bda-46fa-b18f-4ed674e0ee56,InventoryItem,PRO_SUPPLIES,Production Supplies,Rock Rake,Rock Rake,,true,not publicVisible
+7a9e4fea-a5c6-40e6-904f-7c2f51274f2e,InventoryItem,PRO_SUPPLIES,Production Supplies,Rolling Wardrobe Rack,Rolling Wardrobe Rack,,true,not publicVisible
+2391dbc9-7cb1-496b-bbca-ad2ddf6d9d50,InventoryItem,PRO_SUPPLIES,Production Supplies,Rosco 1900 Fogger,Rosco 1900 Fogger,,true,not publicVisible
+f012e748-1ff1-431e-9833-7b60ed4eccaf,InventoryItem,PRO_SUPPLIES,Production Supplies,Rubber Maid Cart,Rubber Maid Cart,,true,not publicVisible
+e9531692-68db-4caf-9a34-20cd961bfabc,InventoryItem,PRO_SUPPLIES,Production Supplies,Rubber Mat 3' x 10',Rubber Mat 3' x 10',,true,not publicVisible
+6d76cc1b-ef11-4176-8c19-782fc5e68ce3,InventoryItem,PRO_SUPPLIES,Production Supplies,Rubber Mat 3' x 5',Rubber Mat 3' x 5',,true,not publicVisible
+8c72268c-ade2-4b12-9778-7103cb517112,InventoryItem,PRO_SUPPLIES,Production Supplies,SPEED CLIP 1-1/4ﬂ (BLACK),SPEED CLIP 1-1/4ﬂ (BLACK),,true,not publicVisible
+382dd3e5-473b-43e1-b277-8348d495bfe6,InventoryItem,PRO_SUPPLIES,Production Supplies,"SPEEDRAIL COUPLER 1 1/4""","SPEEDRAIL COUPLER 1 1/4""",,true,not publicVisible
+f81fff22-664e-40fd-a317-69c7f0dd98a9,InventoryItem,PRO_SUPPLIES,Production Supplies,SPEEDRAIL EAR 1 1/4ﬂ,SPEEDRAIL EAR 1 1/4ﬂ,,true,not publicVisible
+51abf108-b3cb-4ca0-9287-f5d6185274cd,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 18inch,STEEL DECK LEGS 18inch,,true,not publicVisible
+24849ff3-d167-452f-9ced-fa001f060753,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 1ft,STEEL DECK LEGS 1ft,,true,not publicVisible
+0b05327e-1fa9-446f-aabf-6a6d59d7490a,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 2ft,STEEL DECK LEGS 2ft,,true,not publicVisible
+36a506b5-6ffa-472e-8cd6-26e347881210,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 3ft,STEEL DECK LEGS 3ft,,true,not publicVisible
+0ad23175-1e50-4d3d-a745-619f72caea75,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 4ft,STEEL DECK LEGS 4ft,,true,not publicVisible
+a242532a-7094-454b-b783-99a11de0cb8b,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK LEGS 9inch,STEEL DECK LEGS 9inch,,true,not publicVisible
+5adbd87c-7bb6-4bd2-b1f0-1b3acb00364f,InventoryItem,PRO_SUPPLIES,Production Supplies,STEEL DECK NUT & BOLT,STEEL DECK NUT & BOLT,,true,not publicVisible
+cc8e181c-bf05-46c6-89bf-0898d3a85bfa,InventoryItem,PRO_SUPPLIES,Production Supplies,SUMO HEAD FEEDER,SUMO HEAD FEEDER,,true,not publicVisible
+b442f82d-ecb4-49ac-a653-383bb5ab5eca,InventoryItem,PRO_SUPPLIES,Production Supplies,SUMO LENS 30 DEGREE,SUMO LENS 30 DEGREE,,true,not publicVisible
+7dc90c47-6612-4504-a409-628ecfcf1e22,InventoryItem,PRO_SUPPLIES,Production Supplies,SUMO- CHAIN LINK,SUMO- CHAIN LINK,,true,not publicVisible
+f1836fb1-d558-4a83-9841-2624dcdb6d0e,InventoryItem,PRO_SUPPLIES,Production Supplies,SUMO- POWER FEEDER,SUMO- POWER FEEDER,,true,not publicVisible
+8f558cda-c2fc-4f1a-a561-ed2fe30eca6a,InventoryItem,PRO_SUPPLIES,Production Supplies,Safety Vest,Safety Vest,,true,not publicVisible
+64e8bc09-9243-4cc4-b076-0e120fb3b7a6,InventoryItem,PRO_SUPPLIES,Production Supplies,ShotBags - 20lbs,ShotBags - 20lbs,,true,not publicVisible
+23fe1810-b3df-47a3-9cf2-ba6bb4ec75da,InventoryItem,PRO_SUPPLIES,Production Supplies,Shovel - Flat,Shovel - Flat,,true,not publicVisible
+39ed700a-2f1e-44ef-83bd-ad7762455412,InventoryItem,PRO_SUPPLIES,Production Supplies,Shovel - Snow,Shovel - Snow,,true,not publicVisible
+f8b50024-9058-4b56-ae64-9fb2b03f033e,InventoryItem,PRO_SUPPLIES,Production Supplies,Shovel - Spade,Shovel - Spade,,true,not publicVisible
+3e8961ed-db74-4db4-9d7f-7d4b6286acec,InventoryItem,PRO_SUPPLIES,Production Supplies,Speaker - Gemini 115BT (Bluetooth),Speaker - Gemini 115BT (Bluetooth),,true,not publicVisible
+edfea467-1ffb-4179-a667-350d69998645,InventoryItem,PRO_SUPPLIES,Production Supplies,Stop/Slow Sign - Handheld,Stop/Slow Sign - Handheld,,true,not publicVisible
+4b1320ea-9349-45fb-8630-3f0ed25d9591,InventoryItem,PRO_SUPPLIES,Production Supplies,"Super Shelf, Rolling, 9' 10"" L x 5' H","Super Shelf, Rolling, 9' 10"" L x 5' H",,true,not publicVisible
+ff4207e9-bbae-4362-89f8-18c5dc5950d2,InventoryItem,COMMUNICATIONS,Production Supplies,Surveillance Kit,Surveillance Kit,,true,not publicVisible
+4293e8f5-3a50-4cf2-9d17-13639a60776c,InventoryItem,PRO_SUPPLIES,Production Supplies,"TRIANGULAR TRUSS MAKER 1-1/4""","TRIANGULAR TRUSS MAKER 1-1/4""",,true,not publicVisible
+87ab36e5-e970-4881-b932-0f90fbcb745a,InventoryItem,PRO_SUPPLIES,Production Supplies,"Table Divider - 29.5"" W x 23.5"" H","Table Divider - 29.5"" W x 23.5"" H",,true,not publicVisible
+5eba9922-7f85-41a9-81e8-641464dc00e7,InventoryItem,PRO_SUPPLIES,Production Supplies,Tea Kettle (1.7 liter) - Electric,Tea Kettle (1.7 liter) - Electric,,true,not publicVisible
+0ca8aac4-eed5-459a-9c8f-d832981e5fa1,InventoryItem,PRO_SUPPLIES,Production Supplies,Trash Can (33 gal),Trash Can (33 gal),,true,not publicVisible
+a3a4b727-fdc9-4b14-9b8a-f74261c2f916,InventoryItem,PRO_SUPPLIES,Production Supplies,Trash Grabber,Trash Grabber,,true,not publicVisible
+31e673e3-7929-488a-ab0e-3a88ae8aaef6,InventoryItem,PRO_SUPPLIES,Production Supplies,"UTAH - 6' TABLE LINEN, BLACK","UTAH - 6' TABLE LINEN, BLACK",,true,not publicVisible
+4306c3a3-fc7a-47f2-919c-81f493cfaca0,InventoryItem,PRO_SUPPLIES,Production Supplies,UTAH - BOX FAN,UTAH - BOX FAN,,true,not publicVisible
+12ad9d75-4ba8-49a0-a77a-28f8effdc08d,InventoryItem,PRO_SUPPLIES,Production Supplies,UTAH - DIRECTOR'S CHAIR CART,UTAH - DIRECTOR'S CHAIR CART,,true,not publicVisible
+a5773551-0a8f-4249-937c-30c63fcfee6c,InventoryItem,COMMUNICATIONS,Production Supplies,UTAH - MOTOROLA CP200 UHF (ANALOG),UTAH - MOTOROLA CP200 UHF (ANALOG),,true,not publicVisible
+7307e12e-f0a9-4341-90b0-26eafe0c3f94,InventoryItem,COMMUNICATIONS,Production Supplies,UTAH - MOTOROLA CP200 UHF (DIGITAL),UTAH - MOTOROLA CP200 UHF (DIGITAL),,true,not publicVisible
+c6b6a1c1-6b3f-45f8-9545-6a5f13a8c51a,InventoryItem,COMMUNICATIONS,Production Supplies,UTAH - SURVEILLANCE MIC,UTAH - SURVEILLANCE MIC,,true,not publicVisible
+b89b2b8b-d589-45b6-bc44-6d7ebd1e3bc6,InventoryItem,PRO_SUPPLIES,Production Supplies,UTAH - TABLE TOP MAKE UP MIRROR,UTAH - TABLE TOP MAKE UP MIRROR,,true,not publicVisible
+43294205-8df4-4ef8-b0cb-73ffa0dc239d,InventoryItem,PRO_SUPPLIES,Production Supplies,UTAH - WET/DRY SHOP VAC,UTAH - WET/DRY SHOP VAC,,true,not publicVisible
+637825d6-723e-4634-8099-fb6b1e34958f,InventoryItem,PRO_SUPPLIES,Production Supplies,Umbrella - Golf,Umbrella - Golf,,true,not publicVisible
+4702f7c2-0776-43ad-a413-8646b6ede287,InventoryItem,PRO_SUPPLIES,Production Supplies,Utility Tool Rack,Utility Tool Rack,,true,not publicVisible
+2ade9d97-d45e-4f83-9bc8-a1767eb4616f,InventoryItem,PRO_SUPPLIES,Production Supplies,"Wardrobe Hanger 17"" Clear, Pant w/ Clip - Each","Wardrobe Hanger 17"" Clear, Pant w/ Clip - Each",,true,not publicVisible
+dddb5dd5-925a-448c-b56c-f867c7cba9cb,InventoryItem,PRO_SUPPLIES,Production Supplies,"Wardrobe Hanger 17"" Clear, Shirt/Dress - Each","Wardrobe Hanger 17"" Clear, Shirt/Dress - Each",,true,not publicVisible
+500a1a62-eefe-4bb6-965d-c9c864c72ef1,InventoryItem,PRO_SUPPLIES,Production Supplies,Water - Dispenser,Water - Dispenser,,true,not publicVisible
+ca884d43-b825-4313-9977-e9d269c5821d,InventoryItem,PRO_SUPPLIES,Production Supplies,Wet/Dry Shop Vacuum,Wet/Dry Shop Vacuum,,true,not publicVisible
+ed9409c5-a543-4fae-9cc5-0940113de065,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Air Scrubber (550 CFM),SSE-AIR-SCRUBBER-550-CFM,,true,
+9b06910f-e1d6-48f6-9031-2de78129129e,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Air Scrubber (750 CFM),SSE-AIR-SCRUBBER-750-CFM,,true,
+5ece53d5-765f-46fd-bd64-dc2f1f59feee,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Director's Shield,SSE-DIRECTORS-SHIELD,,true,
+169a4093-5e32-4d56-8e0f-ea7ce9bfc055,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Hand Washing Station,SSE-HAND-WASHING-STATION,,true,
+ae1bdf06-ead9-47a6-bdaa-481952bfdc95,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Standing Sanitizing Station,SSE-STANDING-SANITIZING-STATION,,true,
+cd0339c6-a120-4fbd-8c9f-23d1443177bc,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Table Divider,SSE-TABLE-DIVIDER,,true,
+0b719d02-58c7-471f-b822-644a8295218b,InventoryItem,PRO_SUPPLIES,Safe Sets Equipment,Tabletop Sanitizing Station,SSE-TABLETOP-SANITIZING-STATION,,true,
+22de4d9f-cd3c-41e0-bd1f-ecb52a7cc21c,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"1st Aid Kit, 50 person",SAF-1ST-AID-KIT-50-PERSON,,true,
+29b8313b-30a0-46ea-a585-18f992124140,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Barricades w/Lights,SAF-BARRICADES-W-LIGHTS,,true,
+b9acf0cd-d0e4-4643-868b-99eb08f8c3f0,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Cal OSHA Board,SAF-CAL-OSHA-BOARD,,true,
+e26393c9-5faa-49aa-839c-e4a2925e2dd1,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Delineators, 36""",SAF-DELINEATORS-36,,true,
+0efc46a7-7673-48be-8eaf-29548a0fbac5,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Fire Extinguisher (18LB),SAF-FIRE-EXTINGUISHER-18LB,,true,
+079f6998-6cb4-42b9-a9fb-672ddfff38af,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Fire Extinguisher (8LB),SAF-FIRE-EXTINGUISHER-8LB,,true,
+a98057f8-0c9b-45ee-9d03-5655c01d5f6e,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Hard Hat,SAF-HARD-HAT,,true,
+8358927b-af13-473f-9c33-411268c11168,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Safety Vest,SAF-SAFETY-VEST,,true,
+d5f742df-def0-4abb-a2fb-48df15c51179,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Sign, ""Men Working""",SAF-SIGN-MEN-WORKING,,true,
+fb0539cc-6e86-4831-bf95-796d59a8d548,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Sign, ""Prepare to Stop""",SAF-SIGN-PREPARE-TO-STOP,,true,
+12757c9f-9f48-47ed-9855-9d8ffd64d7be,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Sign, ""Road Work Ahead""",SAF-SIGN-ROAD-WORK-AHEAD,,true,
+5daff131-3682-4270-9b76-1d759e2b3908,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Sign, ""Wet Pavement""",SAF-SIGN-WET-PAVEMENT,,true,
+ffdf8a03-9ae4-4ad0-b0b8-76b4cd5338a6,InventoryItem,PRO_SUPPLIES,Safety & Traffic,Stop/Slow Sign,SAF-STOP-SLOW-SIGN,,true,
+6243e0e1-805f-4b7e-8b89-74d6bfd58b84,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Traffic Cones, 18""",SAF-TRAFFIC-CONES-18,,true,
+309492f4-e653-4e57-8e7b-9dd6ef0cdacb,InventoryItem,PRO_SUPPLIES,Safety & Traffic,"Traffic Cones, 28""",SAF-TRAFFIC-CONES-28,,true,
+76944b7a-54a3-4057-9015-3e04eef6d12f,InventoryItem,PRO_SUPPLIES,Tables & Chairs,6' Table Linen (Black),TAB-6-TABLE-LINEN-BLACK,,true,
+eee6b84a-f2a1-4542-8719-7a202bb1ce58,InventoryItem,PRO_SUPPLIES,Tables & Chairs,6' Table Linen (White),TAB-6-TABLE-LINEN-WHITE,,true,
+ae433f61-2817-4273-bacf-9d49eeeb1efb,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Chairs, Folding",TAB-CHAIRS-FOLDING,,true,
+f6f49a5f-8671-4197-83b8-14f338e05656,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Client Lounge, SOLO Line",TAB-CLIENT-LOUNGE-SOLO-LINE,,true,
+80ea1b93-3e81-47a4-af62-5925dd4a2fe7,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Client Lounge, Standard",TAB-CLIENT-LOUNGE-STANDARD,,true,
+d06eca6e-3698-479d-83d8-d5e6a342bc33,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Director's Chairs, Low",TAB-DIRECTORS-CHAIRS-LOW,,true,
+1c3e1496-4623-47b1-afef-db2e2bc0a683,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Director's Chairs, Medium (Padded)",TAB-DIRECTORS-CHAIRS-MEDIUM-PADDED,,true,
+f7672693-b19a-4394-bcaf-9452e9ae3842,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Director's Chairs, Tall",TAB-DIRECTORS-CHAIRS-TALL,,true,
+13e1b064-bf10-46b9-9d9a-d4cb2f4fb3af,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Table, 2' Folding (Personal)",TAB-TABLE-2-FOLDING-PERSONAL,,true,
+24ee9c43-eac3-4174-a868-bf74a6811848,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Table, 4' Folding",TAB-TABLE-4-FOLDING,,true,
+d3a062f8-0cae-4296-8a4a-6d883a14d811,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Table, 6' Folding",TAB-TABLE-6-FOLDING,,true,
+8bc99a00-af40-4ddc-994f-78001babcaae,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Table, 6' Folding (Half Fold)",TAB-TABLE-6-FOLDING-HALF-FOLD,,true,
+455f7b7c-8eaf-4f1a-a1d3-1e9635c43f91,InventoryItem,PRO_SUPPLIES,Tables & Chairs,"Table, 8' Folding",TAB-TABLE-8-FOLDING,,true,
+8b664523-c112-4a1f-ab1f-89e402f510ca,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Caravan Canopy, 10x10",TEN-CARAVAN-CANOPY-10X10,,true,
+d60a1290-9e0c-4098-887c-5a9acec9f11f,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Caravan Canopy, 10x15",TEN-CARAVAN-CANOPY-10X15,,true,
+4d565795-0a47-4f0a-8795-4116c173c9d1,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Caravan Canopy, 10x20",TEN-CARAVAN-CANOPY-10X20,,true,
+56319cd1-e9a7-4be1-8f3a-d0a087e5e858,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Caravan Canopy, 8x8",TEN-CARAVAN-CANOPY-8X8,,true,
+f188c9d3-d69b-4464-b307-977f91fb3e98,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Sand Bags, 25lbs",TEN-SAND-BAGS-25LBS,,true,
+e56894c5-c0da-46cc-abd8-b18882f33d4c,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Sand Bags, 35lbs",TEN-SAND-BAGS-35LBS,,true,
+892658a0-2143-42b6-8d5f-386e851a2c22,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Sidewalls, 10x10",TEN-SIDEWALLS-10X10,,true,
+15914363-ebd1-4bd1-8352-3aa2f15e5d3b,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Sidewalls, 10x15",TEN-SIDEWALLS-10X15,,true,
+28a2816c-876a-4955-9a90-30fd4919f687,InventoryItem,PRO_SUPPLIES,Tents & Accessories,"Sidewalls, 8x8",TEN-SIDEWALLS-8X8,,true,
+e53d0d17-fbd0-4777-9bbf-3fbe440f1a2b,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Bolt Cutter,TOO-BOLT-CUTTER,,true,
+a908d5dc-b53b-4a56-9cb4-f2ee20fe1831,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Broom, Corn",TOO-BROOM-CORN,,true,
+be66ec1d-a1af-47f8-9ee6-673cb4642c43,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Broom, Push",TOO-BROOM-PUSH,,true,
+1286e8db-a2de-4ce0-8992-6e0e89499e38,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Dust Mop,TOO-DUST-MOP,,true,
+3145e778-4312-40b1-bc59-e94a307b4794,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Dust Pan,TOO-DUST-PAN,,true,
+56c6314e-a217-40ff-8714-bd062aba5035,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Hedge Trimmer, Electric",TOO-HEDGE-TRIMMER-ELECTRIC,,true,
+efedd3a1-9259-4efc-9826-e92c2315167d,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Leaf Blower, Electric",TOO-LEAF-BLOWER-ELECTRIC,,true,
+3e40a721-eb3c-44ca-a498-f1fe72a17655,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Mop & Bucket,TOO-MOP-BUCKET,,true,
+11737a34-8cda-4e1e-ad21-0b21d1035d21,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Pail, Plastic 5 Gallon",TOO-PAIL-PLASTIC-5-GALLON,,true,
+31bcdc39-3fe2-4380-b2d7-83ad81c5089b,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Pressure Washer,TOO-PRESSURE-WASHER,,true,
+6d302c32-328b-4e34-95b2-5a40b7639742,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Prune Cutter,TOO-PRUNE-CUTTER,,true,
+3c06d0f0-709c-4e6e-b6d4-8a3866b68645,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Rake, Leaf",TOO-RAKE-LEAF,,true,
+8a5a5fee-f0b3-4bb2-ab8a-39e092362977,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Rake, Rock",TOO-RAKE-ROCK,,true,
+73cd7b6a-2046-4a94-863f-92f474a10348,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Rake, Sand",TOO-RAKE-SAND,,true,
+a8081c12-549d-4050-9e44-2f75ce8f494e,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Shop Vacuum,TOO-SHOP-VACUUM,,true,
+8134e3ef-7353-4c2d-b49f-e498c4afaadf,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Shovel, Flat",TOO-SHOVEL-FLAT,,true,
+c88481b2-2ce9-42fd-93ef-04838c38b58a,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Shovel, Snow",TOO-SHOVEL-SNOW,,true,
+743a64e0-03cd-4610-ae85-f7466b6318aa,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Shovel, Spade",TOO-SHOVEL-SPADE,,true,
+54209a3b-fb5f-468c-84f0-920794d66d3d,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Sledge Hammer,TOO-SLEDGE-HAMMER,,true,
+2a16f3d1-e405-47c2-a873-f37aa1892ffe,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,Trash Grabber,TOO-TRASH-GRABBER,,true,
+8db1b2ec-fe7f-4a66-9e9d-fda25b91f4b8,InventoryItem,PRO_SUPPLIES,Tools & Cleaning,"Weed Wacker, Electric",TOO-WEED-WACKER-ELECTRIC,,true,
+33565644-26ab-4c73-a86f-ddd6c98492a3,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,4' Work Basket,VEH-4-WORK-BASKET,,true,
+1b3e3692-48f3-4e21-b1b3-7005f657ec7f,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,4' Work Shelf,VEH-4-WORK-SHELF,,true,
+14702a8c-301b-4e97-8fa4-7a5f842fee8f,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,8' Work Shelf,VEH-8-WORK-SHELF,,true,
+11b5d4ae-8a6d-4e24-89d4-6ea5f75ce4e3,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Chair Rack, Hanging",VEH-CHAIR-RACK-HANGING,,true,
+e2a5f1c4-acfa-448b-8c1d-d8a775410660,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Chair Rack, Rolling",VEH-CHAIR-RACK-ROLLING,,true,
+44f0a1a1-084e-4b9d-be2d-46b2f5b06c8a,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Director's Chair Rack, Rolling",VEH-DIRECTORS-CHAIR-RACK-ROLLING,,true,
+7d37369a-ea90-4cd3-b0d1-2845086e891f,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Dolly Track Rack, Single",VEH-DOLLY-TRACK-RACK-SINGLE,,true,
+0e3dd874-b90e-4242-832d-bf80076b5cca,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,Fire Extinguisher Rack,VEH-FIRE-EXTINGUISHER-RACK,,true,
+b7f32531-12d6-4c63-ad1e-89e907b4998e,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,Milk Crate,VEH-MILK-CRATE,,true,
+b3bac7dd-69e5-4f98-88e4-b7ac0f8e2da6,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Straps, Bungee or D-Ring",VEH-STRAPS-BUNGEE-OR-D-RING,,true,
+10713942-7499-4cf2-9fc5-4df940fea3a0,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,"Straps, Ratchet",VEH-STRAPS-RATCHET,,true,
+45369e8e-cb7f-44b6-9116-1de939762361,InventoryItem,PRO_SUPPLIES,Vehicle Outfitting,Tool Rack,VEH-TOOL-RACK,,true,
+bddcfbde-bc50-488b-8ac1-ffc87a4a3eee,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,Iron,WAR-IRON,,true,
+acac2763-a226-4a99-9a83-48db2478eb3a,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,Ironing Board,WAR-IRONING-BOARD,,true,
+08450fb5-b5a2-4aaf-94e8-a1a4fddffb97,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,Jiffy Steamer,WAR-JIFFY-STEAMER,,true,
+181b5d94-4258-4573-a026-c354cd2145b9,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,"Mirror, 6' Wardrobe",WAR-MIRROR-6-WARDROBE,,true,
+27888496-507e-4aab-b1af-859df36e775d,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,"Mirror, Half w/lights",WAR-MIRROR-HALF-W-LIGHTS,,true,
+c5b96e42-4b5a-4e74-a47c-1fc3c731cc7b,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,"Mirror, Rolling M/U",WAR-MIRROR-ROLLING-M-U,,true,
+e0709cfe-7906-414e-8c71-b39599e4da8b,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,Pop-Up Changing Stall,WAR-POP-UP-CHANGING-STALL,,true,
+75298e0e-9e2e-4c23-9196-bf13371085c0,InventoryItem,PRO_SUPPLIES,Wardrobe & Makeup,"Wardrobe Rack, Rolling",WAR-WARDROBE-RACK-ROLLING,,true,
+f0ebd373-dbf3-4625-bfc3-5353292116fc,AssetCategory,VEHICLES,Camera Cube,Camera Cube,camera-cube,,true,LA · planyo:117156
+c6bffb8b-f047-404b-a48a-b9e6862ce8d3,AssetCategory,VEHICLES,Cargo Van w/ Liftgate,Cargo Van w/ Liftgate,cargo-van-liftgate,,true,LA · planyo:117102
+11baa153-b6cd-49c6-b87b-009858da057d,AssetCategory,VEHICLES,Cargo Van w/o Liftgate,Cargo Van w/o Liftgate,cargo-van-no-liftgate,,false,LA · planyo:117105
+c564d46e-12f7-4a04-a3f1-e87ca57ce37b,AssetCategory,VEHICLES,Cube Truck,Cube Truck,cube-truck,,true,LA · planyo:116560
+1ce0a285-22d2-4dce-99e6-f4f9da026157,AssetCategory,VEHICLES,DLUX,DLUX,dlux,,true,LA · planyo:119962
+5af2064a-773b-4c82-8977-887992753be7,AssetCategory,VEHICLES,DLUX (NorCal),DLUX (NorCal),dlux-norcal,,false,NORCAL · planyo:224971
+efe74778-de92-4329-8954-6a21e0df6f1c,AssetCategory,VEHICLES,Passenger Van,Passenger Van,passenger-van,,true,LA · planyo:117158
+4c810d9c-96ed-4954-a4bf-dd1a0442bd44,AssetCategory,VEHICLES,PopVan,PopVan,popvan,,true,LA · planyo:117155
+23d4c204-dd31-4303-a434-16ab878a4966,AssetCategory,VEHICLES,ProScout / VTR,ProScout / VTR,proscout-vtr,,true,LA · planyo:117159
+24a2d81b-31e8-4305-908f-e46fc34782af,AssetCategory,VEHICLES,Scissor Lift,Scissor Lift,scissor-lift,,false,LA · planyo:217515
+33aced7d-62f3-4f6a-b4bd-49789a118f0c,AssetCategory,VEHICLES,Stakebed,Stakebed,stakebed,,false,LA · planyo:117160
+79de16d1-a189-47bb-929d-6e46d84cb28c,AssetCategory,VEHICLES,UTAH Vehicles,UTAH Vehicles,utah-vehicles,,false,UTAH · planyo:234184
+57b40a69-ca57-468f-86eb-fa3069820d95,AssetCategory,STAGES,Lankershim Studios,Lankershim Studios,lankershim-studios,"Bookable stages at the Lankershim location (Hospital Set, Police Set, LED Stage, Black Box). Distinct from the legacy ""Studios"" / Standing Sets bucket.",true,LA
+dbd045b9-fc0d-4006-ace6-53183a9640bd,AssetCategory,STAGES,Studios,Studios,studios,"Lankershim & Lima stages. Standing sets: hospital, police, morgue.",true,LA · planyo:128064
+ac5c3004-b01d-4c9e-b77f-d5a8b2a0a145,AssetCategory,STAGES,TEST capacity-1 stage,TEST capacity-1 stage,test-cap1-stage,Test fixture — single-unit category for scheduling capacity-1 assertions.,false,LA
+42baf8b7-59e9-427a-a6a0-2383f504ba58,AssetCategory,STAGES,TEST capacity-2 stage,TEST capacity-2 stage,test-cap2-stage,Test fixture — two-unit category for buffer + multi-qty + serviceable-status assertions.,false,LA
+6aa623f4-ef35-4126-a0ec-c7c7121e512d,AssetCategory,PRO_SUPPLIES,Wardrobe,Wardrobe,wardrobe,Placeholder for a future wardrobe-truck / wardrobe-space buildout. No Assets yet.,false,LA
+06f21260-1cca-44fb-a780-f0d6f46109f7,VehicleCategory,,12-Passenger Van,12-Passenger Van,12-passenger-van,,true,legacy Planyo-aligned model
+083ecfae-c827-4bec-8ab8-7c54aa8a1cac,VehicleCategory,,15-Passenger Van,15-Passenger Van,15-passenger-van,,true,legacy Planyo-aligned model
+b4bd23f2-d956-4316-a2af-224d4e5082ca,VehicleCategory,,Cargo Van,Cargo Van,cargo-van,,true,legacy Planyo-aligned model
+fdf5c399-8fa9-4b4e-8cc5-4b1a7493638b,VehicleCategory,,Cargo w/Lift Gate,Cargo w/Lift Gate,cargo-w-liftgate,,true,legacy Planyo-aligned model
+1abef07f-669f-4ca4-859a-32bb6e7ef882,VehicleCategory,,Cube Truck,Cube Truck,cube-truck,,true,legacy Planyo-aligned model
+fba10c66-a9be-43fc-b6e3-6b235b64d181,VehicleCategory,,Hair / Makeup Trailer,Hair / Makeup Trailer,hair-makeup-trailer,,true,legacy Planyo-aligned model
+f401ddff-4982-46f7-96c3-79a83b5d3b2f,VehicleCategory,,Honeywagon,Honeywagon,honeywagon,,true,legacy Planyo-aligned model
+060b4b59-6f7a-4051-989d-fffbf9f812e7,VehicleCategory,,PopVan,PopVan,popvan,,true,legacy Planyo-aligned model
+3d2fff1c-3590-4a3a-862e-4e4a3e37d2b3,VehicleCategory,,Production Trailer,Production Trailer,production-trailer,,true,legacy Planyo-aligned model
+482d296e-03fb-4b27-8eba-56d3b6f15237,VehicleCategory,,Star / Talent Trailer,Star / Talent Trailer,star-talent-trailer,,true,legacy Planyo-aligned model
+8665dce1-6935-44c7-a603-d5430ce51db1,VehicleCategory,,Supercube,Supercube,supercube,Liftgate,true,legacy Planyo-aligned model
+2daa46a6-a121-48e3-9aff-8bc9e772c720,VehicleCategory,,Video Van / ProScout Sprinter,Video Van / ProScout Sprinter,video-van-proscout,,true,legacy Planyo-aligned model
+e8ae9b02-45bd-4565-84c1-b09a9398f88e,VehicleCategory,,Wardrobe Trailer,Wardrobe Trailer,wardrobe-trailer,,true,legacy Planyo-aligned model

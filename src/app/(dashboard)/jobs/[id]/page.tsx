@@ -156,6 +156,7 @@ interface JobDetail {
   company: { id: string; name: string };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; createdAt: string }>;
   orders: JobOrder[];
   bookings: JobBooking[];
   activity: ActivityRow[];
@@ -426,6 +427,17 @@ export default function JobDetailPage() {
     return [...seen.values()].sort((x, y) => x.unitName.localeCompare(y.unitName, undefined, { numeric: true }))
   })()
 
+  const coiStatus: 'Verified' | 'Pending' | 'Expired' | 'Missing' = (() => {
+    const checks = job.coiChecks ?? [];
+    if (checks.length === 0) return 'Missing';
+    const latest = checks[0];
+    if (latest.coverageVerified) {
+      if (latest.policyExpiryDate && new Date(latest.policyExpiryDate) < new Date()) return 'Expired';
+      return 'Verified';
+    }
+    return 'Pending';
+  })();
+
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <button
@@ -639,21 +651,24 @@ export default function JobDetailPage() {
       {/* Quick access — clickable jump tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length) },
-          { href: '#orders', label: 'Orders', value: String(job.orders.length) },
-          { href: '#documents', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'pending' ? 'Pending' : '—' },
-          { href: '#documents', label: 'COI', value: 'Link' },
-        ].map((t) => (
-          <a
-            key={t.label}
-            href={t.href}
-            className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors"
-          >
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t.label}</div>
-            <div className="mt-1.5 text-2xl font-bold text-white group-hover:text-amber-300 transition-colors leading-none">{t.value}</div>
-            <div className="mt-2 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Jump ↓</div>
-          </a>
-        ))}
+          { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length), tone: 'neutral' },
+          { href: '#orders', label: 'Orders', value: String(job.orders.length), tone: 'neutral' },
+          { href: '#documents', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'pending' ? 'Pending' : '—', tone: agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : 'neutral' },
+          { href: '#documents', label: 'COI', value: coiStatus, tone: coiStatus === 'Verified' ? 'good' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bad' : 'warn' },
+        ].map((t) => {
+          const toneCls = t.tone === 'good' ? 'text-emerald-300' : t.tone === 'warn' ? 'text-amber-300' : t.tone === 'bad' ? 'text-rose-300' : 'text-white group-hover:text-amber-300'
+          return (
+            <a
+              key={t.label}
+              href={t.href}
+              className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t.label}</div>
+              <div className={`mt-1.5 text-2xl font-bold ${toneCls} transition-colors leading-none`}>{t.value}</div>
+              <div className="mt-2 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Jump ↓</div>
+            </a>
+          )
+        })}
       </div>
 
       {/* Reserved assets → each opens its reservation on the calendar */}
