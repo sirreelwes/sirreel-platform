@@ -174,6 +174,7 @@ const TONE_ICON: Record<ChipTone, string> = {
 interface JobRow {
   id: string
   jobCode: string
+  assistantAuthCode: string | null
   name: string
   status: JobStatus
   startDate: string | null
@@ -673,6 +674,11 @@ function JobCard({
     >
       <div className="flex items-center gap-2">
         <span className="text-[12.5px] font-mono font-bold tracking-wide text-lt-fg bg-lt-inner border border-lt-hairline rounded px-2 py-0.5 leading-none">{j.jobCode}</span>
+        {j.assistantAuthCode && (
+          <span className="text-[11px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 leading-none" title="Client access code — read to the after-hours assistant to verify">
+            {j.assistantAuthCode}
+          </span>
+        )}
         {j.hasDelivery && column !== 'RETURNED' && (
           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500 text-white" title="Delivery — a booking on this job has a delivery address">
             Delivery

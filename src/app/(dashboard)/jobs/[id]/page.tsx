@@ -140,6 +140,8 @@ interface JobOrder {
 interface JobDetail {
   id: string;
   jobCode: string;
+  /** 5-digit after-hours access code clients read to the assistant to verify. */
+  assistantAuthCode: string | null;
   name: string;
   status: JobStatus;
   productionType: string;
@@ -422,6 +424,15 @@ export default function JobDetailPage() {
                   title={`Physically returned ${fmtDateTime(job.returnedAt)}${job.returnedBy ? ` · marked by ${job.returnedBy.name}` : ''}`}
                 >
                   Returned
+                </span>
+              )}
+              {job.assistantAuthCode && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[14px] font-mono font-bold tracking-[0.15em] text-amber-300 bg-amber-950/40 border border-amber-800/60 rounded px-2.5 py-1"
+                  title="Client access code — clients read this to the after-hours assistant to verify their identity"
+                >
+                  <span className="text-[9px] font-sans font-semibold uppercase tracking-wider text-amber-500/80">Access</span>
+                  {job.assistantAuthCode}
                 </span>
               )}
             </div>
