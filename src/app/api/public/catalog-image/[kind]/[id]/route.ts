@@ -109,5 +109,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return streamPrivateBlobAsResponse({ fileUrl: photo.url, filename: `${id}.jpg` })
   }
 
+  if (kind === 'team-photo') {
+    // A team member's headshot by id. Lenient by design — a staff headshot
+    // isn't sensitive and the id is a UUID — so admin can preview drafts too.
+    const m = await prisma.teamMember.findFirst({
+      where: { id, photoUrl: { not: null } },
+      select: { photoUrl: true },
+    })
+    if (!m?.photoUrl) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    return streamPrivateBlobAsResponse({ fileUrl: m.photoUrl, filename: `${id}.jpg` })
+  }
+
   return NextResponse.json({ error: 'not found' }, { status: 404 })
 }

@@ -3593,6 +3593,24 @@ model PaymentLog {
   @@map("payment_logs")
 }
 
+// Public "Who we are" team roster (photo + title), managed at
+// /admin/who-we-are and shown on /contact when whoWeAreEnabled is on.
+model TeamMember {
+  id            String   @id @default(uuid())
+  name          String
+  title         String
+  /// Private-blob fileUrl for the headshot (served via the
+  /// /api/public/catalog-image/team-photo proxy). Column name is historical.
+  photoUrl      String?  @map("photo_blob_key")
+  photoFilename String?  @map("photo_filename")
+  sortOrder     Int      @default(0) @map("sort_order")
+  published     Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("team_members")
+}
+
 // ============================================================
 // JOB FEATURE — added by recover-and-add-jobs.js
 // ============================================================
@@ -4935,6 +4953,10 @@ model SiteSetting {
   gateCode            String?   @map("gate_code")
   gateCodeUpdatedAt   DateTime? @map("gate_code_updated_at")
   gateCodeUpdatedById String?   @map("gate_code_updated_by_id")
+
+  /// Master switch for the public "Who we are" team section on /contact.
+  /// Off until the roster + photos are set in /admin/who-we-are.
+  whoWeAreEnabled     Boolean   @default(false) @map("who_we_are_enabled")
 
   /// PUBLIC downloadable forms (PDF, private blob URLs) — served via the
   /// public proxy /api/public/forms/[slot]. Managed at /admin/forms.

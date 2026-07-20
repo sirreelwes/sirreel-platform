@@ -12,6 +12,7 @@ import { ContactForm } from '@/components/site/ContactForm'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import { getPageTitles } from '@/lib/site/siteSettings'
 import { SWatermark } from '@/components/site/SWatermark'
+import { getTeamSection } from '@/lib/site/team'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +22,10 @@ export default async function ContactPage({
   searchParams?: { prefill?: string }
 }) {
   const prefill = typeof searchParams?.prefill === 'string' ? searchParams.prefill.slice(0, 300) : ''
-  const titles = await getPageTitles()
+  const [titles, team] = await Promise.all([getPageTitles(), getTeamSection()])
 
   return (
+    <>
     <section id="contact" className="bg-[#0c0c0d] text-white scroll-mt-24 relative overflow-hidden">
       <SWatermark size={460} className="-right-24 -top-24 rotate-[6deg]" />
       <div className="relative max-w-[1480px] mx-auto px-5 py-16 sm:py-24">
@@ -50,5 +52,33 @@ export default async function ContactPage({
         </div>
       </div>
     </section>
+
+    {team.enabled && team.members.length > 0 && (
+      <section className="bg-[#f6f2e8] text-[#1e2833]">
+        <div className="max-w-[1480px] mx-auto px-5 py-16 sm:py-20">
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#b06d12] mb-4" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Who we are
+          </div>
+          <h2 className="font-black tracking-tight text-[30px] sm:text-[42px] leading-[1.05] max-w-[18ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            The crew behind your production.
+          </h2>
+          <div className="mt-10 grid gap-x-6 gap-y-9 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+            {team.members.map((m) => (
+              <div key={m.id} className="text-center">
+                <div className="aspect-square overflow-hidden rounded-2xl border border-[#e4dfd4] bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/public/catalog-image/team-photo/${m.id}`} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+                </div>
+                <div className="mt-3 font-extrabold text-[16px] tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  {m.name}
+                </div>
+                <div className="text-[13px] text-[#8b857a] mt-0.5">{m.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+    </>
   )
 }
