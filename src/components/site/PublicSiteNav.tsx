@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -61,6 +61,33 @@ export function PublicSiteNav({
   const pathname = usePathname()
   const [open, setOpen] = useState(false) // mobile menu
   const [expanded, setExpanded] = useState<string | null>(null) // mobile dropdown section
+  const [openMenu, setOpenMenu] = useState<string | null>(null) // desktop dropdown
+  const navRef = useRef<HTMLElement>(null)
+
+  // Close the desktop dropdown on route change so a click-through never
+  // leaves it hanging open on the next page.
+  useEffect(() => {
+    setOpenMenu(null)
+  }, [pathname])
+
+  // While a desktop dropdown is open, close it on outside click or Escape.
+  // (Hover + click both open it; mouse-leave/blur close it — see
+  // desktopEntry. This covers the click-away and keyboard cases.)
+  useEffect(() => {
+    if (!openMenu) return
+    const onDown = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenMenu(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenu(null)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [openMenu])
 
   const isActive = (href?: string) => {
     if (!href) return false
@@ -143,19 +170,35 @@ export function PublicSiteNav({
         </Link>
       )
     }
-    // Dropdown — CSS hover + focus-within, keyboard accessible.
+    // Dropdown — controlled open state. Hover opens it, a click toggles it,
+    // and it closes on mouse-leave, blur-out, Escape, outside-click, or
+    // navigation. (The old CSS focus-within kept it stuck open after a
+    // click gave the trigger focus.)
+    const isOpen = openMenu === entry.label
     return (
-      <div key={entry.label} className="relative group">
+      <div
+        key={entry.label}
+        className="relative"
+        onMouseEnter={() => setOpenMenu(entry.label)}
+        onMouseLeave={() => setOpenMenu(null)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpenMenu(null)
+        }}
+      >
         <button
           type="button"
-          className="text-[13px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-[#cfc9bd] group-hover:text-white transition-colors inline-flex items-center gap-1"
-          style={{ fontFamily: 'Archivo, sans-serif' }}
+          onClick={() => setOpenMenu(isOpen ? null : entry.label)}
           aria-haspopup="true"
+          aria-expanded={isOpen}
+          className="text-[13px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-[#cfc9bd] hover:text-white transition-colors inline-flex items-center gap-1"
+          style={{ fontFamily: 'Archivo, sans-serif' }}
         >
           {entry.label}
-          <span className="text-[9px]" aria-hidden>▾</span>
+          <span className={`text-[9px] transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden>▾</span>
         </button>
-        <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 top-full pt-3 z-50">
+        <div
+          className={`${isOpen ? 'visible opacity-100' : 'invisible opacity-0'} transition-opacity absolute left-1/2 -translate-x-1/2 top-full pt-3 z-50`}
+        >
           <div className="min-w-[230px] bg-[#141416] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.45)] py-2">
             {entry.groups.map((g, gi) => (
               <div key={g.heading ?? gi} className={gi > 0 ? 'mt-1 pt-1 border-t border-white/10' : ''}>
@@ -164,7 +207,7 @@ export function PublicSiteNav({
                     {g.heading}
                   </div>
                 )}
-                {g.items.map((it) => leaf(it))}
+                {g.items.map((it) => leaf(it, () => setOpenMenu(null)))}
               </div>
             ))}
           </div>
@@ -298,7 +341,7 @@ export function PublicSiteNav({
       {/* ── 3. Nav row (desktop) ───────────────────────────────── */}
       <div className="hidden md:block">
         <div className="max-w-[1480px] mx-auto px-5 h-14 flex items-center justify-center">
-          <nav className="flex items-center gap-8" aria-label="Primary">
+          <nav ref={navRef} className="flex items-center gap-8" aria-label="Primary">
             {PUBLIC_NAV.map((entry) => desktopEntry(entry))}
           </nav>
         </div>
