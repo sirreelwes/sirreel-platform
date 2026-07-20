@@ -36,7 +36,7 @@ export default function StagesPage() {
             Stages
           </div>
           <h1 className="font-black tracking-tight leading-[0.95] text-[40px] sm:text-[56px] md:text-[64px] max-w-[16ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-            Stages built for the shot.
+            SirReel Studio Complex
           </h1>
           <p className="mt-4 max-w-[58ch] text-[#cfc9bd] text-base leading-relaxed">
             A cyc sound stage, an LED volume for virtual production, turnkey standing sets, and a black box — all under one roof at our Lankershim studios. Explore each, then check availability for your dates.
