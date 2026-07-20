@@ -672,7 +672,7 @@ function JobCard({
       className={`block bg-lt-card border border-lt-hairline border-l-4 ${band} rounded-lg px-3 py-2.5 hover:bg-lt-inner transition-colors`}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[9px] font-mono uppercase tracking-wider text-lt-fg3">{j.jobCode}</span>
+        <span className="text-[12.5px] font-mono font-bold tracking-wide text-lt-fg bg-lt-inner border border-lt-hairline rounded px-2 py-0.5 leading-none">{j.jobCode}</span>
         {j.hasDelivery && column !== 'RETURNED' && (
           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500 text-white" title="Delivery — a booking on this job has a delivery address">
             Delivery
