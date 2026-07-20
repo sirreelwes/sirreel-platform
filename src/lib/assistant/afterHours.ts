@@ -28,6 +28,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendSms } from '@/lib/sms/sendSms'
 
 const TEAM_INBOX = 'rentals@sirreel.com'
 const GRACE_DAYS = 1
@@ -367,24 +368,60 @@ export async function fileAfterHoursCallback(input: {
   }
 }
 
-export type EmergencyResult =
-  | { result: 'CONTACTS'; contacts: { name: string; phone: string }[] }
-  | { result: 'NONE' }
+export type AlertResult =
+  | { result: 'ALERTED'; texted: number; oncall: number }
+  | { result: 'NO_ONCALL' }
 
 /**
- * Release on-call emergency contacts — invoked by the assistant ONLY when a
- * caller has declared a genuine emergency. The numbers never enter the AI
- * prompt; they come from here. Every release is audited and alerts the team.
+ * Emergency escalation — invoked by the assistant ONLY when a caller declares a
+ * genuine emergency. We do NOT hand agents' numbers to the caller; instead we
+ * TEXT the on-call agents the caller's request so they can review it and decide
+ * whether to call back. Falls back to an email alert when SMS (Twilio) isn't
+ * configured. Every escalation is audited + emails the team.
  */
-export async function getEmergencyContacts(input: { reason: string; ip: string }): Promise<EmergencyResult> {
-  const users = await prisma.user.findMany({
+export async function alertOnCallTeam(input: {
+  callerName: string
+  callbackNumber: string
+  emergency: string
+  ip: string
+}): Promise<AlertResult> {
+  const agents = await prisma.user.findMany({
     where: { isEmergencyContact: true, isActive: true, emergencyPhone: { not: null } },
     select: { name: true, emergencyPhone: true },
-    orderBy: { name: 'asc' },
   })
-  const contacts = users
-    .map((u) => ({ name: u.name, phone: (u.emergencyPhone ?? '').trim() }))
-    .filter((c) => c.phone)
+  const oncall = agents
+    .map((a) => ({ name: a.name, phone: (a.emergencyPhone ?? '').trim() }))
+    .filter((a) => a.phone)
+
+  const caller = input.callerName?.trim() || 'a caller'
+  const cb = input.callbackNumber?.trim() || 'no number given'
+  const what = (input.emergency || '').trim().slice(0, 400) || '(no details)'
+
+  if (oncall.length === 0) {
+    await notifyTeam('⚠ After-hours emergency — NO on-call contacts set', [
+      `A caller reported an emergency but NO on-call agents are configured in /admin/assistant.`,
+      `Caller: ${caller} · callback: ${cb}`,
+      `Emergency: ${what}`,
+      `IP: ${input.ip}.`,
+    ])
+    return { result: 'NO_ONCALL' }
+  }
+
+  const sms = `SirReel after-hours EMERGENCY. ${caller} (${cb}): "${what}". Call the caller back only if this warrants it.`
+  let texted = 0
+  for (const a of oncall) {
+    const r = await sendSms(a.phone, sms)
+    if (r.ok) texted++
+    else if (!r.skipped) console.error('[after-hours] SMS to', a.name, 'failed:', r.error)
+  }
+
+  // Always email the team as a record + fallback (esp. before SMS is live).
+  await notifyTeam('⚠ After-hours EMERGENCY — on-call alerted', [
+    `Caller: ${caller} · callback: ${cb}`,
+    `Emergency: ${what}`,
+    `On-call: ${oncall.map((a) => a.name).join(', ')}. SMS delivered ${texted}/${oncall.length}${texted === 0 ? ' (SMS not configured — email only)' : ''}.`,
+    `IP: ${input.ip}.`,
+  ])
 
   try {
     await prisma.auditLog.create({
@@ -394,20 +431,15 @@ export async function getEmergencyContacts(input: { reason: string; ip: string }
         action: 'public.emergency_escalation',
         entityType: 'User',
         entityId: 'emergency',
-        oldValues: { reason: (input.reason || '').slice(0, 500) },
-        newValues: { released: contacts.length, at: new Date().toISOString() },
+        oldValues: { caller, callback: cb, emergency: what },
+        newValues: { oncall: oncall.length, texted, at: new Date().toISOString() },
       },
     })
   } catch (err) {
     console.error('[after-hours] emergency audit failed:', err)
   }
-  await notifyTeam('⚠ After-hours EMERGENCY escalation', [
-    `A caller declared an emergency to the site assistant and was given ${contacts.length} on-call number(s).`,
-    `Stated reason: ${input.reason || '(none)'}`,
-    `IP: ${input.ip}.`,
-  ])
 
-  return contacts.length ? { result: 'CONTACTS', contacts } : { result: 'NONE' }
+  return { result: 'ALERTED', texted, oncall: oncall.length }
 }
 
 function escapeHtml(s: string): string {

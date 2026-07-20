@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { ASSISTANT_MODEL } from '@/lib/ai/models'
-import { verifyAndRelease, fileAfterHoursCallback, getEmergencyContacts } from '@/lib/assistant/afterHours'
+import { verifyAndRelease, fileAfterHoursCallback, alertOnCallTeam } from '@/lib/assistant/afterHours'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 export const dynamic = 'force-dynamic'
@@ -48,7 +48,7 @@ AFTER-HOURS ACCESS (lot gate code + vehicle lockbox code) — your most importan
 4. On RELEASED: give the gateCode (the lot gate) and, if present, the lockboxCode with its vehicle name — clearly, once each. If gateCode is null, say the gate code isn't on file and to call ${PUBLIC_CONTACT.phone}. If lockboxHint is NEED_VEHICLE or AMBIGUOUS, ask which unit they're driving (or the VIN last 4) and call the tool again.
 5. On NOT_VERIFIED: do NOT reveal whether any job/vehicle exists or who is on the booking. Say you couldn't verify them and point them to the 24/7 line at ${PUBLIC_CONTACT.phone} — that is the fastest way to reach someone after hours. Do NOT promise that an agent will "reach out," call them back, or respond "ASAP," and NEVER hand out an individual person's phone number. Do NOT offer to file a callback as a routine option. ONLY if the caller clearly states it is a genuine emergency (a safety issue, or a time-critical, on-the-clock production that is blocked right now) may you offer to file a callback with file_callback_request — and even then make clear that after-hours callbacks are not immediate, so ${PUBLIC_CONTACT.phone} is best for anything urgent. If they mention a QR code sticker in the vehicle's glove box, tell them to call the number printed with it.
 
-EMERGENCIES: If — and ONLY if — the caller clearly states a GENUINE emergency (a safety issue, or a blocked, time-critical, on-the-clock production that cannot wait), call provide_emergency_contacts with a short reason and give them the on-call name(s) and number(s) it returns. If it returns none, give them the 24/7 line ${PUBLIC_CONTACT.phone}. NEVER use this for a routine lost code or a general question — those go to the 24/7 line.
+EMERGENCIES: If — and ONLY if — the caller clearly states a GENUINE emergency (a safety issue, or a blocked, time-critical, on-the-clock production that cannot wait): first collect their name, a callback number, and a short description of what's wrong, then call alert_on_call_team with those. On ALERTED, tell them our on-call team has been texted their request and will call back if it warrants one — for immediate help the 24/7 line is ${PUBLIC_CONTACT.phone}. On NO_ONCALL, give them the 24/7 line. NEVER promise a specific callback time and NEVER give out anyone's number. Don't use this for routine lost codes or general questions — those go to the 24/7 line.
 
 STYLE: brief, warm, practical. One question at a time. Never make up policy, pricing, or availability. Anything you can't answer → direct them to the 24/7 line at ${PUBLIC_CONTACT.phone}. Refuse anything unrelated to SirReel.`
 
@@ -83,15 +83,17 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'provide_emergency_contacts',
+    name: 'alert_on_call_team',
     description:
-      "Release SirReel's on-call emergency phone numbers to the caller. Use ONLY when the caller has clearly stated a GENUINE emergency — a safety issue, or a blocked, time-critical, on-the-clock production that cannot wait. NEVER use this for a routine lost code or a general question.",
+      "Text SirReel's on-call agents about a GENUINE emergency so they can review it and decide whether to call the caller back. Use ONLY for a real emergency — a safety issue, or a blocked, time-critical, on-the-clock production that cannot wait. NEVER for a routine lost code or a general question. First collect the caller's name, a callback number, and a short description of the emergency.",
     input_schema: {
       type: 'object' as const,
       properties: {
-        reason: { type: 'string', description: 'Brief description of the stated emergency' },
+        callerName: { type: 'string', description: "The caller's name" },
+        callbackNumber: { type: 'string', description: 'A phone number to reach the caller' },
+        emergency: { type: 'string', description: 'Short description of the emergency' },
       },
-      required: ['reason'],
+      required: ['callerName', 'callbackNumber', 'emergency'],
     },
   },
 ]
@@ -165,10 +167,12 @@ export async function POST(req: NextRequest) {
                   ip,
                 })
               : { ok: false, error: 'missing fields' }
-        } else if (block.name === 'provide_emergency_contacts') {
-          const inp = block.input as { reason?: string }
-          resultPayload = await getEmergencyContacts({
-            reason: inp.reason ? String(inp.reason).slice(0, 500) : '',
+        } else if (block.name === 'alert_on_call_team') {
+          const inp = block.input as { callerName?: string; callbackNumber?: string; emergency?: string }
+          resultPayload = await alertOnCallTeam({
+            callerName: inp.callerName ? String(inp.callerName).slice(0, 200) : '',
+            callbackNumber: inp.callbackNumber ? String(inp.callbackNumber).slice(0, 60) : '',
+            emergency: inp.emergency ? String(inp.emergency).slice(0, 500) : '',
             ip,
           })
         } else {

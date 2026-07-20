@@ -255,9 +255,10 @@ export default function AssistantAdminPage() {
           <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Emergency contacts</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              On-call staff whose numbers the assistant releases <span className="text-zinc-300">only</span> when a caller
-              declares a genuine emergency. Toggle a person on and add their emergency number. Numbers are never shown
-              publicly otherwise, and every release is logged below.
+              On-call staff the assistant <span className="text-zinc-300">texts</span> when a caller declares a genuine
+              emergency — so they can review the request and decide whether to call back. Toggle a person on and add
+              their emergency (cell) number. Numbers are never shown to callers; every alert is logged below.
+              <span className="block mt-1 text-zinc-600">SMS needs Twilio env keys; until then, alerts go out by email.</span>
             </p>
             <div className="mt-3 space-y-2">
               {(data.emergencyContacts || []).map((u) => (
