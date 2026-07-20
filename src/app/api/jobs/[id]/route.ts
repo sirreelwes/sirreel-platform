@@ -43,7 +43,15 @@ export async function GET(
         coiChecks: {
           where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
-          select: { id: true, coverageVerified: true, policyExpiryDate: true, humanDecision: true, createdAt: true },
+          select: {
+            id: true,
+            coverageVerified: true,
+            policyExpiryDate: true,
+            humanDecision: true,
+            source: true,
+            originalFilename: true,
+            createdAt: true,
+          },
         },
         orders: {
           orderBy: { createdAt: 'desc' },

@@ -7,6 +7,7 @@ import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
+import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -156,7 +157,7 @@ interface JobDetail {
   company: { id: string; name: string };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; createdAt: string }>;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; createdAt: string }>;
   orders: JobOrder[];
   bookings: JobBooking[];
   activity: ActivityRow[];
@@ -245,6 +246,7 @@ export default function JobDetailPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [coiModalOpen, setCoiModalOpen] = useState(false);
   // Phase 7 Pass B — inline scope expander. Collapsed by default;
   // click the row to expand the full booked-scope panel.
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -530,7 +532,16 @@ export default function JobDetailPage() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <CopyCoiLinkButton jobId={job.id} variant="dark" />
+            <div className="flex flex-col items-end gap-1.5">
+              <CopyCoiLinkButton jobId={job.id} variant="dark" />
+              <button
+                onClick={() => setCoiModalOpen(true)}
+                className="text-xs font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-2"
+                title="File a signed COI that came in outside the portal (email, broker)"
+              >
+                Upload COI
+              </button>
+            </div>
             {/* Physical return — semantic action, separate from the
                 status lifecycle above. The v1 stand-in for warehouse
                 check-in; mirrors the board's RETURNED column moves. */}
@@ -654,7 +665,7 @@ export default function JobDetailPage() {
           { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length), tone: 'neutral' },
           { href: '#orders', label: 'Orders', value: String(job.orders.length), tone: 'neutral' },
           { href: '#documents', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'pending' ? 'Pending' : '—', tone: agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : 'neutral' },
-          { href: '#documents', label: 'COI', value: coiStatus, tone: coiStatus === 'Verified' ? 'good' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bad' : 'warn' },
+          { href: '#coi', label: 'COI', value: coiStatus, tone: coiStatus === 'Verified' ? 'good' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bad' : 'warn' },
         ].map((t) => {
           const toneCls = t.tone === 'good' ? 'text-emerald-300' : t.tone === 'warn' ? 'text-amber-300' : t.tone === 'bad' ? 'text-rose-300' : 'text-white group-hover:text-amber-300'
           return (
@@ -699,6 +710,69 @@ export default function JobDetailPage() {
                 <div className="mt-1.5 text-[10px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Certificate of Insurance — the compliance record. Client-drop
+          uploads land here via the portal link; offline COIs (email,
+          broker, RentalWorks) are attached with "Upload COI" so HQ stays
+          the source of truth without a re-sign. */}
+      <div id="coi" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm font-semibold text-white">Certificate of Insurance</h2>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              coiStatus === 'Verified' ? 'bg-emerald-500/15 text-emerald-300'
+                : coiStatus === 'Pending' ? 'bg-amber-500/15 text-amber-300'
+                : 'bg-rose-500/15 text-rose-300'
+            }`}>{coiStatus}</span>
+          </div>
+          <button
+            onClick={() => setCoiModalOpen(true)}
+            className="text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + Upload COI
+          </button>
+        </div>
+        {job.coiChecks.length === 0 ? (
+          <div className="text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-4 py-6 text-center">
+            No certificate on file. Upload one the client sent by email or broker, or use
+            <span className="text-zinc-400"> Copy COI link</span> to have them drop it in.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {job.coiChecks.map((c) => {
+              const verified = c.coverageVerified || c.humanDecision === 'APPROVED';
+              const expired = !!c.policyExpiryDate && new Date(c.policyExpiryDate) < new Date();
+              const rowStatus = verified ? (expired ? 'Expired' : 'Verified')
+                : c.humanDecision === 'REJECTED' ? 'Rejected' : 'Pending';
+              const rowTone = rowStatus === 'Verified' ? 'text-emerald-300 bg-emerald-500/10'
+                : rowStatus === 'Pending' ? 'text-amber-300 bg-amber-500/10'
+                : 'text-rose-300 bg-rose-500/10';
+              const src = c.source === 'CLIENT_UPLOAD' ? 'Client upload'
+                : c.source === 'INTERNAL' ? 'Filed by agent' : 'On file';
+              return (
+                <div key={c.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rowTone}`}>{rowStatus}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-white truncate">{c.originalFilename}</div>
+                    <div className="text-[11px] text-zinc-500">
+                      {src} · added {fmtDate(c.createdAt)}
+                      {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}
+                    </div>
+                  </div>
+                  <a
+                    href={`/api/coi/download/${c.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex-shrink-0"
+                  >
+                    View PDF →
+                  </a>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1101,6 +1175,17 @@ export default function JobDetailPage() {
             })}
           </ul>
         </div>
+      )}
+
+      {coiModalOpen && (
+        <UploadCoiModal
+          jobId={job.id}
+          onClose={() => setCoiModalOpen(false)}
+          onUploaded={() => {
+            setCoiModalOpen(false);
+            load();
+          }}
+        />
       )}
     </div>
   );
