@@ -53,6 +53,30 @@ export async function GET(
             createdAt: true,
           },
         },
+        // Job-level agreement coverage — a job is attached as an addendum
+        // to an on-file (often annual) master. This is the job's rental /
+        // stage agreement truth, separate from the order-native flow.
+        agreementAddenda: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            note: true,
+            addendumFileUrl: true,
+            createdAt: true,
+            companyAgreement: {
+              select: {
+                id: true,
+                contractType: true,
+                title: true,
+                isAnnual: true,
+                effectiveDate: true,
+                expiryDate: true,
+                originalFilename: true,
+              },
+            },
+          },
+        },
         orders: {
           orderBy: { createdAt: 'desc' },
           select: {

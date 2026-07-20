@@ -490,6 +490,7 @@ model Company {
   jobs            Job[]
   contractReviews ContractReview[]
   coiChecks       CoiCheck[]
+  agreements      CompanyAgreement[]
   inquiries       Inquiry[]
   inquiryCaptures InquiryCapture[] @relation("CaptureCompany")
   outreachActivities OutreachActivity[] @relation("CompanyOutreach")
@@ -2019,6 +2020,8 @@ model User {
   changeDecisionsDecided  ReviewChangeDecision[] @relation("ChangeDecisionDecider")
   uploadedCoiChecks       CoiCheck[]       @relation("CoiCheckUploader")
   decidedCoiChecks        CoiCheck[]       @relation("CoiCheckDecider")
+  uploadedCompanyAgreements CompanyAgreement[] @relation("CompanyAgreementUploader")
+  addedJobAgreementAddenda  JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
   reviewClauseMessages    ReviewClauseMessage[] @relation("ReviewClauseMessageAuthor")
   assignedInquiries       Inquiry[]        @relation("InquiryAssignedTo")
 
@@ -3667,6 +3670,7 @@ model Job {
   jobContacts JobContact[]
   contractReviews ContractReview[]
   coiChecks       CoiCheck[]
+  agreementAddenda JobAgreementAddendum[]
   fromInquiry     Inquiry?         @relation("ConvertedFromInquiry")
 
   @@index([companyId])
@@ -4280,6 +4284,85 @@ model CoiCheck {
   @@index([humanDecision])
   @@index([policyExpiryDate])
   @@map("sr_coi_checks")
+}
+
+// A rental/stage agreement ON FILE — the executed master document. Often
+// ANNUAL and shared across many of a company's jobs (Wes, Jul 2026:
+// "sometimes we have annual rental agreements"). Filed once at the company
+// level; individual jobs are attached to it as addenda (see
+// JobAgreementAddendum). The order-native SignedAgreement flow (portal
+// sign / review / counter) is separate and untouched — this is the
+// job-level truth for whether a job is covered.
+model CompanyAgreement {
+  id        String  @id @default(uuid())
+  companyId String  @map("company_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractType ContractType @default(RENTAL_AGREEMENT) @map("contract_type")
+  title        String? // e.g. "2026 Annual Rental Agreement"
+
+  fileKey          String @map("file_key")
+  fileUrl          String @map("file_url")
+  originalFilename String @map("original_filename")
+  fileSize         Int    @map("file_size")
+  mimeType         String @map("mime_type")
+
+  // Annual coverage window. isAnnual=false is a one-off master a single
+  // job attaches to; annual masters carry effective/expiry dates.
+  isAnnual      Boolean   @default(false) @map("is_annual")
+  effectiveDate DateTime? @map("effective_date")
+  expiryDate    DateTime? @map("expiry_date")
+
+  signerName String?   @map("signer_name")
+  signedAt   DateTime? @map("signed_at")
+  note       String?   @db.Text
+
+  source       String? // INTERNAL
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("CompanyAgreementUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  addenda JobAgreementAddendum[]
+
+  @@index([companyId])
+  @@index([contractType])
+  @@index([deletedAt])
+  @@map("sr_company_agreements")
+}
+
+// Attaches ONE job to a CompanyAgreement as an addendum — "add the job to
+// that agreement as an addendum" (Wes, Jul 2026). Manual, per job. The
+// linkage alone means the job is covered; an optional signed addendum page
+// (the doc that formally adds this job) can be attached too.
+model JobAgreementAddendum {
+  id                 String           @id @default(uuid())
+  jobId              String           @map("job_id")
+  companyAgreementId String           @map("company_agreement_id")
+  job                Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  companyAgreement   CompanyAgreement @relation(fields: [companyAgreementId], references: [id], onDelete: Cascade)
+
+  // Optional signed addendum page that adds THIS job to the master.
+  addendumFileKey  String? @map("addendum_file_key")
+  addendumFileUrl  String? @map("addendum_file_url")
+  addendumFilename String? @map("addendum_filename")
+  addendumFileSize Int?    @map("addendum_file_size")
+
+  note      String?  @db.Text
+  addedById String?  @map("added_by_id")
+  addedBy   User?    @relation("JobAgreementAddendumAddedBy", fields: [addedById], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([jobId, companyAgreementId])
+  @@index([jobId])
+  @@index([companyAgreementId])
+  @@index([deletedAt])
+  @@map("sr_job_agreement_addenda")
 }
 
 // ============================================================

@@ -8,7 +8,7 @@ import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
-import { AttachSignedAgreementModal } from '@/components/agreements/AttachSignedAgreementModal';
+import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -95,6 +95,22 @@ interface OrderSignedAgreement {
   updatedAt: string;
 }
 
+interface JobAgreementAddendum {
+  id: string;
+  note: string | null;
+  addendumFileUrl: string | null;
+  createdAt: string;
+  companyAgreement: {
+    id: string;
+    contractType: string;
+    title: string | null;
+    isAnnual: boolean;
+    effectiveDate: string | null;
+    expiryDate: string | null;
+    originalFilename: string;
+  };
+}
+
 interface OrderInvoice {
   id: string;
   invoiceNumber: string;
@@ -160,6 +176,7 @@ interface JobDetail {
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
   coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; createdAt: string }>;
+  agreementAddenda: JobAgreementAddendum[];
   orders: JobOrder[];
   bookings: JobBooking[];
   activity: ActivityRow[];
@@ -249,7 +266,7 @@ export default function JobDetailPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
-  const [attachAgreementFor, setAttachAgreementFor] = useState<{ orderId: string; orderNumber: string } | null>(null);
+  const [agreementModalOpen, setAgreementModalOpen] = useState(false);
   // Phase 7 Pass B — inline scope expander. Collapsed by default;
   // click the row to expand the full booked-scope panel.
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -392,12 +409,30 @@ export default function JobDetailPage() {
   const stageAgreement = liveOrders
     .flatMap((o) => o.signedAgreements)
     .find((a) => a.contractType === 'STAGE_CONTRACT');
+  // Job-level agreement coverage takes precedence: a job attached to an
+  // on-file (often annual) master reads "on file" regardless of orders.
+  // An expired annual window is surfaced as its own state.
+  const now = new Date();
+  const rentalAddendum = job.agreementAddenda.find(
+    (a) => a.companyAgreement.contractType === 'RENTAL_AGREEMENT',
+  );
+  const stageAddendum = job.agreementAddenda.find(
+    (a) => a.companyAgreement.contractType === 'STAGE_CONTRACT',
+  );
+  const isAnnualExpired = (a?: JobAgreementAddendum) =>
+    !!a?.companyAgreement.isAnnual &&
+    !!a.companyAgreement.expiryDate &&
+    new Date(a.companyAgreement.expiryDate) < now;
   const agreementStatus =
-    rentalAgreement?.status === 'SIGNED_BASELINE' || rentalAgreement?.status === 'SIGNED_NEGOTIATED'
-      ? 'signed'
-      : rentalAgreement
-        ? 'pending'
-        : 'none';
+    rentalAddendum
+      ? isAnnualExpired(rentalAddendum)
+        ? 'expired'
+        : 'signed'
+      : rentalAgreement?.status === 'SIGNED_BASELINE' || rentalAgreement?.status === 'SIGNED_NEGOTIATED'
+        ? 'signed'
+        : rentalAgreement
+          ? 'pending'
+          : 'none';
   // Invoices: sum of balanceDue across active (non-VOID) RENTAL + LD invoices.
   const liveInvoices = liveOrders.flatMap((o) => o.invoices).filter((i) => i.status !== 'VOID');
   const totalBalanceDue = liveInvoices.reduce((s, i) => s + i.balanceDue, 0);
@@ -667,7 +702,7 @@ export default function JobDetailPage() {
         {[
           { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length), tone: 'neutral' },
           { href: '#orders', label: 'Orders', value: String(job.orders.length), tone: 'neutral' },
-          { href: '#documents', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'pending' ? 'Pending' : '—', tone: agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : 'neutral' },
+          { href: '#agreement', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : '—', tone: agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : agreementStatus === 'expired' ? 'bad' : 'neutral' },
           { href: '#coi', label: 'COI', value: coiStatus, tone: coiStatus === 'Verified' ? 'good' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bad' : 'warn' },
         ].map((t) => {
           const toneCls = t.tone === 'good' ? 'text-emerald-300' : t.tone === 'warn' ? 'text-amber-300' : t.tone === 'bad' ? 'text-rose-300' : 'text-white group-hover:text-amber-300'
@@ -773,6 +808,80 @@ export default function JobDetailPage() {
                   >
                     View PDF →
                   </a>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Rental / stage agreement — job-level coverage. A job is attached
+          as an addendum to an on-file (often annual) master agreement. */}
+      <div id="agreement" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm font-semibold text-white">Rental &amp; Stage Agreement</h2>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              agreementStatus === 'signed' ? 'bg-emerald-500/15 text-emerald-300'
+                : agreementStatus === 'pending' ? 'bg-amber-500/15 text-amber-300'
+                : agreementStatus === 'expired' ? 'bg-rose-500/15 text-rose-300'
+                : 'bg-zinc-700/40 text-zinc-400'
+            }`}>{agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}</span>
+          </div>
+          <button
+            onClick={() => setAgreementModalOpen(true)}
+            className="text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + Link agreement
+          </button>
+        </div>
+        {job.agreementAddenda.length === 0 ? (
+          <div className="text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-4 py-6 text-center">
+            This job isn&rsquo;t linked to an agreement yet. Attach it to an on-file rental / stage
+            agreement (or file a new one) so it reads covered.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {job.agreementAddenda.map((ad) => {
+              const ca = ad.companyAgreement;
+              const expired = ca.isAnnual && ca.expiryDate && new Date(ca.expiryDate) < new Date();
+              return (
+                <div key={ad.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${expired ? 'text-rose-300 bg-rose-500/10' : 'text-emerald-300 bg-emerald-500/10'}`}>
+                      {expired ? 'Expired' : 'On file'}
+                    </span>
+                    <span className="text-sm text-white font-medium">{ca.title || ca.contractType.replace(/_/g, ' ')}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">{ca.contractType.replace(/_/g, ' ')}</span>
+                    {ca.isAnnual && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 uppercase tracking-wider">Annual</span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    added {fmtDate(ad.createdAt)}
+                    {ca.isAnnual && ca.effectiveDate && <> · covers {fmtDate(ca.effectiveDate)}{ca.expiryDate ? ` – ${fmtDate(ca.expiryDate)}` : ''}</>}
+                    {ad.note && <> · {ad.note}</>}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <a
+                      href={`/api/agreements/company/${ca.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-amber-400 hover:text-amber-300"
+                    >
+                      View agreement →
+                    </a>
+                    {ad.addendumFileUrl && (
+                      <a
+                        href={`/api/agreements/addendum/${ad.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-semibold text-amber-400 hover:text-amber-300"
+                      >
+                        View addendum →
+                      </a>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1056,22 +1165,12 @@ export default function JobDetailPage() {
                         </div>
                       )}
 
-                      {/* Signed agreements — always shown so an order with
-                          no agreement row still offers the offline attach. */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold">Agreements</div>
-                          <button
-                            onClick={() => setAttachAgreementFor({ orderId: o.id, orderNumber: o.orderNumber })}
-                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
-                            title="Attach an agreement signed outside the portal (email, broker, wet signature)"
-                          >
-                            + Attach signed
-                          </button>
-                        </div>
-                        {o.signedAgreements.length === 0 ? (
-                          <div className="text-[11px] text-zinc-500">No agreement on file. Attach a signed copy, or send the portal link from the order.</div>
-                        ) : (
+                      {/* Order-native agreements (portal-sign flow). The
+                          job's coverage lives in the job-level Agreement
+                          section; this is just per-order signing state. */}
+                      {o.signedAgreements.length > 0 && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Order agreements</div>
                           <ul className="text-xs text-zinc-300 space-y-0.5">
                             {o.signedAgreements.map((a) => {
                               const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
@@ -1104,8 +1203,8 @@ export default function JobDetailPage() {
                               );
                             })}
                           </ul>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {/* Invoices */}
                       {o.invoices.length > 0 && (
@@ -1216,13 +1315,13 @@ export default function JobDetailPage() {
         />
       )}
 
-      {attachAgreementFor && (
-        <AttachSignedAgreementModal
-          orderId={attachAgreementFor.orderId}
-          orderNumber={attachAgreementFor.orderNumber}
-          onClose={() => setAttachAgreementFor(null)}
-          onAttached={() => {
-            setAttachAgreementFor(null);
+      {agreementModalOpen && (
+        <LinkJobAgreementModal
+          jobId={job.id}
+          companyName={job.company?.name || 'this company'}
+          onClose={() => setAgreementModalOpen(false)}
+          onDone={() => {
+            setAgreementModalOpen(false);
             load();
           }}
         />
