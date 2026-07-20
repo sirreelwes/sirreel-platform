@@ -42,6 +42,7 @@ export const STUDIO_AMENITIES: { heading: string; items: string[] }[] = [
 export const STAGES: StageArea[] = [
   {
     slug: 'lankershim-sound-stage',
+    photo: '/images/stages/sound-stage.jpg',
     name: 'Lankershim Sound Stage',
     eyebrow: 'Sound Stage',
     idealFor: 'Film, TV & commercial shoots',
@@ -59,6 +60,7 @@ export const STAGES: StageArea[] = [
   },
   {
     slug: 'led-volume-stage',
+    photo: '/images/stages/led-volume.jpg',
     name: 'LED / Volume Stage',
     eyebrow: 'Virtual Production',
     idealFor: 'Large photo shoots, commercials, podcasts & music videos',
@@ -75,6 +77,7 @@ export const STAGES: StageArea[] = [
   },
   {
     slug: 'standing-sets',
+    photo: '/images/stages/standing-sets.jpg',
     name: 'Standing Sets',
     eyebrow: 'Turnkey Sets',
     idealFor: 'TV shows, film shoots & commercials',
@@ -91,6 +94,7 @@ export const STAGES: StageArea[] = [
   },
   {
     slug: 'black-box',
+    photo: '/images/stages/black-box.jpg',
     name: 'Black Box',
     eyebrow: 'Flexible Stage',
     idealFor: 'Tabletop, product & controlled-lighting work',
