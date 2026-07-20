@@ -108,7 +108,9 @@ export const PUBLIC_NAV: NavEntry[] = [
           // Interactive review page (rendered from contractClauses.ts) with its
           // own source-matched "Download PDF" — replaced the static-PDF link.
           { label: 'Rental Agreement', href: '/rental-agreement', mode: 'link' },
-          { label: 'Studio Contract', href: '/api/public/forms/studio-contract', mode: 'download', external: true },
+          // Interactive review page (rendered from stageContractClauses.ts) with
+          // its own source-matched "Download PDF" — replaced the static-PDF link.
+          { label: 'Studio Contract', href: '/stage-contract', mode: 'link' },
         ],
       },
       {

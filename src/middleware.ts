@@ -40,7 +40,11 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/home',
   '/contact',
   '/vehicles',
+  '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
+  '/standing-sets',    // public standing-sets pages (STUDIOS nav + home tiles)
+  '/payment-info',     // public "request payment info" page (FORMS → Billing)
   '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
+  '/stage-contract',   // public stage-contract review page (FORMS → Studio Contract)
   '/order/supplies',
   '/api/public/',
   '/_next/',
@@ -63,7 +67,11 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/home',             // public Home page (linked from the shared public nav)
   '/contact',          // public contact band (nav Contact + quote/payment deep-links)
   '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
+  '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
+  '/standing-sets',    // public standing-sets pages (STUDIOS nav + home tiles)
+  '/payment-info',     // public "request payment info" page (FORMS → Billing)
   '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
+  '/stage-contract',   // public stage-contract review page (FORMS → Studio Contract)
   '/api/public/',      // catalog / vehicle-categories / supply-request
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights
