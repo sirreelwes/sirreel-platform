@@ -8,6 +8,7 @@ import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
+import { AttachSignedAgreementModal } from '@/components/agreements/AttachSignedAgreementModal';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -90,6 +91,7 @@ interface OrderSignedAgreement {
   status: string;
   signedAt: string | null;
   signerName: string | null;
+  signedDocumentUrl: string | null;
   updatedAt: string;
 }
 
@@ -247,6 +249,7 @@ export default function JobDetailPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
+  const [attachAgreementFor, setAttachAgreementFor] = useState<{ orderId: string; orderNumber: string } | null>(null);
   // Phase 7 Pass B — inline scope expander. Collapsed by default;
   // click the row to expand the full booked-scope panel.
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -1053,31 +1056,56 @@ export default function JobDetailPage() {
                         </div>
                       )}
 
-                      {/* Signed agreements */}
-                      {o.signedAgreements.length > 0 && (
-                        <div>
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Agreements</div>
-                          <ul className="text-xs text-zinc-300 space-y-0.5">
-                            {o.signedAgreements.map((a) => (
-                              <li key={a.id} className="flex gap-2">
-                                <span className="text-zinc-500 min-w-[1rem]">·</span>
-                                <span>
-                                  <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
-                                  <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-300">
-                                    {a.status.replace(/_/g, ' ')}
-                                  </span>
-                                  {a.signedAt && (
-                                    <span className="ml-2 text-zinc-500">
-                                      signed {fmtDate(a.signedAt)}
-                                      {a.signerName ? ` · ${a.signerName}` : ''}
-                                    </span>
-                                  )}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
+                      {/* Signed agreements — always shown so an order with
+                          no agreement row still offers the offline attach. */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold">Agreements</div>
+                          <button
+                            onClick={() => setAttachAgreementFor({ orderId: o.id, orderNumber: o.orderNumber })}
+                            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                            title="Attach an agreement signed outside the portal (email, broker, wet signature)"
+                          >
+                            + Attach signed
+                          </button>
                         </div>
-                      )}
+                        {o.signedAgreements.length === 0 ? (
+                          <div className="text-[11px] text-zinc-500">No agreement on file. Attach a signed copy, or send the portal link from the order.</div>
+                        ) : (
+                          <ul className="text-xs text-zinc-300 space-y-0.5">
+                            {o.signedAgreements.map((a) => {
+                              const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
+                              return (
+                                <li key={a.id} className="flex gap-2">
+                                  <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                  <span className="flex-1">
+                                    <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
+                                    <span className={`ml-2 text-[10px] uppercase tracking-wider ${signed ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                      {a.status.replace(/_/g, ' ')}
+                                    </span>
+                                    {a.signedAt && (
+                                      <span className="ml-2 text-zinc-500">
+                                        signed {fmtDate(a.signedAt)}
+                                        {a.signerName ? ` · ${a.signerName}` : ''}
+                                      </span>
+                                    )}
+                                    {a.signedDocumentUrl && (
+                                      <a
+                                        href={`/api/orders/${o.id}/agreement/pdf?type=${a.contractType}&doc=signed`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-2 text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                                      >
+                                        View signed PDF →
+                                      </a>
+                                    )}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
 
                       {/* Invoices */}
                       {o.invoices.length > 0 && (
@@ -1183,6 +1211,18 @@ export default function JobDetailPage() {
           onClose={() => setCoiModalOpen(false)}
           onUploaded={() => {
             setCoiModalOpen(false);
+            load();
+          }}
+        />
+      )}
+
+      {attachAgreementFor && (
+        <AttachSignedAgreementModal
+          orderId={attachAgreementFor.orderId}
+          orderNumber={attachAgreementFor.orderNumber}
+          onClose={() => setAttachAgreementFor(null)}
+          onAttached={() => {
+            setAttachAgreementFor(null);
             load();
           }}
         />

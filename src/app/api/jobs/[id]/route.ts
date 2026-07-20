@@ -102,6 +102,7 @@ export async function GET(
                 status: true,
                 signedAt: true,
                 signerName: true,
+                signedDocumentUrl: true,
                 updatedAt: true,
               },
             },
