@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           jobCode: true,
+          assistantAuthCode: true,
           coiChecks: {
             where: { deletedAt: null },
             orderBy: { createdAt: 'desc' },
@@ -173,5 +174,7 @@ export async function GET(req: NextRequest) {
     unionStatus: booking.unionStatus,
     balanceDue,
     checkout,
+    // 5-digit after-hours access code clients read to the assistant to verify.
+    accessCode: booking.job?.assistantAuthCode ?? null,
   })
 }
