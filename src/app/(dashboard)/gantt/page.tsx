@@ -442,6 +442,14 @@ export default function GanttPage() {
   const defaultAnchor = useMemo(() => addDays(today, -3), [])
   const [anchorDate, setAnchorDate] = useState<string>(defaultAnchor)
 
+  // Deep-link: /gantt?date=YYYY-MM-DD centers the window near that date
+  // (used by the job page's reserved-asset links). Runs once on mount.
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get('date')
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setAnchorDate(addDays(d, -3))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const totalDays = weeks * 7
   const dayWidth = weeks <= 2 ? 48 : weeks <= 3 ? 36 : 28
   // Top task lane: chip height + per-day stack slot pitch (chip + gap).

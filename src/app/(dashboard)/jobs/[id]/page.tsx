@@ -222,6 +222,13 @@ const INQUIRY_SOURCE_BADGE: Record<'MANUAL' | 'GMAIL' | 'WEB_FORM', string> = {
   WEB_FORM: 'bg-sky-950/40 text-sky-300 border-sky-900',
 };
 
+const ASSIGN_BADGE: Record<string, string> = {
+  ASSIGNED:    'bg-sky-950/40 text-sky-300 border-sky-900',
+  CHECKED_OUT: 'bg-amber-950/40 text-amber-300 border-amber-900',
+  RETURNED:    'bg-emerald-950/40 text-emerald-300 border-emerald-900',
+  SWAPPED:     'bg-zinc-800 text-zinc-400 border-zinc-700',
+};
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -398,6 +405,27 @@ export default function JobDetailPage() {
     ['BOOKED', 'LOADED_READY', 'ON_JOB', 'RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(o.status),
   ).length;
 
+  // Unique reserved units across this job's live bookings — for the
+  // Reserved Assets section + quick-nav tile. Each links to its reservation
+  // on the calendar.
+  const reservedAssets = (() => {
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string }>()
+    for (const b of job.bookings) {
+      if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
+      for (const it of b.items) {
+        for (const a of it.assignments) {
+          if (!seen.has(a.asset.id)) {
+            seen.set(a.asset.id, {
+              assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
+              startDate: a.startDate, endDate: a.endDate, status: a.status,
+            })
+          }
+        }
+      }
+    }
+    return [...seen.values()].sort((x, y) => x.unitName.localeCompare(y.unitName, undefined, { numeric: true }))
+  })()
+
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <button
@@ -541,7 +569,7 @@ export default function JobDetailPage() {
             Hidden when the job has zero non-cancelled orders — the
             chips read as garbage during the QUOTED-no-order phase. */}
         {liveOrders.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
+          <div id="documents" className="scroll-mt-4 mt-4 flex flex-wrap items-center gap-2 text-[11px]">
             <RollupChip
               label="Rental agreement"
               value={
@@ -606,6 +634,58 @@ export default function JobDetailPage() {
           </div>
           {profileSaving && <span className="text-[10px] text-zinc-500">Saving…</span>}
         </div>
+      </div>
+
+      {/* Quick access — clickable jump tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length) },
+          { href: '#orders', label: 'Orders', value: String(job.orders.length) },
+          { href: '#documents', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'Signed' : agreementStatus === 'pending' ? 'Pending' : '—' },
+          { href: '#documents', label: 'COI', value: 'Link' },
+        ].map((t) => (
+          <a
+            key={t.label}
+            href={t.href}
+            className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors"
+          >
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t.label}</div>
+            <div className="mt-1.5 text-2xl font-bold text-white group-hover:text-amber-300 transition-colors leading-none">{t.value}</div>
+            <div className="mt-2 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Jump ↓</div>
+          </a>
+        ))}
+      </div>
+
+      {/* Reserved assets → each opens its reservation on the calendar */}
+      <div id="reserved-assets" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Reserved assets</h2>
+          <span className="text-[11px] text-zinc-500">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
+        </div>
+        {reservedAssets.length === 0 ? (
+          <div className="mt-3 text-sm text-zinc-500">No units reserved on this job yet.</div>
+        ) : (
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {reservedAssets.map((a) => (
+              <Link
+                key={a.assetId}
+                href={`/gantt?date=${a.startDate.slice(0, 10)}`}
+                title="Open this reservation on the calendar"
+                className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
+                  <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
+                    {a.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-zinc-500 truncate">{a.category}</div>
+                <div className="mt-1.5 text-[11px] text-zinc-400 font-mono">{fmtDate(a.startDate)} – {fmtDate(a.endDate)}</div>
+                <div className="mt-1.5 text-[10px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Contacts — Phase 7 Pass A: surface phone (already fetched,
@@ -759,7 +839,7 @@ export default function JobDetailPage() {
           per-vehicle BookingAssignments. Affordances (edit, send, sign,
           invoice, payment) live on /orders/[id] — this is read-only
           rollup for the live engagement. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div id="orders" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-white">Orders</h2>
           <span className="text-xs text-zinc-500">{job.orders.length} total · click to expand scope</span>
