@@ -3,8 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
+import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 
 export const dynamic = 'force-dynamic'
+// AI review can take a beat; give it headroom past the default function cap.
+export const maxDuration = 60
 
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB — matches the client COI drop.
 
@@ -90,6 +93,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Upload failed while saving. Please try again.' }, { status: 502 })
   }
 
+  // Run the SAME AI COI review the client-drop runs, so an agent uploading
+  // here gets the identical analysis (risk level, pass/fail, extracted
+  // expiry). Best-effort — never blocks the file from being filed.
+  const ai = await runCoiAiReview(buffer, 'application/pdf')
+  const aiExpiry =
+    typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
+      ? new Date(ai.policyExpiryDate)
+      : null
+  // Agent-entered expiry wins; otherwise fall back to what the AI extracted.
+  const effectiveExpiry = policyExpiryDate ?? aiExpiry
+
   const coi = await prisma.coiCheck.create({
     data: {
       fileKey: stored.blobKey,
@@ -101,11 +115,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       companyId: job.companyId ?? null,
       source: 'INTERNAL',
       uploadedById: uploader?.id ?? null,
-      policyExpiryDate,
-      additionalInsured,
+      policyExpiryDate: effectiveExpiry,
+      additionalInsured: additionalInsured || ai.additionalInsured === true,
       coverageVerified,
-      // Marking coverage verified at upload records the agent's human
-      // sign-off, so the job reads Verified without a second review pass.
+      aiResponse: ai as object,
+      aiRiskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
+      aiRecommendation: ai.overallPass ? 'accept' : 'review',
+      // If the agent explicitly verified at upload, record the human
+      // sign-off so the job reads Verified. Otherwise it stays PENDING with
+      // the AI review attached — exactly like the COI review queue.
       ...(coverageVerified && {
         humanDecision: 'APPROVED' as const,
         humanDecisionById: uploader?.id ?? null,
@@ -117,5 +135,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { id: true },
   })
 
-  return NextResponse.json({ ok: true, coiId: coi.id })
+  return NextResponse.json({
+    ok: true,
+    coiId: coi.id,
+    review: {
+      overallPass: ai.overallPass === true,
+      riskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
+      notes: typeof ai.notes === 'string' ? ai.notes : null,
+    },
+  })
 }

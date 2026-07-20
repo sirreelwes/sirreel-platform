@@ -50,6 +50,8 @@ export async function GET(
             humanDecision: true,
             source: true,
             originalFilename: true,
+            aiRiskLevel: true,
+            aiRecommendation: true,
             createdAt: true,
           },
         },

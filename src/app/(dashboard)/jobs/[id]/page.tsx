@@ -175,7 +175,7 @@ interface JobDetail {
   company: { id: string; name: string };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; createdAt: string }>;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; createdAt: string }>;
   agreementAddenda: JobAgreementAddendum[];
   orders: JobOrder[];
   bookings: JobBooking[];
@@ -794,7 +794,21 @@ export default function JobDetailPage() {
                 <div key={c.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rowTone}`}>{rowStatus}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm text-white truncate">{c.originalFilename}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white truncate">{c.originalFilename}</span>
+                      {c.aiRiskLevel && (
+                        <span
+                          title={`AI review: ${c.aiRecommendation === 'accept' ? 'passes checks' : 'needs review'}`}
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${
+                            c.aiRiskLevel === 'low' ? 'bg-emerald-500/10 text-emerald-300'
+                              : c.aiRiskLevel === 'high' ? 'bg-rose-500/10 text-rose-300'
+                              : 'bg-amber-500/10 text-amber-300'
+                          }`}
+                        >
+                          AI · {c.aiRiskLevel} risk
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-zinc-500">
                       {src} · added {fmtDate(c.createdAt)}
                       {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}

@@ -20,11 +20,12 @@ export function UploadCoiModal({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [expiry, setExpiry] = useState('');
-  const [verified, setVerified] = useState(true);
+  const [verified, setVerified] = useState(false);
   const [additionalInsured, setAdditionalInsured] = useState(false);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ overallPass: boolean; riskLevel: string | null; notes: string | null } | null>(null);
 
   const submit = async () => {
     if (!file) {
@@ -47,7 +48,9 @@ export function UploadCoiModal({
         setSaving(false);
         return;
       }
-      onUploaded();
+      // Show the AI review result before returning to the page.
+      setResult(data.review ?? { overallPass: false, riskLevel: null, notes: null });
+      setSaving(false);
     } catch (e) {
       setError(String(e));
       setSaving(false);
@@ -71,83 +74,117 @@ export function UploadCoiModal({
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
         </div>
 
-        <div className="space-y-4 px-5 py-4">
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Certificate PDF
-            </label>
-            <FileDropzone file={file} onFile={setFile} />
-          </div>
+        {result ? (
+          <>
+            <div className="space-y-4 px-5 py-5">
+              <div className="flex items-center gap-2.5">
+                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${result.overallPass ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                  {result.overallPass ? 'AI: Passes checks' : 'AI: Needs review'}
+                </span>
+                {result.riskLevel && (
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                    result.riskLevel === 'low' ? 'bg-emerald-500/15 text-emerald-300'
+                      : result.riskLevel === 'high' ? 'bg-rose-500/15 text-rose-300'
+                      : 'bg-amber-500/15 text-amber-300'
+                  }`}>{result.riskLevel} risk</span>
+                )}
+              </div>
+              {result.notes && <p className="text-sm text-zinc-300 leading-relaxed">{result.notes}</p>}
+              <p className="text-[11px] text-zinc-500">
+                Filed on the job. {verified ? 'Marked verified.' : 'Left in the review queue for a human decision.'} The full
+                breakdown is available in COI review.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
+              <button
+                onClick={onUploaded}
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-500"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-4 px-5 py-4">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  Certificate PDF
+                </label>
+                <FileDropzone file={file} onFile={setFile} />
+              </div>
 
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Policy expiry <span className="text-zinc-600">(optional)</span>
-            </label>
-            <input
-              type="date"
-              value={expiry}
-              onChange={(e) => setExpiry(e.target.value)}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
-            />
-          </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  Policy expiry <span className="text-zinc-600">(optional — AI extracts it too)</span>
+                </label>
+                <input
+                  type="date"
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
+                />
+              </div>
 
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={verified}
-              onChange={(e) => setVerified(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-amber-600"
-            />
-            <span className="text-sm text-zinc-300">
-              Coverage verified
-              <span className="block text-[11px] text-zinc-500">
-                I&rsquo;ve reviewed this certificate and it meets SirReel&rsquo;s requirements. Marks the job&rsquo;s COI status Verified.
-              </span>
-            </span>
-          </label>
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={verified}
+                  onChange={(e) => setVerified(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-amber-600"
+                />
+                <span className="text-sm text-zinc-300">
+                  Mark verified now (skip review queue)
+                  <span className="block text-[11px] text-zinc-500">
+                    Leave unchecked to file it and let the AI review + a human decision run, just like COI review. Check only to sign off immediately.
+                  </span>
+                </span>
+              </label>
 
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <input
-              type="checkbox"
-              checked={additionalInsured}
-              onChange={(e) => setAdditionalInsured(e.target.checked)}
-              className="h-4 w-4 accent-amber-600"
-            />
-            <span className="text-sm text-zinc-300">SirReel named as Additional Insured</span>
-          </label>
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={additionalInsured}
+                  onChange={(e) => setAdditionalInsured(e.target.checked)}
+                  className="h-4 w-4 accent-amber-600"
+                />
+                <span className="text-sm text-zinc-300">SirReel named as Additional Insured</span>
+              </label>
 
-          <div>
-            <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-              Note <span className="text-zinc-600">(optional)</span>
-            </label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              placeholder="e.g. Emailed by broker 7/18 — GL + auto confirmed"
-              className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
-            />
-          </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  Note <span className="text-zinc-600">(optional)</span>
+                </label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Emailed by broker 7/18 — GL + auto confirmed"
+                  className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+                />
+              </div>
 
-          {error && <p className="text-sm text-rose-400">{error}</p>}
-        </div>
+              {error && <p className="text-sm text-rose-400">{error}</p>}
+            </div>
 
-        <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving}
-            className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
-          >
-            {saving ? 'Uploading…' : 'Upload COI'}
-          </button>
-        </div>
+            <div className="flex justify-end gap-2 border-t border-zinc-800 px-5 py-4">
+              <button
+                onClick={onClose}
+                disabled={saving}
+                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submit}
+                disabled={saving}
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+              >
+                {saving ? 'Reviewing…' : 'Upload & review'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
