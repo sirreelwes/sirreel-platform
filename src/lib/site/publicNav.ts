@@ -53,8 +53,6 @@ export interface NavEntry {
   groups?: NavGroup[]
 }
 
-const comingSoon = (label: string): NavLeaf => ({ label, mode: 'coming-soon' })
-
 export const PUBLIC_NAV: NavEntry[] = [
   { label: 'Home', href: '/home' },
 
@@ -62,11 +60,10 @@ export const PUBLIC_NAV: NavEntry[] = [
     label: 'Studios',
     groups: [
       {
-        // Stage pages are a future build — structure ready to link later.
         items: [
-          comingSoon('Lankershim Stage'),
-          comingSoon('Standing Sets'),
-          comingSoon('LED Wall'),
+          { label: 'Stages', href: '/stages', mode: 'link' },
+          { label: 'Standing Sets', href: '/standing-sets', mode: 'link' },
+          { label: 'LED / Volume Stage', href: '/stages/led-volume-stage', mode: 'link' },
         ],
       },
     ],
