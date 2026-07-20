@@ -54,6 +54,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/sirreel-logo',
   '/s-logo',
   '/full-logo',
+  '/images/',          // static marketing images (stages heroes, etc.)
   '/public/',
   '/api/health',
 ]
@@ -80,6 +81,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/sirreel-logo',
   '/s-logo',
   '/full-logo',
+  '/images/',          // static marketing images (stages heroes, etc.)
   '/public/',
   '/api/health',
 ]

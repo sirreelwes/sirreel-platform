@@ -272,16 +272,24 @@ export function PublicSiteNav({
     </Link>
   )
 
-  const socials = (size = '') => (
-    <div className={`flex items-center gap-3 ${size}`}>
-      <a href={PUBLIC_SOCIAL.instagram} aria-label="Instagram" target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
-        <InstagramIcon />
-      </a>
-      <a href={PUBLIC_SOCIAL.tiktok} aria-label="TikTok" target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
-        <TikTokIcon />
-      </a>
-    </div>
-  )
+  const socials = (size = '') => {
+    // Only render icons whose URL is actually set (not the '#' placeholder)
+    // — hides dead social links until the real profiles are wired in.
+    const items = [
+      { href: PUBLIC_SOCIAL.instagram, label: 'Instagram', Icon: InstagramIcon },
+      { href: PUBLIC_SOCIAL.tiktok, label: 'TikTok', Icon: TikTokIcon },
+    ].filter((s) => s.href && s.href !== '#')
+    if (!items.length) return null
+    return (
+      <div className={`flex items-center gap-3 ${size}`}>
+        {items.map(({ href, label, Icon }) => (
+          <a key={label} href={href} aria-label={label} target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
+            <Icon />
+          </a>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white">
