@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { FileDropzone } from '@/components/ui/FileDropzone';
 
 /**
  * Internal COI attach modal — the backfill/offline path. An agent files a
@@ -17,8 +18,7 @@ export function UploadCoiModal({
   onClose: () => void;
   onUploaded: () => void;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [expiry, setExpiry] = useState('');
   const [verified, setVerified] = useState(true);
   const [additionalInsured, setAdditionalInsured] = useState(false);
@@ -27,7 +27,6 @@ export function UploadCoiModal({
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    const file = fileRef.current?.files?.[0];
     if (!file) {
       setError('Choose a PDF to upload.');
       return;
@@ -77,14 +76,7 @@ export function UploadCoiModal({
             <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
               Certificate PDF
             </label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-              className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-amber-500"
-            />
-            {fileName && <p className="mt-1 truncate text-[11px] text-zinc-400">{fileName}</p>}
+            <FileDropzone file={file} onFile={setFile} />
           </div>
 
           <div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { FileDropzone } from '@/components/ui/FileDropzone';
 
 interface OnFileAgreement {
   id: string;
@@ -38,12 +39,11 @@ export function LinkJobAgreementModal({
   const [error, setError] = useState<string | null>(null);
 
   // Link-mode optional addendum
-  const addendumRef = useRef<HTMLInputElement>(null);
+  const [addendumFile, setAddendumFile] = useState<File | null>(null);
   const [linkNote, setLinkNote] = useState('');
 
   // File-mode fields
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [contractType, setContractType] = useState<'RENTAL_AGREEMENT' | 'STAGE_CONTRACT'>('RENTAL_AGREEMENT');
   const [title, setTitle] = useState('');
   const [isAnnual, setIsAnnual] = useState(false);
@@ -77,8 +77,7 @@ export function LinkJobAgreementModal({
       fd.append('mode', 'link');
       fd.append('companyAgreementId', selectedId);
       if (linkNote.trim()) fd.append('note', linkNote.trim());
-      const add = addendumRef.current?.files?.[0];
-      if (add) fd.append('addendumFile', add);
+      if (addendumFile) fd.append('addendumFile', addendumFile);
       const res = await fetch(`/api/jobs/${jobId}/agreements`, { method: 'POST', body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -94,8 +93,7 @@ export function LinkJobAgreementModal({
   };
 
   const submitFile = async () => {
-    const f = fileRef.current?.files?.[0];
-    if (!f) {
+    if (!file) {
       setError('Choose the agreement PDF.');
       return;
     }
@@ -104,7 +102,7 @@ export function LinkJobAgreementModal({
     try {
       const fd = new FormData();
       fd.append('mode', 'file');
-      fd.append('file', f);
+      fd.append('file', file);
       fd.append('contractType', contractType);
       fd.append('isAnnual', isAnnual ? 'true' : 'false');
       if (title.trim()) fd.append('title', title.trim());
@@ -176,12 +174,7 @@ export function LinkJobAgreementModal({
                 </div>
                 <div>
                   <label className={label}>Signed addendum page <span className="text-zinc-600">(optional PDF)</span></label>
-                  <input
-                    ref={addendumRef}
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-zinc-600"
-                  />
+                  <FileDropzone file={addendumFile} onFile={setAddendumFile} compact hint="Optional · PDF" />
                 </div>
                 <div>
                   <label className={label}>Note <span className="text-zinc-600">(optional)</span></label>
@@ -208,14 +201,7 @@ export function LinkJobAgreementModal({
             </div>
             <div>
               <label className={label}>Agreement PDF</label>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
-                className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:bg-amber-500"
-              />
-              {fileName && <p className="mt-1 truncate text-[11px] text-zinc-400">{fileName}</p>}
+              <FileDropzone file={file} onFile={setFile} />
             </div>
             <label className="flex cursor-pointer items-center gap-2.5">
               <input type="checkbox" checked={isAnnual} onChange={(e) => setIsAnnual(e.target.checked)} className="h-4 w-4 accent-amber-600" />
