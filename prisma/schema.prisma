@@ -1948,6 +1948,12 @@ model User {
   // falls back to a generic label.
   displayTitle String? @map("display_title") @db.VarChar(60)
   phone     String?   @db.VarChar(30)
+  // After-hours emergency escalation: staff flagged here are surfaced BY
+  // PHONE (emergencyPhone) to a caller who declares a genuine emergency to
+  // the assistant. Numbers are released server-side only, never in the AI
+  // prompt. Managed at /admin/assistant.
+  isEmergencyContact Boolean @default(false) @map("is_emergency_contact")
+  emergencyPhone     String? @map("emergency_phone") @db.VarChar(30)
   avatarUrl String?   @map("avatar_url")
   location  Location? // Home base
   isActive  Boolean   @default(true) @map("is_active")

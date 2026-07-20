@@ -367,6 +367,49 @@ export async function fileAfterHoursCallback(input: {
   }
 }
 
+export type EmergencyResult =
+  | { result: 'CONTACTS'; contacts: { name: string; phone: string }[] }
+  | { result: 'NONE' }
+
+/**
+ * Release on-call emergency contacts — invoked by the assistant ONLY when a
+ * caller has declared a genuine emergency. The numbers never enter the AI
+ * prompt; they come from here. Every release is audited and alerts the team.
+ */
+export async function getEmergencyContacts(input: { reason: string; ip: string }): Promise<EmergencyResult> {
+  const users = await prisma.user.findMany({
+    where: { isEmergencyContact: true, isActive: true, emergencyPhone: { not: null } },
+    select: { name: true, emergencyPhone: true },
+    orderBy: { name: 'asc' },
+  })
+  const contacts = users
+    .map((u) => ({ name: u.name, phone: (u.emergencyPhone ?? '').trim() }))
+    .filter((c) => c.phone)
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        ipAddress: input.ip,
+        action: 'public.emergency_escalation',
+        entityType: 'User',
+        entityId: 'emergency',
+        oldValues: { reason: (input.reason || '').slice(0, 500) },
+        newValues: { released: contacts.length, at: new Date().toISOString() },
+      },
+    })
+  } catch (err) {
+    console.error('[after-hours] emergency audit failed:', err)
+  }
+  await notifyTeam('⚠ After-hours EMERGENCY escalation', [
+    `A caller declared an emergency to the site assistant and was given ${contacts.length} on-call number(s).`,
+    `Stated reason: ${input.reason || '(none)'}`,
+    `IP: ${input.ip}.`,
+  ])
+
+  return contacts.length ? { result: 'CONTACTS', contacts } : { result: 'NONE' }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 }

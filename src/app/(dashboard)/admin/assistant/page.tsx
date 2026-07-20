@@ -18,12 +18,20 @@ type AuditRow = {
   ipAddress: string | null
   newValues: Record<string, unknown> | null
 }
+type EmergencyContact = {
+  id: string
+  name: string
+  role: string
+  isEmergencyContact: boolean
+  emergencyPhone: string | null
+}
 type Data = {
   gateCode: string
   gateCodeUpdatedAt: string | null
   gateCodeUpdatedBy: string | null
   jobs: Job[]
   audit: AuditRow[]
+  emergencyContacts: EmergencyContact[]
 }
 
 function fmt(d: string | null): string {
@@ -45,6 +53,10 @@ function auditLabel(a: AuditRow): string {
   if (a.action === 'public.access_denied') {
     const v = a.newValues || {}
     return `Denied — ${String(v.reason ?? 'unknown')}`
+  }
+  if (a.action === 'public.emergency_escalation') {
+    const v = a.newValues || {}
+    return `⚠ Emergency escalation — released ${String(v.released ?? '?')} number(s)`
   }
   return a.action
 }
@@ -236,6 +248,55 @@ export default function AssistantAdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          {/* Emergency contacts */}
+          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Emergency contacts</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              On-call staff whose numbers the assistant releases <span className="text-zinc-300">only</span> when a caller
+              declares a genuine emergency. Toggle a person on and add their emergency number. Numbers are never shown
+              publicly otherwise, and every release is logged below.
+            </p>
+            <div className="mt-3 space-y-2">
+              {(data.emergencyContacts || []).map((u) => (
+                <div key={u.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-800/40 p-3">
+                  <button
+                    role="switch"
+                    aria-checked={u.isEmergencyContact}
+                    onClick={async () => {
+                      await fetch('/api/admin/assistant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, isEmergencyContact: !u.isEmergencyContact }),
+                      })
+                      load()
+                    }}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${u.isEmergencyContact ? 'bg-amber-600' : 'bg-zinc-700'}`}
+                    title="On-call for emergencies"
+                  >
+                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${u.isEmergencyContact ? 'left-6' : 'left-1'}`} />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-white">{u.name}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</div>
+                  </div>
+                  <input
+                    defaultValue={u.emergencyPhone ?? ''}
+                    placeholder="Emergency phone"
+                    onBlur={(e) =>
+                      fetch('/api/admin/assistant', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'set-emergency-contact', userId: u.id, emergencyPhone: e.target.value }),
+                      })
+                    }
+                    className="w-44 rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm font-mono text-white placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              ))}
+              {(data.emergencyContacts || []).length === 0 && <div className="text-sm text-zinc-500">No eligible staff.</div>}
             </div>
           </section>
 

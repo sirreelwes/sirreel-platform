@@ -53,10 +53,16 @@ export async function GET() {
   })
 
   const audit = await prisma.auditLog.findMany({
-    where: { action: { startsWith: 'public.access_' } },
+    where: { action: { in: ['public.access_released', 'public.access_denied', 'public.emergency_escalation'] } },
     orderBy: { createdAt: 'desc' },
     take: 30,
     select: { id: true, action: true, createdAt: true, ipAddress: true, newValues: true },
+  })
+
+  const emergencyContacts = await prisma.user.findMany({
+    where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
+    orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
+    select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true },
   })
 
   return NextResponse.json({
@@ -65,6 +71,7 @@ export async function GET() {
     gateCodeUpdatedBy,
     jobs,
     audit,
+    emergencyContacts,
   })
 }
 
@@ -73,7 +80,7 @@ export async function POST(req: NextRequest) {
   if (gate instanceof NextResponse) return gate
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; gateCode?: string; jobId?: string }
+    | { action?: string; gateCode?: string; jobId?: string; userId?: string; isEmergencyContact?: boolean; emergencyPhone?: string }
     | null
   if (!body?.action) return NextResponse.json({ error: 'action required' }, { status: 400 })
 
@@ -125,6 +132,16 @@ export async function POST(req: NextRequest) {
       },
     })
     return NextResponse.json({ ok: true, assistantAuthCode })
+  }
+
+  if (body.action === 'set-emergency-contact') {
+    const userId = typeof body.userId === 'string' ? body.userId : ''
+    if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
+    const data: { isEmergencyContact?: boolean; emergencyPhone?: string | null } = {}
+    if (typeof body.isEmergencyContact === 'boolean') data.isEmergencyContact = body.isEmergencyContact
+    if (typeof body.emergencyPhone === 'string') data.emergencyPhone = body.emergencyPhone.trim().slice(0, 30) || null
+    await prisma.user.update({ where: { id: userId }, data })
+    return NextResponse.json({ ok: true })
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 400 })
