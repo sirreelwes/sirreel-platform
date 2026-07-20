@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
         mileage: a.mileage,
         vin: a.vin,
         licensePlate: a.licensePlate,
+        accessCode: a.accessCode,
         latestBitDate: latestBitByAsset.get(a.id) ?? null,
         notes: a.notes,
         categoryId: a.categoryId,
@@ -141,7 +142,7 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   try {
     const body = await req.json()
-    const { assetId, status, notes, year, make, model, vin, licensePlate } = body
+    const { assetId, status, notes, year, make, model, vin, licensePlate, accessCode } = body
     if (!assetId) return NextResponse.json({ error: 'assetId required' }, { status: 400 })
 
     // Lifecycle status writes are a FLEET action (canAssignAssets) and must be
@@ -189,6 +190,7 @@ export async function PATCH(req: NextRequest) {
         ...(model !== undefined ? { model: trimOrNull(model) } : {}),
         ...(vin !== undefined ? { vin: trimOrNull(vin) } : {}),
         ...(licensePlate !== undefined ? { licensePlate: trimOrNull(licensePlate) } : {}),
+        ...(accessCode !== undefined ? { accessCode: trimOrNull(accessCode) } : {}),
       }
     })
 

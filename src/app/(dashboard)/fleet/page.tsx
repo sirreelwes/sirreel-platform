@@ -16,6 +16,7 @@ type Asset = {
   mileage: number | null;
   vin: string | null;
   licensePlate: string | null;
+  accessCode: string | null;
   latestBitDate: string | null;
   notes: string | null;
   categoryId: string;
@@ -292,6 +293,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
   const [model, setModel] = useState(asset.model ?? '');
   const [vin, setVin] = useState(asset.vin ?? '');
   const [plate, setPlate] = useState(asset.licensePlate ?? '');
+  const [accessCode, setAccessCode] = useState(asset.accessCode ?? '');
   const [savingFields, setSavingFields] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
 
@@ -315,7 +317,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
     setSavingFields(true); setSavedMsg(false);
     const res = await fetch('/api/fleet', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assetId: asset.id, year: year === '' ? null : year, make, model, vin, licensePlate: plate }),
+      body: JSON.stringify({ assetId: asset.id, year: year === '' ? null : year, make, model, vin, licensePlate: plate, accessCode }),
     });
     setSavingFields(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Save failed'); return; }
@@ -366,6 +368,10 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
                 <label className={labelCls}>VIN</label>
                 <input className={`${fieldCls} font-mono ${vinWarn ? 'border-amber-400' : ''}`} value={vin} onChange={(e) => setVin(e.target.value)} placeholder="1FTBW2CM5NKA12345" />
                 {vinWarn && <p className="text-[10px] text-amber-600 mt-1">⚠ VINs are usually 17 characters with no I, O, or Q. Saved anyway — double-check if this is a real VIN.</p>}
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>Lockbox access code <span className="font-normal normal-case text-gray-400">— released to verified drivers by the after-hours assistant</span></label>
+                <input className={`${fieldCls} font-mono tracking-widest`} value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="20183" />
               </div>
             </div>
             <div className="flex items-center gap-3 mt-3">
