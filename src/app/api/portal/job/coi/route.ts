@@ -29,10 +29,11 @@ CRITICAL REQUIREMENTS (must all pass):
 1. Certificate Holder = SirReel with correct address
 2. General Liability — Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
 3. Automobile Liability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-4. Additional Insured — SirReel named
-5. Loss Payee — SirReel named
-6. Coverage dates cover the rental period
-7. Policy not expired
+4. Auto Physical Damage — Comprehensive AND Collision coverage carried on the hired/rented autos (this is what pays to repair or replace SirReel's vehicles). Look for "Physical Damage", "Comp & Collision", "Hired Car Physical Damage", or a stated physical-damage limit in the Automobile section or a remarks/coverage line. A COI with liability only and NO physical damage on hired autos FAILS this.
+5. Additional Insured — SirReel named
+6. Loss Payee — SirReel named
+7. Coverage dates cover the rental period
+8. Policy not expired
 
 Return ONLY valid JSON (no markdown, no preamble):
 {
@@ -40,6 +41,7 @@ Return ONLY valid JSON (no markdown, no preamble):
   "policyExpiryDate": "YYYY-MM-DD" | null,
   "coverageVerified": true,
   "additionalInsured": true,
+  "autoPhysicalDamage": true,
   "riskLevel": "low" | "medium" | "high",
   "notes": ""
 }`

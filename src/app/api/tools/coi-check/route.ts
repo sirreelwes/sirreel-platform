@@ -17,10 +17,11 @@ HARD REQUIREMENTS (cannot be waived - must all pass):
 1. Certificate Holder = SirReel with correct address
 2. General Liability - Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
 3. Automobile Liability - CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-4. Additional Insured - SirReel named as Additional Insured
-5. Loss Payee - SirReel named as Loss Payee
-6. Primary & Non-Contributory coverage
-7. Policy not expired
+4. Auto Physical Damage - Comprehensive AND Collision coverage carried on the hired/rented autos. This is the coverage that pays to repair or replace SirReel's vehicles, so it is REQUIRED. Look for "Physical Damage", "Comp & Collision", "Hired Car Physical Damage", or a stated physical-damage limit in the Automobile section or a remarks/coverage line. A COI with auto LIABILITY only and NO physical damage on hired autos FAILS this.
+5. Additional Insured - SirReel named as Additional Insured
+6. Loss Payee - SirReel named as Loss Payee
+7. Primary & Non-Contributory coverage
+8. Policy not expired
 
 MANAGEABLE REQUIREMENTS (SirReel management may approve exceptions):
 A. Umbrella/Excess Liability $1M - preferred but not always required for smaller productions
@@ -38,6 +39,7 @@ Return ONLY valid JSON, no markdown:
   "certificateHolder": { "hard": true, "pass": true, "found": "", "note": "" },
   "generalLiability": { "hard": true, "pass": true, "perOccurrence": { "pass": true, "found": "", "required": "$1,000,000" }, "aggregate": { "pass": true, "found": "", "required": "$2,000,000" }, "note": "" },
   "autoLiability": { "hard": true, "pass": true, "combinedSingleLimit": { "pass": true, "found": "", "required": "$1,000,000" }, "hiredAutos": { "pass": true, "found": "" }, "nonOwnedAutos": { "pass": true, "found": "" }, "note": "" },
+  "autoPhysicalDamage": { "hard": true, "pass": true, "comprehensive": { "pass": true, "found": "" }, "collision": { "pass": true, "found": "" }, "note": "" },
   "additionalInsured": { "hard": true, "pass": true, "found": "", "note": "" },
   "lossPayee": { "hard": true, "pass": true, "found": "", "note": "" },
   "primaryNonContributory": { "hard": true, "pass": true, "found": "", "note": "" },
@@ -87,6 +89,7 @@ export async function POST(req: NextRequest) {
       review.certificateHolder?.pass,
       review.generalLiability?.pass,
       review.autoLiability?.pass,
+      review.autoPhysicalDamage?.pass,
       review.additionalInsured?.pass,
       review.lossPayee?.pass,
       review.primaryNonContributory?.pass,

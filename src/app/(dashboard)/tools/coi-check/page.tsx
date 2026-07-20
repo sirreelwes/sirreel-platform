@@ -5,6 +5,7 @@ const CHECKS = [
   { key: 'certificateHolder', label: 'Certificate Holder', hard: true },
   { key: 'generalLiability', label: 'General Liability', hard: true },
   { key: 'autoLiability', label: 'Auto Liability', hard: true },
+  { key: 'autoPhysicalDamage', label: 'Auto Physical Damage', hard: true },
   { key: 'additionalInsured', label: 'Additional Insured', hard: true },
   { key: 'lossPayee', label: 'Loss Payee', hard: true },
   { key: 'primaryNonContributory', label: 'Primary & Non-Contributory', hard: true },

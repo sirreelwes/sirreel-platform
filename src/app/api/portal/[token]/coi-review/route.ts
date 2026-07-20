@@ -19,10 +19,11 @@ CRITICAL REQUIREMENTS (must all pass — cannot be waived):
 2. Named insured must match the rental agreement company name exactly
 3. General Liability - Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
 4. Automobile Liability - CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-5. Additional Insured - SirReel named as Additional Insured
-6. Loss Payee - SirReel named as Loss Payee
-7. Coverage dates must cover the rental period
-8. Policy not expired
+5. Auto Physical Damage - Comprehensive AND Collision coverage carried on the hired/rented autos. This is the coverage that pays to repair or replace SirReel's vehicles, so it is REQUIRED. Look for "Physical Damage", "Comp & Collision", "Hired Car Physical Damage", or a stated physical-damage limit in the Automobile section or a remarks/coverage line. A COI with auto LIABILITY only and NO physical damage on hired autos FAILS this.
+6. Additional Insured - SirReel named as Additional Insured
+7. Loss Payee - SirReel named as Loss Payee
+8. Coverage dates must cover the rental period
+9. Policy not expired
 
 ALERT REQUIREMENTS (admin judgment call):
 A. Primary & Non-Contributory language
@@ -52,6 +53,12 @@ Return ONLY valid JSON, no markdown:
     "nonOwnedAutos": { "pass": true, "found": "" },
     "note": ""
   },
+  "autoPhysicalDamage": {
+    "pass": true,
+    "comprehensive": { "pass": true, "found": "" },
+    "collision": { "pass": true, "found": "" },
+    "note": ""
+  },
   "additionalInsured": { "pass": true, "found": "", "note": "" },
   "lossPayee": { "pass": true, "found": "", "note": "" },
   "coverageDates": { "pass": true, "found": "", "note": "" },
@@ -78,6 +85,7 @@ function buildEmailHtml(
     { label: 'Named Insured matches company', item: review.insuredName },
     { label: 'General Liability ($1M/$2M)', item: review.generalLiability },
     { label: 'Auto Liability ($1M, Hired & Non-Owned)', item: review.autoLiability },
+    { label: 'Auto Physical Damage (Comp & Collision)', item: review.autoPhysicalDamage },
     { label: 'Additional Insured: SirReel', item: review.additionalInsured },
     { label: 'Loss Payee: SirReel', item: review.lossPayee },
     { label: 'Coverage Dates', item: review.coverageDates },
@@ -221,6 +229,7 @@ export async function POST(
       review.insuredName?.pass,
       review.generalLiability?.pass,
       review.autoLiability?.pass,
+      review.autoPhysicalDamage?.pass,
       review.additionalInsured?.pass,
       review.lossPayee?.pass,
       review.coverageDates?.pass,

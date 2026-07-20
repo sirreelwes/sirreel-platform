@@ -47,6 +47,7 @@ export default function CoiReviewResults({ review, compact = false }: { review: 
     review.certificateHolder?.pass,
     review.generalLiability?.pass,
     review.autoLiability?.pass,
+    review.autoPhysicalDamage?.pass,
     review.umbrella?.pass,
     review.workersComp?.pass,
     review.entertainmentPackage?.pass,
@@ -130,6 +131,12 @@ export default function CoiReviewResults({ review, compact = false }: { review: 
                   {review.autoLiability.combinedSingleLimit && <SubRow label="Combined Single Limit" item={review.autoLiability.combinedSingleLimit} />}
                   {review.autoLiability.hiredAutos && <SubRow label="Hired Autos" item={review.autoLiability.hiredAutos} />}
                   {review.autoLiability.nonOwnedAutos && <SubRow label="Non-Owned Autos" item={review.autoLiability.nonOwnedAutos} />}
+                </Row>
+              )}
+              {review.autoPhysicalDamage && (
+                <Row label="Auto Physical Damage" item={review.autoPhysicalDamage}>
+                  {review.autoPhysicalDamage.comprehensive && <SubRow label="Comprehensive" item={review.autoPhysicalDamage.comprehensive} />}
+                  {review.autoPhysicalDamage.collision && <SubRow label="Collision" item={review.autoPhysicalDamage.collision} />}
                 </Row>
               )}
               {review.umbrella && (
