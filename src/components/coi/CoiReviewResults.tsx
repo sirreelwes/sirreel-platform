@@ -134,10 +134,7 @@ export default function CoiReviewResults({ review, compact = false }: { review: 
                 </Row>
               )}
               {review.autoPhysicalDamage && (
-                <Row label="Auto Physical Damage" item={review.autoPhysicalDamage}>
-                  {review.autoPhysicalDamage.comprehensive && <SubRow label="Comprehensive" item={review.autoPhysicalDamage.comprehensive} />}
-                  {review.autoPhysicalDamage.collision && <SubRow label="Collision" item={review.autoPhysicalDamage.collision} />}
-                </Row>
+                <Row label="Hired Auto Physical Damage" item={review.autoPhysicalDamage} />
               )}
               {review.umbrella && (
                 <Row label="Umbrella / Excess Liability" item={review.umbrella}>

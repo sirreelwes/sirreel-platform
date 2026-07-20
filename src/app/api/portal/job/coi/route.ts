@@ -29,7 +29,7 @@ CRITICAL REQUIREMENTS (must all pass):
 1. Certificate Holder = SirReel with correct address
 2. General Liability — Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
 3. Automobile Liability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-4. Auto Physical Damage — Comprehensive AND Collision coverage carried on the hired/rented autos (this is what pays to repair or replace SirReel's vehicles). Look for "Physical Damage", "Comp & Collision", "Hired Car Physical Damage", or a stated physical-damage limit in the Automobile section or a remarks/coverage line. A COI with liability only and NO physical damage on hired autos FAILS this.
+4. Hired Auto Physical Damage — the certificate MUST show physical damage coverage on the hired/rented autos (this is what pays to repair or replace SirReel's vehicles). On SirReel certs this appears as a "Hired Auto Physical Damage" line in the Automobile section and/or the Description of Operations, and is commonly stated as a DEDUCTIBLE structure (e.g. a percentage of the loss subject to a minimum and maximum) rather than a dollar limit — that is acceptable and PASSES. Also accept explicit "Physical Damage", "Comprehensive & Collision", or a stated physical-damage limit. FAIL only if NO physical-damage coverage on rented/hired autos appears anywhere on the cert (auto liability alone is not enough).
 5. Additional Insured — SirReel named
 6. Loss Payee — SirReel named
 7. Coverage dates cover the rental period
