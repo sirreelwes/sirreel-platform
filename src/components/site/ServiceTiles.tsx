@@ -116,12 +116,14 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // is now un-clipped (clip lives on the media layer only, below),
           // seat it centred in the band box (0) so it stays inside the
           // viewport at any width instead of overflowing off-screen.
-          // Last (flush-right) tile: seat the label between its box centre
-          // and its stripe centroid (s/6). Box-centre alone read too far
-          // left (empty stripe to its right); the full centroid sits right
-          // against the page edge. s/6 centres it in the visible magenta
-          // while keeping a safe page-edge margin at every width.
-          const axisShift = i === last ? 'calc(var(--s) / 6)' : i === 0 ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
+          // Label seating on the band's diagonal axis. The flush-right LAST
+          // tile uses s/4 — enough rightward push that "Wardrobe & Makeup"
+          // clears "Grip & Electric" when both collapse on hover, while the
+          // 4% gutter keeps it on-page. Everything else (first + interiors)
+          // uses s/2: for the long-labelled first tile that extra rightward
+          // shift stops "Trucks and Vans" overflowing off the left edge when
+          // it collapses to a sliver.
+          const axisShift = i === last ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
 
           // The diagonal WINDOW — clips the media/scrims only, NOT the
           // labels. Clipping the whole band cut long labels (e.g. the
@@ -211,8 +213,22 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // Rest: grow = --restgrow, basis-0 → widths follow the weights.
           // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
           // while the others share the rest as narrow slivers. ~350ms ease.
+          //
+          // Per-tile minimum width so no band collapses too thin on hover
+          // (its label would overlap the neighbour's). The two RIGHTMOST
+          // tiles (Grip, Wardrobe) get the largest floors — jammed against
+          // the page edge, they overlap first; the long-labelled first tile
+          // (Trucks and Vans) gets a mid floor; interiors the smallest.
+          // Applied only at lg+ where there's room; below that it stays
+          // min-w-0 so the row can never overflow on small screens. Sums fit
+          // within 1024px with room for the hovered tile to grow.
+          const minWClass =
+            i === last ? 'min-w-0 lg:min-w-[200px]'
+              : i === last - 1 ? 'min-w-0 lg:min-w-[168px]'
+                : i === 0 ? 'min-w-0 lg:min-w-[150px]'
+                  : 'min-w-0 lg:min-w-[84px]'
           const bandClass =
-            'group relative h-full min-w-0 grow-[var(--restgrow)] basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none'
+            `group relative h-full ${minWClass} grow-[var(--restgrow)] basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none`
 
           // coming-soon → non-navigating div; link/order → Link.
           return t.mode === 'coming-soon' || !t.href ? (
