@@ -92,7 +92,13 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
     >
       {/* ── Desktop: diagonal bands ─────────────────────────────── */}
       <div
-        className="hidden md:flex w-full overflow-hidden bg-[#0c0c0d]"
+        // Left/right gutters (4% each) push the diagonal bands toward the
+        // middle and leave dark breathing room on both edges — so a tilted
+        // label (esp. the flush-right "Wardrobe & Makeup" when its tile is
+        // a sliver on hover) can extend into the gutter instead of getting
+        // clipped at the page edge. overflow-hidden still clips at the page
+        // edge, but the label never reaches it.
+        className="hidden md:flex w-full overflow-hidden bg-[#0c0c0d] px-[4%]"
         style={{ height: SECTION_H }}
       >
         {tiles.map((t, i) => {
