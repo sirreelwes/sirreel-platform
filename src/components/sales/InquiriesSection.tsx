@@ -163,7 +163,7 @@ export function InquiriesSection() {
       const data = await res.json();
       const inquiryId = data.inquiry?.id;
       if (inquiryId) {
-        router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`);
+        router.push(`/orders/new?inquiryId=${encodeURIComponent(inquiryId)}`);
         return true;
       }
       load();
@@ -189,7 +189,7 @@ export function InquiriesSection() {
 
   const onManualCreated = (inquiryId: string | null) => {
     if (inquiryId) {
-      router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`);
+      router.push(`/orders/new?inquiryId=${encodeURIComponent(inquiryId)}`);
     } else {
       load();
     }
@@ -371,7 +371,7 @@ export function InquiriesSection() {
       <ThreadDrawer
         emailId={drawerEmailId}
         onClose={closeDrawer}
-        // On capture success the router.push to /orders/new-quote
+        // On capture success the router.push to /orders/new
         // already unmounts the drawer; only close manually on a
         // failure (capture returns false) so the user can retry.
         // Calling closeDrawer() unconditionally was racing the push

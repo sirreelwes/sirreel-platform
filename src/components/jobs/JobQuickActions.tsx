@@ -5,7 +5,7 @@
  * The user path is: create Job (global "+ New Job") → open it → add a
  * quote or reservation HERE, with the Job already decided:
  *
- *   - "+ New quote"       → /orders/new-quote?jobId=… (the page's
+ *   - "+ New quote"       → /orders/new?jobId=… (the page's
  *                           JobPicker opens pre-seeded to this Job).
  *   - "+ New reservation" → category picker → <NewHoldModal> with
  *                           defaultJob pre-seeded (the modal's JobPicker
@@ -83,7 +83,7 @@ export function JobQuickActions({
   return (
     <div className="relative flex items-center gap-2" ref={wrapperRef}>
       <button
-        onClick={() => router.push(`/orders/new-quote?jobId=${job.id}`)}
+        onClick={() => router.push(`/orders/new?jobId=${job.id}`)}
         className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold"
         title="Draft a quote on this job — the quote page opens with the Job pre-selected"
       >

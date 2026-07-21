@@ -405,13 +405,13 @@ export default function CRMPage() {
     const params = new URLSearchParams();
     if (returnInquiryId) params.set('inquiryId', returnInquiryId);
     params.set('clientCompanyId', companyId);
-    router.push(`/orders/new-quote?${params.toString()}`);
+    router.push(`/orders/new?${params.toString()}`);
   };
 
   const cancelSelectForQuote = () => {
     const params = new URLSearchParams();
     if (returnInquiryId) params.set('inquiryId', returnInquiryId);
-    router.push(`/orders/new-quote${params.toString() ? `?${params.toString()}` : ''}`);
+    router.push(`/orders/new${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   return (

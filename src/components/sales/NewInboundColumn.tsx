@@ -22,9 +22,9 @@
  *             for suggestion cards (existing pattern).
  *   - Capture & Quote → for suggestions: existing POST
  *             /api/sales/suggested-inquiries/capture then redirect
- *             to /orders/new-quote?inquiryId=…
+ *             to /orders/new?inquiryId=…
  *             for persistent rows: redirect directly to
- *             /orders/new-quote?inquiryId=…
+ *             /orders/new?inquiryId=…
  *   - Dismiss → for suggestions: existing POST
  *             /api/sales/suggested-inquiries/dismiss (records the
  *             decision against the email so it stops surfacing).
@@ -240,7 +240,7 @@ export function NewInboundColumn({
   const capturePersistent = (inquiryId: string) => {
     // Persistent inquiry already has an Inquiry row; no API call
     // needed — go straight to new-quote with the inquiryId.
-    router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`)
+    router.push(`/orders/new?inquiryId=${encodeURIComponent(inquiryId)}`)
   }
 
   const captureSuggestion = async (emailId: string) => {
@@ -259,7 +259,7 @@ export function NewInboundColumn({
       const data = await res.json()
       const inquiryId = data.inquiry?.id
       if (inquiryId) {
-        router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(inquiryId)}`)
+        router.push(`/orders/new?inquiryId=${encodeURIComponent(inquiryId)}`)
         return
       }
       load()

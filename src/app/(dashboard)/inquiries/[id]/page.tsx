@@ -7,7 +7,7 @@
  * WEB_FORM supply-orders (sourceMetadata.kind === 'supply-order') and
  * the three triage actions:
  *
- *   - Convert to quote → /orders/new-quote?inquiryId=… (existing flow;
+ *   - Convert to quote → /orders/new?inquiryId=… (existing flow;
  *     prefill from sourceMetadata.cart lands in a follow-on)
  *   - Dismiss        → PATCH status=DISMISSED, redirect /inquiries
  *   - Assign to me   → PATCH assignToMe=true (server resolves session)
@@ -269,7 +269,7 @@ export default function InquiryDetailPage() {
                       Send Welcome →
                     </button>
                     <Link
-                      href={`/orders/new-quote?inquiryId=${inquiry.id}`}
+                      href={`/orders/new?inquiryId=${inquiry.id}`}
                       className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg"
                     >
                       Convert to quote →

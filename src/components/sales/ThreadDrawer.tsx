@@ -462,7 +462,7 @@ export function ThreadDrawer(props: Props) {
 
   const goToInquiry = useCallback(() => {
     if (!data?.considered?.inquiryId) return;
-    router.push(`/orders/new-quote?inquiryId=${encodeURIComponent(data.considered.inquiryId)}`);
+    router.push(`/orders/new?inquiryId=${encodeURIComponent(data.considered.inquiryId)}`);
   }, [data, router]);
 
   // followup-mode actions
