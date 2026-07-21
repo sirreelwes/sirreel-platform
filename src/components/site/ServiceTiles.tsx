@@ -187,15 +187,21 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             </>
           )
 
-          // Clip-path now lives on the inner media layer, not the band, so
-          // flex-grow (classes) and un-clipped labels both work. No inline
-          // style needed on the band itself.
-          const bandStyle = undefined
-          // Rest: grow + basis-0 → all bands equal (1/N each, no gaps).
+          // Per-tile REST width. The flush-LEFT first tile's label leans
+          // INTO the tile (away from its vertical edge), so it needs less
+          // room; the flush-RIGHT last tile's label leans toward its
+          // vertical edge and needs more. So narrow the first, widen the
+          // last, interiors equal. Set as a CSS var the band's grow class
+          // reads — a plain custom property (not inline flex-grow), so the
+          // hover class still wins on :hover. Clip-path lives on the inner
+          // media layer, so nothing else needs inline style here.
+          const restGrow = i === 0 ? 0.7 : i === last ? 1.5 : 1
+          const bandStyle = { ['--restgrow' as string]: String(restGrow) } as React.CSSProperties
+          // Rest: grow = --restgrow, basis-0 → widths follow the weights.
           // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
           // while the others share the rest as narrow slivers. ~350ms ease.
           const bandClass =
-            'group relative h-full min-w-0 grow basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none'
+            'group relative h-full min-w-0 grow-[var(--restgrow)] basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none'
 
           // coming-soon → non-navigating div; link/order → Link.
           return t.mode === 'coming-soon' || !t.href ? (
