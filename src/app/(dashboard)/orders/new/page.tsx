@@ -3086,7 +3086,7 @@ function PeopleSection({
                           type="text"
                           value={c.title || ''}
                           onChange={(e) => updateContact(idx, { title: e.target.value || null })}
-                          placeholder="Title"
+                          placeholder="Title (optional)"
                           className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
                         />
                         <input
@@ -3100,7 +3100,7 @@ function PeopleSection({
                     </div>
                   )}
                   <div className="flex items-center gap-3 mt-2">
-                    <label className="text-[10px] text-lt-fg3 uppercase tracking-wider">Role</label>
+                    <label className="text-[10px] text-lt-fg3 uppercase tracking-wider" title="Their role on this job — distinct from their job Title above">Role on job</label>
                     <select
                       value={c.role}
                       onChange={(e) => updateContact(idx, { role: e.target.value as SuggestedJobRole })}
