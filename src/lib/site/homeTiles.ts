@@ -42,18 +42,17 @@ import { contactPrefillHref } from '@/lib/site/publicNav'
 
 const ORDER_FORM_HREF = '/order/supplies'
 
+// Left-to-right order (Wes, Jul 2026): the LONGEST labels sit in the
+// interior and the SHORT ones ("Stages", "LED Wall") at the flush-edge
+// first/last positions, so no long label lands against a page edge where it
+// would clip or crowd on hover.
 export const HOME_TILES: HomeTile[] = [
   // Browse: the swipe jumps straight to the vehicle gallery.
   { slot: 'trucking', label: 'Trucks and Vans', color: '#d99a2b', colorDeep: '#9c6c14', tagline: 'Production vehicles, ready to roll', mode: 'link', href: '/vehicles',
     swipe: { label: 'View Vehicles', href: '/vehicles' } },
-  // Studio inquiries (coming-soon tiles): swipe opens the contact intake
-  // with an "Availability: <service>" subject — lands in the staff pipeline.
-  { slot: 'stages', label: 'Stages', color: '#c0392b', colorDeep: '#822015', tagline: 'Stage space in Sun Valley', mode: 'link', href: '/stages',
-    swipe: { label: 'Check Availability', href: '/stages#availability' } },
-  { slot: 'standing-sets', label: 'Standing Sets', color: '#2b7fd9', colorDeep: '#17548f', tagline: 'Turnkey standing sets', mode: 'link', href: '/standing-sets',
-    swipe: { label: 'Check Availability', href: '/standing-sets#availability' } },
-  { slot: 'led-wall', label: 'LED Wall', color: '#4caf50', colorDeep: '#2e6d31', tagline: 'Virtual production volume', mode: 'link', href: '/stages/led-volume-stage',
-    swipe: { label: 'Check Availability', href: '/stages#availability' } },
+  // Self-serve: deep-links the order form to the Radios & WiFi section.
+  { slot: 'radios-wifi', label: 'Radios & WiFi', color: '#0e9db0', colorDeep: '#0a6b78', tagline: 'Walkies, comms & on-set WiFi', mode: 'order', href: `${ORDER_FORM_HREF}?category=radios-wifi`,
+    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=radios-wifi&focus=1` } },
   // Self-serve: "Add Items" opens the full supplies catalog (no category —
   // "Production Supplies" is the whole form, not a filterable section).
   // Swipe "Add Items" adds `focus=1` → the streamlined mobile focus mode
@@ -61,15 +60,20 @@ export const HOME_TILES: HomeTile[] = [
   // full form. focus=1 only triggers streamlined ON MOBILE (md: classes).
   { slot: 'supplies', label: 'Supplies & Equipment', color: '#7e57c2', colorDeep: '#523584', tagline: 'Order online — on the truck when you need it', mode: 'order', href: ORDER_FORM_HREF,
     swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?focus=1` } },
-  // Self-serve: deep-links the order form to the Radios & WiFi section.
-  { slot: 'radios-wifi', label: 'Radios & WiFi', color: '#0e9db0', colorDeep: '#0a6b78', tagline: 'Walkies, comms & on-set WiFi', mode: 'order', href: `${ORDER_FORM_HREF}?category=radios-wifi`,
-    swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=radios-wifi&focus=1` } },
-  // Quote-request: routes to the contact intake with a prefilled subject
-  // (matches the Equipment ▾ "Request a quote" grip/lighting flow).
-  { slot: 'grip-electric', label: 'Grip & Electric', color: '#e0701f', colorDeep: '#9c4c12', tagline: 'Lighting, grip & power — request a quote', mode: 'link', href: contactPrefillHref('Equipment quote: Grip & Electric'),
-    swipe: { label: 'Request a Quote', href: contactPrefillHref('Quote: Grip & Electric') } },
   // Self-serve catalog section (Wardrobe & Makeup exists on the order form):
   // "Add Items" deep-links to that section.
   { slot: 'wardrobe-makeup', label: 'Wardrobe & Makeup', color: '#d6448c', colorDeep: '#912a5c', tagline: 'Chairs, mirrors, steamers & racks', mode: 'order', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup`,
     swipe: { label: 'Add Items', href: `${ORDER_FORM_HREF}?category=wardrobe-makeup&focus=1` } },
+  // Quote-request: routes to the contact intake with a prefilled subject
+  // (matches the Equipment ▾ "Request a quote" grip/lighting flow).
+  { slot: 'grip-electric', label: 'Grip & Electric', color: '#e0701f', colorDeep: '#9c4c12', tagline: 'Lighting, grip & power — request a quote', mode: 'link', href: contactPrefillHref('Equipment quote: Grip & Electric'),
+    swipe: { label: 'Request a Quote', href: contactPrefillHref('Quote: Grip & Electric') } },
+  // Studio inquiries: swipe opens the contact intake with an
+  // "Availability: <service>" subject — lands in the staff pipeline.
+  { slot: 'standing-sets', label: 'Standing Sets', color: '#2b7fd9', colorDeep: '#17548f', tagline: 'Turnkey standing sets', mode: 'link', href: '/standing-sets',
+    swipe: { label: 'Check Availability', href: '/standing-sets#availability' } },
+  { slot: 'led-wall', label: 'LED Wall', color: '#4caf50', colorDeep: '#2e6d31', tagline: 'Virtual production volume', mode: 'link', href: '/stages/led-volume-stage',
+    swipe: { label: 'Check Availability', href: '/stages#availability' } },
+  { slot: 'stages', label: 'Stages', color: '#c0392b', colorDeep: '#822015', tagline: 'Stage space in Sun Valley', mode: 'link', href: '/stages',
+    swipe: { label: 'Check Availability', href: '/stages#availability' } },
 ]

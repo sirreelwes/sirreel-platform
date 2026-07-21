@@ -205,32 +205,22 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             </>
           )
 
-          // Per-tile REST width. The flush-LEFT first tile's label leans
-          // INTO the tile (away from its vertical edge), so it needs less
-          // room; the flush-RIGHT last tile's label leans toward its
-          // vertical edge and needs more. So narrow the first, widen the
-          // last, interiors equal. Set as a CSS var the band's grow class
-          // reads — a plain custom property (not inline flex-grow), so the
-          // hover class still wins on :hover. Clip-path lives on the inner
-          // media layer, so nothing else needs inline style here.
-          const restGrow = i === 0 ? 0.7 : i === last ? 1.5 : 1
-          const bandStyle = { ['--restgrow' as string]: String(restGrow) } as React.CSSProperties
+          // Equal REST widths. (The old first-narrow/last-wide rebalance
+          // existed only because the longest label used to sit at the
+          // flush-right edge; the tile order now keeps long labels interior,
+          // so every band can be the same width.) Kept as a CSS var the
+          // grow class reads — a plain custom property (not inline flex-grow)
+          // so the hover class still wins on :hover.
+          const bandStyle = { ['--restgrow' as string]: '1' } as React.CSSProperties
           // Rest: grow = --restgrow, basis-0 → widths follow the weights.
           // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
           // while the others share the rest as narrow slivers. ~350ms ease.
           //
-          // Per-tile minimum width so no band collapses too thin on hover
-          // (its label would overlap the neighbour's). The two RIGHTMOST
-          // tiles (Grip, Wardrobe) get the largest floors — jammed against
-          // the page edge, they overlap first; the long-labelled first tile
-          // (Trucks and Vans) gets a mid floor; interiors the smallest.
+          // Uniform minimum width so no band collapses too thin on hover
+          // (a thin band's tilted label would overlap its neighbour's).
           // Applied only at lg+ where there's room; below that it stays
-          // min-w-0 so the row can never overflow on small screens. Sums fit
-          // within 1024px with room for the hovered tile to grow.
-          const minWClass =
-            i === last ? 'min-w-0 lg:min-w-[200px]'
-              : i === last - 1 ? 'min-w-0 lg:min-w-[168px]'
-                : 'min-w-0 lg:min-w-[84px]'
+          // min-w-0 so the row can never overflow on small screens.
+          const minWClass = 'min-w-0 lg:min-w-[104px]'
           const bandClass =
             `group relative h-full ${minWClass} grow-[var(--restgrow)] basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none`
 
