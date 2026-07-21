@@ -59,7 +59,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/orders'
 import { computeLineTotal } from '@/lib/orders/billing'
-import { computeDays } from '@/lib/orders/days'
+import { computeDays, isClaimEligible, sanitizeClaimedDays } from '@/lib/orders/days'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
@@ -116,6 +116,10 @@ interface ResolvedItemInput {
   pickupDate?: string | null
   returnDate?: string | null
   billableDays?: number | null
+  // Client's requested shoot-days (supply-cart lines). Lands PENDING
+  // like the POST line-items route — never prices until an agent writes
+  // billableDays via the day-claims endpoint.
+  claimedDays?: number | null
   notes?: string | null
   packageInstanceId?: string | null
   packageId?: string | null
@@ -441,6 +445,19 @@ export async function POST(req: NextRequest) {
             quantity,
             billableDays: days,
             computedDays: computeDays(pickupResolved, returnResolved),
+            // Client's requested shoot-days → PENDING claim (eligible
+            // gear/vehicle lines only). Mirrors POST /api/orders/[id]/line-items
+            // so supply-cart claims survive the atomic create.
+            ...(() => {
+              const claim = sanitizeClaimedDays(raw.claimedDays)
+              const eligible = isClaimEligible({
+                type: resolveLineType(raw.catalogType, department),
+                department,
+              })
+              return claim != null && eligible
+                ? { claimedDays: claim, claimStatus: 'PENDING' as const }
+                : {}
+            })(),
             lineTotal: Math.round(lineTotal * 100) / 100,
             notes: seededNotes,
             department,

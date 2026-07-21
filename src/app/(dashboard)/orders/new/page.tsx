@@ -1549,65 +1549,33 @@ function NewQuotePageInner() {
       const existingJobId = eff.jobId;
       const companyId = eff.companyId ?? selectedClientId;
 
-      // Single POST creates the Order inside the already-resolved Job
-      // (inline job creation is gone — the resolver made the Job real
-      // BEFORE this point; an abandoned quote leaves at most a NEW lead
-      // Job, which is exactly what Job-as-root wants a lead to be).
-      const orderRes = await fetch('/api/orders', {
+      // ATOMIC create — Order + ALL line items in ONE transaction via
+      // /api/orders/from-parse (replaced the old create-order-then-loop-
+      // over-line-items sequence, which could leave a half-created order
+      // if a mid-loop line failed). Company + Job are already resolved;
+      // the Job's contacts were attached by the resolver, so no
+      // contactsDecision here. The optional discount stays a separate
+      // POST below (its sign convention intentionally left untouched).
+      // On any failure the whole thing rolls back — no orphan order.
+      const orderDescription =
+        eff.name?.trim() || editing.productionName?.trim() || editing.notes || 'Quote from AI extraction';
+      const fromParseRes = await fetch('/api/orders/from-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          companyId,
-          jobId: existingJobId,
-          // The resolved Job's name doubles as the Order description.
-          // Falls back to the agent's notes or a generic label so saved
-          // orders always have something readable.
-          description: eff.name?.trim() || editing.productionName?.trim() || editing.notes || 'Quote from AI extraction',
-          startDate: editing.startDate || null,
-          endDate: editing.endDate || null,
-          notes: editing.notes || null,
-          taxRate: 0,
-          agentId: (session?.user as { id?: string })?.id,
-        }),
-      });
-      if (!orderRes.ok) {
-        const err = await orderRes.json();
-        alert(err.error || 'Failed to create order');
-        setCreating(false);
-        return;
-      }
-      const order = await orderRes.json();
-      // jobId for downstream inquiry-PATCH — always the resolved Job.
-      const jobId: string = existingJobId;
-
-      // Add line items (already pruned of trailing empty rows).
-      // Package metadata (instanceId / header flag / packageId / modified
-      // flag) ride along on each row — the API stores them verbatim so
-      // member grouping survives a page reload.
-      for (const it of itemsForSave) {
-        const liType = it.catalogType === 'ASSET_CATEGORY'
-          ? 'VEHICLE'
-          : it.catalogType === 'PACKAGE'
-            ? 'EQUIPMENT' // package header is treated as equipment for lane routing
-            : it.department === 'EXPENDABLES'
-              ? 'EXPENDABLE'
-              : 'EQUIPMENT';
-        await fetch(`/api/orders/${order.id}/line-items`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: liType,
+          companyDecision: { kind: 'existing', companyId },
+          jobDecision: { kind: 'existing', jobId: existingJobId },
+          contactsDecision: [],
+          items: itemsForSave.map((it) => ({
             description: it.description,
-            // Header rows don't carry an inventoryItemId (the catalog
-            // type is PACKAGE); only INVENTORY-typed children + true
-            // inventory matches do.
-            inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
-            assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,
-            department: it.department,
-            qualifier: it.qualifier || null,
             quantity: it.quantity,
             rate: it.rate,
             rateType: it.rateType,
+            department: it.department,
+            qualifier: it.qualifier || null,
+            inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
+            assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,
+            catalogType: it.catalogType ?? null,
             pickupDate: it.pickupDate,
             returnDate: it.returnDate,
             billableDays: it.billableDays,
@@ -1616,9 +1584,27 @@ function NewQuotePageInner() {
             packageId: it.packageId ?? null,
             isPackageHeader: !!it.isPackageHeader,
             isPackageModified: !!it.isPackageModified,
-          }),
-        });
+          })),
+          parsed: {
+            startDate: editing.startDate || null,
+            endDate: editing.endDate || null,
+            notes: editing.notes || null,
+            // Order description mirrors the old POST /api/orders fallback
+            // chain (Job name → typed production name → notes → generic).
+            productionName: orderDescription,
+          },
+        }),
+      });
+      if (!fromParseRes.ok) {
+        const err = await fromParseRes.json().catch(() => ({}));
+        alert(err.error || 'Failed to create order');
+        setCreating(false);
+        return;
       }
+      const { orderId } = (await fromParseRes.json()) as { orderId: string };
+      const order = { id: orderId };
+      // jobId for downstream inquiry-PATCH — always the resolved Job.
+      const jobId: string = existingJobId;
 
       if (discountAmount && parseFloat(discountAmount) !== 0) {
         await fetch(`/api/orders/${order.id}/line-items`, {
