@@ -205,13 +205,15 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             </>
           )
 
-          // Equal REST widths. (The old first-narrow/last-wide rebalance
-          // existed only because the longest label used to sit at the
-          // flush-right edge; the tile order now keeps long labels interior,
-          // so every band can be the same width.) Kept as a CSS var the
-          // grow class reads — a plain custom property (not inline flex-grow)
-          // so the hover class still wins on :hover.
-          const bandStyle = { ['--restgrow' as string]: '1' } as React.CSSProperties
+          // REST widths. The flush-edge tiles read unbalanced at equal box
+          // width: the first band fills the top-left corner (looks too wide)
+          // while the last band's bottom-right is cut away (looks too narrow).
+          // So give the first band a smaller weight and the last a larger one
+          // to even out their visual mass. Interiors stay 1. Kept as a CSS var
+          // the grow class reads — a plain custom property (not inline
+          // flex-grow) so the hover class still wins on :hover.
+          const restGrow = i === 0 ? 0.72 : i === last ? 1.4 : 1
+          const bandStyle = { ['--restgrow' as string]: String(restGrow) } as React.CSSProperties
           // Rest: grow = --restgrow, basis-0 → widths follow the weights.
           // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
           // while the others share the rest as narrow slivers. ~350ms ease.
