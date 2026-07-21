@@ -313,14 +313,17 @@ export function PublicSiteNav({
           </div>
         </div>
 
-        {/* Mobile: hamburger · wordmark · order button */}
-        <div className="md:hidden flex items-center justify-between gap-3 py-3">
+        {/* Mobile: hamburger · wordmark · order button. 3-column grid with
+            equal (1fr) side columns so the centre wordmark is truly centred
+            on screen — a flex justify-between would centre it between the two
+            side items instead, which are unequal widths. */}
+        <div className="md:hidden grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-3">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
-            className="w-10 h-10 -ml-2 inline-flex items-center justify-center text-white flex-none"
+            className="w-10 h-10 -ml-2 inline-flex items-center justify-center text-white justify-self-start"
           >
             {open ? (
               <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -328,10 +331,10 @@ export function PublicSiteNav({
               <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
             )}
           </button>
-          <Link href={PUBLIC_HOME_HREF} aria-label="SirReel — Home" className="min-w-0">
+          <Link href={PUBLIC_HOME_HREF} aria-label="SirReel — Home" className="justify-self-center min-w-0">
             <Image src="/s-logo-white.png" alt="SirReel Studio Services" width={1118} height={1065} priority className="h-9 w-auto" />
           </Link>
-          <div className="flex-none">
+          <div className="justify-self-end">
             <Link
               href={PUBLIC_ORDER_CTA.href}
               className="inline-flex items-center rounded-full border-[1.5px] border-[#c39a3f] text-[#c39a3f] px-3.5 py-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em] whitespace-nowrap"
