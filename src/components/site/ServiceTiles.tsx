@@ -107,7 +107,13 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // clip-path has content to reveal all the way to the leaning
           // top edge. Without the +--s width, the overhang would show the
           // container background (gaps between bands).
-          const coverStyle: React.CSSProperties = { top: 0, bottom: 0, left: 0, width: 'calc(100% + var(--s))' }
+          // Media spans the parallelogram's bounding box (+slant overhang).
+          // Interior/first tiles anchor LEFT; the flush-right LAST tile
+          // anchors RIGHT so its photo fills all the way to the right edge
+          // (Wardrobe & Makeup was showing bare colour on the right).
+          const coverStyle: React.CSSProperties = i === last
+            ? { top: 0, bottom: 0, right: 0, width: 'calc(100% + var(--s))' }
+            : { top: 0, bottom: 0, left: 0, width: 'calc(100% + var(--s))' }
           // Horizontal shift to seat the tilted label on the band's
           // diagonal AXIS: a middle parallelogram's mid-height centre is
           // s/2 right of the box centre; the flush-LEFT first band leans
@@ -116,14 +122,13 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // is now un-clipped (clip lives on the media layer only, below),
           // seat it centred in the band box (0) so it stays inside the
           // viewport at any width instead of overflowing off-screen.
-          // Label seating on the band's diagonal axis. The flush-right LAST
-          // tile uses s/4 — enough rightward push that "Wardrobe & Makeup"
-          // clears "Grip & Electric" when both collapse on hover, while the
-          // 4% gutter keeps it on-page. Everything else (first + interiors)
-          // uses s/2: for the long-labelled first tile that extra rightward
-          // shift stops "Trucks and Vans" overflowing off the left edge when
-          // it collapses to a sliver.
-          const axisShift = i === last ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
+          // Label seating on the band's diagonal axis. The flush-edged first
+          // and last tiles lean one side only → s/4 (keeps their labels near
+          // the tile edge so there isn't a big empty band beside them);
+          // interiors sit at the parallelogram centroid → s/2. The first
+          // tile's larger min-width (below) is what stops its long label
+          // clipping the left edge on hover, so it can stay at s/4 here.
+          const axisShift = i === last || i === 0 ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
 
           // The diagonal WINDOW — clips the media/scrims only, NOT the
           // labels. Clipping the whole band cut long labels (e.g. the
@@ -225,8 +230,7 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           const minWClass =
             i === last ? 'min-w-0 lg:min-w-[200px]'
               : i === last - 1 ? 'min-w-0 lg:min-w-[168px]'
-                : i === 0 ? 'min-w-0 lg:min-w-[150px]'
-                  : 'min-w-0 lg:min-w-[84px]'
+                : 'min-w-0 lg:min-w-[84px]'
           const bandClass =
             `group relative h-full ${minWClass} grow-[var(--restgrow)] basis-0 transition-[flex-grow] duration-[350ms] ease-out hover:grow-[var(--hovergrow)] focus-visible:grow-[var(--hovergrow)] outline-none`
 
