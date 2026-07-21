@@ -110,7 +110,12 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           // is now un-clipped (clip lives on the media layer only, below),
           // seat it centred in the band box (0) so it stays inside the
           // viewport at any width instead of overflowing off-screen.
-          const axisShift = i === last ? '0px' : i === 0 ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
+          // Last (flush-right) tile: seat the label between its box centre
+          // and its stripe centroid (s/6). Box-centre alone read too far
+          // left (empty stripe to its right); the full centroid sits right
+          // against the page edge. s/6 centres it in the visible magenta
+          // while keeping a safe page-edge margin at every width.
+          const axisShift = i === last ? 'calc(var(--s) / 6)' : i === 0 ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
 
           // The diagonal WINDOW — clips the media/scrims only, NOT the
           // labels. Clipping the whole band cut long labels (e.g. the
