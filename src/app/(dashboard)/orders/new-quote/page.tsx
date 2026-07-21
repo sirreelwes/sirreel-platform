@@ -2863,6 +2863,82 @@ const SOURCE_LABEL: Record<ContactSource, string> = {
   body_mention:  'mentioned in body',
 };
 
+interface PersonHit {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  company: { id: string; name: string } | null;
+}
+
+// Compact typeahead to link an AI-extracted contact to an existing CRM
+// person (searches /api/persons?q=). On pick the parent flips the row to
+// match_status='existing' so submit associates the CRM record instead of
+// minting a new one.
+function PersonSearchField({ onPick }: { onPick: (p: PersonHit) => void }) {
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<PersonHit[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (q.trim().length < 1) { setHits([]); return; }
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/persons?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        setHits(d.persons || []);
+      } finally {
+        setLoading(false);
+      }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        autoComplete="off"
+        name=""
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => q.trim().length >= 1 && setOpen(true)}
+        placeholder="🔍 Link an existing CRM contact…"
+        className="w-full px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg placeholder:text-lt-fg3"
+      />
+      {open && q.trim().length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-lt-card border border-lt-hairline rounded-lg shadow-lg z-20 overflow-hidden max-h-60 overflow-y-auto">
+          {loading && hits.length === 0 && <div className="px-3 py-2 text-[11px] text-lt-fg3">Searching…</div>}
+          {!loading && hits.length === 0 && <div className="px-3 py-2 text-[11px] text-lt-fg3">No matches — type a name and use the fields below to add a new contact.</div>}
+          {hits.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { onPick(p); setOpen(false); setQ(''); }}
+              className="w-full text-left px-3 py-2 hover:bg-lt-inner border-b border-lt-hairline/50 last:border-0"
+            >
+              <div className="text-[12px] font-semibold text-lt-fg">{p.firstName} {p.lastName}</div>
+              <div className="text-[10px] text-lt-fg3">{p.email || '(no email)'}{p.company ? ` · ${p.company.name}` : ''}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PeopleSection({
   contacts,
   setContacts,
@@ -2932,6 +3008,20 @@ function PeopleSection({
       <div className="space-y-2">
         {contacts.map((c, idx) => {
           const badge = MATCH_BADGE[c.match_status];
+          const isLinked = c.match_status === 'existing' && !!c.existing_person_id;
+          const linkExisting = (p: PersonHit) =>
+            updateContact(idx, {
+              match_status: 'existing',
+              existing_person_id: p.id,
+              candidate_person_id: null,
+              decision: undefined,
+              name: `${p.firstName} ${p.lastName}`.trim(),
+              email: p.email || '',
+              phone: p.phone || c.phone,
+              company: p.company?.name ?? c.company,
+            });
+          const unlink = () =>
+            updateContact(idx, { match_status: 'new', existing_person_id: null });
           return (
             <div
               key={`${c.email}-${idx}`}
@@ -2954,36 +3044,61 @@ function PeopleSection({
                     </span>
                     <span className="text-[10px] text-lt-fg3">· {SOURCE_LABEL[c.source]} ({c.confidence})</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <input
-                      type="text"
-                      value={c.name}
-                      onChange={(e) => updateContact(idx, { name: e.target.value })}
-                      placeholder="Name"
-                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-                    />
-                    <input
-                      type="email"
-                      value={c.email}
-                      onChange={(e) => updateContact(idx, { email: e.target.value })}
-                      placeholder="Email"
-                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-                    />
-                    <input
-                      type="text"
-                      value={c.title || ''}
-                      onChange={(e) => updateContact(idx, { title: e.target.value || null })}
-                      placeholder="Title"
-                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-                    />
-                    <input
-                      type="tel"
-                      value={c.phone || ''}
-                      onChange={(e) => updateContact(idx, { phone: e.target.value || null })}
-                      placeholder="Phone"
-                      className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
-                    />
-                  </div>
+                  {isLinked ? (
+                    // Linked to an existing CRM person — show the record + a
+                    // way to switch back to searching / adding a new one.
+                    <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-chip-good-fg/30 bg-chip-good-bg px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-semibold text-lt-fg truncate">{c.name || '(no name)'}</div>
+                        <div className="text-[10px] text-chip-good-fg">
+                          Linked to CRM{c.email ? ` · ${c.email}` : ''}{c.company ? ` · ${c.company}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={unlink}
+                        className="flex-shrink-0 text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {/* Search the CRM to link an existing contact… */}
+                      <PersonSearchField onPick={linkExisting} />
+                      {/* …or fill these to add a new one. */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={c.name}
+                          onChange={(e) => updateContact(idx, { name: e.target.value })}
+                          placeholder="Name"
+                          className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                        />
+                        <input
+                          type="email"
+                          value={c.email}
+                          onChange={(e) => updateContact(idx, { email: e.target.value })}
+                          placeholder="Email"
+                          className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                        />
+                        <input
+                          type="text"
+                          value={c.title || ''}
+                          onChange={(e) => updateContact(idx, { title: e.target.value || null })}
+                          placeholder="Title"
+                          className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                        />
+                        <input
+                          type="tel"
+                          value={c.phone || ''}
+                          onChange={(e) => updateContact(idx, { phone: e.target.value || null })}
+                          placeholder="Phone"
+                          className="px-2 py-1 bg-lt-inner border border-lt-hairline rounded text-[12px] text-lt-fg"
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mt-2">
                     <label className="text-[10px] text-lt-fg3 uppercase tracking-wider">Role</label>
                     <select
