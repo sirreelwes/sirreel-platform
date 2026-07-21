@@ -104,18 +104,23 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
           const coverStyle: React.CSSProperties = { top: 0, bottom: 0, left: 0, width: 'calc(100% + var(--s))' }
           // Horizontal shift to seat the tilted label on the band's
           // diagonal AXIS: a middle parallelogram's mid-height centre is
-          // s/2 right of the box centre; the flush-edged first/last bands
-          // lean on one side only, so their centre is s/4.
-          const axisShift = i === 0 || i === last ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
-          const inner = (
-            <>
+          // s/2 right of the box centre; the flush-LEFT first band leans
+          // one side only (s/4). The flush-RIGHT last band has a VERTICAL
+          // right edge the tilted label would poke past — since the label
+          // is now un-clipped (clip lives on the media layer only, below),
+          // seat it centred in the band box (0) so it stays inside the
+          // viewport at any width instead of overflowing off-screen.
+          const axisShift = i === last ? '0px' : i === 0 ? 'calc(var(--s) / 4)' : 'calc(var(--s) / 2)'
+
+          // The diagonal WINDOW — clips the media/scrims only, NOT the
+          // labels. Clipping the whole band cut long labels (e.g. the
+          // flush-right "Wardrobe & Makeup") off at the band edge; keeping
+          // the label outside the clip lets it read in full.
+          const mediaLayers = (
+            <div className="absolute inset-0" style={{ clipPath: clipFor(i, last) }}>
               {/* Always-visible media — the duotone photo, or a solid
-                  colour fallback until a photo is uploaded. The image is
-                  ALWAYS rendered (no pure-solid resting state); a dim scrim
-                  below controls calm-at-rest vs vibrant-on-hover. */}
+                  colour fallback until a photo is uploaded. */}
               {t.image ? (
-                // saturate() on the wrapper boosts the COMPOSITED duotone
-                // (photo × colour multiply) and isolates the blend group.
                 <div className="absolute" style={{ ...coverStyle, filter: DUOTONE_FILTER }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -131,26 +136,26 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
                 <div className="absolute" style={{ ...coverStyle, backgroundColor: t.color }} />
               )}
 
-              {/* Dim scrim — HEAVY at rest so the page reads calm and the
-                  tilted label stays legible; LIFTS on hover to reveal the
-                  photo at full vibrancy (duotone tint intact underneath).
-                  This is the always-on-dimmed-until-hover behaviour. */}
+              {/* Dim scrim — heavy at rest, lifts on hover. */}
               <div
                 className="absolute bg-black opacity-[var(--tile-rest-scrim)] group-hover:opacity-[var(--tile-hover-scrim)] transition-opacity duration-[350ms] ease-out pointer-events-none"
                 style={coverStyle}
               />
-              {/* Bottom darken keeps the expanded label legible over a
-                  fully-bright hovered photo. */}
+              {/* Bottom darken keeps the expanded label legible. */}
               <div
                 className="absolute bg-gradient-to-t from-black/55 via-transparent to-transparent pointer-events-none"
                 style={coverStyle}
               />
+            </div>
+          )
 
-              {/* tilted label — runs PARALLEL to the diagonal edge (15°
-                  off vertical via a clean rotate, never a skew), seated on
-                  the band's diagonal axis. Visible collapsed; fades out on
-                  hover as the expanded label fades in. Layered shadow keeps
-                  it legible over both the solid colour and the photo. */}
+          const inner = (
+            <>
+              {mediaLayers}
+
+              {/* tilted label — un-clipped so it reads in full. Runs
+                  PARALLEL to the diagonal edge (15° off vertical, clean
+                  rotate). Visible collapsed; fades out on hover. */}
               <div className="absolute inset-0 flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity duration-300 pointer-events-none">
                 <span
                   className={`text-white font-black uppercase tracking-[0.1em] text-[26px] xl:text-[30px] whitespace-nowrap ${TITLE_SHADOW}`}
@@ -182,11 +187,10 @@ export function ServiceTiles({ tiles }: { tiles: (HomeTile & { image: string | n
             </>
           )
 
-          // BUGFIX: flex-grow must live in the CLASSES, not inline style.
-          // An inline `flexGrow: 1` beats the `hover:grow-[4]` class
-          // (inline wins over classes), so hover never resized the bands.
-          // Only clip-path stays inline now.
-          const bandStyle = { clipPath: clipFor(i, last) } as React.CSSProperties
+          // Clip-path now lives on the inner media layer, not the band, so
+          // flex-grow (classes) and un-clipped labels both work. No inline
+          // style needed on the band itself.
+          const bandStyle = undefined
           // Rest: grow + basis-0 → all bands equal (1/N each, no gaps).
           // Hover: grow = --hovergrow (=N-1) → hovered band stays ~50%
           // while the others share the rest as narrow slivers. ~350ms ease.
