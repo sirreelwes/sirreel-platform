@@ -39,6 +39,7 @@ const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/home',
   '/contact',
+  '/help',             // public help hub — after-hours assistant + how-to videos
   '/vehicles',
   '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
   '/standing-sets',    // public standing-sets pages (STUDIOS nav + home tiles)
@@ -67,6 +68,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/order/supplies',   // the public supply form itself (rewrite target + direct hits)
   '/home',             // public Home page (linked from the shared public nav)
   '/contact',          // public contact band (nav Contact + quote/payment deep-links)
+  '/help',             // public help hub — after-hours assistant + how-to videos
   '/vehicles',         // public vehicle catalog: /vehicles + /vehicles/[slug]
   '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
   '/standing-sets',    // public standing-sets pages (STUDIOS nav + home tiles)

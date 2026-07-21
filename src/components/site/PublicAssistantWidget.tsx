@@ -8,59 +8,18 @@
  * codes only appear after server-side driver verification passes.
  */
 
-import { useEffect, useRef, useState } from 'react'
-
-interface Msg {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-const GREETING: Msg = {
-  role: 'assistant',
-  content:
-    "Hi — I'm SirReel's assistant. I can help after hours with things like a lost vehicle access code, directions, or getting a message to your agent. What do you need?",
-}
+import { useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { useAssistantChat } from './useAssistantChat'
 
 export function PublicAssistantWidget() {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState<Msg[]>([GREETING])
-  const [draft, setDraft] = useState('')
-  const [busy, setBusy] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const { messages, draft, setDraft, busy, send, scrollRef } = useAssistantChat()
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [messages, open])
-
-  const send = async () => {
-    const content = draft.trim()
-    if (!content || busy) return
-    const next = [...messages, { role: 'user' as const, content }]
-    setMessages(next)
-    setDraft('')
-    setBusy(true)
-    try {
-      const res = await fetch('/api/public/assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // The greeting is local-only; the server sees user/assistant turns after it.
-        body: JSON.stringify({ messages: next.slice(1) }),
-      })
-      const json = await res.json().catch(() => ({}))
-      const reply =
-        typeof json.reply === 'string' && json.reply
-          ? json.reply
-          : json.error || 'Something went wrong — please call 888.477.7335.'
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Connection trouble — please call 888.477.7335.' },
-      ])
-    } finally {
-      setBusy(false)
-    }
-  }
+  // /help hosts the assistant inline (HelpAssistantPanel) — don't also float
+  // the launcher there.
+  if (pathname === '/help') return null
 
   return (
     <>

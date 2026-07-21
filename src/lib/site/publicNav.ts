@@ -127,6 +127,7 @@ export const PUBLIC_NAV: NavEntry[] = [
   },
 
   { label: 'Contact', href: '/contact' },
+  { label: 'Help', href: '/help' },
 ]
 
 /**
