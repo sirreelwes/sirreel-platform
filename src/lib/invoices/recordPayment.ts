@@ -44,6 +44,10 @@ export interface PaymentInput {
   reference?: string | null
   notes?: string | null
   recordedById: string
+  /** CardConnect retref for gateway-settled operator charges (e.g. the
+   *  charge-saved-card flow). Persisted on Payment.gatewayRefId for
+   *  reconciliation / void. Null for manually-keyed cash/check/wire. */
+  gatewayRefId?: string | null
   /** When true, allow overpayment (amount > balanceDue). Default false
    *  — operators should record exact amounts. Keep the flag for the
    *  future case of credit notations. */
@@ -82,7 +86,7 @@ export type VoidPaymentResult =
 
 // ─── Record ─────────────────────────────────────────────────────
 export async function recordPayment(input: PaymentInput): Promise<RecordPaymentResult> {
-  const { invoiceId, amount, method, receivedAt, reference = null, notes = null, recordedById, allowOverpay = false } = input
+  const { invoiceId, amount, method, receivedAt, reference = null, notes = null, recordedById, gatewayRefId = null, allowOverpay = false } = input
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, status: 400, error: 'amount must be > 0' }
@@ -116,6 +120,24 @@ export async function recordPayment(input: PaymentInput): Promise<RecordPaymentR
     }
   }
 
+  // Idempotency for gateway-settled charges: a CardConnect retref is
+  // unique, so if we've already recorded a Payment for it, don't double-
+  // write. Only applies when gatewayRefId is set (cash/check leave it
+  // null and are never deduped this way).
+  if (gatewayRefId) {
+    const existing = await prisma.payment.findFirst({
+      where: { gatewayRefId, invoiceId },
+      select: { id: true },
+    })
+    if (existing) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'a payment for this gateway transaction already exists',
+      }
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.create({
       data: {
@@ -126,6 +148,7 @@ export async function recordPayment(input: PaymentInput): Promise<RecordPaymentR
         reference,
         notes,
         recordedById,
+        gatewayRefId,
       },
       select: { id: true },
     })

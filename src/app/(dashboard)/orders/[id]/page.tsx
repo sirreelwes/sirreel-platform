@@ -952,6 +952,27 @@ export default function OrderDetailPage() {
       setRecordingPayment(false);
     }
   };
+  const [chargingCard, setChargingCard] = useState(false);
+  const chargeSavedCard = async (invoiceId: string, amount: number) => {
+    if (chargingCard) return;
+    setChargingCard(true);
+    setPaymentErr(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/charge-saved-card`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        setPaymentErr(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      await Promise.all([fetchOrder(), fetchInvoices(), fetchPayments(invoiceId)]);
+    } finally {
+      setChargingCard(false);
+    }
+  };
   const voidPayment = async (paymentId: string, invoiceId: string) => {
     const reason = window.prompt('Reason for voiding this payment? (≥4 chars)');
     if (!reason || reason.trim().length < 4) return;
@@ -3336,8 +3357,10 @@ export default function OrderDetailPage() {
                         canRecord={canRecordPayment}
                         payments={paymentsByInvoice[inv.id] ?? null}
                         recording={recordingPayment}
+                        charging={chargingCard}
                         err={paymentErr}
                         onRecord={(body) => recordPayment(inv.id, body)}
+                        onChargeSavedCard={(amt) => chargeSavedCard(inv.id, amt)}
                         onVoid={(paymentId) => voidPayment(paymentId, inv.id)}
                       />
                       {inv.type === 'LD' && (
@@ -3977,8 +4000,10 @@ function PaymentsPanel({
   canRecord,
   payments,
   recording,
+  charging,
   err,
   onRecord,
+  onChargeSavedCard,
   onVoid,
 }: {
   invoiceId: string;
@@ -3986,6 +4011,7 @@ function PaymentsPanel({
   canRecord: boolean;
   payments: PaymentRow[] | null;
   recording: boolean;
+  charging: boolean;
   err: string | null;
   onRecord: (body: {
     amount: number;
@@ -3994,6 +4020,7 @@ function PaymentsPanel({
     reference: string;
     notes: string;
   }) => void | Promise<void>;
+  onChargeSavedCard: (amount: number) => void | Promise<void>;
   onVoid: (paymentId: string) => void | Promise<void>;
 }) {
   const [amount, setAmount] = useState('');
@@ -4004,6 +4031,26 @@ function PaymentsPanel({
   const amountNum = parseFloat(amount);
   const validAmount = Number.isFinite(amountNum) && amountNum > 0;
   const overpay = validAmount && amountNum > balanceDue + 0.005;
+
+  // Card-on-file probe. The token is never returned — just display
+  // fields — so staff can see & charge the authorized card without the
+  // client re-entering it. null = not yet loaded; false = none on file.
+  const [savedCard, setSavedCard] = useState<
+    { last4: string | null; cardType: string | null; cardholderName: string | null } | false | null
+  >(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/invoices/${invoiceId}/charge-saved-card`)
+      .then((r) => (r.ok ? r.json() : { hasCard: false }))
+      .then((d) => {
+        if (!alive) return;
+        setSavedCard(d.hasCard ? { last4: d.last4, cardType: d.cardType, cardholderName: d.cardholderName } : false);
+      })
+      .catch(() => alive && setSavedCard(false));
+    return () => {
+      alive = false;
+    };
+  }, [invoiceId]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validAmount || overpay) return;
@@ -4152,6 +4199,15 @@ function PaymentsPanel({
         </form>
       )}
 
+      {canRecord && balanceDue > 0 && savedCard && (
+        <CardOnFileCharge
+          savedCard={savedCard}
+          balanceDue={balanceDue}
+          charging={charging}
+          onCharge={onChargeSavedCard}
+        />
+      )}
+
       {err && (
         <div className="text-[11px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded px-2 py-1.5">
           {err}
@@ -4167,6 +4223,71 @@ function PaymentsPanel({
       {/* invoiceId reserved for future per-form analytics — referenced here
           so the unused-var lint stays quiet during tighter perms work. */}
       <span className="hidden">{invoiceId}</span>
+    </div>
+  );
+}
+
+// Charge the client's card-on-file (authorized via the portal CC step)
+// against this invoice — deposits, balances — without them re-entering
+// the card. Amount defaults to the full balance; editable for partials.
+// Real money: confirm before firing, disable while charging.
+function CardOnFileCharge({
+  savedCard,
+  balanceDue,
+  charging,
+  onCharge,
+}: {
+  savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null };
+  balanceDue: number;
+  charging: boolean;
+  onCharge: (amount: number) => void | Promise<void>;
+}) {
+  const [amount, setAmount] = useState<number>(balanceDue);
+  const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
+  const label = `${savedCard.cardType ? savedCard.cardType + ' ' : ''}····${savedCard.last4 ?? '????'}`;
+  const charge = async () => {
+    if (!valid || charging) return;
+    const ok = window.confirm(
+      `Charge $${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} to the card on file (${label})?\n\nThis runs a real charge through CardPointe.`,
+    );
+    if (!ok) return;
+    await onCharge(amount);
+  };
+  return (
+    <div className="border border-lt-hairline rounded-lg p-3 bg-lt-inner space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] uppercase tracking-wider font-bold text-lt-fg3">
+          💳 Card on file
+        </span>
+        <span className="text-[11px] text-lt-fg2 font-mono">{label}</span>
+        {savedCard.cardholderName && (
+          <span className="text-[11px] text-lt-fg3">· {savedCard.cardholderName}</span>
+        )}
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          Amount
+          <div className="mt-1">
+            <CurrencyInput
+              value={amount}
+              onChange={setAmount}
+              min={0.01}
+              max={balanceDue}
+              placeholder={balanceDue.toFixed(2)}
+              inputClassName="px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
+              ariaLabel="Charge amount"
+            />
+          </div>
+        </label>
+        <button
+          type="button"
+          onClick={charge}
+          disabled={!valid || charging}
+          className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
+        >
+          {charging ? 'Charging…' : `Charge ${label}`}
+        </button>
+      </div>
     </div>
   );
 }
