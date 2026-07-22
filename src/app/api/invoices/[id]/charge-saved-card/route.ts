@@ -90,7 +90,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'nothing due on this invoice' }, { status: 409 })
   }
   // Amount: explicit or full balance. Clamp to balance (server is truth).
-  const body = (await req.json().catch(() => ({}))) as { amount?: unknown }
+  const body = (await req.json().catch(() => ({}))) as { amount?: unknown; waiveSurcharge?: unknown }
+  const waiveSurcharge = body.waiveSurcharge === true
   const requested =
     body.amount === undefined || body.amount === null
       ? balanceDue
@@ -106,8 +107,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 },
     )
   }
-  // Base credits the invoice; the card is charged base + 3% surcharge.
-  const { base, surcharge, total } = surchargeBreakdown(requested)
+  // Base credits the invoice; the card is charged base + 3% surcharge,
+  // UNLESS staff waived the fee for this charge (courtesy / negotiated).
+  const breakdown = surchargeBreakdown(requested)
+  const base = breakdown.base
+  const surcharge = waiveSurcharge ? 0 : breakdown.surcharge
+  const total = Math.round((base + surcharge) * 100) / 100
 
   // ── Charge the card on file through CardPointe ───────────────
   let charge
@@ -137,7 +142,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Credit the invoice the BASE; the surcharge is stored separately and
   // does not count toward the invoice balance.
   const cardRef = card.last4 ? `card ····${card.last4} (on file)` : 'card on file'
-  const ref = surcharge > 0 ? `${cardRef} +${CARD_SURCHARGE_LABEL}` : cardRef
+  const ref =
+    surcharge > 0
+      ? `${cardRef} +${CARD_SURCHARGE_LABEL}`
+      : waiveSurcharge
+        ? `${cardRef} (3% fee waived)`
+        : cardRef
   const result = await recordPayment({
     invoiceId: invoice.id,
     amount: base,

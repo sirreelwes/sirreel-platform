@@ -954,7 +954,7 @@ export default function OrderDetailPage() {
     }
   };
   const [chargingCard, setChargingCard] = useState(false);
-  const chargeSavedCard = async (invoiceId: string, amount: number) => {
+  const chargeSavedCard = async (invoiceId: string, amount: number, waiveSurcharge: boolean) => {
     if (chargingCard) return;
     setChargingCard(true);
     setPaymentErr(null);
@@ -962,7 +962,7 @@ export default function OrderDetailPage() {
       const res = await fetch(`/api/invoices/${invoiceId}/charge-saved-card`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, waiveSurcharge }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
@@ -3363,7 +3363,7 @@ export default function OrderDetailPage() {
                         charging={chargingCard}
                         err={paymentErr}
                         onRecord={(body) => recordPayment(inv.id, body)}
-                        onChargeSavedCard={(amt) => chargeSavedCard(inv.id, amt)}
+                        onChargeSavedCard={(amt, waive) => chargeSavedCard(inv.id, amt, waive)}
                         onVoid={(paymentId) => voidPayment(paymentId, inv.id)}
                       />
                       {inv.type === 'LD' && (
@@ -4023,7 +4023,7 @@ function PaymentsPanel({
     reference: string;
     notes: string;
   }) => void | Promise<void>;
-  onChargeSavedCard: (amount: number) => void | Promise<void>;
+  onChargeSavedCard: (amount: number, waiveSurcharge: boolean) => void | Promise<void>;
   onVoid: (paymentId: string) => void | Promise<void>;
 }) {
   const [amount, setAmount] = useState('');
@@ -4243,25 +4243,32 @@ function CardOnFileCharge({
   savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null };
   balanceDue: number;
   charging: boolean;
-  onCharge: (amount: number) => void | Promise<void>;
+  onCharge: (amount: number, waiveSurcharge: boolean) => void | Promise<void>;
 }) {
   const [amount, setAmount] = useState<number>(balanceDue);
+  const [waive, setWaive] = useState(false);
   const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
   const label = `${savedCard.cardType ? savedCard.cardType + ' ' : ''}····${savedCard.last4 ?? '????'}`;
-  // Card is charged base + 3%; the invoice is credited the base.
-  const fee = surchargeBreakdown(valid ? amount : 0);
+  // Card is charged base + 3%; the invoice is credited the base. Staff can
+  // waive the fee for this charge (courtesy / negotiated).
+  const bd = surchargeBreakdown(valid ? amount : 0);
+  const surcharge = waive ? 0 : bd.surcharge;
+  const total = Math.round((bd.base + surcharge) * 100) / 100;
+  const fee = { base: bd.base, surcharge, total };
   const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
   const charge = async () => {
     if (!valid || charging) return;
     const ok = window.confirm(
       `Charge the card on file (${label})?\n\n` +
         `Applied to balance: ${usd(fee.base)}\n` +
-        `Card processing fee (3%): ${usd(fee.surcharge)}\n` +
+        (waive
+          ? `Card processing fee (3%): WAIVED\n`
+          : `Card processing fee (3%): ${usd(fee.surcharge)}\n`) +
         `Total charged to card: ${usd(fee.total)}\n\n` +
         `This runs a real charge through CardPointe.`,
     );
     if (!ok) return;
-    await onCharge(amount);
+    await onCharge(amount, waive);
   };
   return (
     <div className="border border-lt-hairline rounded-lg p-3 bg-lt-inner space-y-2">
@@ -4298,10 +4305,28 @@ function CardOnFileCharge({
           {charging ? 'Charging…' : `Charge ${usd(fee.total)}`}
         </button>
       </div>
-      {valid && fee.surcharge > 0 && (
+      <label className="flex items-center gap-2 text-[11px] text-lt-fg2 cursor-pointer w-fit">
+        <input
+          type="checkbox"
+          checked={waive}
+          onChange={(e) => setWaive(e.target.checked)}
+          className="w-3.5 h-3.5 accent-cadence-on-rental-bar"
+        />
+        Waive 3% card processing fee
+      </label>
+      {valid && (
         <div className="text-[11px] text-lt-fg3">
-          {usd(fee.base)} to balance + {usd(fee.surcharge)} card fee (3%) ={' '}
-          <span className="font-semibold text-lt-fg2">{usd(fee.total)}</span> charged
+          {waive ? (
+            <>
+              {usd(fee.base)} to balance · <span className="text-chip-warn-fg">fee waived</span> ={' '}
+              <span className="font-semibold text-lt-fg2">{usd(fee.total)}</span> charged
+            </>
+          ) : (
+            <>
+              {usd(fee.base)} to balance + {usd(fee.surcharge)} card fee (3%) ={' '}
+              <span className="font-semibold text-lt-fg2">{usd(fee.total)}</span> charged
+            </>
+          )}
         </div>
       )}
     </div>
