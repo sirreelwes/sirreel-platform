@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { SigCanvas } from '@/components/portal/SigCanvas'
 import { formatPhone } from '@/lib/format/phone'
 import { TSX } from '@/lib/brand/tsxTokens'
-import { CC_GUARANTEE_TEXT, CC_ACK_TEXT } from './terms'
+import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
 import { CardShell, ContextChip, DoneNote, LockedNote } from './CardShell'
 import type { V2Booking, V2Intake } from './types'
 
@@ -214,6 +214,9 @@ export function CcAuthCard({
             )}
           </div>
 
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+            <span className="font-bold">3% Credit Card Processing Fee.</span> {CC_SURCHARGE_TEXT}
+          </div>
           <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">{CC_GUARANTEE_TEXT}</div>
           <label className="flex items-start gap-3 cursor-pointer">
             <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" />

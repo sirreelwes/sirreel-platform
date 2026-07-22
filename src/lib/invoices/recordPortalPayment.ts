@@ -41,6 +41,9 @@ export interface PortalPaymentInput {
   /** CardConnect retref. Always set on portal payments since they
    *  always flow through the gateway. */
   gatewayRefId: string
+  /** Card processing surcharge charged ON TOP of `amount` at the gateway.
+   *  `amount` credits the invoice; the gateway charged amount+surcharge. */
+  surchargeAmount?: number | null
   receivedAt: Date
   /** ACH-only attestation. */
   nachaAuthSignatureData?: string | null
@@ -77,6 +80,7 @@ export async function recordPortalPayment(
     method,
     status,
     gatewayRefId,
+    surchargeAmount = null,
     receivedAt,
     nachaAuthSignatureData = null,
     nachaAuthText = null,
@@ -151,6 +155,10 @@ export async function recordPortalPayment(
         method,
         status,
         gatewayRefId,
+        surchargeAmount:
+          surchargeAmount != null && surchargeAmount > 0
+            ? new Prisma.Decimal(surchargeAmount.toFixed(2))
+            : null,
         receivedAt,
         settledAt,
         clearedAt,

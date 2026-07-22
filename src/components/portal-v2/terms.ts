@@ -73,7 +73,13 @@ export const STUDIO_TERMS: { heading: string; text: string }[] = [
 
 export const CC_GUARANTEE_TEXT = `This Credit Card Authorization form guarantees the payment of all fees due SirReel Studio Services according to the Rental Agreement. This credit card may be used for Charges and Deposits, Cancellation Fees, Damage to Premises and Equipment, Past Due Balances, Fines, Parking Fees and all fees incurred during a given project/production. I agree that the cardholder is a Personal Guarantor of the charges here described and summarized.`
 
-export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`
+// Surcharge disclosure. Shown prominently near the card entry, and the
+// consent to it is folded into CC_ACK_TEXT below so the signed
+// acknowledgment covers the fee. The "3%" here must match
+// CARD_SURCHARGE_RATE in src/lib/payments/surcharge.ts.
+export const CC_SURCHARGE_TEXT = `A 3% processing fee is added to all payments made by credit card. This fee is applied to each amount charged to the card on file. To avoid this fee, payment may be made by check.`
+
+export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above, plus a 3% credit card processing fee, and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`
 
 // Stage area keys/labels moved to the single source in
 // src/lib/contracts/stageAreas.ts (stageAreaLabel / STAGE_AREAS).

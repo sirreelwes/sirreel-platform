@@ -48,6 +48,10 @@ export interface PaymentInput {
    *  charge-saved-card flow). Persisted on Payment.gatewayRefId for
    *  reconciliation / void. Null for manually-keyed cash/check/wire. */
   gatewayRefId?: string | null
+  /** Card processing surcharge charged ON TOP of `amount` at the gateway.
+   *  `amount` credits the invoice; the gateway charged amount+surcharge.
+   *  Null for non-surcharged payments. */
+  surchargeAmount?: number | null
   /** When true, allow overpayment (amount > balanceDue). Default false
    *  — operators should record exact amounts. Keep the flag for the
    *  future case of credit notations. */
@@ -86,7 +90,7 @@ export type VoidPaymentResult =
 
 // ─── Record ─────────────────────────────────────────────────────
 export async function recordPayment(input: PaymentInput): Promise<RecordPaymentResult> {
-  const { invoiceId, amount, method, receivedAt, reference = null, notes = null, recordedById, gatewayRefId = null, allowOverpay = false } = input
+  const { invoiceId, amount, method, receivedAt, reference = null, notes = null, recordedById, gatewayRefId = null, surchargeAmount = null, allowOverpay = false } = input
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, status: 400, error: 'amount must be > 0' }
@@ -149,6 +153,10 @@ export async function recordPayment(input: PaymentInput): Promise<RecordPaymentR
         notes,
         recordedById,
         gatewayRefId,
+        surchargeAmount:
+          surchargeAmount != null && surchargeAmount > 0
+            ? new Prisma.Decimal(surchargeAmount.toFixed(2))
+            : null,
       },
       select: { id: true },
     })

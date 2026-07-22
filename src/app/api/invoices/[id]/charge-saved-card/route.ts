@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { chargeCard, isApproved } from '@/lib/cardpointe/client'
 import { recordPayment } from '@/lib/invoices/recordPayment'
 import { resolveSavedCardForInvoice } from '@/lib/invoices/savedCard'
+import { surchargeBreakdown, CARD_SURCHARGE_LABEL } from '@/lib/payments/surcharge'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -105,14 +106,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 },
     )
   }
-  const amount = Math.round(requested * 100) / 100
+  // Base credits the invoice; the card is charged base + 3% surcharge.
+  const { base, surcharge, total } = surchargeBreakdown(requested)
 
   // ── Charge the card on file through CardPointe ───────────────
   let charge
   try {
     charge = await chargeCard({
       cardToken: card.cardToken,
-      amountDollars: amount,
+      amountDollars: total,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName: card.cardholderName ?? undefined,
     })
@@ -132,15 +134,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Record the payment (operator-attributed) ─────────────────
-  const ref = card.last4 ? `card ····${card.last4} (on file)` : 'card on file'
+  // Credit the invoice the BASE; the surcharge is stored separately and
+  // does not count toward the invoice balance.
+  const cardRef = card.last4 ? `card ····${card.last4} (on file)` : 'card on file'
+  const ref = surcharge > 0 ? `${cardRef} +${CARD_SURCHARGE_LABEL}` : cardRef
   const result = await recordPayment({
     invoiceId: invoice.id,
-    amount,
+    amount: base,
     method: 'CARDPOINTE' satisfies PaymentMethod,
     receivedAt: new Date(),
     reference: ref,
     recordedById: user.id,
     gatewayRefId: charge.retref,
+    surchargeAmount: surcharge,
   })
   if (!result.ok) {
     // Gateway charged but the DB write failed. Log loudly with the
@@ -168,5 +174,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     orderAdvancedToClosed: result.orderAdvancedToClosed,
     last4: card.last4,
     retref: charge.retref,
+    base,
+    surcharge,
+    totalCharged: total,
   })
 }

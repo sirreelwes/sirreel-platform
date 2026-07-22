@@ -3261,6 +3261,12 @@ model Payment {
   // existing operator-recorded payments (CHECK/WIRE/CASH/OTHER) which
   // are always "received" by the time they're entered.
   status        PaymentStatus  @default(CLEARED)
+  // Card processing surcharge (3%) added ON TOP of `amount` at the
+  // gateway. `amount` is what credits the invoice; the gateway actually
+  // charged `amount + surchargeAmount`. Null for non-surcharged payments
+  // (cash/check/wire, or card charges taken before surcharging began).
+  // Reversals must refund `amount + surchargeAmount`.
+  surchargeAmount Decimal?     @map("surcharge_amount") @db.Decimal(10, 2)
   // Operator-supplied reference: check #, wire confirmation, etc.
   // Free-text by design.
   reference     String?

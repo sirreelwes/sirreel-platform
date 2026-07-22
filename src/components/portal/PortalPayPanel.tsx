@@ -28,6 +28,7 @@
 
 import { useEffect, useState } from 'react'
 import { SigCanvas } from './SigCanvas'
+import { surchargeBreakdown } from '@/lib/payments/surcharge'
 
 interface PortalInvoice {
   id: string
@@ -226,6 +227,8 @@ function CardPayForm({
   const [success, setSuccess] = useState<{
     last4: string | null
     amount: number
+    surcharge: number
+    total: number
     orderClosed: boolean
   } | null>(null)
 
@@ -284,6 +287,8 @@ function CardPayForm({
   const amount = Number(amountStr)
   const amountValid = Number.isFinite(amount) && amount > 0 && amount <= balance + 0.001
   const canSubmit = !!cardToken && cardholderName.trim().length > 1 && amountValid && !submitting
+  // Card is charged base + 3% surcharge; the invoice is credited the base.
+  const fee = surchargeBreakdown(amountValid ? amount : 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -307,6 +312,9 @@ function CardPayForm({
         last4?: string | null
         orderAdvancedToClosed?: boolean
         retref?: string
+        base?: number
+        surcharge?: number
+        totalCharged?: number
       }
       if (!r.ok || !data.ok) {
         setErr(
@@ -320,7 +328,9 @@ function CardPayForm({
       }
       setSuccess({
         last4: data.last4 ?? last4,
-        amount,
+        amount: data.base ?? amount,
+        surcharge: data.surcharge ?? fee.surcharge,
+        total: data.totalCharged ?? fee.total,
         orderClosed: !!data.orderAdvancedToClosed,
       })
       await onPaid()
@@ -334,8 +344,14 @@ function CardPayForm({
   if (success) {
     return (
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-4 py-3">
-        Payment received: {fmtUsd(success.amount)}
+        Payment received: {fmtUsd(success.total)}
         {success.last4 && <> on card ····{success.last4}</>}.
+        {success.surcharge > 0 && (
+          <span className="block text-xs mt-1">
+            {fmtUsd(success.amount)} applied to your balance + {fmtUsd(success.surcharge)} card
+            processing fee (3%).
+          </span>
+        )}
         {success.orderClosed && (
           <span className="block text-xs mt-1">Your order is now closed. Thanks.</span>
         )}
@@ -422,6 +438,24 @@ function CardPayForm({
         )}
       </label>
 
+      {amountValid && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-0.5">
+          <div className="flex justify-between">
+            <span>Applied to balance</span>
+            <span className="font-medium tabular-nums">{fmtUsd(fee.base)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Card processing fee (3%)</span>
+            <span className="font-medium tabular-nums">{fmtUsd(fee.surcharge)}</span>
+          </div>
+          <div className="flex justify-between border-t border-amber-200 pt-0.5 font-bold">
+            <span>Total charged to card</span>
+            <span className="tabular-nums">{fmtUsd(fee.total)}</span>
+          </div>
+          <div className="text-[10px] text-amber-700 pt-0.5">To avoid the 3% fee, pay by check.</div>
+        </div>
+      )}
+
       {err && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-xs px-3 py-2">
           {err}
@@ -433,7 +467,7 @@ function CardPayForm({
         disabled={!canSubmit}
         className="w-full bg-gray-900 text-white rounded-lg py-3 text-sm font-semibold hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
-        {submitting ? 'Charging card…' : `Pay ${fmtUsd(amount || balance)}`}
+        {submitting ? 'Charging card…' : `Pay ${fmtUsd(amountValid ? fee.total : balance)}`}
       </button>
     </form>
   )

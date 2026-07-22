@@ -19,6 +19,7 @@ import { DiscountsPanel, type DiscountsPanelData } from "@/components/orders/Dis
 import { PushDatesModal } from "@/components/orders/PushDatesModal";
 import { LineItemDescriptionCombobox } from "@/components/orders/LineItemDescriptionCombobox";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { surchargeBreakdown } from "@/lib/payments/surcharge";
 import { SubRentalModal, type SubRentalLineContext } from "@/components/sub-rentals/SubRentalModal";
 import { describeAgreementStatus, RECOVERABLE_AGREEMENT_STATES } from "@/lib/portal/agreementStatus";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
@@ -4247,10 +4248,17 @@ function CardOnFileCharge({
   const [amount, setAmount] = useState<number>(balanceDue);
   const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
   const label = `${savedCard.cardType ? savedCard.cardType + ' ' : ''}····${savedCard.last4 ?? '????'}`;
+  // Card is charged base + 3%; the invoice is credited the base.
+  const fee = surchargeBreakdown(valid ? amount : 0);
+  const usd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
   const charge = async () => {
     if (!valid || charging) return;
     const ok = window.confirm(
-      `Charge $${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} to the card on file (${label})?\n\nThis runs a real charge through CardPointe.`,
+      `Charge the card on file (${label})?\n\n` +
+        `Applied to balance: ${usd(fee.base)}\n` +
+        `Card processing fee (3%): ${usd(fee.surcharge)}\n` +
+        `Total charged to card: ${usd(fee.total)}\n\n` +
+        `This runs a real charge through CardPointe.`,
     );
     if (!ok) return;
     await onCharge(amount);
@@ -4287,9 +4295,15 @@ function CardOnFileCharge({
           disabled={!valid || charging}
           className="px-3 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded"
         >
-          {charging ? 'Charging…' : `Charge ${label}`}
+          {charging ? 'Charging…' : `Charge ${usd(fee.total)}`}
         </button>
       </div>
+      {valid && fee.surcharge > 0 && (
+        <div className="text-[11px] text-lt-fg3">
+          {usd(fee.base)} to balance + {usd(fee.surcharge)} card fee (3%) ={' '}
+          <span className="font-semibold text-lt-fg2">{usd(fee.total)}</span> charged
+        </div>
+      )}
     </div>
   );
 }

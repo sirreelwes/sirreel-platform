@@ -41,6 +41,7 @@ import {
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { chargeCard, isApproved } from '@/lib/cardpointe/client'
 import { recordPortalPayment } from '@/lib/invoices/recordPortalPayment'
+import { surchargeBreakdown, CARD_SURCHARGE_LABEL } from '@/lib/payments/surcharge'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -121,12 +122,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
+  // Base credits the invoice; the card is charged base + 3% surcharge.
+  const { base, surcharge, total } = surchargeBreakdown(amount)
+
   // ── Charge through CardPointe ────────────────────────────────
   let charge
   try {
     charge = await chargeCard({
       cardToken,
-      amountDollars: amount,
+      amountDollars: total,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName,
     })
@@ -149,15 +153,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Persist Payment row ──────────────────────────────────────
+  // Credit the invoice the BASE; the surcharge is stored separately and
+  // does not count toward the invoice balance.
+  const baseRef = last4 ? `card ····${last4}` : null
   const result = await recordPortalPayment({
     invoiceId: invoice.id,
     portalAccessId: resolved.portalAccessId,
-    amount,
+    amount: base,
     method: 'CARDPOINTE' satisfies PaymentMethod,
     status: 'CLEARED' satisfies PaymentStatus,
     gatewayRefId: charge.retref,
+    surchargeAmount: surcharge,
     receivedAt: new Date(),
-    reference: last4 ? `card ····${last4}` : null,
+    reference: surcharge > 0 && baseRef ? `${baseRef} +${CARD_SURCHARGE_LABEL}` : baseRef,
   })
   if (!result.ok) {
     // Edge case: gateway charged successfully but our DB write
@@ -186,5 +194,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     invoice: result.invoice,
     orderAdvancedToClosed: result.orderAdvancedToClosed,
     last4,
+    base,
+    surcharge,
+    totalCharged: total,
   })
 }

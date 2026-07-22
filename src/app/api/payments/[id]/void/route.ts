@@ -44,17 +44,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // gateway (voidPayment returns 409) so a retry can't double-refund.
   const payment = await prisma.payment.findUnique({
     where: { id: params.id },
-    select: { id: true, method: true, gatewayRefId: true, amount: true, voidedAt: true },
+    select: { id: true, method: true, gatewayRefId: true, amount: true, surchargeAmount: true, voidedAt: true },
   })
   if (!payment) return NextResponse.json({ ok: false, error: 'payment not found' }, { status: 404 })
 
   let reversalNote = ''
   if (payment.method === 'CARDPOINTE' && payment.gatewayRefId && !payment.voidedAt) {
+    // Refund the FULL amount the gateway captured — base credited to the
+    // invoice PLUS the surcharge charged on top.
+    const chargedTotal = Number(payment.amount) + Number(payment.surchargeAmount ?? 0)
     let reversal
     try {
       reversal = await reverseCardCharge({
         retref: payment.gatewayRefId,
-        amountDollars: Number(payment.amount),
+        amountDollars: chargedTotal,
       })
     } catch (err) {
       console.error('[payment.void] gateway error:', err)
