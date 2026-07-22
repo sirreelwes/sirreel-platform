@@ -1425,7 +1425,15 @@ export default function ClientPortal() {
         )}
 
         {activeTab === 'overview' && (
-          <div className="pb-2 px-1">
+          <div className="pb-2 px-1 space-y-2">
+            {/* Our W-9 — clients need it for their AP/records when they pay
+                us. Shared single company file via /api/public/forms/w9 (same
+                one the public site's Forms → W-9 serves). */}
+            <a href="/api/public/forms/w9" target="_blank" rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors bg-white">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+              Download our W-9
+            </a>
             <a href={`mailto:${booking.person?.email || ''}?subject=Your SirReel Job Portal — ${booking.jobName}&body=Hi,%0A%0AHere is your link to your SirReel Job Portal for ${booking.jobName}:%0A%0A${typeof window !== 'undefined' ? window.location.origin : ''}/portal/${token}%0A%0AYour progress is saved automatically — return any time to pick up where you left off.%0A%0AQuestions? Call us at (818) 515-2389 or email info@sirreel.com.%0A%0AWarm regards,%0ASirReel Studio Services`}
               className="w-full flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
               📧 Email me this link for later
