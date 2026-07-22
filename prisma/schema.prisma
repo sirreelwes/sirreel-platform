@@ -2135,6 +2135,12 @@ model PaperworkRequest {
   ccCardNumberEncrypted String?   @map("cc_card_number_encrypted") @db.Text
   ccChargeEstimate      Decimal?  @map("cc_charge_estimate") @db.Decimal(10, 2)
   ccAuthSignedAt        DateTime? @map("cc_auth_signed_at")
+  // Client's stated payment intent captured alongside the card auth.
+  // 'CARD' (default) = charge the card on file; 'CHECK_WIRE' = client
+  // will pay by check/bank transfer and the card is on file as SECURITY
+  // ONLY. The card is authorized/stored either way — this is an intent
+  // signal for staff, not a gate. Null = legacy/unspecified (treat as CARD).
+  ccPaymentPreference   String?   @map("cc_payment_preference")
 
   // Signer info
   signerName String? @map("signer_name")

@@ -28,6 +28,11 @@ export interface SavedCard {
   cardType: string | null
   cardholderName: string | null
   authSignedAt: Date | null
+  /** Client's stated payment intent: 'CARD' (charge the card) or
+   *  'CHECK_WIRE' (client pays by check/bank transfer, card is security
+   *  only). Null = legacy/unspecified (treat as CARD). Informational —
+   *  the card is chargeable regardless. */
+  paymentPreference: 'CARD' | 'CHECK_WIRE' | null
   /** The paperwork_requests row the token came from. */
   paperworkRequestId: string
 }
@@ -58,6 +63,7 @@ export async function resolveSavedCardForInvoice(
       ccCardholderFirst: true,
       ccCardholderLast: true,
       ccAuthSignedAt: true,
+      ccPaymentPreference: true,
     },
   })
   if (!pw || !pw.ccCardNumberEncrypted) return null
@@ -71,6 +77,7 @@ export async function resolveSavedCardForInvoice(
     cardType: pw.ccCardType ?? null,
     cardholderName,
     authSignedAt: pw.ccAuthSignedAt ?? null,
+    paymentPreference: pw.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : pw.ccPaymentPreference === 'CARD' ? 'CARD' : null,
     paperworkRequestId: pw.id,
   }
 }

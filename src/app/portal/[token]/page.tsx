@@ -159,6 +159,7 @@ export default function ClientPortal() {
   const [ccBillingPhone, setCcBillingPhone] = useState('');
   const [ccBillingEmail, setCcBillingEmail] = useState('');
   const [ccCardType, setCcCardType] = useState('');
+  const [ccPaymentPreference, setCcPaymentPreference] = useState<'CARD' | 'CHECK_WIRE'>('CARD');
   const [ccChargeSummary, setCcChargeSummary] = useState('');
   const [ccChargeEstimate, setCcChargeEstimate] = useState('');
   const [ccAcknowledged, setCcAcknowledged] = useState(false);
@@ -1380,6 +1381,24 @@ export default function ClientPortal() {
                     </div>
                   </div>
                   <div>
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">How will you pay your invoices?</div>
+                    <div className="space-y-2">
+                      {([
+                        { key: 'CARD', title: 'Charge my card on file', sub: 'A 3% processing fee applies to card payments.' },
+                        { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No 3% fee. Your card stays on file as security only.' },
+                      ] as const).map(opt => (
+                        <label key={opt.key} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${ccPaymentPreference === opt.key ? 'border-gray-900 bg-gray-50' : 'border-gray-200'}`}>
+                          <input type="radio" name="payPref" checked={ccPaymentPreference === opt.key} onChange={() => setCcPaymentPreference(opt.key)} className="mt-0.5 accent-gray-900" />
+                          <span>
+                            <span className="block text-sm font-semibold text-gray-800">{opt.title}</span>
+                            <span className="block text-[11px] text-gray-500">{opt.sub}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-[11px] text-gray-500">Either way, your card is authorized and kept on file as a guarantee for deposits, unpaid balances, and damages.</div>
+                  </div>
+                  <div>
                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Type</div>
                     <div className="flex gap-2">
                       {['AMEX', 'VISA', 'MASTERCARD'].map(type => (
@@ -1417,7 +1436,7 @@ export default function ClientPortal() {
                 <SigCanvas canvasRef={ccSigRef} drawn={ccSigDrawn} onClear={() => clearSig(ccSigRef, setCcSigDrawn)} />
               </div>
               <button onClick={async () => {
-                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccChargeSummary, ccChargeEstimate, ccToken: cpToken, ccSignatureData: sigData(ccSigRef) })) {
+                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccPaymentPreference, ccChargeSummary, ccChargeEstimate, ccToken: cpToken, ccSignatureData: sigData(ccSigRef) })) {
                   setDone(d => ({ ...d, cc: true })); setActiveTab('overview');
                 }
               }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>

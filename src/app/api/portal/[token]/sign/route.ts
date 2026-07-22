@@ -28,17 +28,21 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     if (body.step === 'cc') {
+      // Payment intent: CHECK_WIRE = client will pay by check/bank
+      // transfer, card is on file as SECURITY ONLY. Default CARD.
+      const paymentPreference = body.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : 'CARD'
       await prisma.$executeRawUnsafe(`
         UPDATE paperwork_requests SET
           cc_cardholder_first=$1, cc_cardholder_last=$2,
           cc_card_type=$3, cc_card_last4=$4, cc_card_number_encrypted=$5,
           cc_charge_estimate=$6, cc_auth_signed_at=$7,
+          cc_payment_preference=$8,
           credit_card_auth=true
-        WHERE token=$8`,
+        WHERE token=$9`,
         body.ccCardholderFirst, body.ccCardholderLast,
         body.ccCardType, body.ccToken?.slice(-4), body.ccToken,
         body.ccChargeEstimate ? parseFloat(body.ccChargeEstimate) : null,
-        now, params.token
+        now, paymentPreference, params.token
       )
     }
 

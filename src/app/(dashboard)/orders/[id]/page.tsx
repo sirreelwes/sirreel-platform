@@ -4039,7 +4039,9 @@ function PaymentsPanel({
   // fields — so staff can see & charge the authorized card without the
   // client re-entering it. null = not yet loaded; false = none on file.
   const [savedCard, setSavedCard] = useState<
-    { last4: string | null; cardType: string | null; cardholderName: string | null } | false | null
+    | { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | null }
+    | false
+    | null
   >(null);
   useEffect(() => {
     let alive = true;
@@ -4047,7 +4049,11 @@ function PaymentsPanel({
       .then((r) => (r.ok ? r.json() : { hasCard: false }))
       .then((d) => {
         if (!alive) return;
-        setSavedCard(d.hasCard ? { last4: d.last4, cardType: d.cardType, cardholderName: d.cardholderName } : false);
+        setSavedCard(
+          d.hasCard
+            ? { last4: d.last4, cardType: d.cardType, cardholderName: d.cardholderName, paymentPreference: d.paymentPreference ?? null }
+            : false,
+        );
       })
       .catch(() => alive && setSavedCard(false));
     return () => {
@@ -4240,11 +4246,12 @@ function CardOnFileCharge({
   charging,
   onCharge,
 }: {
-  savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null };
+  savedCard: { last4: string | null; cardType: string | null; cardholderName: string | null; paymentPreference: 'CARD' | 'CHECK_WIRE' | null };
   balanceDue: number;
   charging: boolean;
   onCharge: (amount: number, waiveSurcharge: boolean) => void | Promise<void>;
 }) {
+  const securityOnly = savedCard.paymentPreference === 'CHECK_WIRE';
   const [amount, setAmount] = useState<number>(balanceDue);
   const [waive, setWaive] = useState(false);
   const valid = Number.isFinite(amount) && amount > 0 && amount <= balanceDue + 0.005;
@@ -4281,6 +4288,11 @@ function CardOnFileCharge({
           <span className="text-[11px] text-lt-fg3">· {savedCard.cardholderName}</span>
         )}
       </div>
+      {securityOnly && (
+        <div className="rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-1.5 text-[11px] text-chip-warn-fg">
+          🛈 Client elected to pay by check / bank transfer — card is on file as <span className="font-semibold">security only</span>. Charge it only as a fallback (e.g. unpaid balance).
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <label className="flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
           Amount

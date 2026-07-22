@@ -58,6 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     cardType: card.cardType,
     cardholderName: card.cardholderName,
     authSignedAt: card.authSignedAt,
+    paymentPreference: card.paymentPreference,
   })
 }
 

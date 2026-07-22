@@ -48,6 +48,7 @@ export function CcAuthCard({
   const [cardholderFirst, setCardholderFirst] = useState('')
   const [cardholderLast, setCardholderLast] = useState('')
   const [cardType, setCardType] = useState('')
+  const [paymentPreference, setPaymentPreference] = useState<'CARD' | 'CHECK_WIRE'>('CARD')
   const [chargeSummary, setChargeSummary] = useState('')
   const [chargeEstimate, setChargeEstimate] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
@@ -135,6 +136,38 @@ export function CcAuthCard({
               {[intake.billingAddress1, intake.billingAddress2, intake.billingCity, intake.billingState, intake.billingZip]
                 .filter(Boolean)
                 .join(', ') || 'No billing address saved — add it in Your details above.'}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">How will you pay your invoices?</div>
+            <div className="space-y-2">
+              {([
+                { key: 'CARD', title: 'Charge my card on file', sub: 'A 3% processing fee applies to card payments.' },
+                { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No 3% fee. Your card stays on file as security only.' },
+              ] as const).map((opt) => (
+                <label
+                  key={opt.key}
+                  className={`flex items-start gap-3 px-3 py-2.5 rounded-xl border cursor-pointer ${
+                    paymentPreference === opt.key ? 'border-gray-900 bg-gray-50' : 'border-gray-200'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="v2-payPref"
+                    checked={paymentPreference === opt.key}
+                    onChange={() => setPaymentPreference(opt.key)}
+                    className="mt-0.5 accent-gray-900"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-800">{opt.title}</span>
+                    <span className="block text-[11px] text-gray-500">{opt.sub}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] text-gray-500">
+              Either way, your card is authorized and kept on file as a guarantee for deposits, unpaid balances, and damages.
             </div>
           </div>
 
@@ -253,6 +286,7 @@ export function CcAuthCard({
                     ccBillingPhone: formatPhone(intake.phone),
                     ccBillingEmail: intake.email,
                     ccCardType: cardType,
+                    ccPaymentPreference: paymentPreference,
                     ccChargeSummary: chargeSummary,
                     ccChargeEstimate: chargeEstimate,
                     ccToken: cpToken,
