@@ -30,11 +30,34 @@ interface CardPointeConfig {
   password: string
 }
 
-function readConfig(): CardPointeConfig {
-  const envRaw = (process.env.CARDPOINTE_ENV ?? 'UAT').toUpperCase()
-  const env: CardPointeEnv = envRaw === 'PROD' ? 'PROD' : 'UAT'
+/** Resolve the active environment from CARDPOINTE_ENV (defaults to UAT). */
+export function cardpointeEnv(): CardPointeEnv {
+  return (process.env.CARDPOINTE_ENV ?? 'UAT').toUpperCase() === 'PROD' ? 'PROD' : 'UAT'
+}
 
-  const prefix = env === 'PROD' ? 'CARDPOINTE_PROD' : 'CARDPOINTE_UAT'
+/** Env var prefix for the active environment. */
+function cardpointePrefix(): 'CARDPOINTE_PROD' | 'CARDPOINTE_UAT' {
+  return cardpointeEnv() === 'PROD' ? 'CARDPOINTE_PROD' : 'CARDPOINTE_UAT'
+}
+
+/**
+ * The env-appropriate CardConnect base host. Within one environment the
+ * SAME host serves the CardSecure tokenizer iframe (`/itoke/…`) and the
+ * REST gateway (`/cardconnect/rest`), so the tokenizer route and the
+ * gateway client MUST resolve it from the same CARDPOINTE_ENV → *_URL
+ * map — otherwise a token minted on one environment's tokenizer is
+ * handed to the other environment's gateway and the charge rejects.
+ * Returns null when the env var is unset (caller decides how to fail).
+ */
+export function cardpointeBaseUrl(): string | null {
+  const url = process.env[`${cardpointePrefix()}_URL`]
+  return url && url.trim() ? url : null
+}
+
+function readConfig(): CardPointeConfig {
+  const env = cardpointeEnv()
+
+  const prefix = cardpointePrefix()
   const baseUrl = process.env[`${prefix}_URL`] ?? ''
   const mid = process.env[`${prefix}_MID`] ?? ''
   const username = process.env[`${prefix}_USERNAME`] ?? ''

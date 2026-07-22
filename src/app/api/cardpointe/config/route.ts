@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cardpointeBaseUrl } from '@/lib/cardpointe/client';
 
 /**
  * GET /api/cardpointe/config
@@ -9,21 +10,18 @@ import { NextRequest, NextResponse } from 'next/server';
  *                      account number; routing number captured
  *                      separately on the form server-side
  *
- * Phase 6 commit 3 — adds the eCheck variant. UAT-only for now;
- * production cutover comes after ACH underwriting completes.
+ * The tokenizer host follows CARDPOINTE_ENV via cardpointeBaseUrl() —
+ * the SAME env-appropriate host used by the REST gateway client — so
+ * the token is minted on the same environment it will be charged
+ * against. (In UAT and PROD alike, one host serves both the /itoke/
+ * iframe and the /cardconnect/rest gateway.)
  *
  * The CardConnect iframe takes `useexpiry` / `usecvv` flags to
  * suppress card-only fields for ACH. ACH also takes `usemonthnames`
  * etc. — for the basic tokenizer we just drop the expiry/CVV inputs.
  */
 export async function GET(req: NextRequest) {
-  // Phase 6 commit 1 client honors CARDPOINTE_ENV, but the iframe URL
-  // base still reads from the legacy UAT env var — same hostname
-  // serves both prod and UAT tokenizers per CardConnect docs (the
-  // distinction is which gateway you POST to, not which iframe loads).
-  // When prod env lands we'll switch this to read the env-appropriate
-  // *_URL alongside the REST client.
-  const base = process.env.CARDPOINTE_UAT_URL;
+  const base = cardpointeBaseUrl();
   if (!base) return NextResponse.json({ error: 'CardPointe not configured' }, { status: 500 });
 
   const mode = req.nextUrl.searchParams.get('mode') === 'echeck' ? 'echeck' : 'card';
