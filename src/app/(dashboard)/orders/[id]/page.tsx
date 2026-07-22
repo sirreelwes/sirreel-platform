@@ -974,7 +974,9 @@ export default function OrderDetailPage() {
     }
   };
   const voidPayment = async (paymentId: string, invoiceId: string) => {
-    const reason = window.prompt('Reason for voiding this payment? (≥4 chars)');
+    const reason = window.prompt(
+      'Reason for voiding this payment? (≥4 chars)\n\nCard (CardPointe) payments are automatically reversed at the processor — voided if unsettled, refunded if already settled.',
+    );
     if (!reason || reason.trim().length < 4) return;
     setPaymentErr(null);
     try {

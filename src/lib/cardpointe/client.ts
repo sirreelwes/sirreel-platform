@@ -257,6 +257,91 @@ export async function voidByRetref(retref: string): Promise<AuthResponse> {
   }
 }
 
+/**
+ * Refund a settled transaction (full or partial). Use AFTER settlement,
+ * when a void no longer qualifies. `amountDollars` omitted → full refund
+ * of the original; provided → partial. CardConnect returns a NEW retref
+ * for the refund transaction.
+ */
+export async function refundByRetref(
+  retref: string,
+  amountDollars?: number,
+): Promise<AuthResponse> {
+  const cfg = readConfig()
+  const payload: Record<string, unknown> = { merchid: cfg.mid, retref }
+  if (typeof amountDollars === 'number' && amountDollars > 0) {
+    payload.amount = amountDollars.toFixed(2)
+  }
+  const res = await fetch(`${restBase(cfg)}/refund`, {
+    method: 'PUT',
+    headers: {
+      Authorization: authHeader(cfg),
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  return {
+    respcode: typeof json.respcode === 'string' ? json.respcode : '',
+    resptext: typeof json.resptext === 'string' ? json.resptext : '',
+    retref: typeof json.retref === 'string' ? json.retref : undefined,
+    raw: json,
+  }
+}
+
+export interface ReversalResult {
+  ok: boolean
+  /** How the money was returned: pre-settlement void or post-settlement
+   *  refund. Null when neither succeeded. */
+  kind: 'void' | 'refund' | null
+  /** Gateway retref of the reversal transaction (refund mints a new one;
+   *  void echoes the original). */
+  retref?: string
+  /** Human-readable gateway text for the failing path, for surfacing. */
+  message: string
+}
+
+/**
+ * Reverse a card charge without the caller needing to know whether it has
+ * settled yet. Tries a VOID first (works pre-settlement, no fee); if the
+ * gateway declines it (typically because the batch already settled),
+ * falls back to a REFUND. Returns which path succeeded so the caller can
+ * record it. NEVER assume success — check `.ok`.
+ */
+export async function reverseCardCharge(args: {
+  retref: string
+  amountDollars?: number
+}): Promise<ReversalResult> {
+  // 1) Pre-settlement void.
+  let voidErr = ''
+  try {
+    const v = await voidByRetref(args.retref)
+    if (isApproved(v)) {
+      return { ok: true, kind: 'void', retref: v.retref ?? args.retref, message: v.resptext }
+    }
+    voidErr = v.resptext || `void respcode ${v.respcode}`
+  } catch (err) {
+    voidErr = err instanceof Error ? err.message : 'void request failed'
+  }
+
+  // 2) Post-settlement refund fallback.
+  try {
+    const r = await refundByRetref(args.retref, args.amountDollars)
+    if (isApproved(r)) {
+      return { ok: true, kind: 'refund', retref: r.retref ?? args.retref, message: r.resptext }
+    }
+    return {
+      ok: false,
+      kind: null,
+      message: `void failed (${voidErr}); refund failed (${r.resptext || r.respcode})`,
+    }
+  } catch (err) {
+    const refundErr = err instanceof Error ? err.message : 'refund request failed'
+    return { ok: false, kind: null, message: `void failed (${voidErr}); refund failed (${refundErr})` }
+  }
+}
+
 // ─── Internal ───────────────────────────────────────────────────
 
 async function postAuth(cfg: CardPointeConfig, body: AuthRequest): Promise<AuthResponse> {
