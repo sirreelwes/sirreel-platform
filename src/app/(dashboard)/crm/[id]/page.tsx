@@ -372,8 +372,8 @@ export default function CompanyDetailPage() {
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-sm font-semibold text-lt-fg">CRM Notes</h2>
-              <span className="text-[11px] text-lt-fg3">Client relationship notes — shown on every job for {company.name}</span>
+              <h2 className="text-sm font-semibold text-lt-fg">Client Notes</h2>
+              <span className="text-[11px] text-lt-fg3">Idiosyncrasies &amp; preferences — shown on every job for {company.name}</span>
             </div>
             <button
               onClick={saveCrmNotesCard}
@@ -387,7 +387,7 @@ export default function CompanyDetailPage() {
             value={crmNotesDraft}
             onChange={(e) => { setCrmNotesDraft(e.target.value); setCrmNotesDirty(e.target.value !== (company.notes ?? '')); }}
             rows={4}
-            placeholder="Preferences, key contacts, billing quirks, negotiation history — context that applies to every job for this client…"
+            placeholder="How this client likes to work — preferences, quirks, billing habits, who to call, what to avoid…"
             className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg resize-y"
           />
         </div>
