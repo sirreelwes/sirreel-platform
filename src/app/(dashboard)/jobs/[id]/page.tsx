@@ -27,7 +27,7 @@ const ORDER_STATUS_BADGE: Record<string, string> = {
   CONFIRMED:  'bg-amber-900/40 text-amber-300',
   ACTIVE:     'bg-emerald-900/40 text-emerald-300',
   RETURNED:   'bg-purple-900/40 text-purple-300',
-  CLOSED:     'bg-zinc-800 text-zinc-500',
+  CLOSED:     'bg-zinc-800 text-zinc-400',
   CANCELLED:  'bg-red-900/40 text-red-300',
 };
 
@@ -514,7 +514,7 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-sm">Loading…</div>
+      <div className="min-h-[60vh] flex items-center justify-center text-zinc-400 text-sm">Loading…</div>
     );
   }
 
@@ -632,13 +632,13 @@ export default function JobDetailPage() {
       )}
       <button
         onClick={() => router.back()}
-        className="text-xs text-zinc-500 hover:text-zinc-300"
+        className="text-xs text-zinc-400 hover:text-zinc-300"
       >
         ← Back
       </button>
 
       {/* Header */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -705,7 +705,7 @@ export default function JobDetailPage() {
                   </a>
                 )}
                 {extraContacts > 0 && (
-                  <span className="text-[11px] text-zinc-500">+{extraContacts} more</span>
+                  <span className="text-[11px] text-zinc-400">+{extraContacts} more</span>
                 )}
               </div>
             )}
@@ -724,7 +724,7 @@ export default function JobDetailPage() {
               />
             </div>
             {job.fromInquiry && (
-              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-400">
                 <span>Originated from</span>
                 <Link
                   href={`/inquiries/${job.fromInquiry.id}`}
@@ -799,7 +799,7 @@ export default function JobDetailPage() {
             {job.returnedAt && (
               <div className="text-[11px] text-emerald-400 font-semibold text-right">
                 ✓ Returned {fmtDateTime(job.returnedAt)}
-                {job.returnedBy && <span className="text-zinc-500 font-normal"> · {job.returnedBy.name}</span>}
+                {job.returnedBy && <span className="text-zinc-400 font-normal"> · {job.returnedBy.name}</span>}
               </div>
             )}
             {job.archivedAt && (
@@ -812,19 +812,19 @@ export default function JobDetailPage() {
         {editing && (
           <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 p-4 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Job name</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Job name</span>
               <input value={editName} onChange={(e) => setEditName(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Start</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Start</span>
               <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">End</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">End</span>
               <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
             </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Estimated deal value ($)</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold">Estimated deal value ($)</span>
               <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="—" className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
             </label>
             <div className="sm:col-span-2 flex items-center gap-2 justify-end">
@@ -905,7 +905,7 @@ export default function JobDetailPage() {
             productionType enum stays in the Meta grid above as static
             display until the writers cut over. */}
         <div className="mt-5 flex items-center gap-3 flex-wrap">
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
             Production type profile
           </div>
           <div className="w-64">
@@ -916,7 +916,7 @@ export default function JobDetailPage() {
               size="compact"
             />
           </div>
-          {profileSaving && <span className="text-[10px] text-zinc-500">Saving…</span>}
+          {profileSaving && <span className="text-[10px] text-zinc-400">Saving…</span>}
         </div>
       </div>
 
@@ -926,41 +926,41 @@ export default function JobDetailPage() {
       <div>
         <div className="flex items-center gap-2.5 mb-2 px-0.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Paperwork</span>
-          <span className="text-[11px] text-zinc-500">{pwComplete} of 3 complete</span>
+          <span className="text-[11px] text-zinc-400">{pwComplete} of 3 complete</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* COI */}
           <a href="#coi" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Certificate of Insurance</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Certificate of Insurance</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
               coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
             }`}>
               <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-400' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-400' : 'bg-amber-400'}`} />
               {coiStatus}
             </div>
-            <div className="mt-1.5 text-[11px] text-zinc-500">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+            <div className="mt-1.5 text-[11px] text-zinc-400">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
           </a>
           {/* Rental Agreement */}
           <a href="#agreement" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Rental Agreement</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Rental Agreement</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
               agreementStatus === 'signed' ? 'text-emerald-300' : agreementStatus === 'expired' ? 'text-rose-300' : agreementStatus === 'pending' ? 'text-amber-300' : 'text-zinc-400'
             }`}>
               <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-400' : agreementStatus === 'expired' ? 'bg-rose-400' : agreementStatus === 'pending' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
               {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}
             </div>
-            <div className="mt-1.5 text-[11px] text-zinc-500">{agreementStatus === 'signed' ? 'Coverage on file' : 'Attach to cover'}</div>
+            <div className="mt-1.5 text-[11px] text-zinc-400">{agreementStatus === 'signed' ? 'Coverage on file' : 'Attach to cover'}</div>
           </a>
           {/* Card Authorization */}
           <div className="rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Card Authorization</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Card Authorization</div>
             {cardOnFile ? (
               <>
                 <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
                 </div>
-                <div className="mt-1.5 text-[11px] text-zinc-500">
+                <div className="mt-1.5 text-[11px] text-zinc-400">
                   {cardSecurityOnly ? 'Security only — client pays another way' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
               </>
@@ -973,7 +973,7 @@ export default function JobDetailPage() {
                 >
                   {ccBusy ? 'Preparing…' : '↗ Send CC request'}
                 </button>
-                <div className="mt-2 text-[11px] text-zinc-500">Client enters it in their portal</div>
+                <div className="mt-2 text-[11px] text-zinc-400">Client enters it in their portal</div>
               </>
             )}
           </div>
@@ -981,13 +981,13 @@ export default function JobDetailPage() {
       </div>
 
       {/* Reserved assets → each opens its reservation on the calendar */}
-      <div id="reserved-assets" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Reserved assets</h2>
-          <span className="text-[11px] text-zinc-500">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
+          <span className="text-[11px] text-zinc-400">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
         </div>
         {reservedAssets.length === 0 ? (
-          <div className="mt-3 text-sm text-zinc-500">No units reserved on this job yet.</div>
+          <div className="mt-3 text-sm text-zinc-400">No units reserved on this job yet.</div>
         ) : (
           <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {reservedAssets.map((a) => (
@@ -995,17 +995,24 @@ export default function JobDetailPage() {
                 key={a.assetId}
                 href={`/gantt?date=${a.startDate.slice(0, 10)}`}
                 title="Open this reservation on the calendar"
-                className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3 transition-colors"
+                className="group rounded-xl border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3.5 transition-all duration-200 hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <svg className="w-4 h-4 shrink-0 text-amber-500/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
+                      <path d="M3.5 7 12 11.6 20.5 7" />
+                      <path d="M12 11.6v9.8" />
+                    </svg>
+                    <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
+                  </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {(() => {
                       const lcdw = job.lcdwByBooking?.[a.bookingId];
                       return (
                         <span
                           title={lcdw ? 'LCDW accepted — collision damage waiver' : 'LCDW not accepted'}
-                          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${lcdw ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-zinc-800 text-zinc-500 border-zinc-700'}`}
+                          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${lcdw ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
@@ -1020,7 +1027,7 @@ export default function JobDetailPage() {
                     </span>
                   </div>
                 </div>
-                <div className="mt-0.5 text-[11px] text-zinc-500 truncate">{a.category}</div>
+                <div className="mt-0.5 text-[11px] text-zinc-400 truncate">{a.category}</div>
                 <div className="mt-1.5 text-[11px] text-zinc-400 font-mono">{fmtDate(a.startDate)} – {fmtDate(a.endDate)}</div>
                 <div className="mt-1.5 text-[10px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
@@ -1033,10 +1040,10 @@ export default function JobDetailPage() {
           uploads land here via the portal link; offline COIs (email,
           broker, RentalWorks) are attached with "Upload COI" so HQ stays
           the source of truth without a re-sign. */}
-      <div id="coi" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-semibold text-white">Certificate of Insurance</h2>
+            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Certificate of Insurance</h2>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
               coiStatus === 'Verified' ? 'bg-emerald-500/15 text-emerald-300'
                 : coiStatus === 'Pending' ? 'bg-amber-500/15 text-amber-300'
@@ -1054,7 +1061,7 @@ export default function JobDetailPage() {
           </div>
         </div>
         {job.coiChecks.length === 0 ? (
-          <div className="text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-4 py-6 text-center">
+          <div className="text-sm text-zinc-400 border border-dashed border-zinc-800 rounded-xl px-4 py-5 text-center bg-zinc-950/40">
             No certificate on file. Upload one the client sent by email or broker, or use
             <span className="text-zinc-400"> Copy COI link</span> to have them drop it in.
           </div>
@@ -1089,7 +1096,7 @@ export default function JobDetailPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-zinc-500">
+                    <div className="text-[11px] text-zinc-400">
                       {src} · added {fmtDate(c.createdAt)}
                       {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}
                     </div>
@@ -1111,10 +1118,10 @@ export default function JobDetailPage() {
 
       {/* Rental / stage agreement — job-level coverage. A job is attached
           as an addendum to an on-file (often annual) master agreement. */}
-      <div id="agreement" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div id="agreement" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-semibold text-white">Rental &amp; Stage Agreement</h2>
+            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Rental &amp; Stage Agreement</h2>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
               agreementStatus === 'signed' ? 'bg-emerald-500/15 text-emerald-300'
                 : agreementStatus === 'pending' ? 'bg-amber-500/15 text-amber-300'
@@ -1130,7 +1137,7 @@ export default function JobDetailPage() {
           </button>
         </div>
         {job.agreementAddenda.length === 0 ? (
-          <div className="text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-4 py-6 text-center">
+          <div className="text-sm text-zinc-400 border border-dashed border-zinc-800 rounded-xl px-4 py-5 text-center bg-zinc-950/40">
             This job isn&rsquo;t linked to an agreement yet. Attach it to an on-file rental / stage
             agreement (or file a new one) so it reads covered.
           </div>
@@ -1146,12 +1153,12 @@ export default function JobDetailPage() {
                       {expired ? 'Expired' : 'On file'}
                     </span>
                     <span className="text-sm text-white font-medium">{ca.title || ca.contractType.replace(/_/g, ' ')}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">{ca.contractType.replace(/_/g, ' ')}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-400">{ca.contractType.replace(/_/g, ' ')}</span>
                     {ca.isAnnual && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 uppercase tracking-wider">Annual</span>
                     )}
                   </div>
-                  <div className="mt-1 text-[11px] text-zinc-500">
+                  <div className="mt-1 text-[11px] text-zinc-400">
                     added {fmtDate(ad.createdAt)}
                     {ca.isAnnual && ca.effectiveDate && <> · covers {fmtDate(ca.effectiveDate)}{ca.expiryDate ? ` – ${fmtDate(ca.expiryDate)}` : ''}</>}
                     {ad.note && <> · {ad.note}</>}
@@ -1187,15 +1194,22 @@ export default function JobDetailPage() {
           previously not rendered) so the agent can reach the client
           after-hours via a single tap. tel: link triggers native
           dialer on mobile / Mac Continuity Calling on desktop. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-white mb-3">Contacts</h2>
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
+        <h2 className="text-[15px] font-semibold text-white mb-3 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
         {job.jobContacts.length === 0 ? (
-          <div className="text-sm text-zinc-500">No contacts yet.</div>
+          <div className="text-sm text-zinc-400">No contacts yet.</div>
         ) : (
           <div className="divide-y divide-zinc-800">
             {job.jobContacts.map((jc) => (
-              <div key={jc.id} className="flex items-center justify-between py-2.5 gap-3">
-                <div className="min-w-0">
+              <div key={jc.id} className="flex items-center justify-between py-3 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="w-8 h-8 shrink-0 rounded-full bg-amber-500/10 border border-amber-700/40 flex items-center justify-center text-[11px] font-bold text-amber-300"
+                    style={{ fontFamily: 'Georgia, serif' }}
+                  >
+                    {((jc.person.firstName?.[0] ?? '') + (jc.person.lastName?.[0] ?? '')).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
                   <div className="text-sm text-white truncate">
                     {jc.person.firstName} {jc.person.lastName}
                     {jc.isPrimary && (
@@ -1204,7 +1218,7 @@ export default function JobDetailPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-500 truncate flex items-center gap-3 flex-wrap">
+                  <div className="text-xs text-zinc-400 truncate flex items-center gap-3 flex-wrap">
                     {jc.person.email && (
                       <a href={`mailto:${jc.person.email}`} className="hover:text-amber-500">
                         {jc.person.email}
@@ -1218,6 +1232,7 @@ export default function JobDetailPage() {
                         {jc.person.phone}
                       </a>
                     )}
+                  </div>
                   </div>
                 </div>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 bg-zinc-800 px-2 py-1 rounded">
@@ -1254,10 +1269,10 @@ export default function JobDetailPage() {
         if (rows.length === 0) return null;
 
         return (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-white">Logistics & after-hours</h2>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
+              <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
             </div>
             <div className="space-y-4">
               {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
@@ -1274,19 +1289,19 @@ export default function JobDetailPage() {
                     >
                       {order.status}
                     </span>
-                    <span className="text-zinc-500">
+                    <span className="text-zinc-400">
                       {fmtDate(order.startDate)} – {fmtDate(order.endDate)}
                     </span>
                   </div>
                   {hasNotes && (
                     <div className="mb-2">
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Order notes</div>
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Order notes</div>
                       <div className="text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
                     </div>
                   )}
                   {hasStageDetail && order.stageBookingTerms && (
                     <div className="mb-2">
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Stage terms</div>
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Stage terms</div>
                       <div className="text-xs text-zinc-300 flex flex-wrap gap-x-3 gap-y-0.5">
                         {order.stageBookingTerms.specificSpaces?.length > 0 && (
                           <span>Spaces: <span className="text-zinc-100">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
@@ -1306,14 +1321,14 @@ export default function JobDetailPage() {
                   )}
                   {dateOverrides.length > 0 && (
                     <div>
-                      <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-0.5">Off-window pickup / return</div>
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Off-window pickup / return</div>
                       <ul className="text-xs text-zinc-300 space-y-0.5">
                         {dateOverrides.map((li) => (
                           <li key={li.id} className="flex gap-2">
-                            <span className="text-zinc-500 min-w-[1rem]">·</span>
+                            <span className="text-zinc-400 min-w-[1rem]">·</span>
                             <span className="flex-1">
                               <span className="text-zinc-100">{li.description}</span>
-                              <span className="ml-2 text-zinc-500">
+                              <span className="ml-2 text-zinc-400">
                                 {li.pickupDate ? fmtDate(li.pickupDate) : '—'} → {li.returnDate ? fmtDate(li.returnDate) : '—'}
                               </span>
                             </span>
@@ -1334,13 +1349,13 @@ export default function JobDetailPage() {
           per-vehicle BookingAssignments. Affordances (edit, send, sign,
           invoice, payment) live on /orders/[id] — this is read-only
           rollup for the live engagement. */}
-      <div id="orders" className="scroll-mt-4 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Orders</h2>
-          <span className="text-xs text-zinc-500">{job.orders.length} total · row expands · open for full order</span>
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
+          <span className="text-xs text-zinc-400">{job.orders.length} total · row expands · open for full order</span>
         </div>
         {job.orders.length === 0 ? (
-          <div className="text-sm text-zinc-500">No orders on this job yet.</div>
+          <div className="text-sm text-zinc-400">No orders on this job yet.</div>
         ) : (
           <div className="space-y-2">
             {job.orders.map((o) => {
@@ -1354,7 +1369,7 @@ export default function JobDetailPage() {
                     onClick={() => toggleOrder(o.id)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
                   >
-                    <span className="text-zinc-500 text-xs w-3">{expanded ? '▾' : '▸'}</span>
+                    <span className="text-zinc-400 text-xs w-3">{expanded ? '▾' : '▸'}</span>
                     <span className="font-mono text-sm font-semibold text-white">{o.orderNumber}</span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-400'}`}
@@ -1372,7 +1387,7 @@ export default function JobDetailPage() {
                     <span className="text-xs text-zinc-400 whitespace-nowrap">
                       {fmtDate(o.startDate)} – {fmtDate(o.endDate)}
                     </span>
-                    <span className="text-[10px] text-zinc-500 ml-2">
+                    <span className="text-[10px] text-zinc-400 ml-2">
                       {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
                     </span>
                     <span className="ml-auto font-mono text-xs text-zinc-200">{fmtMoney(o.total)}</span>
@@ -1390,10 +1405,10 @@ export default function JobDetailPage() {
                       {/* Booked scope */}
                       {o.lineItems.length > 0 && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Booked scope</div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Booked scope</div>
                           <div className="overflow-x-auto">
                             <table className="w-full text-xs">
-                              <thead className="text-[9px] uppercase tracking-wider text-zinc-500">
+                              <thead className="text-[9px] uppercase tracking-wider text-zinc-400">
                                 <tr className="border-b border-zinc-800">
                                   <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
                                   <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
@@ -1409,7 +1424,7 @@ export default function JobDetailPage() {
                                     <td className="py-1.5 pr-2">
                                       <div className="text-zinc-100">{li.description}</div>
                                       {li.qualifier && (
-                                        <div className="text-[10px] text-zinc-500">{li.qualifier}</div>
+                                        <div className="text-[10px] text-zinc-400">{li.qualifier}</div>
                                       )}
                                     </td>
                                     <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
@@ -1436,20 +1451,20 @@ export default function JobDetailPage() {
                           for this order's categories has assignments. */}
                       {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Per-vehicle assignments</div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Per-vehicle assignments</div>
                           <ul className="text-xs text-zinc-300 space-y-0.5">
                             {orderBookings.flatMap((b) =>
                               b.items.flatMap((bi) =>
                                 bi.assignments.map((a) => (
                                   <li key={a.id} className="flex gap-2">
-                                    <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                    <span className="text-zinc-400 min-w-[1rem]">·</span>
                                     <span>
                                       <span className="text-zinc-100">{bi.category.name}</span>
                                       <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
-                                      <span className="ml-2 text-zinc-500">
+                                      <span className="ml-2 text-zinc-400">
                                         {fmtDate(a.startDate)} → {fmtDate(a.endDate)}
                                       </span>
-                                      <span className="ml-2 text-[9px] uppercase tracking-wider text-zinc-500">{a.status.replace(/_/g, ' ')}</span>
+                                      <span className="ml-2 text-[9px] uppercase tracking-wider text-zinc-400">{a.status.replace(/_/g, ' ')}</span>
                                     </span>
                                   </li>
                                 )),
@@ -1464,20 +1479,20 @@ export default function JobDetailPage() {
                           section; this is just per-order signing state. */}
                       {o.signedAgreements.length > 0 && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Order agreements</div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Order agreements</div>
                           <ul className="text-xs text-zinc-300 space-y-0.5">
                             {o.signedAgreements.map((a) => {
                               const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
                               return (
                                 <li key={a.id} className="flex gap-2">
-                                  <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                  <span className="text-zinc-400 min-w-[1rem]">·</span>
                                   <span className="flex-1">
                                     <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
                                     <span className={`ml-2 text-[10px] uppercase tracking-wider ${signed ? 'text-emerald-300' : 'text-amber-300'}`}>
                                       {a.status.replace(/_/g, ' ')}
                                     </span>
                                     {a.signedAt && (
-                                      <span className="ml-2 text-zinc-500">
+                                      <span className="ml-2 text-zinc-400">
                                         signed {fmtDate(a.signedAt)}
                                         {a.signerName ? ` · ${a.signerName}` : ''}
                                       </span>
@@ -1503,23 +1518,23 @@ export default function JobDetailPage() {
                       {/* Invoices */}
                       {o.invoices.length > 0 && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Invoices</div>
+                          <div className="text-[9px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Invoices</div>
                           <ul className="text-xs text-zinc-300 space-y-0.5">
                             {o.invoices.map((inv) => (
                               <li key={inv.id} className="flex gap-2">
-                                <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                <span className="text-zinc-400 min-w-[1rem]">·</span>
                                 <span className="flex-1">
                                   <span className="font-mono text-zinc-100">{inv.invoiceNumber}</span>
-                                  <span className="ml-1.5 text-[9px] text-zinc-500 uppercase tracking-wider">{inv.type}</span>
+                                  <span className="ml-1.5 text-[9px] text-zinc-400 uppercase tracking-wider">{inv.type}</span>
                                   <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-300">{inv.status}</span>
-                                  <span className="ml-2 text-zinc-500">
+                                  <span className="ml-2 text-zinc-400">
                                     {fmtMoney(inv.amountPaid)} paid of {fmtMoney(inv.total)}
                                     {inv.balanceDue > 0 && (
                                       <span className="ml-1 text-amber-300"> · {fmtMoney(inv.balanceDue)} due</span>
                                     )}
                                   </span>
                                   {inv.dueDate && inv.status !== 'PAID' && (
-                                    <span className="ml-2 text-[10px] text-zinc-500">due {fmtDate(inv.dueDate)}</span>
+                                    <span className="ml-2 text-[10px] text-zinc-400">due {fmtDate(inv.dueDate)}</span>
                                   )}
                                 </span>
                               </li>
@@ -1542,11 +1557,11 @@ export default function JobDetailPage() {
       {/* CRM Notes — CLIENT-level (Company.notes). Shared with the CRM
           page and every other job for this client. Distinct from the
           per-job notes below. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-sm font-semibold text-white">CRM Notes</h2>
-            <span className="text-[11px] text-zinc-500">
+            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">CRM Notes</h2>
+            <span className="text-[11px] text-zinc-400">
               on{' '}
               <Link href={`/crm/${job.company.id}`} className="text-amber-400 hover:text-amber-300">{job.company.name}</Link>
               {' '}· shared across all their jobs
@@ -1573,9 +1588,9 @@ export default function JobDetailPage() {
       </div>
 
       {/* Job notes — THIS job only */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Job notes</h2>
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Job notes</h2>
           <button
             onClick={saveNotes}
             disabled={!notesDirty || notesSaving}
@@ -1603,17 +1618,17 @@ export default function JobDetailPage() {
           when oldValues + newValues both have ≤3 entries (otherwise
           fall back to a generic "updated" line). */}
       {job.activity.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 transition-colors duration-200 hover:border-zinc-700/70">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-white">Activity</h2>
-            <span className="text-xs text-zinc-500">{job.activity.length} event{job.activity.length === 1 ? '' : 's'}</span>
+            <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Activity</h2>
+            <span className="text-xs text-zinc-400">{job.activity.length} event{job.activity.length === 1 ? '' : 's'}</span>
           </div>
           <ul className="space-y-1.5">
             {job.activity.map((a) => {
               const formatted = formatActivity(a);
               return (
                 <li key={a.id} className="flex gap-3 text-xs text-zinc-300 border-l border-zinc-800 pl-3 py-0.5">
-                  <span className="text-zinc-500 whitespace-nowrap min-w-[60px]" title={new Date(a.createdAt).toLocaleString()}>
+                  <span className="text-zinc-400 whitespace-nowrap min-w-[60px]" title={new Date(a.createdAt).toLocaleString()}>
                     {relativeAge(a.createdAt)}
                   </span>
                   <span className="flex-1 min-w-0">
@@ -1621,7 +1636,7 @@ export default function JobDetailPage() {
                     <span className="text-zinc-400"> {formatted.verb} </span>
                     <span className="text-zinc-100">{formatted.what}</span>
                     {formatted.details && (
-                      <span className="text-zinc-500"> · {formatted.details}</span>
+                      <span className="text-zinc-400"> · {formatted.details}</span>
                     )}
                   </span>
                 </li>
@@ -1700,9 +1715,9 @@ function formatActivity(a: ActivityRow): { verb: string; what: string; details?:
 function Meta({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{label}</div>
       <div className="text-sm text-white mt-0.5 truncate">{value}</div>
-      {sub && <div className="text-[10px] text-zinc-500">{sub}</div>}
+      {sub && <div className="text-[10px] text-zinc-400">{sub}</div>}
     </div>
   );
 }
