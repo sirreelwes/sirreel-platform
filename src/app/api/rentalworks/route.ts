@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { getServerSession } from "next-auth"
 
 const BASE_URL = "https://sirreel.rentalworks.cloud"
 const TOKEN = process.env.RENTALWORKS_TOKEN || ""
@@ -22,6 +23,10 @@ async function rwPost(path: string, body: object = {}) {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   try {
     if (!TOKEN) return NextResponse.json({ error: "RENTALWORKS_TOKEN not set" }, { status: 500 })
     const { searchParams } = new URL(req.url)
