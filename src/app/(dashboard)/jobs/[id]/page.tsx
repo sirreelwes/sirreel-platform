@@ -1218,6 +1218,32 @@ export default function JobDetailPage() {
         )}
       </div>
 
+      {/* Client notes — READ-ONLY here. Idiosyncrasies & preferences for
+          this client, so staff know how they like to work. Authored on
+          the client file (Company.notes); this is just the at-a-glance. */}
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="flex items-start gap-3 flex-wrap">
+          <h2 className="text-[13px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-3.5 before:rounded-full before:bg-amber-500/80">
+            Client notes
+          </h2>
+          {job.company.notes?.trim() ? (
+            <div className="flex-1 min-w-[240px] text-[14px] text-zinc-200 whitespace-pre-wrap leading-relaxed">
+              {job.company.notes}
+            </div>
+          ) : (
+            <div className="flex-1 min-w-[240px] text-[13px] text-zinc-400 italic">
+              No preferences or quirks recorded for {job.company.name} yet.
+            </div>
+          )}
+          <Link
+            href={`/crm/${job.company.id}`}
+            className="shrink-0 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
+          >
+            Edit on client file →
+          </Link>
+        </div>
+      </div>
+
       {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
           per-order delivery/pickup arrangements an agent needs at a
           glance: order.notes (free-text — where after-hours dropoff
@@ -1528,31 +1554,6 @@ export default function JobDetailPage() {
       {/* Email threads filed in this Job (email-in-Job, step 6). */}
       <JobEmailThreads jobId={job.id} />
 
-      {/* Client notes — READ-ONLY here. Idiosyncrasies & preferences for
-          this client, so staff know how they like to work. Authored on
-          the client file (Company.notes); this is just the at-a-glance. */}
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-700/70">
-        <div className="flex items-start gap-3 flex-wrap">
-          <h2 className="text-[13px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-3.5 before:rounded-full before:bg-amber-500/80">
-            Client notes
-          </h2>
-          {job.company.notes?.trim() ? (
-            <div className="flex-1 min-w-[240px] text-[14px] text-zinc-200 whitespace-pre-wrap leading-relaxed">
-              {job.company.notes}
-            </div>
-          ) : (
-            <div className="flex-1 min-w-[240px] text-[13px] text-zinc-400 italic">
-              No preferences or quirks recorded for {job.company.name} yet.
-            </div>
-          )}
-          <Link
-            href={`/crm/${job.company.id}`}
-            className="shrink-0 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
-          >
-            Edit on client file →
-          </Link>
-        </div>
-      </div>
 
       {/* Job notes — THIS job only */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
