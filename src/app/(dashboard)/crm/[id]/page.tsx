@@ -130,6 +130,30 @@ export default function CompanyDetailPage() {
 
   useEffect(() => { fetchCompany(); }, [fetchCompany]);
 
+  // Dedicated CRM Notes card (Company.notes) — always-visible, quick-save,
+  // shared with every job for this client. Synced from the loaded company.
+  const [crmNotesDraft, setCrmNotesDraft] = useState('');
+  const [crmNotesDirty, setCrmNotesDirty] = useState(false);
+  const [crmNotesSaving, setCrmNotesSaving] = useState(false);
+  useEffect(() => {
+    if (company) { setCrmNotesDraft(company.notes ?? ''); setCrmNotesDirty(false); }
+  }, [company]);
+  const saveCrmNotesCard = useCallback(async () => {
+    setCrmNotesSaving(true);
+    try {
+      const res = await fetch(`/api/crm/companies/${companyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: crmNotesDraft || null }),
+      });
+      if (!res.ok) { alert('Save failed'); return; }
+      setCrmNotesDirty(false);
+      await fetchCompany();
+    } finally {
+      setCrmNotesSaving(false);
+    }
+  }, [companyId, crmNotesDraft, fetchCompany]);
+
   // Edit mode — collapsed by default; an Edit button on the header
   // expands the form. Same pattern as the Person detail page. Form
   // covers the editable Company columns the PUT route accepts; the
@@ -341,6 +365,33 @@ export default function CompanyDetailPage() {
     <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
       <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
+
+      {/* CRM Notes — pinned client relationship notes (Company.notes).
+          Same field surfaced on every job for this client. */}
+      {company && (
+        <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-sm font-semibold text-lt-fg">CRM Notes</h2>
+              <span className="text-[11px] text-lt-fg3">Client relationship notes — shown on every job for {company.name}</span>
+            </div>
+            <button
+              onClick={saveCrmNotesCard}
+              disabled={!crmNotesDirty || crmNotesSaving}
+              className="px-3 py-1.5 text-xs font-semibold bg-lt-fg text-lt-card rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {crmNotesSaving ? 'Saving…' : crmNotesDirty ? 'Save' : 'Saved'}
+            </button>
+          </div>
+          <textarea
+            value={crmNotesDraft}
+            onChange={(e) => { setCrmNotesDraft(e.target.value); setCrmNotesDirty(e.target.value !== (company.notes ?? '')); }}
+            rows={4}
+            placeholder="Preferences, key contacts, billing quirks, negotiation history — context that applies to every job for this client…"
+            className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg resize-y"
+          />
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 mb-6">

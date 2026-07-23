@@ -172,7 +172,7 @@ interface JobDetail {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
-  company: { id: string; name: string };
+  company: { id: string; name: string; notes: string | null };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
   coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; createdAt: string }>;
@@ -277,6 +277,11 @@ export default function JobDetailPage() {
   const [notes, setNotes] = useState('');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
+  // Client-level CRM notes (Company.notes) — editable here and on the
+  // CRM page; both write the same company record.
+  const [crmNotes, setCrmNotes] = useState('');
+  const [crmNotesSaving, setCrmNotesSaving] = useState(false);
+  const [crmNotesDirty, setCrmNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
@@ -312,6 +317,8 @@ export default function JobDetailPage() {
           setJob(d.job);
           setNotes(d.job.notes || '');
           setNotesDirty(false);
+          setCrmNotes(d.job.company?.notes || '');
+          setCrmNotesDirty(false);
         } else {
           setError(d.error || 'Job not found');
         }
@@ -398,6 +405,25 @@ export default function JobDetailPage() {
       alert(e instanceof Error ? e.message : 'Failed to save profile');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const saveCrmNotes = async () => {
+    if (!job) return;
+    setCrmNotesSaving(true);
+    try {
+      const res = await fetch(`/api/crm/companies/${job.company.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: crmNotes || null }),
+      });
+      if (!res.ok) throw new Error('Failed to save CRM notes');
+      setCrmNotesDirty(false);
+      setJob({ ...job, company: { ...job.company, notes: crmNotes } });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save CRM notes');
+    } finally {
+      setCrmNotesSaving(false);
     }
   };
 
@@ -598,7 +624,7 @@ export default function JobDetailPage() {
     (cardOnFile ? 1 : 0);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="max-w-5xl mx-auto space-y-4 text-[15px]" style={{ zoom: 1.05 }}>
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-600 text-white text-sm px-4 py-2 rounded-lg shadow-xl">
           {toast}
@@ -1513,10 +1539,43 @@ export default function JobDetailPage() {
       {/* Email threads filed in this Job (email-in-Job, step 6). */}
       <JobEmailThreads jobId={job.id} />
 
-      {/* Notes */}
+      {/* CRM Notes — CLIENT-level (Company.notes). Shared with the CRM
+          page and every other job for this client. Distinct from the
+          per-job notes below. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-sm font-semibold text-white">CRM Notes</h2>
+            <span className="text-[11px] text-zinc-500">
+              on{' '}
+              <Link href={`/crm/${job.company.id}`} className="text-amber-400 hover:text-amber-300">{job.company.name}</Link>
+              {' '}· shared across all their jobs
+            </span>
+          </div>
+          <button
+            onClick={saveCrmNotes}
+            disabled={!crmNotesDirty || crmNotesSaving}
+            className="px-3 py-1.5 text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {crmNotesSaving ? 'Saving…' : crmNotesDirty ? 'Save' : 'Saved'}
+          </button>
+        </div>
+        <textarea
+          value={crmNotes}
+          onChange={(e) => {
+            setCrmNotes(e.target.value);
+            setCrmNotesDirty(e.target.value !== (job.company.notes || ''));
+          }}
+          rows={5}
+          placeholder="Relationship context for this client — preferences, key contacts, billing quirks, history — applies to every job for them…"
+          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 resize-y"
+        />
+      </div>
+
+      {/* Job notes — THIS job only */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Notes</h2>
+          <h2 className="text-sm font-semibold text-white">Job notes</h2>
           <button
             onClick={saveNotes}
             disabled={!notesDirty || notesSaving}
@@ -1532,7 +1591,7 @@ export default function JobDetailPage() {
             setNotesDirty(e.target.value !== (job.notes || ''));
           }}
           rows={6}
-          placeholder="Add context, client preferences, deal notes…"
+          placeholder="Notes for this job only — logistics, deal specifics…"
           className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 resize-y"
         />
       </div>
