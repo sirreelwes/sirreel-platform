@@ -3670,6 +3670,10 @@ model Job {
   // same field. The Jobs board's RETURNED column keys off it exclusively.
   returnedAt     DateTime?      @map("returned_at")
   returnedById   String?        @map("returned_by_id")
+  // Soft-archive marker (staff "Archive job" action). Visibility-only —
+  // the /jobs list filters archivedAt IS NULL by default; the detail page
+  // stays reachable. Additive; NULL = active. Cleared on unarchive.
+  archivedAt     DateTime?      @map("archived_at")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 

@@ -253,6 +253,51 @@ export async function GET(
       },
     })
 
+    // Job-level paperwork (card-on-file + LCDW) lives on
+    // paperwork_requests, which is booking-scoped. Pull the job's
+    // bookings' paperwork to surface card-auth status and per-booking
+    // LCDW on the detail page. The raw CardSecure token is NEVER
+    // returned — only display fields.
+    const jobBookingIds = job.bookings.map((b) => b.id)
+    const paperwork = jobBookingIds.length
+      ? await prisma.paperworkRequest.findMany({
+          where: { bookingId: { in: jobBookingIds } },
+          orderBy: { sentAt: 'desc' },
+          select: {
+            bookingId: true,
+            ccCardNumberEncrypted: true,
+            ccCardLast4: true,
+            ccCardType: true,
+            ccCardholderFirst: true,
+            ccCardholderLast: true,
+            ccPaymentPreference: true,
+            lcdwAccepted: true,
+          },
+        })
+      : []
+    const cardRow = paperwork.find((p) => !!p.ccCardNumberEncrypted)
+    const cardAuth = cardRow
+      ? {
+          onFile: true,
+          last4: cardRow.ccCardLast4 ?? null,
+          cardType: cardRow.ccCardType ?? null,
+          cardholderName:
+            [cardRow.ccCardholderFirst, cardRow.ccCardholderLast].filter(Boolean).join(' ').trim() ||
+            null,
+          paymentPreference:
+            cardRow.ccPaymentPreference === 'CHECK_WIRE'
+              ? 'CHECK_WIRE'
+              : cardRow.ccPaymentPreference === 'CARD'
+                ? 'CARD'
+                : null,
+        }
+      : { onFile: false, last4: null, cardType: null, cardholderName: null, paymentPreference: null }
+    const lcdwByBooking: Record<string, boolean> = {}
+    for (const p of paperwork) {
+      // ordered sentAt desc → the first row seen per booking is the latest
+      if (!(p.bookingId in lcdwByBooking)) lcdwByBooking[p.bookingId] = !!p.lcdwAccepted
+    }
+
     // Rollup: prefer bookedTotal sum (locked-in dollars) and fall
     // back to subtotal for un-booked orders; CANCELLED still excluded.
     const orderTotal = job.orders
@@ -289,6 +334,8 @@ export async function GET(
         })),
         primaryContact,
         activity,
+        cardAuth,
+        lcdwByBooking,
       },
     })
   } catch (error) {

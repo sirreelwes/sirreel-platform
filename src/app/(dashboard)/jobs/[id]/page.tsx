@@ -190,6 +190,19 @@ interface JobDetail {
   // mark-returned. Separate axis from status (WRAPPED = lifecycle close).
   returnedAt: string | null;
   returnedBy: { id: string; name: string } | null;
+  archivedAt: string | null;
+  // Job-level card-on-file status (derived from the job's bookings'
+  // paperwork). Token never leaves the server — display fields only.
+  cardAuth: {
+    onFile: boolean;
+    last4: string | null;
+    cardType: string | null;
+    cardholderName: string | null;
+    paymentPreference: 'CARD' | 'CHECK_WIRE' | null;
+  };
+  // bookingId → LCDW accepted, so each reserved asset shows its
+  // vehicle's collision-waiver state.
+  lcdwByBooking: Record<string, boolean>;
 }
 
 interface JobBooking {
@@ -267,6 +280,18 @@ export default function JobDetailPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  // Header "More" overflow menu + its actions.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [ccBusy, setCcBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  // Inline "Edit job details" panel (name / dates / deal value).
+  const [editing, setEditing] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+  const [editValue, setEditValue] = useState('');
   // Phase 7 Pass B — inline scope expander. Collapsed by default;
   // click the row to expand the full booked-scope panel.
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
@@ -376,6 +401,91 @@ export default function JobDetailPage() {
     }
   };
 
+  const flashToast = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3000);
+  };
+
+  const archiveJob = async () => {
+    if (!job) return;
+    const undo = !!job.archivedAt;
+    if (!undo && !window.confirm('Archive this job? It stays reachable but is hidden from the active Jobs list.')) return;
+    setArchiving(true);
+    setMenuOpen(false);
+    try {
+      const res = await fetch(`/api/jobs/${id}/archive${undo ? '?undo=1' : ''}`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed');
+      flashToast(undo ? 'Job unarchived' : 'Job archived');
+      load();
+    } catch {
+      flashToast('Could not update archive state');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  // "Send CC request" — mint/copy the client's portal card-authorization
+  // link. Copy (not auto-send) so staff paste it wherever they contact
+  // the client, mirroring Copy COI link.
+  const sendCcRequest = async () => {
+    setCcBusy(true);
+    try {
+      const res = await fetch(`/api/jobs/${id}/cc-request-link`, { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.url) throw new Error(d.error || 'Failed');
+      await navigator.clipboard.writeText(d.url).catch(() => {});
+      flashToast('Card-authorization link copied — send it to the client');
+    } catch (e) {
+      flashToast(e instanceof Error ? e.message : 'Could not create link');
+    } finally {
+      setCcBusy(false);
+    }
+  };
+
+  const copyJobLink = async () => {
+    setMenuOpen(false);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      flashToast('Job link copied');
+    } catch {
+      flashToast('Could not copy link');
+    }
+  };
+
+  const openEdit = () => {
+    if (!job) return;
+    setEditName(job.name);
+    setEditStart(job.startDate ? job.startDate.slice(0, 10) : '');
+    setEditEnd(job.endDate ? job.endDate.slice(0, 10) : '');
+    setEditValue(job.estimatedValue != null ? String(job.estimatedValue) : '');
+    setEditing(true);
+    setMenuOpen(false);
+  };
+
+  const saveEdit = async () => {
+    if (!job) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName.trim() || job.name,
+          startDate: editStart || null,
+          endDate: editEnd || null,
+          estimatedValue: editValue === '' ? null : Number(editValue),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      setEditing(false);
+      load();
+    } catch (e) {
+      flashToast(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-sm">Loading…</div>
@@ -450,7 +560,7 @@ export default function JobDetailPage() {
   // Reserved Assets section + quick-nav tile. Each links to its reservation
   // on the calendar.
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -458,7 +568,7 @@ export default function JobDetailPage() {
           if (!seen.has(a.asset.id)) {
             seen.set(a.asset.id, {
               assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
-              startDate: a.startDate, endDate: a.endDate, status: a.status,
+              startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
             })
           }
         }
@@ -478,8 +588,22 @@ export default function JobDetailPage() {
     return 'Pending';
   })();
 
+  const primaryContact = job.jobContacts.find((c) => c.isPrimary) ?? job.jobContacts[0] ?? null;
+  const extraContacts = Math.max(0, job.jobContacts.length - 1);
+  const cardOnFile = job.cardAuth?.onFile;
+  const cardSecurityOnly = job.cardAuth?.paymentPreference === 'CHECK_WIRE';
+  const pwComplete =
+    (coiStatus === 'Verified' ? 1 : 0) +
+    (agreementStatus === 'signed' ? 1 : 0) +
+    (cardOnFile ? 1 : 0);
+
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-zinc-600 text-white text-sm px-4 py-2 rounded-lg shadow-xl">
+          {toast}
+        </div>
+      )}
       <button
         onClick={() => router.back()}
         className="text-xs text-zinc-500 hover:text-zinc-300"
@@ -516,13 +640,49 @@ export default function JobDetailPage() {
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-semibold text-white mt-1 truncate">{job.name}</h1>
-            <Link
-              href={`/crm/${job.company.id}`}
-              className="text-sm text-zinc-400 hover:text-amber-500"
+            <h1
+              className="text-3xl font-semibold text-white mt-2 truncate"
+              style={{ fontFamily: "Georgia, 'Times New Roman', serif", letterSpacing: '-0.01em' }}
             >
-              {job.company.name}
-            </Link>
+              {job.name}
+            </h1>
+            <div className="mt-1 flex items-center gap-2.5 flex-wrap text-sm text-zinc-400">
+              <span>
+                for{' '}
+                <Link href={`/crm/${job.company.id}`} className="text-zinc-200 font-medium hover:text-amber-400">
+                  {job.company.name}
+                </Link>
+              </span>
+              {(job.startDate || job.endDate) && (
+                <>
+                  <span className="text-zinc-600">·</span>
+                  <span className="text-zinc-200 font-mono text-[13px]">
+                    {fmtDate(job.startDate)} – {fmtDate(job.endDate)}
+                  </span>
+                </>
+              )}
+            </div>
+            {primaryContact && (
+              <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-800/40 px-3 py-2">
+                <span className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-700/40 flex items-center justify-center text-[11px] font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>
+                  {(primaryContact.person.firstName?.[0] ?? '') + (primaryContact.person.lastName?.[0] ?? '')}
+                </span>
+                <span className="text-sm text-white">
+                  {primaryContact.person.firstName} {primaryContact.person.lastName}
+                </span>
+                {primaryContact.isPrimary && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500">Primary</span>
+                )}
+                {primaryContact.person.email && (
+                  <a href={`mailto:${primaryContact.person.email}`} className="text-xs text-zinc-400 hover:text-amber-400 truncate">
+                    · {primaryContact.person.email}
+                  </a>
+                )}
+                {extraContacts > 0 && (
+                  <span className="text-[11px] text-zinc-500">+{extraContacts} more</span>
+                )}
+              </div>
+            )}
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
             <div className="mt-3">
@@ -558,60 +718,97 @@ export default function JobDetailPage() {
             )}
           </div>
 
-          <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            <label className="text-[10px] font-semibold uppercase text-zinc-500">Status</label>
-            <select
-              value={job.status}
-              disabled={statusSaving}
-              onChange={(e) => updateStatus(e.target.value as JobStatus)}
-              className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-            >
-              {JOB_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <div className="flex flex-col items-end gap-1.5">
-              <CopyCoiLinkButton jobId={job.id} variant="dark" />
-              <button
-                onClick={() => setCoiModalOpen(true)}
-                className="text-xs font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-2"
-                title="File a signed COI that came in outside the portal (email, broker)"
+          <div className="flex flex-col items-end gap-3 flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
+            <div className="flex items-center gap-2">
+              <select
+                value={job.status}
+                disabled={statusSaving}
+                onChange={(e) => updateStatus(e.target.value as JobStatus)}
+                className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+                title="Job status"
               >
-                Upload COI
-              </button>
-            </div>
-            {/* Physical return — semantic action, separate from the
-                status lifecycle above. The v1 stand-in for warehouse
-                check-in; mirrors the board's RETURNED column moves. */}
-            {job.returnedAt ? (
-              <div className="flex flex-col items-end gap-0.5 text-right">
-                <div className="text-[11px] text-emerald-400 font-semibold">
-                  ✓ Returned {fmtDateTime(job.returnedAt)}
-                </div>
-                {job.returnedBy && (
-                  <div className="text-[10px] text-zinc-500">marked by {job.returnedBy.name}</div>
-                )}
+                {JOB_STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <div className="relative">
                 <button
-                  onClick={() => setReturned(false)}
-                  disabled={returnSaving}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2 disabled:opacity-50"
-                  title="Undo — clear the physical-return mark"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white hover:border-zinc-500 transition-colors"
                 >
-                  undo
+                  More ▾
                 </button>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 w-52 z-20 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-1.5">
+                      <button
+                        onClick={() => { setMenuOpen(false); setReturned(!job.returnedAt); }}
+                        disabled={returnSaving}
+                        className="w-full text-left text-[13px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                      >
+                        {job.returnedAt ? 'Unmark returned' : '✓ Mark returned'}
+                      </button>
+                      <button onClick={openEdit} className="w-full text-left text-[13px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
+                        Edit job details
+                      </button>
+                      <button onClick={copyJobLink} className="w-full text-left text-[13px] text-zinc-200 hover:bg-zinc-800 rounded-lg px-2.5 py-2">
+                        Copy job link
+                      </button>
+                      <div className="h-px bg-zinc-800 my-1" />
+                      <button
+                        onClick={archiveJob}
+                        disabled={archiving}
+                        className="w-full text-left text-[13px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                      >
+                        {job.archivedAt ? 'Unarchive job' : 'Archive job'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
-            ) : (
-              <button
-                onClick={() => setReturned(true)}
-                disabled={returnSaving}
-                className="text-xs font-semibold bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                title="The gear is physically back — sets the returned timestamp billing and inspections key off"
-              >
-                {returnSaving ? 'Saving…' : 'Mark returned'}
-              </button>
+            </div>
+            {job.returnedAt && (
+              <div className="text-[11px] text-emerald-400 font-semibold text-right">
+                ✓ Returned {fmtDateTime(job.returnedAt)}
+                {job.returnedBy && <span className="text-zinc-500 font-normal"> · {job.returnedBy.name}</span>}
+              </div>
+            )}
+            {job.archivedAt && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 bg-rose-950/40 border border-rose-900 rounded px-2 py-0.5">Archived</span>
             )}
           </div>
         </div>
+
+        {/* Inline edit panel (from More ▾ → Edit job details). */}
+        {editing && (
+          <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 p-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Job name</span>
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Start</span>
+              <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">End</span>
+              <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
+            </label>
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Estimated deal value ($)</span>
+              <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="—" className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-zinc-500" />
+            </label>
+            <div className="sm:col-span-2 flex items-center gap-2 justify-end">
+              <button onClick={() => setEditing(false)} className="text-xs text-zinc-400 hover:text-zinc-200 px-3 py-1.5">Cancel</button>
+              <button onClick={saveEdit} disabled={editSaving} className="text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">
+                {editSaving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Metadata */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
@@ -697,27 +894,64 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* Quick access — clickable jump tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { href: '#reserved-assets', label: 'Reserved Assets', value: String(reservedAssets.length), tone: 'neutral' },
-          { href: '#orders', label: 'Orders', value: String(job.orders.length), tone: 'neutral' },
-          { href: '#agreement', label: 'Rental Agreement', value: agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : '—', tone: agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : agreementStatus === 'expired' ? 'bad' : 'neutral' },
-          { href: '#coi', label: 'COI', value: coiStatus, tone: coiStatus === 'Verified' ? 'good' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bad' : 'warn' },
-        ].map((t) => {
-          const toneCls = t.tone === 'good' ? 'text-emerald-300' : t.tone === 'warn' ? 'text-amber-300' : t.tone === 'bad' ? 'text-rose-300' : 'text-white group-hover:text-amber-300'
-          return (
-            <a
-              key={t.label}
-              href={t.href}
-              className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors"
-            >
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t.label}</div>
-              <div className={`mt-1.5 text-2xl font-bold ${toneCls} transition-colors leading-none`}>{t.value}</div>
-              <div className="mt-2 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">Jump ↓</div>
-            </a>
-          )
-        })}
+      {/* Paperwork status strip — glanceable client-paperwork state.
+          COI + Rental Agreement jump to their sections; Card Auth carries
+          the "Send CC request" action (client authorizes in their portal). */}
+      <div>
+        <div className="flex items-center gap-2.5 mb-2 px-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Paperwork</span>
+          <span className="text-[11px] text-zinc-500">{pwComplete} of 3 complete</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* COI */}
+          <a href="#coi" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Certificate of Insurance</div>
+            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
+              coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-400' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+              {coiStatus}
+            </div>
+            <div className="mt-1.5 text-[11px] text-zinc-500">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+          </a>
+          {/* Rental Agreement */}
+          <a href="#agreement" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Rental Agreement</div>
+            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
+              agreementStatus === 'signed' ? 'text-emerald-300' : agreementStatus === 'expired' ? 'text-rose-300' : agreementStatus === 'pending' ? 'text-amber-300' : 'text-zinc-400'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-400' : agreementStatus === 'expired' ? 'bg-rose-400' : agreementStatus === 'pending' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
+              {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}
+            </div>
+            <div className="mt-1.5 text-[11px] text-zinc-500">{agreementStatus === 'signed' ? 'Coverage on file' : 'Attach to cover'}</div>
+          </a>
+          {/* Card Authorization */}
+          <div className="rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Card Authorization</div>
+            {cardOnFile ? (
+              <>
+                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  On file{job.cardAuth.last4 ? ` · ····${job.cardAuth.last4}` : ''}
+                </div>
+                <div className="mt-1.5 text-[11px] text-zinc-500">
+                  {cardSecurityOnly ? 'Security only — client pays another way' : job.cardAuth.cardholderName || 'Authorized'}
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={sendCcRequest}
+                  disabled={ccBusy}
+                  className="mt-2.5 text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {ccBusy ? 'Preparing…' : '↗ Send CC request'}
+                </button>
+                <div className="mt-2 text-[11px] text-zinc-500">Client enters it in their portal</div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Reserved assets → each opens its reservation on the calendar */}
@@ -739,9 +973,26 @@ export default function JobDetailPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
-                  <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
-                    {a.status.replace('_', ' ')}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(() => {
+                      const lcdw = job.lcdwByBooking?.[a.bookingId];
+                      return (
+                        <span
+                          title={lcdw ? 'LCDW accepted — collision damage waiver' : 'LCDW not accepted'}
+                          className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${lcdw ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-zinc-800 text-zinc-500 border-zinc-700'}`}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
+                            {lcdw && <path d="M9 12l2 2 4-4.2" />}
+                          </svg>
+                          LCDW
+                        </span>
+                      );
+                    })()}
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
+                      {a.status.replace('_', ' ')}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-0.5 text-[11px] text-zinc-500 truncate">{a.category}</div>
                 <div className="mt-1.5 text-[11px] text-zinc-400 font-mono">{fmtDate(a.startDate)} – {fmtDate(a.endDate)}</div>
@@ -766,12 +1017,15 @@ export default function JobDetailPage() {
                 : 'bg-rose-500/15 text-rose-300'
             }`}>{coiStatus}</span>
           </div>
-          <button
-            onClick={() => setCoiModalOpen(true)}
-            className="text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            + Upload COI
-          </button>
+          <div className="flex items-center gap-3">
+            <CopyCoiLinkButton jobId={job.id} variant="dark" />
+            <button
+              onClick={() => setCoiModalOpen(true)}
+              className="text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              + Upload COI
+            </button>
+          </div>
         </div>
         {job.coiChecks.length === 0 ? (
           <div className="text-sm text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-4 py-6 text-center">
