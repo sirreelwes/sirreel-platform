@@ -24,7 +24,11 @@ export async function GET(req: NextRequest) {
   const filter = (sp.get('filter') || 'unlinked').toLowerCase()
   const q = (sp.get('q') || '').trim()
 
-  const where: Prisma.JobWhereInput = { archivedAt: null }
+  const where: Prisma.JobWhereInput = {
+    archivedAt: null,
+    // Hide ZZTEST fixtures (the documented live-DB test prefix).
+    NOT: { company: { name: { startsWith: 'ZZTEST', mode: 'insensitive' } } },
+  }
   if (q) {
     where.OR = [
       { jobCode: { contains: q, mode: 'insensitive' } },
@@ -35,13 +39,15 @@ export async function GET(req: NextRequest) {
   if (filter === 'unlinked') where.rwOrders = { none: {} }
   else if (filter === 'linked') where.rwOrders = { some: {} }
 
+  // Most-recently-created first — this is a work queue for new jobs, and
+  // ordering by startDate floated the (few) date-less jobs to the top.
   const jobs = await prisma.job.findMany({
     where,
-    orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ createdAt: 'desc' }],
     take: 300,
     select: {
       id: true, jobCode: true, name: true, status: true,
-      startDate: true, endDate: true,
+      startDate: true, endDate: true, createdAt: true,
       company: { select: { id: true, name: true, rentalworksCustomerId: true } },
       rwOrders: { select: { rwOrderNumber: true } },
     },
@@ -55,6 +61,7 @@ export async function GET(req: NextRequest) {
       status: j.status,
       startDate: j.startDate,
       endDate: j.endDate,
+      createdAt: j.createdAt,
       company: j.company ? { id: j.company.id, name: j.company.name } : null,
       companyRwLinked: !!j.company?.rentalworksCustomerId,
       linkedOrders: j.rwOrders.map((o) => o.rwOrderNumber),

@@ -16,7 +16,7 @@ import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 
 type JobRow = {
   id: string; jobCode: string; name: string; status: string;
-  startDate: string | null; endDate: string | null;
+  startDate: string | null; endDate: string | null; createdAt: string;
   company: { id: string; name: string } | null;
   companyRwLinked: boolean;
   linkedOrders: string[];
@@ -145,7 +145,7 @@ export default function ReconcilePage() {
                   </div>
                   <div className="text-[13px] font-semibold text-lt-fg truncate">{j.name}</div>
                   <div className="text-[11px] text-lt-fg3 truncate">
-                    {j.company?.name || '—'} · {fmt(j.startDate)}
+                    {j.company?.name || '—'} · {j.startDate ? fmt(j.startDate) : `created ${fmt(j.createdAt)}`}
                   </div>
                 </button>
               ))}
