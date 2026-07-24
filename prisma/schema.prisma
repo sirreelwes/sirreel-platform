@@ -2021,6 +2021,7 @@ model User {
   uploadedCoiChecks       CoiCheck[]       @relation("CoiCheckUploader")
   decidedCoiChecks        CoiCheck[]       @relation("CoiCheckDecider")
   uploadedCompanyAgreements CompanyAgreement[] @relation("CompanyAgreementUploader")
+  uploadedJobDocuments      JobDocument[]      @relation("JobDocumentUploader")
   addedJobAgreementAddenda  JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
   reviewClauseMessages    ReviewClauseMessage[] @relation("ReviewClauseMessageAuthor")
   assignedInquiries       Inquiry[]        @relation("InquiryAssignedTo")
@@ -3687,6 +3688,7 @@ model Job {
   contractReviews ContractReview[]
   coiChecks       CoiCheck[]
   agreementAddenda JobAgreementAddendum[]
+  documents       JobDocument[]
   fromInquiry     Inquiry?         @relation("ConvertedFromInquiry")
 
   @@index([companyId])
@@ -5156,4 +5158,49 @@ model PortalV2Intake {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("portal_v2_intake")
+}
+
+/// Transitional document store for the RentalWorks → HQ handover. The team
+/// still creates quotes (and today, invoices) in RW; RW's API exposes no
+/// PDF/print endpoint, so staff export the PDF from RW and attach it to the
+/// Job here. HQ becomes the single place to FIND the document while RW
+/// remains the system of record. Retire once quoting/invoicing is native.
+enum JobDocumentKind {
+  QUOTE
+  INVOICE
+  OTHER
+}
+
+model JobDocument {
+  id     String          @id @default(uuid())
+  jobId  String          @map("job_id")
+  kind   JobDocumentKind @default(OTHER)
+  /// Origin of the file. "RENTALWORKS" for RW exports; "INTERNAL" for
+  /// anything staff produced outside RW.
+  source String          @default("RENTALWORKS")
+
+  /// The RW quote / invoice number printed on the document, for
+  /// cross-reference against RW and the order.
+  refNumber    String?   @map("ref_number")
+  /// Face amount, denormalized for at-a-glance listing (not authoritative).
+  amount       Decimal?  @db.Decimal(12, 2)
+  documentDate DateTime? @map("document_date")
+
+  fileKey          String  @map("file_key")
+  fileUrl          String  @map("file_url")
+  originalFilename String  @map("original_filename")
+  fileSize         Int     @map("file_size")
+  mimeType         String  @map("mime_type")
+  note             String? @db.Text
+
+  uploadedById String? @map("uploaded_by_id")
+  uploadedBy   User?   @relation("JobDocumentUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, deletedAt])
+  @@map("sr_job_documents")
 }

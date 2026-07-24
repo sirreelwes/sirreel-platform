@@ -9,6 +9,7 @@ import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
+import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -1552,6 +1553,9 @@ export default function JobDetailPage() {
       </div>
 
       {/* Email threads filed in this Job (email-in-Job, step 6). */}
+      {/* RW quotes/invoices attached to this job (transitional). */}
+      <JobDocumentsPanel jobId={job.id} />
+
       <JobEmailThreads jobId={job.id} />
 
 
