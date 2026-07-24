@@ -3689,6 +3689,7 @@ model Job {
   coiChecks       CoiCheck[]
   agreementAddenda JobAgreementAddendum[]
   documents       JobDocument[]
+  rwOrders        JobRwOrder[]
   fromInquiry     Inquiry?         @relation("ConvertedFromInquiry")
 
   @@index([companyId])
@@ -5237,4 +5238,25 @@ model RwInvoice {
   @@index([rwCustomerId])
   @@index([remainingTotal])
   @@map("sr_rw_invoices")
+}
+
+/// Links an HQ Job to a RentalWorks ORDER (by order number). One RW order
+/// has many invoices, so linking at the ORDER level rolls every current and
+/// future invoice for that order up to the job automatically.
+///
+/// Deliberately its OWN table keyed on the order number rather than a column
+/// on RwInvoice: the mirror is deleted and recreated on every sync, so a link
+/// stored on those rows would be wiped. Retire with RW.
+model JobRwOrder {
+  id            String   @id @default(uuid())
+  jobId         String   @map("job_id")
+  rwOrderNumber String   @map("rw_order_number")
+  linkedById    String?  @map("linked_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, rwOrderNumber])
+  @@index([rwOrderNumber])
+  @@map("sr_job_rw_orders")
 }

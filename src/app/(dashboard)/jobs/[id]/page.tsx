@@ -10,6 +10,7 @@ import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
+import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 
 const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
@@ -1553,6 +1554,9 @@ export default function JobDetailPage() {
       </div>
 
       {/* Email threads filed in this Job (email-in-Job, step 6). */}
+      {/* RW billing: linked RW order → its invoices + balance. */}
+      <JobRwBillingPanel jobId={job.id} />
+
       {/* RW quotes/invoices attached to this job (transitional). */}
       <JobDocumentsPanel jobId={job.id} />
 
