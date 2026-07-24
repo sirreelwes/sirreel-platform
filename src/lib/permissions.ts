@@ -353,6 +353,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+        { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },

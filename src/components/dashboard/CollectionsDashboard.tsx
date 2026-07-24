@@ -32,6 +32,7 @@ const MOCK_COLLECTIONS = [
 export default function CollectionsDashboard() {
   const [orders, setOrders] = useState<RWOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [newPayment, setNewPayment] = useState(false);
   const [pClient, setPClient] = useState('');
   const [pAmount, setPAmount] = useState('');
@@ -42,42 +43,43 @@ export default function CollectionsDashboard() {
   const [toast, setToast] = useState('');
 
   useEffect(() => {
-    fetch('/api/rentalworks').then(r => r.json()).then(data => {
-      if (data?.orders?.Rows) {
-        const cols = data.orders.ColumnIndex;
-        const rows: RWOrder[] = data.orders.Rows.map((r: any[]) => ({
-          orderId:       r[cols.OrderId],
-          orderNumber:   r[cols.OrderNumber],
-          description:   r[cols.Description],
-          customer:      r[cols.Customer],
-          agent:         (r[cols.CustomerServiceRepresentative] || '').split(',').reverse().join(' ').trim(),
-          status:        r[cols.Status],
-          total:         Number(r[cols.Total]) || 0,
-          invoicedAmount:Number(r[cols.InvoicedAmount]) || 0,
-          startDate:     r[cols.EstimatedStartDate] || '',
-          endDate:       r[cols.EstimatedStopDate] || '',
-          poNumber:      r[cols.PoNumber] || '',
-          ccAuthStatus:  r[cols.CreditCardPreAuthorizationStatus] || '',
-          billingStart:  r[cols.BillingStartDate] || '',
-          billingEnd:    r[cols.BillingEndDate] || '',
-        }));
-        setOrders(rows);
-      }
+    // Reads the HQ mirror of RW invoices, not RW live. Per-invoice
+    // RemainingTotal is the real balance; the old order-level
+    // Total - InvoicedAmount overstated it. A stale mirror also beats the
+    // old failure mode, where an expired token rendered $0 as if it were true.
+    fetch('/api/rentalworks/invoices?filter=open&limit=500').then(r => r.json()).then(data => {
+      const rows: RWOrder[] = (data?.invoices || []).map((i: any) => ({
+        orderId:        i.id,
+        orderNumber:    i.orderNumber || '',
+        description:    i.invoiceNumber ? `Invoice #${i.invoiceNumber}` : '',
+        customer:       i.company?.name || i.customerName || '',
+        agent:          '',
+        status:         i.status || '',
+        total:          Number(i.invoiceTotal) || 0,
+        invoicedAmount: Number(i.receivedTotal) || 0,
+        startDate:      (i.invoiceDate || '').slice(0, 10),
+        endDate:        (i.dueDate || '').slice(0, 10),
+        poNumber:       i.poNumber || '',
+        ccAuthStatus:   '',
+        billingStart:   '',
+        billingEnd:     '',
+      }));
+      setOrders(rows);
+      setSyncedAt(data?.syncedAt || null);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
 
   const outstanding = useMemo(() =>
     orders
-      .filter(o => ['ACTIVE','CONFIRMED','COMPLETE'].includes(o.status) && o.total > 0)
       .map(o => ({ ...o, balance: o.total - o.invoicedAmount }))
-      .filter(o => o.balance > 0)
+      .filter(o => o.balance > 0.005)
       .sort((a, b) => b.balance - a.balance),
     [orders]
   );
 
   const overdue = useMemo(() =>
-    outstanding.filter(o => o.endDate && o.endDate < today && o.status !== 'ACTIVE'),
+    outstanding.filter(o => o.endDate && o.endDate < today),
     [outstanding, today]
   );
 
@@ -125,12 +127,12 @@ export default function CollectionsDashboard() {
         <div className="p-4 bg-white rounded-xl border border-amber-200">
           <div className="text-[9px] font-bold text-amber-500 uppercase mb-1">Outstanding</div>
           <div className="text-3xl font-extrabold text-amber-600">${(totalOutstanding/1000).toFixed(1)}K</div>
-          <div className="text-[10px] text-gray-400 mt-0.5">{outstanding.length} orders · RentalWorks</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">{outstanding.length} invoices · synced {syncedAt ? new Date(syncedAt).toLocaleDateString() : "never"}</div>
         </div>
         <div className="p-4 bg-white rounded-xl border border-red-200">
           <div className="text-[9px] font-bold text-red-500 uppercase mb-1">Overdue</div>
           <div className="text-3xl font-extrabold text-red-600">${(totalOverdue/1000).toFixed(1)}K</div>
-          <div className="text-[10px] text-gray-400 mt-0.5">{overdue.length} orders past due</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">{overdue.length} invoices past due</div>
         </div>
         <div className="p-4 bg-white rounded-xl border border-purple-200">
           <div className="text-[9px] font-bold text-purple-500 uppercase mb-1">Open Claims</div>
@@ -223,7 +225,7 @@ export default function CollectionsDashboard() {
                       <div className="flex-1 min-w-0 mr-3">
                         <div className="text-[12px] font-bold text-gray-900 truncate">{o.customer}</div>
                         <div className="text-[10px] text-gray-500 truncate">{o.description} · #{o.orderNumber}</div>
-                        <div className="text-[9px] text-gray-400">{o.agent} · ended {fDate(o.endDate)}</div>
+                        <div className="text-[9px] text-gray-400">{o.agent} · due {fDate(o.endDate)}</div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-[13px] font-extrabold text-red-600">${o.balance.toLocaleString()}</div>

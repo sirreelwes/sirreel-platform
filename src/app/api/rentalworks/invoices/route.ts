@@ -1,0 +1,115 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * GET /api/rentalworks/invoices — browse the RentalWorks invoice mirror.
+ *
+ * Serves both the RW invoices page and Ana's Collections dashboard. Reads
+ * the HQ mirror, never RW live: RW can't filter invoice/browse at all, and
+ * live-fetching is why the legacy dashboards silently show $0 when the token
+ * expires. Totals are computed across the whole filtered set, not the page.
+ *
+ * ?q=        invoice #, order #, or customer (case-insensitive)
+ * ?filter=   open | overdue | paid | all      (default: open)
+ * ?limit= &offset=
+ */
+export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const sp = req.nextUrl.searchParams
+  const q = (sp.get('q') || '').trim()
+  const filter = (sp.get('filter') || 'open').toLowerCase()
+  const limit = Math.min(Math.max(Number(sp.get('limit') || 100), 1), 500)
+  const offset = Math.max(Number(sp.get('offset') || 0), 0)
+
+  const where: Prisma.RwInvoiceWhereInput = {}
+  if (q) {
+    where.OR = [
+      { invoiceNumber: { contains: q, mode: 'insensitive' } },
+      { orderNumber: { contains: q, mode: 'insensitive' } },
+      { customerName: { contains: q, mode: 'insensitive' } },
+    ]
+  }
+  const now = new Date()
+  if (filter === 'open') where.remainingTotal = { gt: 0 }
+  else if (filter === 'paid') where.remainingTotal = { lte: 0 }
+  else if (filter === 'overdue') {
+    where.remainingTotal = { gt: 0 }
+    where.dueDate = { lt: now }
+  }
+
+  const [rows, count, agg, overdueAgg, syncRow] = await Promise.all([
+    prisma.rwInvoice.findMany({
+      where,
+      orderBy: [{ invoiceDate: 'desc' }],
+      skip: offset,
+      take: limit,
+      select: {
+        id: true, invoiceNumber: true, orderNumber: true, customerName: true, rwCustomerId: true,
+        status: true, invoiceDate: true, dueDate: true, poNumber: true,
+        invoiceTotal: true, receivedTotal: true, remainingTotal: true,
+      },
+    }),
+    prisma.rwInvoice.count({ where }),
+    prisma.rwInvoice.aggregate({ where, _sum: { invoiceTotal: true, receivedTotal: true, remainingTotal: true } }),
+    prisma.rwInvoice.aggregate({
+      where: { ...where, remainingTotal: { gt: 0 }, dueDate: { lt: now } },
+      _sum: { remainingTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
+  ])
+
+  // Stitch HQ context: which client, and whether the order is linked to a job.
+  const customerIds = [...new Set(rows.map((r) => r.rwCustomerId).filter(Boolean) as string[])]
+  const orderNumbers = [...new Set(rows.map((r) => r.orderNumber).filter(Boolean) as string[])]
+  const [companies, links] = await Promise.all([
+    customerIds.length
+      ? prisma.company.findMany({
+          where: { rentalworksCustomerId: { in: customerIds } },
+          select: { id: true, name: true, rentalworksCustomerId: true },
+        })
+      : Promise.resolve([]),
+    orderNumbers.length
+      ? prisma.jobRwOrder.findMany({
+          where: { rwOrderNumber: { in: orderNumbers } },
+          select: { rwOrderNumber: true, job: { select: { id: true, jobCode: true, name: true } } },
+        })
+      : Promise.resolve([]),
+  ])
+  const byCustomer = new Map(companies.map((c) => [c.rentalworksCustomerId as string, c]))
+  const byOrder = new Map(links.map((l) => [l.rwOrderNumber, l.job]))
+  const n = (v: unknown) => Number(v ?? 0)
+
+  return NextResponse.json({
+    syncedAt: syncRow?.syncedAt ?? null,
+    count,
+    totals: {
+      invoiced: n(agg._sum.invoiceTotal),
+      received: n(agg._sum.receivedTotal),
+      outstanding: n(agg._sum.remainingTotal),
+      overdue: n(overdueAgg._sum.remainingTotal),
+      overdueCount: overdueAgg._count._all,
+    },
+    invoices: rows.map((r) => ({
+      id: r.id,
+      invoiceNumber: r.invoiceNumber,
+      orderNumber: r.orderNumber,
+      customerName: r.customerName,
+      status: r.status,
+      invoiceDate: r.invoiceDate,
+      dueDate: r.dueDate,
+      poNumber: r.poNumber,
+      invoiceTotal: n(r.invoiceTotal),
+      receivedTotal: n(r.receivedTotal),
+      remainingTotal: n(r.remainingTotal),
+      company: r.rwCustomerId ? byCustomer.get(r.rwCustomerId) ?? null : null,
+      job: r.orderNumber ? byOrder.get(r.orderNumber) ?? null : null,
+    })),
+  })
+}
