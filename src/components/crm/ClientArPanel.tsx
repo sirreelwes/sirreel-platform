@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ClientRwCustomerLink } from '@/components/rentalworks/ClientRwCustomerLink';
 
 /**
  * Client AR from RentalWorks, read from the HQ mirror (sr_rw_invoices).
@@ -96,9 +97,10 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
     return (
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-5 mb-6">
         <h2 className="text-sm font-semibold text-lt-fg mb-1">Accounts Receivable</h2>
-        <p className="text-[12px] text-lt-fg3">
+        <p className="text-[12px] text-lt-fg3 mb-3">
           This client isn’t linked to a RentalWorks customer, so no invoices can be matched.
         </p>
+        <ClientRwCustomerLink companyId={companyId} onLinked={load} />
       </div>
     );
   }

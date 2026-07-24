@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
+import { ClientRwCustomerLink } from '@/components/rentalworks/ClientRwCustomerLink';
 
 /**
  * RentalWorks reconciliation workspace.
@@ -302,9 +303,12 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
         )}
 
         {!rw?.companyLinked && (
-          <div className="text-[12px] text-lt-fg3 mb-3">
-            This client isn’t linked to an RW customer, so there are no suggestions — enter the order
-            number directly below.
+          <div className="mb-3">
+            <div className="text-[12px] text-lt-fg3 mb-2">
+              {job.company.name} isn’t linked to a RentalWorks customer yet — link it first and its
+              orders will appear here.
+            </div>
+            <ClientRwCustomerLink companyId={job.company.id} onLinked={() => { load(); onLinked(); }} />
           </div>
         )}
 
