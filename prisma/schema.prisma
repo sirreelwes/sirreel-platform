@@ -5204,3 +5204,37 @@ model JobDocument {
   @@index([jobId, deletedAt])
   @@map("sr_job_documents")
 }
+
+/// Read-only mirror of RentalWorks invoices.
+///
+/// RW's invoice/browse supports NO server-side filtering (every
+/// searchFields query 400s, even on Status), so we bulk-pull and cache a
+/// slim projection here. Pages then read HQ instead of hitting RW live —
+/// which also removes the silent-$0 failure mode when the RW token expires
+/// (a stale mirror is honest; a zeroed live fetch is not).
+///
+/// Joined to HQ by rwCustomerId -> Company.rentalworksCustomerId (97%
+/// populated). Job-level joining is NOT possible: Booking.rentalworksOrderId
+/// is unpopulated. Retire with RW.
+model RwInvoice {
+  id             String    @id @default(uuid())
+  rwInvoiceId    String    @unique @map("rw_invoice_id")
+  invoiceNumber  String?   @map("invoice_number")
+  invoiceType    String?   @map("invoice_type")
+  status         String?
+  invoiceDate    DateTime? @map("invoice_date")
+  dueDate        DateTime? @map("due_date")
+  rwOrderId      String?   @map("rw_order_id")
+  orderNumber    String?   @map("order_number")
+  rwCustomerId   String?   @map("rw_customer_id")
+  customerName   String?   @map("customer_name")
+  poNumber       String?   @map("po_number")
+  invoiceTotal   Decimal   @default(0) @map("invoice_total") @db.Decimal(12, 2)
+  receivedTotal  Decimal   @default(0) @map("received_total") @db.Decimal(12, 2)
+  remainingTotal Decimal   @default(0) @map("remaining_total") @db.Decimal(12, 2)
+  syncedAt       DateTime  @default(now()) @map("synced_at")
+
+  @@index([rwCustomerId])
+  @@index([remainingTotal])
+  @@map("sr_rw_invoices")
+}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
+import { ClientArPanel } from "@/components/crm/ClientArPanel";
 import { CopyCoiLinkButton } from "@/components/coi/CopyCoiLinkButton";
 
 type Activity = {
@@ -365,6 +366,8 @@ export default function CompanyDetailPage() {
     <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
       <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
+
+      <ClientArPanel companyId={companyId} />
 
       {/* CRM Notes — pinned client relationship notes (Company.notes).
           Same field surfaced on every job for this client. */}
