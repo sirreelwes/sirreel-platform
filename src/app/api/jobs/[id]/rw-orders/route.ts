@@ -94,6 +94,36 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         return ad - bd
       })
       .slice(0, 25)
+
+    // Attach each candidate's invoices so the reconciliation view can show
+    // real detail (numbers, dates, amounts) rather than just an aggregate.
+    const candNumbers = candidates.map((c) => c.orderNumber as string)
+    if (candNumbers.length) {
+      const candInvoices = await prisma.rwInvoice.findMany({
+        where: { orderNumber: { in: candNumbers } },
+        orderBy: [{ invoiceDate: 'desc' }],
+        select: {
+          id: true, invoiceNumber: true, orderNumber: true, status: true,
+          invoiceDate: true, dueDate: true, poNumber: true,
+          invoiceTotal: true, receivedTotal: true, remainingTotal: true,
+        },
+      })
+      const byOrder = new Map<string, unknown[]>()
+      for (const inv of candInvoices) {
+        const key = inv.orderNumber as string
+        if (!byOrder.has(key)) byOrder.set(key, [])
+        byOrder.get(key)!.push({
+          ...inv,
+          invoiceTotal: n(inv.invoiceTotal),
+          receivedTotal: n(inv.receivedTotal),
+          remainingTotal: n(inv.remainingTotal),
+        })
+      }
+      candidates = candidates.map((c) => ({
+        ...c,
+        invoices: byOrder.get(c.orderNumber as string) ?? [],
+      }))
+    }
   }
 
   return NextResponse.json({
