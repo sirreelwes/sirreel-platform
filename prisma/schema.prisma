@@ -5230,6 +5230,17 @@ model RwInvoice {
   rwCustomerId   String?   @map("rw_customer_id")
   customerName   String?   @map("customer_name")
   poNumber       String?   @map("po_number")
+  /// The evidence fields that make job<->order matching possible. `deal` is
+  /// RW's production name and lines up with Job.name; `agent` lines up with
+  /// the HQ job agent; billing dates are the real rental window.
+  dealName          String?   @map("deal_name")
+  dealNumber        String?   @map("deal_number")
+  orderDescription  String?   @map("order_description")
+  invoiceDescription String?  @map("invoice_description")
+  agent             String?
+  billingStartDate  DateTime? @map("billing_start_date")
+  billingEndDate    DateTime? @map("billing_end_date")
+  orderDate         DateTime? @map("order_date")
   invoiceTotal   Decimal   @default(0) @map("invoice_total") @db.Decimal(12, 2)
   receivedTotal  Decimal   @default(0) @map("received_total") @db.Decimal(12, 2)
   remainingTotal Decimal   @default(0) @map("remaining_total") @db.Decimal(12, 2)

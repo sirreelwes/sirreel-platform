@@ -30,10 +30,14 @@ type CandInv = {
 type Cand = {
   orderNumber: string; invoiceCount: number; invoiced: number; outstanding: number;
   firstInvoiceDate: string | null; lastInvoiceDate: string | null; distanceDays: number | null;
+  dealName: string | null; orderDescription: string | null; agent: string | null;
+  billingStartDate: string | null; billingEndDate: string | null;
+  score: number; reasons: string[];
   invoices?: CandInv[];
 };
 type RwData = {
   companyLinked: boolean; companyName: string | null;
+  jobName?: string | null; jobAgent?: string | null;
   linked: { rwOrderNumber: string }[];
   rollup: { invoiced: number; received: number; outstanding: number; openCount: number; invoiceCount: number };
   invoices: CandInv[];
@@ -268,6 +272,12 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
         <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold mb-2">
           RentalWorks orders {rw?.companyName ? `for ${rw.companyName}` : ''}
         </div>
+        {rw?.companyLinked && (
+          <div className="text-[11px] text-lt-fg3 mb-2">
+            Matching against job <span className="font-semibold text-lt-fg2">“{rw.jobName}”</span>
+            {rw.jobAgent && <> · agent {rw.jobAgent}</>} — green ticks show why an order ranked.
+          </div>
+        )}
 
         {rw && rw.linked.length > 0 && (
           <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
@@ -300,29 +310,49 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
 
         <div className="space-y-1.5 max-h-[52vh] overflow-y-auto">
           {rw?.candidates.map((c) => {
-            const near = c.distanceDays != null && c.distanceDays <= 7;
+            const strong = c.score >= 60;
             const open = expanded === c.orderNumber;
             return (
-              <div key={c.orderNumber} className={`rounded-lg border ${near ? 'border-amber-300 bg-amber-50/40' : 'border-lt-hairline'}`}>
-                <div className="flex items-center gap-2 flex-wrap px-3 py-2">
-                  <button onClick={() => setExpanded(open ? null : c.orderNumber)} className="font-mono text-[13px] text-lt-fg hover:underline">
-                    #{c.orderNumber}
-                  </button>
-                  <span className="text-[11px] text-lt-fg2">{c.invoiceCount} inv · {usd(c.invoiced)}</span>
-                  {c.outstanding > 0.005 && <span className="text-[11px] font-semibold text-amber-700">{usd(c.outstanding)} open</span>}
-                  <span className="text-[11px] text-lt-fg3">{fmt(c.firstInvoiceDate)}</span>
-                  {c.distanceDays != null && (
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${near ? 'bg-amber-100 text-amber-800' : 'bg-lt-inner text-lt-fg3'}`}>
-                      {c.distanceDays}d from start
-                    </span>
+              <div key={c.orderNumber} className={`rounded-lg border ${strong ? 'border-amber-400 bg-amber-50/50' : 'border-lt-hairline'}`}>
+                <div className="px-3 py-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => setExpanded(open ? null : c.orderNumber)} className="font-mono text-[13px] text-lt-fg hover:underline">
+                      #{c.orderNumber}
+                    </button>
+                    {c.dealName && (
+                      <span className="text-[13px] font-bold text-lt-fg">{c.dealName}</span>
+                    )}
+                    {c.orderDescription && (
+                      <span className="text-[12px] text-lt-fg2">· {c.orderDescription}</span>
+                    )}
+                    <button
+                      onClick={() => link(c.orderNumber)}
+                      disabled={busy}
+                      className="ml-auto text-[11px] font-semibold px-2.5 py-1 rounded bg-lt-fg text-lt-card hover:opacity-90 disabled:opacity-40"
+                    >
+                      Link
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-lt-fg3">
+                    {c.agent && <span>{c.agent}</span>}
+                    {(c.billingStartDate || c.billingEndDate) && (
+                      <span>· rental {fmt(c.billingStartDate)} – {fmt(c.billingEndDate)}</span>
+                    )}
+                    <span>· {c.invoiceCount} inv · {usd(c.invoiced)}</span>
+                    {c.outstanding > 0.005 && <span className="font-semibold text-amber-700">· {usd(c.outstanding)} open</span>}
+                  </div>
+                  {c.reasons?.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {c.reasons.map((rsn) => (
+                        <span key={rsn} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          ✓ {rsn}
+                        </span>
+                      ))}
+                      {c.distanceDays != null && (
+                        <span className="text-[10px] text-lt-fg3">{c.distanceDays}d from job start</span>
+                      )}
+                    </div>
                   )}
-                  <button
-                    onClick={() => link(c.orderNumber)}
-                    disabled={busy}
-                    className="ml-auto text-[11px] font-semibold px-2.5 py-1 rounded bg-lt-fg text-lt-card hover:opacity-90 disabled:opacity-40"
-                  >
-                    Link
-                  </button>
                 </div>
                 {open && c.invoices && c.invoices.length > 0 && (
                   <div className="border-t border-lt-hairline px-3 py-2 space-y-1">
@@ -333,7 +363,6 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
                         <span>due {fmt(i.dueDate)}</span>
                         {i.poNumber && <span>PO {i.poNumber}</span>}
                         <span className="ml-auto tabular-nums">{usd(i.invoiceTotal)}</span>
-                        <span className="tabular-nums text-lt-fg3">recv {usd(i.receivedTotal)}</span>
                         <span className="tabular-nums font-semibold">{usd(i.remainingTotal)} left</span>
                       </div>
                     ))}
