@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 /**
  * RentalWorks invoice status → AR meaning. Single source of truth so every
@@ -26,4 +27,10 @@ export function isVoid(status: string | null | undefined): boolean {
 /** True if this invoice is real outstanding AR (owed, not cancelled). */
 export function isOpen(inv: { remainingTotal: number | { toString(): string }; status: string | null }): boolean {
   return !isVoid(inv.status) && Number(inv.remainingTotal ?? 0) > 0.005
+}
+
+/** rwInvoiceIds staff have manually marked paid in HQ (RW lagging reality). */
+export async function getHqPaidInvoiceIds(): Promise<string[]> {
+  const marks = await prisma.rwInvoicePaidMark.findMany({ select: { rwInvoiceId: true } })
+  return marks.map((m) => m.rwInvoiceId)
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { RW_VOID } from '@/lib/rentalworks/arStatus'
+import { RW_VOID, getHqPaidInvoiceIds } from '@/lib/rentalworks/arStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const rwCustomerId = job.company?.rentalworksCustomerId ?? null
 
   const invSelect = {
-    id: true, invoiceNumber: true, status: true, invoiceDate: true, dueDate: true,
+    id: true, rwInvoiceId: true, invoiceNumber: true, status: true, invoiceDate: true, dueDate: true,
     orderNumber: true, poNumber: true, dealName: true, orderDescription: true,
     agent: true, billingStartDate: true, billingEndDate: true,
     invoiceTotal: true, receivedTotal: true, remainingTotal: true, syncedAt: true,
@@ -69,7 +69,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       })
     : []
 
-  const open = invoices.filter((i) => n(i.remainingTotal) > 0.005)
+  const hqPaid = new Set(await getHqPaidInvoiceIds())
+  const open = invoices.filter((i) => n(i.remainingTotal) > 0.005 && !hqPaid.has(i.rwInvoiceId))
   const rollup = {
     invoiced: invoices.reduce((s, i) => s + n(i.invoiceTotal), 0),
     received: invoices.reduce((s, i) => s + n(i.receivedTotal), 0),
@@ -141,7 +142,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         billingEndDate: billEnd,
         invoiceCount: rows.length,
         invoiced: rows.reduce((s, r) => s + n(r.invoiceTotal), 0),
-        outstanding: rows.reduce((s, r) => s + n(r.remainingTotal), 0),
+        outstanding: rows.filter((r) => !hqPaid.has(r.rwInvoiceId)).reduce((s, r) => s + n(r.remainingTotal), 0),
         firstInvoiceDate: rows[rows.length - 1]?.invoiceDate ?? null,
         lastInvoiceDate: rows[0]?.invoiceDate ?? null,
         distanceDays,

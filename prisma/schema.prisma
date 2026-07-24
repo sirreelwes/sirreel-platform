@@ -5271,3 +5271,18 @@ model JobRwOrder {
   @@index([rwOrderNumber])
   @@map("sr_job_rw_orders")
 }
+
+/// HQ-side "paid" override for a RentalWorks invoice. RW's status (CLOSED /
+/// VOID / NEW / PROCESSED) is authoritative, but RW can lag — an invoice
+/// collected today may sit NEW for days. Staff mark it paid here to clear it
+/// from HQ AR without waiting on RW. Keyed on rw_invoice_id (NOT a relation)
+/// because the mirror is deleted/recreated each sync. Reversible.
+model RwInvoicePaidMark {
+  id          String   @id @default(uuid())
+  rwInvoiceId String   @unique @map("rw_invoice_id")
+  note        String?
+  markedById  String?  @map("marked_by_id")
+  markedAt    DateTime @default(now()) @map("marked_at")
+
+  @@map("sr_rw_invoice_paid_marks")
+}

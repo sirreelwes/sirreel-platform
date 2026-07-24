@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
-import { OPEN_WHERE, RW_VOID, RW_PAID } from '@/lib/rentalworks/arStatus'
+import { OPEN_WHERE, RW_VOID, RW_PAID, getHqPaidInvoiceIds } from '@/lib/rentalworks/arStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,16 +37,21 @@ export async function GET(req: NextRequest) {
     ]
   }
   const now = new Date()
+  // HQ-side "paid" overrides (RW lagging). Excluded from open, counted as paid.
+  const hqPaidIds = await getHqPaidInvoiceIds()
+  const notHqPaid: Prisma.RwInvoiceWhereInput = hqPaidIds.length ? { NOT: { rwInvoiceId: { in: hqPaidIds } } } : {}
+  const paidSet = new Set(hqPaidIds)
+
   // Status-aware filters. VOID (cancelled) invoices keep a face-value
   // RemainingTotal in RW, so they must never count as owed.
-  if (filter === 'open') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID } })
-  else if (filter === 'paid') where.status = RW_PAID
+  if (filter === 'open') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID }, ...notHqPaid })
+  else if (filter === 'paid') where.AND = [{ OR: [{ status: RW_PAID }, ...(hqPaidIds.length ? [{ rwInvoiceId: { in: hqPaidIds } }] : [])] }]
   else if (filter === 'void') where.status = RW_VOID
-  else if (filter === 'overdue') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID }, dueDate: { lt: now } })
+  else if (filter === 'overdue') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID }, dueDate: { lt: now }, ...notHqPaid })
 
   // KPI tiles are computed over the true-open set, independent of the list
   // filter, so switching to Void/Paid doesn't zero the Outstanding figure.
-  const openWhere: Prisma.RwInvoiceWhereInput = { ...OPEN_WHERE }
+  const openWhere: Prisma.RwInvoiceWhereInput = { ...OPEN_WHERE, ...notHqPaid }
   if (where.OR) openWhere.OR = where.OR // keep the search scope on the KPIs too
 
   const [rows, count, listAgg, openAgg, overdueAgg, syncRow] = await Promise.all([
@@ -56,7 +61,7 @@ export async function GET(req: NextRequest) {
       skip: offset,
       take: limit,
       select: {
-        id: true, invoiceNumber: true, orderNumber: true, customerName: true, rwCustomerId: true,
+        id: true, rwInvoiceId: true, invoiceNumber: true, orderNumber: true, customerName: true, rwCustomerId: true,
         status: true, invoiceDate: true, dueDate: true, poNumber: true,
         invoiceTotal: true, receivedTotal: true, remainingTotal: true,
       },
@@ -105,6 +110,7 @@ export async function GET(req: NextRequest) {
     },
     invoices: rows.map((r) => ({
       id: r.id,
+      rwInvoiceId: r.rwInvoiceId,
       invoiceNumber: r.invoiceNumber,
       orderNumber: r.orderNumber,
       customerName: r.customerName,
@@ -115,6 +121,7 @@ export async function GET(req: NextRequest) {
       invoiceTotal: n(r.invoiceTotal),
       receivedTotal: n(r.receivedTotal),
       remainingTotal: n(r.remainingTotal),
+      hqPaid: paidSet.has(r.rwInvoiceId),
       company: r.rwCustomerId ? byCustomer.get(r.rwCustomerId) ?? null : null,
       job: r.orderNumber ? byOrder.get(r.orderNumber) ?? null : null,
     })),

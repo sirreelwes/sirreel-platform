@@ -13,8 +13,8 @@ import Link from 'next/link';
  */
 
 type Inv = {
-  id: string; invoiceNumber: string | null; orderNumber: string | null;
-  customerName: string | null; status: string | null;
+  id: string; rwInvoiceId: string; invoiceNumber: string | null; orderNumber: string | null;
+  customerName: string | null; status: string | null; hqPaid: boolean;
   invoiceDate: string | null; dueDate: string | null; poNumber: string | null;
   invoiceTotal: number; receivedTotal: number; remainingTotal: number;
   company: { id: string; name: string } | null;
@@ -89,6 +89,18 @@ export default function RwInvoicesPage() {
       }
       await load();
     } finally { setRefreshing(false); }
+  };
+
+  const markPaid = async (rwInvoiceId: string, paid: boolean) => {
+    if (paid) {
+      await fetch('/api/rentalworks/invoices/mark-paid', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rwInvoiceId }),
+      });
+    } else {
+      await fetch(`/api/rentalworks/invoices/mark-paid?rwInvoiceId=${encodeURIComponent(rwInvoiceId)}`, { method: 'DELETE' });
+    }
+    load();
   };
 
   const t = data?.totals;
@@ -180,6 +192,7 @@ export default function RwInvoicesPage() {
                   <th className="py-2 px-3 font-semibold text-right">Total</th>
                   <th className="py-2 px-3 font-semibold text-right">Received</th>
                   <th className="py-2 px-3 font-semibold text-right">Remaining</th>
+                  <th className="py-2 px-3 font-semibold"></th>
                 </tr>
               </thead>
               <tbody>
@@ -208,6 +221,9 @@ export default function RwInvoicesPage() {
                           : i.status === 'CLOSED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                         }`}>{i.status || '—'}</span>
+                        {i.hqPaid && (
+                          <span className="ml-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200" title="Marked paid in HQ">paid · hq</span>
+                        )}
                       </td>
                       <td className="py-2 px-3">
                         {i.job ? (
@@ -224,6 +240,15 @@ export default function RwInvoicesPage() {
                       <td className="py-2 px-3 text-right tabular-nums text-lt-fg2">{usd(i.receivedTotal)}</td>
                       <td className={`py-2 px-3 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-lt-fg' : 'text-lt-fg3'}`}>
                         {usd(i.remainingTotal)}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        {i.status !== 'VOID' && (i.remainingTotal > 0.005 || i.hqPaid) && (
+                          i.hqPaid ? (
+                            <button onClick={() => markPaid(i.rwInvoiceId, false)} className="text-[11px] text-lt-fg3 hover:text-lt-fg">Undo</button>
+                          ) : (
+                            <button onClick={() => markPaid(i.rwInvoiceId, true)} className="text-[11px] font-semibold text-emerald-700 hover:underline">Mark paid</button>
+                          )
+                        )}
                       </td>
                     </tr>
                   );
