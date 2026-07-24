@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
+import { OPEN_WHERE, RW_VOID, RW_PAID } from '@/lib/rentalworks/arStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,14 +37,19 @@ export async function GET(req: NextRequest) {
     ]
   }
   const now = new Date()
-  if (filter === 'open') where.remainingTotal = { gt: 0 }
-  else if (filter === 'paid') where.remainingTotal = { lte: 0 }
-  else if (filter === 'overdue') {
-    where.remainingTotal = { gt: 0 }
-    where.dueDate = { lt: now }
-  }
+  // Status-aware filters. VOID (cancelled) invoices keep a face-value
+  // RemainingTotal in RW, so they must never count as owed.
+  if (filter === 'open') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID } })
+  else if (filter === 'paid') where.status = RW_PAID
+  else if (filter === 'void') where.status = RW_VOID
+  else if (filter === 'overdue') Object.assign(where, { remainingTotal: { gt: 0 }, status: { not: RW_VOID }, dueDate: { lt: now } })
 
-  const [rows, count, agg, overdueAgg, syncRow] = await Promise.all([
+  // KPI tiles are computed over the true-open set, independent of the list
+  // filter, so switching to Void/Paid doesn't zero the Outstanding figure.
+  const openWhere: Prisma.RwInvoiceWhereInput = { ...OPEN_WHERE }
+  if (where.OR) openWhere.OR = where.OR // keep the search scope on the KPIs too
+
+  const [rows, count, listAgg, openAgg, overdueAgg, syncRow] = await Promise.all([
     prisma.rwInvoice.findMany({
       where,
       orderBy: [{ invoiceDate: 'desc' }],
@@ -56,9 +62,10 @@ export async function GET(req: NextRequest) {
       },
     }),
     prisma.rwInvoice.count({ where }),
-    prisma.rwInvoice.aggregate({ where, _sum: { invoiceTotal: true, receivedTotal: true, remainingTotal: true } }),
+    prisma.rwInvoice.aggregate({ where, _sum: { invoiceTotal: true } }),
+    prisma.rwInvoice.aggregate({ where: openWhere, _sum: { remainingTotal: true }, _count: { _all: true } }),
     prisma.rwInvoice.aggregate({
-      where: { ...where, remainingTotal: { gt: 0 }, dueDate: { lt: now } },
+      where: { ...openWhere, dueDate: { lt: now } },
       _sum: { remainingTotal: true },
       _count: { _all: true },
     }),
@@ -90,9 +97,9 @@ export async function GET(req: NextRequest) {
     syncedAt: syncRow?.syncedAt ?? null,
     count,
     totals: {
-      invoiced: n(agg._sum.invoiceTotal),
-      received: n(agg._sum.receivedTotal),
-      outstanding: n(agg._sum.remainingTotal),
+      invoiced: n(listAgg._sum.invoiceTotal),
+      outstanding: n(openAgg._sum.remainingTotal),
+      openCount: openAgg._count._all,
       overdue: n(overdueAgg._sum.remainingTotal),
       overdueCount: overdueAgg._count._all,
     },

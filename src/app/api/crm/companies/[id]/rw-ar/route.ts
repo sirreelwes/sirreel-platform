@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { RW_VOID, isOpen } from '@/lib/rentalworks/arStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 
   const invoices = await prisma.rwInvoice.findMany({
-    where: { rwCustomerId: company.rentalworksCustomerId },
+    where: { rwCustomerId: company.rentalworksCustomerId, status: { not: RW_VOID } },
     orderBy: [{ invoiceDate: 'desc' }],
     take: 200,
     select: {
@@ -38,7 +39,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   })
 
   const n = (d: unknown) => Number(d ?? 0)
-  const open = invoices.filter((i) => n(i.remainingTotal) > 0.005)
+  const open = invoices.filter((i) => isOpen({ remainingTotal: n(i.remainingTotal), status: i.status }))
   const now = Date.now()
   const overdue = open.filter((i) => i.dueDate && new Date(i.dueDate).getTime() < now)
 

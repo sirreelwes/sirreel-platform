@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { RW_VOID } from '@/lib/rentalworks/arStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +63,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const invoices = linkedNumbers.length
     ? await prisma.rwInvoice.findMany({
-        where: { orderNumber: { in: linkedNumbers } },
+        where: { orderNumber: { in: linkedNumbers }, status: { not: RW_VOID } },
         orderBy: [{ invoiceDate: 'desc' }],
         select: invSelect,
       })
@@ -81,7 +82,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   let candidates: Array<Record<string, unknown>> = []
   if (rwCustomerId) {
     const all = await prisma.rwInvoice.findMany({
-      where: { rwCustomerId, orderNumber: { not: null } },
+      where: { rwCustomerId, orderNumber: { not: null }, status: { not: RW_VOID } },
       orderBy: [{ invoiceDate: 'desc' }],
       select: invSelect,
     })

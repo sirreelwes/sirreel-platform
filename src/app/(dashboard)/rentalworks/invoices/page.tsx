@@ -24,7 +24,7 @@ type Inv = {
 type Payload = {
   syncedAt: string | null;
   count: number;
-  totals: { invoiced: number; received: number; outstanding: number; overdue: number; overdueCount: number };
+  totals: { invoiced: number; outstanding: number; openCount: number; overdue: number; overdueCount: number };
   invoices: Inv[];
 };
 
@@ -32,6 +32,7 @@ const FILTERS = [
   { key: 'open', label: 'Open' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'paid', label: 'Paid' },
+  { key: 'void', label: 'Void' },
   { key: 'all', label: 'All' },
 ] as const;
 
@@ -124,7 +125,7 @@ export default function RwInvoicesPage() {
           <Tile label="Outstanding" value={t ? usd(t.outstanding) : '—'} tone="warn" />
           <Tile label="Overdue" value={t ? usd(t.overdue) : '—'} sub={t ? `${t.overdueCount} past due` : undefined} tone="bad" />
           <Tile label="Invoiced" value={t ? usd(t.invoiced) : '—'} />
-          <Tile label="Matching invoices" value={data ? String(data.count) : '—'} />
+          <Tile label="Open invoices" value={t ? String(t.openCount) : '—'} sub={data ? `${data.count} in view` : undefined} />
         </div>
 
         <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -172,6 +173,7 @@ export default function RwInvoicesPage() {
                   <th className="py-2 px-3 font-semibold">Invoice</th>
                   <th className="py-2 px-3 font-semibold">Order</th>
                   <th className="py-2 px-3 font-semibold">Client</th>
+                  <th className="py-2 px-3 font-semibold">Status</th>
                   <th className="py-2 px-3 font-semibold">Job</th>
                   <th className="py-2 px-3 font-semibold">Dated</th>
                   <th className="py-2 px-3 font-semibold">Due</th>
@@ -199,6 +201,13 @@ export default function RwInvoicesPage() {
                         ) : (
                           <span title="No HQ company matched to this RW customer">{i.customerName || '—'}</span>
                         )}
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                          i.status === 'VOID' ? 'bg-gray-100 text-gray-500 border-gray-200'
+                          : i.status === 'CLOSED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>{i.status || '—'}</span>
                       </td>
                       <td className="py-2 px-3">
                         {i.job ? (
