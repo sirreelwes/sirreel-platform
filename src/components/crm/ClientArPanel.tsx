@@ -55,6 +55,8 @@ function ago(d: string | null) {
 export function ClientArPanel({ companyId }: { companyId: string }) {
   const [ar, setAr] = useState<Ar | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshErr, setRefreshErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/crm/companies/${companyId}/rw-ar`);
@@ -63,6 +65,30 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
   }, [companyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Pulls the FULL RW invoice set (~4k rows, ~20-40s) and swaps the mirror,
+  // so this refreshes AR for every client, not just this one.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshErr(null);
+    try {
+      const r = await fetch('/api/admin/rw-invoice-sync', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        setRefreshErr(
+          d.error?.includes('401') || d.error?.includes('403')
+            ? 'RentalWorks rejected the token — it likely needs rotating (see the token-rotation runbook).'
+            : d.error || `Sync failed (HTTP ${r.status})`,
+        );
+        return;
+      }
+      await load();
+    } catch (e) {
+      setRefreshErr(e instanceof Error ? e.message : 'Sync failed');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   if (!ar) return null;
 
@@ -98,6 +124,14 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
           >
             synced {ago(ar.syncedAt)}
           </span>
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            title="Re-pull all invoices from RentalWorks (~30s). Refreshes AR for every client."
+            className="text-[11px] font-semibold px-2 py-0.5 rounded border border-lt-hairline bg-lt-inner text-lt-fg2 hover:text-lt-fg hover:border-lt-fg3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
         </div>
         {ar.invoices.length > open.length && (
           <button
@@ -108,6 +142,17 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
           </button>
         )}
       </div>
+
+      {refreshing && (
+        <div className="mb-3 text-[12px] text-lt-fg3">
+          Pulling all invoices from RentalWorks — this takes about 30 seconds.
+        </div>
+      )}
+      {refreshErr && (
+        <div className="mb-3 text-[12px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {refreshErr}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <Tile label="Outstanding" value={usd(t.outstanding)} tone={t.outstanding > 0 ? 'warn' : 'good'} />
