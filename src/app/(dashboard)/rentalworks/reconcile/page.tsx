@@ -462,6 +462,14 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
                         <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">paid</span>
                       )}
                       <span className="ml-auto">
+                        <a
+                          href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-emerald-700 hover:underline mr-2"
+                        >
+                          PDF
+                        </a>
                         {i.hqPaid ? (
                           <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-emerald-700 hover:underline">Undo</button>
                         ) : !settled ? (

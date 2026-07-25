@@ -154,7 +154,15 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
                         <td className={`py-1.5 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-white' : 'text-zinc-400'}`}>
                           {i.hqPaid ? <span className="text-[10px] font-bold uppercase text-emerald-300">paid · hq</span> : usd(i.remainingTotal)}
                         </td>
-                        <td className="py-1.5 pl-3 text-right">
+                        <td className="py-1.5 pl-3 text-right whitespace-nowrap">
+                          <a
+                            href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-semibold text-amber-300 hover:underline mr-2.5"
+                          >
+                            PDF
+                          </a>
                           {i.hqPaid ? (
                             <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-[11px] text-zinc-400 hover:text-white">Undo</button>
                           ) : i.remainingTotal > 0.005 ? (

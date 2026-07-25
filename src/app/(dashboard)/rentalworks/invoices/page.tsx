@@ -206,7 +206,17 @@ export default function RwInvoicesPage() {
                   const overdue = i.remainingTotal > 0.005 && i.dueDate && new Date(i.dueDate).getTime() < Date.now();
                   return (
                     <tr key={i.id} className="border-b border-lt-hairline/60 hover:bg-lt-inner">
-                      <td className="py-2 px-3 font-mono text-lt-fg">{i.invoiceNumber || '—'}</td>
+                      <td className="py-2 px-3 font-mono text-lt-fg">
+                        <a
+                          href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline"
+                          title="Open an HQ-rendered PDF of this invoice"
+                        >
+                          {i.invoiceNumber || '—'}
+                        </a>
+                      </td>
                       <td className="py-2 px-3 font-mono text-lt-fg2">{i.orderNumber || '—'}</td>
                       <td className="py-2 px-3 text-lt-fg truncate max-w-[220px]">
                         {i.company ? (
