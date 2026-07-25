@@ -172,6 +172,7 @@ interface JobDetail {
   estimatedValue: number | null;
   orderTotal: number;
   rwInvoicedTotal: number;
+  rwOrderCount: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -827,7 +828,15 @@ export default function JobDetailPage() {
           <Meta label="End" value={fmtDate(job.endDate)} />
           <Meta label="Agent" value={job.agent?.name || '—'} />
           <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
-          <Meta label="Orders" value={String(job.orders.length)} />
+          <Meta
+            label="Orders"
+            value={String(job.orders.length > 0 ? job.orders.length : job.rwOrderCount)}
+            sub={
+              job.orders.length > 0
+                ? job.rwOrderCount > 0 ? `+${job.rwOrderCount} RW` : undefined
+                : job.rwOrderCount > 0 ? 'RentalWorks' : undefined
+            }
+          />
           <Meta label="Created" value={fmtDate(job.createdAt)} />
           <Meta label="Updated" value={fmtDate(job.updatedAt)} />
         </div>

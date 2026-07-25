@@ -334,6 +334,7 @@ export async function GET(
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
         rwInvoicedTotal,
+        rwOrderCount: rwLinks.length,
         orders: job.orders.map((o) => ({
           ...o,
           subtotal: Number(o.subtotal || 0),
