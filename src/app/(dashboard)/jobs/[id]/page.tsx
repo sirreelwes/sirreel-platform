@@ -171,6 +171,7 @@ interface JobDetail {
   endDate: string | null;
   estimatedValue: number | null;
   orderTotal: number;
+  rwInvoicedTotal: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -508,9 +509,16 @@ export default function JobDetailPage() {
     );
   }
 
-  const dealValue = job.orderTotal > 0 ? job.orderTotal : job.estimatedValue;
+  // Deal value: HQ-native order total first; else what RentalWorks has
+  // actually invoiced on the linked RW orders; else the manual estimate.
+  const dealValue =
+    job.orderTotal > 0 ? job.orderTotal
+    : job.rwInvoicedTotal > 0 ? job.rwInvoicedTotal
+    : job.estimatedValue;
   const dealValueLabel =
-    job.orderTotal > 0 ? 'Order Total' : job.estimatedValue != null ? 'Estimated' : '—';
+    job.orderTotal > 0 ? 'Order Total'
+    : job.rwInvoicedTotal > 0 ? 'RW invoiced'
+    : job.estimatedValue != null ? 'Estimated' : '—';
 
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.

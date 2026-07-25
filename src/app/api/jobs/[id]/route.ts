@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 
@@ -298,6 +299,26 @@ export async function GET(
       if (!(p.bookingId in lcdwByBooking)) lcdwByBooking[p.bookingId] = !!p.lcdwAccepted
     }
 
+    // Deal value from RentalWorks: total invoiced (non-VOID) across the
+    // RW orders linked to this job. Used as the header Deal Value when the
+    // job has no HQ-native orders — during the transition, RW is where the
+    // real dollars live.
+    const rwLinks = await prisma.jobRwOrder.findMany({
+      where: { jobId: job.id },
+      select: { rwOrderNumber: true },
+    })
+    let rwInvoicedTotal = 0
+    if (rwLinks.length) {
+      const rwAgg = await prisma.rwInvoice.aggregate({
+        where: {
+          orderNumber: { in: rwLinks.map((l) => l.rwOrderNumber) },
+          status: { not: RW_VOID },
+        },
+        _sum: { invoiceTotal: true },
+      })
+      rwInvoicedTotal = Number(rwAgg._sum.invoiceTotal ?? 0)
+    }
+
     // Rollup: prefer bookedTotal sum (locked-in dollars) and fall
     // back to subtotal for un-booked orders; CANCELLED still excluded.
     const orderTotal = job.orders
@@ -312,6 +333,7 @@ export async function GET(
         ...job,
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
+        rwInvoicedTotal,
         orders: job.orders.map((o) => ({
           ...o,
           subtotal: Number(o.subtotal || 0),
