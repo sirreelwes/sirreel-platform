@@ -14,9 +14,9 @@ import { useCallback, useEffect, useState } from 'react';
  */
 
 type Inv = {
-  id: string; invoiceNumber: string | null; status: string | null;
+  id: string; rwInvoiceId: string; invoiceNumber: string | null; status: string | null;
   invoiceDate: string | null; dueDate: string | null; orderNumber: string | null;
-  invoiceTotal: number; receivedTotal: number; remainingTotal: number;
+  invoiceTotal: number; receivedTotal: number; remainingTotal: number; hqPaid: boolean;
 };
 type Cand = {
   orderNumber: string; invoiceCount: number; invoiced: number; outstanding: number;
@@ -65,6 +65,21 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
       });
       setManual('');
       setPicking(false);
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const markPaid = async (rwInvoiceId: string, paid: boolean) => {
+    setBusy(true);
+    try {
+      if (paid) {
+        await fetch('/api/rentalworks/invoices/mark-paid', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rwInvoiceId }),
+        });
+      } else {
+        await fetch(`/api/rentalworks/invoices/mark-paid?rwInvoiceId=${encodeURIComponent(rwInvoiceId)}`, { method: 'DELETE' });
+      }
       await load();
     } finally { setBusy(false); }
   };
@@ -123,6 +138,7 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
                     <th className="py-1.5 pr-3 font-semibold text-right">Total</th>
                     <th className="py-1.5 pr-3 font-semibold text-right">Received</th>
                     <th className="py-1.5 font-semibold text-right">Remaining</th>
+                    <th className="py-1.5 pl-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -136,7 +152,14 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
                         <td className="py-1.5 pr-3 text-right tabular-nums text-white">{usd(i.invoiceTotal)}</td>
                         <td className="py-1.5 pr-3 text-right tabular-nums text-zinc-300">{usd(i.receivedTotal)}</td>
                         <td className={`py-1.5 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-white' : 'text-zinc-400'}`}>
-                          {usd(i.remainingTotal)}
+                          {i.hqPaid ? <span className="text-[10px] font-bold uppercase text-emerald-300">paid · hq</span> : usd(i.remainingTotal)}
+                        </td>
+                        <td className="py-1.5 pl-3 text-right">
+                          {i.hqPaid ? (
+                            <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-[11px] text-zinc-400 hover:text-white">Undo</button>
+                          ) : i.remainingTotal > 0.005 ? (
+                            <button onClick={() => markPaid(i.rwInvoiceId, true)} disabled={busy} className="text-[11px] font-semibold text-emerald-300 hover:underline">Mark paid</button>
+                          ) : null}
                         </td>
                       </tr>
                     );

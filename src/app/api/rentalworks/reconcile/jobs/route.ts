@@ -24,20 +24,28 @@ export async function GET(req: NextRequest) {
   const filter = (sp.get('filter') || 'unlinked').toLowerCase()
   const q = (sp.get('q') || '').trim()
 
-  const where: Prisma.JobWhereInput = {
+  const base: Prisma.JobWhereInput = {
     archivedAt: null,
     // Hide ZZTEST fixtures (the documented live-DB test prefix).
     NOT: { company: { name: { startsWith: 'ZZTEST', mode: 'insensitive' } } },
   }
   if (q) {
-    where.OR = [
+    base.OR = [
       { jobCode: { contains: q, mode: 'insensitive' } },
       { name: { contains: q, mode: 'insensitive' } },
       { company: { name: { contains: q, mode: 'insensitive' } } },
     ]
   }
+  const where: Prisma.JobWhereInput = { ...base }
   if (filter === 'unlinked') where.rwOrders = { none: {} }
   else if (filter === 'linked') where.rwOrders = { some: {} }
+
+  // Tab counts (within the current search scope) — progress feedback.
+  const [unlinkedCount, linkedCount, allCount] = await Promise.all([
+    prisma.job.count({ where: { ...base, rwOrders: { none: {} } } }),
+    prisma.job.count({ where: { ...base, rwOrders: { some: {} } } }),
+    prisma.job.count({ where: base }),
+  ])
 
   // Most-recently-created first — this is a work queue for new jobs, and
   // ordering by startDate floated the (few) date-less jobs to the top.
@@ -54,6 +62,7 @@ export async function GET(req: NextRequest) {
   })
 
   return NextResponse.json({
+    counts: { unlinked: unlinkedCount, linked: linkedCount, all: allCount },
     jobs: jobs.map((j) => ({
       id: j.id,
       jobCode: j.jobCode,

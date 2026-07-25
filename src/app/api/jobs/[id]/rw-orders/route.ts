@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { RW_VOID, getHqPaidInvoiceIds } from '@/lib/rentalworks/arStatus'
+import { scoreOrderMatch } from '@/lib/rentalworks/matchOrders'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,29 +13,12 @@ export const dynamic = 'force-dynamic'
  * link at the ORDER level — every current and future invoice on that order
  * then rolls up to the job automatically on each sync.
  *
- * Candidates are SCORED on real evidence, not just a date guess:
- *   - RW `Deal` is the production name and lines up with Job.name
- *   - RW `Agent` lines up with the job's agent
- *   - RW billing dates are the true rental window
- * Deal-name matching still works when the job has no dates at all, which is
- * common. Nothing auto-links; the score only orders the list.
+ * Candidate scoring lives in lib/rentalworks/matchOrders (shared with the
+ * suggestions queue so both surfaces rank identically). Nothing auto-links;
+ * the score only orders the list.
  */
 
 const n = (v: unknown) => Number(v ?? 0)
-
-/** lowercase, strip punctuation, collapse whitespace */
-function norm(s: string | null | undefined): string {
-  return (s ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
-}
-/** "Carlson, Oliver" -> "oliver carlson" */
-function normAgent(s: string | null | undefined): string {
-  const raw = (s ?? '').trim()
-  if (!raw) return ''
-  return norm(raw.includes(',') ? raw.split(',').reverse().join(' ') : raw)
-}
-function tokens(s: string): string[] {
-  return norm(s).split(' ').filter((t) => t.length > 2)
-}
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()
@@ -79,6 +63,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     invoiceCount: invoices.length,
   }
 
+  const mapInv = (r: (typeof invoices)[number]) => ({
+    ...r,
+    invoiceTotal: n(r.invoiceTotal),
+    receivedTotal: n(r.receivedTotal),
+    remainingTotal: n(r.remainingTotal),
+    hqPaid: hqPaid.has(r.rwInvoiceId),
+  })
+
   // ── Candidates: group this client's invoices by order, then score ──
   let candidates: Array<Record<string, unknown>> = []
   if (rwCustomerId) {
@@ -96,64 +88,34 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       groups.get(key)!.push(inv)
     }
 
-    const jobName = norm(job.name)
-    const jobTokens = tokens(job.name)
-    const jobAgent = normAgent(job.agent?.name)
-    const jobStart = job.startDate ? new Date(job.startDate).getTime() : null
-
     candidates = [...groups.entries()].map(([orderNumber, rows]) => {
       const first = rows[rows.length - 1]
-      const deal = first.dealName ?? null
-      const desc = first.orderDescription ?? null
-      const agent = first.agent ?? null
       const billStart = rows.map((r) => r.billingStartDate).find(Boolean) ?? null
       const billEnd = rows.map((r) => r.billingEndDate).find(Boolean) ?? null
 
-      // Evidence scoring
-      let score = 0
-      const reasons: string[] = []
-      const dealN = norm(deal)
-      if (dealN && jobName) {
-        if (dealN === jobName) { score += 100; reasons.push('deal name matches job') }
-        else if (dealN.includes(jobName) || jobName.includes(dealN)) { score += 60; reasons.push('deal name overlaps job') }
-        else {
-          const dt = tokens(deal ?? '')
-          const shared = jobTokens.filter((t) => dt.includes(t))
-          if (shared.length) { score += 30; reasons.push(`shares “${shared[0]}”`) }
-        }
-      }
-      if (jobAgent && normAgent(agent) === jobAgent) { score += 40; reasons.push('same agent') }
-
-      const anchorDate = billStart ?? first.invoiceDate
-      let distanceDays: number | null = null
-      if (jobStart != null && anchorDate) {
-        distanceDays = Math.round(Math.abs(new Date(anchorDate).getTime() - jobStart) / 86_400_000)
-        if (distanceDays <= 3) { score += 50; reasons.push('dates line up') }
-        else if (distanceDays <= 14) { score += 25; reasons.push('dates close') }
-        else if (distanceDays > 120) { score -= 20 }
-      }
+      const match = scoreOrderMatch(
+        { name: job.name, agentName: job.agent?.name, startDate: job.startDate },
+        { dealName: first.dealName, agent: first.agent, billingStartDate: billStart, firstInvoiceDate: first.invoiceDate },
+      )
 
       return {
         orderNumber,
-        dealName: deal,
-        orderDescription: desc,
-        agent,
+        dealName: first.dealName ?? null,
+        orderDescription: first.orderDescription ?? null,
+        agent: first.agent ?? null,
         billingStartDate: billStart,
         billingEndDate: billEnd,
         invoiceCount: rows.length,
         invoiced: rows.reduce((s, r) => s + n(r.invoiceTotal), 0),
-        outstanding: rows.filter((r) => !hqPaid.has(r.rwInvoiceId)).reduce((s, r) => s + n(r.remainingTotal), 0),
+        outstanding: rows
+          .filter((r) => !hqPaid.has(r.rwInvoiceId))
+          .reduce((s, r) => s + n(r.remainingTotal), 0),
         firstInvoiceDate: rows[rows.length - 1]?.invoiceDate ?? null,
         lastInvoiceDate: rows[0]?.invoiceDate ?? null,
-        distanceDays,
-        score,
-        reasons,
-        invoices: rows.map((r) => ({
-          ...r,
-          invoiceTotal: n(r.invoiceTotal),
-          receivedTotal: n(r.receivedTotal),
-          remainingTotal: n(r.remainingTotal),
-        })),
+        distanceDays: match.distanceDays,
+        score: match.score,
+        reasons: match.reasons,
+        invoices: rows.map(mapInv),
       }
     })
       .sort((a, b) => {
@@ -177,12 +139,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     linked: job.rwOrders,
     syncedAt: invoices[0]?.syncedAt ?? null,
     rollup,
-    invoices: invoices.map((i) => ({
-      ...i,
-      invoiceTotal: n(i.invoiceTotal),
-      receivedTotal: n(i.receivedTotal),
-      remainingTotal: n(i.remainingTotal),
-    })),
+    invoices: invoices.map(mapInv),
     candidates,
   })
 }

@@ -230,6 +230,14 @@ export default function RwInvoicesPage() {
                           <Link href={`/jobs/${i.job.id}`} className="text-[12px] font-semibold text-blue-700 hover:underline">
                             {i.job.jobCode}
                           </Link>
+                        ) : i.company ? (
+                          <Link
+                            href={`/rentalworks/reconcile?q=${encodeURIComponent(i.company.name)}`}
+                            className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg hover:underline"
+                            title="Open Reconcile pre-searched to this client"
+                          >
+                            Reconcile →
+                          </Link>
                         ) : (
                           <span className="text-[11px] text-lt-fg3">—</span>
                         )}
