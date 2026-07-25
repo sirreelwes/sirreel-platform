@@ -69,6 +69,7 @@ type CompanyDetail = {
   activities: Activity[];
   outreachActivities: OutreachActivityRow[];
   outboundEmails: OutboundEmail[];
+  rwStats: { orderCount: number; invoicedTotal: number } | null;
 };
 
 const TENDENCY_LABEL: Record<DiscountTendency, string> = {
@@ -697,7 +698,13 @@ export default function CompanyDetailPage() {
                   </button>
                 </div>
                 <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
-                <p className="text-sm text-lt-fg2">{company.totalBookings} bookings | {company.orders.length} orders</p>
+                <p className="text-sm text-lt-fg2">
+                  {company.totalBookings} bookings | {company.orders.length} orders
+                  {company.rwStats && company.rwStats.orderCount > 0 && <> | {company.rwStats.orderCount} RW orders</>}
+                </p>
+                {company.rwStats && company.rwStats.invoicedTotal > 0 && (
+                  <p className="text-[11px] text-lt-fg3">{fmt(company.rwStats.invoicedTotal)} invoiced in RentalWorks</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
@@ -841,7 +848,11 @@ export default function CompanyDetailPage() {
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <h2 className="text-base font-semibold text-lt-fg mb-3">Orders</h2>
             {company.orders.length === 0 ? (
-              <p className="text-lt-fg3 text-sm">No orders yet</p>
+              <p className="text-lt-fg3 text-sm">
+                {company.rwStats && company.rwStats.orderCount > 0
+                  ? `No HQ orders yet — this client's ${company.rwStats.orderCount} RentalWorks orders show in Accounts Receivable above.`
+                  : 'No orders yet'}
+              </p>
             ) : (
               <table className="w-full text-sm">
                 <thead><tr className="text-lt-fg3 text-xs uppercase border-b border-lt-hairline">

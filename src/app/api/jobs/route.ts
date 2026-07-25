@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { getServerSession } from 'next-auth'
 import type {
   JobStatus,
@@ -223,7 +224,33 @@ export async function GET(req: NextRequest) {
     const today = todayDate.toISOString().slice(0, 10)
     const tomorrow = tomorrowDate.toISOString().slice(0, 10)
 
+    // RW rollup for the listed jobs — one batch, so board cards don't
+    // read "$— / 0 orders" for jobs whose money lives in RentalWorks.
+    const jobIds = jobs.map((j) => j.id)
+    const rwLinks = jobIds.length
+      ? await prisma.jobRwOrder.findMany({
+          where: { jobId: { in: jobIds } },
+          select: { jobId: true, rwOrderNumber: true },
+        })
+      : []
+    const rwByJob = new Map<string, string[]>()
+    for (const l of rwLinks) {
+      if (!rwByJob.has(l.jobId)) rwByJob.set(l.jobId, [])
+      rwByJob.get(l.jobId)!.push(l.rwOrderNumber)
+    }
+    const allRwOrderNumbers = [...new Set(rwLinks.map((l) => l.rwOrderNumber))]
+    const rwSums = allRwOrderNumbers.length
+      ? await prisma.rwInvoice.groupBy({
+          by: ['orderNumber'],
+          where: { orderNumber: { in: allRwOrderNumbers }, status: { not: RW_VOID } },
+          _sum: { invoiceTotal: true },
+        })
+      : []
+    const rwSumByOrder = new Map(rwSums.map((g) => [g.orderNumber as string, Number(g._sum.invoiceTotal ?? 0)]))
+
     const enriched = jobs.map((j) => {
+      const rwNums = rwByJob.get(j.id) ?? []
+      const rwInvoicedTotal = rwNums.reduce((sum, num) => sum + (rwSumByOrder.get(num) ?? 0), 0)
       const orderTotal = j.orders
         .filter((o) => o.status !== ('CANCELLED' as OrderStatus))
         .reduce((sum, o) => sum + Number(o.subtotal || 0), 0)
@@ -356,6 +383,8 @@ export async function GET(req: NextRequest) {
         boardPhaseOverride: overrideByJob.get(j.id) ?? null,
         estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
         orderTotal,
+        rwInvoicedTotal,
+        rwOrderCount: rwNums.length,
         primaryContact: primaryContact
           ? {
               id: primaryContact.person.id,

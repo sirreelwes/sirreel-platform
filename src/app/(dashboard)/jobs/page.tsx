@@ -181,6 +181,8 @@ interface JobRow {
   createdAt: string
   endDate: string | null
   orderTotal: number
+  rwInvoicedTotal: number
+  rwOrderCount: number
   estimatedValue: number | null
   company: { id: string; name: string } | null
   agent: { id: string; name: string } | null
@@ -623,7 +625,7 @@ function JobCard({
   moving: boolean
   onMove: (target: BoardColumn | null) => void
 }) {
-  const value = j.orderTotal > 0 ? j.orderTotal : j.estimatedValue
+  const value = j.orderTotal > 0 ? j.orderTotal : j.rwInvoicedTotal > 0 ? j.rwInvoicedTotal : j.estimatedValue
 
   // Band + status pill are column-specific.
   let band: string
@@ -724,7 +726,7 @@ function JobCard({
           {j.primaryContact?.email && <span className="text-lt-fg2">{j.primaryContact.email}</span>}
           <span className="text-lt-fg3">·</span>
           <span className="font-semibold text-yellow-700">
-            {!j.startDate && !j.bookingWindow?.start ? 'needs dates' : (j._count?.orders ?? 0) === 0 ? 'needs quote' : 'ready to quote'}
+            {!j.startDate && !j.bookingWindow?.start ? 'needs dates' : (j._count?.orders ?? 0) === 0 ? (j.rwOrderCount > 0 ? 'billed in RW' : 'needs quote') : 'ready to quote'}
           </span>
         </div>
       )}
@@ -765,7 +767,10 @@ function JobCard({
       <div className="mt-1.5 flex items-center gap-1.5">
         <span className="text-[12.5px] font-mono font-medium text-lt-fg">
           {fmtMoney(value)}
-          {j.orderTotal === 0 && j.estimatedValue != null && (
+          {j.orderTotal === 0 && j.rwInvoicedTotal > 0 && (
+            <span className="ml-1 text-[8px] text-lt-fg3 uppercase">rw</span>
+          )}
+          {j.orderTotal === 0 && j.rwInvoicedTotal === 0 && j.estimatedValue != null && (
             <span className="ml-1 text-[8px] text-lt-fg3 uppercase">est</span>
           )}
         </span>

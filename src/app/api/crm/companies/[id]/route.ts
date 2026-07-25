@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { RW_VOID } from "@/lib/rentalworks/arStatus";
 import { getServerSession } from "next-auth";
 
 type Params = { params: Promise<{ id: string }> };
@@ -97,7 +98,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
     take: 50,
   });
 
-  return NextResponse.json({ ...company, outboundEmails });
+  // RW rollup so the client header doesn't read "0 orders" for clients
+  // whose history lives in RentalWorks.
+  let rwStats: { orderCount: number; invoicedTotal: number } | null = null;
+  if (company.rentalworksCustomerId) {
+    const [orderGroups, agg] = await Promise.all([
+      prisma.rwInvoice.groupBy({
+        by: ["orderNumber"],
+        where: { rwCustomerId: company.rentalworksCustomerId, status: { not: RW_VOID }, orderNumber: { not: null } },
+      }),
+      prisma.rwInvoice.aggregate({
+        where: { rwCustomerId: company.rentalworksCustomerId, status: { not: RW_VOID } },
+        _sum: { invoiceTotal: true },
+      }),
+    ]);
+    rwStats = { orderCount: orderGroups.length, invoicedTotal: Number(agg._sum.invoiceTotal ?? 0) };
+  }
+
+  return NextResponse.json({ ...company, outboundEmails, rwStats });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
