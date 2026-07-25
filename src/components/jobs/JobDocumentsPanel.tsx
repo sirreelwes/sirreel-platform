@@ -43,12 +43,30 @@ function fmtDate(d: string | null) {
 export function JobDocumentsPanel({ jobId }: { jobId: string }) {
   const [docs, setDocs] = useState<JobDoc[] | null>(null);
   const [open, setOpen] = useState(false);
+  // Prefill for the attach modal when launched from a "missing PDF" chip.
+  const [prefill, setPrefill] = useState<{ kind: 'QUOTE' | 'INVOICE' | 'OTHER'; refNumber: string } | null>(null);
+  // Invoice numbers on the job's LINKED RW orders — used to show which
+  // invoice PDFs haven't been attached yet. (The billing table above is
+  // live DATA from the mirror; RW's API can't export the PDFs, so the
+  // documents are attached by hand here.)
+  const [linkedInvoiceNumbers, setLinkedInvoiceNumbers] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const r = await fetch(`/api/jobs/${jobId}/documents`);
-    if (!r.ok) { setDocs([]); return; }
-    const d = await r.json();
-    setDocs(d.documents || []);
+    const [r, rw] = await Promise.all([
+      fetch(`/api/jobs/${jobId}/documents`),
+      fetch(`/api/jobs/${jobId}/rw-orders`),
+    ]);
+    if (!r.ok) { setDocs([]); } else {
+      const d = await r.json();
+      setDocs(d.documents || []);
+    }
+    if (rw.ok) {
+      const d = await rw.json();
+      const nums = (d.invoices || [])
+        .map((i: { invoiceNumber: string | null }) => i.invoiceNumber)
+        .filter(Boolean) as string[];
+      setLinkedInvoiceNumbers(nums);
+    }
   }, [jobId]);
 
   useEffect(() => { load(); }, [load]);
@@ -66,7 +84,7 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             Quotes &amp; Invoices
           </h2>
-          <span className="text-[12px] text-zinc-300">from RentalWorks</span>
+          <span className="text-[12px] text-zinc-300">PDF documents — attached by hand (RW can’t export them)</span>
         </div>
         <button
           onClick={() => setOpen(true)}
@@ -80,8 +98,9 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
         <div className="text-[13px] text-zinc-400">Loading…</div>
       ) : docs.length === 0 ? (
         <div className="text-[14px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
-          No quotes or invoices attached yet. Export the PDF from RentalWorks and attach it here so
-          it lives with the job.
+          The billing numbers above come straight from RentalWorks — but RW can’t export the
+          documents themselves. Export each quote / invoice PDF from RW and attach it here so the
+          paper lives with the job.
         </div>
       ) : (
         <div className="space-y-2">
@@ -131,11 +150,34 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
         </div>
       )}
 
+      {(() => {
+        const attachedRefs = new Set((docs ?? []).map((d) => (d.refNumber ?? '').replace(/^#/, '')));
+        const missing = linkedInvoiceNumbers.filter((n2) => !attachedRefs.has(n2));
+        if (!missing.length) return null;
+        return (
+          <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[12px] text-zinc-400">
+            <span>PDFs not attached yet for linked invoices:</span>
+            {missing.map((n2) => (
+              <button
+                key={n2}
+                onClick={() => { setPrefill({ kind: 'INVOICE', refNumber: n2 }); setOpen(true); }}
+                className="font-mono text-[12px] px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-amber-300 hover:border-amber-600/60"
+                title={`Attach the PDF for invoice #${n2} (prefills the form)`}
+              >
+                #{n2} +
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {open && (
         <AttachModal
           jobId={jobId}
-          onClose={() => setOpen(false)}
-          onUploaded={() => { setOpen(false); load(); }}
+          initialKind={prefill?.kind}
+          initialRefNumber={prefill?.refNumber}
+          onClose={() => { setOpen(false); setPrefill(null); }}
+          onUploaded={() => { setOpen(false); setPrefill(null); load(); }}
         />
       )}
     </div>
@@ -144,16 +186,20 @@ export function JobDocumentsPanel({ jobId }: { jobId: string }) {
 
 function AttachModal({
   jobId,
+  initialKind,
+  initialRefNumber,
   onClose,
   onUploaded,
 }: {
   jobId: string;
+  initialKind?: 'QUOTE' | 'INVOICE' | 'OTHER';
+  initialRefNumber?: string;
   onClose: () => void;
   onUploaded: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const [kind, setKind] = useState<'QUOTE' | 'INVOICE' | 'OTHER'>('QUOTE');
-  const [refNumber, setRefNumber] = useState('');
+  const [kind, setKind] = useState<'QUOTE' | 'INVOICE' | 'OTHER'>(initialKind ?? 'QUOTE');
+  const [refNumber, setRefNumber] = useState(initialRefNumber ?? '');
   const [amount, setAmount] = useState('');
   const [documentDate, setDocumentDate] = useState('');
   const [note, setNote] = useState('');
