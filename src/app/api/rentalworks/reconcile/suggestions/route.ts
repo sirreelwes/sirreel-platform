@@ -27,6 +27,7 @@ export async function GET(_req: NextRequest) {
     where: {
       archivedAt: null,
       rwOrders: { none: {} },
+      rwNotApplicable: null, // dismissed jobs are out of the queue
       company: {
         rentalworksCustomerId: { not: null },
         NOT: { name: { startsWith: 'ZZTEST', mode: 'insensitive' } },

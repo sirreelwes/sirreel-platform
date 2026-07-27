@@ -1,22 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { ClientRwCustomerLink } from '@/components/rentalworks/ClientRwCustomerLink';
 
 /**
- * RentalWorks reconciliation workspace — the one place the whole matching
- * workflow lives:
+ * RentalWorks reconciliation workspace.
  *
- *   Suggested matches (top): high-confidence job↔order pairs, one click to
- *   confirm. Everything else: pick a job, follow the two steps —
- *   Step 1 link the client to its RW customer, Step 2 link the RW order —
- *   with the evidence (client, dates, rental, email trail) beside the
- *   candidates. Linked invoices can be marked paid right here.
+ * The queue is bucketed by what you can DO, because a flat "unlinked" list
+ * was misleading — most unlinked jobs were blocked on a client link or had
+ * no RW counterpart at all, so the count never dropped and nothing felt
+ * finished. Now: Ready to match is the real work, and jobs with no RW
+ * counterpart can be dismissed so the queue reaches zero.
  *
- * Nothing links or pays automatically; suggestions only rank.
+ * Linking still requires a human click — mis-linking attributes real money
+ * to the wrong job — but everything around that click is one keystroke.
  */
+
+type Bucket = 'ready' | 'needsClient' | 'noMatch' | 'dismissed' | 'linked';
 
 type JobRow = {
   id: string; jobCode: string; name: string; status: string;
@@ -24,7 +26,11 @@ type JobRow = {
   company: { id: string; name: string } | null;
   companyRwLinked: boolean;
   linkedOrders: string[];
+  bucket: Bucket;
+  candidateCount: number;
 };
+
+type Counts = Record<Bucket, number>;
 
 type Suggestion = {
   jobId: string; jobCode: string; jobName: string; companyName: string;
@@ -59,7 +65,6 @@ type RwData = {
 type JobDetail = {
   jobCode: string; name: string; status: string;
   startDate: string | null; endDate: string | null;
-  productionType: string;
   company: { id: string; name: string };
   agent: { name: string } | null;
   jobContacts: Array<{ id: string; role: string; isPrimary: boolean;
@@ -78,35 +83,45 @@ const fmt = (d: string | null) => {
   return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const TABS: Array<{ key: Bucket; label: string; hint: string }> = [
+  { key: 'ready', label: 'Ready to match', hint: 'RW orders are waiting for these' },
+  { key: 'needsClient', label: 'Needs client link', hint: 'Link the client to a RentalWorks customer first' },
+  { key: 'noMatch', label: 'No RW orders', hint: 'Client is linked but has no unclaimed orders left' },
+  { key: 'dismissed', label: 'Not in RW', hint: 'Marked as having no RentalWorks counterpart' },
+  { key: 'linked', label: 'Linked', hint: 'Done' },
+];
+
 export default function ReconcilePage() {
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
-  const [counts, setCounts] = useState<{ unlinked: number; linked: number; all: number } | null>(null);
-  const [filter, setFilter] = useState<'unlinked' | 'linked' | 'all'>('unlinked');
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const [bucket, setBucket] = useState<Bucket>('ready');
   const [q, setQ] = useState('');
   const [term, setTerm] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
-  const [version, setVersion] = useState(0); // bump to force the panel to reload
+  const [version, setVersion] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  // Deep links: /rentalworks/reconcile?q=<client> pre-searches (used from
-  // the invoices page's "Reconcile →" on unlinked rows).
+  const flash = (m: string) => { setToast(m); window.setTimeout(() => setToast((t) => (t === m ? null : t)), 2600); };
+
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const qq = sp.get('q');
-    if (qq) { setQ(qq); setTerm(qq); }
+    if (qq) { setQ(qq); setTerm(qq); setBucket('ready'); }
   }, []);
 
   const loadJobs = useCallback(async () => {
-    const p = new URLSearchParams({ filter });
+    const p = new URLSearchParams({ bucket });
     if (term) p.set('q', term);
     const r = await fetch(`/api/rentalworks/reconcile/jobs?${p}`);
     const d = r.ok ? await r.json() : { jobs: [], counts: null };
     setJobs(d.jobs);
     setCounts(d.counts ?? null);
-    if (!selected && d.jobs.length) setSelected(d.jobs[0].id);
-  }, [filter, term, selected]);
+    return d.jobs as JobRow[];
+  }, [bucket, term]);
 
   const loadSuggestions = useCallback(async () => {
     const r = await fetch('/api/rentalworks/reconcile/suggestions');
@@ -117,11 +132,46 @@ export default function ReconcilePage() {
   useEffect(() => { loadJobs(); }, [loadJobs]);
   useEffect(() => { loadSuggestions(); }, [loadSuggestions]);
 
-  const refreshAll = useCallback(() => {
-    loadJobs();
-    loadSuggestions();
+  // Keep a selection inside the current list; default to the first job.
+  useEffect(() => {
+    if (!jobs) return;
+    if (!jobs.length) { setSelected(null); return; }
+    if (!selected || !jobs.some((j) => j.id === selected)) setSelected(jobs[0].id);
+  }, [jobs, selected]);
+
+  /** After finishing a job, drop it from the list and land on the next one. */
+  const advancePast = useCallback((jobId: string) => {
+    setJobs((prev) => {
+      if (!prev) return prev;
+      const idx = prev.findIndex((j) => j.id === jobId);
+      const next = prev.filter((j) => j.id !== jobId);
+      if (idx >= 0) setSelected(next[Math.min(idx, next.length - 1)]?.id ?? null);
+      return next;
+    });
     setVersion((v) => v + 1);
-  }, [loadJobs, loadSuggestions]);
+    loadSuggestions();
+    // Refresh counts in the background without yanking the list out from under.
+    fetch(`/api/rentalworks/reconcile/jobs?bucket=${bucket}${term ? `&q=${encodeURIComponent(term)}` : ''}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.counts && setCounts(d.counts))
+      .catch(() => {});
+  }, [bucket, term, loadSuggestions]);
+
+  const dismissJobs = async (jobIds: string[], notApplicable = true) => {
+    if (!jobIds.length) return;
+    setBulkBusy(true);
+    try {
+      await fetch('/api/rentalworks/reconcile/jobs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobIds, notApplicable }),
+      });
+      flash(notApplicable
+        ? `${jobIds.length} job${jobIds.length > 1 ? 's' : ''} marked “not in RentalWorks”`
+        : 'Job returned to the queue');
+      if (jobIds.length === 1) advancePast(jobIds[0]);
+      else { await loadJobs(); loadSuggestions(); }
+    } finally { setBulkBusy(false); }
+  };
 
   const confirmSuggestion = async (s: Suggestion) => {
     setConfirming(s.jobId);
@@ -130,34 +180,105 @@ export default function ReconcilePage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rwOrderNumber: s.orderNumber }),
       });
-      refreshAll();
+      flash(`${s.jobCode} linked to #${s.orderNumber}`);
+      setSuggestions((prev) => (prev ?? []).filter((x) => x.jobId !== s.jobId));
+      advancePast(s.jobId);
     } finally { setConfirming(null); }
   };
 
-  const visibleSuggestions = (suggestions ?? []).filter((s) => !skipped.has(s.jobId));
-  const suggestedJobIds = new Set(visibleSuggestions.map((s) => s.jobId));
+  const confirmAll = async () => {
+    const list = visibleSuggestions;
+    if (!list.length) return;
+    if (!window.confirm(`Link all ${list.length} suggested matches?\n\nEach is a high-confidence pair. You can unlink any of them afterwards.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const s of list) {
+        await fetch(`/api/jobs/${s.jobId}/rw-orders`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rwOrderNumber: s.orderNumber }),
+        });
+      }
+      flash(`${list.length} matches linked`);
+      await loadJobs();
+      await loadSuggestions();
+      setVersion((v) => v + 1);
+    } finally { setBulkBusy(false); }
+  };
+
+  const visibleSuggestions = useMemo(
+    () => (suggestions ?? []).filter((s) => !skipped.has(s.jobId)),
+    [suggestions, skipped],
+  );
+  const suggestedJobIds = useMemo(() => new Set(visibleSuggestions.map((s) => s.jobId)), [visibleSuggestions]);
+
+  // Keyboard: J/K (or ↑/↓) move through the queue, D dismisses. Linking stays
+  // an explicit click — a stray keystroke must never attribute money.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (!jobs?.length) return;
+      const idx = jobs.findIndex((j) => j.id === selected);
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelected(jobs[Math.min(idx + 1, jobs.length - 1)]?.id ?? null);
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelected(jobs[Math.max(idx - 1, 0)]?.id ?? null);
+      } else if (e.key === 'd' && selected && bucket !== 'dismissed' && bucket !== 'linked') {
+        e.preventDefault();
+        dismissJobs([selected]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, selected, bucket]);
+
+  const totalOpen = counts ? counts.ready + counts.needsClient + counts.noMatch : 0;
 
   return (
     <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1600px] mx-auto">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-lt-fg">Reconcile RentalWorks</h1>
-          <p className="text-[12px] text-lt-fg3">
-            Match each job to its RentalWorks order so quotes, invoices and balances follow the job.
-            Nothing links automatically — you confirm every match.
-          </p>
+        {toast && (
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-lt-fg text-lt-card text-[13px] font-semibold px-4 py-2 rounded-lg shadow-xl">
+            {toast}
+          </div>
+        )}
+
+        <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold text-lt-fg">Reconcile RentalWorks</h1>
+            <p className="text-[12px] text-lt-fg3">
+              {counts
+                ? counts.ready > 0
+                  ? <><span className="font-semibold text-lt-fg2">{counts.ready} job{counts.ready === 1 ? '' : 's'} ready to match</span> — {totalOpen} unlinked in total.</>
+                  : <>Nothing ready to match right now — {counts.needsClient} need a client link.</>
+                : 'Loading…'}
+            </p>
+          </div>
+          <span className="text-[11px] text-lt-fg3">
+            <kbd className="px-1 py-0.5 rounded border border-lt-hairline bg-lt-card font-mono">J</kbd>/
+            <kbd className="px-1 py-0.5 rounded border border-lt-hairline bg-lt-card font-mono">K</kbd> move ·{' '}
+            <kbd className="px-1 py-0.5 rounded border border-lt-hairline bg-lt-card font-mono">D</kbd> not in RW
+          </span>
         </div>
 
-        {/* ── Suggested matches: the one-click fast lane ── */}
+        {/* ── Suggested matches ── */}
         {visibleSuggestions.length > 0 && (
           <div className="mb-4 bg-lt-card border border-amber-300 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2.5">
+            <div className="flex items-center gap-2 mb-2.5 flex-wrap">
               <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-                Suggested matches
+                Suggested matches ({visibleSuggestions.length})
               </span>
-              <span className="text-[11px] text-lt-fg3">
-                high-confidence pairs — review and confirm with one click
-              </span>
+              <span className="text-[11px] text-lt-fg3">high-confidence pairs — confirm with one click</span>
+              <button
+                onClick={confirmAll}
+                disabled={bulkBusy}
+                className="ml-auto text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
+              >
+                {bulkBusy ? 'Working…' : `✓ Confirm all ${visibleSuggestions.length}`}
+              </button>
             </div>
             <div className="space-y-1.5">
               {visibleSuggestions.map((s) => (
@@ -182,16 +303,16 @@ export default function ReconcilePage() {
                     <button
                       onClick={() => setSkipped((prev) => new Set(prev).add(s.jobId))}
                       className="text-[11px] text-lt-fg3 hover:text-lt-fg px-2 py-1"
-                      title="Hide this suggestion for now (nothing is saved)"
+                      title="Hide this suggestion for now"
                     >
                       Skip
                     </button>
                     <button
                       onClick={() => confirmSuggestion(s)}
-                      disabled={confirming === s.jobId}
+                      disabled={confirming === s.jobId || bulkBusy}
                       className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
                     >
-                      {confirming === s.jobId ? 'Linking…' : '✓ Confirm link'}
+                      {confirming === s.jobId ? 'Linking…' : '✓ Confirm'}
                     </button>
                   </span>
                 </div>
@@ -200,57 +321,102 @@ export default function ReconcilePage() {
           </div>
         )}
 
+        {/* ── Bucket tabs ── */}
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          {TABS.map((t) => {
+            const n = counts?.[t.key] ?? 0;
+            const active = bucket === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setBucket(t.key); setSelected(null); }}
+                title={t.hint}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+                  active ? 'bg-lt-fg text-lt-card border-lt-fg'
+                  : n === 0 ? 'bg-lt-card text-lt-fg3 border-lt-hairline'
+                  : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:text-lt-fg'
+                }`}
+              >
+                {t.label} <span className={active ? 'opacity-80' : 'opacity-60'}>({n})</span>
+              </button>
+            );
+          })}
+          <form
+            onSubmit={(e) => { e.preventDefault(); setTerm(q.trim()); }}
+            className="flex items-center gap-2 ml-auto"
+          >
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Job or client…"
+              className="px-3 py-1.5 w-60 bg-lt-card border border-lt-hairline rounded-lg text-[12px] text-lt-fg focus:outline-none focus:border-lt-fg3"
+            />
+            {term && (
+              <button type="button" onClick={() => { setQ(''); setTerm(''); }} className="text-[12px] text-lt-fg3 hover:text-lt-fg">
+                Clear
+              </button>
+            )}
+          </form>
+        </div>
+
+        {/* Bucket-level guidance + bulk action */}
+        {bucket === 'noMatch' && (jobs?.length ?? 0) > 0 && (
+          <div className="mb-3 flex items-center gap-3 flex-wrap rounded-xl border border-lt-hairline bg-lt-card px-4 py-2.5">
+            <span className="text-[12px] text-lt-fg2">
+              These clients are linked to RentalWorks but have no unclaimed orders left — usually HQ-native
+              work that was never billed through RW.
+            </span>
+            <button
+              onClick={() => dismissJobs((jobs ?? []).map((j) => j.id))}
+              disabled={bulkBusy}
+              className="ml-auto text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-lt-hairline bg-lt-inner text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+            >
+              Mark all {jobs?.length} “not in RentalWorks”
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start">
-          {/* ── Left rail: jobs to work through ── */}
+          {/* ── Queue ── */}
           <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
-            <div className="p-3 border-b border-lt-hairline space-y-2">
-              <div className="flex gap-1.5">
-                {(['unlinked', 'linked', 'all'] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold border capitalize ${
-                      filter === f ? 'bg-lt-fg text-lt-card border-lt-fg' : 'bg-lt-card text-lt-fg2 border-lt-hairline'
-                    }`}
-                  >
-                    {f}{counts ? ` (${counts[f]})` : ''}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); setTerm(q.trim()); }}>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Job, client…"
-                  className="w-full px-2.5 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-[12px] text-lt-fg focus:outline-none focus:border-lt-fg3"
-                />
-              </form>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto divide-y divide-lt-hairline">
+            <div className="max-h-[72vh] overflow-y-auto divide-y divide-lt-hairline">
               {jobs === null && <div className="p-4 text-[12px] text-lt-fg3">Loading…</div>}
-              {jobs?.length === 0 && <div className="p-4 text-[12px] text-lt-fg3">No jobs match.</div>}
+              {jobs?.length === 0 && (
+                <div className="p-5 text-[12px] text-lt-fg3">
+                  {bucket === 'ready'
+                    ? '🎉 Nothing left to match. New RentalWorks orders will show up here after the nightly sync.'
+                    : bucket === 'needsClient'
+                      ? 'Every client is linked to a RentalWorks customer.'
+                      : bucket === 'noMatch'
+                        ? 'Nothing here.'
+                        : bucket === 'dismissed'
+                          ? 'No jobs have been marked “not in RentalWorks”.'
+                          : 'No jobs linked yet.'}
+                </div>
+              )}
               {jobs?.map((j) => (
                 <button
                   key={j.id}
                   onClick={() => setSelected(j.id)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-lt-inner ${selected === j.id ? 'bg-lt-inner' : ''}`}
+                  className={`w-full text-left px-3 py-2.5 hover:bg-lt-inner ${selected === j.id ? 'bg-lt-inner border-l-2 border-l-lt-fg' : 'border-l-2 border-l-transparent'}`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[11px] text-lt-fg2">{j.jobCode}</span>
                     {j.linkedOrders.length > 0 && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        ✓ {j.linkedOrders.length} linked
+                        ✓ {j.linkedOrders.length}
                       </span>
                     )}
                     {suggestedJobIds.has(j.id) && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-300" title="A high-confidence match is waiting in Suggested matches">
-                        match?
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-300">
+                        suggested
                       </span>
                     )}
-                    {!j.companyRwLinked && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200" title="Start with Step 1 — link this client to its RentalWorks customer">
-                        needs client link
-                      </span>
+                    {j.bucket === 'ready' && !suggestedJobIds.has(j.id) && (
+                      <span className="text-[9px] text-lt-fg3">{j.candidateCount} candidate{j.candidateCount === 1 ? '' : 's'}</span>
+                    )}
+                    {j.bucket === 'dismissed' && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">not in RW</span>
                     )}
                   </div>
                   <div className="text-[13px] font-semibold text-lt-fg truncate">{j.name}</div>
@@ -262,12 +428,20 @@ export default function ReconcilePage() {
             </div>
           </div>
 
-          {/* ── Right: the evidence + the candidates ── */}
+          {/* ── Detail ── */}
           {selected ? (
-            <ReconcilePanel key={`${selected}:${version}`} jobId={selected} onLinked={refreshAll} />
+            <ReconcilePanel
+              key={`${selected}:${version}`}
+              jobId={selected}
+              bucket={bucket}
+              onLinked={() => advancePast(selected)}
+              onDismiss={() => dismissJobs([selected])}
+              onRestore={() => dismissJobs([selected], false)}
+              onClientLinked={() => { loadJobs(); loadSuggestions(); setVersion((v) => v + 1); }}
+            />
           ) : (
             <div className="bg-lt-card border border-lt-hairline rounded-xl p-6 text-[13px] text-lt-fg3">
-              Pick a job on the left.
+              {jobs?.length ? 'Pick a job on the left.' : 'Nothing to do in this bucket.'}
             </div>
           )}
         </div>
@@ -276,12 +450,22 @@ export default function ReconcilePage() {
   );
 }
 
-function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => void }) {
+function ReconcilePanel({
+  jobId, bucket, onLinked, onDismiss, onRestore, onClientLinked,
+}: {
+  jobId: string;
+  bucket: Bucket;
+  onLinked: () => void;
+  onDismiss: () => void;
+  onRestore: () => void;
+  onClientLinked: () => void;
+}) {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [rw, setRw] = useState<RwData | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showAllCands, setShowAllCands] = useState(false);
 
   const load = useCallback(async () => {
     const [a, b] = await Promise.all([
@@ -303,7 +487,6 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
         body: JSON.stringify({ rwOrderNumber: orderNumber.trim() }),
       });
       setManual('');
-      await load();
       onLinked();
     } finally { setBusy(false); }
   };
@@ -313,7 +496,6 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
     try {
       await fetch(`/api/jobs/${jobId}/rw-orders?orderNumber=${encodeURIComponent(orderNumber)}`, { method: 'DELETE' });
       await load();
-      onLinked();
     } finally { setBusy(false); }
   };
 
@@ -336,7 +518,9 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
 
   const assets = [...new Set((job.bookings || []).flatMap((b) => b.items.flatMap((i) => i.assignments.map((a) => a.asset.unitName))))];
   const lineItems = (job.orders || []).flatMap((o) => o.lineItems.map((li) => li.description)).slice(0, 12);
-  const step: 1 | 2 | 3 = !rw?.companyLinked ? 1 : (rw.linked.length === 0 ? 2 : 3);
+  const cands = rw?.candidates ?? [];
+  const strongCands = cands.filter((c) => c.score >= 60);
+  const shownCands = showAllCands ? cands : (strongCands.length ? strongCands : cands.slice(0, 6));
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
@@ -358,15 +542,13 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
           {job.jobContacts?.length > 0 && (
             <div className="mt-3">
               <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold mb-1">Contacts</div>
-              <div className="space-y-0.5">
-                {job.jobContacts.map((c) => (
-                  <div key={c.id} className="text-[12px] text-lt-fg2">
-                    <span className="text-lt-fg font-medium">{c.person.firstName} {c.person.lastName}</span>
-                    {c.isPrimary && <span className="ml-1.5 text-[9px] font-bold text-amber-600 uppercase">Primary</span>}
-                    {c.person.email && <> · {c.person.email}</>}
-                  </div>
-                ))}
-              </div>
+              {job.jobContacts.map((c) => (
+                <div key={c.id} className="text-[12px] text-lt-fg2">
+                  <span className="text-lt-fg font-medium">{c.person.firstName} {c.person.lastName}</span>
+                  {c.isPrimary && <span className="ml-1.5 text-[9px] font-bold text-amber-600 uppercase">Primary</span>}
+                  {c.person.email && <> · {c.person.email}</>}
+                </div>
+              ))}
             </div>
           )}
 
@@ -386,126 +568,112 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
               <div className="text-[12px] text-lt-fg2 whitespace-pre-wrap">{job.notes}</div>
             </div>
           )}
+
+          {/* Escape hatch — always available, always reversible */}
+          <div className="mt-3 pt-3 border-t border-lt-hairline">
+            {bucket === 'dismissed' ? (
+              <button onClick={onRestore} disabled={busy} className="text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg">
+                ↩︎ Put back in the queue
+              </button>
+            ) : (
+              <button
+                onClick={onDismiss}
+                disabled={busy}
+                className="text-[11px] text-lt-fg3 hover:text-lt-fg"
+                title="This job has no RentalWorks counterpart (press D)"
+              >
+                This job isn’t in RentalWorks — remove it from the queue
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Email trail — the strongest signal for confirming a match */}
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-4">
           <div className="text-[10px] uppercase tracking-wider text-lt-fg3 font-semibold mb-2">Email trail</div>
           <JobEmailThreads jobId={jobId} />
         </div>
       </div>
 
-      {/* Candidates / stepper */}
+      {/* Action side */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl p-4">
-        {/* Progress header: the two-step flow, made explicit */}
-        <div className="flex items-center gap-2 mb-3 text-[11px] font-semibold">
-          <span className={`px-2 py-1 rounded-lg ${step === 1 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-            {step > 1 ? '✓' : '1.'} Client linked
-          </span>
-          <span className="text-lt-fg3">→</span>
-          <span className={`px-2 py-1 rounded-lg ${step === 2 ? 'bg-amber-100 text-amber-800' : step > 2 ? 'bg-emerald-50 text-emerald-700' : 'bg-lt-inner text-lt-fg3'}`}>
-            {step > 2 ? '✓' : '2.'} Order linked
-          </span>
-          <span className="text-lt-fg3">→</span>
-          <span className={`px-2 py-1 rounded-lg ${step === 3 ? 'bg-emerald-50 text-emerald-700' : 'bg-lt-inner text-lt-fg3'}`}>
-            Invoices &amp; balance on the job
-          </span>
-        </div>
-
-        {/* STEP 1 — link the client */}
-        {step === 1 && (
-          <div className="mb-3">
-            <div className="text-[12px] text-lt-fg2 mb-2">
-              <span className="font-bold">Step 1.</span> {job.company.name} isn’t linked to a
-              RentalWorks customer yet. Pick the matching RW customer — then its orders appear here.
-            </div>
-            <ClientRwCustomerLink companyId={job.company.id} onLinked={() => { load(); onLinked(); }} />
-          </div>
-        )}
-
-        {/* Linked state — the payoff + mark-paid */}
+        {/* Linked state */}
         {rw && rw.linked.length > 0 && (
           <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Linked</div>
-              <div className="flex gap-1.5 flex-wrap">
-                {rw.linked.map((l) => (
-                  <button
-                    key={l.rwOrderNumber}
-                    onClick={() => unlink(l.rwOrderNumber)}
-                    disabled={busy}
-                    className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 bg-white text-emerald-800 hover:border-rose-300 hover:text-rose-700"
-                    title="Click to unlink"
-                  >
-                    #{l.rwOrderNumber} ✕
-                  </button>
-                ))}
-              </div>
+              {rw.linked.map((l) => (
+                <button
+                  key={l.rwOrderNumber}
+                  onClick={() => unlink(l.rwOrderNumber)}
+                  disabled={busy}
+                  className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-300 bg-white text-emerald-800 hover:border-rose-300 hover:text-rose-700"
+                  title="Click to unlink"
+                >
+                  #{l.rwOrderNumber} ✕
+                </button>
+              ))}
             </div>
             <div className="text-[13px] text-emerald-900 mb-1.5">
               {usd(rw.rollup.outstanding)} outstanding · {rw.rollup.openCount} of {rw.rollup.invoiceCount} invoices open
             </div>
-            {rw.invoices.length > 0 && (
-              <div className="space-y-1">
-                {rw.invoices.map((i) => {
-                  const settled = i.hqPaid || i.remainingTotal <= 0.005;
-                  return (
-                    <div key={i.id} className="flex items-center gap-2 flex-wrap text-[11px] text-emerald-900 bg-white/60 rounded px-2 py-1">
-                      <span className="font-mono">#{i.invoiceNumber}</span>
-                      <span>{fmt(i.invoiceDate)}</span>
-                      <span className="tabular-nums">{usd(i.invoiceTotal)}</span>
-                      {i.hqPaid ? (
-                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">paid · hq</span>
-                      ) : i.remainingTotal > 0.005 ? (
-                        <span className="tabular-nums font-semibold text-amber-800">{usd(i.remainingTotal)} open</span>
-                      ) : (
-                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">paid</span>
-                      )}
-                      <span className="ml-auto">
-                        <a
-                          href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-semibold text-emerald-700 hover:underline mr-2"
-                        >
-                          PDF
-                        </a>
-                        {i.hqPaid ? (
-                          <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-emerald-700 hover:underline">Undo</button>
-                        ) : !settled ? (
-                          <button onClick={() => markPaid(i.rwInvoiceId, true)} disabled={busy} className="font-semibold text-emerald-700 hover:underline">Mark paid</button>
-                        ) : null}
-                      </span>
-                    </div>
-                  );
-                })}
+            {rw.invoices.map((i) => (
+              <div key={i.id} className="flex items-center gap-2 flex-wrap text-[11px] text-emerald-900 bg-white/60 rounded px-2 py-1 mb-1">
+                <span className="font-mono">#{i.invoiceNumber}</span>
+                <span>{fmt(i.invoiceDate)}</span>
+                <span className="tabular-nums">{usd(i.invoiceTotal)}</span>
+                {i.hqPaid ? (
+                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">paid · hq</span>
+                ) : i.remainingTotal > 0.005 ? (
+                  <span className="tabular-nums font-semibold text-amber-800">{usd(i.remainingTotal)} open</span>
+                ) : (
+                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300">paid</span>
+                )}
+                <span className="ml-auto flex items-center gap-2">
+                  <a href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline">PDF</a>
+                  {i.hqPaid ? (
+                    <button onClick={() => markPaid(i.rwInvoiceId, false)} disabled={busy} className="text-emerald-700 hover:underline">Undo</button>
+                  ) : i.remainingTotal > 0.005 ? (
+                    <button onClick={() => markPaid(i.rwInvoiceId, true)} disabled={busy} className="font-semibold text-emerald-700 hover:underline">Mark paid</button>
+                  ) : null}
+                </span>
               </div>
-            )}
-            <div className="mt-1.5 text-[10px] text-emerald-700">
-              PDFs from RW attach on the job page → Quotes &amp; Invoices.
-            </div>
+            ))}
           </div>
         )}
 
-        {/* STEP 2 — pick the order */}
-        {step !== 1 && (
-          <>
+        {/* Needs client link */}
+        {!rw?.companyLinked ? (
+          <div>
             <div className="text-[12px] text-lt-fg2 mb-2">
-              {step === 2 && <span className="font-bold">Step 2. </span>}
-              {rw?.companyName}’s RentalWorks orders, best match first — matching against{' '}
-              <span className="font-semibold">“{rw?.jobName}”</span>
-              {rw?.jobAgent && <> · agent {rw.jobAgent}</>}. Green ticks show why an order ranked.
+              <span className="font-bold">{job.company.name}</span> isn’t linked to a RentalWorks customer.
+              Link it and this client’s orders appear here — for this job and every other one.
+            </div>
+            <ClientRwCustomerLink companyId={job.company.id} onLinked={() => { load(); onClientLinked(); }} />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-[12px] text-lt-fg2">
+                {cands.length > 0
+                  ? <>Best matches for <span className="font-semibold">“{rw?.jobName}”</span>{rw?.jobAgent && <> · {rw.jobAgent}</>}</>
+                  : 'No unclaimed RentalWorks orders left for this client.'}
+              </span>
+              {cands.length > shownCands.length && (
+                <button onClick={() => setShowAllCands(true)} className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg">
+                  Show all {cands.length}
+                </button>
+              )}
             </div>
 
-            <div className="space-y-1.5 max-h-[48vh] overflow-y-auto">
-              {rw?.candidates.map((c) => {
+            <div className="space-y-1.5 max-h-[46vh] overflow-y-auto">
+              {shownCands.map((c) => {
                 const strong = c.score >= 60;
                 const open = expanded === c.orderNumber;
                 return (
                   <div key={c.orderNumber} className={`rounded-lg border ${strong ? 'border-amber-400 bg-amber-50/50' : 'border-lt-hairline'}`}>
                     <div className="px-3 py-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => setExpanded(open ? null : c.orderNumber)} className="font-mono text-[13px] text-lt-fg hover:underline" title="Show this order's invoices">
+                        <button onClick={() => setExpanded(open ? null : c.orderNumber)} className="font-mono text-[13px] text-lt-fg hover:underline">
                           #{c.orderNumber} {open ? '▾' : '▸'}
                         </button>
                         {c.dealName && <span className="text-[13px] font-bold text-lt-fg">{c.dealName}</span>}
@@ -515,27 +683,21 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
                           disabled={busy}
                           className="ml-auto text-[11px] font-semibold px-2.5 py-1 rounded bg-lt-fg text-lt-card hover:opacity-90 disabled:opacity-40"
                         >
-                          Link to this job
+                          Link
                         </button>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-lt-fg3">
                         {c.agent && <span>{c.agent}</span>}
-                        {(c.billingStartDate || c.billingEndDate) && (
-                          <span>· rental {fmt(c.billingStartDate)} – {fmt(c.billingEndDate)}</span>
-                        )}
+                        {(c.billingStartDate || c.billingEndDate) && <span>· rental {fmt(c.billingStartDate)} – {fmt(c.billingEndDate)}</span>}
                         <span>· {c.invoiceCount} inv · {usd(c.invoiced)}</span>
                         {c.outstanding > 0.005 && <span className="font-semibold text-amber-700">· {usd(c.outstanding)} open</span>}
                       </div>
                       {c.reasons?.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                           {c.reasons.map((rsn) => (
-                            <span key={rsn} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              ✓ {rsn}
-                            </span>
+                            <span key={rsn} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">✓ {rsn}</span>
                           ))}
-                          {c.distanceDays != null && (
-                            <span className="text-[10px] text-lt-fg3">{c.distanceDays}d from job start</span>
-                          )}
+                          {c.distanceDays != null && <span className="text-[10px] text-lt-fg3">{c.distanceDays}d from job start</span>}
                         </div>
                       )}
                     </div>
@@ -545,10 +707,9 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
                           <div key={i.id} className="flex items-center gap-2 flex-wrap text-[11px] text-lt-fg2">
                             <span className="font-mono text-lt-fg">#{i.invoiceNumber}</span>
                             <span>{fmt(i.invoiceDate)}</span>
-                            <span>due {fmt(i.dueDate)}</span>
                             {i.poNumber && <span>PO {i.poNumber}</span>}
                             <span className="ml-auto tabular-nums">{usd(i.invoiceTotal)}</span>
-                            <span className="tabular-nums font-semibold">{usd(i.remainingTotal)} left</span>
+                            <a href={`/api/rentalworks/invoices/${i.rwInvoiceId}/pdf`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline">PDF</a>
                           </div>
                         ))}
                       </div>
@@ -556,12 +717,6 @@ function ReconcilePanel({ jobId, onLinked }: { jobId: string; onLinked: () => vo
                   </div>
                 );
               })}
-              {rw && rw.candidates.length === 0 && rw.companyLinked && (
-                <div className="text-[12px] text-lt-fg3">
-                  No unlinked RW orders for this client — every order is already linked to a job, or
-                  RW has nothing for them yet.
-                </div>
-              )}
             </div>
 
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-lt-hairline">

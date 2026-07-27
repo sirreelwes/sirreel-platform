@@ -3675,6 +3675,11 @@ model Job {
   // the /jobs list filters archivedAt IS NULL by default; the detail page
   // stays reachable. Additive; NULL = active. Cleared on unarchive.
   archivedAt     DateTime?      @map("archived_at")
+  /// Staff marked this job as having NO RentalWorks counterpart (HQ-native
+  /// work, or a client that never existed in RW). Removes it from the
+  /// reconcile queue so the queue can actually reach zero — without it,
+  /// every new HQ-native job accumulates as permanent noise. Reversible.
+  rwNotApplicable DateTime?     @map("rw_not_applicable")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 

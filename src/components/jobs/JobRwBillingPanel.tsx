@@ -198,7 +198,11 @@ export function JobRwBillingPanel({ jobId }: { jobId: string }) {
           {!data.companyLinked ? (
             <div className="text-[13px] text-zinc-300">
               {data.companyName || 'This client'} isn’t linked to a RentalWorks customer, so we can’t
-              suggest orders. Enter the RW order number directly:
+              suggest orders yet.{' '}
+              <a href="/rentalworks/reconcile" className="font-semibold text-amber-300 hover:underline">
+                Link the client in Reconcile →
+              </a>{' '}
+              (fixes every job for them), or enter the RW order number directly:
             </div>
           ) : (
             <div className="text-[12px] text-zinc-400 mb-2">
