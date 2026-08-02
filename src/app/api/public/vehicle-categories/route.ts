@@ -40,7 +40,7 @@ export async function GET() {
       // read straight from here (never copied), so a Fleet Pricing edit flows
       // through with no second place to maintain. imageUrl is the fallback
       // thumbnail source when the row has no photoUrl of its own.
-      assetCategory: { select: { dailyRate: true, imageUrl: true } },
+      catalogItem: { select: { dailyRate: true, imageUrl: true } },
       photos: { select: { id: true }, take: 1 },
     },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -54,7 +54,7 @@ export async function GET() {
     // row's own photoUrl, then the linked AssetCategory image. All are PRIVATE
     // blobs → expose only the public scoped proxy path (never the raw URL),
     // and only when an image actually exists.
-    const hasImage = r.photos.length > 0 || !!(r.photoUrl || r.assetCategory?.imageUrl)
+    const hasImage = r.photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
     return {
       id: r.id,
       name: r.name,

@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
   const acIds = [...new Set(orders.flatMap((o) => o.lineItems.map((l) => l.assetCategory?.id)).filter(Boolean))] as string[]
   const vcs = acIds.length === 0 ? [] : await prisma.vehicleCategory.findMany({
     where: { assetCategoryId: { in: acIds } },
-    select: { id: true, name: true, assetCategoryId: true, dailyRate: true, assetCategory: { select: { dailyRate: true } } },
+    select: { id: true, name: true, assetCategoryId: true, dailyRate: true, catalogItem: { select: { dailyRate: true } } },
   })
   const vcByAc = new Map(vcs.map((v) => [v.assetCategoryId as string, v]))
 
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
           name: vc?.name ?? li.assetCategory.name,
           qty: li.quantity,
           available: !!vc,
-          price: vc ? Number(vc.assetCategory?.dailyRate ?? vc.dailyRate ?? 0) : 0,
+          price: vc ? Number(vc.catalogItem?.dailyRate ?? vc.dailyRate ?? 0) : 0,
           type: 'VEHICLE',
           category: 'Vehicle',
         })

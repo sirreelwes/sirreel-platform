@@ -36,7 +36,7 @@ export async function GET() {
       liftGateSpec: true,
       tagline: true,
       description: true,
-      assetCategory: { select: { dailyRate: true, imageUrl: true } },
+      catalogItem: { select: { dailyRate: true, imageUrl: true } },
       // Editor order = gallery storage order (primary is a badge, not a sort
       // key here — the public surfaces hoist it to the front themselves).
       photos: {
@@ -48,7 +48,7 @@ export async function GET() {
 
   const categories = rows.map((r) => {
     const effective = pickEffectiveDailyRate(r)
-    const hasImage = r.photos.length > 0 || !!(r.photoUrl || r.assetCategory?.imageUrl)
+    const hasImage = r.photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
     return {
       id: r.id,
       name: r.name,
@@ -59,7 +59,7 @@ export async function GET() {
       // The full public gate — so the editor can show the row's real
       // client-facing state ("published but photo-less → still hidden").
       clientVisible: r.active && r.published && hasImage,
-      hasLegacyImage: !!(r.photoUrl || r.assetCategory?.imageUrl),
+      hasLegacyImage: !!(r.photoUrl || r.catalogItem?.imageUrl),
       features: r.features,
       photos: r.photos,
       dailyRate: effective == null ? null : Number(effective),

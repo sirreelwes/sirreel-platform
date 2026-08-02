@@ -110,6 +110,37 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           totalUnits: true, sortOrder: true, dailyRate: true, weeklyRate: true,
         },
       });
+      // Catalog merge (Aug 2026): rates are READ from the merged
+      // InventoryItem now (see lib/pricing/resolveRate). An edit here that
+      // didn't write through would appear to save and then quietly price
+      // nothing differently. Mirror the same fields in this transaction so
+      // Fleet Pricing and the catalog can never disagree.
+      //
+      // weeklyRate is nullable on AssetCategory but not on InventoryItem;
+      // a cleared weekly rate lands as 0, which resolveRate already reads
+      // as "not configured".
+      const mirror: {
+        description?: string;
+        dailyRate?: string;
+        weeklyRate?: string;
+        isActive?: boolean;
+        archivedAt?: Date | null;
+      } = {};
+      if (data.name !== undefined) mirror.description = String(data.name);
+      if (data.dailyRate !== undefined) mirror.dailyRate = String(data.dailyRate);
+      if (data.weeklyRate !== undefined) {
+        mirror.weeklyRate = data.weeklyRate != null ? String(data.weeklyRate) : '0';
+      }
+      if (data.isActive !== undefined) {
+        mirror.isActive = Boolean(data.isActive);
+        mirror.archivedAt = (data.archivedAt as Date | null) ?? null;
+      }
+      if (Object.keys(mirror).length > 0) {
+        await tx.inventoryItem.updateMany({
+          where: { legacyAssetCategoryId: id },
+          data: mirror,
+        });
+      }
       if (rateChanged) {
         await tx.rateChangeLog.create({
           data: {

@@ -25,7 +25,7 @@ export const PUBLIC_VEHICLE_VISIBLE_WHERE: Prisma.VehicleCategoryWhereInput = {
   OR: [
     { photos: { some: {} } },
     { photoUrl: { not: null } },
-    { assetCategory: { imageUrl: { not: null } } },
+    { catalogItem: { imageUrl: { not: null } } },
   ],
 }
 
@@ -81,7 +81,7 @@ const SELECT: Prisma.VehicleCategorySelect = {
   heightClearance: true,
   interiorBoxHeight: true,
   liftGateSpec: true,
-  assetCategory: { select: { dailyRate: true, imageUrl: true } },
+  catalogItem: { select: { dailyRate: true, imageUrl: true } },
   photos: {
     select: { id: true, isPrimary: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -105,7 +105,7 @@ type Row = {
   heightClearance: string | null
   interiorBoxHeight: string | null
   liftGateSpec: string | null
-  assetCategory: { dailyRate: unknown; imageUrl: string | null } | null
+  catalogItem: { dailyRate: unknown; imageUrl: string | null } | null
   photos: { id: string; isPrimary: boolean }[]
 }
 
@@ -125,7 +125,7 @@ function shape(r: Row): PublicVehicle {
     src: `/api/public/catalog-image/vehicle-photo/${p.id}`,
     isPrimary: p.isPrimary,
   }))
-  const hasImage = photos.length > 0 || !!(r.photoUrl || r.assetCategory?.imageUrl)
+  const hasImage = photos.length > 0 || !!(r.photoUrl || r.catalogItem?.imageUrl)
   return {
     id: r.id,
     name: r.name,
