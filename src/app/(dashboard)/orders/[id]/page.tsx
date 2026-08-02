@@ -599,18 +599,29 @@ export default function OrderDetailPage() {
 
   const fmtDate = (d: string | null) => {
     if (!d) return "--";
-    const dt = new Date(d + "T00:00:00");
-    if (Number.isNaN(dt.getTime())) {
-      // Legacy rows can carry a malformed date string from an earlier
-      // write path; render the same "--" the null case shows rather
-      // than letting "Invalid Date" leak into the UI. Logged once per
-      // bad value so the data team can spot the pattern.
-      if (typeof console !== "undefined" && console.warn) {
-        console.warn("[orders/detail] unparseable line-item date — rendering '--':", d);
-      }
-      return "--";
+    // Accepts BOTH shapes we receive: a bare "yyyy-MM-dd" (line-item date
+    // inputs) and a full ISO datetime — Order.startDate/endDate are
+    // `@db.Date`, so Prisma serializes them as "yyyy-MM-ddT00:00:00.000Z".
+    // The previous `d + "T00:00:00"` produced "…000ZT00:00:00" for the
+    // latter → Invalid Date → every order date rendered as "--".
+    //
+    // Pull the calendar date out and format it in UTC: these are date-only
+    // values, so rendering them in a negative-offset local timezone would
+    // shift them a day earlier.
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+    if (m) {
+      const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+      return dt.toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+      });
     }
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    // Anything else: legacy rows can carry a malformed date string from an
+    // earlier write path; render the same "--" the null case shows rather
+    // than letting "Invalid Date" leak into the UI.
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn("[orders/detail] unparseable date — rendering '--':", d);
+    }
+    return "--";
   };
 
   const fetchOrder = useCallback(async () => {
