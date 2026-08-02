@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
+import { buildStageContractProps } from '@/lib/contracts/buildStageContractProps'
+import { generateSignedStageContractPdf } from '@/lib/contracts/generateStageContractPdf'
 import {
   JOB_SESSION_COOKIE,
   verifyJobSessionCookieValue,
@@ -22,12 +25,14 @@ export const dynamic = 'force-dynamic'
  * support the redline / negotiated round-trip yet, so the flow is
  * single-shot: client clicks "Sign", row flips to SIGNED_BASELINE.
  *
- * MVP scope: we do not regenerate the PDF with the client's signature
- * burned in. We capture the typed name + acknowledgement metadata on
- * the SignedAgreement row, and the original pre-signed baseline PDF
- * stays as the document of record. A follow-up commit can replace this
- * with a render-burned-in flow (mirroring the rental agreement) once
- * the burn-in step is generalized.
+ * On sign we render the EXECUTED PDF — the same contract body the client
+ * reviewed (rebuilt from the order via buildStageContractProps, so the two
+ * copies can't drift) plus the Producer signature, e-sign attestation and
+ * audit trail — upload it, and point signedDocumentUrl at it.
+ * documentToSignUrl (the pre-sign copy) is left untouched.
+ *
+ * A render/upload failure ABORTS the sign: we never flip to a SIGNED status
+ * without a signed artifact, so the client can safely retry.
  */
 
 interface SignBody {
@@ -78,23 +83,68 @@ export async function POST(req: NextRequest, _params: { params: { token: string 
 
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null
   const ua = req.headers.get('user-agent') || null
+  const signedAt = new Date()
+  const signerTitle = typeof body.signerTitle === 'string' ? body.signerTitle.trim() || null : null
+  const signerEmail = typeof body.signerEmail === 'string' ? body.signerEmail.trim() || null : null
+  const signatureImageData =
+    typeof body.signatureImageData === 'string' ? body.signatureImageData : null
+
+  // Rebuild the contract body from the order so the executed copy is the
+  // same document the client reviewed, then render it WITH the signature.
+  const rendered = await buildStageContractProps(resolved.orderId)
+  if (!rendered) {
+    return NextResponse.json(
+      { error: 'Stage booking terms are missing — ask your SirReel rep to regenerate the contract' },
+      { status: 409 },
+    )
+  }
+
+  let uploadedUrl: string
+  try {
+    const pdfBuffer = await generateSignedStageContractPdf({
+      party: rendered.party,
+      terms: rendered.terms,
+      generatedAt: signedAt,
+      signature: {
+        signerName,
+        signerTitle,
+        signerEmail,
+        signatureImageDataUri: signatureImageData,
+        acknowledgmentText,
+        signedAt,
+        ipAddress: ip,
+        userAgent: ua,
+      },
+    })
+    const blobKey = `stage-contracts/${resolved.orderId}/signed-${signedAt.getTime()}.pdf`
+    // Private store (see generate-stage-contract): a `public` put throws
+    // against the prod store. Served through the gated proxy.
+    const uploaded = await put(blobKey, pdfBuffer, {
+      access: 'private' as 'public',
+      contentType: 'application/pdf',
+    })
+    uploadedUrl = uploaded.url
+  } catch (err) {
+    console.error('[stage-agreement/sign] signed PDF render/upload failed:', err)
+    return NextResponse.json(
+      { error: 'Could not produce the signed contract — nothing was recorded. Please try again.' },
+      { status: 502 },
+    )
+  }
 
   const updated = await prisma.signedAgreement.update({
     where: { id: agreement.id },
     data: {
       status: 'SIGNED_BASELINE',
-      signedAt: new Date(),
+      signedAt,
       signerName,
-      signerTitle: typeof body.signerTitle === 'string' ? body.signerTitle.trim() || null : null,
-      signerEmail: typeof body.signerEmail === 'string' ? body.signerEmail.trim() || null : null,
-      signatureImageData: typeof body.signatureImageData === 'string' ? body.signatureImageData : null,
+      signerTitle,
+      signerEmail,
+      signatureImageData,
       acknowledgmentText,
       signerIpAddress: ip,
       signerUserAgent: ua,
-      // MVP: signedDocumentUrl stays equal to documentToSignUrl. Follow-up
-      // commit will burn the producer signature into the PDF and upload
-      // a separate signed copy.
-      signedDocumentUrl: agreement.documentToSignUrl,
+      signedDocumentUrl: uploadedUrl,
     },
     select: { id: true, status: true, signedAt: true, signedDocumentUrl: true },
   })

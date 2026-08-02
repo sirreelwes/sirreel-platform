@@ -1,5 +1,5 @@
 import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import {
   STAGE_CONTRACT_CLAUSES,
   STAGE_CONTRACT_OPENING,
@@ -39,10 +39,28 @@ export interface StageContractPartyForRender {
   contactEmail: string
 }
 
+/**
+ * Producer-side countersign captured by the portal. When present the
+ * document renders as the EXECUTED contract: the signature (drawn image, or
+ * the typed name as fallback), who signed, and the e-sign attestation +
+ * audit trail. Absent = the unsigned baseline the client reviews.
+ */
+export interface StageContractSignatureForRender {
+  signerName: string
+  signerTitle?: string | null
+  signerEmail?: string | null
+  signatureImageDataUri?: string | null
+  acknowledgmentText: string
+  signedAt: Date
+  ipAddress?: string | null
+  userAgent?: string | null
+}
+
 export interface StageContractDocumentProps {
   party: StageContractPartyForRender
   terms: StageBookingTermsForRender
   generatedAt?: Date
+  signature?: StageContractSignatureForRender | null
 }
 
 const C = {
@@ -151,6 +169,26 @@ const styles = StyleSheet.create({
     width: 220,
   },
   sigCaption: { fontSize: 8, color: C.muted, marginTop: 2 },
+  sigImage: { width: 150, height: 44, objectFit: 'contain', marginBottom: 2 },
+  attestation: {
+    fontSize: 7.5,
+    color: C.muted,
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: C.rule,
+    lineHeight: 1.4,
+  },
+  auditRow: { flexDirection: 'row', marginTop: 1.5 },
+  auditKey: { fontSize: 7.5, color: C.faint, width: 78 },
+  auditValue: { fontSize: 7.5, color: C.muted, flex: 1 },
+  execBadge: {
+    fontSize: 8,
+    color: C.signatureGold,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   footer: { fontSize: 8, color: C.faint, marginTop: 16, textAlign: 'center' },
 })
 
@@ -186,7 +224,7 @@ function fmtToday(d: Date): string {
 }
 
 export function StageContractDocument(props: StageContractDocumentProps) {
-  const { party, terms, generatedAt } = props
+  const { party, terms, generatedAt, signature } = props
   const today = generatedAt ?? new Date()
 
   return (
@@ -267,11 +305,65 @@ export function StageContractDocument(props: StageContractDocumentProps) {
           <View style={styles.sigGroup}>
             <Text style={styles.sigLabel}>Accepted and Agreed — Producer</Text>
             <Text style={styles.sigParty}>{party.clientCompany}</Text>
-            {/* Producer countersign — collected at /portal sign endpoint */}
-            <View style={styles.sigLine} />
-            <Text style={styles.sigCaption}>Signature, printed name, date</Text>
+            {signature ? (
+              <>
+                {signature.signatureImageDataUri ? (
+                  <Image src={signature.signatureImageDataUri} style={styles.sigImage} />
+                ) : (
+                  <Text style={styles.sigTyped}>{signature.signerName}</Text>
+                )}
+                <View style={styles.sigLine} />
+                <Text style={styles.sigCaption}>
+                  {signature.signerName}
+                  {signature.signerTitle ? `, ${signature.signerTitle}` : ''} {'\u00b7'}{' '}
+                  {fmtToday(signature.signedAt)}
+                </Text>
+              </>
+            ) : (
+              <>
+                {/* Producer countersign — collected at /portal sign endpoint */}
+                <View style={styles.sigLine} />
+                <Text style={styles.sigCaption}>Signature, printed name, date</Text>
+              </>
+            )}
           </View>
         </View>
+
+        {/* E-sign attestation + audit trail — only on the executed copy. */}
+        {signature && (
+          <View wrap={false}>
+            <Text style={styles.attestation}>
+              This contract was executed electronically. By typing their name and submitting the
+              acknowledgement below through the SirReel client portal, the Producer signatory
+              adopted an electronic signature with the same force and effect as a handwritten
+              signature.
+            </Text>
+            <Text style={[styles.attestation, { borderTopWidth: 0, marginTop: 4, paddingTop: 0 }]}>
+              “{signature.acknowledgmentText}”
+            </Text>
+            <View style={{ marginTop: 6 }}>
+              <View style={styles.auditRow}>
+                <Text style={styles.auditKey}>Signed</Text>
+                <Text style={styles.auditValue}>{signature.signedAt.toISOString()}</Text>
+              </View>
+              <View style={styles.auditRow}>
+                <Text style={styles.auditKey}>Signatory</Text>
+                <Text style={styles.auditValue}>
+                  {signature.signerName}
+                  {signature.signerEmail ? ` (${signature.signerEmail})` : ''}
+                </Text>
+              </View>
+              <View style={styles.auditRow}>
+                <Text style={styles.auditKey}>IP address</Text>
+                <Text style={styles.auditValue}>{signature.ipAddress || 'unknown'}</Text>
+              </View>
+              <View style={styles.auditRow}>
+                <Text style={styles.auditKey}>Device</Text>
+                <Text style={styles.auditValue}>{signature.userAgent || 'unknown'}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         <Text style={styles.footer}>
           SirReel Studio Services {'\u00b7'} 8500 Lankershim Blvd, Sun Valley, CA {'\u00b7'} sirreel.com

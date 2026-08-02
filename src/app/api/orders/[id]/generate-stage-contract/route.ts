@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { put } from '@vercel/blob'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { buildStageContractProps } from '@/lib/contracts/buildStageContractProps'
 import { generateStageContractPdf } from '@/lib/contracts/generateStageContractPdf'
 
 export const dynamic = 'force-dynamic'
@@ -70,49 +71,16 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     )
   }
 
-  const producerJobContact =
-    order.job?.jobContacts.find((c) => c.role === 'PRODUCER') ?? order.job?.jobContacts[0] ?? null
-  const producer = producerJobContact?.person ?? null
-
-  // The "Contact" / "Your Name" block on the form defaults to the producer
-  // when there's no separate contact specified — matches the docx's
-  // "Same as producer [yes]/[no]" toggle behavior.
-  const contactPerson = order.jobContact ?? producer
-
-  const fullProducerName = producer
-    ? `${producer.firstName} ${producer.lastName}`.trim()
-    : ''
-  const fullContactName = contactPerson
-    ? `${contactPerson.firstName} ${contactPerson.lastName}`.trim()
-    : fullProducerName
-
-  const dailyRate = Number(terms.dailyRate.toString())
-  const formattedRate = dailyRate.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })
+  // Same assembly the portal countersign uses, so the executed copy can
+  // never drift from the baseline the client reviewed.
+  const rendered = await buildStageContractProps(params.id)
+  if (!rendered) {
+    return NextResponse.json({ error: 'Could not assemble the contract for this order' }, { status: 409 })
+  }
 
   const pdfBuffer = await generateStageContractPdf({
-    party: {
-      clientCompany: order.company?.name ?? '',
-      projectName: order.job?.name ?? '',
-      clientAddress: order.company?.billingAddress ?? '',
-      producerName: fullProducerName,
-      producerPhone: producer?.phone ?? '',
-      producerEmail: producer?.email ?? '',
-      contactName: fullContactName,
-      contactPhone: contactPerson?.phone ?? '',
-      contactEmail: contactPerson?.email ?? '',
-    },
-    terms: {
-      rentalDates: Array.isArray(terms.rentalDates) ? (terms.rentalDates as string[]) : [],
-      dailyRate: formattedRate,
-      productionOfficeRental: terms.productionOfficeRental,
-      specificSpaces: terms.specificSpaces,
-      securityGuardRequired: terms.securityGuardRequired,
-    },
+    party: rendered.party,
+    terms: rendered.terms,
     generatedAt: new Date(),
   })
 
