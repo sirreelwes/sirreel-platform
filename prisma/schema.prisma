@@ -2542,18 +2542,23 @@ model InventoryItem {
   // AssetCategory.totalUnits maps onto qtyOwned and .isPublished onto
   // publicVisible — same meaning, no new columns. The rest land here.
   // All nullable / defaulted: existing rows stay QUANTITY and untouched.
-  trackingMode       CatalogTrackingMode @default(QUANTITY) @map("tracking_mode")
-  slug               String?             @unique
-  region             Region?
-  minRentalHours     Int?                @map("min_rental_hours")
-  maxRentalDays      Int?                @map("max_rental_days")
-  reservableOnGantt  Boolean             @default(false) @map("reservable_on_gantt")
-  sortOrder          Int                 @default(0) @map("sort_order")
-  planyoResourceId   Int?                @unique @map("planyo_resource_id")
-  rentalworksCategId String?             @map("rentalworks_categ_id")
+  trackingMode          CatalogTrackingMode @default(QUANTITY) @map("tracking_mode")
+  slug                  String?             @unique
+  region                Region?
+  minRentalHours        Int?                @map("min_rental_hours")
+  maxRentalDays         Int?                @map("max_rental_days")
+  reservableOnGantt     Boolean             @default(false) @map("reservable_on_gantt")
+  sortOrder             Int                 @default(0) @map("sort_order")
+  planyoResourceId      Int?                @unique @map("planyo_resource_id")
+  rentalworksCategId    String?             @map("rentalworks_categ_id")
+  // Provenance for the merged rows: which AssetCategory this row came
+  // from. Lets any caller holding a legacy assetCategoryId resolve the
+  // merged catalog row in one indexed hit — see lib/catalog/resolve.ts.
+  // Null on the 1,831 rows that were always InventoryItems.
+  legacyAssetCategoryId String?             @unique @map("legacy_asset_category_id")
   // AssetCategory.description — a public-facing blurb. InventoryItem's
   // own `description` is the display NAME, so it can't be reused.
-  catalogDescription String?             @map("catalog_description") @db.Text
+  catalogDescription    String?             @map("catalog_description") @db.Text
 
   // Children repointed off AssetCategory in Phase 3.
   assets            Asset[]

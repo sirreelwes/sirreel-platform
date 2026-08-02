@@ -4,11 +4,15 @@
  * re-implemented inline in three files, and line-item rates were a
  * client-supplied snapshot the server never checked).
  *
- * Resolution policy:
- *   - AssetCategory.dailyRate/weeklyRate (Fleet Pricing) is canonical.
- *   - VehicleCategory.dailyRate is a fallback ONLY when the linked
- *     AssetCategory rate is null (or there is no link).
- *   - InventoryItem.dailyRate/weeklyRate for warehouse/catalog items.
+ * Resolution policy (post catalog merge, Aug 2026):
+ *   - InventoryItem.dailyRate/weeklyRate is canonical for EVERYTHING.
+ *     AssetCategory folded into it, so there is one rate per thing.
+ *   - A legacy assetCategoryId is translated to its merged catalog row
+ *     via lib/catalog/resolve. The AssetCategory table is frozen: reading
+ *     its rate directly would serve a price that went stale the moment
+ *     someone edited the merged row.
+ *   - VehicleCategory.dailyRate stays a fallback ONLY when the linked
+ *     catalog rate is null (or there is no link).
  *
  * All math stays in Prisma.Decimal rounded to cents — callers convert to
  * Number only at the display/serialization boundary.
@@ -17,6 +21,7 @@
 import { Prisma } from '@prisma/client'
 import type { RateType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { normalizeCatalogRef } from '@/lib/catalog/resolve'
 
 /** Works with the singleton client or a transaction client. */
 export type Db = Prisma.TransactionClient
@@ -66,28 +71,23 @@ export async function resolveRate(
   const positive = (d: Prisma.Decimal | null | undefined): Prisma.Decimal | null =>
     d != null && d.greaterThan(0) ? roundCents(d) : null
 
-  if (input.inventoryItemId) {
+  // One lookup for both shapes — a legacy assetCategoryId resolves to the
+  // merged catalog row rather than to the frozen AssetCategory table.
+  const catalogItemId = await normalizeCatalogRef(input, db)
+  if (catalogItemId) {
     const item = await db.inventoryItem.findUnique({
-      where: { id: input.inventoryItemId },
+      where: { id: catalogItemId },
       select: { dailyRate: true, weeklyRate: true },
     })
-    if (!item) return { dailyRate: null, weeklyRate: null, source: 'NONE' }
-    return {
-      dailyRate: positive(item.dailyRate),
-      weeklyRate: positive(item.weeklyRate),
-      source: 'INVENTORY_ITEM',
+    const daily = positive(item?.dailyRate)
+    const weekly = positive(item?.weeklyRate)
+    if (daily || weekly) {
+      return { dailyRate: daily, weeklyRate: weekly, source: 'INVENTORY_ITEM' }
     }
-  }
-
-  if (input.assetCategoryId) {
-    const ac = await db.assetCategory.findUnique({
-      where: { id: input.assetCategoryId },
-      select: { dailyRate: true, weeklyRate: true },
-    })
-    const daily = positive(ac?.dailyRate)
-    const weekly = positive(ac?.weeklyRate)
-    if (daily || weekly) return { dailyRate: daily, weeklyRate: weekly, source: 'ASSET_CATEGORY' }
-    // fall through to vehicleCategory fallback below (if provided)
+    // An unpriced item with no vehicleCategory fallback is simply unpriced.
+    if (!input.vehicleCategoryId) {
+      return { dailyRate: null, weeklyRate: null, source: 'NONE' }
+    }
   }
 
   if (input.vehicleCategoryId) {
@@ -95,16 +95,16 @@ export async function resolveRate(
       where: { id: input.vehicleCategoryId },
       select: {
         dailyRate: true,
-        assetCategory: { select: { dailyRate: true, weeklyRate: true } },
+        catalogItem: { select: { dailyRate: true, weeklyRate: true } },
       },
     })
     if (!vc) return { dailyRate: null, weeklyRate: null, source: 'NONE' }
-    const acDaily = positive(vc.assetCategory?.dailyRate)
-    if (acDaily) {
+    const catDaily = positive(vc.catalogItem?.dailyRate)
+    if (catDaily) {
       return {
-        dailyRate: acDaily,
-        weeklyRate: positive(vc.assetCategory?.weeklyRate),
-        source: 'ASSET_CATEGORY',
+        dailyRate: catDaily,
+        weeklyRate: positive(vc.catalogItem?.weeklyRate),
+        source: 'INVENTORY_ITEM',
       }
     }
     const own = positive(vc.dailyRate)
@@ -123,9 +123,11 @@ export async function resolveRate(
  */
 export function pickEffectiveDailyRate<T>(row: {
   dailyRate: T | null
+  catalogItem?: { dailyRate: T | null } | null
+  /** Legacy join; only consulted when catalogItem wasn't selected. */
   assetCategory?: { dailyRate: T | null } | null
 }): T | null {
-  return row.assetCategory?.dailyRate ?? row.dailyRate
+  return row.catalogItem?.dailyRate ?? row.assetCategory?.dailyRate ?? row.dailyRate
 }
 
 export interface LineRateResult {
