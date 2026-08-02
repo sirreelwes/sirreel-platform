@@ -289,6 +289,12 @@ export default function JobDetailPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
+  // "Send for signature" — the paperwork portal invite, surfaced here
+  // because this is where both contracts' status already lives. The only
+  // other entry point is the order page's "Portal access" section, 11
+  // sections down and behind a hand-typed email address.
+  const [signSendBusy, setSignSendBusy] = useState(false);
+  const [signSendMsg, setSignSendMsg] = useState<string>("");
   // Header "More" overflow menu + its actions.
   const [menuOpen, setMenuOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -529,6 +535,63 @@ export default function JobDetailPage() {
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+
+  // Who signs, and therefore who gets the link. PRODUCER first to match
+  // buildStageContractProps — the contract names the Producer as the
+  // signatory, so the invite has to reach that person and not merely the
+  // first contact on the job.
+  const signatory =
+    job.jobContacts.find((c) => c.role === 'PRODUCER') ??
+    job.jobContacts.find((c) => c.isPrimary) ??
+    job.jobContacts.find((c) => c.role === 'PM') ??
+    job.jobContacts.find((c) => c.role === 'PC') ??
+    job.jobContacts[0] ??
+    null;
+
+  // The portal link is per-ORDER (portalSlug lives on Order), so pick the
+  // order that actually has paperwork waiting; fall back to the first live
+  // order when nothing is generated yet.
+  const signTargetOrder =
+    liveOrders.find((o) =>
+      o.signedAgreements.some(
+        (a) => a.status !== 'SIGNED_BASELINE' && a.status !== 'SIGNED_NEGOTIATED',
+      ),
+    ) ??
+    liveOrders[0] ??
+    null;
+
+  const sendForSignature = async () => {
+    if (!signatory || !signTargetOrder) return;
+    setSignSendBusy(true);
+    setSignSendMsg("");
+    try {
+      const res = await fetch(`/api/orders/${signTargetOrder.id}/portal-access/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: signatory.person.email,
+          firstName: signatory.person.firstName,
+          lastName: signatory.person.lastName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSignSendMsg(data.error || `Send failed (HTTP ${res.status})`);
+        return;
+      }
+      // Resend can report a soft failure while the invite itself is fine —
+      // surface the URL either way so the rep is never stuck.
+      setSignSendMsg(
+        data.emailResult?.ok === false
+          ? `Invite created but email failed (${data.emailResult?.reason || 'unknown'}). Copy: ${data.portalUrl}`
+          : `Sent to ${signatory.person.email} · ${data.portalUrl ?? ''}`,
+      );
+    } catch (err) {
+      setSignSendMsg(err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSignSendBusy(false);
+    }
+  };
   const rentalAgreement = liveOrders
     .flatMap((o) => o.signedAgreements)
     .find((a) => a.contractType === 'RENTAL_AGREEMENT');
@@ -1127,13 +1190,42 @@ export default function JobDetailPage() {
                 : 'bg-zinc-700/40 text-zinc-300'
             }`}>{agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}</span>
           </div>
-          <button
-            onClick={() => setAgreementModalOpen(true)}
-            className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            + Link agreement
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Primary action: the rep's actual next step once a contract
+                exists. Names the recipient so nobody has to guess who the
+                link reaches, and needs no typing — the signatory is on the
+                job already. */}
+            <button
+              onClick={sendForSignature}
+              disabled={signSendBusy || !signatory || !signTargetOrder}
+              title={
+                !signatory
+                  ? 'Add a contact to this job first'
+                  : !signTargetOrder
+                    ? 'This job has no live order to send paperwork for'
+                    : `Emails the paperwork portal link to ${signatory.person.email}`
+              }
+              className="text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {signSendBusy
+                ? 'Sending…'
+                : signatory
+                  ? `Send for signature → ${signatory.person.firstName}`
+                  : 'Send for signature'}
+            </button>
+            <button
+              onClick={() => setAgreementModalOpen(true)}
+              className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              + Link agreement
+            </button>
+          </div>
         </div>
+        {signSendMsg && (
+          <div className="mb-2.5 text-[12px] text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2 break-all">
+            {signSendMsg}
+          </div>
+        )}
         {job.agreementAddenda.length === 0 ? (
           <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
             This job isn&rsquo;t linked to an agreement yet. Attach it to an on-file rental / stage
