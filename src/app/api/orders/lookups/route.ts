@@ -19,10 +19,14 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
-    prisma.assetCategory.findMany({
-      where: { isPublished: true },
-      select: { id: true, name: true, slug: true, dailyRate: true, weeklyRate: true },
-      orderBy: { name: "asc" },
+    // Post catalog merge these are unit-tracked InventoryItems. The
+    // response key stays `assetCategories` — it is what the order page's
+    // vehicle picker reads — but the ids are catalog ids and bind to
+    // inventoryItemId. isPublished became publicVisible in the merge.
+    prisma.inventoryItem.findMany({
+      where: { trackingMode: "UNIT_TRACKED", publicVisible: true, isActive: true },
+      select: { id: true, code: true, description: true, slug: true, dailyRate: true, weeklyRate: true },
+      orderBy: { description: "asc" },
     }),
     prisma.inventoryCategory.findMany({
       where: { isActive: true },
@@ -34,7 +38,13 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     companies,
     agents,
-    assetCategories,
+    assetCategories: assetCategories.map((c) => ({
+      id: c.id,
+      name: c.description || c.code,
+      slug: c.slug,
+      dailyRate: c.dailyRate,
+      weeklyRate: c.weeklyRate,
+    })),
     inventoryCategories,
   });
 }

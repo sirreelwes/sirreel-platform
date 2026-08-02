@@ -57,6 +57,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { ClientTier, JobRole, LineItemDepartment, LineItemType, Prisma, ProductionType, RateType } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { normalizeCatalogRef } from '@/lib/catalog/resolve'
 import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/orders'
 import { computeLineTotal } from '@/lib/orders/billing'
 import { computeDays, isClaimEligible, sanitizeClaimedDays } from '@/lib/orders/days'
@@ -146,12 +147,22 @@ interface Warning {
   reason: string
 }
 
+/**
+ * Before the Aug 2026 catalog merge, catalogType 'ASSET_CATEGORY' was
+ * how a line learned it was a vehicle — that was the only table vehicles
+ * lived in. Both live in InventoryItem now, so the catalog row's own
+ * `type` column is the answer and is passed in as catalogLineType.
+ * The legacy catalogType is still honoured for parses stored before the
+ * merge, which have no catalogLineType to offer.
+ */
 function resolveLineType(
   itemType: 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | null | undefined,
   department: LineItemDepartment,
+  catalogLineType?: LineItemType | null,
 ): LineItemType {
-  if (itemType === 'ASSET_CATEGORY') return 'VEHICLE'
   if (itemType === 'PACKAGE') return 'EQUIPMENT'
+  if (catalogLineType) return catalogLineType
+  if (itemType === 'ASSET_CATEGORY') return 'VEHICLE'
   if (department === 'EXPENDABLES') return 'EXPENDABLE'
   return 'EQUIPMENT'
 }
@@ -338,16 +349,25 @@ export async function POST(req: NextRequest) {
         // as final fallback.
         let department: LineItemDepartment = raw.department ?? 'PRO_SUPPLIES'
         let truckSlug: string | null = null
-        if (raw.inventoryItemId) {
+        let catalogLineType: LineItemType | null = null
+        // A pre-merge parse carries an assetCategoryId; translate it to
+        // the merged row so one lookup serves both shapes.
+        const catalogId = await normalizeCatalogRef(
+          { inventoryItemId: raw.inventoryItemId, assetCategoryId: raw.assetCategoryId },
+          tx,
+        )
+        if (catalogId) {
           const inv = await tx.inventoryItem.findUnique({
-            where: { id: raw.inventoryItemId }, select: { department: true },
+            where: { id: catalogId },
+            select: { department: true, slug: true, type: true, trackingMode: true },
           })
-          if (inv) department = inv.department
-        } else if (raw.assetCategoryId) {
-          const ac = await tx.assetCategory.findUnique({
-            where: { id: raw.assetCategoryId }, select: { department: true, slug: true },
-          })
-          if (ac) { department = ac.department; truckSlug = ac.slug }
+          if (inv) {
+            department = inv.department
+            catalogLineType = inv.type
+            // truckSlug drove fleet-specific handling and only ever came
+            // from an AssetCategory — i.e. a unit-tracked row.
+            if (inv.trackingMode === 'UNIT_TRACKED') truckSlug = inv.slug
+          }
         }
 
         // Dates — per-line override > order range > today/today.
@@ -432,7 +452,7 @@ export async function POST(req: NextRequest) {
           data: {
             orderId: order.id,
             sortOrder: sortOrder++,
-            type: resolveLineType(raw.catalogType, department),
+            type: resolveLineType(raw.catalogType, department, catalogLineType),
             description: raw.description,
             inventoryItemId: raw.inventoryItemId || null,
             assetCategoryId: raw.assetCategoryId || null,
@@ -451,7 +471,7 @@ export async function POST(req: NextRequest) {
             ...(() => {
               const claim = sanitizeClaimedDays(raw.claimedDays)
               const eligible = isClaimEligible({
-                type: resolveLineType(raw.catalogType, department),
+                type: resolveLineType(raw.catalogType, department, catalogLineType),
                 department,
               })
               return claim != null && eligible

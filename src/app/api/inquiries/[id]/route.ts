@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // Enrich the order-form cart so the new-quote prefill can bind each line to a
   // real catalog target (additive — other consumers ignore the extra fields):
   //   - VEHICLE lines carry only a VehicleCategory id; resolve the linked
-  //     AssetCategory id (quotes bind vehicles as catalogType=ASSET_CATEGORY).
+  //     merged catalog id (quotes bind vehicles as catalogType=INVENTORY).
   //   - SUPPLY lines resolve the InventoryItem's department (the cart snapshot
   //     only stores the display category name, not the line department).
   // Covers BOTH metadata kinds ('production-order' written by the form today,
@@ -35,13 +35,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
     const supplyIds = cart.filter((l) => l.itemKind === 'SUPPLY').map((l) => String(l.itemId))
     const [vehicles, supplies] = await Promise.all([
       vehicleIds.length
-        ? prisma.vehicleCategory.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, assetCategoryId: true } })
+        ? prisma.vehicleCategory.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, catalogItemId: true } })
         : Promise.resolve([]),
       supplyIds.length
         ? prisma.inventoryItem.findMany({ where: { id: { in: supplyIds } }, select: { id: true, department: true } })
         : Promise.resolve([]),
     ])
-    const acById = new Map(vehicles.map((v) => [v.id, v.assetCategoryId]))
+    const acById = new Map(vehicles.map((v) => [v.id, v.catalogItemId]))
     const deptById = new Map(supplies.map((s) => [s.id, s.department]))
     const enrichedCart = cart.map((l) =>
       l.itemKind === 'VEHICLE'

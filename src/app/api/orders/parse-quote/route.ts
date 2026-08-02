@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import type { LineItemType } from '@prisma/client'
 import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import type { LineItemDepartment } from '@prisma/client'
 import {
@@ -316,7 +317,7 @@ interface ResolvedItem {
   returnDate: string  // ISO date
   billableDays: number
   rate: number
-  matchedProduct: { id: string; type: CatalogType; name: string } | null
+  matchedProduct: { id: string; type: CatalogType; name: string; lineType: LineItemType } | null
   matchSource: 'AI' | 'ALIAS_FALLBACK' | null
   warnings: string[]
 }
@@ -437,7 +438,7 @@ async function resolveItem(
     billableDays,
     rate,
     matchedProduct: matchedProduct
-      ? { id: matchedProduct.id, type: matchedProduct.type, name: matchedProduct.name }
+      ? { id: matchedProduct.id, type: matchedProduct.type, name: matchedProduct.name, lineType: matchedProduct.lineType }
       : null,
     matchSource,
     warnings,

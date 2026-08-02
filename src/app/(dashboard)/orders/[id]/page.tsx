@@ -285,7 +285,9 @@ function computeRecipients(order: Order): RecipientChoice {
   return { primary: all[0] || null, others: all.slice(1) };
 }
 
-type AssetCat = { id: string; name: string; slug: string; dailyRate: string; weeklyRate: string | null };
+// Unit-tracked catalog rows (vehicles + stages). Named for the picker
+// it feeds; the id is an InventoryItem id since the Aug 2026 merge.
+type AssetCat = { id: string; name: string; slug: string | null; dailyRate: string; weeklyRate: string | null };
 type InvItem = {
   id: string;
   code: string;
@@ -1395,7 +1397,11 @@ export default function OrderDetailPage() {
   };
 
   const selectAssetCategory = (cat: AssetCat) => {
-    setLiAssetCatId(cat.id);
+    // Binds inventoryItemId, not assetCategoryId — these ids are catalog
+    // rows now. Writing the legacy FK would mint a fresh reference to a
+    // frozen table on every new vehicle line.
+    setLiInvItemId(cat.id);
+    setLiAssetCatId("");
     maybeAutoFillDesc(cat.name);
     setLiRate(String(Number(cat.dailyRate)));
     setLiRateType("DAILY");
@@ -2179,7 +2185,7 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 ) : liType === "VEHICLE" ? (
-                  <select value={liAssetCatId} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
+                  <select value={assetCats.some((c) => c.id === liInvItemId) ? liInvItemId : ""} onChange={(e) => { const cat = assetCats.find((c) => c.id === e.target.value); if (cat) selectAssetCategory(cat); }}
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                     <option value="">Select vehicle...</option>
                     {assetCats.map((c) => <option key={c.id} value={c.id}>{c.name} ({fmt(c.dailyRate)}/day)</option>)}

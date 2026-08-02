@@ -23,7 +23,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal';
 
-interface MatchedProduct { id: string; type: string; name: string }
+interface MatchedProduct { id: string; type: string; name: string; lineType?: string | null }
 interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
 interface Cat { id: string; name: string; quantity: number }
 interface Line { id: string; name: string; requested: number; availableToHold: number; serviceableCount: number; status: 'available' | 'tight' | 'short' }
@@ -87,8 +87,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
       const parsed = pj.parsed || {};
       const items: ParsedItem[] = Array.isArray(pj.items) ? pj.items : [];
+      // Pre-merge this asked catalogType === 'ASSET_CATEGORY', because
+      // vehicles were the only thing in that table. Every catalog hit is
+      // type INVENTORY now, so the vehicle test reads the matched row's
+      // own line type or the availability check would find nothing.
       const assetCats: Cat[] = items
-        .filter((i) => i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct)
+        .filter((i) => i.matchedProduct?.lineType === 'VEHICLE'
+          || (i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct))
         .map((i) => ({ id: i.matchedProduct!.id, name: i.matchedProduct!.name, quantity: Math.max(1, Math.floor(i.quantity || 1)) }));
 
       setClientName(parsed.clientName ?? null);

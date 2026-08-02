@@ -1,24 +1,37 @@
 import { prisma } from '@/lib/prisma'
-import type { LineItemDepartment } from '@prisma/client'
+import { catalogIdForAssetCategory } from '@/lib/catalog/resolve'
+import type { LineItemDepartment, LineItemType } from '@prisma/client'
 
 /**
  * Phase 2 sales pipeline — catalog matching helpers shared between the
  * AI quote extractor (parse-quote route) and the eventual quote-builder
- * UI. The schema lives in two tables (InventoryItem 522 rows,
- * AssetCategory 13 rows); these helpers paper over the split with a
- * unified `CatalogProduct` shape and a `catalogType` discriminator.
+ * UI. The two-table split these helpers used to paper over is gone —
+ * the Aug 2026 merge folded AssetCategory into InventoryItem, so every
+ * catalog row is one row in one table and `CatalogProduct` is now the
+ * shape of that table rather than a union of two.
  */
 
 export type CatalogType = 'INVENTORY' | 'ASSET_CATEGORY'
 
 export interface CatalogProduct {
   id: string
+  /**
+   * Always 'INVENTORY' for catalog rows since the Aug 2026 merge — the
+   * id is an InventoryItem id and binds to inventoryItemId. 'PACKAGE'
+   * still comes from the package path.
+   */
   type: CatalogType
   name: string
   aliases: string[]
   department: LineItemDepartment
   dailyRate: number
   weeklyRate: number
+  /**
+   * The catalog row's own LineItemType. Before the merge, "this came
+   * from the AssetCategory table" was how callers inferred VEHICLE;
+   * both live in one table now, so the row states it directly.
+   */
+  lineType: LineItemType
 }
 
 /**
@@ -37,57 +50,45 @@ export interface CatalogProduct {
  * via server-side alias-tokenized fallback (see fallbackMatch below).
  */
 export async function loadCatalogForSnippet(): Promise<CatalogProduct[]> {
-  const [assetCats, invItems] = await Promise.all([
-    prisma.assetCategory.findMany({
-      select: {
-        id: true,
-        name: true,
-        aliases: true,
-        department: true,
-        dailyRate: true,
-        weeklyRate: true,
-      },
-      orderBy: { sortOrder: 'asc' },
-    }),
-    prisma.inventoryItem.findMany({
-      where: { isActive: true, NOT: { aliases: { isEmpty: true } } },
-      select: {
-        id: true,
-        code: true,
-        description: true,
-        aliases: true,
-        department: true,
-        dailyRate: true,
-        weeklyRate: true,
-      },
-      orderBy: { qtyOwned: 'desc' },
-    }),
-  ])
+  // One table since the merge. Unit-tracked rows are what used to be
+  // AssetCategories and are ALWAYS included — the old query took every
+  // one of them regardless of aliases, and filtering them on aliases
+  // here would quietly drop fleet and stage coverage out of the AI
+  // snippet. Warehouse gear still has to earn its place with aliases.
+  const invItems = await prisma.inventoryItem.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { trackingMode: 'UNIT_TRACKED' },
+        { NOT: { aliases: { isEmpty: true } } },
+      ],
+    },
+    select: {
+      id: true,
+      code: true,
+      description: true,
+      aliases: true,
+      department: true,
+      dailyRate: true,
+      weeklyRate: true,
+      type: true,
+      trackingMode: true,
+      sortOrder: true,
+      qtyOwned: true,
+    },
+    orderBy: [{ trackingMode: 'asc' }, { sortOrder: 'asc' }, { qtyOwned: 'desc' }],
+  })
 
-  const catalog: CatalogProduct[] = []
-  for (const a of assetCats) {
-    catalog.push({
-      id: a.id,
-      type: 'ASSET_CATEGORY',
-      name: a.name,
-      aliases: a.aliases,
-      department: a.department,
-      dailyRate: Number(a.dailyRate),
-      weeklyRate: a.weeklyRate ? Number(a.weeklyRate) : 0,
-    })
-  }
-  for (const i of invItems) {
-    catalog.push({
-      id: i.id,
-      type: 'INVENTORY',
-      name: i.description || i.code,
-      aliases: i.aliases,
-      department: i.department,
-      dailyRate: Number(i.dailyRate),
-      weeklyRate: Number(i.weeklyRate),
-    })
-  }
-  return catalog
+  return invItems.map((i) => ({
+    id: i.id,
+    type: 'INVENTORY' as const,
+    name: i.description || i.code,
+    aliases: i.aliases,
+    department: i.department,
+    dailyRate: Number(i.dailyRate),
+    weeklyRate: Number(i.weeklyRate),
+    lineType: i.type,
+  }))
 }
 
 /** Department-grouped, compact, deterministic — fed verbatim to the AI prompt. */
@@ -134,11 +135,12 @@ export async function validateCatalogMatch(
       select: {
         id: true, code: true, description: true,
         aliases: true, department: true,
-        dailyRate: true, weeklyRate: true, isActive: true,
+        dailyRate: true, weeklyRate: true, isActive: true, type: true,
       },
     })
     if (!i || !i.isActive) return null
     return {
+      lineType: i.type,
       id: i.id,
       type: 'INVENTORY',
       name: i.description || i.code,
@@ -148,23 +150,28 @@ export async function validateCatalogMatch(
       weeklyRate: Number(i.weeklyRate),
     }
   }
-  const a = await prisma.assetCategory.findUnique({
-    where: { id },
+  // Parses stored before the merge hold an AssetCategory id. Translate
+  // it to the merged row rather than reading the frozen table, so an
+  // old draft re-prices at today's rate.
+  const mergedId = await catalogIdForAssetCategory(id)
+  if (!mergedId) return null
+  const merged = await prisma.inventoryItem.findUnique({
+    where: { id: mergedId },
     select: {
-      id: true, name: true,
-      aliases: true, department: true,
-      dailyRate: true, weeklyRate: true, isPublished: true,
+      id: true, code: true, description: true, aliases: true,
+      department: true, dailyRate: true, weeklyRate: true, type: true,
     },
   })
-  if (!a) return null
+  if (!merged) return null
   return {
-    id: a.id,
-    type: 'ASSET_CATEGORY',
-    name: a.name,
-    aliases: a.aliases,
-    department: a.department,
-    dailyRate: Number(a.dailyRate),
-    weeklyRate: a.weeklyRate ? Number(a.weeklyRate) : 0,
+    id: merged.id,
+    type: 'INVENTORY',
+    name: merged.description || merged.code,
+    aliases: merged.aliases,
+    department: merged.department,
+    dailyRate: Number(merged.dailyRate),
+    weeklyRate: Number(merged.weeklyRate),
+    lineType: merged.type,
   }
 }
 
@@ -215,21 +222,13 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
   if (!desc) return null
   const descTokens = new Set(tokenize(desc))
 
-  const [assetCats, invItems] = await Promise.all([
-    prisma.assetCategory.findMany({
-      select: {
-        id: true, name: true, aliases: true, department: true,
-        dailyRate: true, weeklyRate: true,
-      },
-    }),
-    prisma.inventoryItem.findMany({
-      where: { isActive: true },
-      select: {
-        id: true, code: true, description: true, aliases: true, department: true,
-        dailyRate: true, weeklyRate: true,
-      },
-    }),
-  ])
+  const invItems = await prisma.inventoryItem.findMany({
+    where: { isActive: true },
+    select: {
+      id: true, code: true, description: true, aliases: true, department: true,
+      dailyRate: true, weeklyRate: true, type: true,
+    },
+  })
 
   type Scored = { product: CatalogProduct; score: number }
   const scores: Scored[] = []
@@ -252,22 +251,10 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
     return { product, score }
   }
 
-  for (const a of assetCats) {
-    const product: CatalogProduct = {
-      id: a.id,
-      type: 'ASSET_CATEGORY',
-      name: a.name,
-      aliases: a.aliases,
-      department: a.department,
-      dailyRate: Number(a.dailyRate),
-      weeklyRate: a.weeklyRate ? Number(a.weeklyRate) : 0,
-    }
-    const s = scoreOne(product, a.name, a.aliases)
-    if (s) scores.push(s)
-  }
   for (const i of invItems) {
     const name = i.description || i.code
     const product: CatalogProduct = {
+      lineType: i.type,
       id: i.id,
       type: 'INVENTORY',
       name,

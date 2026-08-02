@@ -815,10 +815,10 @@ function NewQuotePageInner() {
 
           // Cart → ResolvedItem[]. Map each line by its kind to the right
           // catalog target (no AI/alias matching — the ids are canonical):
-          //   • VEHICLE → quotes bind vehicles as catalogType=ASSET_CATEGORY,
-          //     keyed by the AssetCategory id (resolved server-side from the
-          //     VehicleCategory in /api/inquiries/[id]). DAILY. If no linked
-          //     AssetCategory, leave it unmatched for the rep to resolve.
+          //   • VEHICLE → binds catalogType=INVENTORY, keyed by the merged
+          //     catalog id (resolved server-side from the VehicleCategory in
+          //     /api/inquiries/[id]). DAILY. If the VehicleCategory has no
+          //     catalog row, leave it unmatched for the rep to resolve.
           //   • SUPPLY → INVENTORY by InventoryItem id; FLAT for EXPENDABLE
           //     consumables (qty × rate, no billable days), DAILY for EQUIPMENT.
           // Reads the ACTUAL cart-snapshot fields (qty, per-line dates).
@@ -844,12 +844,12 @@ function NewQuotePageInner() {
               return {
                 ...base,
                 catalogProductId: acId,
-                catalogType: acId ? ('ASSET_CATEGORY' as const) : null,
+                catalogType: acId ? ('INVENTORY' as const) : null,
                 department: 'VEHICLES' as const,
                 rateType: 'DAILY' as const,
                 billableDays: line.days ?? 1,
                 claimedDays: line.claimedDays ?? null,
-                matchedProduct: acId ? { id: acId, type: 'ASSET_CATEGORY' as const, name: line.name } : null,
+                matchedProduct: acId ? { id: acId, type: 'INVENTORY' as const, name: line.name } : null,
               };
             }
             const isExpendable = line.type === 'EXPENDABLE';
