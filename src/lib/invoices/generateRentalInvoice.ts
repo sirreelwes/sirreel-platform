@@ -44,6 +44,7 @@
  * those columns; this helper just reads.
  */
 
+import { catalogInvoiceLabel } from '@/lib/catalog/display'
 import React from 'react'
 import { randomUUID } from 'crypto'
 import { put, del } from '@vercel/blob'
@@ -88,8 +89,7 @@ export async function generateRentalInvoice(args: {
       job: true,
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true, description: true } },
-          assetCategory: { select: { name: true } },
+          inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           feeItem: { select: { code: true, name: true } },
         },
         orderBy: { sortOrder: 'asc' },
@@ -129,9 +129,10 @@ export async function generateRentalInvoice(args: {
 
   // ── Build line snapshot from the live order ─────────────────────
   // RENTAL_LINE entries mirror the order line items. The category
-  // string is rebuilt from inventoryItem.description OR
-  // assetCategory.name as fallback — same context the order detail
-  // page shows.
+  // string comes off the catalog row. Warehouse gear labels by its
+  // stock code; a unit-tracked row (what used to be an AssetCategory)
+  // labels by name — its code is a synthetic CAT_* slug that should
+  // never reach a client invoice.
   // CLIENT-FACING — sub-rental fields (vendor name, vendor cost, PO #,
   // status, receiveMethod) must NEVER be added to this snapshot. The
   // invoice mirrors what the client signed, not SirReel's sourcing.
@@ -143,7 +144,7 @@ export async function generateRentalInvoice(args: {
     // distinctly from gear on the (flat, sortOrder-driven) invoice.
     category: li.feeItem
       ? `FEE · ${li.feeItem.code}`
-      : li.inventoryItem?.code ?? li.assetCategory?.name ?? null,
+      : catalogInvoiceLabel(li),
     qty: li.quantity,
     unitPrice: Number(li.rate),
     amount: Number(li.lineTotal),

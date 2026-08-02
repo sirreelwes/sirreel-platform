@@ -83,8 +83,12 @@ interface OrderLineItem {
   pickStatus: 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null;
   qualifier: string | null;
   notes: string | null;
-  inventoryItem: { code: string; description: string | null } | null;
-  assetCategory: { name: string; slug: string } | null;
+  inventoryItem: {
+    code: string;
+    description: string | null;
+    slug: string | null;
+    trackingMode: string;
+  } | null;
 }
 
 interface OrderSignedAgreement {
@@ -220,6 +224,7 @@ interface JobBooking {
     quantity: number;
     holdRank: number;
     category: { id: string; name: string; slug: string };
+    catalogItem: { id: string; slug: string | null } | null;
     assignments: Array<{
       id: string;
       startDate: string;
@@ -1380,7 +1385,10 @@ export default function JobDetailPage() {
             {job.orders.map((o) => {
               const expanded = expandedOrders.has(o.id);
               const orderBookings = job.bookings.filter(
-                (b) => b.items.some((bi) => o.lineItems.some((li) => li.assetCategory?.slug === bi.category.slug)),
+                // Post catalog merge both sides carry the merged row's
+                // slug; bi.category is the frozen AssetCategory join.
+                (b) => b.items.some((bi) => o.lineItems.some((li) =>
+                  !!li.inventoryItem?.slug && li.inventoryItem.slug === (bi.catalogItem?.slug ?? bi.category.slug))),
               );
               return (
                 <div key={o.id} className="bg-zinc-950/40 border border-zinc-800 rounded-lg">

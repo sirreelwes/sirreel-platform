@@ -9,7 +9,7 @@ import { isStageLineItem } from './stageLines'
  *
  *   - If the order has any stage line items (see isStageLineItem —
  *     the STAGES department, the STAGE fulfillment lane, or a legacy
- *     asset-category name/slug containing "stage"), a STAGE_CONTRACT
+ *     catalog name/slug containing "stage"), a STAGE_CONTRACT
  *     SignedAgreement must exist and be in SIGNED_BASELINE /
  *     SIGNED_NEGOTIATED.
  *   - If the order has any non-stage line items, a RENTAL_AGREEMENT
@@ -47,7 +47,7 @@ export async function canPickupConfirm(orderId: string): Promise<PickupConfirmGa
         select: {
           department: true,
           fulfillmentLane: true,
-          assetCategory: { select: { name: true, slug: true } },
+          inventoryItem: { select: { description: true, slug: true } },
         },
       },
       signedAgreements: {

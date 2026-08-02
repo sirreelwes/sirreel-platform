@@ -62,8 +62,14 @@ type LineItem = {
   // the post-BOOKED gate. Always present on rows from the GET; the
   // string union mirrors LineItemDepartment from Prisma.
   department: 'VEHICLES' | 'COMMUNICATIONS' | 'STAGES' | 'PRO_SUPPLIES' | 'EXPENDABLES' | 'GE' | 'ART';
-  inventoryItem: { id: string; code: string; description: string; internalFlags: string[] } | null;
-  assetCategory: { id: string; name: string } | null;
+  inventoryItem: {
+    id: string;
+    code: string;
+    description: string;
+    internalFlags: string[];
+    slug: string | null;
+    trackingMode: string;
+  } | null;
 };
 
 type JobContactRow = {
@@ -1563,11 +1569,6 @@ export default function OrderDetailPage() {
       setEditAssetCatId(null);
       setEditCatalogType('INVENTORY');
       setEditMatchedName(li.inventoryItem.description || li.inventoryItem.code);
-    } else if (li.assetCategory) {
-      setEditAssetCatId(li.assetCategory.id);
-      setEditInvItemId(null);
-      setEditCatalogType('ASSET_CATEGORY');
-      setEditMatchedName(li.assetCategory.name);
     } else {
       setEditInvItemId(null);
       setEditAssetCatId(null);
@@ -1673,7 +1674,6 @@ export default function OrderDetailPage() {
             type: snapshot.type,
             description: snapshot.description,
             inventoryItemId: snapshot.inventoryItem?.id ?? undefined,
-            assetCategoryId: snapshot.assetCategory?.id ?? undefined,
             startDate: snapshot.startDate,
             endDate: snapshot.endDate,
             rateType: snapshot.rateType,

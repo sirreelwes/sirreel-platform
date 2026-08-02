@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           lineItems: {
             select: {
               id: true, type: true, description: true, quantity: true, rate: true, lineTotal: true, billableDays: true,
-              assetCategory: { select: { name: true } },
+              inventoryItem: { select: { description: true, trackingMode: true } },
             },
             orderBy: { sortOrder: 'asc' },
           },

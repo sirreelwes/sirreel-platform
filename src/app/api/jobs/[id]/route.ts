@@ -118,8 +118,7 @@ export async function GET(
                 pickStatus: true,
                 qualifier: true,
                 notes: true,
-                inventoryItem: { select: { code: true, description: true } },
-                assetCategory: { select: { name: true, slug: true } },
+                inventoryItem: { select: { code: true, description: true, slug: true, trackingMode: true } },
               },
             },
             signedAgreements: {
@@ -178,6 +177,7 @@ export async function GET(
                 quantity: true,
                 holdRank: true,
                 category: { select: { id: true, name: true, slug: true } },
+                catalogItem: { select: { id: true, slug: true } },
                 assignments: {
                   select: {
                     id: true,

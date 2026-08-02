@@ -18,11 +18,15 @@
 export function isStageLineItem(li: {
   department?: string | null
   fulfillmentLane?: string | null
-  assetCategory?: { name?: string | null; slug?: string | null } | null
+  inventoryItem?: { description?: string | null; slug?: string | null } | null
 }): boolean {
   if (li.department === 'STAGES') return true
   if (li.fulfillmentLane === 'STAGE') return true
+  // Legacy fallback for rows written before department was populated.
+  // Post catalog merge the name lives on the catalog row, not on the
+  // frozen AssetCategory table.
   return (
-    /stage/i.test(li.assetCategory?.name || '') || /stage/i.test(li.assetCategory?.slug || '')
+    /stage/i.test(li.inventoryItem?.description || '') ||
+    /stage/i.test(li.inventoryItem?.slug || '')
   )
 }

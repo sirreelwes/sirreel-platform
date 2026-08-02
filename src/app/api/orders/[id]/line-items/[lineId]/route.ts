@@ -297,7 +297,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       data,
       include: {
         inventoryItem: { select: { id: true, code: true, description: true } },
-        assetCategory: { select: { id: true, name: true } },
+
       },
     });
 

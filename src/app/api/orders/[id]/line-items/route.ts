@@ -453,7 +453,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
       include: {
         inventoryItem: { select: { id: true, code: true, description: true } },
-        assetCategory: { select: { id: true, name: true } },
+
         feeItem: { select: { id: true, code: true, name: true, unit: true } },
       },
     });

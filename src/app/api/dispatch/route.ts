@@ -37,6 +37,7 @@
  * days=14 returns a fortnight's worth.
  */
 
+import { categoryNameForLine } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import type { FulfillmentLane, OrderStatus, BookingPriority, PickListStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -187,7 +188,8 @@ export async function GET(req: NextRequest) {
       returnDate: true,
       fulfillmentLane: true,
       assetCategoryId: true,
-      assetCategory: { select: { id: true, name: true } },
+      inventoryItemId: true,
+      inventoryItem: { select: { id: true, description: true, trackingMode: true } },
       order: {
         select: {
           id: true,
@@ -212,6 +214,7 @@ export async function GET(req: NextRequest) {
                 select: {
                   id: true,
                   categoryId: true,
+                  catalogItemId: true,
                   assignments: {
                     select: {
                       id: true,
@@ -247,14 +250,14 @@ export async function GET(req: NextRequest) {
     let pickupDate = line.pickupDate
     let returnDate = line.returnDate
     let assetUnitName: string | null = null
-    let categoryName = line.assetCategory?.name ?? null
+    let categoryName = categoryNameForLine(line)
     const priority = line.order.booking?.priority ?? null
 
     // Unambiguous BA match: same category, exactly one BA under this
     // Booking. Anything else falls back to line dates.
-    if (line.assetCategoryId && line.order.booking) {
+    if (line.inventoryItemId && line.order.booking) {
       const matchingBAs = line.order.booking.items
-        .filter((bi) => bi.categoryId === line.assetCategoryId)
+        .filter((bi) => bi.catalogItemId === line.inventoryItemId)
         .flatMap((bi) => bi.assignments)
       if (matchingBAs.length === 1) {
         pickupDate = matchingBAs[0].startDate

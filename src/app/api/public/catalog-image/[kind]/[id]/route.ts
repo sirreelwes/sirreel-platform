@@ -55,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       where: { id, ...PUBLIC_VEHICLE_VISIBLE_WHERE },
       select: {
         photoUrl: true,
-        assetCategory: { select: { imageUrl: true } },
+        catalogItem: { select: { imageUrl: true } },
         photos: {
           select: { url: true },
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -66,7 +66,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!vc) return NextResponse.json({ error: 'not found' }, { status: 404 })
     // Prefer the primary gallery photo; else the row's own legacy photoUrl;
     // else the linked Fleet Pricing category image.
-    const fileUrl = vc.photos[0]?.url ?? vc.photoUrl ?? vc.assetCategory?.imageUrl ?? null
+    const fileUrl = vc.photos[0]?.url ?? vc.photoUrl ?? vc.catalogItem?.imageUrl ?? null
     if (!fileUrl) return NextResponse.json({ error: 'not found' }, { status: 404 })
     return streamPrivateBlobAsResponse({ fileUrl, filename: `${id}.jpg` })
   }

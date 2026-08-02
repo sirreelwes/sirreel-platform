@@ -1,3 +1,4 @@
+import { categoryNameForLine } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
@@ -136,8 +137,7 @@ export async function GET(req: NextRequest) {
             billableDays: true,
             startDate: true,
             endDate: true,
-            inventoryItem: { select: { code: true, description: true } },
-            assetCategory: { select: { name: true } },
+            inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
         },
@@ -365,7 +365,7 @@ export async function GET(req: NextRequest) {
       startDate: li.startDate,
       endDate: li.endDate,
       inventoryCode: li.inventoryItem?.code || null,
-      categoryName: li.assetCategory?.name || null,
+      categoryName: categoryNameForLine(li),
     })),
     paperwork: {
       quotePdfUrl: order.quotePdfUrl,

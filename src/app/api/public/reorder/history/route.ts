@@ -84,23 +84,30 @@ export async function GET(req: NextRequest) {
           inventoryItem: {
             select: {
               id: true, description: true, dailyRate: true, includedFree: true,
-              isActive: true, type: true, category: { select: { name: true, slug: true } },
+              isActive: true, type: true, trackingMode: true,
+              category: { select: { name: true, slug: true } },
             },
           },
-          assetCategory: { select: { id: true, name: true } },
         },
       },
     },
   })
 
-  // Vehicle mapping: order lines hold AssetCategory; the public cart
-  // keys vehicles by VehicleCategory. Resolve in one query.
-  const acIds = [...new Set(orders.flatMap((o) => o.lineItems.map((l) => l.assetCategory?.id)).filter(Boolean))] as string[]
-  const vcs = acIds.length === 0 ? [] : await prisma.vehicleCategory.findMany({
-    where: { assetCategoryId: { in: acIds } },
-    select: { id: true, name: true, assetCategoryId: true, dailyRate: true, catalogItem: { select: { dailyRate: true } } },
+  // Vehicle mapping: a unit-tracked catalog row is what used to be an
+  // AssetCategory; the public cart keys vehicles by VehicleCategory.
+  // Resolve in one query, keyed on the merged catalog id.
+  const catIds = [...new Set(
+    orders.flatMap((o) =>
+      o.lineItems
+        .filter((l) => l.inventoryItem?.trackingMode === 'UNIT_TRACKED')
+        .map((l) => l.inventoryItem?.id),
+    ).filter(Boolean),
+  )] as string[]
+  const vcs = catIds.length === 0 ? [] : await prisma.vehicleCategory.findMany({
+    where: { catalogItemId: { in: catIds } },
+    select: { id: true, name: true, catalogItemId: true, dailyRate: true, catalogItem: { select: { dailyRate: true } } },
   })
-  const vcByAc = new Map(vcs.map((v) => [v.assetCategoryId as string, v]))
+  const vcByCat = new Map(vcs.map((v) => [v.catalogItemId as string, v]))
 
   const payload = orders.map((o) => {
     const lines: ReorderLine[] = []
@@ -108,7 +115,24 @@ export async function GET(req: NextRequest) {
       // Money-only / structural lines never reorder.
       if (li.type === 'FEE' || li.type === 'DISCOUNT' || li.type === 'LABOR') continue
       if (li.isPackageHeader) continue
-      if (li.inventoryItem) {
+      // Order matters: after the catalog merge EVERY line has an
+      // inventoryItem, so the vehicle test has to come first and has to
+      // key off trackingMode. Testing "has an inventoryItem" first would
+      // reorder every vehicle as a warehouse supply.
+      if (li.inventoryItem?.trackingMode === 'UNIT_TRACKED') {
+        const inv = li.inventoryItem
+        const vc = vcByCat.get(inv.id)
+        lines.push({
+          itemKind: 'VEHICLE',
+          itemId: vc?.id ?? inv.id,
+          name: vc?.name ?? inv.description ?? li.description,
+          qty: li.quantity,
+          available: !!vc,
+          price: vc ? Number(vc.catalogItem?.dailyRate ?? vc.dailyRate ?? 0) : 0,
+          type: 'VEHICLE',
+          category: 'Vehicle',
+        })
+      } else if (li.inventoryItem) {
         const inv = li.inventoryItem
         lines.push({
           itemKind: 'SUPPLY',
@@ -119,18 +143,6 @@ export async function GET(req: NextRequest) {
           price: inv.isActive ? Number(inv.dailyRate) : 0,
           type: inv.type,
           category: inv.category?.slug ?? 'other',
-        })
-      } else if (li.assetCategory) {
-        const vc = vcByAc.get(li.assetCategory.id)
-        lines.push({
-          itemKind: 'VEHICLE',
-          itemId: vc?.id ?? li.assetCategory.id,
-          name: vc?.name ?? li.assetCategory.name,
-          qty: li.quantity,
-          available: !!vc,
-          price: vc ? Number(vc.catalogItem?.dailyRate ?? vc.dailyRate ?? 0) : 0,
-          type: 'VEHICLE',
-          category: 'Vehicle',
         })
       }
       // free-text lines (no catalog binding) are skipped — nothing to re-add

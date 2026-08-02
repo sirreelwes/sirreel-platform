@@ -95,8 +95,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
       lineItems: {
         include: {
-          inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true } },
-          assetCategory: { select: { id: true, name: true, slug: true } },
+          inventoryItem: { select: { id: true, code: true, description: true, internalFlags: true, slug: true, trackingMode: true } },
+
         },
         orderBy: { sortOrder: "asc" },
       },
