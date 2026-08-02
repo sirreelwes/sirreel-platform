@@ -53,24 +53,24 @@ enum Region {
 }
 
 model AssetCategory {
-  id             String              @id @default(uuid())
-  name           String // "Cube Truck", "PopVan", "Studios"
-  slug           String              @unique // "cube-truck"
-  totalUnits     Int                 @map("total_units")
-  dailyRate      Decimal             @map("daily_rate") @db.Decimal(10, 2)
-  weeklyRate     Decimal?            @map("weekly_rate") @db.Decimal(10, 2)
-  minRentalHours Int                 @default(24) @map("min_rental_hours")
-  maxRentalDays  Int                 @default(365) @map("max_rental_days")
-  region         Region              @default(LA)
-  isPublished    Boolean             @default(true) @map("is_published")
+  id                String             @id @default(uuid())
+  name              String // "Cube Truck", "PopVan", "Studios"
+  slug              String             @unique // "cube-truck"
+  totalUnits        Int                @map("total_units")
+  dailyRate         Decimal            @map("daily_rate") @db.Decimal(10, 2)
+  weeklyRate        Decimal?           @map("weekly_rate") @db.Decimal(10, 2)
+  minRentalHours    Int                @default(24) @map("min_rental_hours")
+  maxRentalDays     Int                @default(365) @map("max_rental_days")
+  region            Region             @default(LA)
+  isPublished       Boolean            @default(true) @map("is_published")
   // Soft-delete / archive — mirrors InventoryItem. `isActive=false` is the
   // archived state (hidden from the default Fleet Pricing list + pickers);
   // `archivedAt` records WHEN for the audit trail. Archive (not hard-delete)
   // is the only safe option once a category has Asset units / order lines /
   // rate-change history, so the row survives for those FK references and
   // existing quotes/invoices stay intact. Restore flips back to true/null.
-  isActive       Boolean             @default(true) @map("is_active")
-  archivedAt     DateTime?           @map("archived_at")
+  isActive          Boolean            @default(true) @map("is_active")
+  archivedAt        DateTime?          @map("archived_at")
   // Operator-facing flag for the "+ New Hold" picker on the gantt
   // /reservations page. Orthogonal to isPublished — that controls
   // storefront / quote-side visibility; this controls whether the
@@ -78,19 +78,19 @@ model AssetCategory {
   // operator scheduler. Default true so new categories show up; flip
   // false on test rigs and any other unit-tracked category that
   // shouldn't surface in the operator picker.
-  reservableOnGantt Boolean          @default(true) @map("reservable_on_gantt")
-  description    String?             @db.Text
-  imageUrl       String?             @map("image_url")
-  sortOrder      Int                 @default(0) @map("sort_order")
+  reservableOnGantt Boolean            @default(true) @map("reservable_on_gantt")
+  description       String?            @db.Text
+  imageUrl          String?            @map("image_url")
+  sortOrder         Int                @default(0) @map("sort_order")
   // Phase 2 sales pipeline — see InventoryItem for semantics.
-  aliases        String[]            @default([])
-  department     LineItemDepartment
+  aliases           String[]           @default([])
+  department        LineItemDepartment
   // Defensive RW columns (May 2026). The May spike doesn't write to
   // AssetCategory rows, but Phase 4 may map RW Categories ↔ SirReel
   // AssetCategory; columns are in place to avoid a re-migration.
-  needsReview    Boolean             @default(false) @map("needs_review")
-  rwLastSyncedAt DateTime?           @map("rw_last_synced_at")
-  rwId           String?             @map("rw_id")
+  needsReview       Boolean            @default(false) @map("needs_review")
+  rwLastSyncedAt    DateTime?          @map("rw_last_synced_at")
+  rwId              String?            @map("rw_id")
 
   // Integration IDs
   planyoResourceId   Int?    @unique @map("planyo_resource_id")
@@ -100,10 +100,10 @@ model AssetCategory {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assets           Asset[]
-  bookingItems     BookingItem[]
-  orderLineItems   OrderLineItem[]
-  rateChangeLogs   RateChangeLog[]
+  assets            Asset[]
+  bookingItems      BookingItem[]
+  orderLineItems    OrderLineItem[]
+  rateChangeLogs    RateChangeLog[]
   vehicleCategories VehicleCategory[]
 
   @@index([rwId])
@@ -112,19 +112,19 @@ model AssetCategory {
 }
 
 model Asset {
-  id         String      @id @default(uuid())
-  categoryId String      @map("category_id")
-  unitName   String      @map("unit_name") // "18", "Sprinter #2 (A)", "Lankershim Studio"
-  status     AssetStatus @default(AVAILABLE)
-  location   Location    @default(LANKERSHIM)
-  tier       AssetTier   @default(STANDARD)
+  id            String      @id @default(uuid())
+  categoryId    String      @map("category_id")
+  unitName      String      @map("unit_name") // "18", "Sprinter #2 (A)", "Lankershim Studio"
+  status        AssetStatus @default(AVAILABLE)
+  location      Location    @default(LANKERSHIM)
+  tier          AssetTier   @default(STANDARD)
   // 1–5 age/condition class for the fleet-assignment optimizer.
   // Distinct from the legacy `tier` field above (3-bucket marketing
   // tier: PREMIUM/STANDARD/ECONOMY). equipmentTier matches
   // ProductionTypeProfile.tier pools: tier=5 routes to newest-gear
   // pool, tier=1 to oldest. Nullable until the fleet team backfills
   // the 5-bucket classification across the inventory.
-  equipmentTier Int? @map("equipment_tier")
+  equipmentTier Int?        @map("equipment_tier")
 
   // Vehicle details
   vin          String? @db.VarChar(20)
@@ -171,6 +171,11 @@ model Asset {
 
   // Relations
   category           AssetCategory       @relation(fields: [categoryId], references: [id])
+  // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
+  // through the cutover — readers prefer this one, the legacy column
+  // stays populated so nothing has to be dropped. See InventoryItem.
+  catalogItemId      String?             @map("catalog_item_id")
+  catalogItem        InventoryItem?      @relation(fields: [catalogItemId], references: [id])
   bookingAssignments BookingAssignment[]
   maintenanceRecords MaintenanceRecord[]
   dispatchTasks      DispatchTask[]
@@ -181,6 +186,7 @@ model Asset {
   lotChecks          LotCheck[]
   bitInspections     BitInspection[]
 
+  @@index([catalogItemId])
   @@map("assets")
 }
 
@@ -251,16 +257,16 @@ model ProductionTypeProfile {
   id               String   @id @default(uuid())
   name             String   @unique
   slug             String   @unique
-  tier             Int      // 1–5; 5 = newest-gear pool, 1 = oldest
+  tier             Int // 1–5; 5 = newest-gear pool, 1 = oldest
   upsellPropensity Int      @map("upsell_propensity") // 1–5; 1 = none, 5 = high
   priceSensitivity Int      @map("price_sensitivity") // 1–5; 1 = premium-tolerant, 5 = very sensitive
-  salesMode        String   @map("sales_mode")        // WHITE_GLOVE | HIGHER_TOUCH | SEMI_AUTO | LIGHT_TOUCH | FULL_AUTO
+  salesMode        String   @map("sales_mode") // WHITE_GLOVE | HIGHER_TOUCH | SEMI_AUTO | LIGHT_TOUCH | FULL_AUTO
   sortOrder        Int      @default(0) @map("sort_order")
   active           Boolean  @default(true)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  jobs                Job[]     @relation("JobProductionTypeProfile")
+  jobs                   Job[]     @relation("JobProductionTypeProfile")
   mostCommonForCompanies Company[] @relation("CompanyMostCommonProductionTypeProfile")
 
   @@map("production_type_profiles")
@@ -279,46 +285,52 @@ model ProductionTypeProfile {
 // quote (don't render a price hint). photoUrl is admin-managed;
 // null renders a graceful placeholder.
 model VehicleCategory {
-  id         String   @id @default(uuid())
-  name       String   @unique
-  slug       String   @unique
-  subtitle   String?
-  photoUrl   String?  @map("photo_url")
+  id                String                 @id @default(uuid())
+  name              String                 @unique
+  slug              String                 @unique
+  subtitle          String?
+  photoUrl          String?                @map("photo_url")
   // dailyRate is now a FALLBACK/override only. When assetCategoryId is set,
   // the public order form reads the price LIVE from the linked
   // AssetCategory.dailyRate (Fleet Pricing — one source of truth), so owned
   // vehicles never have a second place to maintain a rate. NULL here +
   // unlinked = "price on quote" (the sub-rental trailers).
-  dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
-  sortOrder  Int      @default(0) @map("sort_order")
-  active     Boolean  @default(true)
+  dailyRate         Decimal?               @map("daily_rate") @db.Decimal(10, 2)
+  sortOrder         Int                    @default(0) @map("sort_order")
+  active            Boolean                @default(true)
   // Structured public-site spec fields (all nullable — a missing spec is
   // simply omitted from the vehicle detail page). One set per vehicle; edited
   // in HQ (/admin/vehicle-catalog) and read LIVE by the public /vehicles pages.
-  baseVehicle      String?  @map("base_vehicle")        // e.g. "Ford Transit Cargo"
-  model            String?                              // trim / model designation
-  fuelType         String?  @map("fuel_type")           // e.g. "Gas", "Diesel"
-  lengthFt         Decimal? @map("length_ft") @db.Decimal(6, 2) // overall length in feet
-  heightClearance  String?  @map("height_clearance")    // e.g. "9' 6\""
-  interiorBoxHeight String? @map("interior_box_height") // e.g. "6' 2\""
-  liftGateSpec     String?  @map("lift_gate_spec")      // e.g. "3,000 lb hydraulic"
-  tagline          String?                              // short hero line
-  description      String?                              // longer marketing paragraph
+  baseVehicle       String?                @map("base_vehicle") // e.g. "Ford Transit Cargo"
+  model             String? // trim / model designation
+  fuelType          String?                @map("fuel_type") // e.g. "Gas", "Diesel"
+  lengthFt          Decimal?               @map("length_ft") @db.Decimal(6, 2) // overall length in feet
+  heightClearance   String?                @map("height_clearance") // e.g. "9' 6\""
+  interiorBoxHeight String?                @map("interior_box_height") // e.g. "6' 2\""
+  liftGateSpec      String?                @map("lift_gate_spec") // e.g. "3,000 lb hydraulic"
+  tagline           String? // short hero line
+  description       String? // longer marketing paragraph
   // Publish gate for the public site: a vehicle is client-visible only when
   // published=true AND it has at least one photo (VehicleCategoryPhoto or the
   // legacy photoUrl). Unpublished rows still appear in HQ admin views.
-  published  Boolean  @default(false)
+  published         Boolean                @default(false)
   // Public-site feature bullets, one per line (rendered as a list under specs).
-  features   String?
+  features          String?
   // Link to the operational Fleet Pricing category (owned vehicles). NULL for
   // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
-  assetCategoryId String?       @map("asset_category_id")
-  assetCategory   AssetCategory? @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-  photos     VehicleCategoryPhoto[]
+  assetCategoryId   String?                @map("asset_category_id")
+  assetCategory     AssetCategory?         @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
+  // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
+  // through the cutover — readers prefer this one, the legacy column
+  // stays populated so nothing has to be dropped. See InventoryItem.
+  catalogItemId     String?                @map("catalog_item_id")
+  catalogItem       InventoryItem?         @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  photos            VehicleCategoryPhoto[]
 
   @@index([assetCategoryId])
+  @@index([catalogItemId])
   @@map("vehicle_categories")
 }
 
@@ -367,7 +379,7 @@ model Space {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  photos      SpacePhoto[]
+  photos SpacePhoto[]
 
   // Names are unique WITHIN a type (a Stage and a Standing Set may share a
   // name); also the upsert key for the idempotent seed.
@@ -437,9 +449,9 @@ model Company {
   // typicalDiscountPct is what they usually angle for (15 = "15%").
   // discountNotes is free-text context (e.g. "always asks for free
   // delivery"). All three are agent-set, no derivation today.
-  discountTendency    DiscountTendency @default(NONE)  @map("discount_tendency")
-  typicalDiscountPct  Int?             @map("typical_discount_pct")
-  discountNotes       String?          @map("discount_notes") @db.Text
+  discountTendency   DiscountTendency @default(NONE) @map("discount_tendency")
+  typicalDiscountPct Int?             @map("typical_discount_pct")
+  discountNotes      String?          @map("discount_notes") @db.Text
 
   // ── CRH: Company-level paperwork (institutional memory) ────────────────
   // Annual MSA (Master Services Agreement). When `annualAgreementApprovedAt`
@@ -455,13 +467,13 @@ model Company {
   // Annual COI (Certificate of Insurance). Parallel structure to the MSA;
   // additionally stores the coverage limits so the CRH job-creation flow
   // can validate per-job requirements against the annual policy.
-  annualCoiUrl                 String?   @map("annual_coi_url")
-  annualCoiEffectiveDate       DateTime? @map("annual_coi_effective_date")
-  annualCoiExpiresAt           DateTime? @map("annual_coi_expires_at")
-  annualCoiCoverageGL          Decimal?  @map("annual_coi_coverage_gl") @db.Decimal(14, 2)
-  annualCoiCoverageAuto        Decimal?  @map("annual_coi_coverage_auto") @db.Decimal(14, 2)
-  annualCoiApprovedBy          String?   @map("annual_coi_approved_by")
-  annualCoiApprovedAt          DateTime? @map("annual_coi_approved_at")
+  annualCoiUrl           String?   @map("annual_coi_url")
+  annualCoiEffectiveDate DateTime? @map("annual_coi_effective_date")
+  annualCoiExpiresAt     DateTime? @map("annual_coi_expires_at")
+  annualCoiCoverageGL    Decimal?  @map("annual_coi_coverage_gl") @db.Decimal(14, 2)
+  annualCoiCoverageAuto  Decimal?  @map("annual_coi_coverage_auto") @db.Decimal(14, 2)
+  annualCoiApprovedBy    String?   @map("annual_coi_approved_by")
+  annualCoiApprovedAt    DateTime? @map("annual_coi_approved_at")
 
   // Negotiated terms. When set, future Quote/Job flows render a banner and
   // use this PDF as the baseline (not the standard SirReel template). The
@@ -479,21 +491,21 @@ model Company {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  defaultAgent    User?            @relation("DefaultAgent", fields: [defaultAgentId], references: [id])
+  defaultAgent                    User?                  @relation("DefaultAgent", fields: [defaultAgentId], references: [id])
   mostCommonProductionTypeProfile ProductionTypeProfile? @relation("CompanyMostCommonProductionTypeProfile", fields: [mostCommonProductionTypeProfileId], references: [id])
-  affiliations    Affiliation[]
-  bookings        Booking[]
-  drivers         Driver[]
-  insuranceClaims InsuranceClaim[]
-  incidents       Incident[]
-  emailMessages   EmailMessage[]
-  jobs            Job[]
-  contractReviews ContractReview[]
-  coiChecks       CoiCheck[]
-  agreements      CompanyAgreement[]
-  inquiries       Inquiry[]
-  inquiryCaptures InquiryCapture[] @relation("CaptureCompany")
-  outreachActivities OutreachActivity[] @relation("CompanyOutreach")
+  affiliations                    Affiliation[]
+  bookings                        Booking[]
+  drivers                         Driver[]
+  insuranceClaims                 InsuranceClaim[]
+  incidents                       Incident[]
+  emailMessages                   EmailMessage[]
+  jobs                            Job[]
+  contractReviews                 ContractReview[]
+  coiChecks                       CoiCheck[]
+  agreements                      CompanyAgreement[]
+  inquiries                       Inquiry[]
+  inquiryCaptures                 InquiryCapture[]       @relation("CaptureCompany")
+  outreachActivities              OutreachActivity[]     @relation("CompanyOutreach")
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -548,17 +560,17 @@ model Person {
   // origin shows up. `sourceMessageId` is the EmailMessage.id of the
   // mail that produced or last enriched this person — exposed on the
   // contact detail page as "Captured from <inbox>, <date>".
-  source           String?  @map("source")
-  sourceMessageId  String?  @map("source_message_id")
+  source            String?   @map("source")
+  sourceMessageId   String?   @map("source_message_id")
   // Verbatim signature title (e.g. "Sr. Production Coordinator —
   // FX Networks"). Kept alongside the mapped `role` enum because the
   // enum collapses dozens of real-world titles into ~10 buckets;
   // rawTitle preserves what the person actually called themselves.
-  rawTitle         String?  @map("raw_title")
+  rawTitle          String?   @map("raw_title")
   // Most recent project / show / production name parsed off mail
   // from this contact. Single string, not a history — the review
   // widget surfaces "last seen on" as a sales prompt.
-  lastKnownProject String?  @map("last_known_project")
+  lastKnownProject  String?   @map("last_known_project")
   // /admin/dedup "Not a dupe — shared office line" button stamps
   // this on every member of the cluster. The cluster API filters
   // out persons with this flag set so suppressed clusters drop
@@ -570,27 +582,27 @@ model Person {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assignedAgent    User?          @relation("PersonAgent", fields: [assignedAgentId], references: [id])
-  worksWith        Person?        @relation("WorksWith", fields: [worksWithId], references: [id])
-  worksWithBack    Person[]       @relation("WorksWith")
-  affiliations     Affiliation[]
-  bookings         Booking[]      @relation("BookingContact")
-  referredBookings Booking[]      @relation("BookingReferrer")
-  user             User?          @relation("ContactUser")
-  emailMessages    EmailMessage[]
-  jobContacts      JobContact[]
-  orderContacts    Order[]        @relation("OrderJobContact")
-  inquiries        Inquiry[]      @relation("InquiryContact")
-  portalAccesses   PortalAccess[] @relation("PortalAccessContact")
-  welcomeInvites   WelcomeInvite[] @relation("WelcomeInvitePerson")
-  personSessions   PersonSession[]
-  inquiryCaptures  InquiryCapture[] @relation("CaptureContact")
+  assignedAgent      User?              @relation("PersonAgent", fields: [assignedAgentId], references: [id])
+  worksWith          Person?            @relation("WorksWith", fields: [worksWithId], references: [id])
+  worksWithBack      Person[]           @relation("WorksWith")
+  affiliations       Affiliation[]
+  bookings           Booking[]          @relation("BookingContact")
+  referredBookings   Booking[]          @relation("BookingReferrer")
+  user               User?              @relation("ContactUser")
+  emailMessages      EmailMessage[]
+  jobContacts        JobContact[]
+  orderContacts      Order[]            @relation("OrderJobContact")
+  inquiries          Inquiry[]          @relation("InquiryContact")
+  portalAccesses     PortalAccess[]     @relation("PortalAccessContact")
+  welcomeInvites     WelcomeInvite[]    @relation("WelcomeInvitePerson")
+  personSessions     PersonSession[]
+  inquiryCaptures    InquiryCapture[]   @relation("CaptureContact")
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
-  emailAliases     PersonEmailAlias[] @relation("PersonAliases")
+  emailAliases       PersonEmailAlias[] @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
   // on PersonMerge), so there's no loser-side back-relation to model.
-  mergesAsSurvivor PersonMerge[]      @relation("MergeSurvivor")
+  mergesAsSurvivor   PersonMerge[]      @relation("MergeSurvivor")
 
   @@map("people")
 }
@@ -632,37 +644,37 @@ model PersonEmailAlias {
 // See src/lib/people/mergePersons.ts for the merge primitive and
 // src/lib/people/reverseMerge.ts for the reverse primitive.
 model PersonMerge {
-  id              String   @id @default(uuid())
-  survivorId      String   @map("survivor_id")
+  id                       String   @id @default(uuid())
+  survivorId               String   @map("survivor_id")
   // Survivor's email at merge time, before the lowercase
   // normalization that the merge primitive runs as part of its
   // root-cause fix. Reversal restores this so the loser's pre-merge
   // email (which may differ ONLY in case from the survivor's
   // normalized form — the canary case) can come back without
   // colliding on Person.email's @unique.
-  survivorEmailBeforeMerge String? @map("survivor_email_before_merge")
+  survivorEmailBeforeMerge String?  @map("survivor_email_before_merge")
   // Snapshot of the loser Person at merge time — full field set so
   // reversal is a JSON unpack, not a guess. Schema is loose
   // intentionally: if Person gains fields, older PersonMerge rows
   // remain valid (extra fields land as null on the restored loser).
-  loserSnapshot   Json     @map("loser_snapshot")
+  loserSnapshot            Json     @map("loser_snapshot")
   // Per-FK repoint log. Each entry: { table, op: 'repoint'|'delete'|'sum',
   //   loserId, survivorId, affectedIds: [...], details: {...} }.
   // Reversal walks this in reverse and inverts each op.
-  repointLog      Json     @map("repoint_log")
+  repointLog               Json     @map("repoint_log")
   // PersonEmailAlias rows minted by this merge — deleted on reversal.
   // Indirect (FK on PersonEmailAlias.mergeId) so the list is
   // discoverable even if this array drifts; kept here for cheap audit.
-  aliasIds        String[] @map("alias_ids")
+  aliasIds                 String[] @map("alias_ids")
 
-  mergedAt        DateTime @default(now()) @map("merged_at")
-  mergedById      String   @map("merged_by_id")
-  reversedAt      DateTime? @map("reversed_at")
-  reversedById    String?   @map("reversed_by_id")
+  mergedAt       DateTime  @default(now()) @map("merged_at")
+  mergedById     String    @map("merged_by_id")
+  reversedAt     DateTime? @map("reversed_at")
+  reversedById   String?   @map("reversed_by_id")
   // Populated when reversal hits a conflict (e.g. survivor row was
   // edited downstream and the loser's old refs can't cleanly come
   // back). Reversal aborts; this row stays in place; human triage.
-  reversalErrors  Json?     @map("reversal_errors")
+  reversalErrors Json?     @map("reversal_errors")
 
   survivor   Person             @relation("MergeSurvivor", fields: [survivorId], references: [id])
   mergedBy   User               @relation("PersonMergeOperator", fields: [mergedById], references: [id])
@@ -838,7 +850,7 @@ model Booking {
   /// the script looks up the existing Booking via this @unique field
   /// and APPENDS new BookingItems instead of creating a duplicate
   /// Booking. NULL on Bookings created via the +Hold flow.
-  planyoCartId         String? @unique @map("planyo_cart_id")
+  planyoCartId String? @unique @map("planyo_cart_id")
 
   source BookingSource @default(PHONE)
 
@@ -878,31 +890,31 @@ model Booking {
 // paths. The native scheduling engine does NOT use this model — it
 // reads from BookingItem + BookingAssignment.
 model Reservation {
-  id                  String            @id @default(uuid())
-  bookingId           String?           @map("booking_id")
-  booking             Booking?          @relation(fields: [bookingId], references: [id])
+  id        String   @id @default(uuid())
+  bookingId String?  @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id])
 
-  unitName            String            @map("unit_name")
-  category            String?
+  unitName String  @map("unit_name")
+  category String?
 
-  startTime           DateTime          @map("start_time")
-  endTime             DateTime          @map("end_time")
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time")
 
-  status              ReservationStatus @default(HOLD)
-  source              ReservationSource @default(PLANYO)
+  status ReservationStatus @default(HOLD)
+  source ReservationSource @default(PLANYO)
 
-  planyoReservationId String?           @unique @map("planyo_reservation_id")
-  planyoCartId        String?           @map("planyo_cart_id")
-  planyoCompany       String?           @map("planyo_company")
-  planyoJobName       String?           @map("planyo_job_name")
-  planyoAgent         String?           @map("planyo_agent")
-  planyoCustomerName  String?           @map("planyo_customer_name")
-  planyoCustomerEmail String?           @map("planyo_customer_email")
-  planyoCustomerPhone String?           @map("planyo_customer_phone")
-  notes               String?           @db.Text
+  planyoReservationId String? @unique @map("planyo_reservation_id")
+  planyoCartId        String? @map("planyo_cart_id")
+  planyoCompany       String? @map("planyo_company")
+  planyoJobName       String? @map("planyo_job_name")
+  planyoAgent         String? @map("planyo_agent")
+  planyoCustomerName  String? @map("planyo_customer_name")
+  planyoCustomerEmail String? @map("planyo_customer_email")
+  planyoCustomerPhone String? @map("planyo_customer_phone")
+  notes               String? @db.Text
 
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([bookingId])
   @@index([unitName])
@@ -946,10 +958,16 @@ model BookingItem {
   notes      String?           @db.Text
 
   // Relations
-  booking     Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  category    AssetCategory       @relation(fields: [categoryId], references: [id])
-  assignments BookingAssignment[]
+  booking       Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  category      AssetCategory       @relation(fields: [categoryId], references: [id])
+  // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
+  // through the cutover — readers prefer this one, the legacy column
+  // stays populated so nothing has to be dropped. See InventoryItem.
+  catalogItemId String?             @map("catalog_item_id")
+  catalogItem   InventoryItem?      @relation(fields: [catalogItemId], references: [id])
+  assignments   BookingAssignment[]
 
+  @@index([catalogItemId])
   @@map("booking_items")
 }
 
@@ -984,14 +1002,14 @@ model BookingAssignment {
 // ═══════════════════════════════════════
 
 model CheckoutRecord {
-  id                  String @id @default(uuid())
-  bookingAssignmentId String @map("booking_assignment_id")
-  assetId             String @map("asset_id")
+  id                  String  @id @default(uuid())
+  bookingAssignmentId String  @map("booking_assignment_id")
+  assetId             String  @map("asset_id")
   // Nullable (Sprint 2A): a pre-rental inspection creates the record
   // before the client's driver is known; the driver attaches at
   // physical pickup. Relaxed with the table empty — approved 2026-07-02.
   driverId            String? @map("driver_id")
-  checkedOutBy        String @map("checked_out_by") // Fleet team member
+  checkedOutBy        String  @map("checked_out_by") // Fleet team member
 
   // Checkout
   checkoutTime         DateTime @map("checkout_time")
@@ -1251,7 +1269,7 @@ model DamageItem {
   invoiceId   String?           @map("invoice_id")
 
   // Link to claim
-  claimId String? @map("claim_id")
+  claimId    String? @map("claim_id")
   // Phase Incidents — damage rows now know about their parent Incident
   // when one exists. The "Bill renter" action on an Incident routes
   // here. Nullable to keep existing damage rows (created via inspection
@@ -1320,11 +1338,11 @@ model InsuranceClaim {
   status               ClaimStatus @default(DRAFT)
 
   // Insurance details
-  filedAgainst  String  @map("filed_against") // Insurance company name
-  adjusterName  String? @map("adjuster_name")
-  adjusterPhone String? @map("adjuster_phone")
-  adjusterEmail String? @map("adjuster_email")
-  policyNumber  String? @map("policy_number")
+  filedAgainst       String  @map("filed_against") // Insurance company name
+  adjusterName       String? @map("adjuster_name")
+  adjusterPhone      String? @map("adjuster_phone")
+  adjusterEmail      String? @map("adjuster_email")
+  policyNumber       String? @map("policy_number")
   // The carrier's own claim number (e.g. Intact "0AB459860"), distinct
   // from our SR-CLM-NNNN and from the renter's policyNumber. Captured
   // so reps can quote either side's reference in correspondence and
@@ -1375,25 +1393,25 @@ model InsuranceClaim {
   //                        into LD invoice line items by Ana —
   //                        storing it on the claim makes the
   //                        client-exposure picture explicit
-  lossAmount           Decimal? @map("loss_amount")            @db.Decimal(10, 2)
+  lossAmount          Decimal? @map("loss_amount") @db.Decimal(10, 2)
   // Contract-side billed amount captured DIRECTLY on the claim. When
   // an LD invoice gets linked later, Invoice.total takes precedence
   // for the ledger view. During historical onboarding the LD invoice
   // typically doesn't exist yet, so this field carries the
   // "what we billed the client" figure so the contract-vs-insurance
   // ledger composition has a contract side to net against.
-  contractAmount       Decimal? @map("contract_amount")         @db.Decimal(10, 2)
-  acvReceived          Decimal? @map("acv_received")           @db.Decimal(10, 2)
-  depreciationApplied  Decimal? @map("depreciation_applied")   @db.Decimal(10, 2)
-  deductibleAmount     Decimal? @map("deductible_amount")      @db.Decimal(10, 2)
-  adminFeeAmount       Decimal? @map("admin_fee_amount")       @db.Decimal(10, 2)
+  contractAmount      Decimal? @map("contract_amount") @db.Decimal(10, 2)
+  acvReceived         Decimal? @map("acv_received") @db.Decimal(10, 2)
+  depreciationApplied Decimal? @map("depreciation_applied") @db.Decimal(10, 2)
+  deductibleAmount    Decimal? @map("deductible_amount") @db.Decimal(10, 2)
+  adminFeeAmount      Decimal? @map("admin_fee_amount") @db.Decimal(10, 2)
 
   // Phase A follow-up cadence — drives the OVERDUE_RESPONSE /
   // GONE_QUIET badges. assignedTo (already on the model) is the
   // owner; these two columns are when-it's-on-them and when-they-
   // last-heard-anything.
-  nextActionAt         DateTime? @map("next_action_at")
-  lastContactAt        DateTime? @map("last_contact_at")
+  nextActionAt  DateTime? @map("next_action_at")
+  lastContactAt DateTime? @map("last_contact_at")
 
   // AI
   demandLetterUrl   String? @map("demand_letter_url")
@@ -1412,7 +1430,7 @@ model InsuranceClaim {
   //      drafted the claim).
   // Null for everything onboarded via the manual paste flow or the
   // openLdClaim() LD-invoice path.
-  onboardedFromEmailMessageId String?    @unique @map("onboarded_from_email_message_id")
+  onboardedFromEmailMessageId String?       @unique @map("onboarded_from_email_message_id")
   onboardedFromEmailMessage   EmailMessage? @relation("OnboardingSourceEmail", fields: [onboardedFromEmailMessageId], references: [id])
 
   // Phase Incidents — every NEW claim is now created from an Incident
@@ -1420,8 +1438,8 @@ model InsuranceClaim {
   // claims keep working unchanged; new claims always set it. The
   // carrier-required floor that used to live on the auto-draft path
   // moves to the upgrade form gated on this FK.
-  incidentId String?    @map("incident_id")
-  incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  incidentId String?   @map("incident_id")
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
 
   submittedAt DateTime? @map("submitted_at")
   settledAt   DateTime? @map("settled_at")
@@ -1493,28 +1511,28 @@ enum DocTypeSource {
 }
 
 model ClaimDocument {
-  id         String       @id @default(uuid())
+  id             String         @id @default(uuid())
   // Phase Incidents — claimId becomes nullable so the document can
   // attach to either a Claim OR an Incident (incidentId below). Legacy
   // rows always have claimId set; new writes pick exactly one. The
   // "exactly one" invariant is app-layer (no partial CHECK constraint
   // in Postgres without an extension); the upload routes enforce it.
-  claimId    String?      @map("claim_id")
-  incidentId String?      @map("incident_id")
-  type       ClaimDocType
+  claimId        String?        @map("claim_id")
+  incidentId     String?        @map("incident_id")
+  type           ClaimDocType
   // Provenance of the `type` decision. NULL on rows written before
   // the typed-document system shipped — UI treats null as "unknown
   // source, treat as user-set" so legacy rows don't surface a phantom
   // review prompt. New writes always populate this.
-  typeSource DocTypeSource? @map("type_source")
+  typeSource     DocTypeSource? @map("type_source")
   // AI confidence score when typeSource = AI_SUGGESTED. 0..1 scale,
   // matching the messageExtractor + reply-classifier convention.
   // NULL for USER / EMAIL_INGEST sources where confidence is N/A.
-  typeConfidence Float?  @map("type_confidence")
-  title      String
-  fileUrl    String       @map("file_url")
-  uploadedBy String?      @map("uploaded_by")
-  notes      String?      @db.Text
+  typeConfidence Float?         @map("type_confidence")
+  title          String
+  fileUrl        String         @map("file_url")
+  uploadedBy     String?        @map("uploaded_by")
+  notes          String?        @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1603,19 +1621,19 @@ model AiDecision {
 // ═══════════════════════════════════════
 
 model EmailAccount {
-  id           String    @id @default(uuid())
-  userId       String    @map("user_id")
-  emailAddress String    @unique @map("email_address") // jose@sirreel.com
-  accessToken  String?   @map("access_token") @db.Text
-  refreshToken String?   @map("refresh_token") @db.Text
-  tokenExpiry  DateTime? @map("token_expiry")
-  lastSyncAt   DateTime? @map("last_sync_at")
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  emailAddress  String    @unique @map("email_address") // jose@sirreel.com
+  accessToken   String?   @map("access_token") @db.Text
+  refreshToken  String?   @map("refresh_token") @db.Text
+  tokenExpiry   DateTime? @map("token_expiry")
+  lastSyncAt    DateTime? @map("last_sync_at")
   // Ground truth for the last SUCCESSFUL Gmail watch renewal. Stamped
   // inside /api/gmail/watch on the per-inbox `gmail.users.watch()`
   // success path. The dead-man's-switch health probe alerts when this
   // goes stale past the 7-day Gmail watch TTL on any active inbox.
   lastWatchedAt DateTime? @map("last_watched_at")
-  isActive     Boolean   @default(true) @map("is_active")
+  isActive      Boolean   @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1679,8 +1697,8 @@ model EmailMessage {
   // Cross-inbox dedup: when two EmailMessages share the same Message-ID, the
   // oldest createdAt wins and the rest point here. `duplicateOfId IS NULL`
   // is the canonical "this is the surviving copy" filter for queries.
-  duplicateOfId String?       @map("duplicate_of_id")
-  duplicateOf   EmailMessage? @relation("EmailDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicateOfId String?        @map("duplicate_of_id")
+  duplicateOf   EmailMessage?  @relation("EmailDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates    EmailMessage[] @relation("EmailDuplicates")
 
   // CRH reply classification — output of the AI reply classifier (extends
@@ -1695,9 +1713,9 @@ model EmailMessage {
   // Pipeline slider can render a Quick Read card instead of raw text. See
   // src/lib/ai/messageExtractor.ts for the JSON shape and prompt.
   // Cached per-message; backfill script populates historical rows.
-  extractedData         Json?     @map("extracted_data")
-  extractionRunAt       DateTime? @map("extraction_run_at")
-  extractionConfidence  Float?    @map("extraction_confidence")
+  extractedData        Json?     @map("extracted_data")
+  extractionRunAt      DateTime? @map("extraction_run_at")
+  extractionConfidence Float?    @map("extraction_confidence")
 
   // Heuristic form-type detection from the Subject line. Cognito Forms
   // submissions land with predictable prefixes ("NEW INQUIRY",
@@ -1759,18 +1777,18 @@ model EmailMessage {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
-  emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id])
-  thread       EmailThread? @relation(fields: [threadId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  person       Person?      @relation(fields: [personId], references: [id])
-  claim        InsuranceClaim? @relation("ClaimSourceEmails", fields: [claimId], references: [id])
+  emailAccount   EmailAccount    @relation(fields: [emailAccountId], references: [id])
+  thread         EmailThread?    @relation(fields: [threadId], references: [id])
+  company        Company?        @relation(fields: [companyId], references: [id])
+  person         Person?         @relation(fields: [personId], references: [id])
+  claim          InsuranceClaim? @relation("ClaimSourceEmails", fields: [claimId], references: [id])
   // Inverse of InsuranceClaim.onboardedFromEmailMessage — present on
   // exactly one EmailMessage per auto-drafted claim. Used by the claim
   // detail page to render the source-chain link back to this row.
-  draftedClaim InsuranceClaim? @relation("OnboardingSourceEmail")
+  draftedClaim   InsuranceClaim? @relation("OnboardingSourceEmail")
   // ClaimMail triage row — one per claims@-inbox EmailMessage. Drives
   // the triage widget on /claims.
-  claimMail    ClaimMail?
+  claimMail      ClaimMail?
   // InquiryCapture verdict row — one per evaluated INBOUND message on
   // info@/jose@/oliver@. Drives the CRM capture-review widget.
   inquiryCapture InquiryCapture?
@@ -1840,12 +1858,12 @@ model ClaimMail {
 
   // Reviewer state — Dismiss / Create-claim buttons in the widget
   // stamp these so the row drops out of the active triage view.
-  dismissed      Boolean              @default(false)
-  reviewedById   String?              @map("reviewed_by_id")
-  reviewedAt     DateTime?            @map("reviewed_at")
+  dismissed    Boolean   @default(false)
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
 
-  createdAt      DateTime             @default(now()) @map("created_at")
-  updatedAt      DateTime             @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   emailMessage EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
   claim        InsuranceClaim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
@@ -1860,7 +1878,7 @@ model ClaimMail {
 
 model IngestFilterStat {
   inbox          String    @id
-  mode           String    // 'SALES' | 'MONEY' | 'CLAIMS' | 'PRESERVE'
+  mode           String // 'SALES' | 'MONEY' | 'CLAIMS' | 'PRESERVE'
   kept           Int       @default(0)
   dropped        Int       @default(0)
   lastDropReason String?   @map("last_drop_reason")
@@ -1925,10 +1943,10 @@ enum DataScope {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  name      String
-  role      UserRole  @default(AGENT)
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  name               String
+  role               UserRole  @default(AGENT)
   // Phase 6.5 — surface scoping. AGENTs split into accounting (Ana)
   // and sales-only (Jose, Oliver). When salesOnly is true, the
   // permissions layer overrides off the operational sections (fleet,
@@ -1936,28 +1954,28 @@ model User {
   // bookings-gated tools) AND billing. Ana stays salesOnly=false so
   // her billing access is preserved. Separate from `dataScope` —
   // surface vs data are independent axes.
-  salesOnly Boolean   @default(false) @map("sales_only")
+  salesOnly          Boolean   @default(false) @map("sales_only")
   // Phase 6.5 — data scoping. TEAM sees the whole org's pipeline /
   // orders / jobs / inquiries; OWN is restricted to rows where the
   // requesting user is the agent (or, for inquiries, the assignee).
   // Server-side list endpoints honor this via the requireScope helper.
   // Default TEAM preserves today's behavior for every existing user.
-  dataScope DataScope @default(TEAM) @map("data_scope")
+  dataScope          DataScope @default(TEAM) @map("data_scope")
   // Client-facing title (e.g. "COO", "Owner", "Sales Lead"). Separate from
   // `role` which is access-control / permission scope. The portal Job Page
   // shows displayTitle on the "Your SirReel Team" card; if null, the card
   // falls back to a generic label.
-  displayTitle String? @map("display_title") @db.VarChar(60)
-  phone     String?   @db.VarChar(30)
+  displayTitle       String?   @map("display_title") @db.VarChar(60)
+  phone              String?   @db.VarChar(30)
   // After-hours emergency escalation: staff flagged here are surfaced BY
   // PHONE (emergencyPhone) to a caller who declares a genuine emergency to
   // the assistant. Numbers are released server-side only, never in the AI
   // prompt. Managed at /admin/assistant.
-  isEmergencyContact Boolean @default(false) @map("is_emergency_contact")
-  emergencyPhone     String? @map("emergency_phone") @db.VarChar(30)
-  avatarUrl String?   @map("avatar_url")
-  location  Location? // Home base
-  isActive  Boolean   @default(true) @map("is_active")
+  isEmergencyContact Boolean   @default(false) @map("is_emergency_contact")
+  emergencyPhone     String?   @map("emergency_phone") @db.VarChar(30)
+  avatarUrl          String?   @map("avatar_url")
+  location           Location? // Home base
+  isActive           Boolean   @default(true) @map("is_active")
 
   // Agent-shareable public-intake handle. Lowercased first name by
   // convention (e.g. "jose", "oliver") — populated by the seed script
@@ -1973,58 +1991,58 @@ model User {
   lastLoginAt DateTime? @map("last_login_at")
 
   // Relations
-  person              Person?             @relation("ContactUser", fields: [personId], references: [id])
-  assignedPeople      Person[]            @relation("PersonAgent")
-  agentBookings       Booking[]           @relation("BookingAgent")
-  defaultForCompanies Company[]           @relation("DefaultAgent")
-  emailAccounts       EmailAccount[]
-  inspections         Inspection[]        @relation("InspectedBy")
-  checkoutsProcessed  CheckoutRecord[]    @relation("CheckedOutBy")
-  maintenanceCreated  MaintenanceRecord[] @relation("MaintCreatedBy")
-  assignedClaims      InsuranceClaim[]    @relation("ClaimAssignee")
-  uploadedDocs        ClaimDocument[]     @relation("DocUploader")
-  timelineActions     ClaimTimeline[]     @relation("TimelineActor")
-  reviewedClaimMail   ClaimMail[]         @relation("ClaimMailReviewer")
-  createdOrderDiscounts OrderDiscount[]   @relation("OrderDiscountCreator")
-  createdIncidents      Incident[]        @relation("IncidentCreator")
-  assignedIncidents     Incident[]        @relation("IncidentAssignee")
+  person                   Person?             @relation("ContactUser", fields: [personId], references: [id])
+  assignedPeople           Person[]            @relation("PersonAgent")
+  agentBookings            Booking[]           @relation("BookingAgent")
+  defaultForCompanies      Company[]           @relation("DefaultAgent")
+  emailAccounts            EmailAccount[]
+  inspections              Inspection[]        @relation("InspectedBy")
+  checkoutsProcessed       CheckoutRecord[]    @relation("CheckedOutBy")
+  maintenanceCreated       MaintenanceRecord[] @relation("MaintCreatedBy")
+  assignedClaims           InsuranceClaim[]    @relation("ClaimAssignee")
+  uploadedDocs             ClaimDocument[]     @relation("DocUploader")
+  timelineActions          ClaimTimeline[]     @relation("TimelineActor")
+  reviewedClaimMail        ClaimMail[]         @relation("ClaimMailReviewer")
+  createdOrderDiscounts    OrderDiscount[]     @relation("OrderDiscountCreator")
+  createdIncidents         Incident[]          @relation("IncidentCreator")
+  assignedIncidents        Incident[]          @relation("IncidentAssignee")
   // HR back-relations. employee is the 0-or-1 Employee row for staff
   // who happen to also have an HQ login — most do. reviewedHrMail is
   // every HR triage decision this user stamped. Access to HR data
   // itself is gated by src/lib/hr/allowlist.ts, NOT by these
   // relations — having a login + an Employee row does NOT imply
   // permission to see other employees' HR mail.
-  employee            Employee?           @relation("EmployeeUserLink")
-  reviewedHrMail      HrMail[]            @relation("HrMailReviewer")
-  resolvedInquiryCaptures InquiryCapture[] @relation("CaptureResolver")
-  outreachActivitiesLogged OutreachActivity[] @relation("OutreachCreator")
-  orderDocumentsUploaded   OrderDocument[]    @relation("OrderDocumentUploader")
+  employee                 Employee?           @relation("EmployeeUserLink")
+  reviewedHrMail           HrMail[]            @relation("HrMailReviewer")
+  resolvedInquiryCaptures  InquiryCapture[]    @relation("CaptureResolver")
+  outreachActivitiesLogged OutreachActivity[]  @relation("OutreachCreator")
+  orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
-  personMergesPerformed    PersonMerge[]      @relation("PersonMergeOperator")
-  personMergesReversed     PersonMerge[]      @relation("PersonMergeReverser")
-  rateChangesApplied       RateChangeLog[]    @relation("RateChangeApplier")
-  aiOverrides         AiDecision[]        @relation("AiOverrider")
-  auditActions        AuditLog[]
-  accounts            Account[]
-  sessions            Session[]
+  personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
+  personMergesReversed     PersonMerge[]       @relation("PersonMergeReverser")
+  rateChangesApplied       RateChangeLog[]     @relation("RateChangeApplier")
+  aiOverrides              AiDecision[]        @relation("AiOverrider")
+  auditActions             AuditLog[]
+  accounts                 Account[]
+  sessions                 Session[]
 
-  agentOrders     Order[]    @relation("OrderAgent")
-  agentActivities Activity[] @relation("ActivityAgent")
-  jobsAsAgent     Job[]      @relation("JobAgent")
-  jobsMarkedReturned Job[]   @relation("JobReturnedBy")
-  lotChecks       LotCheck[] @relation("LotCheckedBy")
+  agentOrders        Order[]    @relation("OrderAgent")
+  agentActivities    Activity[] @relation("ActivityAgent")
+  jobsAsAgent        Job[]      @relation("JobAgent")
+  jobsMarkedReturned Job[]      @relation("JobReturnedBy")
+  lotChecks          LotCheck[] @relation("LotCheckedBy")
 
-  uploadedContractReviews ContractReview[] @relation("ContractReviewUploader")
-  decidedContractReviews  ContractReview[] @relation("ContractReviewDecider")
-  counterPdfsGenerated    ContractReview[] @relation("CounterPdfGenerator")
-  changeDecisionsDecided  ReviewChangeDecision[] @relation("ChangeDecisionDecider")
-  uploadedCoiChecks       CoiCheck[]       @relation("CoiCheckUploader")
-  decidedCoiChecks        CoiCheck[]       @relation("CoiCheckDecider")
-  uploadedCompanyAgreements CompanyAgreement[] @relation("CompanyAgreementUploader")
-  uploadedJobDocuments      JobDocument[]      @relation("JobDocumentUploader")
+  uploadedContractReviews   ContractReview[]       @relation("ContractReviewUploader")
+  decidedContractReviews    ContractReview[]       @relation("ContractReviewDecider")
+  counterPdfsGenerated      ContractReview[]       @relation("CounterPdfGenerator")
+  changeDecisionsDecided    ReviewChangeDecision[] @relation("ChangeDecisionDecider")
+  uploadedCoiChecks         CoiCheck[]             @relation("CoiCheckUploader")
+  decidedCoiChecks          CoiCheck[]             @relation("CoiCheckDecider")
+  uploadedCompanyAgreements CompanyAgreement[]     @relation("CompanyAgreementUploader")
+  uploadedJobDocuments      JobDocument[]          @relation("JobDocumentUploader")
   addedJobAgreementAddenda  JobAgreementAddendum[] @relation("JobAgreementAddendumAddedBy")
-  reviewClauseMessages    ReviewClauseMessage[] @relation("ReviewClauseMessageAuthor")
-  assignedInquiries       Inquiry[]        @relation("InquiryAssignedTo")
+  reviewClauseMessages      ReviewClauseMessage[]  @relation("ReviewClauseMessageAuthor")
+  assignedInquiries         Inquiry[]              @relation("InquiryAssignedTo")
 
   followUpsSent    QuoteFollowUp[] @relation("FollowUpSentBy")
   followUpsSkipped QuoteFollowUp[] @relation("FollowUpSkippedBy")
@@ -2366,10 +2384,10 @@ model InventoryLocation {
 // "show me this item's rate history" is the trivial sorted scan a
 // human triager will actually run.
 enum RateChangeSource {
-  RW_GAP_FILL       // scripts/rw-rate-gap-fill.ts (the May/June 2026 first run)
-  MANUAL            // operator edit via admin UI (future)
-  ROLLBACK          // reverting a prior change (future)
-  IMPORT_RW         // one-time RW inventory reconcile (2026-06-23 backfill)
+  RW_GAP_FILL // scripts/rw-rate-gap-fill.ts (the May/June 2026 first run)
+  MANUAL // operator edit via admin UI (future)
+  ROLLBACK // reverting a prior change (future)
+  IMPORT_RW // one-time RW inventory reconcile (2026-06-23 backfill)
 }
 
 model RateChangeLog {
@@ -2407,112 +2425,153 @@ model RateChangeLog {
 }
 
 model InventoryItem {
-  id              String              @id @default(uuid())
+  id                String             @id @default(uuid())
   // Nullable since the May 2026 RW import — auto-created rows from RW
   // start with no SirReel category until the admin reassigns. Existing
   // hand-curated rows always have one.
-  categoryId      String?             @map("category_id")
-  code            String              @unique
+  categoryId        String?            @map("category_id")
+  code              String             @unique
   // RentalWorks item number (I-Code), backfilled one-time from RW in the
   // 2026-06-23 reconcile. Distinct from `code` (HQ's descriptive unique
   // key) and `rwId` (RW InventoryId / master). Surfaces to the catalog
   // since the catalog reads InventoryItem. Nullable: only MATCHED rows
   // get one; never overwritten once set.
-  rwICode         String?             @map("rw_icode")
-  description     String?
-  dailyRate       Decimal             @default(0) @map("daily_rate") @db.Decimal(10, 2)
-  weeklyRate      Decimal             @default(0) @map("weekly_rate") @db.Decimal(10, 2)
+  rwICode           String?            @map("rw_icode")
+  description       String?
+  dailyRate         Decimal            @default(0) @map("daily_rate") @db.Decimal(10, 2)
+  weeklyRate        Decimal            @default(0) @map("weekly_rate") @db.Decimal(10, 2)
   // Intentional no-charge inclusion (e.g. recycle bins that come with a
   // basecamp order). Disambiguates a $0 dailyRate: includedFree=true →
   // public form shows "Included" (not orderable); a $0 with includedFree=false
   // is a missing price and is HIDDEN from the public form (fail-safe — never
   // render "FREE"/orderable to a client). Internal/rep views ignore this flag.
-  includedFree    Boolean             @default(false) @map("included_free")
-  qtyOwned        Int                 @default(0) @map("qty_owned")
-  replacementCost Decimal?            @map("replacement_cost") @db.Decimal(10, 2)
-  imageUrl        String?             @map("image_url")
+  includedFree      Boolean            @default(false) @map("included_free")
+  qtyOwned          Int                @default(0) @map("qty_owned")
+  replacementCost   Decimal?           @map("replacement_cost") @db.Decimal(10, 2)
+  imageUrl          String?            @map("image_url")
   // Preferred replacement vendor — relational so reorder routing is
   // consistent across items (same handful of vendors: Amazon, Home
   // Depot, etc., not free text). `vendorItemUrl` is an item-specific
   // product/reorder link that overrides Vendor.url for THIS item;
   // when null we fall back to the vendor's default url.
-  preferredVendorId String?           @map("preferred_vendor_id")
-  preferredVendor   Vendor?           @relation(fields: [preferredVendorId], references: [id])
-  vendorItemUrl     String?           @map("vendor_item_url")
+  preferredVendorId String?            @map("preferred_vendor_id")
+  preferredVendor   Vendor?            @relation(fields: [preferredVendorId], references: [id])
+  vendorItemUrl     String?            @map("vendor_item_url")
   // Phase 2 sales pipeline. `aliases` are colloquial synonyms ("walkies" →
   // CP200 Radio) handed to the AI extractor as catalog context and used
   // server-side for fallback alias-tokenized matching. `department` is the
   // catalog-side authority — when an OrderLineItem matches this product,
   // the line item's department is overridden from this field.
-  aliases         String[]            @default([])
-  department      LineItemDepartment
+  aliases           String[]           @default([])
+  department        LineItemDepartment
   // Default LineItemType for this catalog item — inherited by
   // OrderLineItem when the line is created from a catalog match
   // (overridable per-line). EQUIPMENT for unit=day rentals,
   // EXPENDABLE for unit=ea consumables. The new-quote createQuote
   // path may still re-derive at create time for legacy callers.
-  type            LineItemType        @default(EQUIPMENT)
+  type              LineItemType       @default(EQUIPMENT)
   // RentalWorks enrichment (May 2026 spike). The first four columns are
   // populated from RW Items grouped by InventoryId. needsReview flags
   // auto-created rows where Wes hasn't yet picked an InventoryCategory /
   // confirmed the dept guess. rwLastSyncedAt + rwId track the last RW
   // pull so re-syncs can pick up where they left off.
-  manufacturer    String?
-  model           String?
-  specs           String?             @db.Text
-  dimensions      String?
+  manufacturer      String?
+  model             String?
+  specs             String?            @db.Text
+  dimensions        String?
   // Color-variant grouping (2026-07, tents first): items sharing a
   // variantGroupKey render as ONE public-catalog card with color swatches;
   // color labels each swatch. Only COLOR is a variant — sizes stay separate
   // groups/cards. Null = standalone item (renders exactly as before).
-  color           String?
-  variantGroupKey String?             @map("variant_group_key")
-  needsReview     Boolean             @default(false) @map("needs_review")
-  rwLastSyncedAt  DateTime?           @map("rw_last_synced_at")
-  rwId            String?             @map("rw_id")
+  color             String?
+  variantGroupKey   String?            @map("variant_group_key")
+  needsReview       Boolean            @default(false) @map("needs_review")
+  rwLastSyncedAt    DateTime?          @map("rw_last_synced_at")
+  rwId              String?            @map("rw_id")
   // Whether the item appears in the client-facing supply ordering
   // catalog. Defaults false so RW-imported rows stay out of the public
   // surface until an operator (or the seed script) opts them in. The
   // seed flips this for items reconciled against the Production
   // Supplies PDF; everything else stays hidden.
-  publicVisible   Boolean             @default(false) @map("public_visible")
+  publicVisible     Boolean            @default(false) @map("public_visible")
   // Soft-delete: `isActive=false` is the archive state (already the
   // universal exclude filter on list / catalog / search / pickers).
   // `archivedAt` records WHEN it was archived for the Archived view +
   // restore audit; restore flips isActive=true and clears archivedAt.
-  isActive        Boolean             @default(true) @map("is_active")
-  archivedAt      DateTime?           @map("archived_at")
+  isActive          Boolean            @default(true) @map("is_active")
+  archivedAt        DateTime?          @map("archived_at")
   // Client-facing note seeded onto OrderLineItem.notes whenever this
   // InventoryItem is added as a line. Lets the catalog carry policy text
   // (e.g. "LED wall use requires a qualified A/V Tech on the client's
   // payroll.") so the same wording prints on every quote/invoice
   // without per-line config. Editable per-line after the fact.
-  clientNote      String?             @map("client_note")
+  clientNote        String?            @map("client_note")
   // Admin-only flags that the order detail UI consults to surface
   // operational reminders (e.g. ["REQUIRES_AV_TECH"] for the LED Wall
   // Usage item triggers a sticky amber banner). Never printed on
   // client-facing PDFs.
-  internalFlags   String[]            @default([]) @map("internal_flags")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
+  internalFlags     String[]           @default([]) @map("internal_flags")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
-  category   InventoryCategory? @relation(fields: [categoryId], references: [id])
-  lineItems  OrderLineItem[]
+  category     InventoryCategory? @relation(fields: [categoryId], references: [id])
+  lineItems    OrderLineItem[]
   packageItems PackageItem[]
-  subRentals SubRental[]
-  rateChanges RateChangeLog[]
-  location   Location           @default(LANKERSHIM)
+  subRentals   SubRental[]
+  rateChanges  RateChangeLog[]
+  location     Location           @default(LANKERSHIM)
 
   // New editable-location FK. Coexists with the legacy enum during transition;
   // app reads/writes prefer this when present.
   locationId  String?            @map("location_id")
   locationRef InventoryLocation? @relation(fields: [locationId], references: [id])
 
+  // ── Unified catalog (Aug 2026) ────────────────────────────────────
+  // InventoryItem is becoming the single catalog model; AssetCategory
+  // folds in here. The two tables only ever differed in HOW availability
+  // is tracked, which belongs in a column, not a table split:
+  //
+  //   UNIT_TRACKED — individually-identified Assets, a Planyo resource,
+  //                  gantt-reservable. Vehicles and stages.
+  //   QUANTITY     — a count on hand (qtyOwned). Warehouse gear.
+  //
+  // The split forced reps to pick a table before they could quote, which
+  // is how "Hospital Set" ended up as warehouse stock at $3,500/day while
+  // the "Studios" rate card said $3,000.
+  //
+  // AssetCategory.totalUnits maps onto qtyOwned and .isPublished onto
+  // publicVisible — same meaning, no new columns. The rest land here.
+  // All nullable / defaulted: existing rows stay QUANTITY and untouched.
+  trackingMode       CatalogTrackingMode @default(QUANTITY) @map("tracking_mode")
+  slug               String?             @unique
+  region             Region?
+  minRentalHours     Int?                @map("min_rental_hours")
+  maxRentalDays      Int?                @map("max_rental_days")
+  reservableOnGantt  Boolean             @default(false) @map("reservable_on_gantt")
+  sortOrder          Int                 @default(0) @map("sort_order")
+  planyoResourceId   Int?                @unique @map("planyo_resource_id")
+  rentalworksCategId String?             @map("rentalworks_categ_id")
+  // AssetCategory.description — a public-facing blurb. InventoryItem's
+  // own `description` is the display NAME, so it can't be reused.
+  catalogDescription String?             @map("catalog_description") @db.Text
+
+  // Children repointed off AssetCategory in Phase 3.
+  assets            Asset[]
+  bookingItems      BookingItem[]
+  vehicleCategories VehicleCategory[]
+
   @@index([rwId])
   @@index([needsReview])
   @@index([locationId])
   @@index([preferredVendorId])
+  @@index([trackingMode])
   @@map("inventory_items")
+}
+
+// How a catalog row's availability is tracked. See InventoryItem.
+enum CatalogTrackingMode {
+  UNIT_TRACKED
+  QUANTITY
 }
 
 model Order {
@@ -2571,19 +2630,19 @@ model Order {
   // the email cadence ladder (quote silence, acknowledged, discussing,
   // booked, in-progress, ...). The cron-driven CadenceEventRunner advances
   // it and emits emails based on the state machine in the CRH brief.
-  cadenceState           CadenceState @default(QUOTE_DRAFT) @map("cadence_state")
-  cadencePausedUntil     DateTime?    @map("cadence_paused_until")
-  cadenceManualOverride  Boolean      @default(false) @map("cadence_manual_override")
+  cadenceState          CadenceState @default(QUOTE_DRAFT) @map("cadence_state")
+  cadencePausedUntil    DateTime?    @map("cadence_paused_until")
+  cadenceManualOverride Boolean      @default(false) @map("cadence_manual_override")
 
   // Captures the pickup date as it stood when the order was marked LOST.
   // Useful for re-engagement reporting (how close to pickup did we lose them).
-  pickupDateAtLoss       DateTime?    @map("pickup_date_at_loss")
+  pickupDateAtLoss DateTime? @map("pickup_date_at_loss")
 
   // Re-engagement (post-LOST) touchpoint tracking. Set by the
   // LOST_REENGAGEMENT_2W cadence event when it fires; flipped to true when
   // the client responds (any inbound reply detected by Gmail integration).
-  reengagementSentAt     DateTime?    @map("reengagement_sent_at")
-  reengagementResponded  Boolean      @default(false) @map("reengagement_responded")
+  reengagementSentAt    DateTime? @map("reengagement_sent_at")
+  reengagementResponded Boolean   @default(false) @map("reengagement_responded")
 
   // Client-facing portal URL slug. Declared nullable because `prisma db push`
   // cannot add a non-null TEXT column to existing rows without a SQL default
@@ -2591,9 +2650,9 @@ model Order {
   // via the @default(uuid()); a one-time backfill populates pre-existing rows.
   // Once every row has a value, the application layer can treat this as
   // effectively non-null.
-  portalSlug             String?      @unique @default(uuid()) @map("portal_slug")
-  portalCreatedAt        DateTime     @default(now()) @map("portal_created_at")
-  portalSunsetAt         DateTime?    @map("portal_sunset_at")
+  portalSlug      String?   @unique @default(uuid()) @map("portal_slug")
+  portalCreatedAt DateTime  @default(now()) @map("portal_created_at")
+  portalSunsetAt  DateTime? @map("portal_sunset_at")
 
   // Client-facing Quote PDF (mirrors the contract review counter-PDF
   // pattern: blob key + url + timestamp, replace-on-regenerate). PDF is
@@ -2607,9 +2666,9 @@ model Order {
   // latest BitInspection). Mirrors the quote-PDF storage pattern; the URL is
   // a PRIVATE blob, served only through the gated proxy (rep + portal),
   // never a public CDN URL. Replace-on-regenerate.
-  dotSheetPdfKey         String?   @map("dot_sheet_pdf_key")
-  dotSheetPdfUrl         String?   @map("dot_sheet_pdf_url")
-  dotSheetGeneratedAt    DateTime? @map("dot_sheet_generated_at")
+  dotSheetPdfKey      String?   @map("dot_sheet_pdf_key")
+  dotSheetPdfUrl      String?   @map("dot_sheet_pdf_url")
+  dotSheetGeneratedAt DateTime? @map("dot_sheet_generated_at")
 
   // Blind handoff flags — set on the order when the client picks up
   // their own unit (blindPickup) or returns it themselves (blindReturn)
@@ -2618,17 +2677,17 @@ model Order {
   // the portal (location, gate code, lockbox combination, where to
   // park, etc.). The Dispatch board surfaces blindReturn loudly on the
   // inbound lane so the unit doesn't sit unprocessed.
-  blindPickup              Boolean @default(false) @map("blind_pickup")
-  blindReturn              Boolean @default(false) @map("blind_return")
-  blindPickupInstructions  String? @map("blind_pickup_instructions") @db.Text
-  blindReturnInstructions  String? @map("blind_return_instructions") @db.Text
+  blindPickup             Boolean @default(false) @map("blind_pickup")
+  blindReturn             Boolean @default(false) @map("blind_return")
+  blindPickupInstructions String? @map("blind_pickup_instructions") @db.Text
+  blindReturnInstructions String? @map("blind_return_instructions") @db.Text
 
   // Delivery/pickup task origination (STEP 1 — additive fields only, no logic
   // yet). Sales marks the order for delivery and/or pickup; a DispatchTask is
   // created from that marking in a later step.
-  deliveryRequested        Boolean @default(false) @map("delivery_requested")
-  pickupRequested          Boolean @default(false) @map("pickup_requested")
-  dispatchTasks            DispatchTask[]
+  deliveryRequested Boolean        @default(false) @map("delivery_requested")
+  pickupRequested   Boolean        @default(false) @map("pickup_requested")
+  dispatchTasks     DispatchTask[]
 
   // Phase 1b client-intake — set when this Order was added as an
   // "add-on" to an existing Job via the inquiry triage path (rather
@@ -2636,7 +2695,7 @@ model Order {
   // Order that was the FIRST order on its job. Drives the "Add-on"
   // chip on the order list + detail and the convertedOrder relation
   // back-link from the Inquiry it satisfied.
-  addedToJobAt             DateTime? @map("added_to_job_at")
+  addedToJobAt DateTime? @map("added_to_job_at")
 
   booking      Booking?        @relation(fields: [bookingId], references: [id])
   company      Company         @relation(fields: [companyId], references: [id])
@@ -2665,7 +2724,7 @@ model Order {
   // 1-1 back-relation to the Inquiry that became this Order via the
   // add-on triage path. Mirrors Job.fromInquiry — Inquiry.convertedOrderId
   // is @unique so at most one Inquiry points here.
-  fromInquiry        Inquiry?         @relation("ConvertedFromInquiryToOrder")
+  fromInquiry        Inquiry?            @relation("ConvertedFromInquiryToOrder")
   // Phase 2 warehouse lane: zero-or-one PickList per Order, created at
   // book time iff the order has ≥1 WAREHOUSE-lane line item.
   pickList           PickList?
@@ -2712,10 +2771,10 @@ model OrderDocument {
   sizeBytes    Int?         @map("size_bytes")
   uploadedById String?      @map("uploaded_by_id")
 
-  createdAt    DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  order        Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  uploadedBy   User? @relation("OrderDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedBy      User?                @relation("OrderDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
   thankYouAsPhoto ThankYouSuggestion[] @relation("ThankYouPhoto")
 
   @@index([orderId, createdAt(sort: Desc)])
@@ -2756,11 +2815,11 @@ model ThankYouSuggestion {
   dismissedReason String?        @map("dismissed_reason") @db.Text
   dismissedAt     DateTime?      @map("dismissed_at")
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  photoDocument   OrderDocument? @relation("ThankYouPhoto", fields: [photoDocumentId], references: [id], onDelete: SetNull)
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  photoDocument OrderDocument? @relation("ThankYouPhoto", fields: [photoDocumentId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt(sort: Desc)])
   @@map("sr_thank_you_suggestions")
@@ -2780,18 +2839,18 @@ model ThankYouSuggestion {
 // email <img> embedding to work (see uploadOrderDocument's note on
 // the private-blob-store gap).
 model AgentWeeklyCandid {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  fileUrl     String   @map("file_url")
-  blobKey     String?  @map("blob_key")
-  mimeType    String?  @map("mime_type")
-  sizeBytes   Int?     @map("size_bytes")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  fileUrl       String   @map("file_url")
+  blobKey       String?  @map("blob_key")
+  mimeType      String?  @map("mime_type")
+  sizeBytes     Int?     @map("size_bytes")
   // Monday of the calendar week this candid covers (Pacific time at
   // upload). Drives the "show me this week's candid" lookup.
   weekStartDate DateTime @map("week_start_date") @db.Date
-  capturedAt  DateTime @default(now()) @map("captured_at")
+  capturedAt    DateTime @default(now()) @map("captured_at")
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, weekStartDate(sort: Desc)])
   @@index([userId, capturedAt(sort: Desc)])
@@ -2814,7 +2873,7 @@ enum FollowUpStage {
 
 enum FollowUpStatus {
   PENDING // due, awaiting agent action
-  SENT    // agent sent the follow-up
+  SENT // agent sent the follow-up
   SKIPPED // agent dismissed without sending
   EXPIRED // quote moved out of SENT before agent acted (won/lost/draft)
 }
@@ -2837,9 +2896,9 @@ model QuoteFollowUp {
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sentBy    User? @relation("FollowUpSentBy", fields: [sentById], references: [id])
-  skippedBy User? @relation("FollowUpSkippedBy", fields: [skippedById], references: [id])
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sentBy          User?           @relation("FollowUpSentBy", fields: [sentById], references: [id])
+  skippedBy       User?           @relation("FollowUpSkippedBy", fields: [skippedById], references: [id])
   emailDeliveries EmailDelivery[]
 
   @@unique([orderId, stage])
@@ -2848,14 +2907,14 @@ model QuoteFollowUp {
 }
 
 model OrderLineItem {
-  id              String             @id @default(uuid())
-  orderId         String             @map("order_id")
-  sortOrder       Int                @default(0) @map("sort_order")
+  id              String              @id @default(uuid())
+  orderId         String              @map("order_id")
+  sortOrder       Int                 @default(0) @map("sort_order")
   type            LineItemType
   // Phase 1 sales pipeline: every line item carries a department for
   // departmental quote breakdown. Backfilled to PRO_SUPPLIES on existing
   // rows — note the historical-reporting caveat in the commit message.
-  department      LineItemDepartment @default(PRO_SUPPLIES)
+  department      LineItemDepartment  @default(PRO_SUPPLIES)
   // Phase 1 lifecycle spine: set at book time from `department`. Null
   // until the order transitions APPROVED → BOOKED.
   fulfillmentLane FulfillmentLane?    @map("fulfillment_lane")
@@ -2863,28 +2922,28 @@ model OrderLineItem {
   // Phase 2 picking workflow. Null on FLEET and STAGE lanes.
   pickStatus      LineItemPickStatus? @map("pick_status")
   description     String
-  inventoryItemId String?            @map("inventory_item_id")
-  assetCategoryId String?            @map("asset_category_id")
+  inventoryItemId String?             @map("inventory_item_id")
+  assetCategoryId String?             @map("asset_category_id")
   // Fee-catalog source (type=FEE lines). Mutually exclusive with the
   // two catalog FKs above in practice; the server prices the line from
   // FeeItem.amount + unit — same trust model as resolveLineRate.
-  feeItemId       String?            @map("fee_item_id")
-  startDate       DateTime?          @map("start_date") @db.Date
-  endDate         DateTime?          @map("end_date") @db.Date
-  rateType        RateType           @default(DAILY)
-  rate            Decimal            @db.Decimal(10, 2)
+  feeItemId       String?             @map("fee_item_id")
+  startDate       DateTime?           @map("start_date") @db.Date
+  endDate         DateTime?           @map("end_date") @db.Date
+  rateType        RateType            @default(DAILY)
+  rate            Decimal             @db.Decimal(10, 2)
   // Sprint 1 money integrity: server-resolved Fleet Pricing/catalog rate
   // at write time (null = nothing to resolve — custom/FLAT/discount lines),
   // snapshotted at QUOTE_SENT if still null. `rate` above is what the line
   // bills at; when it differs from resolvedRate the write was a staff
   // override and rateOverridden flips (AuditLog: order.line_item_rate_override).
-  resolvedRate    Decimal?           @map("resolved_rate") @db.Decimal(10, 2)
-  rateOverridden  Boolean            @default(false) @map("rate_overridden")
-  quantity        Int                @default(1)
+  resolvedRate    Decimal?            @map("resolved_rate") @db.Decimal(10, 2)
+  rateOverridden  Boolean             @default(false) @map("rate_overridden")
+  quantity        Int                 @default(1)
   // Per-line pickup / return dates. Default to the parent Order's range,
   // but rep can override per line during quote review.
-  pickupDate      DateTime           @map("pickup_date") @db.Date
-  returnDate      DateTime           @map("return_date") @db.Date
+  pickupDate      DateTime            @map("pickup_date") @db.Date
+  returnDate      DateTime            @map("return_date") @db.Date
   // Billable days — what the client is charged for. For cap-per-week
   // departments this typically differs from (returnDate - pickupDate)
   // because of the weekly cap; the rep can edit it freely. Stored in
@@ -2899,7 +2958,7 @@ model OrderLineItem {
   // surfaces the per-day rate. Sending a firm-total quote is blocked
   // when any non-EXPENDABLE line has NULL billableDays — see the
   // Send Quote validator.
-  billableDays    Int?               @default(1) @map("days")
+  billableDays    Int?                @default(1) @map("days")
   // ── Shoot-days claim (Wes ruling B) ────────────────────────────
   // computedDays: server-derived max(1, returnDate − pickupDate) —
   //   never client-writable; the reference number. Nullable only for
@@ -2911,16 +2970,16 @@ model OrderLineItem {
   //   or computedDays — no clamping, SirReel has final say). The
   //   pre-existing NULL-billableDays "rate-card / dates-TBD" semantic
   //   in computeLineTotal is unchanged.
-  computedDays    Int?               @map("computed_days")
-  claimedDays     Int?               @map("claimed_days")
-  claimStatus     DayClaimStatus     @default(NONE) @map("claim_status")
-  claimNote       String?            @map("claim_note") @db.Text
-  lineTotal       Decimal            @db.Decimal(12, 2)
+  computedDays    Int?                @map("computed_days")
+  claimedDays     Int?                @map("claimed_days")
+  claimStatus     DayClaimStatus      @default(NONE) @map("claim_status")
+  claimNote       String?             @map("claim_note") @db.Text
+  lineTotal       Decimal             @db.Decimal(12, 2)
   // Phase 2: AI-extracted client modifier preserved verbatim (e.g.
   // "no surveillance kits"). Displayed in italics in the builder; never
   // used to invent extra line items.
-  qualifier       String?            @db.Text
-  notes           String?            @db.Text
+  qualifier       String?             @db.Text
+  notes           String?             @db.Text
 
   // Package grouping. When a package is selected on a line, one
   // header line + N member lines share a single `packageInstanceId`
@@ -2931,14 +2990,14 @@ model OrderLineItem {
   // a member has been added / removed / qty-edited relative to the
   // template. Date cascades from header to members happen at edit
   // time in the UI.
-  packageInstanceId  String?  @map("package_instance_id")
-  isPackageHeader    Boolean  @default(false) @map("is_package_header")
-  isPackageModified  Boolean  @default(false) @map("is_package_modified")
-  packageId          String?  @map("package_id")
-  package            Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  packageInstanceId String?  @map("package_instance_id")
+  isPackageHeader   Boolean  @default(false) @map("is_package_header")
+  isPackageModified Boolean  @default(false) @map("is_package_modified")
+  packageId         String?  @map("package_id")
+  package           Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
@@ -2967,32 +3026,32 @@ model OrderLineItem {
 // level discounts apply on top exactly as they do for à-la-carte
 // rows.
 model Package {
-  id          String        @id @default(cuid())
-  name        String
-  description String?       @db.Text
-  department  LineItemDepartment
-  pricePerDay Decimal       @default(0) @map("price_per_day") @db.Decimal(10, 2)
-  active      Boolean       @default(true)
-  items       PackageItem[]
+  id             String             @id @default(cuid())
+  name           String
+  description    String?            @db.Text
+  department     LineItemDepartment
+  pricePerDay    Decimal            @default(0) @map("price_per_day") @db.Decimal(10, 2)
+  active         Boolean            @default(true)
+  items          PackageItem[]
   // Back-relation for line-items minted from this package. Helps
   // analytics ("how many times has the X package been quoted?")
   // without forcing the OrderLineItem write path to carry it as a
   // required FK.
   orderLineItems OrderLineItem[]
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
 
   @@index([active, name])
   @@map("sr_packages")
 }
 
 model PackageItem {
-  id          String  @id @default(cuid())
-  packageId   String  @map("package_id")
-  package     Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  inventoryItemId String  @map("inventory_item_id")
+  id              String        @id @default(cuid())
+  packageId       String        @map("package_id")
+  package         Package       @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  inventoryItemId String        @map("inventory_item_id")
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  qty         Int     @default(1)
+  qty             Int           @default(1)
 
   @@index([packageId])
   @@map("sr_package_items")
@@ -3013,8 +3072,8 @@ model PackageItem {
 // ORDER discount against the post-department subtotal and stores
 // the result here — it's not a third type.
 model OrderDiscount {
-  id            String              @id @default(uuid())
-  orderId       String              @map("order_id")
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
 
   scope         DiscountScope
   // Required when scope=DEPARTMENT, must be null when scope=ORDER.
@@ -3022,19 +3081,19 @@ model OrderDiscount {
   // can't land via the API.
   departmentKey LineItemDepartment? @map("department_key")
 
-  type          DiscountType
+  type  DiscountType
   // PERCENT: 0–100 (validated app-side). FIXED: dollar amount.
   // Stored at 2 decimals to match the rest of the money columns.
-  value         Decimal             @db.Decimal(10, 2)
+  value Decimal      @db.Decimal(10, 2)
 
   // Surfaces on the PDF + UI row. Defaults to "Discount" so the
   // creator can ship without picking a label, but reps usually
   // type a reason (e.g. "Repeat-client courtesy").
-  label         String              @default("Discount")
+  label String @default("Discount")
 
-  createdById   String?             @map("created_by_id")
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt      @map("updated_at")
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   createdBy User? @relation("OrderDiscountCreator", fields: [createdById], references: [id])
@@ -3101,12 +3160,12 @@ model FeeItem {
 // ════════════════════════════════════════════════════════════════
 
 enum PickListStatus {
-  DRAFT            // created at book time; no picker assigned yet
-  PICKING          // a warehouse user has started the pick session
-  READY_TO_STAGE   // all items picked; awaiting move to staging area
-  STAGED           // physically staged for loadout
-  LOADED           // loaded onto outbound transport — warehouse lane terminal
-  CANCELLED        // order cancelled or list voided
+  DRAFT // created at book time; no picker assigned yet
+  PICKING // a warehouse user has started the pick session
+  READY_TO_STAGE // all items picked; awaiting move to staging area
+  STAGED // physically staged for loadout
+  LOADED // loaded onto outbound transport — warehouse lane terminal
+  CANCELLED // order cancelled or list voided
 }
 
 model PickList {
@@ -3162,47 +3221,47 @@ model PickListItem {
 // canonical money number (quote estimate → booked value → invoice
 // total); never overwrite the Order.booked* snapshot from here.
 model Invoice {
-  id            String        @id @default(uuid())
-  invoiceNumber String        @unique @map("invoice_number")
-  orderId       String        @map("order_id")
+  id             String        @id @default(uuid())
+  invoiceNumber  String        @unique @map("invoice_number")
+  orderId        String        @map("order_id")
   // Phase 5: RENTAL (primary) drives the close; LD (satellite, Phase 5
   // commit 4) is non-blocking. Default RENTAL for forward-compat with
   // existing zero-row table. Enum is extensible.
-  type          InvoiceType   @default(RENTAL)
-  status        InvoiceStatus @default(DRAFT)
-  subtotal      Decimal       @db.Decimal(12, 2)
-  taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  type           InvoiceType   @default(RENTAL)
+  status         InvoiceStatus @default(DRAFT)
+  subtotal       Decimal       @db.Decimal(12, 2)
+  taxAmount      Decimal       @default(0) @map("tax_amount") @db.Decimal(12, 2)
   // The final number. Sum of the lineSnapshot is guaranteed to equal
   // this — when the live order's line items differ from the booked
   // snapshot, the generator emits an ADJUSTMENT line so the math
   // balances and `total` always equals the booked total at issue.
-  total         Decimal       @db.Decimal(12, 2)
-  amountPaid    Decimal       @default(0) @map("amount_paid") @db.Decimal(12, 2)
-  balanceDue    Decimal       @default(0) @map("balance_due") @db.Decimal(12, 2)
-  dueDate       DateTime?     @map("due_date") @db.Date
-  sentAt        DateTime?     @map("sent_at")
-  paidAt        DateTime?     @map("paid_at")
-  notes         String?       @db.Text
+  total          Decimal       @db.Decimal(12, 2)
+  amountPaid     Decimal       @default(0) @map("amount_paid") @db.Decimal(12, 2)
+  balanceDue     Decimal       @default(0) @map("balance_due") @db.Decimal(12, 2)
+  dueDate        DateTime?     @map("due_date") @db.Date
+  sentAt         DateTime?     @map("sent_at")
+  paidAt         DateTime?     @map("paid_at")
+  notes          String?       @db.Text
   // PDF storage — mirrors the SignedAgreement / quote-pdf pattern.
   // pdfBlobKey is the Vercel Blob key (private bucket); pdfUrl is the
   // signed URL returned by put(); pdfGeneratedAt is the issuance
   // timestamp. Replace-on-regenerate: when an invoice's PDF is
   // re-rendered, the previous blob is deleted.
-  pdfBlobKey       String?    @map("pdf_blob_key")
-  pdfUrl           String?    @map("pdf_url")
-  pdfGeneratedAt   DateTime?  @map("pdf_generated_at")
+  pdfBlobKey     String?       @map("pdf_blob_key")
+  pdfUrl         String?       @map("pdf_url")
+  pdfGeneratedAt DateTime?     @map("pdf_generated_at")
   // Structured line-item snapshot at issue time. Array of
   //   { description, category, qty, unitPrice, amount,
   //     kind: 'RENTAL_LINE' | 'ADJUSTMENT' | 'DAMAGE' }
   // Stays queryable for departmental revenue reporting (PostgreSQL
   // jsonb_path), and the shape is promotable to a relational
   // InvoiceLineItem model later without breaking callers.
-  lineSnapshot     Json?      @map("line_snapshot")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  lineSnapshot   Json?         @map("line_snapshot")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  order       Order            @relation(fields: [orderId], references: [id])
-  payments    Payment[]
+  order           Order            @relation(fields: [orderId], references: [id])
+  payments        Payment[]
   // Phase 5 commit 4 — DamageItems and InsuranceClaims tagged with
   // this invoice. For RENTAL: BILL_NOW damages billed here. For LD:
   // the damages that drove the LD invoice + any claims opened
@@ -3256,62 +3315,62 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id            String         @id @default(uuid())
-  invoiceId     String         @map("invoice_id")
+  id                        String        @id @default(uuid())
+  invoiceId                 String        @map("invoice_id")
   // The amount applied to this invoice. Always > 0 — voids are tracked
   // via voidedAt, never by negative amounts (keeps SUM() math correct
   // when filtered to non-voided rows).
-  amount        Decimal        @db.Decimal(12, 2)
-  method        PaymentMethod
+  amount                    Decimal       @db.Decimal(12, 2)
+  method                    PaymentMethod
   // Phase 6 lifecycle. CLEARED is the only state that counts toward
   // invoice paid/balance. Default CLEARED for backward-compat with
   // existing operator-recorded payments (CHECK/WIRE/CASH/OTHER) which
   // are always "received" by the time they're entered.
-  status        PaymentStatus  @default(CLEARED)
+  status                    PaymentStatus @default(CLEARED)
   // Card processing surcharge (3%) added ON TOP of `amount` at the
   // gateway. `amount` is what credits the invoice; the gateway actually
   // charged `amount + surchargeAmount`. Null for non-surcharged payments
   // (cash/check/wire, or card charges taken before surcharging began).
   // Reversals must refund `amount + surchargeAmount`.
-  surchargeAmount Decimal?     @map("surcharge_amount") @db.Decimal(10, 2)
+  surchargeAmount           Decimal?      @map("surcharge_amount") @db.Decimal(10, 2)
   // Operator-supplied reference: check #, wire confirmation, etc.
   // Free-text by design.
-  reference     String?
+  reference                 String?
   // Phase 6 — CardPointe transaction id (retref). Distinct from
   // `reference` so gateway txn ids stay queryable without polluting
   // the free-text column.
-  gatewayRefId  String?        @map("gateway_ref_id")
-  receivedAt    DateTime       @map("received_at")
+  gatewayRefId              String?       @map("gateway_ref_id")
+  receivedAt                DateTime      @map("received_at")
   // Phase 6 ACH timestamps. Card captures stamp settledAt + clearedAt
   // = now() on the same write since auth+capture is instant; ACH
   // walks them out across the polling lifecycle.
-  settledAt     DateTime?      @map("settled_at")
-  clearedAt     DateTime?      @map("cleared_at")
-  returnedAt    DateTime?      @map("returned_at")
-  returnReason  String?        @map("return_reason") @db.Text
+  settledAt                 DateTime?     @map("settled_at")
+  clearedAt                 DateTime?     @map("cleared_at")
+  returnedAt                DateTime?     @map("returned_at")
+  returnReason              String?       @map("return_reason") @db.Text
   // Phase 6 NACHA authorization — ACH-only; captured via SigCanvas
   // alongside the consent text shown to the payer at the moment of
   // authorization. Stored on the row so the auth artifact is co-
   // located with the payment it authorized.
-  nachaAuthSignatureData String?   @map("nacha_auth_signature_data") @db.Text
-  nachaAuthText          String?   @map("nacha_auth_text") @db.Text
-  nachaAuthSignedAt      DateTime? @map("nacha_auth_signed_at")
-  notes         String?        @db.Text
+  nachaAuthSignatureData    String?       @map("nacha_auth_signature_data") @db.Text
+  nachaAuthText             String?       @map("nacha_auth_text") @db.Text
+  nachaAuthSignedAt         DateTime?     @map("nacha_auth_signed_at")
+  notes                     String?       @db.Text
   // Phase 6 portal attribution. Operator-recorded payments set
   // recordedById; portal-initiated payments set
   // initiatedByPortalAccessId. Exactly one of the two must be set —
   // enforced at the application layer (Prisma can't express XOR via
   // schema alone; the recordPayment helper guards this).
-  recordedById             String?    @map("recorded_by_id")
-  initiatedByPortalAccessId String?   @map("initiated_by_portal_access_id")
-  voidedAt      DateTime?      @map("voided_at")
-  voidedById    String?        @map("voided_by_id")
-  voidReason    String?        @map("void_reason") @db.Text
-  createdAt     DateTime       @default(now()) @map("created_at")
+  recordedById              String?       @map("recorded_by_id")
+  initiatedByPortalAccessId String?       @map("initiated_by_portal_access_id")
+  voidedAt                  DateTime?     @map("voided_at")
+  voidedById                String?       @map("voided_by_id")
+  voidReason                String?       @map("void_reason") @db.Text
+  createdAt                 DateTime      @default(now()) @map("created_at")
 
-  invoice              Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  recordedBy           User?         @relation("PaymentRecorder", fields: [recordedById], references: [id])
-  voidedBy             User?         @relation("PaymentVoider", fields: [voidedById], references: [id])
+  invoice                 Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy              User?         @relation("PaymentRecorder", fields: [recordedById], references: [id])
+  voidedBy                User?         @relation("PaymentVoider", fields: [voidedById], references: [id])
   initiatedByPortalAccess PortalAccess? @relation("PortalInitiatedPayments", fields: [initiatedByPortalAccessId], references: [id])
 
   @@index([invoiceId])
@@ -3325,13 +3384,13 @@ model Payment {
 }
 
 model Vendor {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  contactName String?  @map("contact_name")
+  id          String  @id @default(uuid())
+  name        String  @unique
+  contactName String? @map("contact_name")
   email       String?
-  phone       String?  @db.VarChar(30)
+  phone       String? @db.VarChar(30)
   website     String?
-  notes       String?  @db.Text
+  notes       String? @db.Text
 
   // --- Sub-rental Phase A additions (roster fields for later PO /
   // shortfall-sourcing / margin phases; no PO or margin logic here) ---
@@ -3348,11 +3407,11 @@ model Vendor {
   supplies      String? @db.Text
   // Standing delivery / pickup terms shown on a PO (lead time, cutoffs,
   // dock hours). Distinct from general `notes`.
-  deliveryTerms String? @db.Text @map("delivery_terms")
+  deliveryTerms String? @map("delivery_terms") @db.Text
 
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   subRentals     SubRental[]
   // Reverse relation: InventoryItems with this vendor as their
@@ -3382,18 +3441,18 @@ enum ReceiveMethod {
 }
 
 model SubRental {
-  id                String          @id @default(uuid())
-  orderId           String?         @map("order_id")
+  id              String          @id @default(uuid())
+  orderId         String?         @map("order_id")
   /// Optional direct link to the OrderLineItem this sub-rental fulfills.
   /// One line can have multiple sub-rentals (partial fulfillment by qty).
   /// Internal-only — never read by client-facing serializers.
-  orderLineItemId   String?         @map("order_line_item_id")
-  inventoryItemId   String?         @map("inventory_item_id")
-  vendorId          String          @map("vendor_id")
-  status            SubRentalStatus @default(REQUESTED)
+  orderLineItemId String?         @map("order_line_item_id")
+  inventoryItemId String?         @map("inventory_item_id")
+  vendorId        String          @map("vendor_id")
+  status          SubRentalStatus @default(REQUESTED)
   /// How Hugo's team takes custody from the vendor — surfaced on the
   /// returns board in Phase 3. Nullable until set at create time.
-  receiveMethod     ReceiveMethod?  @map("receive_method")
+  receiveMethod   ReceiveMethod?  @map("receive_method")
 
   itemDescription String    @map("item_description")
   quantity        Int       @default(1)
@@ -3445,38 +3504,38 @@ enum ActivityType {
 // Activity model so neither stream is lost. App-layer constraint:
 // at least one of personId / companyId must be set on insert.
 enum OutreachType {
-  VISIT     // in-person visit to set / studio / office
-  CALL      // phone call
-  EMAIL     // outbound email logged manually (NOT auto-synced Gmail)
-  TEXT      // SMS
-  EVENT     // mixer, wrap party, industry event
-  DROP_IN   // unscheduled drop-by (lobby / craft services / etc.)
+  VISIT // in-person visit to set / studio / office
+  CALL // phone call
+  EMAIL // outbound email logged manually (NOT auto-synced Gmail)
+  TEXT // SMS
+  EVENT // mixer, wrap party, industry event
+  DROP_IN // unscheduled drop-by (lobby / craft services / etc.)
 }
 
 model OutreachActivity {
-  id           String       @id @default(uuid())
-  type         OutreachType
-  personId     String?      @map("person_id")
-  companyId    String?      @map("company_id")
-  notes        String       @db.Text
-  occurredAt   DateTime     @default(now()) @map("occurred_at")
+  id         String       @id @default(uuid())
+  type       OutreachType
+  personId   String?      @map("person_id")
+  companyId  String?      @map("company_id")
+  notes      String       @db.Text
+  occurredAt DateTime     @default(now()) @map("occurred_at")
 
   // Optional follow-up — when set, this row counts toward the
   // FOLLOW-UPS DUE card until followUpDone flips true. Indexed on
   // (followUpDone, followUpAt) so the count query is cheap.
-  followUpAt   DateTime?    @map("follow_up_at")
-  followUpDone Boolean      @default(false) @map("follow_up_done")
+  followUpAt   DateTime? @map("follow_up_at")
+  followUpDone Boolean   @default(false) @map("follow_up_done")
 
   // The rep who logged this. Drives the "My outreach" filter (sales
   // reps see their own + their due follow-ups; admins see all).
-  createdById  String       @map("created_by_id")
-  createdBy    User         @relation("OutreachCreator", fields: [createdById], references: [id])
+  createdById String @map("created_by_id")
+  createdBy   User   @relation("OutreachCreator", fields: [createdById], references: [id])
 
-  person       Person?      @relation("PersonOutreach", fields: [personId], references: [id], onDelete: SetNull)
-  company      Company?     @relation("CompanyOutreach", fields: [companyId], references: [id], onDelete: SetNull)
+  person  Person?  @relation("PersonOutreach", fields: [personId], references: [id], onDelete: SetNull)
+  company Company? @relation("CompanyOutreach", fields: [companyId], references: [id], onDelete: SetNull)
 
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt      @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([followUpDone, followUpAt])
   @@index([createdById, occurredAt(sort: Desc)])
@@ -3638,64 +3697,64 @@ model TeamMember {
 // ============================================================
 
 model Job {
-  id             String         @id @default(uuid())
-  jobCode        String         @unique @map("job_code")
+  id                      String         @id @default(uuid())
+  jobCode                 String         @unique @map("job_code")
   // Random, high-entropy after-hours authentication factor — surfaced to
   // the client on their Portal v2 job page and presented to the SirReel
   // Assistant to help release the gate/lockbox code. DELIBERATELY separate
   // from `jobCode` (which is the sequential, guessable SR-JOB-0001 business
   // ID — unfit as a secret). Nullable so existing rows are unaffected until
   // backfilled; unique because it's a lookup key.
-  assistantAuthCode String?      @unique @map("assistant_auth_code")
-  name           String
-  companyId      String         @map("company_id")
-  productionType ProductionType @default(OTHER) @map("production_type")
+  assistantAuthCode       String?        @unique @map("assistant_auth_code")
+  name                    String
+  companyId               String         @map("company_id")
+  productionType          ProductionType @default(OTHER) @map("production_type")
   // FK to the new ProductionTypeProfile lookup table — the structured
   // tier + sales-mode + price-sensitivity metadata that will drive the
   // fleet-assignment optimizer. Nullable so existing rows are
   // unaffected (no backfill required at this commit). Lives alongside
   // the legacy productionType enum above; a future migration will cut
   // over writers and deprecate the enum.
-  productionTypeProfileId String?       @map("production_type_profile_id")
-  status         JobStatus      @default(QUOTED)
-  startDate      DateTime?      @map("start_date") @db.Date
-  endDate        DateTime?      @map("end_date") @db.Date
-  agentId        String         @map("agent_id")
-  planyoCartId   String?        @unique @map("planyo_cart_id")
-  estimatedValue Decimal?       @map("estimated_value") @db.Decimal(12, 2)
-  notes          String?        @db.Text
+  productionTypeProfileId String?        @map("production_type_profile_id")
+  status                  JobStatus      @default(QUOTED)
+  startDate               DateTime?      @map("start_date") @db.Date
+  endDate                 DateTime?      @map("end_date") @db.Date
+  agentId                 String         @map("agent_id")
+  planyoCartId            String?        @unique @map("planyo_cart_id")
+  estimatedValue          Decimal?       @map("estimated_value") @db.Decimal(12, 2)
+  notes                   String?        @db.Text
   // Physical-return marker — "the gear is back at the warehouse."
   // Deliberately NOT a JobStatus value (WRAPPED = lifecycle close, not
   // physical return). Set/cleared by POST /api/jobs/[id]/mark-returned
   // and unmark-returned; the future warehouse check-in flow writes this
   // same field. The Jobs board's RETURNED column keys off it exclusively.
-  returnedAt     DateTime?      @map("returned_at")
-  returnedById   String?        @map("returned_by_id")
+  returnedAt              DateTime?      @map("returned_at")
+  returnedById            String?        @map("returned_by_id")
   // Soft-archive marker (staff "Archive job" action). Visibility-only —
   // the /jobs list filters archivedAt IS NULL by default; the detail page
   // stays reachable. Additive; NULL = active. Cleared on unarchive.
-  archivedAt     DateTime?      @map("archived_at")
+  archivedAt              DateTime?      @map("archived_at")
   /// Staff marked this job as having NO RentalWorks counterpart (HQ-native
   /// work, or a client that never existed in RW). Removes it from the
   /// reconcile queue so the queue can actually reach zero — without it,
   /// every new HQ-native job accumulates as permanent noise. Reversible.
-  rwNotApplicable DateTime?     @map("rw_not_applicable")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  rwNotApplicable         DateTime?      @map("rw_not_applicable")
+  createdAt               DateTime       @default(now()) @map("created_at")
+  updatedAt               DateTime       @updatedAt @map("updated_at")
 
   company               Company                @relation(fields: [companyId], references: [id])
   agent                 User                   @relation("JobAgent", fields: [agentId], references: [id])
   returnedBy            User?                  @relation("JobReturnedBy", fields: [returnedById], references: [id])
   productionTypeProfile ProductionTypeProfile? @relation("JobProductionTypeProfile", fields: [productionTypeProfileId], references: [id])
-  orders      Order[]
-  bookings    Booking[]
-  jobContacts JobContact[]
-  contractReviews ContractReview[]
-  coiChecks       CoiCheck[]
-  agreementAddenda JobAgreementAddendum[]
-  documents       JobDocument[]
-  rwOrders        JobRwOrder[]
-  fromInquiry     Inquiry?         @relation("ConvertedFromInquiry")
+  orders                Order[]
+  bookings              Booking[]
+  jobContacts           JobContact[]
+  contractReviews       ContractReview[]
+  coiChecks             CoiCheck[]
+  agreementAddenda      JobAgreementAddendum[]
+  documents             JobDocument[]
+  rwOrders              JobRwOrder[]
+  fromInquiry           Inquiry?               @relation("ConvertedFromInquiry")
 
   @@index([companyId])
   @@index([status])
@@ -3724,30 +3783,30 @@ enum InquiryStatus {
 }
 
 model Inquiry {
-  id                 String        @id @default(cuid())
-  createdAt          DateTime      @default(now()) @map("created_at")
-  updatedAt          DateTime      @updatedAt @map("updated_at")
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  source             InquirySource @default(MANUAL)
-  status             InquiryStatus @default(NEW)
+  source InquirySource @default(MANUAL)
+  status InquiryStatus @default(NEW)
 
-  title              String
-  description        String        @db.Text
+  title       String
+  description String @db.Text
 
-  companyId          String?       @map("company_id")
-  company            Company?      @relation(fields: [companyId], references: [id])
-  personId           String?       @map("person_id")
-  person             Person?       @relation("InquiryContact", fields: [personId], references: [id])
+  companyId String?  @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id])
+  personId  String?  @map("person_id")
+  person    Person?  @relation("InquiryContact", fields: [personId], references: [id])
 
-  estimatedValue     Decimal?      @map("estimated_value") @db.Decimal(12, 2)
-  preferredStartDate DateTime?     @map("preferred_start_date") @db.Date
-  preferredEndDate   DateTime?     @map("preferred_end_date") @db.Date
+  estimatedValue     Decimal?  @map("estimated_value") @db.Decimal(12, 2)
+  preferredStartDate DateTime? @map("preferred_start_date") @db.Date
+  preferredEndDate   DateTime? @map("preferred_end_date") @db.Date
 
-  assignedToId       String?       @map("assigned_to_id")
-  assignedTo         User?         @relation("InquiryAssignedTo", fields: [assignedToId], references: [id])
+  assignedToId String? @map("assigned_to_id")
+  assignedTo   User?   @relation("InquiryAssignedTo", fields: [assignedToId], references: [id])
 
-  convertedJobId     String?       @unique @map("converted_job_id")
-  convertedJob       Job?          @relation("ConvertedFromInquiry", fields: [convertedJobId], references: [id])
+  convertedJobId String? @unique @map("converted_job_id")
+  convertedJob   Job?    @relation("ConvertedFromInquiry", fields: [convertedJobId], references: [id])
 
   // Phase 1b add-on triage — set when the inquiry was converted by
   // attaching to an EXISTING Job (a new Order on that job, marked
@@ -3755,12 +3814,12 @@ model Inquiry {
   // practice: the new-Job path sets convertedJobId, the add-on path
   // sets convertedOrderId. @unique mirrors convertedJobId so each
   // Order can satisfy at most one inquiry.
-  convertedOrderId   String?       @unique @map("converted_order_id")
-  convertedOrder     Order?        @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
+  convertedOrderId String?    @unique @map("converted_order_id")
+  convertedOrder   Order?     @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
   // COIs dropped via the client upload link before a job exists.
-  coiChecks          CoiCheck[]    @relation("InquiryCoiChecks")
+  coiChecks        CoiCheck[] @relation("InquiryCoiChecks")
 
-  sourceMetadata     Json?         @map("source_metadata")
+  sourceMetadata Json? @map("source_metadata")
 
   // RFC822 Message-Id of the originating email when source=GMAIL.
   // Used to dedupe cross-inbox copies of the same message (each Gmail
@@ -3768,7 +3827,7 @@ model Inquiry {
   // share rfc822MessageId). The partial unique index `sr_inquiries_rfc822_gmail_uniq`
   // (added via raw SQL — Prisma can't express filtered uniques) makes
   // a concurrent double-capture impossible at the DB layer.
-  rfc822MessageId    String?       @map("rfc822_message_id")
+  rfc822MessageId String? @map("rfc822_message_id")
 
   // First staff reply on the inquiry's email thread. Deliberately NOT a
   // status value: a responded inquiry is still an open lead (status stays
@@ -3779,12 +3838,12 @@ model Inquiry {
   // later staff messages don't overwrite. respondedBy is the staff
   // mailbox address (e.g. jose@sirreel.com), not a User FK — outbound
   // mail can come from shared inboxes (hello@, info@) with no User row.
-  respondedAt        DateTime?     @map("responded_at")
-  respondedBy        String?       @map("responded_by")
+  respondedAt DateTime? @map("responded_at")
+  respondedBy String?   @map("responded_by")
 
   // Welcome / Job Begin invite (client click-to-create) — at most one per
   // inquiry (@unique on WelcomeInvite.inquiryId).
-  welcomeInvite      WelcomeInvite?
+  welcomeInvite WelcomeInvite?
 
   @@index([status, createdAt])
   @@index([assignedToId])
@@ -3856,59 +3915,59 @@ model WelcomeInvite {
 // capture, not two. The shared helper at
 // src/lib/crm/captureFromEmail.ts is responsible for the lookup.
 enum CaptureVerdict {
-  AUTO_CAPTURED  // contact added or enriched automatically
-  NEEDS_REVIEW   // production-related but uncertain — surface to rep
-  SKIPPED        // hard skip OR no production signal; stored, muted
+  AUTO_CAPTURED // contact added or enriched automatically
+  NEEDS_REVIEW // production-related but uncertain — surface to rep
+  SKIPPED // hard skip OR no production signal; stored, muted
 }
 
 enum CaptureResolution {
-  PENDING        // default for NEEDS_REVIEW awaiting human action
-  AUTO_FILED     // AUTO_CAPTURED created a new Person
-  AUTO_ENRICHED  // AUTO_CAPTURED filled empty fields on an existing Person
-  AUTO_SKIPPED   // SKIPPED set this immediately, no action needed
-  ADDED          // rep accepted the NEEDS_REVIEW row, person now linked
-  DISMISSED      // rep dismissed the NEEDS_REVIEW row
+  PENDING // default for NEEDS_REVIEW awaiting human action
+  AUTO_FILED // AUTO_CAPTURED created a new Person
+  AUTO_ENRICHED // AUTO_CAPTURED filled empty fields on an existing Person
+  AUTO_SKIPPED // SKIPPED set this immediately, no action needed
+  ADDED // rep accepted the NEEDS_REVIEW row, person now linked
+  DISMISSED // rep dismissed the NEEDS_REVIEW row
 }
 
 model InquiryCapture {
-  id              String          @id @default(uuid())
-  emailMessageId  String          @unique @map("email_message_id")
-  rfc822MessageId String?         @map("rfc822_message_id")
-  inbox           String          // info@, jose@, oliver@ — denormalized for filters
+  id              String  @id @default(uuid())
+  emailMessageId  String  @unique @map("email_message_id")
+  rfc822MessageId String? @map("rfc822_message_id")
+  inbox           String // info@, jose@, oliver@ — denormalized for filters
 
-  verdict         CaptureVerdict
-  verdictReason   String          @map("verdict_reason") @db.Text
+  verdict       CaptureVerdict
+  verdictReason String         @map("verdict_reason") @db.Text
   // Production-legitimacy signals matched (role title, project name,
   // domain match, history language, freemail-rental-intent). Stored
   // as an array of short tags for the review widget; classifier
   // populates it.
-  signals         Json?
+  signals       Json?
 
   // Parsed signature payload — denormalized so the review widget can
   // render the row without joining EmailMessage.extractedData.
-  parsedName          String?     @map("parsed_name")
-  parsedEmail         String?     @map("parsed_email")
-  parsedPhone         String?     @map("parsed_phone")
-  parsedTitle         String?     @map("parsed_title")
-  parsedCompanyString String?     @map("parsed_company_string")
-  parsedProject       String?     @map("parsed_project")
+  parsedName          String? @map("parsed_name")
+  parsedEmail         String? @map("parsed_email")
+  parsedPhone         String? @map("parsed_phone")
+  parsedTitle         String? @map("parsed_title")
+  parsedCompanyString String? @map("parsed_company_string")
+  parsedProject       String? @map("parsed_project")
 
   // Linked rows once captured/enriched. Company is set ONLY on a
   // confident match (domain or exact name); the classifier never
   // auto-creates companies — unmatched company strings stay in
   // parsedCompanyString for the review widget to surface.
-  personId        String?         @map("person_id")
-  person          Person?         @relation("CaptureContact", fields: [personId], references: [id], onDelete: SetNull)
-  companyId       String?         @map("company_id")
-  company         Company?        @relation("CaptureCompany", fields: [companyId], references: [id], onDelete: SetNull)
+  personId  String?  @map("person_id")
+  person    Person?  @relation("CaptureContact", fields: [personId], references: [id], onDelete: SetNull)
+  companyId String?  @map("company_id")
+  company   Company? @relation("CaptureCompany", fields: [companyId], references: [id], onDelete: SetNull)
 
-  resolution      CaptureResolution @default(PENDING)
+  resolution    CaptureResolution @default(PENDING)
   // Audit trail of fields filled on an existing Person during enrich.
   // Shape: { phone: { from: null, to: "..." }, rawTitle: {...}, ... }
-  enrichmentLog   Json?           @map("enrichment_log")
-  resolvedById    String?         @map("resolved_by_id")
-  resolvedBy      User?           @relation("CaptureResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
-  resolvedAt      DateTime?       @map("resolved_at")
+  enrichmentLog Json?             @map("enrichment_log")
+  resolvedById  String?           @map("resolved_by_id")
+  resolvedBy    User?             @relation("CaptureResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt    DateTime?         @map("resolved_at")
 
   // Pending-review dedup. When a new NEEDS_REVIEW would mint and an
   // existing PENDING parent already exists for the same parsedEmail
@@ -3917,14 +3976,14 @@ model InquiryCapture {
   // (every EmailMessage still gets exactly one capture row) while
   // surfacing only the parent in the review widget. Resolving the
   // parent cascades the action to all attached children in one shot.
-  attachedToCaptureId String?       @map("attached_to_capture_id")
+  attachedToCaptureId String?          @map("attached_to_capture_id")
   attachedTo          InquiryCapture?  @relation("CaptureAttached", fields: [attachedToCaptureId], references: [id], onDelete: SetNull)
   attachedChildren    InquiryCapture[] @relation("CaptureAttached")
 
-  emailMessage    EmailMessage    @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  emailMessage EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
 
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([verdict, createdAt(sort: Desc)])
   @@index([resolution, createdAt(sort: Desc)])
@@ -4033,15 +4092,15 @@ enum ChangeDecision {
 }
 
 model ContractReview {
-  id               String  @id @default(uuid())
-  fileKey          String  @map("file_key")
-  fileUrl          String  @map("file_url")
-  originalFilename String  @map("original_filename")
-  fileSize         Int     @map("file_size")
-  mimeType         String  @map("mime_type")
+  id               String @id @default(uuid())
+  fileKey          String @map("file_key")
+  fileUrl          String @map("file_url")
+  originalFilename String @map("original_filename")
+  fileSize         Int    @map("file_size")
+  mimeType         String @map("mime_type")
 
-  jobId     String?  @map("job_id")
-  companyId String?  @map("company_id")
+  jobId     String? @map("job_id")
+  companyId String? @map("company_id")
 
   uploadedById String @map("uploaded_by_id")
 
@@ -4066,21 +4125,21 @@ model ContractReview {
   humanDecisionById String?        @map("human_decision_by_id")
   humanDecisionAt   DateTime?      @map("human_decision_at")
 
-  counterPdfKey         String?   @map("counter_pdf_key")
-  counterPdfUrl         String?   @map("counter_pdf_url")
-  counterGeneratedAt    DateTime? @map("counter_generated_at")
-  counterGeneratedById  String?   @map("counter_generated_by_id")
+  counterPdfKey        String?   @map("counter_pdf_key")
+  counterPdfUrl        String?   @map("counter_pdf_url")
+  counterGeneratedAt   DateTime? @map("counter_generated_at")
+  counterGeneratedById String?   @map("counter_generated_by_id")
 
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
   deletedById String?   @map("deleted_by_id")
 
-  job                Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  company            Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  uploadedBy         User     @relation("ContractReviewUploader", fields: [uploadedById], references: [id])
-  humanDecisionBy    User?    @relation("ContractReviewDecider", fields: [humanDecisionById], references: [id])
-  counterGeneratedBy User?    @relation("CounterPdfGenerator", fields: [counterGeneratedById], references: [id])
+  job                Job?                   @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  company            Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  uploadedBy         User                   @relation("ContractReviewUploader", fields: [uploadedById], references: [id])
+  humanDecisionBy    User?                  @relation("ContractReviewDecider", fields: [humanDecisionById], references: [id])
+  counterGeneratedBy User?                  @relation("CounterPdfGenerator", fields: [counterGeneratedById], references: [id])
   changeDecisions    ReviewChangeDecision[]
   clauseMessages     ReviewClauseMessage[]
   signedAgreement    SignedAgreement?
@@ -4095,24 +4154,24 @@ model ContractReview {
 }
 
 model ReviewChangeDecision {
-  id              String          @id @default(uuid())
-  reviewId        String          @map("review_id")
-  review          ContractReview  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  id       String         @id @default(uuid())
+  reviewId String         @map("review_id")
+  review   ContractReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
-  clauseRef       String          @map("clause_ref")
-  changeType      String          @map("change_type")
-  changeIndex     Int             @map("change_index")
+  clauseRef   String @map("clause_ref")
+  changeType  String @map("change_type")
+  changeIndex Int    @map("change_index")
 
-  decision        ChangeDecision  @default(PENDING)
-  counterLanguage String?         @map("counter_language") @db.Text
-  note            String?         @db.Text
+  decision        ChangeDecision @default(PENDING)
+  counterLanguage String?        @map("counter_language") @db.Text
+  note            String?        @db.Text
 
-  decidedById     String?         @map("decided_by_id")
-  decidedBy       User?           @relation("ChangeDecisionDecider", fields: [decidedById], references: [id])
-  decidedAt       DateTime?       @map("decided_at")
+  decidedById String?   @map("decided_by_id")
+  decidedBy   User?     @relation("ChangeDecisionDecider", fields: [decidedById], references: [id])
+  decidedAt   DateTime? @map("decided_at")
 
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([reviewId, changeIndex], name: "review_change_unique")
   @@index([reviewId])
@@ -4150,9 +4209,9 @@ enum AgreementDocumentType {
 }
 
 enum AgreementStatus {
-  PORTAL_GENERATED  // PDF rendered + persisted, NOT yet released to the client portal
-  PORTAL_RELEASED   // agent explicitly released → client sees the in-portal Sign link (June 2026 native-sign flow)
-  DOWNLOAD_SENT     // legacy: download link emailed via the /portal/[token] paperwork-portal flow
+  PORTAL_GENERATED // PDF rendered + persisted, NOT yet released to the client portal
+  PORTAL_RELEASED // agent explicitly released → client sees the in-portal Sign link (June 2026 native-sign flow)
+  DOWNLOAD_SENT // legacy: download link emailed via the /portal/[token] paperwork-portal flow
   REDLINE_UPLOADED
   UNDER_REVIEW
   NEGOTIATED_READY
@@ -4226,15 +4285,15 @@ model StageBookingTerms {
 
   /// Array of ISO yyyy-MM-dd date strings. Stored as JSON so non-contiguous
   /// bookings ("Mon, Wed-Fri") fit in one column without a child table.
-  rentalDates Json @map("rental_dates")
+  rentalDates Json    @map("rental_dates")
   dailyRate   Decimal @map("daily_rate") @db.Decimal(10, 2)
 
-  productionOfficeRental Boolean @default(false) @map("production_office_rental")
+  productionOfficeRental Boolean  @default(false) @map("production_office_rental")
   /// Free-text labels: "Standing Sets", "LED Volume Stage", "Cyc Wall", etc.
   /// Kept as a string array (not an enum) because the catalog of stage spaces
   /// shifts faster than schema migrations want to track.
-  specificSpaces        String[] @default([])  @map("specific_spaces")
-  securityGuardRequired Boolean  @default(false) @map("security_guard_required")
+  specificSpaces         String[] @default([]) @map("specific_spaces")
+  securityGuardRequired  Boolean  @default(false) @map("security_guard_required")
 
   /// Internal-only context about the negotiation (not rendered in the
   /// generated PDF). Used by sales during follow-ups.
@@ -4249,23 +4308,23 @@ model StageBookingTerms {
 }
 
 model CoiCheck {
-  id               String  @id @default(uuid())
-  fileKey          String  @map("file_key")
-  fileUrl          String  @map("file_url")
-  originalFilename String  @map("original_filename")
-  fileSize         Int     @map("file_size")
-  mimeType         String  @map("mime_type")
+  id               String @id @default(uuid())
+  fileKey          String @map("file_key")
+  fileUrl          String @map("file_url")
+  originalFilename String @map("original_filename")
+  fileSize         Int    @map("file_size")
+  mimeType         String @map("mime_type")
 
-  jobId     String?  @map("job_id")
-  companyId String?  @map("company_id")
+  jobId     String? @map("job_id")
+  companyId String? @map("company_id")
   // Client-facing COI upload (no-login tokenized drop): may carry a job,
   // a company, an inquiry, or none of them (lands UNATTACHED for the team
   // to assign later). All three nullable.
-  inquiryId String?  @map("inquiry_id")
+  inquiryId String? @map("inquiry_id")
 
   // Nullable: a no-login client upload has no HQ User behind it; internal
   // uploads still set this.
-  uploadedById String? @map("uploaded_by_id")
+  uploadedById        String? @map("uploaded_by_id")
   // Provenance for client uploads (no User to attribute to).
   source              String? @map("source") // CLIENT_UPLOAD | INTERNAL
   clientUploaderName  String? @map("client_uploader_name")
@@ -4290,11 +4349,11 @@ model CoiCheck {
   deletedAt   DateTime? @map("deleted_at")
   deletedById String?   @map("deleted_by_id")
 
-  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  company         Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  inquiry         Inquiry? @relation("InquiryCoiChecks", fields: [inquiryId], references: [id], onDelete: SetNull)
-  uploadedBy      User?    @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
-  humanDecisionBy User?    @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
+  job             Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  inquiry         Inquiry?         @relation("InquiryCoiChecks", fields: [inquiryId], references: [id], onDelete: SetNull)
+  uploadedBy      User?            @relation("CoiCheckUploader", fields: [uploadedById], references: [id])
+  humanDecisionBy User?            @relation("CoiCheckDecider", fields: [humanDecisionById], references: [id])
   // Phase 5 commit 4 — claims that reference this COI as the policy
   // they were filed against.
   insuranceClaims InsuranceClaim[]
@@ -4374,9 +4433,9 @@ model JobAgreementAddendum {
   addendumFilename String? @map("addendum_filename")
   addendumFileSize Int?    @map("addendum_file_size")
 
-  note      String?  @db.Text
-  addedById String?  @map("added_by_id")
-  addedBy   User?    @relation("JobAgreementAddendumAddedBy", fields: [addedById], references: [id])
+  note      String? @db.Text
+  addedById String? @map("added_by_id")
+  addedBy   User?   @relation("JobAgreementAddendumAddedBy", fields: [addedById], references: [id])
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -4524,9 +4583,9 @@ model CadenceEvent {
 /// Cookie exp (30 days) is in jobSession.ts territory; row revocation
 /// is via revokedAt.
 model PersonSession {
-  id        String   @id @default(uuid())
-  personId  String   @map("person_id")
-  person    Person   @relation(fields: [personId], references: [id])
+  id       String @id @default(uuid())
+  personId String @map("person_id")
+  person   Person @relation(fields: [personId], references: [id])
 
   // Magic-link state — populated on request, consumed on verify.
   magicLinkToken     String    @unique @map("magic_link_token")
@@ -4559,7 +4618,7 @@ model PortalAccess {
   createdAt          DateTime  @default(now()) @map("created_at")
   revokedAt          DateTime? @map("revoked_at")
   revokedBy          String?   @map("revoked_by")
-  lastAccessedAt    DateTime?  @map("last_accessed_at")
+  lastAccessedAt     DateTime? @map("last_accessed_at")
   accessCount        Int       @default(0) @map("access_count")
 
   // Phase 6 commit 1 — back-relation for portal-initiated payments
@@ -4581,8 +4640,8 @@ model PortalAccess {
 model HealthCheckLog {
   id          String    @id @default(uuid())
   checkedAt   DateTime  @default(now()) @map("checked_at")
-  overall     String    // "healthy" | "degraded" | "down"
-  services    Json      // full per-service detail (see HealthReport type)
+  overall     String // "healthy" | "degraded" | "down"
+  services    Json // full per-service detail (see HealthReport type)
   alertedAt   DateTime? @map("alerted_at")
   alertDetail String?   @map("alert_detail")
 
@@ -4626,23 +4685,23 @@ model EmailDelivery {
 
   // Send context — at least one of these is set by the caller. Used
   // by the order detail UI to scope the deliveries shown.
-  orderId         String?  @map("order_id")
-  invoiceId       String?  @map("invoice_id")
-  quoteFollowUpId String?  @map("quote_follow_up_id")
+  orderId         String? @map("order_id")
+  invoiceId       String? @map("invoice_id")
+  quoteFollowUpId String? @map("quote_follow_up_id")
 
   // Envelope — recorded at send for display + debugging
-  toAddress       String   @map("to_address")
-  ccAddresses     String[] @map("cc_addresses")
-  subject         String
+  toAddress   String   @map("to_address")
+  ccAddresses String[] @map("cc_addresses")
+  subject     String
   // sendAgreementEmail's `label` — e.g. "send-quote:SR-ORD-0042"
-  label           String?
+  label       String?
 
   sentAt    DateTime @default(now()) @map("sent_at")
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt        @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  order   Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  invoice Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   quoteFollowUp QuoteFollowUp? @relation(fields: [quoteFollowUpId], references: [id], onDelete: SetNull)
 
   @@index([orderId, sentAt(sort: Desc)])
@@ -4694,27 +4753,27 @@ enum EmailDeliveryStatus {
 // (Gmail personal accounts, payroll-provider addresses, etc.). The
 // Sonnet employee-match step in onboardFromHrEmail searches both.
 model Employee {
-  id              String   @id @default(uuid())
-  fullName        String
-  workEmail       String?  @unique @map("work_email")
-  personalEmails  String[] @map("personal_emails")
-  title           String?
-  department      String?
-  isActive        Boolean  @default(true) @map("is_active")
-  startedOn       DateTime? @map("started_on") @db.Date
-  leftOn          DateTime? @map("left_on")    @db.Date
-  notes           String?  @db.Text
+  id             String    @id @default(uuid())
+  fullName       String
+  workEmail      String?   @unique @map("work_email")
+  personalEmails String[]  @map("personal_emails")
+  title          String?
+  department     String?
+  isActive       Boolean   @default(true) @map("is_active")
+  startedOn      DateTime? @map("started_on") @db.Date
+  leftOn         DateTime? @map("left_on") @db.Date
+  notes          String?   @db.Text
 
   // Nullable link to the HQ login. UNIQUE so the inverse on User
   // is a clean 1:1; reverse is User.employee.
-  userId          String?  @unique @map("user_id")
-  user            User?    @relation("EmployeeUserLink", fields: [userId], references: [id], onDelete: SetNull)
+  userId String? @unique @map("user_id")
+  user   User?   @relation("EmployeeUserLink", fields: [userId], references: [id], onDelete: SetNull)
 
-  hrMail          HrMail[]
-  hrAttachments   HrAttachment[]
+  hrMail        HrMail[]
+  hrAttachments HrAttachment[]
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt      @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("hr_employees")
 }
@@ -4725,13 +4784,13 @@ model Employee {
 // inbound HR Gmail message; the HrMail disposition + HrAttachment
 // children point back to it.
 model HrEmail {
-  id              String   @id @default(uuid())
+  id              String  @id @default(uuid())
   // Same dedup contract EmailMessage has — Gmail's per-inbox id is
   // unique within an inbox; the RFC-2822 Message-Id is the cross-
   // inbox key (used for the staff-forward-into-hr@ idempotency check).
-  gmailMessageId  String   @unique @map("gmail_message_id")
-  rfc822MessageId String?  @map("rfc822_message_id")
-  inReplyTo       String?  @map("in_reply_to")
+  gmailMessageId  String  @unique @map("gmail_message_id")
+  rfc822MessageId String? @map("rfc822_message_id")
+  inReplyTo       String? @map("in_reply_to")
 
   fromAddress     String   @map("from_address")
   toAddresses     String[] @map("to_addresses")
@@ -4743,17 +4802,17 @@ model HrEmail {
   attachmentCount Int      @default(0) @map("attachment_count")
   routingHeaders  Json?    @map("routing_headers")
 
-  sentAt          DateTime @map("sent_at")
-  isRead          Boolean  @default(false) @map("is_read")
+  sentAt DateTime @map("sent_at")
+  isRead Boolean  @default(false) @map("is_read")
 
   // 0-or-1 — populated by onboardFromHrEmail. Null when the
   // background helper hasn't run yet (rare; fire-and-forget); the UI
   // treats missing disposition as "still being processed".
-  hrMail          HrMail?
-  attachments     HrAttachment[]
+  hrMail      HrMail?
+  attachments HrAttachment[]
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt      @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([rfc822MessageId])
   @@index([sentAt(sort: Desc)])
@@ -4774,37 +4833,37 @@ enum HrCategory {
 }
 
 enum HrDisposition {
-  FILED         // confident employee match + category assigned
-  NEEDS_REVIEW  // partial info — Wes/Dani assign manually
-  IGNORED       // non-HR noise (auto-replies, newsletters that slipped through)
+  FILED // confident employee match + category assigned
+  NEEDS_REVIEW // partial info — Wes/Dani assign manually
+  IGNORED // non-HR noise (auto-replies, newsletters that slipped through)
 }
 
 // HrMail — disposition + parse snapshot per HrEmail. Mirror of
 // ClaimMail's role on the claims side. employeeId is nullable for
 // NEEDS_REVIEW + IGNORED rows; the triage UI lets Wes/Dani assign it.
 model HrMail {
-  id              String        @id @default(uuid())
-  hrEmailId       String        @unique @map("hr_email_id")
-  employeeId      String?       @map("employee_id")
+  id         String  @id @default(uuid())
+  hrEmailId  String  @unique @map("hr_email_id")
+  employeeId String? @map("employee_id")
 
-  category        HrCategory
-  disposition    HrDisposition
+  category    HrCategory
+  disposition HrDisposition
   // Sonnet parse output: { employeeNameGuess, category, summary,
   // confidence, reasoning }. JSON keeps the surface flexible while
   // the classifier prompt evolves; the triage UI reads named keys.
-  parse           Json?
-  reason          String?
+  parse       Json?
+  reason      String?
 
-  dismissed       Boolean       @default(false)
-  reviewedById    String?       @map("reviewed_by_id")
-  reviewedAt      DateTime?     @map("reviewed_at")
+  dismissed    Boolean   @default(false)
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
 
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt      @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  hrEmail         HrEmail       @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
-  employee        Employee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  reviewedBy      User?         @relation("HrMailReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  hrEmail    HrEmail   @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  reviewedBy User?     @relation("HrMailReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, createdAt(sort: Desc)])
   @@index([disposition, dismissed])
@@ -4817,28 +4876,28 @@ model HrMail {
 // orphaned attachments (NEEDS_REVIEW / IGNORED) keep employeeId null
 // until the rep assigns the parent row.
 model HrAttachment {
-  id              String      @id @default(uuid())
-  hrEmailId       String?     @map("hr_email_id")
-  employeeId      String?     @map("employee_id")
+  id         String  @id @default(uuid())
+  hrEmailId  String? @map("hr_email_id")
+  employeeId String? @map("employee_id")
 
-  category        HrCategory  @default(OTHER)
-  title           String
-  fileUrl         String      @map("file_url")
-  mimeType        String?     @map("mime_type")
-  sizeBytes       Int?        @map("size_bytes")
-  notes           String?     @db.Text
+  category  HrCategory @default(OTHER)
+  title     String
+  fileUrl   String     @map("file_url")
+  mimeType  String?    @map("mime_type")
+  sizeBytes Int?       @map("size_bytes")
+  notes     String?    @db.Text
 
   // AI classifier provenance — same idea as ClaimDocument.typeSource
   // (EMAIL_INGEST vs AI_SUGGESTED vs USER). Reuses the existing
   // DocTypeSource enum since the semantics are identical.
-  typeSource      DocTypeSource? @map("type_source")
-  typeConfidence  Float?         @map("type_confidence")
+  typeSource     DocTypeSource? @map("type_source")
+  typeConfidence Float?         @map("type_confidence")
 
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt      @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  hrEmail         HrEmail?    @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
-  employee        Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  hrEmail  HrEmail?  @relation(fields: [hrEmailId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   @@index([employeeId, createdAt(sort: Desc)])
   @@index([hrEmailId])
@@ -4866,18 +4925,18 @@ model HrAttachment {
 // only.
 
 enum IncidentSource {
-  EMAIL              // claim-mail "Open incident report"
-  RETURN_INSPECTION  // captured during the L&D return-check (future
-                     //   bridge; not auto-created in this phase)
-  MANUAL             // dispatcher / rep clicks "+ New incident"
+  EMAIL // claim-mail "Open incident report"
+  RETURN_INSPECTION // captured during the L&D return-check (future
+  //   bridge; not auto-created in this phase)
+  MANUAL // dispatcher / rep clicks "+ New incident"
 }
 
 enum IncidentStatus {
   OPEN
-  CLAIM_FILED        // ≥1 InsuranceClaim with incidentId set
-  BILLED_RENTER      // ≥1 DamageItem with incidentId set + BILL_NOW
-  RESOLVED           // carrier + renter recovery complete
-  WRITTEN_OFF        // explicitly absorbed
+  CLAIM_FILED // ≥1 InsuranceClaim with incidentId set
+  BILLED_RENTER // ≥1 DamageItem with incidentId set + BILL_NOW
+  RESOLVED // carrier + renter recovery complete
+  WRITTEN_OFF // explicitly absorbed
 }
 
 /// Stored severity override on an Incident. NULL means "auto" — the
@@ -4917,29 +4976,29 @@ model Incident {
   // ── Phase 3 worklist teeth (all additive, all nullable) ─────────
   /// Severity override — NULL means "auto-derive from linked mail".
   /// API computes `effectiveSeverity = severity ?? derivedSeverity`.
-  severity IncidentSeverity? @map("severity")
+  severity        IncidentSeverity? @map("severity")
   /// Who's actively working this incident. Phase 3 gate: anyone with
   /// canManageClaims (ADMIN + MANAGER + AGENT). Soft FK (SetNull on
   /// User delete) so a departing rep's incidents don't cascade.
-  assigneeId String? @map("assignee_id")
+  assigneeId      String?           @map("assignee_id")
   /// Human-owned next action. When set, the card surfaces this
   /// verbatim instead of the heuristic suggestion from
   /// computeSuggestedNextAction; when null, the heuristic shows as
   /// "Suggested:" with a "set action" affordance.
-  nextAction String? @db.Text @map("next_action")
+  nextAction      String?           @map("next_action") @db.Text
   /// When the assignee committed to having the next action done by.
   /// Indexed for the worklist's "overdue first" sort.
-  nextActionDueAt DateTime? @map("next_action_due_at")
+  nextActionDueAt DateTime?         @map("next_action_due_at")
   /// Driver who had the unit at time of loss. Distinct from the
   /// renter's primary booking contact (Order.jobContact). Backfilled
   /// from mail parse where available; editable in the card.
-  driverName String? @map("driver_name")
+  driverName      String?           @map("driver_name")
   // ────────────────────────────────────────────────────────────────
 
   createdById String? @map("created_by_id")
 
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt      @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
   asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
@@ -5014,18 +5073,18 @@ model PlanyoSyncRun {
 }
 
 model PlanyoSyncEvent {
-  id                  String       @id @default(uuid())
-  runId               String       @map("run_id")
+  id                  String        @id @default(uuid())
+  runId               String        @map("run_id")
   run                 PlanyoSyncRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   op                  PlanyoSyncOp
-  planyoReservationId String?      @map("planyo_reservation_id")
-  planyoCartId        String?      @map("planyo_cart_id")
-  bookingId           String?      @map("booking_id")
-  bookingItemId       String?      @map("booking_item_id")
+  planyoReservationId String?       @map("planyo_reservation_id")
+  planyoCartId        String?       @map("planyo_cart_id")
+  bookingId           String?       @map("booking_id")
+  bookingItemId       String?       @map("booking_item_id")
   before              Json?
   after               Json?
-  detail              String?      @db.Text
-  createdAt           DateTime     @default(now()) @map("created_at")
+  detail              String?       @db.Text
+  createdAt           DateTime      @default(now()) @map("created_at")
 
   @@index([runId])
   @@index([planyoReservationId])
@@ -5046,14 +5105,14 @@ model PlanyoSyncEvent {
 /// them through the public proxy /api/public/site-media/[slot], never
 /// as a raw blob src.
 model SiteSetting {
-  id                 String   @id @default("singleton")
+  id                 String  @id @default("singleton")
   /// Required poster / static-background JPG for the Home hero, and the
   /// <video poster> shown before/if the video plays (private blob URL).
-  heroPosterUrl      String?  @map("hero_poster_url")
+  heroPosterUrl      String? @map("hero_poster_url")
   /// Muted-loop MP4 background for the Home hero (private blob URL).
-  heroVideoUrl       String?  @map("hero_video_url")
+  heroVideoUrl       String? @map("hero_video_url")
   /// Optional lighter MP4 served under ~768px (private blob URL).
-  heroVideoMobileUrl String?  @map("hero_video_mobile_url")
+  heroVideoMobileUrl String? @map("hero_video_mobile_url")
 
   /// Standing lot GATE CODE — the single code shared by all drivers until
   /// it's physically reprogrammed at the gate. This field only RECORDS the
@@ -5069,7 +5128,7 @@ model SiteSetting {
 
   /// Master switch for the public "Who we are" team section on /contact.
   /// Off until the roster + photos are set in /admin/who-we-are.
-  whoWeAreEnabled     Boolean   @default(false) @map("who_we_are_enabled")
+  whoWeAreEnabled Boolean @default(false) @map("who_we_are_enabled")
 
   /// PUBLIC downloadable forms (PDF, private blob URLs) — served via the
   /// public proxy /api/public/forms/[slot]. Managed at /admin/forms.
@@ -5105,22 +5164,22 @@ model SiteSetting {
   paymentBankInfoKey      String? @map("payment_bank_info_key")
   paymentBankInfoFilename String? @map("payment_bank_info_filename")
 
-  formCoiUrl              String? @map("form_coi_url")
-  formW9Url               String? @map("form_w9_url")
-  formRentalAgreementUrl  String? @map("form_rental_agreement_url")
-  formStudioContractUrl   String? @map("form_studio_contract_url")
+  formCoiUrl             String? @map("form_coi_url")
+  formW9Url              String? @map("form_w9_url")
+  formRentalAgreementUrl String? @map("form_rental_agreement_url")
+  formStudioContractUrl  String? @map("form_studio_contract_url")
 
   /// Home diagonal service-nav tile images (private blob URLs) — served
   /// via /api/public/site-media/[slot] and managed at /admin/home-tiles.
   /// Each is duotone-tinted to its tile color on the Home page; a null
   /// slot falls back to the solid tile color (graceful empty state).
-  tileTruckingUrl     String? @map("tile_trucking_url")
-  tileStagesUrl       String? @map("tile_stages_url")
-  tileStandingSetsUrl String? @map("tile_standing_sets_url")
-  tileLedWallUrl      String? @map("tile_led_wall_url")
-  tileSuppliesUrl     String? @map("tile_supplies_url")
-  tileRadiosWifiUrl   String? @map("tile_radios_wifi_url")
-  tileGripElectricUrl String? @map("tile_grip_electric_url")
+  tileTruckingUrl       String? @map("tile_trucking_url")
+  tileStagesUrl         String? @map("tile_stages_url")
+  tileStandingSetsUrl   String? @map("tile_standing_sets_url")
+  tileLedWallUrl        String? @map("tile_led_wall_url")
+  tileSuppliesUrl       String? @map("tile_supplies_url")
+  tileRadiosWifiUrl     String? @map("tile_radios_wifi_url")
+  tileGripElectricUrl   String? @map("tile_grip_electric_url")
   tileWardrobeMakeupUrl String? @map("tile_wardrobe_makeup_url")
 
   /// Editable public-page hero titles (the H1 on each marketing page). Null →
@@ -5130,8 +5189,8 @@ model SiteSetting {
   titleVehicles     String? @map("title_vehicles")
   titleContact      String? @map("title_contact")
 
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sr_site_settings")
 }
@@ -5223,33 +5282,33 @@ model JobDocument {
 /// populated). Job-level joining is NOT possible: Booking.rentalworksOrderId
 /// is unpopulated. Retire with RW.
 model RwInvoice {
-  id             String    @id @default(uuid())
-  rwInvoiceId    String    @unique @map("rw_invoice_id")
-  invoiceNumber  String?   @map("invoice_number")
-  invoiceType    String?   @map("invoice_type")
-  status         String?
-  invoiceDate    DateTime? @map("invoice_date")
-  dueDate        DateTime? @map("due_date")
-  rwOrderId      String?   @map("rw_order_id")
-  orderNumber    String?   @map("order_number")
-  rwCustomerId   String?   @map("rw_customer_id")
-  customerName   String?   @map("customer_name")
-  poNumber       String?   @map("po_number")
+  id                 String    @id @default(uuid())
+  rwInvoiceId        String    @unique @map("rw_invoice_id")
+  invoiceNumber      String?   @map("invoice_number")
+  invoiceType        String?   @map("invoice_type")
+  status             String?
+  invoiceDate        DateTime? @map("invoice_date")
+  dueDate            DateTime? @map("due_date")
+  rwOrderId          String?   @map("rw_order_id")
+  orderNumber        String?   @map("order_number")
+  rwCustomerId       String?   @map("rw_customer_id")
+  customerName       String?   @map("customer_name")
+  poNumber           String?   @map("po_number")
   /// The evidence fields that make job<->order matching possible. `deal` is
   /// RW's production name and lines up with Job.name; `agent` lines up with
   /// the HQ job agent; billing dates are the real rental window.
-  dealName          String?   @map("deal_name")
-  dealNumber        String?   @map("deal_number")
-  orderDescription  String?   @map("order_description")
-  invoiceDescription String?  @map("invoice_description")
-  agent             String?
-  billingStartDate  DateTime? @map("billing_start_date")
-  billingEndDate    DateTime? @map("billing_end_date")
-  orderDate         DateTime? @map("order_date")
-  invoiceTotal   Decimal   @default(0) @map("invoice_total") @db.Decimal(12, 2)
-  receivedTotal  Decimal   @default(0) @map("received_total") @db.Decimal(12, 2)
-  remainingTotal Decimal   @default(0) @map("remaining_total") @db.Decimal(12, 2)
-  syncedAt       DateTime  @default(now()) @map("synced_at")
+  dealName           String?   @map("deal_name")
+  dealNumber         String?   @map("deal_number")
+  orderDescription   String?   @map("order_description")
+  invoiceDescription String?   @map("invoice_description")
+  agent              String?
+  billingStartDate   DateTime? @map("billing_start_date")
+  billingEndDate     DateTime? @map("billing_end_date")
+  orderDate          DateTime? @map("order_date")
+  invoiceTotal       Decimal   @default(0) @map("invoice_total") @db.Decimal(12, 2)
+  receivedTotal      Decimal   @default(0) @map("received_total") @db.Decimal(12, 2)
+  remainingTotal     Decimal   @default(0) @map("remaining_total") @db.Decimal(12, 2)
+  syncedAt           DateTime  @default(now()) @map("synced_at")
 
   @@index([rwCustomerId])
   @@index([remainingTotal])
