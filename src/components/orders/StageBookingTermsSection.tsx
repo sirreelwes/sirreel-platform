@@ -1,17 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { STAGE_AREAS } from "@/lib/contracts/stageAreas";
 
 /**
  * Sales-facing form for capturing negotiated stage-booking terms, plus a
  * "Generate Stage Contract" button that POSTs to the generator endpoint.
  *
- * Visibility: parent controls render — typically when the Order has a
- * STAGE line item or Order.contractType ∈ {'stage', 'both'}.
+ * Dates are picked on a real calendar (non-contiguous days are normal for
+ * stage bookings — prep / shoot / strike with gaps), spaces are checkboxes
+ * off the STAGE_AREAS single source with an escape hatch for anything not
+ * on the list, and the day count × rate total is shown live so the rep sees
+ * what the client will owe before generating.
  *
- * Spaces & dates use simple text inputs for MVP (one date per line, one
- * space per line). A richer date-picker / space-picker can ship later
- * without breaking the API contract.
+ * The API contract is unchanged: rentalDates is still string[] of
+ * 'yyyy-MM-dd' and specificSpaces is still string[] of labels.
  */
 
 interface StageContractSummary {
@@ -43,6 +46,40 @@ const EMPTY_TERMS: Terms = {
   salesNotes: null,
 };
 
+const AREA_LABELS = STAGE_AREAS.map((a) => a.label);
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW = ["S", "M", "T", "W", "T", "F", "S"];
+
+/** 'yyyy-MM-dd' for a UTC-safe calendar cell. */
+function iso(y: number, m: number, d: number): string {
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+function parseIso(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+}
+const fmtDay = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** "Aug 10–12, Aug 15" — groups consecutive runs, matching the PDF. */
+function summarizeDates(dates: string[]): string {
+  const ds = dates.map(parseIso).filter((d): d is Date => !!d).sort((a, b) => +a - +b);
+  if (!ds.length) return "";
+  const runs: Date[][] = [[ds[0]]];
+  for (let i = 1; i < ds.length; i++) {
+    const prev = runs[runs.length - 1][runs[runs.length - 1].length - 1];
+    if (+ds[i] - +prev === 86_400_000) runs[runs.length - 1].push(ds[i]);
+    else runs.push([ds[i]]);
+  }
+  return runs
+    .map((r) =>
+      r.length === 1
+        ? fmtDay(r[0])
+        : `${fmtDay(r[0])}–${r[r.length - 1].toLocaleDateString("en-US", { day: "numeric", timeZone: "UTC" })}`,
+    )
+    .join(", ");
+}
+
 export function StageBookingTermsSection({
   orderId,
   onContractGenerated,
@@ -51,25 +88,38 @@ export function StageBookingTermsSection({
   onContractGenerated?: (agreement: StageContractSummary) => void;
 }) {
   const [terms, setTerms] = useState<Terms>(EMPTY_TERMS);
-  const [datesText, setDatesText] = useState("");
-  const [spacesText, setSpacesText] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [otherSpaces, setOtherSpaces] = useState("");
+  const [cursor, setCursor] = useState(() => {
+    const n = new Date();
+    return { y: n.getUTCFullYear(), m: n.getUTCMonth() };
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [contract, setContract] = useState<StageContractSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+
+  const applyTerms = useCallback((t: Terms) => {
+    setTerms(t);
+    setSelected(new Set(t.rentalDates));
+    // Anything stored that isn't a known area goes back in the "other" box.
+    setOtherSpaces(t.specificSpaces.filter((s) => !AREA_LABELS.includes(s)).join(", "));
+    // Open the calendar on the first booked month so edits start in context.
+    const first = t.rentalDates.map(parseIso).filter(Boolean).sort((a, b) => +a! - +b!)[0];
+    if (first) setCursor({ y: first.getUTCFullYear(), m: first.getUTCMonth() });
+    setDirty(false);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [tRes, cRes] = await Promise.all([
-        fetch(`/api/orders/${orderId}/stage-booking-terms`),
-        fetch(`/api/orders/${orderId}/agreement`).catch(() => null),
-      ]);
-      if (tRes.ok) {
-        const d = await tRes.json();
+      const res = await fetch(`/api/orders/${orderId}/stage-booking-terms`);
+      if (res.ok) {
+        const d = await res.json();
         if (d.terms) {
-          const t: Terms = {
+          applyTerms({
             id: d.terms.id,
             rentalDates: d.terms.rentalDates ?? [],
             dailyRate: d.terms.dailyRate ?? "",
@@ -78,52 +128,63 @@ export function StageBookingTermsSection({
             securityGuardRequired: !!d.terms.securityGuardRequired,
             salesNotes: d.terms.salesNotes ?? null,
             updatedAt: d.terms.updatedAt,
-          };
-          setTerms(t);
-          setDatesText(t.rentalDates.join("\n"));
-          setSpacesText(t.specificSpaces.join("\n"));
+          });
         }
-      }
-      // The /agreement endpoint only returns the rental agreement; the
-      // stage contract status comes back from the generate endpoint
-      // response. After page load we don't know it yet — that's fine,
-      // the UI shows "Not generated yet" until the rep clicks Generate.
-      if (cRes && cRes.ok) {
-        // no-op for now; reserved for if we add a list endpoint.
+        if (d.contract) setContract(d.contract);
       }
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, applyTerms]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+
+  const patch = (p: Partial<Terms>) => { setTerms((t) => ({ ...t, ...p })); setDirty(true); };
+  const toggleDay = (d: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(d) ? next.delete(d) : next.add(d);
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const sortedDates = useMemo(() => [...selected].sort(), [selected]);
+  const dayCount = sortedDates.length;
+  const rateNum = Number(terms.dailyRate || 0);
+  const estTotal = Number.isFinite(rateNum) ? rateNum * dayCount : 0;
+
+  // Calendar grid for the visible month.
+  const grid = useMemo(() => {
+    const first = new Date(Date.UTC(cursor.y, cursor.m, 1));
+    const startPad = first.getUTCDay();
+    const days = new Date(Date.UTC(cursor.y, cursor.m + 1, 0)).getUTCDate();
+    const cells: Array<{ iso: string; day: number } | null> = Array(startPad).fill(null);
+    for (let d = 1; d <= days; d++) cells.push({ iso: iso(cursor.y, cursor.m, d), day: d });
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [cursor]);
+
+  const buildSpaces = () => {
+    const extra = otherSpaces.split(/[\n,]/g).map((s) => s.trim()).filter(Boolean);
+    return [...terms.specificSpaces.filter((s) => AREA_LABELS.includes(s)), ...extra];
+  };
 
   const save = async () => {
     setSaving(true);
     setError(null);
-    const rentalDates = datesText
-      .split(/[\n,]/g)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const specificSpaces = spacesText
-      .split(/\n/g)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const payload = {
-      rentalDates,
-      dailyRate: terms.dailyRate,
-      productionOfficeRental: terms.productionOfficeRental,
-      specificSpaces,
-      securityGuardRequired: terms.securityGuardRequired,
-      salesNotes: terms.salesNotes,
-    };
     try {
       const res = await fetch(`/api/orders/${orderId}/stage-booking-terms`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          rentalDates: sortedDates,
+          dailyRate: terms.dailyRate,
+          productionOfficeRental: terms.productionOfficeRental,
+          specificSpaces: buildSpaces(),
+          securityGuardRequired: terms.securityGuardRequired,
+          salesNotes: terms.salesNotes,
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -131,7 +192,7 @@ export function StageBookingTermsSection({
         return;
       }
       const d = await res.json();
-      setTerms({
+      applyTerms({
         id: d.terms.id,
         rentalDates: d.terms.rentalDates ?? [],
         dailyRate: d.terms.dailyRate ?? "",
@@ -150,9 +211,7 @@ export function StageBookingTermsSection({
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch(`/api/orders/${orderId}/generate-stage-contract`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/orders/${orderId}/generate-stage-contract`, { method: "POST" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d.error || `Generate failed (HTTP ${res.status})`);
@@ -166,135 +225,249 @@ export function StageBookingTermsSection({
     }
   };
 
-  const canGenerate = terms.id !== undefined && !saving;
+  const selectedAreas = terms.specificSpaces.filter((s) => AREA_LABELS.includes(s));
+  const canGenerate = terms.id !== undefined && !saving && !dirty;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6 space-y-4">
+    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-6 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-lg font-semibold text-white">Stage Booking Terms</h2>
-          <div className="text-xs text-zinc-500 mt-0.5">
-            Negotiated parameters for the stage rental. Save these before generating the
-            pre-signed stage contract for the client to countersign.
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
+            Stage Booking Terms
+          </h2>
+          <div className="text-[12px] text-zinc-300 mt-1">
+            The negotiated terms that print on the client&rsquo;s stage contract.
           </div>
         </div>
         {terms.updatedAt && (
-          <span className="text-[11px] text-zinc-500">
-            Last saved {new Date(terms.updatedAt).toLocaleString()}
+          <span className="text-[11px] text-zinc-400">
+            Saved {new Date(terms.updatedAt).toLocaleString()}
           </span>
         )}
       </div>
 
       {loading ? (
-        <div className="text-sm text-zinc-500 py-3">Loading…</div>
+        <div className="text-[13px] text-zinc-400 py-3">Loading…</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-5">
+            {/* ── Calendar ── */}
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Rental dates (one per line, yyyy-MM-dd)</label>
-              <textarea
-                value={datesText}
-                onChange={(e) => setDatesText(e.target.value)}
-                rows={4}
-                placeholder={"2026-05-22\n2026-05-23\n2026-05-26"}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 font-mono"
-              />
-              <div className="text-[10px] text-zinc-500 mt-1">
-                Non-contiguous days are fine — the PDF groups runs (e.g. May 22–23, May 26).
+              <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                Rental days
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 w-fit">
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setCursor((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { ...c, m: c.m - 1 }))}
+                    className="w-7 h-7 rounded-lg text-zinc-300 hover:bg-zinc-800"
+                    aria-label="Previous month"
+                  >
+                    ‹
+                  </button>
+                  <div className="text-[13px] font-semibold text-white">
+                    {MONTHS[cursor.m]} {cursor.y}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCursor((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { ...c, m: c.m + 1 }))}
+                    className="w-7 h-7 rounded-lg text-zinc-300 hover:bg-zinc-800"
+                    aria-label="Next month"
+                  >
+                    ›
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 mb-1">
+                  {DOW.map((d, i) => (
+                    <div key={i} className="w-9 text-center text-[10px] font-semibold text-zinc-500">{d}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {grid.map((cell, i) =>
+                    cell === null ? (
+                      <div key={i} className="w-9 h-9" />
+                    ) : (
+                      <button
+                        key={cell.iso}
+                        type="button"
+                        onClick={() => toggleDay(cell.iso)}
+                        className={`w-9 h-9 rounded-lg text-[13px] tabular-nums transition-colors ${
+                          selected.has(cell.iso)
+                            ? "bg-amber-600 text-white font-bold"
+                            : "text-zinc-300 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {cell.day}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center gap-2">
+                  <span className="text-[12px] text-zinc-300">
+                    {dayCount > 0 ? summarizeDates(sortedDates) : "Click days to select"}
+                  </span>
+                  {dayCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelected(new Set()); setDirty(true); }}
+                      className="ml-auto text-[11px] text-zinc-400 hover:text-white"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="text-[11px] text-zinc-400 mt-1.5">
+                Non-contiguous days are fine — the contract groups runs.
               </div>
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Daily rate (USD)</label>
-              <input
-                type="number"
-                min="0"
-                step="100"
-                value={terms.dailyRate}
-                onChange={(e) => setTerms((t) => ({ ...t, dailyRate: e.target.value }))}
-                placeholder="2500"
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">
-                Specific spaces (one per line — e.g. "Standing Sets", "LED Volume Stage")
-              </label>
-              <textarea
-                value={spacesText}
-                onChange={(e) => setSpacesText(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500"
-              />
-            </div>
-            <div className="flex items-start gap-3">
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
+
+            {/* ── Rate, spaces, options ── */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                    Daily rate (USD)
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={terms.dailyRate}
+                    onChange={(e) => patch({ dailyRate: e.target.value })}
+                    placeholder="2500"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  />
+                </label>
+                <div>
+                  <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                    Location fee
+                  </span>
+                  <div className="px-3 py-2 rounded-lg border border-amber-700/40 bg-amber-950/20">
+                    <div className="text-[18px] font-bold text-amber-300 tabular-nums">
+                      {estTotal > 0
+                        ? estTotal.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+                        : "—"}
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      {dayCount} day{dayCount === 1 ? "" : "s"}
+                      {rateNum > 0 && ` × ${rateNum.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                  Spaces booked
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {STAGE_AREAS.map((a) => {
+                    const on = selectedAreas.includes(a.label);
+                    return (
+                      <button
+                        key={a.key}
+                        type="button"
+                        onClick={() =>
+                          patch({
+                            specificSpaces: on
+                              ? terms.specificSpaces.filter((s) => s !== a.label)
+                              : [...terms.specificSpaces, a.label],
+                          })
+                        }
+                        className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors ${
+                          on
+                            ? "bg-amber-600 border-amber-600 text-white"
+                            : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-600"
+                        }`}
+                      >
+                        {on ? "✓ " : ""}{a.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <input
-                  type="checkbox"
-                  checked={terms.productionOfficeRental}
-                  onChange={(e) => setTerms((t) => ({ ...t, productionOfficeRental: e.target.checked }))}
-                  className="rounded"
+                  value={otherSpaces}
+                  onChange={(e) => { setOtherSpaces(e.target.value); setDirty(true); }}
+                  placeholder="Anything else (comma separated)…"
+                  className="mt-2 w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[13px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
                 />
-                Production office rental
-              </label>
-            </div>
-            <div className="flex items-start gap-3">
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={terms.securityGuardRequired}
-                  onChange={(e) => setTerms((t) => ({ ...t, securityGuardRequired: e.target.checked }))}
-                  className="rounded"
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["productionOfficeRental", "Production office rental"],
+                  ["securityGuardRequired", "Security guard required"],
+                ] as const).map(([key, label]) => {
+                  const on = terms[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => patch({ [key]: !on } as Partial<Terms>)}
+                      title={key === "securityGuardRequired" ? "Clause 4 — at Producer's expense" : undefined}
+                      className={`px-3 py-1.5 rounded-lg text-[13px] font-medium border transition-colors ${
+                        on
+                          ? "bg-zinc-700 border-zinc-600 text-white"
+                          : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                      }`}
+                    >
+                      {on ? "✓ " : ""}{label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <label className="block">
+                <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                  Sales notes <span className="normal-case font-normal text-zinc-500">— internal, not on the contract</span>
+                </span>
+                <textarea
+                  value={terms.salesNotes ?? ""}
+                  onChange={(e) => patch({ salesNotes: e.target.value || null })}
+                  rows={2}
+                  placeholder="e.g. negotiated down from $3,000 — client mentioned a competing quote"
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[13px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 resize-y"
                 />
-                Security guard required (clause 4, Producer&rsquo;s expense)
               </label>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Sales notes (internal — not on PDF)</label>
-              <textarea
-                value={terms.salesNotes ?? ""}
-                onChange={(e) => setTerms((t) => ({ ...t, salesNotes: e.target.value || null }))}
-                rows={2}
-                placeholder="e.g. negotiated down from $3000 — client mentioned competing studio quote"
-                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500"
-              />
             </div>
           </div>
 
           {error && (
-            <div className="text-sm text-red-300 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</div>
+            <div className="text-[13px] text-red-300 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</div>
           )}
 
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap pt-1">
             <button
               onClick={save}
               disabled={saving}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg transition-colors"
             >
-              {saving ? "Saving…" : "Save Terms"}
+              {saving ? "Saving…" : dirty ? "Save terms" : "Saved"}
             </button>
             <button
               onClick={generate}
               disabled={!canGenerate || generating}
-              title={!canGenerate ? "Save terms before generating the contract" : "Render the pre-signed stage contract PDF"}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors"
+              title={
+                dirty ? "Save your changes first" :
+                terms.id === undefined ? "Save terms before generating the contract" :
+                "Render the pre-signed stage contract PDF"
+              }
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-[13px] font-semibold rounded-lg transition-colors"
             >
-              {generating ? "Generating…" : contract ? "Re-generate Stage Contract" : "Generate Stage Contract"}
+              {generating ? "Generating…" : contract ? "Re-generate contract" : "Generate contract"}
             </button>
+            {dirty && <span className="text-[11px] text-amber-300">Unsaved changes</span>}
             {contract?.documentToSignUrl && (
               <a
                 href={`/api/orders/${orderId}/agreement/pdf?type=STAGE_CONTRACT`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-sm text-amber-300 hover:text-amber-200 underline"
+                className="text-[13px] font-semibold text-amber-300 hover:text-amber-200 ml-auto"
               >
-                View pre-signed PDF →
+                View contract PDF →
               </a>
-            )}
-            {contract && (
-              <span className="text-[11px] text-zinc-500">
-                Status: {contract.status.replace(/_/g, " ")}
-                {contract.baselineVersion ? ` · v${contract.baselineVersion}` : ""}
-              </span>
             )}
           </div>
         </>
