@@ -217,10 +217,17 @@ export async function syncHoldOnLineAdd(
 
   // No existing hold for this category — create at rank 1, status
   // REQUESTED, snapshot the category dailyRate. Mirrors holds/route.ts:273.
-  const category = await tx.assetCategory.findUnique({
-    where: { id: args.categoryId },
-    select: { dailyRate: true },
-  })
+  // Rate comes off the merged catalog row; the AssetCategory copy is
+  // frozen and would snapshot a stale price onto the hold.
+  const category =
+    (await tx.inventoryItem.findUnique({
+      where: { legacyAssetCategoryId: args.categoryId },
+      select: { dailyRate: true },
+    })) ??
+    (await tx.assetCategory.findUnique({
+      where: { id: args.categoryId },
+      select: { dailyRate: true },
+    }))
   if (!category) {
     throw new Error(`assetCategory ${args.categoryId} not found`)
   }

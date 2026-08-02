@@ -110,11 +110,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           totalUnits: true, sortOrder: true, dailyRate: true, weeklyRate: true,
         },
       });
-      // Catalog merge (Aug 2026): rates are READ from the merged
-      // InventoryItem now (see lib/pricing/resolveRate). An edit here that
-      // didn't write through would appear to save and then quietly price
-      // nothing differently. Mirror the same fields in this transaction so
-      // Fleet Pricing and the catalog can never disagree.
+      // Fleet Pricing's write path into the catalog. Every reader — the
+      // Fleet Pricing list itself included — resolves rates and names from
+      // InventoryItem, so this is where an edit actually lands. The
+      // AssetCategory row above is updated only to keep the id anchor's
+      // own fields honest; nothing reads them.
       //
       // weeklyRate is nullable on AssetCategory but not on InventoryItem;
       // a cleared weekly rate lands as 0, which resolveRate already reads

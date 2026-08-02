@@ -15,31 +15,41 @@ export async function GET(req: NextRequest) {
 
   const includeArchived = req.nextUrl.searchParams.get('includeArchived') === '1';
 
-  const rows = await prisma.assetCategory.findMany({
-    where: includeArchived ? {} : { isActive: true },
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  // Fleet Pricing lists the MERGED catalog rows. It used to read
+  // AssetCategory, which is frozen — with the write mirror gone it would
+  // have shown pre-merge prices and hidden every later edit. The `id`
+  // stays the AssetCategory id because the PATCH/image routes below are
+  // still keyed on it (and it anchors BookingItem.categoryId's FK).
+  const rows = await prisma.inventoryItem.findMany({
+    where: {
+      trackingMode: 'UNIT_TRACKED',
+      legacyAssetCategoryId: { not: null },
+      ...(includeArchived ? {} : { isActive: true }),
+    },
+    orderBy: [{ sortOrder: 'asc' }, { description: 'asc' }],
     select: {
-      id: true,
-      name: true,
+      legacyAssetCategoryId: true,
+      code: true,
+      description: true,
       slug: true,
       department: true,
-      totalUnits: true,
+      qtyOwned: true,
       sortOrder: true,
       dailyRate: true,
       weeklyRate: true,
       isActive: true,
       archivedAt: true,
       imageUrl: true,
-      _count: { select: { assets: true, orderLineItems: true, rateChangeLogs: true } },
+      _count: { select: { assets: true, lineItems: true, rateChanges: true } },
     },
   });
 
   const categories = rows.map((c) => ({
-    id: c.id,
-    name: c.name,
+    id: c.legacyAssetCategoryId as string,
+    name: c.description || c.code,
     slug: c.slug,
     department: c.department,
-    totalUnits: c.totalUnits,
+    totalUnits: c.qtyOwned,
     sortOrder: c.sortOrder,
     dailyRate: c.dailyRate.toString(),
     weeklyRate: c.weeklyRate != null ? c.weeklyRate.toString() : null,
@@ -51,10 +61,12 @@ export async function GET(req: NextRequest) {
     hasImage: !!c.imageUrl,
     // Reference counts for the guarded delete modal. total > 0 ⇒ archive-only.
     refs: {
+      // Relation names differ on InventoryItem; the response keys the
+      // delete modal reads are unchanged.
       assets: c._count.assets,
-      orderLineItems: c._count.orderLineItems,
-      rateChangeLogs: c._count.rateChangeLogs,
-      total: c._count.assets + c._count.orderLineItems + c._count.rateChangeLogs,
+      orderLineItems: c._count.lineItems,
+      rateChangeLogs: c._count.rateChanges,
+      total: c._count.assets + c._count.lineItems + c._count.rateChanges,
     },
   }));
 

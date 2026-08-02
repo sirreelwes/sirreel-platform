@@ -144,29 +144,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // (catalog/search reads it). Existing OrderLineItems snapshot their
       // own rate, so they are untouched. We only AUDIT the change here;
       // future quotes pull the new rate from the item itself.
-      // Catalog merge (Aug 2026): a row carrying legacyAssetCategoryId is a
-      // merged AssetCategory. Display surfaces that still join through the
-      // frozen assetCategory relation (order lines, dispatch, invoices,
-      // portal) would keep showing the OLD name after a rename here, so
-      // mirror the shared fields back in the same transaction. The two
-      // rows stay identical from either direction until the last of those
-      // readers moves over.
-      if (updated.legacyAssetCategoryId) {
-        const back: { name?: string; dailyRate?: string; weeklyRate?: string; isActive?: boolean; archivedAt?: Date | null } = {};
-        if (data.description !== undefined) back.name = String(data.description);
-        if (data.dailyRate !== undefined) back.dailyRate = String(data.dailyRate);
-        if (data.weeklyRate !== undefined) back.weeklyRate = String(data.weeklyRate);
-        if (data.isActive !== undefined) {
-          back.isActive = Boolean(data.isActive);
-          back.archivedAt = (data.archivedAt as Date | null) ?? null;
-        }
-        if (Object.keys(back).length > 0) {
-          await tx.assetCategory.update({
-            where: { id: updated.legacyAssetCategoryId },
-            data: back,
-          });
-        }
-      }
       if (rateChanged) {
         await tx.rateChangeLog.create({
           data: {

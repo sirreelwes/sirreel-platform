@@ -22,14 +22,35 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const categories = await prisma.assetCategory.findMany({
+  // Read the merged catalog rows so name and unit count are live —
+  // totalUnits on the frozen AssetCategory is NOT mirrored and drifts as
+  // soon as qtyOwned is edited. The returned `id` stays the AssetCategory
+  // id: the gantt posts it back as a hold's categoryId.
+  const rows = await prisma.inventoryItem.findMany({
     where: {
       department: { in: [LineItemDepartment.VEHICLES, LineItemDepartment.STAGES] },
       reservableOnGantt: true,
+      legacyAssetCategoryId: { not: null },
       assets: { some: {} },
     },
-    select: { id: true, name: true, slug: true, totalUnits: true, planyoResourceId: true, department: true },
-    orderBy: { name: 'asc' },
+    select: {
+      legacyAssetCategoryId: true,
+      description: true,
+      code: true,
+      slug: true,
+      qtyOwned: true,
+      planyoResourceId: true,
+      department: true,
+    },
+    orderBy: { description: 'asc' },
   })
+  const categories = rows.map((r) => ({
+    id: r.legacyAssetCategoryId as string,
+    name: r.description || r.code,
+    slug: r.slug,
+    totalUnits: r.qtyOwned,
+    planyoResourceId: r.planyoResourceId,
+    department: r.department,
+  }))
   return NextResponse.json({ ok: true, categories })
 }

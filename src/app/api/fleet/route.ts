@@ -73,11 +73,27 @@ export async function GET(req: NextRequest) {
       ]
     })
 
-    const categories = await prisma.assetCategory.findMany({
-      where: { department: 'VEHICLES', assets: { some: { isActive: true } } },
-      select: { id: true, name: true, _count: { select: { assets: true } } },
-      orderBy: { name: 'asc' }
+    // Names come off the merged catalog row; the id stays the
+    // AssetCategory id because Asset.categoryId is what's grouped on.
+    const categoryRows = await prisma.inventoryItem.findMany({
+      where: {
+        department: 'VEHICLES',
+        legacyAssetCategoryId: { not: null },
+        assets: { some: { isActive: true } },
+      },
+      select: {
+        legacyAssetCategoryId: true,
+        description: true,
+        code: true,
+        _count: { select: { assets: true } },
+      },
+      orderBy: { description: 'asc' },
     })
+    const categories = categoryRows.map((c) => ({
+      id: c.legacyAssetCategoryId as string,
+      name: c.description || c.code,
+      _count: c._count,
+    }))
 
     // Latest BIT inspection date per unit (max inspectionDate) for the DOT
     // at-a-glance. The PDF itself loads lazily through the gated proxy.

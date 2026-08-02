@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
@@ -84,9 +85,12 @@ export async function POST(req: NextRequest, { params }: Params) {
         });
         if (inv) gateDepartment = inv.department;
       } else if (assetCategoryId) {
-        const ac = await prisma.assetCategory.findUnique({
-          where: { id: assetCategoryId }, select: { department: true },
-        });
+        const acId = await catalogIdForAssetCategory(assetCategoryId)
+        const ac = acId
+          ? await prisma.inventoryItem.findUnique({
+              where: { id: acId }, select: { department: true },
+            })
+          : null;
         if (ac) gateDepartment = ac.department;
       }
     }
@@ -221,9 +225,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       // rule; every other category keeps the standard inclusive count.
       let truckSlug: string | null = null;
       if (assetCategoryId) {
-        const acSlug = await prisma.assetCategory.findUnique({
-          where: { id: assetCategoryId }, select: { slug: true },
-        });
+        const slugId = await catalogIdForAssetCategory(assetCategoryId)
+        const acSlug = slugId
+          ? await prisma.inventoryItem.findUnique({
+              where: { id: slugId }, select: { slug: true },
+            })
+          : null;
         truckSlug = acSlug?.slug ?? null;
       }
       days = estimateRentalDays(pickupResolved, returnResolved, truckSlug);
@@ -240,9 +247,12 @@ export async function POST(req: NextRequest, { params }: Params) {
         });
         if (inv) resolvedDepartment = inv.department;
       } else if (assetCategoryId) {
-        const ac = await prisma.assetCategory.findUnique({
-          where: { id: assetCategoryId }, select: { department: true },
-        });
+        const acId = await catalogIdForAssetCategory(assetCategoryId)
+        const ac = acId
+          ? await prisma.inventoryItem.findUnique({
+              where: { id: acId }, select: { department: true },
+            })
+          : null;
         if (ac) resolvedDepartment = ac.department;
       }
     }

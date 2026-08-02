@@ -73,11 +73,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       contentType: file.type,
       data: buf,
     })
-    const updated = await prisma.assetCategory.update({
-      where: { id },
-      data: { imageUrl: fileUrl },
-      select: { id: true, slug: true, imageUrl: true },
-    })
+    // Fleet Pricing LISTS imageUrl off the merged catalog row, so an
+    // upload that only wrote here would save and then show no image.
+    const [updated] = await prisma.$transaction([
+      prisma.assetCategory.update({
+        where: { id },
+        data: { imageUrl: fileUrl },
+        select: { id: true, slug: true, imageUrl: true },
+      }),
+      prisma.inventoryItem.updateMany({
+        where: { legacyAssetCategoryId: id },
+        data: { imageUrl: fileUrl },
+      }),
+    ])
     return NextResponse.json({ ok: true, category: updated })
   } catch (err) {
     console.error('[asset-category image POST] upload failed:', err)
@@ -93,6 +101,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (gate instanceof NextResponse) return gate
 
   const { id } = await params
+  await prisma.inventoryItem.updateMany({
+    where: { legacyAssetCategoryId: id },
+    data: { imageUrl: null },
+  })
   const updated = await prisma.assetCategory
     .update({ where: { id }, data: { imageUrl: null }, select: { id: true, slug: true, imageUrl: true } })
     .catch(() => null)

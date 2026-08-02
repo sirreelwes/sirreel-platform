@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { LineItemDepartment, RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
 import { computeLineTotal } from "@/lib/orders/billing";
@@ -184,7 +185,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
             const effCatId = assetCategoryId !== undefined ? (assetCategoryId || null) : existing.assetCategoryId;
             let truckSlug: string | null = null;
             if (effCatId) {
-              const ac = await prisma.assetCategory.findUnique({ where: { id: effCatId }, select: { slug: true } });
+              const effCatalogId = await catalogIdForAssetCategory(effCatId);
+              const ac = effCatalogId
+                ? await prisma.inventoryItem.findUnique({ where: { id: effCatalogId }, select: { slug: true } })
+                : null;
               truckSlug = ac?.slug ?? null;
             }
             effectiveDays = estimateRentalDays(p, r, truckSlug);

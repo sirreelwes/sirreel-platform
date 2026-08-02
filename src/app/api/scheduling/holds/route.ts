@@ -131,11 +131,26 @@ export async function POST(req: NextRequest) {
   const agentId = body.agentId || actor.id
   if (!agentId) return NextResponse.json({ error: 'agentId required (none in body or session)' }, { status: 400 })
 
-  // Look up category for the dailyRate default; also confirms it exists.
-  const category = await prisma.assetCategory.findUnique({
-    where: { id: body.categoryId },
-    select: { id: true, name: true, dailyRate: true, department: true },
+  // Look up the category for the dailyRate default; also confirms it
+  // exists. Read the MERGED catalog row — the AssetCategory copy is
+  // frozen, so a hold created from it would snapshot a stale rate.
+  // categoryId stays an AssetCategory id: it is the scheduling key and
+  // the target of BookingItem.categoryId's NOT NULL FK.
+  const merged = await prisma.inventoryItem.findUnique({
+    where: { legacyAssetCategoryId: body.categoryId },
+    select: { description: true, code: true, dailyRate: true, department: true },
   })
+  const category = merged
+    ? {
+        id: body.categoryId,
+        name: merged.description || merged.code,
+        dailyRate: merged.dailyRate,
+        department: merged.department,
+      }
+    : await prisma.assetCategory.findUnique({
+        where: { id: body.categoryId },
+        select: { id: true, name: true, dailyRate: true, department: true },
+      })
   if (!category) return NextResponse.json({ error: 'category not found' }, { status: 404 })
 
   // Determine effective rank. Default = 1 (primary). isBackup=true

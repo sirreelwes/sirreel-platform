@@ -160,10 +160,25 @@ export async function getCategoryAvailability(
   // and the pooled count is understated by its own demand.
   excludeBookingItemId?: string | null,
 ): Promise<CategoryAvailability> {
-  const category = await prisma.assetCategory.findUnique({
-    where: { id: categoryId },
-    select: { id: true, name: true, slug: true, totalUnits: true },
+  // Display fields come off the merged catalog row. totalUnits on the
+  // frozen AssetCategory was never mirrored, so it goes stale the moment
+  // qtyOwned is edited. The serviceable count below still comes from the
+  // Asset rows themselves, which both rows share.
+  const merged = await prisma.inventoryItem.findUnique({
+    where: { legacyAssetCategoryId: categoryId },
+    select: { description: true, code: true, slug: true, qtyOwned: true },
   })
+  const category = merged
+    ? {
+        id: categoryId,
+        name: merged.description || merged.code,
+        slug: merged.slug ?? '',
+        totalUnits: merged.qtyOwned,
+      }
+    : await prisma.assetCategory.findUnique({
+        where: { id: categoryId },
+        select: { id: true, name: true, slug: true, totalUnits: true },
+      })
 
   const assets = await prisma.asset.findMany({
     where: {

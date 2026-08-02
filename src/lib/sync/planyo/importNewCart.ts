@@ -82,6 +82,8 @@ export interface BookingDraft {
 
 export interface BookingItemDraft {
   categoryId: string
+  /** Merged catalog row for the same thing; see resourceCrosswalk. */
+  catalogItemId: string
   categoryName: string
   quantity: number
   dailyRate: number
@@ -150,7 +152,7 @@ interface PlanInputs {
   /** Map of resource_id → AssetCategory {id, name, dailyRate}.
    *  Lines on resources not in this map are skipped at the hold level
    *  (they'd be FLAG_UNMAPPED in the sync). */
-  crosswalk: Map<number, { id: string; name: string; dailyRate: number }>
+  crosswalk: Map<number, { id: string; catalogItemId: string; name: string; dailyRate: number }>
 }
 
 interface PlanDeps {
@@ -344,6 +346,7 @@ export async function planCartImport(
     } else {
       byCategory.set(cat.id, {
         categoryId: cat.id,
+        catalogItemId: cat.catalogItemId,
         categoryName: cat.name,
         quantity: 1,
         dailyRate: cat.dailyRate,
@@ -507,6 +510,7 @@ export async function applyCartImport(
         data: {
           bookingId: booking.id,
           categoryId: item.categoryId,
+          catalogItemId: item.catalogItemId,
           quantity: item.quantity,
           dailyRate: item.dailyRate,
           status: 'REQUESTED',
