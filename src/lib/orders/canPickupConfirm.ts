@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { isStageLineItem } from './stageLines'
 
 /**
  * Gate for transitioning an Order to PICKUP_CONFIRMED status.
@@ -6,7 +7,8 @@ import { prisma } from '@/lib/prisma'
  * Rule (CRH brief, May 2026): every contract the Order *requires* must
  * be in a SIGNED status before pickup can be confirmed.
  *
- *   - If the order has any STAGE line items (matched by type or by an
+ *   - If the order has any stage line items (see isStageLineItem —
+ *     the STAGES department, the STAGE fulfillment lane, or a legacy
  *     asset-category name/slug containing "stage"), a STAGE_CONTRACT
  *     SignedAgreement must exist and be in SIGNED_BASELINE /
  *     SIGNED_NEGOTIATED.
@@ -35,14 +37,6 @@ export interface PickupConfirmGate {
 
 const SIGNED_STATUSES = new Set(['SIGNED_BASELINE', 'SIGNED_NEGOTIATED'])
 
-function isStageLine(li: { type: string; assetCategory: { name: string; slug: string } | null }): boolean {
-  return (
-    li.type === 'STAGE' ||
-    /stage/i.test(li.assetCategory?.name || '') ||
-    /stage/i.test(li.assetCategory?.slug || '')
-  )
-}
-
 export async function canPickupConfirm(orderId: string): Promise<PickupConfirmGate> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -51,7 +45,8 @@ export async function canPickupConfirm(orderId: string): Promise<PickupConfirmGa
       orderNumber: true,
       lineItems: {
         select: {
-          type: true,
+          department: true,
+          fulfillmentLane: true,
           assetCategory: { select: { name: true, slug: true } },
         },
       },
@@ -62,8 +57,8 @@ export async function canPickupConfirm(orderId: string): Promise<PickupConfirmGa
   })
   if (!order) return { allowed: false, blockers: ['Order not found'] }
 
-  const requiresStage = order.lineItems.some(isStageLine)
-  const requiresRental = order.lineItems.some((li) => !isStageLine(li))
+  const requiresStage = order.lineItems.some(isStageLineItem)
+  const requiresRental = order.lineItems.some((li) => !isStageLineItem(li))
 
   const blockers: string[] = []
   if (requiresRental) {

@@ -30,6 +30,7 @@ import {
   isLineItemEditable as isLineItemEditableFn,
   lineEditLockReason as lineEditLockReasonFn,
 } from "@/lib/orders/editability";
+import { isStageLineItem } from "@/lib/orders/stageLines";
 
 type LineItem = {
   id: string;
@@ -2963,11 +2964,12 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {/* Stage Booking Terms — shown when the order has a stage line item
-          (category slug contains "stage") or the line-items contain anything
-          flagged as a stage rental. Sales fills in negotiated terms here,
+      {/* Stage Booking Terms — shown when the order has a stage line item.
+          Stage-ness comes from the STAGES department (LineItemType has no
+          stage value — a stage day is EQUIPMENT in the STAGES department).
+          Sales fills in negotiated terms here,
           then generates the pre-signed stage contract for client countersign. */}
-      {order.lineItems.some((li) => /stage/i.test(li.assetCategory?.name || "") || li.type === "STAGE") && (
+      {order.lineItems.some(isStageLineItem) && (
         <StageBookingTermsSection orderId={order.id} />
       )}
 
