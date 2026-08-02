@@ -40,8 +40,18 @@ type LineItem = {
   rateType: string;
   rate: string;
   quantity: number;
-  days: number | null;
+  // The GET returns the Prisma row verbatim, so these are the Prisma
+  // field names. `days` (the column name) is NOT in the payload —
+  // reading it silently yielded undefined and rendered "--" on every
+  // order. billableDays is what bills; computedDays is the calendar
+  // span (max(1, returnDate - pickupDate)) the server derives.
+  billableDays: number | null;
+  computedDays: number | null;
   lineTotal: string;
+  // Always set — default to the parent order's range at write time.
+  pickupDate: string;
+  returnDate: string;
+  // Optional per-line override of the above; null on most lines.
   startDate: string | null;
   endDate: string | null;
   notes: string | null;
@@ -1540,7 +1550,8 @@ export default function OrderDetailPage() {
     setEditingLineId(li.id);
     setEditRate(String(Number(li.rate)));
     setEditQty(String(li.quantity));
-    setEditDays(li.days !== null && li.days !== undefined ? String(li.days) : "");
+    const seedDays = li.billableDays ?? li.computedDays;
+    setEditDays(seedDays !== null && seedDays !== undefined ? String(seedDays) : "");
     setEditDesc(li.description ?? "");
     setEditDept(li.department);
     setEditRateType(li.rateType ?? "DAILY");
@@ -1668,7 +1679,7 @@ export default function OrderDetailPage() {
             rateType: snapshot.rateType,
             rate: Number(snapshot.rate),
             quantity: snapshot.quantity,
-            billableDays: snapshot.days ?? undefined,
+            billableDays: snapshot.billableDays ?? undefined,
             notes: snapshot.notes ?? undefined,
           }),
         });
@@ -2445,7 +2456,7 @@ export default function OrderDetailPage() {
                     <td className="px-4 py-3 text-lt-fg">{li.description}</td>
                   )}
                   <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap text-xs">
-                    {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : "--"}
+                    {li.startDate ? `${fmtDate(li.startDate)} - ${fmtDate(li.endDate)}` : `${fmtDate(li.pickupDate)} - ${fmtDate(li.returnDate)}`}
                   </td>
                   {editingLineId === li.id ? (
                     <>
@@ -2483,7 +2494,23 @@ export default function OrderDetailPage() {
                         {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
                       </td>
                       <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
-                      <td className="px-4 py-3 text-center text-lt-fg2">{li.days ?? "--"}</td>
+                      <td className="px-4 py-3 text-center text-lt-fg2">
+                        {(() => {
+                          const billed = li.billableDays ?? li.computedDays;
+                          if (billed == null) return "--";
+                          // Billable under the calendar span is normal (weekly
+                          // cap, half-days) — surface it rather than hide it.
+                          const span = li.computedDays;
+                          return span != null && span !== billed ? (
+                            <span title={`${span} calendar days \u00b7 billing ${billed}`}>
+                              {billed}
+                              <span className="text-lt-fg3 text-[10px] ml-0.5">/{span}</span>
+                            </span>
+                          ) : (
+                            billed
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(li.lineTotal)}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
                         {(() => {
