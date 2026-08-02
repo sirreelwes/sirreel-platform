@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { Archivo, Hanken_Grotesk } from 'next/font/google'
 import { PublicSiteNav } from '@/components/site/PublicSiteNav'
 import { PublicSiteFooter } from '@/components/site/PublicSiteFooter'
@@ -29,6 +30,41 @@ const hanken = Hanken_Grotesk({
   variable: '--font-hanken',
   display: 'swap',
 })
+
+/**
+ * Public-site metadata defaults.
+ *
+ * The root layout sets robots noindex — correct for the staff dashboard
+ * and the client portal, which share it. This group is the ONLY part of
+ * the app that should be crawled, so it flips indexing back on and adds
+ * the social-card defaults every marketing page inherits.
+ *
+ * `title.default` covers pages that set no title of their own; those used
+ * to fall through to the root layout's "SirReel HQ / Production vehicle
+ * fleet management platform", i.e. the internal tool's name on the
+ * marketing homepage.
+ */
+export const metadata: Metadata = {
+  title: {
+    default: 'SirReel Production Vehicles — Production Trucks, Stages & Standing Sets in LA',
+    template: '%s',
+  },
+  description:
+    'SirReel rents production vehicles, sound stages and standing sets to film and television productions in Los Angeles — cube trucks, cargo and passenger vans, camera cubes, and the Lankershim stages.',
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    siteName: 'SirReel Production Vehicles',
+    locale: 'en_US',
+    url: '/',
+    images: [{ url: '/full-logo.jpg', alt: 'SirReel Production Vehicles' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    images: ['/full-logo.jpg'],
+  },
+}
 
 export default async function PublicSiteLayout({ children }: { children: React.ReactNode }) {
   // Publish gate for the Studios ▾ nav: the "Standing Sets" entry stays a

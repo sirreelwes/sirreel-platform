@@ -58,6 +58,10 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/images/',          // static marketing images (stages heroes, etc.)
   '/public/',
   '/api/health',
+  // SEO surface. Without these the crawler gets a 404 for the very
+  // sitemap robots.txt advertises.
+  '/robots.txt',
+  '/sitemap.xml',
 ]
 
 // Paths reachable on the public supply-order host. Root is rewritten to the
@@ -86,6 +90,10 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/images/',          // static marketing images (stages heroes, etc.)
   '/public/',
   '/api/health',
+  // SEO surface. Without these the crawler gets a 404 for the very
+  // sitemap robots.txt advertises.
+  '/robots.txt',
+  '/sitemap.xml',
 ]
 
 // Paths that are allowed on the portal host. Everything else 404s.

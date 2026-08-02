@@ -13,6 +13,16 @@
  * never take the page down (it degrades to all-solid-color tiles).
  */
 
+import type { Metadata } from 'next'
+import { PublicSiteJsonLd } from '@/components/site/PublicSiteJsonLd'
+
+export const metadata: Metadata = {
+  title: 'SirReel Production Vehicles — Production Trucks, Stages & Standing Sets in LA',
+  description:
+    'Production vehicle and stage rentals for film and TV in Los Angeles. Cube trucks, cargo and passenger vans, camera cubes, sound stages and standing sets — with 24/7 production support.',
+  alternates: { canonical: '/' },
+}
+
 import { prisma } from '@/lib/prisma'
 import { HOME_TILES } from '@/lib/site/homeTiles'
 import { ServiceTiles } from '@/components/site/ServiceTiles'
@@ -68,5 +78,11 @@ export default async function PublicHomePage() {
     return base
   })
 
-  return <ServiceTiles tiles={tiles} />
+  return (
+    <>
+      {/* LocalBusiness structured data — Home only. */}
+      <PublicSiteJsonLd />
+      <ServiceTiles tiles={tiles} />
+    </>
+  )
 }

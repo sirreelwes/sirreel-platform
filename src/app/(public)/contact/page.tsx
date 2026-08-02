@@ -8,6 +8,15 @@
  * renders here only once enabled — off for now.
  */
 
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Contact SirReel — Quotes, Bookings & Production Support',
+  description:
+    'Get a quote or reach SirReel about production vehicle, stage and standing-set rentals in Los Angeles.',
+  alternates: { canonical: '/contact' },
+}
+
 import { ContactForm } from '@/components/site/ContactForm'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 import { getPageTitles } from '@/lib/site/siteSettings'
