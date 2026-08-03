@@ -42,7 +42,7 @@ interface Terms {
 const EMPTY_TERMS: Terms = {
   rentalDates: [],
   dailyRate: "",
-  dayLengthHours: "",
+  dayLengthHours: "12",
   overtimeHourlyRate: "",
   productionOfficeRental: false,
   specificSpaces: [],
@@ -127,7 +127,7 @@ export function StageBookingTermsSection({
             id: d.terms.id,
             rentalDates: d.terms.rentalDates ?? [],
             dailyRate: d.terms.dailyRate ?? "",
-            dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "",
+            dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "12",
             overtimeHourlyRate: d.terms.overtimeHourlyRate ?? "",
             productionOfficeRental: !!d.terms.productionOfficeRental,
             specificSpaces: d.terms.specificSpaces ?? [],
@@ -204,7 +204,7 @@ export function StageBookingTermsSection({
         id: d.terms.id,
         rentalDates: d.terms.rentalDates ?? [],
         dailyRate: d.terms.dailyRate ?? "",
-        dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "",
+        dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "12",
         overtimeHourlyRate: d.terms.overtimeHourlyRate ?? "",
         productionOfficeRental: !!d.terms.productionOfficeRental,
         specificSpaces: d.terms.specificSpaces ?? [],
@@ -236,7 +236,13 @@ export function StageBookingTermsSection({
   };
 
   const selectedAreas = terms.specificSpaces.filter((s) => AREA_LABELS.includes(s));
-  const canGenerate = terms.id !== undefined && !saving && !dirty;
+  // Both are required on the contract, so Generate stays disabled until
+  // they're filled — clicking into a server 409 is a worse experience
+  // than a disabled button with a reason on it.
+  const hasDayLength = terms.dayLengthHours.trim() !== "";
+  const hasOvertime = terms.overtimeHourlyRate.trim() !== "";
+  const canGenerate =
+    terms.id !== undefined && !saving && !dirty && hasDayLength && hasOvertime;
 
   return (
     <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-6 space-y-4">
@@ -336,7 +342,7 @@ export function StageBookingTermsSection({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block">
                   <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
-                    Day length (hours)
+                    Day length (hours) <span className="text-amber-400">*</span>
                   </span>
                   <input
                     type="number"
@@ -349,12 +355,12 @@ export function StageBookingTermsSection({
                     className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
                   />
                   <span className="block mt-1 text-[11px] text-zinc-500">
-                    What the daily rate buys. Blank = not specified on the contract.
+                    What the daily rate buys. Required — defaults to 12.
                   </span>
                 </label>
                 <label className="block">
                   <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
-                    Overtime rate (USD / hour)
+                    Overtime rate (USD / hour) <span className="text-amber-400">*</span>
                   </span>
                   <input
                     type="number"
@@ -366,7 +372,7 @@ export function StageBookingTermsSection({
                     className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
                   />
                   <span className="block mt-1 text-[11px] text-zinc-500">
-                    Charged per hour beyond the day length.
+                    Charged per hour beyond the day length. Required — enter 0 if not charged.
                   </span>
                 </label>
               </div>
@@ -504,6 +510,8 @@ export function StageBookingTermsSection({
               title={
                 dirty ? "Save your changes first" :
                 terms.id === undefined ? "Save terms before generating the contract" :
+                !hasDayLength ? "Set the day length — the contract must state what a day is" :
+                !hasOvertime ? "Set the overtime rate — enter 0 if overtime isn't charged" :
                 "Render the pre-signed stage contract PDF"
               }
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-[13px] font-semibold rounded-lg transition-colors"

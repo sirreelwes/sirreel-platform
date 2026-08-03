@@ -36,8 +36,8 @@ function coerceTerms(input: StageBookingTermsInput): {
   data: {
     rentalDates: string[]
     dailyRate: string
-    dayLengthHours: number | null
-    overtimeHourlyRate: string | null
+    dayLengthHours: number
+    overtimeHourlyRate: string
     productionOfficeRental: boolean
     specificSpaces: string[]
     securityGuardRequired: boolean
@@ -55,28 +55,31 @@ function coerceTerms(input: StageBookingTermsInput): {
 
   // dailyRate stored as Decimal — accept number or numeric string. Reject
   // anything that can't round-trip as a positive amount.
-  // Day length: whole hours, 1-24. Optional — a booking with no agreed
-  // day length must say "not specified" on the contract rather than have
-  // a number invented for it.
-  let dayLen: number | null = null
-  if (input.dayLengthHours !== undefined && input.dayLengthHours !== null && input.dayLengthHours !== '') {
-    const n = Number(input.dayLengthHours)
-    if (!Number.isInteger(n) || n < 1 || n > 24) {
-      return { ok: false, error: 'dayLengthHours must be a whole number of hours between 1 and 24' }
-    }
-    dayLen = n
+  // Day length and overtime are REQUIRED (Wes, Aug 2026): every stage
+  // booking states both, so a contract can't go out silently omitting
+  // what a "day" is or what happens past it. The columns stay nullable
+  // rather than taking a DB default — a default would quietly supply 12
+  // to any future code path that forgot to ask, where a null fails loudly
+  // and gets fixed.
+  if (input.dayLengthHours === undefined || input.dayLengthHours === null || input.dayLengthHours === '') {
+    return { ok: false, error: 'Day length is required — how many hours the daily rate buys' }
   }
+  const dayLenNum = Number(input.dayLengthHours)
+  if (!Number.isInteger(dayLenNum) || dayLenNum < 1 || dayLenNum > 24) {
+    return { ok: false, error: 'dayLengthHours must be a whole number of hours between 1 and 24' }
+  }
+  const dayLen: number = dayLenNum
 
-  // Overtime rate: per hour beyond the day length. Zero is meaningful
-  // ("no overtime charge"), so only negatives and junk are rejected.
-  let otRate: string | null = null
-  if (input.overtimeHourlyRate !== undefined && input.overtimeHourlyRate !== null && input.overtimeHourlyRate !== '') {
-    const n = Number(input.overtimeHourlyRate)
-    if (!Number.isFinite(n) || n < 0) {
-      return { ok: false, error: 'overtimeHourlyRate must be a non-negative number' }
-    }
-    otRate = n.toFixed(2)
+  // Zero is meaningful here ("no overtime charge"), so it must be typed
+  // explicitly rather than inferred from a blank field.
+  if (input.overtimeHourlyRate === undefined || input.overtimeHourlyRate === null || input.overtimeHourlyRate === '') {
+    return { ok: false, error: 'Overtime rate is required — enter 0 if overtime is not charged' }
   }
+  const otNum = Number(input.overtimeHourlyRate)
+  if (!Number.isFinite(otNum) || otNum < 0) {
+    return { ok: false, error: 'overtimeHourlyRate must be a non-negative number' }
+  }
+  const otRate: string = otNum.toFixed(2)
 
   const rateRaw = input.dailyRate
   const rateNum = typeof rateRaw === 'number' ? rateRaw : typeof rateRaw === 'string' ? Number(rateRaw) : NaN

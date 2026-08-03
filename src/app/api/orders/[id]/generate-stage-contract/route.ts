@@ -70,6 +70,17 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       { status: 409 },
     )
   }
+  // Rows saved before day length / overtime became required can still be
+  // sitting in the DB; the contract must not go out without them.
+  if (terms.dayLengthHours == null || terms.overtimeHourlyRate == null) {
+    return NextResponse.json(
+      {
+        error:
+          'Day length and overtime rate are required — set them in Stage Booking Terms before generating the contract',
+      },
+      { status: 409 },
+    )
+  }
 
   // Same assembly the portal countersign uses, so the executed copy can
   // never drift from the baseline the client reviewed.
