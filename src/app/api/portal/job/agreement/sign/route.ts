@@ -132,12 +132,24 @@ export async function POST(req: NextRequest) {
     where: { id: resolved.orderId },
     select: {
       company: { select: { name: true, billingAddress: true } },
-      job: { select: { jobCode: true, name: true, startDate: true, endDate: true } },
+      // "Rental period" on the contract is THIS order's window. It used
+      // to come off Job.startDate/endDate — a separately-typed job range
+      // that drifted from the orders it described, so a signed contract
+      // could state dates the order never had.
+      startDate: true,
+      endDate: true,
+      job: { select: { jobCode: true, name: true } },
     },
   })
   const pdfBuffer = await generateSignedAgreementPdf({
     company: orderForPdf?.company ?? null,
-    job: orderForPdf?.job ?? null,
+    job: orderForPdf?.job
+      ? {
+          ...orderForPdf.job,
+          startDate: orderForPdf.startDate,
+          endDate: orderForPdf.endDate,
+        }
+      : null,
     signature: {
       signerName,
       signerTitle: signerTitle ?? '',

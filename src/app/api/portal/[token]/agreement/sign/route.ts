@@ -165,7 +165,13 @@ export async function POST(
       id: true,
       orderNumber: true,
       company: { select: { name: true, billingAddress: true } },
-      job: { select: { jobCode: true, name: true, startDate: true, endDate: true } },
+      // "Rental period" on the contract is THIS order's window. It used
+      // to come off Job.startDate/endDate — a separately-typed job range
+      // that drifted from the orders it described, so a signed contract
+      // could state dates the order never had.
+      startDate: true,
+      endDate: true,
+      job: { select: { jobCode: true, name: true } },
       bookingId: true,
     },
   })
@@ -184,8 +190,8 @@ export async function POST(
       job: {
         jobCode: orderRow.job?.jobCode || null,
         name: orderRow.job?.name || null,
-        startDate: orderRow.job?.startDate || null,
-        endDate: orderRow.job?.endDate || null,
+        startDate: orderRow.startDate || null,
+        endDate: orderRow.endDate || null,
       },
       signature: {
         signerName: body.signerName,

@@ -410,8 +410,10 @@ export async function PATCH(
         }),
         ...(agentId !== undefined && { agentId }),
         ...(notes !== undefined && { notes }),
-        ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
-        ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+        // startDate/endDate are deliberately NOT written: a job has no
+        // dates of its own (lib/jobs/dateRange). Callers may still send
+        // them; they're ignored rather than 400'd so older clients don't
+        // break mid-deploy.
         ...(estimatedValue !== undefined && {
           estimatedValue:
             estimatedValue == null || estimatedValue === '' ? null : Number(estimatedValue),

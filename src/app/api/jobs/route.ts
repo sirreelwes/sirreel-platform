@@ -468,8 +468,9 @@ export async function POST(req: NextRequest) {
         contactName: typeof body.contactName === 'string' ? body.contactName : null,
         contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
         contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,
-        startDate: startDate || null,
-        endDate: endDate || null,
+        // Job-level dates are no longer written — a job has no dates of
+        // its own; its orders carry them (lib/jobs/dateRange). The columns
+        // remain in the DB per the additive-only rule, unread and unwritten.
         // legacy callers that omit status keep getting QUOTED; the
         // resolver modal passes NEW explicitly.
         status: status || 'QUOTED',

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
@@ -304,8 +305,6 @@ export default function JobDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editStart, setEditStart] = useState('');
-  const [editEnd, setEditEnd] = useState('');
   const [editValue, setEditValue] = useState('');
   // Phase 7 Pass B — inline scope expander. Collapsed by default;
   // click the row to expand the full booked-scope panel.
@@ -470,8 +469,6 @@ export default function JobDetailPage() {
   const openEdit = () => {
     if (!job) return;
     setEditName(job.name);
-    setEditStart(job.startDate ? job.startDate.slice(0, 10) : '');
-    setEditEnd(job.endDate ? job.endDate.slice(0, 10) : '');
     setEditValue(job.estimatedValue != null ? String(job.estimatedValue) : '');
     setEditing(true);
     setMenuOpen(false);
@@ -486,8 +483,6 @@ export default function JobDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName.trim() || job.name,
-          startDate: editStart || null,
-          endDate: editEnd || null,
           estimatedValue: editValue === '' ? null : Number(editValue),
         }),
       });
@@ -535,6 +530,9 @@ export default function JobDetailPage() {
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+  // A job has no dates of its own — see lib/jobs/dateRange. Show the span
+  // its ORDERS cover instead of a separately-typed job range that drifts.
+  const orderSpan = deriveJobDateRange(job.orders);
 
   // Who signs, and therefore who gets the link. PRODUCER first to match
   // buildStageContractProps — the contract names the Producer as the
@@ -732,14 +730,6 @@ export default function JobDetailPage() {
                   {job.company.name}
                 </Link>
               </span>
-              {(job.startDate || job.endDate) && (
-                <>
-                  <span className="text-zinc-600">·</span>
-                  <span className="text-zinc-200 font-mono text-[14px]">
-                    {fmtDate(job.startDate)} – {fmtDate(job.endDate)}
-                  </span>
-                </>
-              )}
             </div>
             {primaryContact && (
               <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-800/40 px-3 py-2">
@@ -771,8 +761,10 @@ export default function JobDetailPage() {
                   jobCode: job.jobCode,
                   name: job.name,
                   company: job.company,
-                  startDate: job.startDate,
-                  endDate: job.endDate,
+                  // Derived from the orders — a job carries no dates of
+                  // its own (lib/jobs/dateRange). Seeds the hold pickers.
+                  startDate: isoDate(orderSpan.start),
+                  endDate: isoDate(orderSpan.end),
                 }}
               />
             </div>
@@ -868,14 +860,6 @@ export default function JobDetailPage() {
               <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">Job name</span>
               <input value={editName} onChange={(e) => setEditName(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">Start</span>
-              <input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">End</span>
-              <input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
-            </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-[11px] uppercase tracking-wider text-zinc-300 font-semibold">Estimated deal value ($)</span>
               <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} placeholder="—" className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500" />
@@ -892,8 +876,15 @@ export default function JobDetailPage() {
         {/* Metadata */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
           <Meta label="Production Type" value={job.productionType.replace('_', ' ')} />
-          <Meta label="Start" value={fmtDate(job.startDate)} />
-          <Meta label="End" value={fmtDate(job.endDate)} />
+          <Meta
+            label="Order span"
+            value={
+              orderSpan.start || orderSpan.end
+                ? `${fmtDate(isoDate(orderSpan.start))} – ${fmtDate(isoDate(orderSpan.end))}`
+                : '—'
+            }
+            sub="from this job's orders"
+          />
           <Meta label="Agent" value={job.agent?.name || '—'} />
           <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
           <Meta

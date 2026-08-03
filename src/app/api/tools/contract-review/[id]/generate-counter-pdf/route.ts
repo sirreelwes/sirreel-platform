@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { randomUUID } from 'crypto'
 import { put, del } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { generateCounterPdf } from '@/lib/contracts/generateCounterPdf'
 import type {
   AiChange,
@@ -41,6 +42,8 @@ export async function POST(
           jobContacts: {
             include: { person: true },
           },
+          // A job has no dates of its own; the span comes from its orders.
+          orders: { select: { startDate: true, endDate: true, status: true } },
         },
       },
       changeDecisions: true,
@@ -124,8 +127,10 @@ export async function POST(
         jobCode: review.job.jobCode,
         name: review.job.name,
         productionType: review.job.productionType,
-        startDate: review.job.startDate,
-        endDate: review.job.endDate,
+        // The job-level range was a separate, drifting copy. ContractReview
+        // has no order relation, so derive the span from the job's orders.
+        startDate: deriveJobDateRange(review.job.orders).start,
+        endDate: deriveJobDateRange(review.job.orders).end,
         primaryContact,
       }
     : null

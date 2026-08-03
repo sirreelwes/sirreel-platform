@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { deriveJobDateRange } from '@/lib/jobs/dateRange'
 import { RW_VOID, getHqPaidInvoiceIds } from '@/lib/rentalworks/arStatus'
 import { scoreOrderMatch } from '@/lib/rentalworks/matchOrders'
 
@@ -27,7 +28,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
-      id: true, name: true, startDate: true, endDate: true,
+      id: true, name: true,
+      // A job has no dates of its own — the matcher scores against the
+      // span its ORDERS cover. Reading Job.startDate here meant ranking
+      // RW candidates against a separately-typed value that had drifted
+      // from the orders it was supposed to describe.
+      orders: { select: { startDate: true, endDate: true, status: true } },
       agent: { select: { name: true } },
       company: { select: { name: true, rentalworksCustomerId: true } },
       rwOrders: { select: { rwOrderNumber: true, createdAt: true } },
@@ -88,13 +94,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       groups.get(key)!.push(inv)
     }
 
+    const jobSpan = deriveJobDateRange(job.orders)
     candidates = [...groups.entries()].map(([orderNumber, rows]) => {
       const first = rows[rows.length - 1]
       const billStart = rows.map((r) => r.billingStartDate).find(Boolean) ?? null
       const billEnd = rows.map((r) => r.billingEndDate).find(Boolean) ?? null
 
       const match = scoreOrderMatch(
-        { name: job.name, agentName: job.agent?.name, startDate: job.startDate },
+        { name: job.name, agentName: job.agent?.name, startDate: jobSpan.start },
         { dealName: first.dealName, agent: first.agent, billingStartDate: billStart, firstInvoiceDate: first.invoiceDate },
       )
 

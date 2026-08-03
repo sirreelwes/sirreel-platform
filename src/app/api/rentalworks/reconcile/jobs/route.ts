@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange'
 import type { Prisma } from '@prisma/client'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 
@@ -48,7 +49,10 @@ export async function GET(req: NextRequest) {
     take: 500,
     select: {
       id: true, jobCode: true, name: true, status: true,
-      startDate: true, endDate: true, createdAt: true, rwNotApplicable: true,
+      createdAt: true, rwNotApplicable: true,
+      // Span comes from the orders, not a job-level date — see
+      // lib/jobs/dateRange.
+      orders: { select: { startDate: true, endDate: true, status: true } },
       company: { select: { id: true, name: true, rentalworksCustomerId: true } },
       rwOrders: { select: { rwOrderNumber: true } },
     },
@@ -106,8 +110,8 @@ export async function GET(req: NextRequest) {
       jobCode: j.jobCode,
       name: j.name,
       status: j.status,
-      startDate: j.startDate,
-      endDate: j.endDate,
+      startDate: isoDate(deriveJobDateRange(j.orders).start),
+      endDate: isoDate(deriveJobDateRange(j.orders).end),
       createdAt: j.createdAt,
       company: j.company ? { id: j.company.id, name: j.company.name } : null,
       companyRwLinked: !!j.company?.rentalworksCustomerId,
