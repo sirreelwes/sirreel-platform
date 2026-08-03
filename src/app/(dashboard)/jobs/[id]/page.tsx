@@ -5,6 +5,25 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
 import { isStageLineItem } from '@/lib/orders/stageLines';
+
+/**
+ * "Agreement on file" — upload a client's own signed PDF (often an annual
+ * master) and link jobs to it, instead of sending each job for signature.
+ *
+ * HIDDEN (Aug 2026). It had never been used: zero CompanyAgreement rows,
+ * zero job links, and zero companies with the parallel annualAgreement*
+ * fields set — while the portal signing flow is the one reps actually
+ * use. Two unused mechanisms for the same idea, surfaced as a modal that
+ * exposes the data model ("Link existing / File new / Type / Annual")
+ * rather than a task, was the most confusing thing on this page.
+ *
+ * Nothing is deleted: the models, the API, the modal component and the
+ * chip logic all still work. Flip this to true when a client actually
+ * turns up with a standing agreement — and at that point decide whether
+ * CompanyAgreement or Company.annualAgreement* is the one to keep,
+ * because shipping both is what created the confusion.
+ */
+const SHOW_AGREEMENT_ON_FILE = false;
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
@@ -1037,7 +1056,11 @@ export default function JobDetailPage() {
               <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-400' : agreementStatus === 'expired' ? 'bg-rose-400' : agreementStatus === 'pending' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
               {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}
             </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">{agreementStatus === 'signed' ? 'Coverage on file' : 'Attach to cover'}</div>
+            <div className="mt-1.5 text-[12px] text-zinc-300">{agreementStatus === 'signed'
+                ? 'Coverage on file'
+                : SHOW_AGREEMENT_ON_FILE
+                  ? 'Attach to cover'
+                  : 'Send for signature'}</div>
           </a>
           {/* Card Authorization */}
           <div className="rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
@@ -1240,12 +1263,14 @@ export default function JobDetailPage() {
                   ? `Send for signature → ${signatory.person.firstName}`
                   : 'Send for signature'}
             </button>
-            <button
-              onClick={() => setAgreementModalOpen(true)}
-              className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              + Link agreement
-            </button>
+            {SHOW_AGREEMENT_ON_FILE && (
+              <button
+                onClick={() => setAgreementModalOpen(true)}
+                className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                + Link agreement
+              </button>
+            )}
           </div>
         </div>
         {signSendMsg && (
@@ -1255,8 +1280,9 @@ export default function JobDetailPage() {
         )}
         {job.agreementAddenda.length === 0 ? (
           <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
-            This job isn&rsquo;t linked to an agreement yet. Attach it to an on-file rental / stage
-            agreement (or file a new one) so it reads covered.
+            {SHOW_AGREEMENT_ON_FILE
+              ? 'This job isn\u2019t linked to an agreement yet. Attach it to an on-file rental / stage agreement (or file a new one) so it reads covered.'
+              : 'No signed paperwork on this job yet. Use Send for signature to have the client countersign in their portal.'}
           </div>
         ) : (
           <div className="space-y-2">
