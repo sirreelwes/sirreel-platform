@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
+import { isStageLineItem } from '@/lib/orders/stageLines';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
@@ -610,14 +611,60 @@ export default function JobDetailPage() {
     !!a?.companyAgreement.isAnnual &&
     !!a.companyAgreement.expiryDate &&
     new Date(a.companyAgreement.expiryDate) < now;
-  const agreementStatus =
-    rentalAddendum
-      ? isAnnualExpired(rentalAddendum)
-        ? 'expired'
-        : 'signed'
-      : rentalAgreement?.status === 'SIGNED_BASELINE' || rentalAgreement?.status === 'SIGNED_NEGOTIATED'
+  // Coverage for one contract type, from EITHER route: an on-file
+  // company agreement (which wins — often an annual master covering many
+  // jobs) or a per-order contract signed through the portal. `source`
+  // lets the chip say "On file" rather than "Signed", because the two
+  // mean different things to a rep chasing paperwork.
+  const SIGNED_STATES = new Set(['SIGNED_BASELINE', 'SIGNED_NEGOTIATED']);
+  type CoverageState = 'signed' | 'pending' | 'expired' | 'none';
+  const resolveCoverage = (
+    addendum?: JobAgreementAddendum,
+    agreement?: { status: string },
+  ): { state: CoverageState; source: 'onFile' | 'portal' | null } => {
+    if (addendum) {
+      return { state: isAnnualExpired(addendum) ? 'expired' : 'signed', source: 'onFile' };
+    }
+    if (agreement && SIGNED_STATES.has(agreement.status)) {
+      return { state: 'signed', source: 'portal' };
+    }
+    if (agreement) return { state: 'pending', source: 'portal' };
+    return { state: 'none', source: null };
+  };
+
+  // "On file" and "Signed" both mean covered, but a rep chasing paperwork
+  // needs to know which — one is a master already in the drawer, the
+  // other was countersigned for this job.
+  const coverageLabel = (
+    c: { state: CoverageState; source: 'onFile' | 'portal' | null },
+    rawStatus?: string,
+  ): string => {
+    if (c.state === 'expired') return 'Expired';
+    if (c.state === 'signed') return c.source === 'onFile' ? 'On file' : 'Signed';
+    if (c.state === 'pending') return rawStatus?.replace(/_/g, ' ') || 'Pending';
+    return 'None';
+  };
+  const coverageTone = (state: CoverageState): 'good' | 'warn' | 'idle' =>
+    state === 'signed' ? 'good' : state === 'expired' || state === 'pending' ? 'warn' : 'idle';
+
+  const rentalCoverage = resolveCoverage(rentalAddendum, rentalAgreement);
+  const stageCoverage = resolveCoverage(stageAddendum, stageAgreement);
+
+  // A stage contract is only owed when the job actually books a stage —
+  // same department test the order page and canPickupConfirm use.
+  const needsStageContract = liveOrders.some((o) => o.lineItems.some(isStageLineItem));
+  const stageRelevant = needsStageContract || stageCoverage.state !== 'none';
+
+  // Header chip covers everything this job OWES. Previously it read the
+  // rental agreement alone, so a job with an unsigned stage contract
+  // still showed "On file" off the back of its rental paperwork.
+  const requiredCoverage = [rentalCoverage, ...(stageRelevant ? [stageCoverage] : [])];
+  const agreementStatus: CoverageState =
+    requiredCoverage.some((c) => c.state === 'expired')
+      ? 'expired'
+      : requiredCoverage.every((c) => c.state === 'signed')
         ? 'signed'
-        : rentalAgreement
+        : requiredCoverage.some((c) => c.state === 'signed' || c.state === 'pending')
           ? 'pending'
           : 'none';
   // Invoices: sum of balanceDue across active (non-VOID) RENTAL + LD invoices.
@@ -908,28 +955,17 @@ export default function JobDetailPage() {
           <div id="documents" className="scroll-mt-4 mt-4 flex flex-wrap items-center gap-2 text-[12px]">
             <RollupChip
               label="Rental agreement"
-              value={
-                agreementStatus === 'signed'
-                  ? 'Signed'
-                  : agreementStatus === 'pending'
-                    ? rentalAgreement?.status.replace(/_/g, ' ') || 'Pending'
-                    : 'None'
-              }
-              tone={agreementStatus === 'signed' ? 'good' : agreementStatus === 'pending' ? 'warn' : 'idle'}
+              value={coverageLabel(rentalCoverage, rentalAgreement?.status)}
+              tone={coverageTone(rentalCoverage.state)}
             />
-            {stageAgreement && (
+            {/* Shows whenever the job books a stage OR a stage agreement
+                exists — an on-file stage contract used to be stored and
+                then rendered nowhere. */}
+            {stageRelevant && (
               <RollupChip
                 label="Stage agreement"
-                value={
-                  stageAgreement.status === 'SIGNED_BASELINE' || stageAgreement.status === 'SIGNED_NEGOTIATED'
-                    ? 'Signed'
-                    : stageAgreement.status.replace(/_/g, ' ')
-                }
-                tone={
-                  stageAgreement.status === 'SIGNED_BASELINE' || stageAgreement.status === 'SIGNED_NEGOTIATED'
-                    ? 'good'
-                    : 'warn'
-                }
+                value={coverageLabel(stageCoverage, stageAgreement?.status)}
+                tone={coverageTone(stageCoverage.state)}
               />
             )}
             {liveInvoices.length > 0 && (
