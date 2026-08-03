@@ -140,14 +140,24 @@ const STATUS_STAGE: { key: string; label: string; matches: string[] }[] = [
   { key: 'wrapped', label: 'Wrapped', matches: ['PAID', 'WRAPPED'] },
 ];
 
+/**
+ * Format a DATE-ONLY value (Order.startDate / endDate are @db.Date).
+ *
+ * Those serialize as midnight UTC — "2026-08-09T00:00:00.000Z" — so
+ * formatting them in the viewer's local zone renders the PREVIOUS day
+ * anywhere west of UTC. A client in Los Angeles was being shown a pickup
+ * of Sat Aug 8 for an order that starts Sun Aug 9. Pin to UTC to read
+ * back the calendar date that was actually stored.
+ */
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
-}
-
-function fmtTime(iso: string | null): string {
-  if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function fmtRelative(iso: string): string {
@@ -453,12 +463,10 @@ export default function JobPortalPage() {
             <div>
               <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Pickup</div>
               <div className="text-sm font-semibold text-gray-900 mt-1">{fmtDate(data.order.startDate)}</div>
-              <div className="text-xs text-gray-500">{fmtTime(data.order.startDate)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Return</div>
               <div className="text-sm font-semibold text-gray-900 mt-1">{fmtDate(data.order.endDate)}</div>
-              <div className="text-xs text-gray-500">{fmtTime(data.order.endDate)}</div>
             </div>
           </div>
           <div className="border-t border-gray-100 pt-3 text-[11px] text-gray-500">

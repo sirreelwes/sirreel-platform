@@ -28,7 +28,10 @@ import {
  * hand-verified and cut over — nothing links here yet by design.
  */
 
-const fmtShort = (d?: string) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
+// Booking.startDate / endDate are @db.Date — midnight UTC. Without the
+// UTC pin these render a day early for any viewer west of UTC.
+const fmtShort = (d?: string) =>
+  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—'
 
 type OpenKey = 'details' | V2DocKey | null
 
