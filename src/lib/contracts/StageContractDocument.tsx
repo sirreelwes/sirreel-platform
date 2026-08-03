@@ -1,5 +1,20 @@
 import React from 'react'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import fs from 'fs'
+import path from 'path'
+
+// Read once at module load, like InvoiceDocument and RwInvoiceDocument.
+// Stage bookings are sold under the Studio Services brand, so this uses
+// the Studio Services mark rather than the SirReel fleet logo the
+// invoices carry. Falls back to the wordmark if the asset is missing —
+// a contract must never fail to render over a logo.
+const LOGO_PATH = path.join(process.cwd(), 'public', 'SirReel Studio Services (2023) Black.png')
+let LOGO_BUFFER: Buffer | null = null
+try {
+  LOGO_BUFFER = fs.readFileSync(LOGO_PATH)
+} catch (err) {
+  console.warn('[StageContractDocument] Studio Services logo unavailable, using text brand:', err)
+}
 import {
   STAGE_CONTRACT_CLAUSES,
   STAGE_CONTRACT_OPENING,
@@ -95,6 +110,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   brandName: { fontFamily: 'Helvetica-Bold', fontSize: 18 },
+  brandLogo: { width: 150, height: 'auto', marginBottom: 6 },
   brandSub: { fontSize: 9, color: C.muted, marginTop: 2 },
   docMeta: { flexDirection: 'column', alignItems: 'flex-end' },
   docTitle: { fontFamily: 'Helvetica-Bold', fontSize: 11 },
@@ -254,8 +270,14 @@ export function StageContractDocument(props: StageContractDocumentProps) {
         {/* Brand header */}
         <View style={styles.brandRow}>
           <View>
-            <Text style={styles.brandName}>SirReel Studio Services</Text>
-            <Text style={styles.brandSub}>8500 Lankershim Blvd, Sun Valley, CA</Text>
+            {LOGO_BUFFER ? (
+              <Image src={LOGO_BUFFER} style={styles.brandLogo} />
+            ) : (
+              <Text style={styles.brandName}>SirReel Studio Services</Text>
+            )}
+            <Text style={styles.brandSub}>SirReel Production Vehicles, Inc. dba SirReel Studio Services</Text>
+            <Text style={styles.brandSub}>8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
+            <Text style={styles.brandSub}>888.477.7335 &middot; info@sirreel.com</Text>
           </View>
           <View style={styles.docMeta}>
             <Text style={styles.docTitle}>STAGE BOOKING AGREEMENT</Text>
