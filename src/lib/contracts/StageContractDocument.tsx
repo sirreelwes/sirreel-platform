@@ -22,6 +22,10 @@ import {
 export interface StageBookingTermsForRender {
   rentalDates: string[]      // ISO yyyy-MM-dd
   dailyRate: string          // pre-formatted "$2,500" etc.
+  /** Contracted hours the daily rate buys. Null = not negotiated. */
+  dayLengthHours: number | null
+  /** Pre-formatted per-hour overtime rate beyond dayLengthHours. */
+  overtimeHourlyRate: string | null
   productionOfficeRental: boolean
   specificSpaces: string[]
   securityGuardRequired: boolean
@@ -111,6 +115,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   partyRow: { flexDirection: 'row', marginBottom: 2 },
+  // Rates get their own bordered panel: on the old layout the money sat
+  // as one plain row among the party fields and read as fine print.
+  rateBox: {
+    borderWidth: 1,
+    borderColor: C.rule,
+    borderRadius: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    marginBottom: 8,
+    flexDirection: 'row',
+  },
+  rateCell: { flex: 1, paddingRight: 8 },
+  rateCellDivider: { borderLeftWidth: 1, borderLeftColor: C.rule, paddingLeft: 10 },
+  rateLabel: { fontSize: 7, color: C.muted, letterSpacing: 0.6, marginBottom: 2 },
+  rateValue: { fontSize: 15, fontWeight: 700 },
+  rateSub: { fontSize: 8, color: C.muted, marginTop: 1 },
   partyLabel: { width: '32%', fontSize: 9, color: C.muted },
   partyValue: { flex: 1, fontSize: 10 },
   termsBlock: {
@@ -260,7 +281,38 @@ export function StageContractDocument(props: StageContractDocumentProps) {
         <View style={styles.termsBlock}>
           <Text style={styles.termsTitle}>Rental Description ("Terms")</Text>
           <PartyRow label="Rental date(s)" value={fmtDateRange(terms.rentalDates)} />
-          <PartyRow label="Rental rate" value={`${terms.dailyRate} / day`} />
+        </View>
+
+        {/* Money terms, called out rather than buried in the list above. */}
+        <View style={styles.rateBox}>
+          <View style={styles.rateCell}>
+            <Text style={styles.rateLabel}>DAILY RATE</Text>
+            <Text style={styles.rateValue}>{terms.dailyRate}</Text>
+            <Text style={styles.rateSub}>per day</Text>
+          </View>
+          <View style={[styles.rateCell, styles.rateCellDivider]}>
+            <Text style={styles.rateLabel}>DAY LENGTH</Text>
+            <Text style={styles.rateValue}>
+              {terms.dayLengthHours != null ? `${terms.dayLengthHours} hrs` : '\u2014'}
+            </Text>
+            <Text style={styles.rateSub}>
+              {terms.dayLengthHours != null ? 'included in the daily rate' : 'not specified'}
+            </Text>
+          </View>
+          <View style={[styles.rateCell, styles.rateCellDivider]}>
+            <Text style={styles.rateLabel}>OVERTIME</Text>
+            <Text style={styles.rateValue}>{terms.overtimeHourlyRate ?? '\u2014'}</Text>
+            <Text style={styles.rateSub}>
+              {terms.overtimeHourlyRate
+                ? terms.dayLengthHours != null
+                  ? `per hour beyond ${terms.dayLengthHours}`
+                  : 'per hour beyond the day length'
+                : 'not specified'}
+            </Text>
+          </View>
+        </View>
+
+        <View>
           <PartyRow label="Production office rental" value={terms.productionOfficeRental ? 'Yes' : 'No'} />
           {terms.specificSpaces.length > 0 && (
             <PartyRow label="Spaces booked" value={terms.specificSpaces.join(', ')} />

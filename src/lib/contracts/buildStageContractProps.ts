@@ -80,6 +80,19 @@ export async function buildStageContractProps(orderId: string): Promise<{
     terms: {
       rentalDates: Array.isArray(terms.rentalDates) ? (terms.rentalDates as string[]) : [],
       dailyRate: formattedRate,
+      dayLengthHours: terms.dayLengthHours,
+      // Formatted here so the document never does money math. Null stays
+      // null — the contract prints "not specified" rather than "$0.00",
+      // which would read as a promise of free overtime.
+      overtimeHourlyRate:
+        terms.overtimeHourlyRate != null
+          ? Number(terms.overtimeHourlyRate.toString()).toLocaleString('en-US', {
+              style: 'currency',
+              currency: 'USD',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2,
+            })
+          : null,
       productionOfficeRental: terms.productionOfficeRental,
       specificSpaces: terms.specificSpaces,
       securityGuardRequired: terms.securityGuardRequired,

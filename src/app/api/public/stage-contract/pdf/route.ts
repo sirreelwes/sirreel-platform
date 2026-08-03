@@ -29,7 +29,9 @@ export async function GET() {
       },
       terms: {
         rentalDates: [],
-        dailyRate: '',
+        dayLengthHours: null,
+      overtimeHourlyRate: null,
+      dailyRate: '',
         productionOfficeRental: false,
         specificSpaces: [],
         securityGuardRequired: false,

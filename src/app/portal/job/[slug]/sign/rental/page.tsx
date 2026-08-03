@@ -19,6 +19,7 @@
  * the portal home happens automatically on successful sign.
  */
 
+import { SignaturePad } from "@/components/portal/SignaturePad";
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
@@ -46,6 +47,9 @@ export default function RentalAgreementSignPage() {
   const [signerTitle, setSignerTitle] = useState('Producer');
   const [signerEmail, setSignerEmail] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  // See the stage page: the route already forwards this to the PDF as
+  // signatureImageDataUri; the page simply never sent one.
+  const [signature, setSignature] = useState<string | null>(null);
 
   const [redlineFile, setRedlineFile] = useState<File | null>(null);
   const [redlineUploading, setRedlineUploading] = useState(false);
@@ -86,7 +90,7 @@ export default function RentalAgreementSignPage() {
   }, []);
 
   const submitSign = async () => {
-    if (!signerName.trim() || !acknowledged) return;
+    if (!signerName.trim() || !acknowledged || !signature) return;
     setSigning(true);
     setError(null);
     try {
@@ -97,6 +101,7 @@ export default function RentalAgreementSignPage() {
           signerName: signerName.trim(),
           signerTitle: signerTitle.trim() || null,
           signerEmail: signerEmail.trim() || null,
+          signatureImageData: signature,
           acknowledgmentText: ACKNOWLEDGEMENT_TEXT,
         }),
       });
@@ -320,6 +325,9 @@ export default function RentalAgreementSignPage() {
                 />
               </div>
             </div>
+
+            <SignaturePad onChange={setSignature} disabled={signing} />
+
             <label className="flex items-start gap-3 text-xs text-gray-700">
               <input
                 type="checkbox"
@@ -339,7 +347,7 @@ export default function RentalAgreementSignPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={submitSign}
-                disabled={!signerName.trim() || !acknowledged || signing}
+                disabled={!signerName.trim() || !acknowledged || !signature || signing}
                 className="px-5 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
               >
                 {signing ? 'Signing…' : 'Sign Rental Agreement'}

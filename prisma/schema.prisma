@@ -4293,6 +4293,14 @@ model StageBookingTerms {
   rentalDates Json    @map("rental_dates")
   dailyRate   Decimal @map("daily_rate") @db.Decimal(10, 2)
 
+  // Negotiated day length and the overtime rate beyond it. A "day" in
+  // production is a contracted number of hours, not a calendar day, and
+  // the number is negotiable per booking — so it is stored per-order and
+  // editable by the rep BEFORE the contract is generated, not hardcoded
+  // in the template. Nullable: rows written before Aug 2026 have no
+  // agreed figure, and the contract must say so rather than invent one.
+  dayLengthHours         Int?     @map("day_length_hours")
+  overtimeHourlyRate     Decimal? @map("overtime_hourly_rate") @db.Decimal(10, 2)
   productionOfficeRental Boolean  @default(false) @map("production_office_rental")
   /// Free-text labels: "Standing Sets", "LED Volume Stage", "Cyc Wall", etc.
   /// Kept as a string array (not an enum) because the catalog of stage spaces

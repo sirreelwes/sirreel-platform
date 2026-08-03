@@ -30,6 +30,8 @@ interface Terms {
   id?: string;
   rentalDates: string[];
   dailyRate: string;
+  dayLengthHours: string;
+  overtimeHourlyRate: string;
   productionOfficeRental: boolean;
   specificSpaces: string[];
   securityGuardRequired: boolean;
@@ -40,6 +42,8 @@ interface Terms {
 const EMPTY_TERMS: Terms = {
   rentalDates: [],
   dailyRate: "",
+  dayLengthHours: "",
+  overtimeHourlyRate: "",
   productionOfficeRental: false,
   specificSpaces: [],
   securityGuardRequired: false,
@@ -123,6 +127,8 @@ export function StageBookingTermsSection({
             id: d.terms.id,
             rentalDates: d.terms.rentalDates ?? [],
             dailyRate: d.terms.dailyRate ?? "",
+            dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "",
+            overtimeHourlyRate: d.terms.overtimeHourlyRate ?? "",
             productionOfficeRental: !!d.terms.productionOfficeRental,
             specificSpaces: d.terms.specificSpaces ?? [],
             securityGuardRequired: !!d.terms.securityGuardRequired,
@@ -180,6 +186,8 @@ export function StageBookingTermsSection({
         body: JSON.stringify({
           rentalDates: sortedDates,
           dailyRate: terms.dailyRate,
+          dayLengthHours: terms.dayLengthHours || null,
+          overtimeHourlyRate: terms.overtimeHourlyRate || null,
           productionOfficeRental: terms.productionOfficeRental,
           specificSpaces: buildSpaces(),
           securityGuardRequired: terms.securityGuardRequired,
@@ -196,6 +204,8 @@ export function StageBookingTermsSection({
         id: d.terms.id,
         rentalDates: d.terms.rentalDates ?? [],
         dailyRate: d.terms.dailyRate ?? "",
+        dayLengthHours: d.terms.dayLengthHours != null ? String(d.terms.dayLengthHours) : "",
+        overtimeHourlyRate: d.terms.overtimeHourlyRate ?? "",
         productionOfficeRental: !!d.terms.productionOfficeRental,
         specificSpaces: d.terms.specificSpaces ?? [],
         securityGuardRequired: !!d.terms.securityGuardRequired,
@@ -317,6 +327,48 @@ export function StageBookingTermsSection({
                     </button>
                   )}
                 </div>
+              </div>
+
+              {/* Day length + overtime. A production "day" is a contracted
+                  number of hours, negotiated per booking — so it is set
+                  HERE, before the contract is generated, and printed on
+                  the contract next to the rate it qualifies. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                    Day length (hours)
+                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="24"
+                    step="1"
+                    value={terms.dayLengthHours}
+                    onChange={(e) => patch({ dayLengthHours: e.target.value })}
+                    placeholder="10"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  />
+                  <span className="block mt-1 text-[11px] text-zinc-500">
+                    What the daily rate buys. Blank = not specified on the contract.
+                  </span>
+                </label>
+                <label className="block">
+                  <span className="block text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">
+                    Overtime rate (USD / hour)
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="25"
+                    value={terms.overtimeHourlyRate}
+                    onChange={(e) => patch({ overtimeHourlyRate: e.target.value })}
+                    placeholder="350"
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                  />
+                  <span className="block mt-1 text-[11px] text-zinc-500">
+                    Charged per hour beyond the day length.
+                  </span>
+                </label>
               </div>
               <div className="text-[11px] text-zinc-400 mt-1.5">
                 Non-contiguous days are fine — the contract groups runs.

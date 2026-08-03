@@ -19,6 +19,8 @@ export const dynamic = 'force-dynamic'
 interface StageBookingTermsInput {
   rentalDates?: unknown
   dailyRate?: unknown
+  dayLengthHours?: unknown
+  overtimeHourlyRate?: unknown
   productionOfficeRental?: unknown
   specificSpaces?: unknown
   securityGuardRequired?: unknown
@@ -34,6 +36,8 @@ function coerceTerms(input: StageBookingTermsInput): {
   data: {
     rentalDates: string[]
     dailyRate: string
+    dayLengthHours: number | null
+    overtimeHourlyRate: string | null
     productionOfficeRental: boolean
     specificSpaces: string[]
     securityGuardRequired: boolean
@@ -51,6 +55,29 @@ function coerceTerms(input: StageBookingTermsInput): {
 
   // dailyRate stored as Decimal — accept number or numeric string. Reject
   // anything that can't round-trip as a positive amount.
+  // Day length: whole hours, 1-24. Optional — a booking with no agreed
+  // day length must say "not specified" on the contract rather than have
+  // a number invented for it.
+  let dayLen: number | null = null
+  if (input.dayLengthHours !== undefined && input.dayLengthHours !== null && input.dayLengthHours !== '') {
+    const n = Number(input.dayLengthHours)
+    if (!Number.isInteger(n) || n < 1 || n > 24) {
+      return { ok: false, error: 'dayLengthHours must be a whole number of hours between 1 and 24' }
+    }
+    dayLen = n
+  }
+
+  // Overtime rate: per hour beyond the day length. Zero is meaningful
+  // ("no overtime charge"), so only negatives and junk are rejected.
+  let otRate: string | null = null
+  if (input.overtimeHourlyRate !== undefined && input.overtimeHourlyRate !== null && input.overtimeHourlyRate !== '') {
+    const n = Number(input.overtimeHourlyRate)
+    if (!Number.isFinite(n) || n < 0) {
+      return { ok: false, error: 'overtimeHourlyRate must be a non-negative number' }
+    }
+    otRate = n.toFixed(2)
+  }
+
   const rateRaw = input.dailyRate
   const rateNum = typeof rateRaw === 'number' ? rateRaw : typeof rateRaw === 'string' ? Number(rateRaw) : NaN
   if (!Number.isFinite(rateNum) || rateNum <= 0) {
@@ -66,6 +93,8 @@ function coerceTerms(input: StageBookingTermsInput): {
     data: {
       rentalDates: dates as string[],
       dailyRate: rateNum.toFixed(2),
+      dayLengthHours: dayLen,
+      overtimeHourlyRate: otRate,
       productionOfficeRental: input.productionOfficeRental === true,
       specificSpaces: spaces,
       securityGuardRequired: input.securityGuardRequired === true,
@@ -92,6 +121,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       id: row.id,
       rentalDates: row.rentalDates,
       dailyRate: row.dailyRate.toString(),
+      dayLengthHours: row.dayLengthHours,
+      overtimeHourlyRate: row.overtimeHourlyRate?.toString() ?? null,
       productionOfficeRental: row.productionOfficeRental,
       specificSpaces: row.specificSpaces,
       securityGuardRequired: row.securityGuardRequired,
@@ -127,6 +158,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     update: {
       rentalDates: coerced.data.rentalDates,
       dailyRate: coerced.data.dailyRate,
+      dayLengthHours: coerced.data.dayLengthHours,
+      overtimeHourlyRate: coerced.data.overtimeHourlyRate,
       productionOfficeRental: coerced.data.productionOfficeRental,
       specificSpaces: coerced.data.specificSpaces,
       securityGuardRequired: coerced.data.securityGuardRequired,
@@ -139,6 +172,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       id: saved.id,
       rentalDates: saved.rentalDates,
       dailyRate: saved.dailyRate.toString(),
+      dayLengthHours: saved.dayLengthHours,
+      overtimeHourlyRate: saved.overtimeHourlyRate?.toString() ?? null,
       productionOfficeRental: saved.productionOfficeRental,
       specificSpaces: saved.specificSpaces,
       securityGuardRequired: saved.securityGuardRequired,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TSX, TSX_SERIF } from "@/lib/brand/tsxTokens";
+import { SignaturePad } from "@/components/portal/SignaturePad";
 
 /**
  * Stage contract countersign page. Lives under the Job Page portal so the
@@ -11,6 +12,7 @@ import { TSX, TSX_SERIF } from "@/lib/brand/tsxTokens";
  * this URL).
  *
  * The form captures:
+ *   - Drawn signature (required — SignaturePad, burned into the PDF)
  *   - Typed signer name (required)
  *   - Title (optional, defaults to "Producer")
  *   - Email (optional, defaults to portal-session contact)
@@ -34,6 +36,11 @@ export default function StageContractSignPage() {
   const [signerTitle, setSignerTitle] = useState('Producer');
   const [signerEmail, setSignerEmail] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  // PNG data URL from the pad. The API forwards it to the PDF renderer as
+  // signatureImageDataUri; without it the contract falls back to drawing
+  // the typed name in a font, which is what every executed copy did
+  // before the pad existed.
+  const [signature, setSignature] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +71,7 @@ export default function StageContractSignPage() {
   }, []);
 
   const submit = async () => {
-    if (!signerName.trim() || !acknowledged) return;
+    if (!signerName.trim() || !acknowledged || !signature) return;
     setBusy(true);
     setError(null);
     const res = await fetch(`/api/portal/${slug}/stage-agreement/sign`, {
@@ -74,6 +81,7 @@ export default function StageContractSignPage() {
         signerName: signerName.trim(),
         signerTitle: signerTitle.trim() || null,
         signerEmail: signerEmail.trim() || null,
+        signatureImageData: signature,
         acknowledgmentText: ACKNOWLEDGEMENT_TEXT,
       }),
     });
@@ -163,6 +171,8 @@ export default function StageContractSignPage() {
               />
             </div>
           </div>
+          <SignaturePad onChange={setSignature} disabled={busy} />
+
           <label className="flex items-start gap-3 text-xs text-gray-700">
             <input
               type="checkbox"
@@ -178,7 +188,7 @@ export default function StageContractSignPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={submit}
-              disabled={!signerName.trim() || !acknowledged || busy}
+              disabled={!signerName.trim() || !acknowledged || !signature || busy}
               className="px-5 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
             >
               {busy ? 'Signing…' : 'Sign Stage Contract'}
