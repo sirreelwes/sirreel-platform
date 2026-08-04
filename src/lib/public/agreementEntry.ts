@@ -168,24 +168,42 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
   let subject: string
   let title: string
   let body: string
+  // Real plain-text alternative, built per variant.
+  //
+  // This used to be a stub — "Open this email in an HTML mail client to
+  // continue" — which is one of the strongest spam signals a transactional
+  // message can carry: an HTML part full of links beside a text part with
+  // none. Filters compare the two alternatives, and Apple weights the
+  // mismatch heavily. It also stranded anyone reading in plain text, since
+  // the link they needed existed only in the HTML.
+  let textBody: string
   let variant: 'confirm' | 'all-set' | 'welcome-back' | 'get-started'
 
   if (unsigned.length > 0) {
     // A — confirm which open job this agreement is for (or a new one).
     variant = 'confirm'
-    const rows = await Promise.all(
+    // One pass builds BOTH renderings from the same token, so the text
+    // alternative can't drift from the HTML or miss a link.
+    const built = await Promise.all(
       unsigned.map(async (j) => {
         const t = await prisma.agreementEntry.create({
           data: { token: entryToken(), email, kind: 'CONFIRM_JOB', personId: person!.id, jobId: j.id, expiresAt: expiry() },
           select: { token: true },
         })
-        return `<div style="border:1px solid #e6e2d8;border-radius:8px;padding:12px 14px;margin:0 0 10px;">
+        const url = confirmEntryUrl(t.token)
+        return {
+          html: `<div style="border:1px solid #e6e2d8;border-radius:8px;padding:12px 14px;margin:0 0 10px;">
           <div style="font-size:14px;font-weight:600;color:#1a1a1a;">${esc(j.name)}</div>
           <div style="font-size:12px;color:#777;margin:2px 0 10px;">${esc(j.company)} · ${esc(jobDates(j))}</div>
-          ${btn(confirmEntryUrl(t.token), 'This is my job →')}
-        </div>`
+          ${btn(url, 'This is my job →')}
+        </div>`,
+          label: `${j.name} — ${j.company} · ${jobDates(j)}`,
+          url,
+        }
       }),
     )
+    const rows = built.map((b) => b.html)
+    const textRows = built.map((b) => ({ label: b.label, url: b.url }))
     subject = 'Your SirReel rental agreement — which job is this for?'
     title = 'Which job is this agreement for?'
     body =
@@ -193,6 +211,11 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
       P('You asked to fill out the SirReel rental agreement. We have the following open with you — pick the job it belongs to and we’ll take you straight to the paperwork:') +
       rows.join('') +
       P(`Working on something else? ${btn(startHref, 'This is a new job →')}`)
+    textBody =
+      `You asked to fill out the SirReel rental agreement. We have these open with you — ` +
+      `open the link for the job it belongs to:\n\n` +
+      textRows.map((r) => `  ${r.label}\n  ${r.url}`).join('\n\n') +
+      `\n\nWorking on something else? Start a new job:\n  ${startHref}`
   } else if (jobs.length > 0) {
     // B — everything already signed.
     variant = 'all-set'
@@ -203,6 +226,9 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
       P(hi) +
       P(`Your rental agreement is already signed for <strong>${names}</strong> — nothing more to fill out there.`) +
       P(`Starting something new? ${btn(startHref, 'Start a new job →')}`)
+    textBody =
+      `Your rental agreement is already signed for ${jobs.map((j) => j.name).join(', ')} — ` +
+      `nothing more to fill out there.\n\nStarting something new?\n  ${startHref}`
   } else if (person) {
     // C — known person, nothing open.
     variant = 'welcome-back'
@@ -212,6 +238,9 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
       P(hi) +
       P('Good to see you again. Tell us a little about the new job and we’ll set up your paperwork and portal in one step.') +
       P(btn(startHref, 'Get started →'))
+    textBody =
+      `Good to see you again. Tell us a little about the new job and we'll set up ` +
+      `your paperwork and portal in one step.\n\nGet started:\n  ${startHref}`
   } else {
     // C' — unknown email.
     variant = 'get-started'
@@ -221,10 +250,21 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
       P('Hi,') +
       P('Thanks for your interest in SirReel Studio Services. Tell us a little about your job and we’ll set up your rental agreement and portal in one step.') +
       P(btn(startHref, 'Get started →'))
+    textBody =
+      `Thanks for your interest in SirReel Studio Services. Tell us a little about ` +
+      `your job and we'll set up your rental agreement and portal in one step.\n\n` +
+      `Get started:\n  ${startHref}`
   }
 
   const html = emailShell(title, body)
-  const text = `${title}\n\nOpen this email in an HTML mail client to continue, or contact us at (888) 477-7335.`
+  // Mirrors the HTML: same greeting, same content, same links, plus a
+  // real signature block. A text part that stands on its own.
+  const text =
+    `${hi}\n\n${textBody}\n\n` +
+    `--\nSirReel Studio Services\n8500 Lankershim Blvd, Sun Valley, CA 91352\n` +
+    `(888) 477-7335 · info@sirreel.com\n\n` +
+    `You received this because someone entered this address on sirreel.com. ` +
+    `If that wasn't you, you can ignore this email.`
   // The result was previously discarded. sendAgreementEmail never throws —
   // it returns { ok:false, reason } — and it writes no EmailDelivery row,
   // so a rejected send left NO trace anywhere: the token row existed, the
