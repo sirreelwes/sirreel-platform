@@ -120,27 +120,66 @@ const GOLD = '#D4A547'
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-function emailShell(title: string, bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" /><meta name="color-scheme" content="light" /></head>
-<body style="margin:0;padding:0;background:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f5f3;"><tr><td align="center" style="padding:24px 12px;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
+/**
+ * Email shell, tuned for Apple Mail / iCloud — a large share of SirReel's
+ * clients read there.
+ *
+ *  - color-scheme "light dark" + supported-color-schemes: previously this
+ *    declared LIGHT ONLY, which makes Apple Mail apply its own inversion
+ *    in dark mode. That flipped the black masthead to white and took the
+ *    white logo with it — an invisible header for every dark-mode reader.
+ *    Declaring both, and supplying explicit dark values, stops Apple
+ *    guessing.
+ *  - format-detection telephone=no: Apple auto-links phone numbers and
+ *    addresses and restyles them blue-and-underlined, which reads as a
+ *    broken link in the footer.
+ *  - Hidden preheader: controls the grey preview line in the inbox list.
+ *    Without one, Apple pulls the first text it finds.
+ *  - Buttons are padded to a 44px minimum height, Apple's HIG tap target.
+ *    The old 11px padding gave ~36px, under the threshold on a phone.
+ */
+function emailShell(title: string, bodyHtml: string, preheader?: string): string {
+  return `<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<meta name="supported-color-schemes" content="light dark" />
+<meta name="format-detection" content="telephone=no,address=no,date=no" />
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .sr-bg   { background:#141414 !important; }
+    .sr-card { background:#1e1e1e !important; }
+    .sr-h1   { color:#f5f5f3 !important; }
+    .sr-p    { color:#d6d2c8 !important; }
+    .sr-foot { color:#9a958a !important; }
+  }
+</style>
+</head>
+<body class="sr-bg" style="margin:0;padding:0;background:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${esc(preheader ?? title)}</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sr-bg" style="background:#f5f5f3;"><tr><td align="center" style="padding:24px 12px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" class="sr-card" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;">
       <tr><td style="background:#0a0a0a;padding:28px 24px;text-align:center;">
         <img src="https://hq.sirreel.com/sirreel-logo-white.png" alt="SirReel Studio Services" width="180" style="max-width:180px;height:auto;border:0;" />
       </td></tr>
       <tr><td style="padding:28px 32px 8px;">
-        <h1 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:400;">${title}</h1>
+        <h1 class="sr-h1" style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:400;color:#1a1a1a;">${title}</h1>
         ${bodyHtml}
       </td></tr>
-      <tr><td style="padding:18px 32px 26px;font-size:11px;color:#888;">SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · (888) 477-7335</td></tr>
+      <tr><td class="sr-foot" style="padding:18px 32px 26px;font-size:13px;line-height:1.5;color:#767676;">SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · (888) 477-7335</td></tr>
     </table>
   </td></tr></table>
 </body></html>`
 }
 
+// 14px padding + 16px line-height clears Apple's 44pt minimum tap target;
+// the old 11px padding rendered ~36px, which is fiddly on a phone and
+// fails WCAG 2.5.5.
 const btn = (href: string, label: string) =>
-  `<a href="${href}" style="display:inline-block;background:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:6px;">${esc(label)}</a>`
-const P = (s: string) => `<p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#333;">${s}</p>`
+  `<a href="${href}" style="display:inline-block;background:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;line-height:16px;padding:14px 24px;border-radius:6px;min-height:16px;">${esc(label)}</a>`
+// 15px body: Apple Mail doesn't auto-zoom, so small type just stays small.
+const P = (s: string) => `<p class="sr-p" style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${s}</p>`
 
 /**
  * Look up the email + send the branch email. Returns which variant fired —
@@ -177,6 +216,10 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
   // mismatch heavily. It also stranded anyone reading in plain text, since
   // the link they needed existed only in the HTML.
   let textBody: string
+  // The grey preview line beside the subject in the inbox list. Apple
+  // shows ~90 chars; without one it scrapes the first text in the body,
+  // which here would just repeat the greeting.
+  let preheader: string
   let variant: 'confirm' | 'all-set' | 'welcome-back' | 'get-started'
 
   if (unsigned.length > 0) {
@@ -206,6 +249,7 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
     const textRows = built.map((b) => ({ label: b.label, url: b.url }))
     subject = 'Your SirReel rental agreement — which job is this for?'
     title = 'Which job is this agreement for?'
+    preheader = "Pick the job and we'll take you straight to the paperwork."
     body =
       P(hi) +
       P('You asked to fill out the SirReel rental agreement. We have the following open with you — pick the job it belongs to and we’ll take you straight to the paperwork:') +
@@ -222,6 +266,7 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
     const names = jobs.map((j) => esc(j.name)).join(', ')
     subject = 'You’re all set — SirReel rental agreement'
     title = 'You’re all set.'
+    preheader = "Your rental agreement is already signed — nothing to fill out."
     body =
       P(hi) +
       P(`Your rental agreement is already signed for <strong>${names}</strong> — nothing more to fill out there.`) +
@@ -234,6 +279,7 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
     variant = 'welcome-back'
     subject = 'Welcome back to SirReel — let’s get started'
     title = 'Welcome back.'
+    preheader = "Tell us about the new job and we'll set up your paperwork in one step."
     body =
       P(hi) +
       P('Good to see you again. Tell us a little about the new job and we’ll set up your paperwork and portal in one step.') +
@@ -246,6 +292,7 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
     variant = 'get-started'
     subject = 'Let’s get started with SirReel'
     title = 'Let’s get you started.'
+    preheader = "Tell us about your job and we'll set up your agreement and portal."
     body =
       P('Hi,') +
       P('Thanks for your interest in SirReel Studio Services. Tell us a little about your job and we’ll set up your rental agreement and portal in one step.') +
@@ -256,7 +303,7 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
       `Get started:\n  ${startHref}`
   }
 
-  const html = emailShell(title, body)
+  const html = emailShell(title, body, preheader)
   // Mirrors the HTML: same greeting, same content, same links, plus a
   // real signature block. A text part that stands on its own.
   const text =
