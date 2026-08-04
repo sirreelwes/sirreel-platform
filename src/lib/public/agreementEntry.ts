@@ -225,7 +225,18 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
 
   const html = emailShell(title, body)
   const text = `${title}\n\nOpen this email in an HTML mail client to continue, or contact us at (888) 477-7335.`
-  await sendAgreementEmail({ to: [email], subject, html, text, label: 'agreement-entry' })
+  // The result was previously discarded. sendAgreementEmail never throws —
+  // it returns { ok:false, reason } — and it writes no EmailDelivery row,
+  // so a rejected send left NO trace anywhere: the token row existed, the
+  // page said "check your email", and nothing had been delivered. The
+  // response stays neutral (anti-enumeration), but the failure is now
+  // loud in the server logs.
+  const sent = await sendAgreementEmail({ to: [email], subject, html, text, label: 'agreement-entry' })
+  if (!sent.ok) {
+    console.error(
+      `[agreement-entry] DELIVERY FAILED for ${email} (variant=${variant}): ${sent.reason}`,
+    )
+  }
   return variant
 }
 

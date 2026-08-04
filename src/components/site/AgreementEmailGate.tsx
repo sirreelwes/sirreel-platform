@@ -7,6 +7,7 @@
  * (and can never leak) whether the address matched anything; all branching
  * happens in the emailed message. Honeypot mirrors the other public intakes.
  */
+import Link from 'next/link'
 import { useState } from 'react'
 
 export function AgreementEmailGate() {
@@ -75,6 +76,24 @@ export function AgreementEmailGate() {
         </form>
       )}
       {err && <p className="mt-2 text-[11.5px] text-rose-300 m-0">{err}</p>}
+
+      {/* Always visible, in BOTH states. The neutral response above can't
+          say whether the address matched — that anti-enumeration property
+          is deliberate — so without a standing route forward, anyone who
+          isn't a client yet hits a dead end and leaves. Showing this
+          unconditionally helps them without signalling anything, which a
+          "we didn't recognise you" message would. */}
+      <p className="mt-3 pt-3 border-t border-white/10 text-[12px] leading-relaxed text-[#a8a294] m-0">
+        Not a SirReel client yet?{' '}
+        <Link
+          href={`/contact?prefill=${encodeURIComponent(
+            "I'd like a quote for an upcoming production.",
+          )}`}
+          className="font-semibold text-[#c39a3f] hover:text-[#d4ab50] underline"
+        >
+          Start a quote &rarr;
+        </Link>
+      </p>
     </div>
   )
 }
