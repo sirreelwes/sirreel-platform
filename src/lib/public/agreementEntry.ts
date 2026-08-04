@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -432,37 +433,73 @@ export async function startNewSubmit(
   }
 
   try {
-    // Person: the verified email is the identity; enrich the name if new.
-    const existingPerson = (await resolvePersonByEmail(entry.email, { select: { id: true } })) as { id: string } | null
-    const person =
-      existingPerson ??
-      (await prisma.person.create({
-        data: { email: entry.email, firstName: firstName || entry.email.split('@')[0], lastName: lastName || '—' },
-        select: { id: true },
-      }))
-    // Company: exact-name match else create (self-serve entries get triaged).
-    const company =
-      (await prisma.company.findFirst({ where: { name: { equals: companyName, mode: 'insensitive' } }, select: { id: true } })) ??
-      (await prisma.company.create({ data: { name: companyName }, select: { id: true } }))
     // Default agent for self-serve entries: first active ADMIN (house book).
     const agent = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } })
     if (!agent) throw new Error('no active ADMIN user for self-serve assignment')
 
+    // Job-as-root: startWelcomeInvite REFUSES an invite with no resolved
+    // Job, so this path has been dead since that refactor (Jul 2026) —
+    // it built an Inquiry and an invite with no jobId, and every submit
+    // ended at "Setup failed".
+    //
+    // createJobFromDraft is the ONE creation primitive, and it also does
+    // company/person resolve-or-create with proper name normalization —
+    // better than the exact-match this used to do, which spawned a
+    // duplicate company whenever the client typed the name slightly
+    // differently.
+    //
+    // It always creates a NEW Job rather than attaching to a match. The
+    // resolver's discipline is "the machine discovers, the AGENT
+    // decides", and a self-serve client is not an agent: silently
+    // attaching them to someone else's open job would put a stranger on
+    // that job's paperwork. A duplicate job an agent merges is the
+    // recoverable failure; the Inquiry below is the triage handle.
+    const created = await createJobFromDraft(
+      {
+        name: jobName,
+        companyName,
+        contactName: [firstName, lastName].filter(Boolean).join(' ') || null,
+        contactEmail: entry.email,
+        startDate: form.startDate ?? null,
+        endDate: form.endDate ?? null,
+        status: 'QUOTED',
+        notes: `Self-serve rental-agreement entry (public form) on ${new Date().toISOString().slice(0, 10)}.`,
+      },
+      agent.id,
+    )
+
+    // Person is resolved by createJobFromDraft off the same email; read it
+    // back for the Inquiry + invite rather than creating a second row.
+    const person = (await resolvePersonByEmail(entry.email, { select: { id: true } })) as { id: string } | null
+    if (!person) throw new Error('person not resolved after job creation')
+
     const inquiry = await prisma.inquiry.create({
       data: {
         title: jobName,
-        description: `Self-serve rental-agreement entry (public form). Company: ${companyName}. Contact: ${firstName} ${lastName} <${entry.email}>.`,
+        description:
+          `Self-serve rental-agreement entry (public form). Company: ${companyName}. ` +
+          `Contact: ${firstName} ${lastName} <${entry.email}>.` +
+          (created.companyResolution ? ` Company resolution: ${created.companyResolution}.` : '') +
+          (created.contactWarning ? ` Contact note: ${created.contactWarning}.` : ''),
         source: 'WEB_FORM',
         personId: person.id,
-        companyId: company.id,
+        companyId: created.job.companyId,
         assignedToId: agent.id,
         preferredStartDate: startDate,
         preferredEndDate: endDate,
+        // Already converted — the Job exists before the client clicks on.
+        convertedJobId: created.job.id,
       },
       select: { id: true },
     })
     const invite = await prisma.welcomeInvite.create({
-      data: { token: entryToken(), inquiryId: inquiry.id, personId: person.id, expiresAt: expiry() },
+      data: {
+        token: entryToken(),
+        inquiryId: inquiry.id,
+        personId: person.id,
+        jobId: created.job.id,
+        expiresAt: expiry(),
+      },
       select: { token: true },
     })
     await prisma.agreementEntry.update({ where: { id: entry.id }, data: { createdInquiryId: inquiry.id } })
