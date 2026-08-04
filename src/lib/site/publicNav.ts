@@ -170,12 +170,17 @@ export const PUBLIC_CONTACT = {
 } as const
 
 /**
- * Social links for the utility row. URLs are CONFIGURABLE and currently
- * UNSET — '#' placeholders render the icons without a live destination.
- * Fill these in when the handles are confirmed (or lift to SiteSetting /
- * env later if they need to change without a deploy).
+ * Social links for the utility row. Both profiles are @sirreelstudios.
+ *
+ * The nav hides any icon still set to '#', so an unconfirmed handle never
+ * renders as a dead link — keep that convention if more are added.
  */
-export const PUBLIC_SOCIAL = {
-  instagram: '#', // TODO: set SirReel Instagram URL
-  tiktok: '#', // TODO: set SirReel TikTok URL
-} as const
+export const SIRREEL_SOCIAL_HANDLE = 'sirreelstudios'
+
+// Deliberately NOT `as const`: literal types would let TS prove the
+// '#' placeholder check can never fire, and reject it at every call site.
+export const PUBLIC_SOCIAL: Record<'instagram' | 'tiktok', string> = {
+  instagram: `https://www.instagram.com/${SIRREEL_SOCIAL_HANDLE}/`,
+  // TikTok profile URLs carry the @ in the path; Instagram's do not.
+  tiktok: `https://www.tiktok.com/@${SIRREEL_SOCIAL_HANDLE}`,
+}

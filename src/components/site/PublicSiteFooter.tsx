@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import { SocialLinks } from '@/components/site/SocialIcons'
 import {
   PUBLIC_NAV,
   PUBLIC_ORDER_CTA,
@@ -80,6 +81,9 @@ export function PublicSiteFooter() {
                 {PUBLIC_CONTACT.email}
               </a>
             </p>
+            {/* Same component the nav uses — hides any profile still on the
+                '#' placeholder. */}
+            <SocialLinks className="mt-4" size={19} />
           </div>
 
           {/* Column 1 — nav items */}

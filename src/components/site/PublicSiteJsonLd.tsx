@@ -1,4 +1,4 @@
-import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { PUBLIC_CONTACT, PUBLIC_SOCIAL } from '@/lib/site/publicNav'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 
 /**
@@ -40,6 +40,9 @@ export function PublicSiteJsonLd() {
       addressCountry: 'US',
     },
     areaServed: { '@type': 'City', name: 'Los Angeles' },
+    // sameAs links the official profiles to this business entity, which
+    // is how search engines associate them rather than guessing.
+    sameAs: [PUBLIC_SOCIAL.instagram, PUBLIC_SOCIAL.tiktok].filter((u) => u && u !== '#'),
     logo: `${PUBLIC_SITE_ORIGIN}/sirreel-logo.png`,
     image: `${PUBLIC_SITE_ORIGIN}/full-logo.jpg`,
   }

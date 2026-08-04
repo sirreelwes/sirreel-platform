@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
+import { SocialLinks } from '@/components/site/SocialIcons'
 import {
   PUBLIC_NAV,
   PUBLIC_ORDER_CTA,
   PUBLIC_HOME_HREF,
   PUBLIC_CONTACT,
-  PUBLIC_SOCIAL,
   type NavEntry,
   type NavLeaf,
 } from '@/lib/site/publicNav'
@@ -32,23 +32,6 @@ import {
  * render per their mode: downloads open in a new tab; coming-soon is a
  * non-clickable placeholder.
  */
-
-function InstagramIcon() {
-  return (
-    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <rect x={2} y={2} width={20} height={20} rx={5} />
-      <circle cx={12} cy={12} r={4} />
-      <path d="M17.5 6.5h.01" />
-    </svg>
-  )
-}
-function TikTokIcon() {
-  return (
-    <svg width={17} height={17} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M16.5 3c.3 2 1.6 3.6 3.5 4v2.5c-1.3 0-2.6-.4-3.6-1v6.3a5.8 5.8 0 1 1-5-5.7v2.6a3.2 3.2 0 1 0 2.4 3.1V3h2.7Z" />
-    </svg>
-  )
-}
 
 export function PublicSiteNav({
   liveStudioLinks = {},
@@ -272,24 +255,9 @@ export function PublicSiteNav({
     </Link>
   )
 
-  const socials = (size = '') => {
-    // Only render icons whose URL is actually set (not the '#' placeholder)
-    // — hides dead social links until the real profiles are wired in.
-    const items = [
-      { href: PUBLIC_SOCIAL.instagram, label: 'Instagram', Icon: InstagramIcon },
-      { href: PUBLIC_SOCIAL.tiktok, label: 'TikTok', Icon: TikTokIcon },
-    ].filter((s) => s.href && s.href !== '#')
-    if (!items.length) return null
-    return (
-      <div className={`flex items-center gap-3 ${size}`}>
-        {items.map(({ href, label, Icon }) => (
-          <a key={label} href={href} aria-label={label} target="_blank" rel="noreferrer" className="text-[#a8a294] hover:text-white transition-colors">
-            <Icon />
-          </a>
-        ))}
-      </div>
-    )
-  }
+  // Icons + the hide-unset-profiles rule live in SocialIcons, shared with
+  // the footer so the SVG paths aren't duplicated.
+  const socials = (size = '') => <SocialLinks className={size} />
 
   return (
     <header className="sticky top-0 z-40 bg-[#0c0c0d] text-white">
