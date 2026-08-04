@@ -1,10 +1,14 @@
 /**
  * Per-send delivery-audit writer.
  *
- * Called by every order-anchored email send right after
- * sendAgreementEmail() succeeds. Writes one EmailDelivery row keyed
- * on the Resend message id; status starts at SENT and is later
- * advanced by the Resend webhook handler.
+ * sendAgreementEmail() now calls this for EVERY send, so no touchpoint
+ * is invisible. Callers that know what the mail is anchored to (an
+ * order, invoice or follow-up) still call it explicitly afterwards to
+ * attach those ids — hence the UPSERT: the second call enriches the row
+ * the send already created rather than colliding on the unique
+ * resendMessageId.
+ *
+ * Status starts at SENT and is later advanced by the Resend webhook.
  *
  * Best-effort: failures here are logged but do NOT bubble to the
  * caller — the email already went out, refusing to record audit
@@ -29,8 +33,9 @@ export async function recordEmailDelivery(
   input: RecordEmailDeliveryInput,
 ): Promise<{ ok: boolean; id?: string; reason?: string }> {
   try {
-    const row = await prisma.emailDelivery.create({
-      data: {
+    const row = await prisma.emailDelivery.upsert({
+      where: { resendMessageId: input.resendMessageId },
+      create: {
         resendMessageId: input.resendMessageId,
         toAddress: input.toAddress,
         ccAddresses: input.ccAddresses ?? [],
@@ -40,6 +45,14 @@ export async function recordEmailDelivery(
         invoiceId: input.invoiceId ?? null,
         quoteFollowUpId: input.quoteFollowUpId ?? null,
         // status defaults to SENT in the schema.
+      },
+      // Only ever ADD linkage — never null out what a prior call set, and
+      // never touch status, which belongs to the webhook.
+      update: {
+        ...(input.orderId ? { orderId: input.orderId } : {}),
+        ...(input.invoiceId ? { invoiceId: input.invoiceId } : {}),
+        ...(input.quoteFollowUpId ? { quoteFollowUpId: input.quoteFollowUpId } : {}),
+        ...(input.label ? { label: input.label } : {}),
       },
       select: { id: true },
     })

@@ -5,6 +5,8 @@ import { Resend } from 'resend'
  * the preview endpoints can show the agent the SAME string the send
  * route will use — single source of truth.
  */
+import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
+
 export const SEND_FROM = 'SirReel HQ <notifications@sirreel.com>'
 
 export type EmailResult =
@@ -27,6 +29,15 @@ export interface EmailPayload {
   attachments?: { filename: string; content: Buffer }[]
   /** Logging tag — surfaces in console error lines so it's obvious which touchpoint failed. */
   label?: string
+  /**
+   * Optional anchors recorded on the EmailDelivery row. Pass them when
+   * the send belongs to something — the order page reads deliveries by
+   * orderId to show its per-send status pills. Callers that already
+   * record explicitly can keep doing so; the recorder upserts.
+   */
+  orderId?: string | null
+  invoiceId?: string | null
+  quoteFollowUpId?: string | null
 }
 
 /**
@@ -72,6 +83,26 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       return { ok: false, reason: errMessage }
     }
     const id = (result as any)?.data?.id ?? null
+
+    // Record EVERY send, not just the order-anchored ones. Before this,
+    // 29 of the 34 send sites wrote no EmailDelivery row, so a client
+    // saying "I never got the link" was unanswerable — no message id, no
+    // status, nothing for the Resend webhook to advance. Best-effort:
+    // recordEmailDelivery swallows its own failures, because the mail has
+    // already gone out and failing to audit it is not a reason to report
+    // the send as failed.
+    if (id) {
+      await recordEmailDelivery({
+        resendMessageId: id,
+        toAddress: payload.to[0] ?? '',
+        ccAddresses: payload.cc ?? [],
+        subject: payload.subject,
+        label: payload.label ?? null,
+        orderId: payload.orderId ?? null,
+        invoiceId: payload.invoiceId ?? null,
+        quoteFollowUpId: payload.quoteFollowUpId ?? null,
+      })
+    }
     return { ok: true, id }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
