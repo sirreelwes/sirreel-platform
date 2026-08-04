@@ -487,8 +487,15 @@ export async function startNewSubmit(
         assignedToId: agent.id,
         preferredStartDate: startDate,
         preferredEndDate: endDate,
-        // Already converted — the Job exists before the client clicks on.
-        convertedJobId: created.job.id,
+        // Deliberately NOT setting convertedJobId here. It looks right —
+        // the Job does exist — but startWelcomeInvite reads it as "another
+        // path already converted this AND created an order", then looks
+        // for that order, finds none on a brand-new Job, and bails to the
+        // landing page. Which surfaces as "Setup failed".
+        //
+        // The invite's jobId is the piece that was actually missing.
+        // convertedJobId gets stamped by whichever path mints the Order —
+        // welcomeStart does it in the claim below.
       },
       select: { id: true },
     })
