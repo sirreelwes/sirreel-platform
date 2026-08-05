@@ -20,7 +20,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { ASSISTANT_MODEL } from '@/lib/ai/models'
 import { verifyAndRelease, fileAfterHoursCallback, alertOnCallTeam } from '@/lib/assistant/afterHours'
-import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
+import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 
 export const dynamic = 'force-dynamic'
@@ -39,8 +39,16 @@ const MAX_TOOL_ROUNDS = 3
  * assistant can never quote steps the published guide no longer says.
  *
  * The briefs are credential-free by construction; see that module's header.
+ *
+ * The guide URL is built from PUBLIC_SITE_URL rather than written into the
+ * brief, so it points at whichever host actually serves the public site. Until
+ * the sirreel.com DNS cutover that is hq.sirreel.com — a hardcoded apex link
+ * 404s, because sirreel.com still 301s to the old www.
  */
-const GEAR_GUIDES_BLOCK = SETUP_GUIDES.map((g) => g.assistantBrief).join('\n\n')
+const GEAR_GUIDES_BLOCK = SETUP_GUIDES.map(
+  (g) =>
+    `${g.assistantBrief}\n- Full guide (send them this link): ${PUBLIC_SITE_URL}/help/${g.slug} — has the same steps plus a printable one-page PDF. It has no photos; don't claim it does.`,
+).join('\n\n')
 
 const SYSTEM_PROMPT = `You are the SirReel Studio Services after-hours assistant on sirreel.com. SirReel rents production vehicles (cube trucks, cargo vans, passenger vans), stages, production supplies, and satellite internet units to film/TV productions in Los Angeles.
 

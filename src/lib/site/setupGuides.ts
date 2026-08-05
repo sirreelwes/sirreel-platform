@@ -53,6 +53,11 @@ export interface SetupGuide {
    * Compact plain-text brief injected into the after-hours assistant's system
    * prompt. Keep it SHORT and factual — it is prompt budget on every message.
    * Never put credentials or anything unit-specific in here.
+   *
+   * Do NOT hardcode a guide URL here — the assistant route prepends one built
+   * from PUBLIC_SITE_URL, so it stays correct before and after the
+   * sirreel.com DNS cutover. (A hardcoded sirreel.com link shipped once and
+   * sent clients to a 404, since the apex still redirects to the old www.)
    */
   assistantBrief: string
 }
@@ -175,7 +180,7 @@ export const STARLINK_MINI_GUIDE: SetupGuide = {
     'Mini Router + adapter back in the case, if you got one',
     'Latch the case shut before it goes on the truck',
   ],
-  assistantBrief: `STARLINK MINI RENTALS — SirReel rents Starlink Mini satellite internet units. Full guide: sirreel.com/help/starlink-mini (printable PDF linked there).
+  assistantBrief: `STARLINK MINI RENTALS — SirReel rents Starlink Mini satellite internet units.
 - Arrives activated on the SirReel account; nothing for the client to sign up for. The dish has Wi-Fi built in.
 - Setup: place it OUTSIDE on a flat surface with a clear view of the sky, kickstand out, facing north; plug into standard 110V; wait 5-10 min on first boot; join the unit's Wi-Fi.
 - Each unit has its own network named "SirReel" + a unit number. NEVER state a network password — you do not have it. The name and password are printed on the case label and the setup card in the kit; if the client cannot find them, tell them to call the 24/7 line.
