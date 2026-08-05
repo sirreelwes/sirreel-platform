@@ -27,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     lastName?: unknown
     startDate?: unknown
     endDate?: unknown
+    authorizedRepresentative?: unknown
     website?: unknown
   } | null
   if (!body) return NextResponse.json({ ok: false, error: 'Bad request' }, { status: 400 })
@@ -43,6 +44,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     lastName: str(body.lastName),
     startDate: str(body.startDate) || null,
     endDate: str(body.endDate) || null,
+    // Tri-state on purpose: true = ticked, false = shown and left unticked,
+    // null = never shown (the typed name matched no existing client). The
+    // submit path re-derives the match server-side rather than trusting
+    // this, so a caller can't skip the attestation by omitting the field.
+    authorizedRepresentative:
+      typeof body.authorizedRepresentative === 'boolean' ? body.authorizedRepresentative : null,
   })
   if (result.kind === 'ok') {
     return NextResponse.json({ ok: true, portalUrl: result.portalUrl, orderFormUrl: result.orderFormUrl })

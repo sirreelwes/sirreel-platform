@@ -32,7 +32,18 @@ export default async function AgreementStartPage({ params }: { params: { token: 
   const entry = token
     ? await prisma.agreementEntry.findUnique({
         where: { token },
-        select: { kind: true, expiresAt: true, usedAt: true, createdInquiryId: true },
+        select: { kind: true, expiresAt: true, usedAt: true, createdInquiryId: true, personId: true },
+      })
+    : null
+
+  // Known sender → prefill the name fields. The gate minted this token
+  // against a Person we already have, so asking them to retype their own
+  // name is friction for nothing. Fields stay editable: the address on
+  // file isn't always the person filling the form in, and names change.
+  const person = entry?.personId
+    ? await prisma.person.findUnique({
+        where: { id: entry.personId },
+        select: { firstName: true, lastName: true },
       })
     : null
 
@@ -59,7 +70,13 @@ export default async function AgreementStartPage({ params }: { params: { token: 
         One short form — then your rental agreement is ready to sign and you can start building
         your order.
       </p>
-      <AgreementStartForm token={token} />
+      <AgreementStartForm
+        token={token}
+        // '(unknown)' is the placeholder createJobFromDraft writes when a
+        // Person was made from an email with no name — never show it back.
+        initialFirstName={person?.firstName && person.firstName !== '(unknown)' ? person.firstName : ''}
+        initialLastName={person?.lastName ?? ''}
+      />
     </Shell>
   )
 }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { resolvePersonByEmail } from '@/lib/people/email'
+import { companyNameKey } from '@/lib/companies/normalize'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl, portalBaseUrl } from '@/lib/portal/portalUrl'
 import { startWelcomeInvite } from '@/lib/portal/welcomeStart'
@@ -376,6 +377,11 @@ export interface StartNewForm {
   lastName: string
   startDate?: string | null
   endDate?: string | null
+  /**
+   * "I am an authorized representative of this company."
+   * true = ticked · false = shown and refused · null = never shown.
+   */
+  authorizedRepresentative?: boolean | null
 }
 
 interface StartedRows {
@@ -501,6 +507,26 @@ export async function startNewSubmit(
   const startDate = parseDay(form.startDate)
   const endDate = parseDay(form.endDate)
 
+  // Re-derive the existing-client match HERE rather than trusting the
+  // browser. The form shows the "authorized representative" checkbox when
+  // the typed name matches a client, and a check that only exists in the
+  // page is not a check — this endpoint is reachable with curl. Same
+  // normalizer createJobFromDraft uses to link, so the two can't disagree
+  // about what counts as a match.
+  const companyKey = companyNameKey(companyName)
+  const matchesExistingClient = companyKey
+    ? (await prisma.company.findMany({ select: { name: true } })).some(
+        (c) => companyNameKey(c.name) === companyKey,
+      )
+    : false
+  if (matchesExistingClient && form.authorizedRepresentative !== true) {
+    // Checked BEFORE the claim below, so a refusal leaves the token usable.
+    return {
+      kind: 'error',
+      message: 'Please confirm you’re authorized to book for this company.',
+    }
+  }
+
   // Atomic claim — exactly one submit creates; losers resolve to the winner.
   const claimed = await prisma.agreementEntry.updateMany({
     where: { id: entry.id, usedAt: null },
@@ -577,7 +603,14 @@ export async function startNewSubmit(
           `Self-serve rental-agreement entry (public form). Company: ${companyName}. ` +
           `Contact: ${firstName} ${lastName} <${entry.email}>.` +
           (created.companyResolution ? ` Company resolution: ${created.companyResolution}.` : '') +
-          (created.contactWarning ? ` Contact note: ${created.contactWarning}.` : ''),
+          (created.contactWarning ? ` Contact note: ${created.contactWarning}.` : '') +
+          // Recorded because this submit attached a stranger's job to an
+          // EXISTING client record on nothing but their say-so. It is an
+          // attestation, not a verification — the value here is that if the
+          // claim was false, there is a dated record of who made it.
+          (matchesExistingClient
+            ? ` ATTESTATION: confirmed they are an authorized representative of "${companyName}" (existing client) on ${new Date().toISOString()}.`
+            : ''),
         source: 'WEB_FORM',
         personId,
         companyId: created.job.companyId,
