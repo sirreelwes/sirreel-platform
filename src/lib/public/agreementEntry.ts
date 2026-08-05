@@ -378,6 +378,89 @@ export interface StartNewForm {
   endDate?: string | null
 }
 
+interface StartedRows {
+  jobId: string
+  inquiryId: string | null
+  /** Set ONLY when createJobFromDraft reports it created these. */
+  companyId: string | null
+  personId: string | null
+}
+
+/**
+ * Undo a self-serve start that failed before the portal ever opened.
+ *
+ * The submit below commits in four steps — Job, Inquiry, invite, then the
+ * Order mint — and it is the last one that can fail. Without this, such a
+ * failure left a permanent Job (and sometimes a Company and a Person) in
+ * the real book, indistinguishable from a genuine lead. SR-JOB-0094 and
+ * SR-JOB-0095 came from exactly that.
+ *
+ * Every id here was captured from a row THIS request created, which is
+ * what the captured-ID rule requires (CLAUDE.md): nothing is matched by
+ * name, prefix, shape or entity scope. Company and Person are touched
+ * only when createJobFromDraft reports it created them — a submit that
+ * resolved to an existing client leaves that client entirely alone.
+ *
+ * Two guards, because "created seconds ago" is an assumption and this is
+ * the production database:
+ *   - a Job that has acquired an Order is LEFT ALONE. The mint partly
+ *     succeeded, so the row is real work, not litter.
+ *   - Company / Person are kept if anything else already points at them.
+ *
+ * Best-effort throughout. A failed cleanup must never mask the original
+ * error or take down the response, so it logs and returns.
+ */
+async function unwindFailedStart(entryId: string, rows: StartedRows): Promise<void> {
+  try {
+    // Clear the pointer FIRST. created_inquiry_id has no FK constraint, so
+    // deleting the Inquiry would leave it dangling — and the retry reads
+    // it as "already submitted" and dead-ends in resolveExisting().
+    await prisma.agreementEntry.update({ where: { id: entryId }, data: { createdInquiryId: null } })
+
+    const orders = await prisma.order.count({ where: { jobId: rows.jobId } })
+    if (orders > 0) {
+      console.error(
+        `[agreement-start] NOT unwinding job ${rows.jobId}: it has ${orders} order(s). Leaving it for an agent.`,
+      )
+      return
+    }
+
+    // Inquiry first — WelcomeInvite cascades from it. JobContact cascades
+    // from Job. Order is a RESTRICT relation, which is the backstop for
+    // the count above.
+    if (rows.inquiryId) await prisma.inquiry.deleteMany({ where: { id: rows.inquiryId } })
+    await prisma.job.deleteMany({ where: { id: rows.jobId } })
+
+    if (rows.companyId) {
+      const c = await prisma.company.findUnique({
+        where: { id: rows.companyId },
+        select: { _count: { select: { jobs: true, orders: true, inquiries: true, bookings: true } } },
+      })
+      const refs = c ? Object.values(c._count).reduce((a, b) => a + b, 0) : -1
+      if (refs === 0) await prisma.company.deleteMany({ where: { id: rows.companyId } })
+      else if (refs > 0) console.error(`[agreement-start] kept company ${rows.companyId} — ${refs} other reference(s)`)
+    }
+
+    if (rows.personId) {
+      const p = await prisma.person.findUnique({
+        where: { id: rows.personId },
+        select: {
+          _count: {
+            select: { jobContacts: true, inquiries: true, welcomeInvites: true, orderContacts: true, bookings: true },
+          },
+        },
+      })
+      const refs = p ? Object.values(p._count).reduce((a, b) => a + b, 0) : -1
+      if (refs === 0) await prisma.person.deleteMany({ where: { id: rows.personId } })
+      else if (refs > 0) console.error(`[agreement-start] kept person ${rows.personId} — ${refs} other reference(s)`)
+    }
+
+    console.error(`[agreement-start] unwound failed start — job ${rows.jobId} removed; the entry can be retried`)
+  } catch (err) {
+    console.error('[agreement-start] unwind FAILED, rows may remain:', rows, err)
+  }
+}
+
 /**
  * Branch C submit — the client's explicit "create my job" action. Creates
  * Person/Company/Inquiry as needed, then routes through the SAME
@@ -432,6 +515,15 @@ export async function startNewSubmit(
     return { kind: 'invalid' }
   }
 
+  // Captured as each row lands, so the unwind below can prove ownership of
+  // everything it deletes even if we fail partway through.
+  const started: StartedRows = { jobId: '', inquiryId: null, companyId: null, personId: null }
+  // Nothing was stamped, so a retry can claim the entry again.
+  const releaseClaim = () =>
+    prisma.agreementEntry
+      .updateMany({ where: { id: entry.id, createdInquiryId: null }, data: { usedAt: null } })
+      .catch(() => {})
+
   try {
     // Default agent for self-serve entries: first active ADMIN (house book).
     const agent = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } })
@@ -467,11 +559,16 @@ export async function startNewSubmit(
       },
       agent.id,
     )
+    started.jobId = created.job.id
+    // Only what createJobFromDraft actually created is ours to remove.
+    started.companyId = created.companyCreated ? created.job.companyId : null
+    started.personId = created.personCreated ? created.personId : null
 
-    // Person is resolved by createJobFromDraft off the same email; read it
-    // back for the Inquiry + invite rather than creating a second row.
-    const person = (await resolvePersonByEmail(entry.email, { select: { id: true } })) as { id: string } | null
-    if (!person) throw new Error('person not resolved after job creation')
+    // createJobFromDraft resolved-or-created the Person off this same
+    // email and hands the id back — reuse it rather than looking it up
+    // again and risking a second row.
+    const personId = created.personId
+    if (!personId) throw new Error('person not resolved after job creation')
 
     const inquiry = await prisma.inquiry.create({
       data: {
@@ -482,7 +579,7 @@ export async function startNewSubmit(
           (created.companyResolution ? ` Company resolution: ${created.companyResolution}.` : '') +
           (created.contactWarning ? ` Contact note: ${created.contactWarning}.` : ''),
         source: 'WEB_FORM',
-        personId: person.id,
+        personId,
         companyId: created.job.companyId,
         assignedToId: agent.id,
         preferredStartDate: startDate,
@@ -503,24 +600,34 @@ export async function startNewSubmit(
       data: {
         token: entryToken(),
         inquiryId: inquiry.id,
-        personId: person.id,
+        personId,
         jobId: created.job.id,
         expiresAt: expiry(),
       },
       select: { token: true },
     })
+    started.inquiryId = inquiry.id
     await prisma.agreementEntry.update({ where: { id: entry.id }, data: { createdInquiryId: inquiry.id } })
 
     // The SAME click-to-create path as the welcome email — one idempotent mint.
     const r = await startWelcomeInvite(invite.token)
-    if (r.kind !== 'redirect') return { kind: 'error', message: 'Setup failed — please contact your SirReel rep.' }
+    if (r.kind !== 'redirect') {
+      // The mint refused. Everything above is now unreachable litter in
+      // the real book, so take it back out and free the entry — the
+      // client can simply submit the form again.
+      console.error(`[agreement-start] mint refused for entry ${entry.id} (job ${created.job.id}) — unwinding`)
+      await unwindFailedStart(entry.id, started)
+      await releaseClaim()
+      return { kind: 'error', message: 'Setup failed — please contact your SirReel rep.' }
+    }
     return { kind: 'ok', portalUrl: r.url, orderFormUrl }
   } catch (err) {
     console.error('[agreement-start] submit failed:', entry.id, err)
-    // Release the claim so a retry can succeed (nothing was stamped).
-    await prisma.agreementEntry
-      .updateMany({ where: { id: entry.id, createdInquiryId: null }, data: { usedAt: null } })
-      .catch(() => {})
+    // A throw can land anywhere in the sequence above; unwind whatever had
+    // already committed. The unwind clears createdInquiryId, which is what
+    // lets releaseClaim's guard pass and the entry be retried.
+    if (started.jobId) await unwindFailedStart(entry.id, started)
+    await releaseClaim()
     return { kind: 'error', message: 'Something went wrong — please try again.' }
   }
 }

@@ -318,6 +318,16 @@ export interface CreateJobResult {
   job: { id: string; jobCode: string; name: string; status: JobStatus; companyId: string }
   companyResolution: string | null
   contactWarning: string | null
+  /// Provenance for callers that may need to UNWIND this creation — a
+  /// self-serve flow that fails downstream has to clean up after itself,
+  /// and it may only delete rows it can prove it made. `companyResolution`
+  /// carries the same information in prose, but matching on a string
+  /// meant for humans is not proof. These are.
+  companyCreated: boolean
+  personCreated: boolean
+  /// The resolved-or-created lead contact. Null when the draft carried no
+  /// email (the dedup anchor), in which case no Person was touched.
+  personId: string | null
 }
 
 export async function createJobFromDraft(draft: JobDraft, agentId: string): Promise<CreateJobResult> {
@@ -327,6 +337,7 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
   // Company: resolve-or-create via the existing normalizer.
   let companyId = draft.companyId || null
   let companyResolution: string | null = null
+  let companyCreated = false
   const companyName = draft.companyName?.trim() || ''
   if (!companyId && companyName) {
     const key = companyNameKey(companyName)
@@ -344,6 +355,7 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
         select: { id: true, name: true },
       })
       companyId = created.id
+      companyCreated = true
       companyResolution = `created new company "${created.name}"`
     }
   }
@@ -352,6 +364,7 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
   // Person: resolve-or-create (email is the dedup anchor; enrichment
   // fills EMPTY fields only).
   let leadContactPersonId: string | null = null
+  let personCreated = false
   let contactWarning: string | null = null
   const contactEmail = draft.contactEmail ? normalizeEmail(draft.contactEmail) : ''
   const contactName = draft.contactName?.trim() || ''
@@ -375,6 +388,7 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
         select: { id: true },
       })
       leadContactPersonId = created.id
+      personCreated = true
     }
   } else if (contactName || contactPhone) {
     contactWarning =
@@ -418,5 +432,12 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
     select: { id: true, jobCode: true, name: true, status: true, companyId: true },
   })
 
-  return { job, companyResolution, contactWarning }
+  return {
+    job,
+    companyResolution,
+    contactWarning,
+    companyCreated,
+    personCreated,
+    personId: leadContactPersonId,
+  }
 }
