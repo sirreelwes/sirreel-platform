@@ -120,6 +120,15 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/full-logo',        // ditto
   '/public/',          // static files
   '/api/health',       // upstream probe (if/when one exists)
+  // robots.txt MUST be reachable here. It was missing, so tsx.sirreel.com
+  // answered 404 for it — and a crawler that gets a 404 for robots.txt
+  // treats the host as fully crawlable. Portal pages are token-gated, so
+  // no content leaked, but a forwarded or pasted tokenised URL was
+  // eligible for indexing. robots.ts is host-keyed and already returns
+  // "Disallow: /" for every non-marketing host; it just never ran.
+  // sitemap.xml is deliberately NOT listed — nothing here should be
+  // crawled, so there is nothing to advertise.
+  '/robots.txt',
 ]
 
 // Paths that explicitly redirect when hit on the portal host root.
