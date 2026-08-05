@@ -170,7 +170,7 @@ export async function sendInvoice(args: {
     invoiceDueDate: fmtDate(invoice.dueDate),
     portalLink: portalUrl ?? portalSignInUrl(),
     repName: 'Ana DeAngelis',
-    repPhone: '888.477.7335',
+    repPhone: '(888) 477-7335',
     repEmail: 'ana@sirreel.com',
   })
   if (!rendered) {

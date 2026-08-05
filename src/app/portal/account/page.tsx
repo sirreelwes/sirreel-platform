@@ -394,7 +394,7 @@ export default async function PortalAccountPage() {
             8500 Lankershim Blvd, Sun Valley, CA 91352
           </p>
           <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
-            After-hours: <a href="tel:8884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
+            After-hours: <a href="tel:+18884777335" style={{ color: TSX.gold }}>(888) 477-7335</a>
           </p>
         </div>
       </footer>

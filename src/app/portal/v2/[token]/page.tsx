@@ -424,7 +424,7 @@ export default function ClientPortalV2() {
           </p>
           <p className="mt-2 text-[11px]" style={{ color: TSX.gold }}>
             After-hours:{' '}
-            <a href="tel:8884777335" style={{ color: TSX.gold }}>
+            <a href="tel:+18884777335" style={{ color: TSX.gold }}>
               (888) 477-7335
             </a>
           </p>

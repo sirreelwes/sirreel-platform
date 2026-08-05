@@ -88,7 +88,7 @@ export function PaymentInfoRequestForm() {
       <p className="text-[12px] text-[#8b857a] leading-relaxed mt-4">
         For security, payment details are only ever delivered by email to the address we have on
         file. SirReel&rsquo;s payment details never change — if you receive any notice of updated
-        banking information, call 888.477.7335 before sending funds.
+        banking information, call (888) 477-7335 before sending funds.
       </p>
     </form>
   )

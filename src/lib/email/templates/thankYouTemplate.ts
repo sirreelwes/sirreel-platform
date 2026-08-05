@@ -265,7 +265,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
                 ${orderLine}
               </p>
               <p style="font-size: 11px; color: ${MUTED}; margin: 4px 0 0; line-height: 1.4;">
-                8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335
+                8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335
               </p>
             </td>
           </tr>
@@ -302,7 +302,7 @@ export function buildThankYouEmail(input: ThankYouTemplateInput): RenderedEmail 
     'TSX — The SirReel Experience',
     '---',
     `${orderLine}`,
-    `8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335`,
+    `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,
   ].filter((s) => s !== null).join('\n')
 
   return { subject, html, text }

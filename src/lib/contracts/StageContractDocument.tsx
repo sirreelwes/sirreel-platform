@@ -277,7 +277,7 @@ export function StageContractDocument(props: StageContractDocumentProps) {
             )}
             <Text style={styles.brandSub}>SirReel Production Vehicles, Inc. dba SirReel Studio Services</Text>
             <Text style={styles.brandSub}>8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
-            <Text style={styles.brandSub}>888.477.7335 &middot; info@sirreel.com</Text>
+            <Text style={styles.brandSub}>(888) 477-7335 &middot; info@sirreel.com</Text>
           </View>
           <View style={styles.docMeta}>
             <Text style={styles.docTitle}>STAGE BOOKING AGREEMENT</Text>

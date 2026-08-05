@@ -161,7 +161,7 @@ export const PUBLIC_HOME_URL = `${PUBLIC_SITE_URL}/home`
  * read from one place instead of triplicating the strings.
  */
 export const PUBLIC_CONTACT = {
-  phone: '888.477.7335',
+  phone: '(888) 477-7335',
   phoneHref: 'tel:+18884777335',
   email: 'info@sirreel.com',
   emailHref: 'mailto:info@sirreel.com',

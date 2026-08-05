@@ -21,7 +21,7 @@ const SLATE = '#0f172a'
 
 // Verbatim per ruling — do not edit without Wes.
 export const FRAUD_WARNING =
-  "SirReel's payment details never change. If you receive any notice of updated banking information, call 888.477.7335 before sending funds."
+  "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
 
 function escapeHtml(s: string): string {
   return s
@@ -74,7 +74,7 @@ export function buildPaymentInfoEmail(input: {
     '',
     `IMPORTANT: ${FRAUD_WARNING}`,
     '',
-    'Questions? Reply to this email or call 888.477.7335.',
+    'Questions? Reply to this email or call (888) 477-7335.',
     payee ? `\n${payee}` : '\nSirReel Studio Services',
   ].join('\n')
 
@@ -123,7 +123,7 @@ export function buildPaymentInfoEmail(input: {
         </tr>
       </table>
 
-      <p style="margin:0 0 4px;font-size:14px;line-height:1.6;">Questions? Reply to this email or call <a href="tel:8884777335" style="color:${SLATE};font-weight:700;text-decoration:none;">888.477.7335</a>.</p>
+      <p style="margin:0 0 4px;font-size:14px;line-height:1.6;">Questions? Reply to this email or call <a href="tel:+18884777335" style="color:${SLATE};font-weight:700;text-decoration:none;">(888) 477-7335</a>.</p>
       <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">${payee ? escapeHtml(payee) : 'SirReel Studio Services'}</p>
     </div>
   </div>

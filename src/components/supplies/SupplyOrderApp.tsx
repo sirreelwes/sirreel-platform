@@ -1132,7 +1132,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       </div>
 
       <div className="text-center text-[#8b857a] text-xs px-5 py-5 leading-relaxed">
-        SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · 888.477.7335 · info@sirreel.com
+        SirReel Studio Services · 8500 Lankershim Blvd, Sun Valley, CA 91352 · (888) 477-7335 · info@sirreel.com
       </div>
 
       {/* Mobile cart bar */}

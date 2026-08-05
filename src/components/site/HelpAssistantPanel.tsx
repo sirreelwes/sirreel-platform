@@ -24,7 +24,7 @@ export function HelpAssistantPanel() {
           </div>
         </div>
         <a href="tel:+18884777335" className="hidden sm:inline text-[12px] font-bold text-[#c39a3f] hover:text-[#d4a547]">
-          888.477.7335
+          (888) 477-7335
         </a>
       </div>
 
@@ -72,7 +72,7 @@ export function HelpAssistantPanel() {
           </button>
         </div>
         <div className="mt-1.5 text-[10px] text-[#5c574d]">
-          For emergencies call 888.477.7335 — this assistant can also file a callback.
+          For emergencies call (888) 477-7335 — this assistant can also file a callback.
         </div>
       </div>
     </div>

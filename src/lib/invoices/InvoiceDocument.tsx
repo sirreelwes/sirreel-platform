@@ -420,7 +420,7 @@ export function InvoiceDocument({
             )}
             <Text style={styles.brandSub}>SirReel Production Vehicles, Inc.</Text>
             <Text style={styles.brandAddress}>8500 Lankershim Blvd, Sun Valley, CA 91352</Text>
-            <Text style={styles.brandAddress}>888.477.7335 · info@sirreel.com</Text>
+            <Text style={styles.brandAddress}>(888) 477-7335 · info@sirreel.com</Text>
           </View>
           <View style={styles.titleColumn}>
             <Text style={styles.docTitle}>{docTitle}</Text>
@@ -500,7 +500,7 @@ export function InvoiceDocument({
             <Text style={styles.infoSub}>8500 Lankershim Blvd</Text>
             <Text style={styles.infoSub}>Sun Valley, CA 91352</Text>
             <Text style={styles.infoSub}>billing@sirreel.com</Text>
-            <Text style={styles.infoSub}>888.477.7335</Text>
+            <Text style={styles.infoSub}>(888) 477-7335</Text>
           </View>
         </View>
 

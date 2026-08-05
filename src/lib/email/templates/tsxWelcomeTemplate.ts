@@ -401,7 +401,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
                   : ''}
               </p>
               <p style="font-size: 11px; color: ${MUTED}; margin: 4px 0 0; line-height: 1.4;">
-                8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335
+                8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335
               </p>
             </td>
           </tr>
@@ -469,7 +469,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     ...(input.agentPhone ? [input.agentPhone] : []),
     '',
     `TSX — The SirReel Experience`,
-    `8500 Lankershim Blvd, Sun Valley CA 91352 · 888.477.7335`,
+    `8500 Lankershim Blvd, Sun Valley CA 91352 · (888) 477-7335`,
   )
 
   return { subject, html, text: textParts.join('\n') }

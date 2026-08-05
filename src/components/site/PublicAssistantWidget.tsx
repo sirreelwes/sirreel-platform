@@ -44,7 +44,7 @@ export function PublicAssistantWidget() {
               <div className="text-white font-extrabold text-[14px]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                 SirReel Assistant
               </div>
-              <div className="text-[#8b857a] text-[11px]">After-hours help · 888.477.7335</div>
+              <div className="text-[#8b857a] text-[11px]">After-hours help · (888) 477-7335</div>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -99,7 +99,7 @@ export function PublicAssistantWidget() {
               </button>
             </div>
             <div className="text-[10px] text-[#5c574d] mt-1.5">
-              For emergencies call 888.477.7335 — this assistant can also file a callback.
+              For emergencies call (888) 477-7335 — this assistant can also file a callback.
             </div>
           </div>
         </div>

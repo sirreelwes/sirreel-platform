@@ -51,12 +51,12 @@ export function useAssistantChat() {
       const reply =
         typeof json.reply === 'string' && json.reply
           ? json.reply
-          : json.error || 'Something went wrong — please call 888.477.7335.'
+          : json.error || 'Something went wrong — please call (888) 477-7335.'
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: 'Connection trouble — please call 888.477.7335.' },
+        { role: 'assistant', content: 'Connection trouble — please call (888) 477-7335.' },
       ])
     } finally {
       setBusy(false)
