@@ -418,17 +418,6 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
       }))
     mergeOrderLines(order.id, incoming)
     setToggledOrders((prev) => new Set(prev).add(order.id))
-    if (!prefilledRef.current && reorder.state === 'verified') {
-      prefilledRef.current = true
-      const p = reorder.person
-      setForm((f) => ({
-        ...f,
-        contactName: f.contactName || p.name,
-        email: f.email || p.email,
-        phone: f.phone || (p.phone ?? ''),
-        role: f.role || (p.role ?? ''),
-      }))
-    }
   }
 
   // Per-vehicle window helpers — bound to the VehicleCard so each
@@ -526,6 +515,26 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // ── Panels (review / details / confirm) ───────────────────────
   const [panel, setPanel] = useState<'none' | 'sheet' | 'details' | 'confirm'>('none')
   const [form, setForm] = useState<DetailsForm>(EMPTY_FORM)
+
+  // Prefill contact details the moment the person-session verifies —
+  // NOT only when a past order is tapped, which was the old trigger. A
+  // client with a valid session but no past orders could never tap one,
+  // so being signed in bought them nothing. Declared here (not in the
+  // reorder effect above) because setForm is defined after it.
+  // Existing keystrokes always win: `f.x || p.x` never overwrites.
+  useEffect(() => {
+    if (prefilledRef.current || reorder.state !== 'verified') return
+    prefilledRef.current = true
+    const p = reorder.person
+    setForm((f) => ({
+      ...f,
+      contactName: f.contactName || p.name,
+      email: f.email || p.email,
+      phone: f.phone || (p.phone ?? ''),
+      role: f.role || (p.role ?? ''),
+    }))
+  }, [reorder])
+
   // Role chips: form.role stays the single source of truth (payload
   // unchanged) — this only tracks whether the "Other" text input is
   // revealed. A preset chip writes its full label into form.role.
@@ -821,12 +830,33 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
               )}
             </div>
           )}
-          {reorder.state === 'verified' && reorder.orders.length > 0 && (
+          {/* Verified ALWAYS renders something. A session with zero past
+              orders (new contact, or jobs that have none yet) used to match
+              neither branch — the strip vanished and a signed-in client saw
+              a page identical to being signed out. */}
+          {reorder.state === 'verified' && (
             <div className="mt-7">
-              <div className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f] mb-2.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                Your past orders — tap to add to this reservation
+              <div className="text-[13px] text-[#cfc9bd] mb-2.5">
+                Signed in as{' '}
+                <span className="font-semibold text-[#e8e3d7]">{reorder.person.name}</span>
+                <span className="text-[#a8a294]"> · {reorder.person.email}</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+
+              {reorder.orders.length === 0 ? (
+                <div className="text-[13px] leading-relaxed text-[#a8a294] max-w-[560px]">
+                  No past orders on this email yet — we&rsquo;ve filled in your contact details below,
+                  so just add your items and send. If you expected to see past orders here,{' '}
+                  <a href={PUBLIC_CONTACT.phoneHref} className="text-[#c39a3f] font-semibold whitespace-nowrap">
+                    give us a call
+                  </a>{' '}
+                  and we&rsquo;ll link them to your account.
+                </div>
+              ) : (
+                <>
+                  <div className="text-[12px] font-semibold tracking-[0.18em] uppercase text-[#c39a3f] mb-2.5" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                    Your past orders — tap to add to this reservation
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                 {reorder.orders.map((o) => {
                   const on = toggledOrders.has(o.id)
                   const unavailable = o.lines.filter((l) => !l.available).length
@@ -848,7 +878,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     </button>
                   )
                 })}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
