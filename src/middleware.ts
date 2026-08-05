@@ -56,6 +56,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/s-logo',
   '/full-logo',
   '/images/',          // static marketing images (stages heroes, etc.)
+  '/guides/',          // client gear setup PDFs linked from /help/[slug]
   '/public/',
   '/api/health',
   // SEO surface. Without these the crawler gets a 404 for the very
@@ -88,6 +89,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/s-logo',
   '/full-logo',
   '/images/',          // static marketing images (stages heroes, etc.)
+  '/guides/',          // client gear setup PDFs linked from /help/[slug]
   '/public/',
   '/api/health',
   // SEO surface. Without these the crawler gets a 404 for the very

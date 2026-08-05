@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { SWatermark } from '@/components/site/SWatermark'
 import { HelpAssistantPanel } from '@/components/site/HelpAssistantPanel'
 import { HELP_VIDEOS } from '@/lib/site/helpVideos'
+import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 import { PUBLIC_CONTACT } from '@/lib/site/publicNav'
 
 /**
@@ -51,6 +53,37 @@ export default function HelpPage() {
               </div>
             </div>
             <HelpAssistantPanel />
+          </div>
+        </div>
+      </section>
+
+      {/* Gear setup guides */}
+      <section className="bg-white text-[#1b1a17] border-b border-[#e2ddd0]">
+        <div className="max-w-[1200px] mx-auto px-5 py-12 sm:py-14">
+          <div className="text-[12px] font-semibold tracking-[0.22em] uppercase text-[#c39a3f] mb-3" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Setup guides
+          </div>
+          <h2 className="font-black tracking-tight text-[26px] sm:text-[34px] leading-tight max-w-[22ch]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Set up your gear on location
+          </h2>
+
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {SETUP_GUIDES.map((g) => (
+              <Link
+                key={g.slug}
+                href={`/help/${g.slug}`}
+                className="group rounded-2xl border border-[#e2ddd0] bg-[#f6f4ef] p-5 transition-colors hover:border-[#c39a3f] hover:bg-[#c39a3f]/[0.06]"
+              >
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#c39a3f]">{g.eyebrow}</div>
+                <h3 className="mt-1 text-[18px] font-black" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  {g.title}
+                </h3>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f]">{g.summary}</p>
+                <span className="mt-3 inline-block text-[13px] font-bold text-[#1b1a17] group-hover:text-[#c39a3f] transition-colors" style={{ fontFamily: 'Archivo, sans-serif' }}>
+                  Read the guide →
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

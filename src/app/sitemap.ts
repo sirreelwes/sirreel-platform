@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { getPublicVehicles } from '@/lib/site/vehicleCatalog'
 import { getPublicSpaces } from '@/lib/site/spaces'
 import { STAGES } from '@/lib/site/stages'
+import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 import { publicUrl } from '@/lib/site/publicUrl'
 
 /**
@@ -31,6 +32,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: publicUrl('/standing-sets'), lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: publicUrl('/contact'), lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: publicUrl('/help'), lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    // Gear setup guides — static content, from the same registry /help/[slug] renders.
+    ...SETUP_GUIDES.map((g) => ({
+      url: publicUrl(`/help/${g.slug}`),
+      lastModified: now,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    })),
     { url: publicUrl('/rental-agreement'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
     { url: publicUrl('/stage-contract'), lastModified: now, changeFrequency: 'yearly', priority: 0.4 },
     { url: publicUrl('/payment-info'), lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
