@@ -29,7 +29,12 @@ const SLOTS: { slot: Slot; title: string; stateKey: keyof FormsState }[] = [
   { slot: 'coi', title: 'Sample COI', stateKey: 'coi' },
   { slot: 'w9', title: 'W-9', stateKey: 'w9' },
   { slot: 'rental-agreement', title: 'Rental Agreement', stateKey: 'rentalAgreement' },
-  { slot: 'studio-contract', title: 'Studio Contract', stateKey: 'studioContract' },
+  // No 'studio-contract' slot. The stage contract is never a generic
+  // uploaded PDF: /stage-contract renders it from stageContractClauses.ts
+  // and /api/public/stage-contract/pdf regenerates the download from that
+  // same source, so an uploaded copy could only drift from the real terms.
+  // The API still accepts the slot and the DB column is untouched, so an
+  // already-uploaded file keeps serving — this just stops offering it.
 ];
 
 export default function AdminFormsPage() {

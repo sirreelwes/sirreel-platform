@@ -37,10 +37,10 @@ const ENTRY_TTL_DAYS = 7
 const OPEN_JOB_STATUSES = ['QUOTED', 'ACTIVE', 'HOLD'] as const
 const SIGNED = new Set(['SIGNED_BASELINE', 'SIGNED_NEGOTIATED'])
 
-function entryToken(): string {
+export function entryToken(): string {
   return randomBytes(32).toString('hex')
 }
-function expiry(): Date {
+export function expiry(): Date {
   return new Date(Date.now() + ENTRY_TTL_DAYS * 24 * 60 * 60 * 1000)
 }
 export function confirmEntryUrl(token: string): string {
@@ -118,7 +118,7 @@ const jobDates = (j: OpenJob) => {
 }
 
 const GOLD = '#D4A547'
-const esc = (s: string) =>
+export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 /**
@@ -139,7 +139,7 @@ const esc = (s: string) =>
  *  - Buttons are padded to a 44px minimum height, Apple's HIG tap target.
  *    The old 11px padding gave ~36px, under the threshold on a phone.
  */
-function emailShell(title: string, bodyHtml: string, preheader?: string): string {
+export function emailShell(title: string, bodyHtml: string, preheader?: string): string {
   return `<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -177,10 +177,10 @@ function emailShell(title: string, bodyHtml: string, preheader?: string): string
 // 14px padding + 16px line-height clears Apple's 44pt minimum tap target;
 // the old 11px padding rendered ~36px, which is fiddly on a phone and
 // fails WCAG 2.5.5.
-const btn = (href: string, label: string) =>
+export const btn = (href: string, label: string) =>
   `<a href="${href}" style="display:inline-block;background:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:15px;line-height:16px;padding:14px 24px;border-radius:6px;min-height:16px;">${esc(label)}</a>`
 // 15px body: Apple Mail doesn't auto-zoom, so small type just stays small.
-const P = (s: string) => `<p class="sr-p" style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${s}</p>`
+export const P = (s: string) => `<p class="sr-p" style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${s}</p>`
 
 /**
  * Look up the email + send the branch email. Returns which variant fired —
