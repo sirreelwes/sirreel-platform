@@ -15,6 +15,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { PUBLIC_SPACE_VISIBLE_WHERE } from '@/lib/site/spaces'
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     message || '(no message provided)',
   ].join('\n')
 
-  await prisma.inquiry.create({
+  const inquiry = await prisma.inquiry.create({
     data: {
       title: `Standing Sets availability — ${name}`,
       description,
@@ -118,6 +119,20 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get('user-agent') || null,
       },
     },
+    select: { id: true },
+  })
+
+  // Fire-and-forget — see notifyPublicSubmission's header. Never awaited.
+  notifyPublicSubmission({
+    kind: 'space-inquiry',
+    inquiryId: inquiry.id,
+    contact: { name, email },
+    subjectHint: setNames.length ? setNames.join(', ') : null,
+    details: [
+      { label: 'Sets', value: setsLine },
+      { label: 'Dates', value: window },
+      ...(message ? [{ label: 'Message', value: message }] : []),
+    ],
   })
 
   return NextResponse.json({ ok: true })

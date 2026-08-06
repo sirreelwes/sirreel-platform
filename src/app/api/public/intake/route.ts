@@ -38,6 +38,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -182,7 +183,7 @@ export async function POST(req: NextRequest) {
     .filter((s) => s != null)
     .join('\n')
 
-  await prisma.inquiry.create({
+  const inquiry = await prisma.inquiry.create({
     data: {
       title: jobName,
       description,
@@ -202,6 +203,26 @@ export async function POST(req: NextRequest) {
       },
     },
     select: { id: true },
+  })
+
+  // Fire-and-forget — see notifyPublicSubmission's header. Never awaited.
+  // Still notifies hq@ even when the intake resolved to a specific agent:
+  // an assigned inquiry with nobody watching is the same crack.
+  notifyPublicSubmission({
+    kind: 'intake',
+    inquiryId: inquiry.id,
+    reference,
+    contact: { name: contactName, email: contactEmail, phone: contactPhone },
+    subjectHint: jobName,
+    details: [{ label: 'Production', value: jobName }],
+    internalOnlyDetails: [
+      {
+        label: 'Agent link',
+        value: rawSlug
+          ? `/intake/${rawSlug}${assignedToId ? '' : ' (unrecognized — UNASSIGNED)'}`
+          : 'none — unassigned',
+      },
+    ],
   })
 
   return NextResponse.json({

@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Verification failed — try again.' }, { status: 400 })
   }
 
-  await prisma.inquiry.create({
+  const inquiry = await prisma.inquiry.create({
     data: {
       title: `Contact — ${name}`,
       description: message,
@@ -89,6 +90,15 @@ export async function POST(req: NextRequest) {
         userAgent: req.headers.get('user-agent') || null,
       },
     },
+    select: { id: true },
+  })
+
+  // Fire-and-forget — see notifyPublicSubmission's header. Never awaited.
+  notifyPublicSubmission({
+    kind: 'contact',
+    inquiryId: inquiry.id,
+    contact: { name, email },
+    details: [{ label: 'Message', value: message }],
   })
 
   return NextResponse.json({ ok: true })

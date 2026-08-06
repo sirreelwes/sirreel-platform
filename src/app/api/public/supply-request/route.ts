@@ -36,6 +36,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
+import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 
 export const dynamic = 'force-dynamic'
 
@@ -380,7 +381,7 @@ export async function POST(req: NextRequest) {
     .filter((s) => s != null)
     .join('\n')
 
-  await prisma.inquiry.create({
+  const inquiry = await prisma.inquiry.create({
     data: {
       title,
       description,
@@ -405,6 +406,35 @@ export async function POST(req: NextRequest) {
       },
     },
     select: { id: true },
+  })
+
+  // Fire-and-forget: notifies hq@ and acknowledges to the client. NOT
+  // awaited — the Inquiry above is the system of record, and a mail
+  // failure must never fail or slow the client's submit.
+  notifyPublicSubmission({
+    kind: 'supply-order',
+    inquiryId: inquiry.id,
+    reference,
+    contact: { name: contactName, email: contactEmail, phone: contactPhone, role: contactRole },
+    subjectHint: [companyName, jobName].filter(Boolean).join(' · ') || null,
+    details: [
+      ...(jobName ? [{ label: 'Production', value: jobName }] : []),
+      ...(companyName ? [{ label: 'Company', value: companyName }] : []),
+      { label: 'Dates', value: `${windowStart} → ${windowEnd} (${windowDays} day${windowDays === 1 ? '' : 's'})` },
+      { label: 'Items', value: `${totalUnits} unit${totalUnits === 1 ? '' : 's'}` },
+      {
+        label: 'Estimate',
+        value: hasPriceOnQuote
+          ? `$${grandTotal.toLocaleString()} + items priced on quote`
+          : `$${grandTotal.toLocaleString()}`,
+      },
+      { label: 'Delivery', value: deliveryMethod === 'DELIVERY' ? deliveryAddress || 'Delivery' : 'Will call / pickup' },
+      ...(poNumber ? [{ label: 'PO number', value: poNumber }] : []),
+    ],
+    internalOnlyDetails: [
+      ...(jobNumber ? [{ label: 'Job number', value: jobNumber }] : []),
+      ...(notes ? [{ label: 'Notes', value: notes }] : []),
+    ],
   })
 
   return NextResponse.json({
