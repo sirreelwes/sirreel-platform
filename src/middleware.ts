@@ -58,6 +58,8 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/full-logo',
   '/images/',          // static marketing images (stages heroes, etc.)
   '/guides/',          // client gear setup PDFs linked from /help/[slug]
+  '/site-404',         // branded-404 rewrite target; listed so a rewrite that
+                       // ever re-entered middleware can't bounce forever
   '/public/',
   '/api/health',
   // SEO surface. Without these the crawler gets a 404 for the very
@@ -91,6 +93,8 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/full-logo',
   '/images/',          // static marketing images (stages heroes, etc.)
   '/guides/',          // client gear setup PDFs linked from /help/[slug]
+  '/site-404',         // branded-404 rewrite target; listed so a rewrite that
+                       // ever re-entered middleware can't bounce forever
   '/public/',
   '/api/health',
   // SEO surface. Without these the crawler gets a 404 for the very
@@ -161,6 +165,27 @@ function tagged(res: NextResponse, host: string, action: string): NextResponse {
   return res
 }
 
+/**
+ * Branded 404 for the client-facing hosts. Rewrites to the /site-404 trigger,
+ * which calls notFound() and renders (public)/not-found.tsx inside the public
+ * shell with a real 404 status.
+ *
+ * These hosts previously returned literal `new NextResponse('Not found')` —
+ * unstyled text on a white page. That is the destination for anyone following
+ * one of the 15 deliberately-unmapped legacy Wix URLs, so it should look like
+ * SirReel rather than a broken server.
+ *
+ * The portal host (tsx) deliberately keeps the bare text 404: it is a
+ * token-gated surface with nothing to browse to, and marketing chrome there
+ * would invite poking around.
+ */
+function branded404(req: NextRequest, host: string, action: string): NextResponse {
+  const url = req.nextUrl.clone()
+  url.pathname = '/site-404'
+  url.search = ''
+  return tagged(NextResponse.rewrite(url), host, action)
+}
+
 export function middleware(req: NextRequest): NextResponse {
   const host = (req.headers.get('host') || '').toLowerCase()
   const pathname = req.nextUrl.pathname
@@ -210,10 +235,7 @@ export function middleware(req: NextRequest): NextResponse {
     }
     const allowed = PUBLIC_SITE_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
     if (allowed) return tagged(NextResponse.next(), host, 'public:allow')
-    return tagged(new NextResponse('Not found', {
-      status: 404,
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
-    }), host, 'public:block-404')
+    return branded404(req, host, 'public:block-404')
   }
 
   // ── orders.sirreel.com (public supply-order form) ─────────────
@@ -244,10 +266,7 @@ export function middleware(req: NextRequest): NextResponse {
     // gated/admin route is reachable on this host.
     const allowed = ORDERS_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
     if (allowed) return tagged(NextResponse.next(), host, 'orders:allow')
-    return tagged(new NextResponse('Not found', {
-      status: 404,
-      headers: { 'content-type': 'text/plain; charset=utf-8' },
-    }), host, 'orders:block-404')
+    return branded404(req, host, 'orders:block-404')
   }
 
   // ── tsx.sirreel.com (client portal) ───────────────────────────
