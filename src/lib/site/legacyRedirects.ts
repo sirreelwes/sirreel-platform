@@ -38,6 +38,17 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   // Wix had several vehicle-closing variants; all point at the one live form.
   '/vehicleclaimcloser': 'https://www.cognitoforms.com/sirreel/fleetvehicleclosingchecklist',
   '/vehiclerepaircloser': 'https://www.cognitoforms.com/sirreel/fleetvehicleclosingchecklist',
+  '/jobmemo': 'https://www.cognitoforms.com/sirreel/jobmemo',
+  '/vehicledamagereport': 'https://www.cognitoforms.com/sirreel/vehicledamagereport',
+  // Wix path is the un-suffixed name; the LIVE Cognito form is the "2".
+  // Both URLs resolve, so this mapping is the only thing recording which
+  // one is current — don't "tidy" the 2 away.
+  '/vehiclerepairreport': 'https://www.cognitoforms.com/sirreel/vehiclerepairreport2',
+
+  // No Wix predecessor — new shortcuts at the form's own name, so these
+  // work the same way as the rest once DNS moves.
+  '/vehicleviolationbilled': 'https://www.cognitoforms.com/sirreel/vehicleviolationbilled',
+  '/billedorderticket': 'https://www.cognitoforms.com/sirreel/billedorderticket',
 
   // ── Vehicles → /vehicles/[slug] ──
   '/cameracubetruck': '/vehicles/camera-cube',
@@ -110,10 +121,10 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   //
   // STILL PENDING — Cognito form URLs needed from Wes before these can be
   // mapped; they 404 until then:
-  //   /jobmemo /vehicledamagereport /vehiclerepairreport /reimbursements
-  //   /lockbox /liftgateinstructions /pickupwindow /vehiclemap /paperwork
-  //   /creditcardauthorization /employmentapplication
-  //   /healthsafetyprotocols /membershiprewardsprogramagreement
+  //   /reimbursements /lockbox /liftgateinstructions /pickupwindow
+  //   /vehiclemap /paperwork /creditcardauthorization
+  //   /employmentapplication /healthsafetyprotocols
+  //   /membershiprewardsprogramagreement
 }
 
 /** Resolve a pathname to its legacy destination, or null. Case/slash tolerant. */
