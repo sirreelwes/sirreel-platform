@@ -45,10 +45,24 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   // one is current — don't "tidy" the 2 away.
   '/vehiclerepairreport': 'https://www.cognitoforms.com/sirreel/vehiclerepairreport2',
 
+  // The bare "reimbursements" form is GONE (404) — only the "2" exists, so
+  // unlike vehiclerepairreport there is no fallback if the suffix is edited.
+  '/reimbursements': 'https://www.cognitoforms.com/sirreel/reimbursements2',
+  // Preserves a URL Wix already published. Note this reintroduces a
+  // card-authorization entry point that PUBLIC_NAV deliberately omits (see
+  // publicNav.ts: card data lives in CardPointe, SirReel never stores it).
+  // Redirecting an existing link is status quo, not a new capability — but
+  // if the policy is meant to cover this URL too, drop this line.
+  '/creditcardauthorization': 'https://www.cognitoforms.com/sirreel/creditcardauthorization',
+
   // No Wix predecessor — new shortcuts at the form's own name, so these
   // work the same way as the rest once DNS moves.
   '/vehicleviolationbilled': 'https://www.cognitoforms.com/sirreel/vehicleviolationbilled',
   '/billedorderticket': 'https://www.cognitoforms.com/sirreel/billedorderticket',
+  // Form is literally named "Order Return Report A"; both spellings mapped
+  // so nobody has to remember the trailing letter.
+  '/orderreturnreport': 'https://www.cognitoforms.com/sirreel/orderreturnreporta',
+  '/orderreturnreporta': 'https://www.cognitoforms.com/sirreel/orderreturnreporta',
 
   // ── Vehicles → /vehicles/[slug] ──
   '/cameracubetruck': '/vehicles/camera-cube',
@@ -119,12 +133,12 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   //   /minted, /minted-add-invoice, /minted-add-job, /minted-order,
   //   /member-admin, /copy-of-add-invoice, /copy-of-minted-newjob
   //
-  // STILL PENDING — Cognito form URLs needed from Wes before these can be
-  // mapped; they 404 until then:
-  //   /reimbursements /lockbox /liftgateinstructions /pickupwindow
-  //   /vehiclemap /paperwork /creditcardauthorization
+  // ALSO DELIBERATELY ABSENT — Wes's call (Aug 2026) to let these go rather
+  // than chase down a Cognito URL for each. They 404 on cutover:
+  //   /lockbox /liftgateinstructions /pickupwindow /vehiclemap /paperwork
   //   /employmentapplication /healthsafetyprotocols
   //   /membershiprewardsprogramagreement
+  // If any turns out to still be in use, adding it here is a one-liner.
 }
 
 /** Resolve a pathname to its legacy destination, or null. Case/slash tolerant. */
