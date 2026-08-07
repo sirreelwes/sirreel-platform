@@ -72,6 +72,48 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   '/onlineaccount': '/help',
   '/home2': '/home',
   '/copy-of-home-1': '/home',
+
+  // ── Vehicles / studios: best-guess mappings, easy to correct ──
+  '/supercargovan': '/vehicles/cargo-van',
+  '/scout': '/vehicles/video-van-proscout',
+  '/proscoutinstructions': '/vehicles/video-van-proscout',
+  '/dluxjobs': '/vehicles/dlux',
+  '/clientlounges': '/stages',
+  '/safesets': '/stages',
+  '/studiophotos': '/stages',
+  '/studioprojectinfo': '/stages',
+
+  // Wix's "Communications" page → the walkies/wifi section of the order
+  // form, which is what that page was actually selling.
+  '/communications': '/order/supplies?category=radios-wifi',
+  '/ambassador': '/contact',
+  '/ar': '/rental-agreement',
+
+  // ── SEO pages with no equivalent (Wes's call: redirect, don't rebuild) ──
+  // Job-type landing pages go to the vehicle catalog rather than Home —
+  // someone searching "cube truck for a music video" wants the offering,
+  // not the brand page. Ranking for the specific phrasing is lost either
+  // way; this at least lands them somewhere useful.
+  '/jobs/feature-film': '/vehicles',
+  '/jobs/commercial-production': '/vehicles',
+  '/jobs/music-video': '/vehicles',
+  '/jobs/short-film': '/vehicles',
+  '/jobs/corporate': '/vehicles',
+  '/news': '/home',
+  '/news/categories/fleet': '/home',
+  '/post/popvans-mobile-office-solution': '/vehicles/popvan',
+
+  // DELIBERATELY ABSENT — confirmed dead, left to 404 rather than
+  // redirected, so they drop out of Google's index instead of lingering:
+  //   /minted, /minted-add-invoice, /minted-add-job, /minted-order,
+  //   /member-admin, /copy-of-add-invoice, /copy-of-minted-newjob
+  //
+  // STILL PENDING — Cognito form URLs needed from Wes before these can be
+  // mapped; they 404 until then:
+  //   /jobmemo /vehicledamagereport /vehiclerepairreport /reimbursements
+  //   /lockbox /liftgateinstructions /pickupwindow /vehiclemap /paperwork
+  //   /creditcardauthorization /employmentapplication
+  //   /healthsafetyprotocols /membershiprewardsprogramagreement
 }
 
 /** Resolve a pathname to its legacy destination, or null. Case/slash tolerant. */

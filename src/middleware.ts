@@ -173,9 +173,12 @@ export function middleware(req: NextRequest): NextResponse {
   // and means staff typing /fuelcardlog at hq.sirreel.com also land right.
   const legacy = resolveLegacyRedirect(pathname)
   if (legacy) {
+    // Resolve against the current origin so an internal destination may carry
+    // its own query string (/order/supplies?category=radios-wifi). Assigning
+    // to .pathname instead would URL-encode the "?" into the path.
     const dest = legacy.startsWith('http')
       ? new URL(legacy)
-      : Object.assign(req.nextUrl.clone(), { pathname: legacy, search: '' })
+      : new URL(legacy, req.nextUrl.origin)
     // 308 permanent — Google transfers the old page's ranking to the new one.
     return tagged(NextResponse.redirect(dest, 308), host, 'legacy:redirect')
   }
