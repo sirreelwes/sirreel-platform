@@ -31,6 +31,10 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { sendSms } from '@/lib/sms/sendSms'
 
 const TEAM_INBOX = 'rentals@sirreel.com'
+// Copied on after-hours callbacks and emergency alerts so hq@ sees the whole
+// inbound funnel in one place. rentals@ stays primary — this adds, it does
+// not reroute.
+const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const GRACE_DAYS = 1
 
 function normTokens(s: string): string[] {
@@ -470,7 +474,7 @@ async function notifyTeam(subject: string, lines: string[]): Promise<void> {
   }
   try {
     const result = await sendAgreementEmail({
-      to: [TEAM_INBOX],
+      to: [TEAM_INBOX, HQ_INBOX],
       subject,
       html: `<p>${lines.map(escapeHtml).join('<br/>')}</p>`,
       text: lines.join('\n'),

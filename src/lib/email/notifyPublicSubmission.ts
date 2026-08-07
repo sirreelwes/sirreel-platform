@@ -43,7 +43,13 @@ const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 
 const HQ_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
 
-export type PublicFormKind = 'supply-order' | 'contact' | 'space-inquiry' | 'intake'
+export type PublicFormKind =
+  | 'supply-order'
+  | 'contact'
+  | 'space-inquiry'
+  | 'intake'
+  | 'agreement-entry'
+  | 'job-created'
 
 interface KindCopy {
   /** Internal subject prefix. */
@@ -84,12 +90,38 @@ const COPY: Record<PublicFormKind, KindCopy> = {
     clientHeading: "Thanks — we've got your details",
     clientLead: 'Your details are with our team. An agent will follow up shortly.',
   },
+  // Both of the below are INTERNAL-ONLY in practice — agreementEntry.ts sends
+  // the client its own branch-specific mail, so they pass notifyClient:false.
+  // The client copy is kept defined so the type stays total and a future
+  // caller that DOES want an ack isn't blocked.
+  'agreement-entry': {
+    internal: 'New prospect — rental agreement page',
+    clientSubject: 'Getting started with SirReel',
+    clientHeading: "Let's get you started",
+    clientLead: 'Thanks for your interest — an agent will follow up shortly.',
+  },
+  'job-created': {
+    internal: 'Client created a job themselves',
+    clientSubject: 'Your SirReel job is set up',
+    clientHeading: 'Your job is set up',
+    clientLead: 'Your job has been created and your agreement is ready to sign.',
+  },
 }
 
 export interface PublicSubmission {
   kind: PublicFormKind
-  /** Inquiry row id — used to deep-link the internal email into HQ. */
-  inquiryId: string
+  /**
+   * Inquiry row id — deep-links the internal email into HQ. Null when the
+   * flow doesn't create one (e.g. a prospect who only entered an email on
+   * the rental-agreement gate); the CTA falls back to the queue.
+   */
+  inquiryId: string | null
+  /**
+   * Set false when the caller already sends the client its own mail —
+   * agreementEntry.ts does, and double-emailing a client reads as a bug.
+   * Defaults to true.
+   */
+  notifyClient?: boolean
   /** Client-facing reference (supply orders); shown in both emails. */
   reference?: string | null
   contact: {
@@ -121,9 +153,11 @@ export function notifyPublicSubmission(sub: PublicSubmission): void {
   void sendInternal(sub).catch((err) =>
     console.error(`[notify:${sub.kind}] internal notify threw:`, err),
   )
-  void sendClientAck(sub).catch((err) =>
-    console.error(`[notify:${sub.kind}] client ack threw:`, err),
-  )
+  if (sub.notifyClient !== false) {
+    void sendClientAck(sub).catch((err) =>
+      console.error(`[notify:${sub.kind}] client ack threw:`, err),
+    )
+  }
 }
 
 async function sendInternal(sub: PublicSubmission): Promise<void> {
@@ -137,7 +171,9 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
     ...(sub.internalOnlyDetails ?? []),
     ...(sub.reference ? [{ label: 'Reference', value: sub.reference }] : []),
   ]
-  const link = `${HQ_APP_URL}/inquiries/${sub.inquiryId}`
+  // No Inquiry row for some flows — fall back to the queue rather than
+  // minting a link to /inquiries/null.
+  const link = sub.inquiryId ? `${HQ_APP_URL}/inquiries/${sub.inquiryId}` : `${HQ_APP_URL}/inquiries`
 
   const contactRows = [
     { label: 'Name', value: sub.contact.name?.trim() || '—' },
@@ -155,7 +191,7 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
       allRows.length ? detailTable(allRows) : '',
       calloutBox('Open it in HQ to assign an owner and reply. Replying to this email goes straight to the client.'),
     ].join(''),
-    cta: { label: 'Open in HQ', href: link },
+    cta: { label: sub.inquiryId ? 'Open in HQ' : 'Open the inquiry queue', href: link },
   })
 
   const text = renderEmailText([
@@ -175,7 +211,7 @@ async function sendInternal(sub: PublicSubmission): Promise<void> {
     text,
     // Lets an agent answer the client directly from the notification.
     replyTo: looksLikeEmail(sub.contact.email) ? sub.contact.email.trim() : undefined,
-    label: `public-submission:${sub.kind}:${sub.inquiryId.slice(0, 8)}`,
+    label: `public-submission:${sub.kind}:${sub.inquiryId?.slice(0, 8) ?? 'no-inquiry'}`,
   })
   if (!res.ok) console.error(`[notify:${sub.kind}] internal notify failed:`, res.reason)
 }
@@ -220,7 +256,7 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
     subject: copy.clientSubject,
     html,
     text,
-    label: `public-ack:${sub.kind}:${sub.inquiryId.slice(0, 8)}`,
+    label: `public-ack:${sub.kind}:${sub.inquiryId?.slice(0, 8) ?? 'no-inquiry'}`,
   })
   if (!res.ok) console.error(`[notify:${sub.kind}] client ack failed:`, res.reason)
 }

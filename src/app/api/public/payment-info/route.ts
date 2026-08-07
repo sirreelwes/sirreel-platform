@@ -34,6 +34,9 @@ import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/p
 export const dynamic = 'force-dynamic'
 
 const BILLING_INBOX = 'billing@sirreel.com'
+// hq@ is copied on every public submission so one inbox sees the whole
+// funnel. Billing keeps its own feed — this adds, it does not reroute.
+const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 
 const UNIFORM_RESPONSE = {
   ok: true,
@@ -60,7 +63,7 @@ async function notifyBilling(subject: string, lines: string[]): Promise<void> {
     const html = `<p>${lines.map(escapeHtml).join('<br/>')}</p>`
     const text = lines.join('\n')
     const result = await sendAgreementEmail({
-      to: [BILLING_INBOX],
+      to: [BILLING_INBOX, HQ_INBOX],
       subject,
       html,
       text,

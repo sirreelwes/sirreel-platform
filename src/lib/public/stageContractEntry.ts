@@ -156,7 +156,11 @@ async function notifyRepPreparing(jobs: StageJob[], contactEmail: string, contac
     select: { id: true, jobCode: true, name: true, agent: { select: { email: true, name: true } } },
   })
   const to = [...new Set(agents.map((a) => a.agent?.email).filter((e): e is string => Boolean(e)))]
-  const recipients = to.length ? to : ['info@sirreel.com']
+  // The job's agent stays the primary recipient, but hq@ is always copied:
+  // a request sitting unread in one agent's inbox while they're on location
+  // is the exact failure this is meant to prevent.
+  const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
+  const recipients = [...new Set([...(to.length ? to : ['info@sirreel.com']), HQ_INBOX])]
 
   const rows = agents
     .map((a) => `  • ${a.jobCode} — ${a.name}${a.agent?.name ? ` (agent: ${a.agent.name})` : ' (no agent assigned)'}`)

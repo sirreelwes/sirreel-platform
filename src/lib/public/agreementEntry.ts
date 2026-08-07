@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
 import { resolvePersonByEmail } from '@/lib/people/email'
 import { companyNameKey } from '@/lib/companies/normalize'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -325,6 +326,32 @@ export async function processAgreementEntryRequest(rawEmail: string): Promise<'c
     console.error(
       `[agreement-entry] DELIVERY FAILED for ${email} (variant=${variant}): ${sent.reason}`,
     )
+  }
+
+  // Tell the team a NEW prospect showed up. Only the get-started variant:
+  // it means the address matched no Person at all, so this is someone we
+  // have never dealt with raising their hand — a lead that previously
+  // reached nobody, since every branch here emails only the client. The
+  // other variants are existing contacts with existing jobs; they are
+  // already visible in HQ, and notifying on them would bury this signal.
+  //
+  // notifyClient:false — the client already got their branch-specific mail
+  // immediately above. Fire-and-forget, and deliberately AFTER the client
+  // send so an internal-notify problem can never delay their email.
+  //
+  // Anti-enumeration is unaffected: this is an internal email, and the
+  // route's response to the browser is the same constant either way.
+  if (variant === 'get-started') {
+    notifyPublicSubmission({
+      kind: 'agreement-entry',
+      inquiryId: null,
+      notifyClient: false,
+      contact: { email },
+      details: [
+        { label: 'Source', value: 'Rental agreement page — email gate' },
+        { label: 'Match', value: 'No existing contact for this address' },
+      ],
+    })
   }
   return variant
 }
@@ -653,6 +680,45 @@ export async function startNewSubmit(
       await releaseClaim()
       return { kind: 'error', message: 'Setup failed — please contact your SirReel rep.' }
     }
+    // A client just created a real Job + Order on the public site with no
+    // agent involved. Nothing announced this before — the only email in
+    // this module goes to the client — so the highest-value event on the
+    // public surface was also the quietest one.
+    //
+    // Placed AFTER the mint succeeded, so an unwound attempt (see the
+    // refusal branch above) never announces a job that no longer exists.
+    // notifyClient:false — startWelcomeInvite hands them the portal.
+    notifyPublicSubmission({
+      kind: 'job-created',
+      inquiryId: inquiry.id,
+      notifyClient: false,
+      contact: { name: `${firstName} ${lastName}`.trim(), email: entry.email },
+      subjectHint: [companyName, jobName].filter(Boolean).join(' · ') || null,
+      details: [
+        { label: 'Job', value: jobName },
+        { label: 'Company', value: companyName },
+        {
+          label: 'Dates',
+          value:
+            startDate || endDate
+              ? `${startDate?.toISOString().slice(0, 10) ?? '?'} → ${endDate?.toISOString().slice(0, 10) ?? '?'}`
+              : 'not specified',
+        },
+      ],
+      internalOnlyDetails: [
+        {
+          label: 'Company match',
+          value: matchesExistingClient
+            ? 'Attested they represent an EXISTING client — self-declared, not verified. Worth a look.'
+            : 'New company record',
+        },
+        // The assignee is whichever ADMIN was created first, not a real
+        // sales assignment — so "assigned" here should not be read as
+        // "somebody owns this".
+        { label: 'Assignment', value: 'Auto-assigned to fallback admin — needs a real owner' },
+      ],
+    })
+
     return { kind: 'ok', portalUrl: r.url, orderFormUrl }
   } catch (err) {
     console.error('[agreement-start] submit failed:', entry.id, err)
