@@ -26,6 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveLegacyRedirect } from '@/lib/site/legacyRedirects'
 
 const STAFF_HOST = 'hq.sirreel.com'
 const PORTAL_HOST = 'tsx.sirreel.com'
@@ -163,6 +164,21 @@ function tagged(res: NextResponse, host: string, action: string): NextResponse {
 export function middleware(req: NextRequest): NextResponse {
   const host = (req.headers.get('host') || '').toLowerCase()
   const pathname = req.nextUrl.pathname
+
+  // ── Legacy Wix URLs ───────────────────────────────────────────
+  // FIRST, before host routing and before the local-dev pass-through, so
+  // (a) an indexed Wix link can't be swallowed by the marketing host's
+  // catch-all 404, and (b) the map is testable on localhost.
+  // These paths exist nowhere in the app, so matching every host is safe
+  // and means staff typing /fuelcardlog at hq.sirreel.com also land right.
+  const legacy = resolveLegacyRedirect(pathname)
+  if (legacy) {
+    const dest = legacy.startsWith('http')
+      ? new URL(legacy)
+      : Object.assign(req.nextUrl.clone(), { pathname: legacy, search: '' })
+    // 308 permanent — Google transfers the old page's ranking to the new one.
+    return tagged(NextResponse.redirect(dest, 308), host, 'legacy:redirect')
+  }
 
   // Local / preview — no host routing.
   if (isLocalHost(host)) return tagged(NextResponse.next(), host, 'pass:local')
