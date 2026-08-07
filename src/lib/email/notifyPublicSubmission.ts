@@ -20,10 +20,12 @@
  * the Inquiry row is already written and is the real system of record.
  * Failures are logged and swallowed.
  *
- * CRM CAPTURE CAVEAT: hq@sirreel.com is NOT in SALES_CAPTURE_INBOXES
- * (info@/jose@/oliver@ only — src/lib/crm/captureConstants.ts). A reply
- * sent FROM hq@ will not be auto-captured into the CRM. Agents should
- * reply from their own address, or hq@ needs adding to that set.
+ * hq@sirreel.com is an OUTBOUND-ONLY distribution group (wes/jose/oliver) —
+ * nobody works out of it. Each member receives the notification in their own
+ * mailbox, so hitting Reply composes from jose@/oliver@, which are already in
+ * SALES_CAPTURE_INBOXES; the thread stays CRM-tracked. Deliberately NOT added
+ * to that set (src/lib/crm/captureConstants.ts): it never authors mail, and
+ * widening the capture gate for an alias that never sends buys nothing.
  */
 
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
