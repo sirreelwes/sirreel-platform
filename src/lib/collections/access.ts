@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { canUseCollections } from '@/lib/collections/allowlist'
 
 /**
  * Access gate for the collections workspace (/collections).
@@ -16,11 +17,6 @@ import { prisma } from '@/lib/prisma'
  * Add someone by putting their address here, or by giving them BILLING if
  * collections is genuinely their job.
  */
-
-const ROLE_ALLOWED = new Set(['ADMIN', 'BILLING'])
-
-/** Individually-granted addresses. Lowercase. */
-const EMAIL_ALLOWED = new Set(['jose@sirreel.com'])
 
 export interface CollectionsUser {
   id: string
@@ -47,8 +43,8 @@ export async function requireCollectionsUser(): Promise<CollectionsUser | null> 
   })
   if (!user || !user.isActive) return null
 
-  const allowed = ROLE_ALLOWED.has(String(user.role)) || EMAIL_ALLOWED.has(email)
-  if (!allowed) return null
+  // Same predicate the sidebar uses — see allowlist.ts.
+  if (!canUseCollections(String(user.role), email)) return null
 
   return { id: user.id, name: user.name, email: user.email, role: String(user.role) }
 }

@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
+import { canUseCollections } from '@/lib/collections/allowlist';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
@@ -327,6 +328,9 @@ export function defaultLandingPath(input: UserRole | PermissionsUser): string {
 
 export function getNavSections(input: UserRole | PermissionsUser): NavSection[] {
   const navRole: UserRole = typeof input === 'string' ? input : input.role;
+  // Legacy callers pass a bare role and get no email — those users simply
+  // don't see email-gated entries, which is the safe default.
+  const navEmail: string | undefined = typeof input === 'string' ? undefined : input.email;
   // Fixed information architecture — identical for every user. This is a
   // visual + IA surface only; pages enforce their own authorization, so
   // there is intentionally NO role-gating here (every tab is visible to
@@ -355,6 +359,17 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
         { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
+        // Narrow exception to "every tab visible to all": this one takes
+        // client money, so showing it to Julian or Oliver would only offer a
+        // tab that dead-ends in a redirect. Same predicate as the page gate
+        // (src/lib/collections/allowlist.ts) so the two can't drift.
+        //
+        // NB the section comment above cites the HR entry as an email-gated
+        // precedent — it isn't; /hr is currently listed unconditionally. The
+        // fleet "Today" entry is the real precedent for conditional items.
+        ...(canUseCollections(navRole, navEmail)
+          ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
+          : []),
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
