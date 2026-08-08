@@ -46,12 +46,27 @@ interface RwInvoice {
   alreadyCharged: { count: number; total: number; last: string | null }
 }
 
+interface FinalInvoice {
+  id: string
+  rwInvoiceId: string | null
+  invoiceNumber: string | null
+  amount: number
+  pdfUrl: string | null
+  note: string | null
+  jobName: string | null
+  jobCode: string | null
+  companyName: string | null
+  alreadyCharged: number
+}
+
 const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
 export function CollectionsWorkspace({ operatorName }: { operatorName: string }) {
   const [auths, setAuths] = useState<Authorization[]>([])
   const [invoices, setInvoices] = useState<RwInvoice[]>([])
+  const [finals, setFinals] = useState<FinalInvoice[]>([])
+  const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
   const [q, setQ] = useState('')
   const [invoice, setInvoice] = useState<RwInvoice | null>(null)
   const [amount, setAmount] = useState('')
@@ -76,6 +91,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       .then((d) => d.ok && setAuths(d.authorizations ?? []))
       .catch(() => {})
   }, [])
+
+  const loadFinals = useCallback(() => {
+    fetch('/api/collections/final-invoices')
+      .then((r) => r.json())
+      .then((d) => d.ok && setFinals(d.finalInvoices ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadFinals()
+  }, [loadFinals])
 
   const loadInvoices = useCallback((query: string) => {
     fetch(`/api/collections/rw-invoices?q=${encodeURIComponent(query)}`)
@@ -156,6 +182,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          finalInvoiceId: finalPick?.id,
           rwInvoiceId: invoice.rwInvoiceId,
           invoiceNumber: invoice.invoiceNumber,
           customerName: invoice.customerName,
@@ -173,7 +200,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       if (d.ok) {
         setCardToken(null)
         setAmount('')
+        setFinalPick(null)
         loadInvoices(q)
+        loadFinals()
       }
     } catch {
       setResult({ ok: false, message: 'Request failed — nothing was charged.' })
@@ -199,8 +228,72 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] items-start">
         {/* ── invoices ─────────────────────────────────────────── */}
+        <div className="space-y-6">
+        {/* Ready to collect — finalized by an agent on the job page. This is
+            the queue Ana works; the RW browse below is the fallback for
+            anything finalized outside HQ. */}
+        <div className="bg-zinc-900 border border-amber-700/50 rounded-xl p-5">
+          <h2 className="text-sm font-bold text-white mb-1">Ready to collect</h2>
+          <p className="text-xs text-zinc-400 mb-3">
+            Final amounts agreed with the client and sent over from the job page.
+          </p>
+          {finals.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-3">
+              Nothing queued. Agents send invoices here with{' '}
+              <b className="text-zinc-300">Upload final invoice</b> on the job page.
+            </p>
+          ) : (
+            <div className="divide-y divide-zinc-800 max-h-[260px] overflow-y-auto">
+              {finals.map((fv) => (
+                <button
+                  key={fv.id}
+                  onClick={() => {
+                    setFinalPick(fv)
+                    setAmount(String(fv.amount))
+                    setInvoice({
+                      rwInvoiceId: fv.rwInvoiceId || `final:${fv.id}`,
+                      invoiceNumber: fv.invoiceNumber,
+                      customerName: fv.companyName,
+                      dealName: fv.jobName,
+                      orderNumber: null,
+                      invoiceDate: null,
+                      status: 'FINAL',
+                      invoiceTotal: fv.amount,
+                      remainingTotal: fv.amount,
+                      alreadyCharged: { count: 0, total: fv.alreadyCharged, last: null },
+                    })
+                  }}
+                  className={`w-full text-left py-2.5 px-2 rounded transition-colors ${
+                    finalPick?.id === fv.id ? 'bg-amber-600/20' : 'hover:bg-zinc-800'
+                  }`}
+                >
+                  <div className="flex justify-between gap-3">
+                    <span className="text-sm font-semibold text-white">
+                      {fv.jobName || fv.invoiceNumber || 'Final invoice'}
+                    </span>
+                    <span className="text-sm text-amber-500 font-semibold">
+                      {money(fv.amount)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    {fv.companyName || '—'}
+                    {fv.invoiceNumber ? ` · ${fv.invoiceNumber}` : ''}
+                    {fv.pdfUrl ? ' · PDF attached' : ' · no PDF'}
+                  </div>
+                  {fv.note && <div className="text-xs text-zinc-500 mt-0.5">{fv.note}</div>}
+                  {fv.alreadyCharged > 0 && (
+                    <div className="text-xs text-amber-500/90 mt-1">
+                      ⚠ {money(fv.alreadyCharged)} already collected against this invoice
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5">
-          <h2 className="text-sm font-bold text-white mb-3">1. Pick the invoice</h2>
+          <h2 className="text-sm font-bold text-white mb-3">Or browse RentalWorks invoices</h2>
           <input
             className={input}
             placeholder="Search invoice #, customer, order, production… (blank = all with a balance)"
@@ -247,6 +340,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
               </button>
             ))}
           </div>
+        </div>
         </div>
 
         {/* ── charge ───────────────────────────────────────────── */}

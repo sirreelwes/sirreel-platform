@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as {
     rwInvoiceId?: unknown
+    finalInvoiceId?: unknown
     invoiceNumber?: unknown
     customerName?: unknown
     amount?: unknown
@@ -51,9 +52,36 @@ export async function POST(req: NextRequest) {
   } | null
   if (!body) return NextResponse.json({ ok: false, error: 'body required' }, { status: 400 })
 
-  const rwInvoiceId = typeof body.rwInvoiceId === 'string' ? body.rwInvoiceId.trim() : ''
+  const finalInvoiceId =
+    typeof body.finalInvoiceId === 'string' ? body.finalInvoiceId.trim() : ''
+
+  // A charge is anchored to EITHER a finalized invoice (the normal path — an
+  // agent agreed the number and queued it) or a raw RW invoice id (the older
+  // path, still needed for anything finalized outside HQ).
+  let rwInvoiceId = typeof body.rwInvoiceId === 'string' ? body.rwInvoiceId.trim() : ''
+  if (finalInvoiceId) {
+    const fi = await prisma.jobFinalInvoice.findUnique({
+      where: { id: finalInvoiceId },
+      select: { id: true, rwInvoiceId: true, invoiceNumber: true, status: true },
+    })
+    if (!fi) {
+      return NextResponse.json({ ok: false, error: 'final invoice not found' }, { status: 404 })
+    }
+    if (fi.status !== 'READY') {
+      return NextResponse.json(
+        { ok: false, error: `that invoice is already ${fi.status.toLowerCase()}` },
+        { status: 409 },
+      )
+    }
+    // Fall back to the final-invoice id itself so the charge is always
+    // anchored to something, even when no RW invoice was linked.
+    rwInvoiceId = fi.rwInvoiceId || rwInvoiceId || `final:${fi.id}`
+  }
   if (!rwInvoiceId) {
-    return NextResponse.json({ ok: false, error: 'rwInvoiceId required' }, { status: 400 })
+    return NextResponse.json(
+      { ok: false, error: 'rwInvoiceId or finalInvoiceId required' },
+      { status: 400 },
+    )
   }
 
   const amount = Number(body.amount)
@@ -176,6 +204,14 @@ export async function POST(req: NextRequest) {
     },
     select: { id: true, status: true, amount: true, surchargeAmount: true },
   })
+
+  // Clear it off Ana's queue. Only on approval — a decline leaves it READY so
+  // the next person still sees it needs collecting.
+  if (approved && finalInvoiceId) {
+    await prisma.jobFinalInvoice
+      .update({ where: { id: finalInvoiceId }, data: { status: 'COLLECTED' } })
+      .catch((e) => console.error('[collections] could not mark collected:', e))
+  }
 
   return NextResponse.json({
     ok: approved,

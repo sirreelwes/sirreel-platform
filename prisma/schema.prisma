@@ -3766,6 +3766,7 @@ model Job {
   @@index([agentId])
   @@index([productionTypeProfileId])
   @@map("sr_jobs")
+  finalInvoices JobFinalInvoice[]
 }
 
 // ============================================================
@@ -5347,6 +5348,48 @@ model JobRwOrder {
   @@unique([jobId, rwOrderNumber])
   @@index([rwOrderNumber])
   @@map("sr_job_rw_orders")
+}
+
+/// The FINAL invoice for a job — the number Jose lands on after the back and
+/// forth with the client, uploaded from the job page and queued for Ana to
+/// collect.
+///
+/// This is the handoff between sales and collections. Before it existed, the
+/// collections screen listed every open RW invoice with no signal about which
+/// were actually agreed and ready to charge; "final" was knowledge that lived
+/// only in Jose's inbox.
+///
+/// jobId is a REAL relation — Job is HQ-native and stable, unlike the RW
+/// invoice mirror (which is dropped and rebuilt each sync, hence the string
+/// keys on RwCollectionCharge). rwInvoiceId/invoiceNumber are optional: the
+/// final number may or may not correspond to a single RW invoice.
+///
+/// Interim shape. When billing moves into HQ this is replaced by a "finalize"
+/// action on the HQ invoice itself, and the PDF upload goes away.
+model JobFinalInvoice {
+  id            String   @id @default(uuid())
+  jobId         String   @map("job_id")
+  /// Optional pointer at the RW mirror row this settles. String, not a
+  /// relation — the mirror is recreated on every sync.
+  rwInvoiceId   String?  @map("rw_invoice_id")
+  invoiceNumber String?  @map("invoice_number")
+  /// The agreed final amount. What Ana charges unless she overrides it.
+  amount        Decimal  @db.Decimal(12, 2)
+  pdfUrl        String?  @map("pdf_url")
+  pdfKey        String?  @map("pdf_key")
+  /// READY (awaiting collection) | COLLECTED | VOID. Not an enum: this whole
+  /// model is interim, and a Postgres enum is the one thing that makes
+  /// retiring it awkward.
+  status        String   @default("READY")
+  note          String?
+  uploadedById  String?  @map("uploaded_by_id")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status, uploadedAt])
+  @@index([jobId])
+  @@map("sr_job_final_invoices")
 }
 
 /// A card charge taken in the collections workspace against a RentalWorks
