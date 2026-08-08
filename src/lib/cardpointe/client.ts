@@ -108,7 +108,12 @@ export interface AuthRequest {
    *  "N" to authorize-only (auth holds funds; capture later). */
   capture: 'Y' | 'N'
   /** ACH-only: set to "Y" to flag this as an eCheck. Cards omit. */
-  ecomind?: 'E' // ecommerce. Required field on most accounts.
+  /** Transaction origin. 'E' = ecommerce (cardholder at a web form).
+   *  'T' = telephone / MOTO — the operator keys a card the client reads out.
+   *  Submitting a phone charge as 'E' misrepresents it to the network: it
+   *  can downgrade interchange and it weakens SirReel's position in a
+   *  dispute, because the record claims the cardholder was present online. */
+  ecomind?: 'E' | 'T'
   /** Operator-supplied invoice reference — shows on the merchant
    *  statement. We pass our Invoice number here. */
   orderid?: string
@@ -148,6 +153,9 @@ export async function chargeCard(args: {
   amountDollars: number
   invoiceNumber: string
   cardholderName?: string
+  /** True when an operator keyed the card on a phone call (collections).
+   *  Sends ecomind 'T' instead of 'E' — see AuthRequest.ecomind. */
+  moto?: boolean
 }): Promise<AuthResponse> {
   const cfg = readConfig()
   const body: AuthRequest = {
@@ -155,7 +163,7 @@ export async function chargeCard(args: {
     amount: args.amountDollars.toFixed(2),
     currency: 'USD',
     capture: 'Y',
-    ecomind: 'E',
+    ecomind: args.moto ? 'T' : 'E',
     orderid: args.invoiceNumber,
     name: args.cardholderName,
   }

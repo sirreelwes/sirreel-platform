@@ -5349,6 +5349,51 @@ model JobRwOrder {
   @@map("sr_job_rw_orders")
 }
 
+/// A card charge taken in the collections workspace against a RentalWorks
+/// invoice, for money collected BEFORE billing moves into HQ.
+///
+/// Keyed on rw_invoice_id as a STRING, not a relation — the RwInvoice mirror
+/// is deleted and recreated on every sync, so a foreign key would be wiped
+/// (same reason RwInvoicePaidMark does it this way). invoice_number and
+/// customer_name are SNAPSHOTS for the same reason: a payment record must
+/// outlive the mirror row it was taken against.
+///
+/// NOT the Payment table: Payment requires an HQ Invoice, and these invoices
+/// live in RentalWorks. Retire alongside RW.
+///
+/// `amount` is what the invoice is credited. `surcharge_amount` is the 3% card
+/// fee charged ON TOP at the gateway — the customer's card was debited
+/// amount + surcharge_amount. Same split as Payment, so the two read alike.
+model RwCollectionCharge {
+  id              String   @id @default(uuid())
+  rwInvoiceId     String   @map("rw_invoice_id")
+  invoiceNumber   String?  @map("invoice_number")
+  customerName    String?  @map("customer_name")
+  amount          Decimal  @db.Decimal(12, 2)
+  surchargeAmount Decimal? @map("surcharge_amount") @db.Decimal(10, 2)
+  cardLast4       String?  @map("card_last4")
+  cardType        String?  @map("card_type")
+  cardholderName  String?  @map("cardholder_name")
+  /// CardPointe response fields, kept for dispute evidence and reconciliation.
+  authCode        String?  @map("auth_code")
+  retref          String?
+  respText        String?  @map("resp_text")
+  /// APPROVED | DECLINED | ERROR. Declines are recorded too — a collections
+  /// call that failed is information, and silently dropping it makes the
+  /// history lie about how often cards bounce.
+  status          String   @default("APPROVED")
+  /// The RW invoice PDF the operator dropped in. Private blob + key.
+  pdfUrl          String?  @map("pdf_url")
+  pdfKey          String?  @map("pdf_key")
+  note            String?
+  chargedById     String?  @map("charged_by_id")
+  chargedAt       DateTime @default(now()) @map("charged_at")
+
+  @@index([rwInvoiceId])
+  @@index([chargedAt])
+  @@map("sr_rw_collection_charges")
+}
+
 /// HQ-side "paid" override for a RentalWorks invoice. RW's status (CLOSED /
 /// VOID / NEW / PROCESSED) is authoritative, but RW can lag — an invoice
 /// collected today may sit NEW for days. Staff mark it paid here to clear it
