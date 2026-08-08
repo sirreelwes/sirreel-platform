@@ -477,10 +477,16 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 ) : (
                   <>
                     {iframeUrl ? (
+                      // Attributes match the portal's pay panel, which is the
+                      // proven configuration for this tokenizer.
                       <iframe
                         title="Card entry"
                         src={iframeUrl}
-                        className="w-full h-[72px] bg-white rounded-lg"
+                        frameBorder="0"
+                        scrolling="no"
+                        width="100%"
+                        height="48"
+                        className="bg-white rounded-lg"
                       />
                     ) : (
                       <p className="text-xs text-zinc-500">Loading secure card entry…</p>

@@ -49,9 +49,31 @@ function cardpointePrefix(): 'CARDPOINTE_PROD' | 'CARDPOINTE_UAT' {
  * handed to the other environment's gateway and the charge rejects.
  * Returns null when the env var is unset (caller decides how to fail).
  */
+/**
+ * Base URL for the CardSecure TOKENIZER iframe — NOT the REST gateway.
+ *
+ * These are different hosts, which this function previously got wrong: it
+ * returned CARDPOINTE_*_URL verbatim (the REST base,
+ * https://boltgw-uat.cardconnect.com/cardconnect/rest), the config route
+ * appended /itoke/ajax-tokenizer.html, and the resulting URL 404'd. The card
+ * field never rendered — in the client portal's pay panel as well as
+ * collections. The file header above always described the two-host split and
+ * claimed we normalized it; nothing actually did.
+ *
+ * Tokenizer lives on the fts- host:
+ *   UAT  https://fts-uat.cardconnect.com/itoke/ajax-tokenizer.html
+ *   PROD https://fts.cardconnect.com/itoke/ajax-tokenizer.html
+ * Both verified returning 200.
+ *
+ * Overridable per environment via CARDPOINTE_{UAT,PROD}_TOKENIZER_URL in case
+ * CardConnect assigns a different tokenizer host to the account.
+ */
 export function cardpointeBaseUrl(): string | null {
-  const url = process.env[`${cardpointePrefix()}_URL`]
-  return url && url.trim() ? url : null
+  const override = process.env[`${cardpointePrefix()}_TOKENIZER_URL`]
+  if (override && override.trim()) return override.trim().replace(/\/$/, '')
+  return cardpointeEnv() === 'PROD'
+    ? 'https://fts.cardconnect.com'
+    : 'https://fts-uat.cardconnect.com'
 }
 
 function readConfig(): CardPointeConfig {
