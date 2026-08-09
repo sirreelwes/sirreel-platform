@@ -161,6 +161,11 @@ export interface AuthRequest {
 export interface AuthResponse {
   /** Gateway response code. "00" = approved. Anything else is a
    *  decline or error and the caller should mark the payment FAILED. */
+  /** AUTHORITATIVE approval flag: 'A' approved, 'B' retry, 'C' declined.
+   *  Prefer this over respcode, whose approval value varies by processor —
+   *  checking respcode === '00' recorded a real approval ("Approval") as a
+   *  decline, which means the card is charged and the invoice never credited. */
+  respstat?: 'A' | 'B' | 'C'
   respcode: string
   /** Human-readable response text. */
   resptext: string
@@ -417,6 +422,9 @@ async function postAuth(cfg: CardPointeConfig, body: AuthRequest): Promise<AuthR
  * decline, error, or gateway issue — caller writes Payment.status
  * = FAILED and surfaces the resptext to the user.
  */
-export function isApproved(r: { respcode: string }): boolean {
-  return r.respcode === '00'
+export function isApproved(r: { respstat?: string; respcode?: string }): boolean {
+  // respstat is definitive when present. respcode is a processor-specific
+  // fallback — '00' and '000' are both seen for approvals.
+  if (r.respstat) return r.respstat === 'A'
+  return r.respcode === '00' || r.respcode === '000'
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
-import { chargeCard } from '@/lib/cardpointe/client'
+import { chargeCard, isApproved } from '@/lib/cardpointe/client'
 import { surchargeBreakdown } from '@/lib/payments/surcharge'
 
 export const dynamic = 'force-dynamic'
@@ -194,7 +194,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const approved = resp.respcode === '00'
+  // Use the shared helper, not a bare respcode check: CardConnect returned
+  // resptext 'Approval' with a respcode that isn't '00', and treating that
+  // as a decline charges the card without crediting the invoice.
+  const approved = isApproved(resp)
 
   const charge = await prisma.rwCollectionCharge.create({
     data: {
