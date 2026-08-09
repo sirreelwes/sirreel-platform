@@ -495,7 +495,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         frameBorder="0"
                         scrolling="no"
                         width="100%"
-                        height="48"
+                        // The tokenizer renders THREE stacked labelled inputs once useexpiry/
+                        // usecvv are on. 48px was sized for the old number-only widget and
+                        // silently clipped expiry and CVV — the fields were present but
+                        // invisible, with scrolling='no' hiding the overflow.
+                        height="210"
                         className="bg-white rounded-lg"
                       />
                     ) : (

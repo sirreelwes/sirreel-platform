@@ -403,7 +403,7 @@ function CardPayForm({
               frameBorder="0"
               scrolling="no"
               width="100%"
-              height="48"
+              height="210"
               title="Card Entry"
             />
           ) : (
