@@ -221,6 +221,10 @@ export async function POST(req: NextRequest) {
       authCode: resp.authcode ?? null,
       retref: resp.retref ?? null,
       respText: resp.resptext?.slice(0, 300) ?? null,
+      // Raw verdict fields — approval classification depends on these, so
+      // record what the gateway actually said, not just our reading of it.
+      respCode: resp.respcode ?? null,
+      respStat: resp.respstat ?? null,
       status: approved ? 'APPROVED' : 'DECLINED',
       pdfUrl: typeof body.pdfUrl === 'string' ? body.pdfUrl : null,
       pdfKey: typeof body.pdfKey === 'string' ? body.pdfKey : null,

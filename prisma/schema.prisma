@@ -5421,6 +5421,12 @@ model RwCollectionCharge {
   authCode        String?  @map("auth_code")
   retref          String?
   respText        String?  @map("resp_text")
+  /// Raw gateway verdict fields. Approval classification runs on these, and
+  /// this gateway omits respstat entirely — so without them a misclassified
+  /// charge is undiagnosable after the fact: the row would read DECLINED with
+  /// no record of what CardConnect actually returned.
+  respCode        String?  @map("resp_code")
+  respStat        String?  @map("resp_stat")
   /// APPROVED | DECLINED | ERROR. Declines are recorded too — a collections
   /// call that failed is information, and silently dropping it makes the
   /// history lie about how often cards bounce.
