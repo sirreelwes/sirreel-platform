@@ -130,17 +130,29 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
     const handler = (e: MessageEvent) => {
       if (typeof e.data !== 'string' || !e.data.startsWith('{')) return
       try {
-        const msg = JSON.parse(e.data) as {
-          message?: { token?: string; expiry?: string; validationError?: string }
-        }
-        const inner = msg.message
-        if (!inner) return
-        if (typeof inner.token === 'string' && inner.token) {
-          setCardToken(inner.token)
+        // CardSecure posts the token in TWO shapes depending on version:
+        //   {"message":"<token>"}                     ← message IS the token
+        //   {"message":{"token":"…","validationError":…}}
+        // Both parsers here only ever handled the object form, so on an
+        // account serving the string form no token was captured, the Charge
+        // button never enabled, and the portal's pay panel had the same
+        // silent failure. Accept either.
+        const raw = JSON.parse(e.data) as
+          | { message?: string | { token?: string; validationError?: string } }
+          | null
+        const inner = raw?.message
+        const token =
+          typeof inner === 'string' ? inner : typeof inner?.token === 'string' ? inner.token : ''
+        const validationError =
+          typeof inner === 'object' && typeof inner?.validationError === 'string'
+            ? inner.validationError
+            : ''
+        if (token) {
+          setCardToken(token)
           setErr(null)
-        } else if (inner.validationError) {
+        } else if (validationError) {
           setCardToken(null)
-          setErr(inner.validationError)
+          setErr(validationError)
         }
       } catch {
         /* not ours */

@@ -263,23 +263,32 @@ function CardPayForm({
       if (typeof e.data !== 'string') return
       if (!e.data.startsWith('{')) return
       try {
-        const msg = JSON.parse(e.data) as {
-          message?: { token?: string; expiry?: string; validationError?: string }
-        }
-        const inner = msg.message
-        if (!inner) return
-        if (typeof inner.token === 'string' && inner.token.length > 0) {
-          setCardToken(inner.token)
-          // Token shape on CardConnect is a 16-character numeric or
-          // alphanumeric string mirroring the card BIN+last4 pattern
-          // — last4 is at the end. Defensive extraction.
-          const tail = inner.token.slice(-4)
+        // CardSecure posts the token in TWO shapes depending on version:
+        //   {"message":"<token>"}  ← message IS the token
+        //   {"message":{"token":"…"}}
+        // Only the object form was handled, so on an account serving the
+        // string form no token was ever captured and the pay button could
+        // not enable. Accept either.
+        const raw = JSON.parse(e.data) as
+          | { message?: string | { token?: string; validationError?: string } }
+          | null
+        const inner = raw?.message
+        const tok =
+          typeof inner === 'string' ? inner : typeof inner?.token === 'string' ? inner.token : ''
+        const vErr =
+          typeof inner === 'object' && typeof inner?.validationError === 'string'
+            ? inner.validationError
+            : ''
+        if (tok) {
+          setCardToken(tok)
+          // Token mirrors the card BIN+last4 pattern; last4 is at the end.
+          const tail = tok.slice(-4)
           if (/^\d{4}$/.test(tail)) setLast4(tail)
           setErr(null)
-        } else if (typeof inner.validationError === 'string' && inner.validationError) {
+        } else if (vErr) {
           setCardToken(null)
           setLast4(null)
-          setErr(inner.validationError)
+          setErr(vErr)
         }
       } catch {
         /* ignore non-JSON posts from the iframe */
@@ -587,20 +596,31 @@ function AchPayForm({
     const handler = (e: MessageEvent) => {
       if (typeof e.data !== 'string' || !e.data.startsWith('{')) return
       try {
-        const msg = JSON.parse(e.data) as {
-          message?: { token?: string; validationError?: string }
-        }
-        const inner = msg.message
-        if (!inner) return
-        if (typeof inner.token === 'string' && inner.token.length > 0) {
-          setBankToken(inner.token)
-          const tail = inner.token.slice(-4)
+        // CardSecure posts the token in TWO shapes depending on version:
+        //   {"message":"<token>"}  ← message IS the token
+        //   {"message":{"token":"…"}}
+        // Only the object form was handled, so on an account serving the
+        // string form no token was ever captured and the pay button could
+        // not enable. Accept either.
+        const raw = JSON.parse(e.data) as
+          | { message?: string | { token?: string; validationError?: string } }
+          | null
+        const inner = raw?.message
+        const tok =
+          typeof inner === 'string' ? inner : typeof inner?.token === 'string' ? inner.token : ''
+        const vErr =
+          typeof inner === 'object' && typeof inner?.validationError === 'string'
+            ? inner.validationError
+            : ''
+        if (tok) {
+          setBankToken(tok)
+          const tail = tok.slice(-4)
           if (/^\d{4}$/.test(tail)) setLast4(tail)
           setErr(null)
-        } else if (typeof inner.validationError === 'string' && inner.validationError) {
+        } else if (vErr) {
           setBankToken(null)
           setLast4(null)
-          setErr(inner.validationError)
+          setErr(vErr)
         }
       } catch {
         /* ignore non-JSON posts */
