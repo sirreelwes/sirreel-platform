@@ -78,6 +78,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [savedId, setSavedId] = useState('')
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
   const [cardToken, setCardToken] = useState<string | null>(null)
+  const [cardExpiry, setCardExpiry] = useState<string | null>(null)
   const [cardholderName, setCardholderName] = useState('')
 
   const [busy, setBusy] = useState(false)
@@ -127,14 +128,21 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
     const handler = (e: MessageEvent) => {
       if (typeof e.data !== 'string' || !e.data.startsWith('{')) return
       try {
-        const msg = JSON.parse(e.data) as { message?: { token?: string; validationError?: string } }
+        const msg = JSON.parse(e.data) as {
+          message?: { token?: string; expiry?: string; validationError?: string }
+        }
         const inner = msg.message
         if (!inner) return
         if (typeof inner.token === 'string' && inner.token) {
           setCardToken(inner.token)
+          // MMYY. The gateway declines a card auth without it, so treat a
+          // token that arrives with no expiry as not-ready rather than
+          // charging and getting an opaque decline.
+          setCardExpiry(typeof inner.expiry === 'string' ? inner.expiry : null)
           setErr(null)
         } else if (inner.validationError) {
           setCardToken(null)
+          setCardExpiry(null)
           setErr(inner.validationError)
         }
       } catch {
@@ -150,7 +158,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const validAmount = Number.isFinite(base) && base > 0
   const surcharge = validAmount ? Math.round(base * 0.03 * 100) / 100 : 0
   const total = validAmount ? Math.round((base + surcharge) * 100) / 100 : 0
-  const cardReady = source === 'saved' ? !!savedId : !!cardToken
+  const cardReady = source === 'saved' ? !!savedId : !!cardToken && !!cardExpiry
   const canCharge = !!invoice && validAmount && cardReady && !busy
 
   const selectedAuth = auths.find((a) => a.id === savedId) ?? null
@@ -189,6 +197,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           amount: base,
           savedPaperworkId: source === 'saved' ? savedId : undefined,
           cardToken: source === 'new' ? cardToken : undefined,
+          expiry: source === 'new' ? cardExpiry : undefined,
           cardholderName: cardholderName || undefined,
           pdfUrl: pdf?.pdfUrl,
           pdfKey: pdf?.pdfKey,
@@ -199,6 +208,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       setResult({ ok: !!d.ok, message: d.message || d.error || 'Unknown response' })
       if (d.ok) {
         setCardToken(null)
+        setCardExpiry(null)
         setAmount('')
         setFinalPick(null)
         loadInvoices(q)
@@ -491,7 +501,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     ) : (
                       <p className="text-xs text-zinc-500">Loading secure card entry…</p>
                     )}
-                    {cardToken && <p className="text-xs text-green-400 mt-1">Card captured.</p>}
+                    {cardToken && cardExpiry && (
+                      <p className="text-xs text-green-400 mt-1">Card captured.</p>
+                    )}
+                    {cardToken && !cardExpiry && (
+                      <p className="text-xs text-amber-500 mt-1">
+                        Enter the expiry date to continue.
+                      </p>
+                    )}
                     <input
                       className={`${input} mt-2`}
                       placeholder="Cardholder name"

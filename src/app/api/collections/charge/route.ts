@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     customerName?: unknown
     amount?: unknown
     cardToken?: unknown
+    expiry?: unknown
     savedPaperworkId?: unknown
     cardholderName?: unknown
     pdfUrl?: unknown
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
   let cardholderName =
     typeof body.cardholderName === 'string' ? body.cardholderName.trim().slice(0, 120) : null
   let moto = true
+  let cardExpiry = ''
 
   if (typeof body.savedPaperworkId === 'string' && body.savedPaperworkId.trim()) {
     const pw = await prisma.paperworkRequest.findUnique({
@@ -128,6 +130,16 @@ export async function POST(req: NextRequest) {
     moto = false
   } else if (typeof body.cardToken === 'string' && body.cardToken.trim()) {
     cardToken = body.cardToken.trim()
+    // MMYY from the CardSecure iframe. Required for a card auth — reject here
+    // with a clear message rather than letting the gateway return an opaque
+    // decline that reads like the client's card was refused.
+    cardExpiry = typeof body.expiry === 'string' ? body.expiry.replace(/\D/g, '').slice(0, 4) : ''
+    if (cardExpiry.length !== 4) {
+      return NextResponse.json(
+        { ok: false, error: 'Card expiry is required (MMYY).' },
+        { status: 400 },
+      )
+    }
   }
 
   if (!cardToken) {
@@ -153,6 +165,7 @@ export async function POST(req: NextRequest) {
       amountDollars: total,
       invoiceNumber: invoiceNumber || rwInvoiceId,
       cardholderName: cardholderName ?? undefined,
+      expiry: cardExpiry || undefined,
       moto,
     })
   } catch (err) {

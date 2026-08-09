@@ -218,6 +218,9 @@ function CardPayForm({
 }) {
   const balance = Number(invoice.balanceDue)
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
+  // MMYY from the tokenizer. The gateway requires it for a card auth;
+  // it was never captured, so portal card payments could not succeed.
+  const [cardExpiry, setCardExpiry] = useState<string | null>(null)
   const [cardToken, setCardToken] = useState<string | null>(null)
   const [last4, setLast4] = useState<string | null>(null)
   const [cardholderName, setCardholderName] = useState('')
@@ -259,12 +262,13 @@ function CardPayForm({
       if (!e.data.startsWith('{')) return
       try {
         const msg = JSON.parse(e.data) as {
-          message?: { token?: string; validationError?: string }
+          message?: { token?: string; expiry?: string; validationError?: string }
         }
         const inner = msg.message
         if (!inner) return
         if (typeof inner.token === 'string' && inner.token.length > 0) {
           setCardToken(inner.token)
+          setCardExpiry(typeof inner.expiry === 'string' ? inner.expiry : null)
           // Token shape on CardConnect is a 16-character numeric or
           // alphanumeric string mirroring the card BIN+last4 pattern
           // — last4 is at the end. Defensive extraction.
@@ -301,6 +305,9 @@ function CardPayForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cardToken,
+          // Required by the gateway for a card auth; captured from the
+          // tokenizer alongside the token.
+          expiry: cardExpiry,
           cardholderName: cardholderName.trim(),
           amount,
           last4,

@@ -18,7 +18,7 @@ import { cardpointeBaseUrl } from '@/lib/cardpointe/client';
  *
  * The CardConnect iframe takes `useexpiry` / `usecvv` flags to
  * suppress card-only fields for ACH. ACH also takes `usemonthnames`
- * etc. — for the basic tokenizer we just drop the expiry/CVV inputs.
+ * etc. — the card tokenizer enables BOTH (the gateway requires expiry).
  */
 export async function GET(req: NextRequest) {
   const base = cardpointeBaseUrl();
@@ -40,7 +40,11 @@ export async function GET(req: NextRequest) {
     // on our form and posted alongside the token.
     iframeUrl = `${base}/itoke/ajax-tokenizer.html?tokenizetype=echeck&useexpiry=false&usecvv=false&${common}`;
   } else {
-    iframeUrl = `${base}/itoke/ajax-tokenizer.html?${common}`;
+    // useexpiry/usecvv were never enabled, so the iframe rendered a lone
+    // card-number box and no expiry ever reached the gateway — a card auth
+    // without expiry declines. Both the portal pay panel and collections
+    // load this URL, so both were affected.
+    iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=true&usecvv=true&${common}`;
   }
 
   return NextResponse.json({ iframeUrl, mode });

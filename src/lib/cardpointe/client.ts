@@ -140,6 +140,9 @@ export interface AuthRequest {
    *  statement. We pass our Invoice number here. */
   orderid?: string
   name?: string
+  /** MMYY. REQUIRED by the gateway for a card authorization — a token alone
+   *  is not enough. Captured from the CardSecure iframe alongside the token. */
+  expiry?: string
   /** ACH-only routing fields. */
   bankaba?: string // routing number
   bankaccttype?: 'C' | 'S' // Checking / Savings
@@ -175,6 +178,8 @@ export async function chargeCard(args: {
   amountDollars: number
   invoiceNumber: string
   cardholderName?: string
+  /** MMYY from the CardSecure iframe. Card auths decline without it. */
+  expiry?: string
   /** True when an operator keyed the card on a phone call (collections).
    *  Sends ecomind 'T' instead of 'E' — see AuthRequest.ecomind. */
   moto?: boolean
@@ -188,6 +193,7 @@ export async function chargeCard(args: {
     ecomind: args.moto ? 'T' : 'E',
     orderid: args.invoiceNumber,
     name: args.cardholderName,
+    expiry: args.expiry,
   }
   return postAuth(cfg, body)
 }

@@ -47,6 +47,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 interface PayCardBody {
+  expiry?: unknown
   cardToken?: unknown
   cardholderName?: unknown
   amount?: unknown
@@ -74,6 +75,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       : null
   if (!cardToken) {
     return NextResponse.json({ error: 'cardToken required' }, { status: 400 })
+  }
+  // Digits only, MMYY. Validated here so a missing expiry reads as our error
+  // rather than reaching the gateway and coming back as an opaque decline the
+  // client would read as "my card was refused".
+  const cardExpiry =
+    typeof body.expiry === 'string' ? body.expiry.replace(/\D/g, '').slice(0, 4) : ''
+  if (cardExpiry.length !== 4) {
+    return NextResponse.json({ error: 'card expiry required' }, { status: 400 })
   }
   const cardholderName =
     typeof body.cardholderName === 'string' && body.cardholderName.trim().length > 0
