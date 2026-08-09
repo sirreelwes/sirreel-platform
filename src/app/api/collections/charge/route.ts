@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
-import { chargeCard, isApproved } from '@/lib/cardpointe/client'
+import { chargeCard, isApproved, cardDisplayFromToken } from '@/lib/cardpointe/client'
 import { surchargeBreakdown } from '@/lib/payments/surcharge'
 
 export const dynamic = 'force-dynamic'
@@ -147,6 +147,15 @@ export async function POST(req: NextRequest) {
       { ok: false, error: 'either savedPaperworkId or cardToken is required' },
       { status: 400 },
     )
+  }
+
+  // Keyed charges carried neither card type nor last-4, so a disputed payment
+  // had nothing identifying it. Recover both from the token; a saved
+  // authorization already has them stored, so don't overwrite those.
+  if (!cardLast4 || !cardType) {
+    const d = cardDisplayFromToken(cardToken)
+    cardLast4 = cardLast4 ?? d.last4
+    cardType = cardType ?? d.cardType
   }
 
   const invoiceNumber =

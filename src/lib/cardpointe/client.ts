@@ -422,6 +422,41 @@ async function postAuth(cfg: CardPointeConfig, body: AuthRequest): Promise<AuthR
  * decline, error, or gateway issue — caller writes Payment.status
  * = FAILED and surfaces the resptext to the user.
  */
+/**
+ * Display-only card details recovered from a CardSecure token.
+ *
+ * LAST-4 is reliable: CardSecure tokens always end in the PAN's last four.
+ *
+ * CARD TYPE is best-effort and often null. Some tokens preserve the leading
+ * BIN (37…1008 reads as Amex), but many are issued with a synthetic prefix —
+ * commonly 9 — in which case the brand is simply not in the token. Returning
+ * null there is deliberate: an absent brand is honest, a guessed one would be
+ * wrong on a dispute, which is the one moment this field matters.
+ *
+ * Derived SERVER-side so the stored record can't be shaped by the browser and
+ * is populated whichever surface took the payment. Keyed collections charges
+ * previously recorded neither, leaving a disputed payment with nothing
+ * identifying it.
+ */
+export function cardDisplayFromToken(token: string): {
+  last4: string | null
+  cardType: string | null
+} {
+  const tail = token.slice(-4)
+  const last4 = /^\d{4}$/.test(tail) ? tail : null
+
+  // Major Industry Identifier / IIN ranges. Amex is the two-digit case.
+  const head = token.replace(/\D/g, '').slice(0, 2)
+  let cardType: string | null = null
+  if (head.startsWith('4')) cardType = 'VISA'
+  else if (head === '34' || head === '37') cardType = 'AMEX'
+  else if (head.startsWith('5')) cardType = 'MASTERCARD'
+  else if (head.startsWith('6')) cardType = 'DISCOVER'
+  else if (head.startsWith('3')) cardType = 'DINERS/JCB'
+
+  return { last4, cardType }
+}
+
 export function isApproved(r: { respstat?: string; respcode?: string }): boolean {
   // respstat is definitive when present. respcode is a processor-specific
   // fallback — '00' and '000' are both seen for approvals.
