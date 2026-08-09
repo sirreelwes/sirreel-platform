@@ -50,31 +50,41 @@ function cardpointePrefix(): 'CARDPOINTE_PROD' | 'CARDPOINTE_UAT' {
  * Returns null when the env var is unset (caller decides how to fail).
  */
 /**
- * Base URL for the CardSecure TOKENIZER iframe — NOT the REST gateway.
+ * Origin for the CardSecure TOKENIZER iframe.
  *
- * These are different hosts, which this function previously got wrong: it
- * returned CARDPOINTE_*_URL verbatim (the REST base,
- * https://boltgw-uat.cardconnect.com/cardconnect/rest), the config route
- * appended /itoke/ajax-tokenizer.html, and the resulting URL 404'd. The card
- * field never rendered — in the client portal's pay panel as well as
- * collections. The file header above always described the two-host split and
- * claimed we normalized it; nothing actually did.
+ * MUST be the same CardConnect SITE as the REST gateway. Tokens are
+ * site-scoped: one minted on fts-uat is rejected by a boltgw-uat gateway with
+ * "Invalid token", which is exactly what happened when this returned a
+ * hardcoded fts host. Both hosts serve the tokenizer page and both return 200,
+ * so reachability proves nothing — only the site match matters.
  *
- * Tokenizer lives on the fts- host:
- *   UAT  https://fts-uat.cardconnect.com/itoke/ajax-tokenizer.html
- *   PROD https://fts.cardconnect.com/itoke/ajax-tokenizer.html
- * Both verified returning 200.
+ * So: derive it from the SAME env var the gateway uses, dropping the
+ * /cardconnect/rest path.
+ *   CARDPOINTE_UAT_URL = https://boltgw-uat.cardconnect.com/cardconnect/rest
+ *   tokenizer          = https://boltgw-uat.cardconnect.com/itoke/...
  *
- * Overridable per environment via CARDPOINTE_{UAT,PROD}_TOKENIZER_URL in case
- * CardConnect assigns a different tokenizer host to the account.
+ * This is what the file header above meant by "we normalize both forms here" —
+ * it just never did. The original code returned the URL verbatim, so the
+ * tokenizer path was appended to /cardconnect/rest and 404'd.
+ *
+ * CARDPOINTE_{UAT,PROD}_TOKENIZER_URL overrides, for an account whose
+ * tokenizer genuinely lives on a different host.
  */
 export function cardpointeBaseUrl(): string | null {
   const override = process.env[`${cardpointePrefix()}_TOKENIZER_URL`]
-  if (override && override.trim()) return override.trim().replace(/\/$/, '')
-  return cardpointeEnv() === 'PROD'
-    ? 'https://fts.cardconnect.com'
-    : 'https://fts-uat.cardconnect.com'
+  if (override && override.trim()) return override.trim().replace(/\/+$/, '')
+
+  const gateway = process.env[`${cardpointePrefix()}_URL`]
+  if (!gateway || !gateway.trim()) return null
+  try {
+    return new URL(gateway.trim()).origin
+  } catch {
+    // Bare hostname with no scheme — tolerate it rather than dropping the
+    // card field entirely.
+    return `https://${gateway.trim().replace(/^\/+|\/.*$/g, '')}`
+  }
 }
+
 
 function readConfig(): CardPointeConfig {
   const env = cardpointeEnv()
