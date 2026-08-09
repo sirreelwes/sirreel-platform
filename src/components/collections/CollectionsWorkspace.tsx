@@ -78,7 +78,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [savedId, setSavedId] = useState('')
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
   const [cardToken, setCardToken] = useState<string | null>(null)
-  const [cardExpiry, setCardExpiry] = useState<string | null>(null)
+  // Our own expiry, kept out of the iframe — see the config route.
+  const [expMonth, setExpMonth] = useState('')
+  const [expYear, setExpYear] = useState('')
   const [cardholderName, setCardholderName] = useState('')
 
   const [busy, setBusy] = useState(false)
@@ -135,14 +137,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         if (!inner) return
         if (typeof inner.token === 'string' && inner.token) {
           setCardToken(inner.token)
-          // MMYY. The gateway declines a card auth without it, so treat a
-          // token that arrives with no expiry as not-ready rather than
-          // charging and getting an opaque decline.
-          setCardExpiry(typeof inner.expiry === 'string' ? inner.expiry : null)
           setErr(null)
         } else if (inner.validationError) {
           setCardToken(null)
-          setCardExpiry(null)
           setErr(inner.validationError)
         }
       } catch {
@@ -158,7 +155,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const validAmount = Number.isFinite(base) && base > 0
   const surcharge = validAmount ? Math.round(base * 0.03 * 100) / 100 : 0
   const total = validAmount ? Math.round((base + surcharge) * 100) / 100 : 0
-  const cardReady = source === 'saved' ? !!savedId : !!cardToken && !!cardExpiry
+  // MMYY, assembled from our own selects.
+  const cardExpiry = expMonth && expYear ? `${expMonth}${expYear}` : ''
+  const cardReady = source === 'saved' ? !!savedId : !!cardToken && cardExpiry.length === 4
   const canCharge = !!invoice && validAmount && cardReady && !busy
 
   const selectedAuth = auths.find((a) => a.id === savedId) ?? null
@@ -208,7 +207,8 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       setResult({ ok: !!d.ok, message: d.message || d.error || 'Unknown response' })
       if (d.ok) {
         setCardToken(null)
-        setCardExpiry(null)
+        setExpMonth('')
+        setExpYear('')
         setAmount('')
         setFinalPick(null)
         loadInvoices(q)
@@ -499,18 +499,51 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         // usecvv are on. 48px was sized for the old number-only widget and
                         // silently clipped expiry and CVV — the fields were present but
                         // invisible, with scrolling='no' hiding the overflow.
-                        height="210"
+                        height="150"
                         className="bg-white rounded-lg"
                       />
                     ) : (
                       <p className="text-xs text-zinc-500">Loading secure card entry…</p>
                     )}
-                    {cardToken && cardExpiry && (
+                    {/* Expiry lives here, not in the iframe — the tokenizer
+                        doesn't reliably return it. Styled like the rest of the
+                        form rather than the iframe's default controls. */}
+                    <div className="mt-2 flex gap-2">
+                      <select
+                        className={input}
+                        value={expMonth}
+                        onChange={(e) => setExpMonth(e.target.value)}
+                        aria-label="Expiry month"
+                      >
+                        <option value="">Month</option>
+                        {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(
+                          (m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                      <select
+                        className={input}
+                        value={expYear}
+                        onChange={(e) => setExpYear(e.target.value)}
+                        aria-label="Expiry year"
+                      >
+                        <option value="">Year</option>
+                        {Array.from({ length: 15 }, (_, i) => 26 + i).map((y) => (
+                          <option key={y} value={String(y)}>
+                            20{y}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {cardToken && cardExpiry.length === 4 && (
                       <p className="text-xs text-green-400 mt-1">Card captured.</p>
                     )}
-                    {cardToken && !cardExpiry && (
+                    {cardToken && cardExpiry.length !== 4 && (
                       <p className="text-xs text-amber-500 mt-1">
-                        Enter the expiry date to continue.
+                        Choose the expiry month and year to continue.
                       </p>
                     )}
                     <input

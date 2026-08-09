@@ -44,7 +44,14 @@ export async function GET(req: NextRequest) {
     // card-number box and no expiry ever reached the gateway — a card auth
     // without expiry declines. Both the portal pay panel and collections
     // load this URL, so both were affected.
-    iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=true&usecvv=true&${common}`;
+    // useexpiry=FALSE deliberately. The tokenizer does render an expiry
+    // control, but it does not reliably hand the value back on the
+    // postMessage, so the charge had no expiry to send and the gateway would
+    // decline. Expiry is collected in our own form instead: it is NOT
+    // sensitive authentication data (unlike CVV/PIN/track), so handling it
+    // outside the iframe is both safe and the common CardConnect pattern.
+    // The PAN and CVV never leave the iframe.
+    iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=false&usecvv=true&${common}`;
   }
 
   return NextResponse.json({ iframeUrl, mode });

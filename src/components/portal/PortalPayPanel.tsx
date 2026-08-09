@@ -218,9 +218,11 @@ function CardPayForm({
 }) {
   const balance = Number(invoice.balanceDue)
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
-  // MMYY from the tokenizer. The gateway requires it for a card auth;
-  // it was never captured, so portal card payments could not succeed.
-  const [cardExpiry, setCardExpiry] = useState<string | null>(null)
+  // Expiry is collected HERE, not in the iframe — the tokenizer does not
+  // reliably return it on the postMessage. Not sensitive authentication
+  // data, so handling it outside the iframe is safe; PAN and CVV stay in.
+  const [expMonth, setExpMonth] = useState('')
+  const [expYear, setExpYear] = useState('')
   const [cardToken, setCardToken] = useState<string | null>(null)
   const [last4, setLast4] = useState<string | null>(null)
   const [cardholderName, setCardholderName] = useState('')
@@ -268,7 +270,6 @@ function CardPayForm({
         if (!inner) return
         if (typeof inner.token === 'string' && inner.token.length > 0) {
           setCardToken(inner.token)
-          setCardExpiry(typeof inner.expiry === 'string' ? inner.expiry : null)
           // Token shape on CardConnect is a 16-character numeric or
           // alphanumeric string mirroring the card BIN+last4 pattern
           // — last4 is at the end. Defensive extraction.
@@ -290,7 +291,15 @@ function CardPayForm({
 
   const amount = Number(amountStr)
   const amountValid = Number.isFinite(amount) && amount > 0 && amount <= balance + 0.001
-  const canSubmit = !!cardToken && cardholderName.trim().length > 1 && amountValid && !submitting
+  // Expiry is required by the gateway, so gate on it too — otherwise the
+  // client submits and gets a decline that reads as their card failing.
+  const canSubmit =
+    !!cardToken &&
+    expMonth.length === 2 &&
+    expYear.length === 2 &&
+    cardholderName.trim().length > 1 &&
+    amountValid &&
+    !submitting
   // Card is charged base + 3% surcharge; the invoice is credited the base.
   const fee = surchargeBreakdown(amountValid ? amount : 0)
 
@@ -307,7 +316,7 @@ function CardPayForm({
           cardToken,
           // Required by the gateway for a card auth; captured from the
           // tokenizer alongside the token.
-          expiry: cardExpiry,
+          expiry: `${expMonth}${expYear}`,
           cardholderName: cardholderName.trim(),
           amount,
           last4,
@@ -403,12 +412,40 @@ function CardPayForm({
               frameBorder="0"
               scrolling="no"
               width="100%"
-              height="210"
+              height="150"
               title="Card Entry"
             />
           ) : (
             <div className="px-3 py-2 text-xs text-gray-400">Loading card entry…</div>
           )}
+        </div>
+        <div className="mt-2 flex gap-2">
+          <select
+            value={expMonth}
+            onChange={(e) => setExpMonth(e.target.value)}
+            aria-label="Expiry month"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+          >
+            <option value="">Exp. month</option>
+            {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <select
+            value={expYear}
+            onChange={(e) => setExpYear(e.target.value)}
+            aria-label="Expiry year"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+          >
+            <option value="">Exp. year</option>
+            {Array.from({ length: 15 }, (_, i) => 26 + i).map((y) => (
+              <option key={y} value={String(y)}>
+                20{y}
+              </option>
+            ))}
+          </select>
         </div>
         {cardToken && (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
