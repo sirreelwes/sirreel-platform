@@ -298,7 +298,68 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // section. If the agent has typed a non-empty query, the vehicle
   // section is hidden so the search experience stays focused.
   const [vehicles, setVehicles] = useState<VehicleCategoryItem[] | null>(null)
+  // Set when the client arrived from a vehicle page's "Reserve this vehicle".
+  // Read from location rather than useSearchParams: this component renders
+  // inside a statically-generated route, and useSearchParams would opt the
+  // whole page into client-side rendering for one optional string.
+  const [featuredSlug, setFeaturedSlug] = useState<string | null>(null)
+  const vehicleSectionRef = useRef<HTMLElement | null>(null)
   const [vehiclesError, setVehiclesError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const slug = new URLSearchParams(window.location.search).get('vehicle')
+    if (slug) setFeaturedSlug(slug)
+  }, [])
+
+  // The requested vehicle moves to the FRONT of the rail. Everything else
+  // keeps its configured order.
+  const orderedVehicles = useMemo(() => {
+    if (!vehicles) return []
+    if (!featuredSlug) return vehicles
+    const hit = vehicles.find((v) => v.slug === featuredSlug)
+    if (!hit) return vehicles
+    return [hit, ...vehicles.filter((v) => v.id !== hit.id)]
+  }, [vehicles, featuredSlug])
+
+  // Scroll to the rail. Guarded on an ACTUAL match so a stale or mistyped
+  // slug just loads the form normally instead of jumping the client somewhere
+  // for no visible reason.
+  //
+  // Re-asserted rather than fired once: the rail sits ~9000px down, and a
+  // single scroll issued as the vehicles arrive loses a race with hydration
+  // and the router's scroll restoration, which put the page back at the top.
+  // Verified in the browser — the same scrollIntoView works perfectly a moment
+  // later. So keep nudging until the section is actually near the top, then
+  // stop.
+  //
+  // 'auto', not 'smooth': a smooth scroll in flight is what gets cancelled,
+  // and the client clicked "Reserve this vehicle" — landing there directly is
+  // the expected outcome, not a scenic route.
+  const scrolledRef = useRef(false)
+  useEffect(() => {
+    if (scrolledRef.current || !featuredSlug || !vehicles) return
+    if (!vehicles.some((v) => v.slug === featuredSlug)) return
+    scrolledRef.current = true
+
+    let attempts = 0
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const settle = () => {
+      const el = vehicleSectionRef.current
+      if (!el) {
+        if (attempts++ < 20) timer = setTimeout(settle, 100)
+        return
+      }
+      // Near the top already, or the client has scrolled past it themselves —
+      // either way, stop touching their scroll position.
+      if (el.getBoundingClientRect().top < 400) return
+      el.scrollIntoView({ behavior: 'auto', block: 'start' })
+      if (attempts++ < 8) timer = setTimeout(settle, 120)
+    }
+    settle()
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [featuredSlug, vehicles])
   useEffect(() => {
     let cancelled = false
     fetch('/api/public/vehicle-categories', { cache: 'no-store' })
@@ -958,7 +1019,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   stay focused. Vehicles are price-on-quote by default
                   (dailyRate null) — the tile labels them as such. */}
               {!debouncedQuery && vehicles && vehicles.length > 0 && (
-                <section className={`order-2 mt-2 scroll-mt-[200px] ${focusHideMobile}`}>
+                <section ref={vehicleSectionRef} className={`order-2 mt-2 scroll-mt-[200px] ${focusHideMobile}`}>
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Reserve Vehicles
@@ -972,13 +1033,14 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                     Pick a vehicle class and the window you need it. Reservation requests confirm availability for those dates and come back with a firm quote.
                   </p>
                   <VehicleRail>
-                    {vehicles.map((v) => {
+                    {orderedVehicles.map((v) => {
                       const slot = cartByItemId.get(v.id)
                       const windows = slot?.lines ?? []
                       return (
                         <VehicleCard
                           key={v.id}
                           vehicle={v}
+                          featured={v.slug === featuredSlug}
                           windows={windows}
                           formDefaults={defaultDatesForAdd(form)}
                           onAdd={(pickupDate, returnDate) => {
@@ -1678,9 +1740,13 @@ function VehicleCard({
   onSetWindowDates,
   onSetWindowQty,
   onRemoveWindow,
+  featured = false,
 }: {
   vehicle: VehicleCategoryItem
   windows: CartLine[]
+  /** Arrived here from this vehicle's own page — mark it so the client can
+   *  see the thing they asked for among a rail of similar tiles. */
+  featured?: boolean
   formDefaults: { pickupDate: string; returnDate: string }
   onAdd: (pickupDate: string, returnDate: string) => void
   onSetWindowDates: (cartLineId: string, pickup: string, returnD: string) => void
@@ -1705,7 +1771,11 @@ function VehicleCard({
   return (
     <div
       className={`w-[210px] shrink-0 bg-white rounded-[14px] overflow-hidden shadow-sm transition-all flex flex-col ${
-        hasWindows ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]' : 'border border-[#e4dfd4]'
+        hasWindows
+          ? 'border border-[#c39a3f] shadow-[0_0_0_1px_#c39a3f]'
+          : featured
+            ? 'border border-[#c39a3f] shadow-[0_0_0_2px_rgba(195,154,63,0.35)]'
+            : 'border border-[#e4dfd4]'
       }`}
     >
       {/* Image + name link to the public vehicle detail page. Scoped to these

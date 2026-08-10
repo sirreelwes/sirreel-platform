@@ -89,8 +89,12 @@ export function StandingSetAvailabilityForm({ sets }: { sets: AvailabilitySet[] 
     )
   }
 
+  // [color-scheme:dark] makes the browser draw its NATIVE controls for a dark
+  // surface — without it the date input's calendar button renders near-black
+  // on this near-black field and is effectively invisible. It also fixes the
+  // picker popup, which would otherwise open as a white panel.
   const inputCls =
-    'w-full bg-white/5 border border-white/15 rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#6d685e] outline-none focus:border-[#c39a3f] transition-colors'
+    'w-full bg-white/5 border border-white/15 rounded-lg px-4 py-3 text-[15px] text-white placeholder:text-[#6d685e] outline-none focus:border-[#c39a3f] transition-colors [color-scheme:dark]'
   const labelCls = 'block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#a8a294] mb-1.5'
 
   return (

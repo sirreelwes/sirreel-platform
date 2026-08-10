@@ -91,8 +91,12 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
 
           {/* Order CTA */}
           <div className="mt-5">
+            {/* Carries the vehicle through. Without the slug this dropped the
+                client on a generic order form with the vehicle rail far below
+                the fold — they had just told us exactly what they wanted and
+                then had to go find it. */}
             <Link
-              href="/order/supplies"
+              href={`/order/supplies?vehicle=${encodeURIComponent(params.slug)}`}
               className="inline-flex items-center gap-2 rounded-full bg-amber-600 hover:bg-amber-500 text-white px-6 py-3 text-[15px] font-bold transition-colors"
               style={{ fontFamily: 'Archivo, sans-serif' }}
             >
