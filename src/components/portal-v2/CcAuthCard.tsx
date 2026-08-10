@@ -248,11 +248,19 @@ export function CcAuthCard({
 
           <div>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Number *</div>
-            <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`} style={{ height: 48 }}>
+            {/* No fixed wrapper height. This was 48px with overflow-hidden —
+                sized for the old number-only widget — so once usecvv was
+                enabled the CVV field rendered inside the 150px iframe but sat
+                entirely below the visible 48px, with scrolling='no' hiding it.
+                The tokenizer will not emit a token until CVV is filled, so a
+                client could type a full card number and never get one: the
+                exact dead-Authorize-button symptom. Same clipping already
+                fixed in collections and the portal pay panel. */}
+            <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`}>
               {iframeUrl ? (
-                <iframe src={iframeUrl} frameBorder="0" scrolling="no" width="100%" height="150" title="Card Entry" />
+                <iframe src={iframeUrl} frameBorder="0" scrolling="no" width="100%" height="150" title="Card Entry" className="block bg-white" />
               ) : (
-                <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading secure card entry…</div>
+                <div className="flex items-center justify-center py-6 text-xs text-gray-400">Loading secure card entry…</div>
               )}
             </div>
             <div className="mt-2 flex gap-2">
@@ -370,8 +378,8 @@ export function CcAuthCard({
               Say which one is missing rather than making the client guess. */}
           {!submitting && !cpToken && cardholderFirst && cardholderLast && acknowledged && sig && (
             <p className="mt-2 text-[11px] text-center text-gray-400">
-              Waiting on the card number — click outside the card field to
-              finish encrypting it.
+              Waiting on the card — enter the card number and CVV above, then
+              click outside the field to finish encrypting it.
             </p>
           )}
         </div>
