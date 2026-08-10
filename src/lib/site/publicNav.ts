@@ -19,6 +19,11 @@
  *                   INTERIM until CardPointe production credentials land —
  *                   the vendor holds the card data; SirReel still never
  *                   collects, stores or serves it.
+ *
+ * SIGN & AUTHORIZE — signable forms, all hosted by Cognito for now, all
+ * linked via OUR paths (/rentalagreement, /annualrentalagreement,
+ * /creditcardauthorization) so go-live is a change to legacyRedirects
+ * rather than a hunt for hardcoded vendor URLs.
  */
 
 const ORDER_FORM_HREF = '/order/supplies'
@@ -116,29 +121,37 @@ export const PUBLIC_NAV: NavEntry[] = [
         ],
       },
       {
-        heading: 'Billing',
+        // Live, signable forms — distinct from the Downloads group above,
+        // which is read-and-review only. A client who needs to SIGN was
+        // landing on the review page and finding no way to do it.
+        heading: 'Sign & Authorize',
         items: [
-          // SENSITIVE — request-only, never a public file link.
-          { label: 'Payment Info & ACH', href: '/payment-info', mode: 'request' },
-          // INTERIM. Card authorization belongs in the portal's CardPointe
-          // flow, but that cannot take a real card until Fiserv issues
-          // production credentials — so clients need somewhere to authorize
-          // one in the meantime, and Cognito is where they did it before.
-          //
-          // The invariant is unchanged: SirReel still never collects, stores
-          // or serves card data. Cognito hosts the form and holds the data;
-          // this is a link to them, not a form of ours.
-          //
-          // Points at OUR path, not the Cognito URL. /creditcardauthorization
-          // already redirects there (legacyRedirects), so switching to the
-          // portal flow at go-live is one line in that map — no hunting for
-          // nav entries, emails or docs that hardcoded the vendor URL.
+          {
+            label: 'Sign Rental Agreement',
+            href: '/rentalagreement',
+            mode: 'link',
+            external: true,
+          },
+          {
+            label: 'Sign Annual Rental Agreement',
+            href: '/annualrentalagreement',
+            mode: 'link',
+            external: true,
+          },
           {
             label: 'Credit Card Authorization',
             href: '/creditcardauthorization',
             mode: 'link',
             external: true,
           },
+        ],
+      },
+      {
+        heading: 'Billing',
+        items: [
+          // SENSITIVE — request-only, never a public file link.
+          { label: 'Payment Info & ACH', href: '/payment-info', mode: 'request' },
+
         ],
       },
     ],

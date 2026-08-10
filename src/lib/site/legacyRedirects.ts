@@ -53,7 +53,7 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   // publicNav.ts: card data lives in CardPointe, SirReel never stores it).
   // Redirecting an existing link is status quo, not a new capability — but
   // if the policy is meant to cover this URL too, drop this line.
-  '/creditcardauthorization': 'https://www.cognitoforms.com/sirreel/creditcardauthorization',
+  '/creditcardauthorization': 'https://www.cognitoforms.com/SirReel/CreditCardAuthorization',
 
   // No Wix predecessor — new shortcuts at the form's own name, so these
   // work the same way as the rest once DNS moves.
@@ -78,8 +78,18 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   '/victorystudios': '/stages',
 
   // ── Forms / documents that DID move here ──
-  '/rentalagreement': '/rental-agreement',
-  '/annualrentalagreement': '/rental-agreement',
+  //
+  // RESTORED TO COGNITO. These pointed at /rental-agreement, which is a
+  // REVIEW page — a client can read the clauses and download a PDF there,
+  // but cannot sign. Signing was supposed to happen in the portal, and the
+  // portal still tells the client "your rep will send the agreement
+  // shortly". So between the Wix cutover and this line, anyone following a
+  // rental-agreement link had no way to actually sign one.
+  //
+  // Points back at Cognito until portal self-signing is live. The review
+  // page keeps its own URL (/rental-agreement) and its nav entry.
+  '/rentalagreement': 'https://www.cognitoforms.com/SirReel/RentalAgreement',
+  '/annualrentalagreement': 'https://www.cognitoforms.com/SirReel/AnnualRentalAgreement',
   '/rental-agreement-online-previous': '/rental-agreement',
   '/studiocontract': '/stage-contract',
   '/dluxeventcontract': '/stage-contract',
