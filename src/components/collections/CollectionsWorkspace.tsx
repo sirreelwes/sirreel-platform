@@ -714,15 +714,21 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     />
                     <input
                       className={`${input} mt-2`}
-                      placeholder="Billing ZIP"
+                      placeholder="Cardholder's billing ZIP"
                       inputMode="numeric"
                       value={cardPostal}
                       onChange={(e) => setCardPostal(e.target.value)}
                     />
+                    {/* Spelled out because the obvious wrong answer is the shoot
+                        location. Eligibility follows the CARDHOLDER's state, so
+                        a Connecticut production paying for an LA job must not be
+                        surcharged — and a job-site ZIP would silently apply the
+                        wrong state's rules. */}
                     <p className="text-xs text-zinc-500 mt-1">
-                      Needed to work out whether the card fee applies — it is
-                      waived for debit cards and in states that prohibit
-                      surcharging.
+                      The ZIP on the cardholder&rsquo;s billing statement — not
+                      the job location. It decides whether the card fee applies:
+                      the fee is waived for debit cards and for cardholders in
+                      states that prohibit surcharging.
                     </p>
                   </>
                 )}
