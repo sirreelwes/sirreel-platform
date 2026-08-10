@@ -5438,6 +5438,17 @@ model RwCollectionCharge {
   chargedById     String?  @map("charged_by_id")
   chargedAt       DateTime @default(now()) @map("charged_at")
 
+  /// Reversal. 'VOID' pre-settlement, 'REFUND' post-settlement — the gateway
+  /// decides which is possible, we record which happened. Kept on the charge
+  /// rather than as a negative row so a reversed charge reads as one event,
+  /// matching how Payment tracks voidedAt instead of negative amounts.
+  reversedAt      DateTime? @map("reversed_at")
+  reversalKind    String?   @map("reversal_kind")
+  reversalRetref  String?   @map("reversal_retref")
+  reversalAmount  Decimal?  @map("reversal_amount") @db.Decimal(12, 2)
+  reversalReason  String?   @map("reversal_reason")
+  reversedById    String?   @map("reversed_by_id")
+
   @@index([rwInvoiceId])
   @@index([chargedAt])
   @@map("sr_rw_collection_charges")

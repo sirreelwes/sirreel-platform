@@ -59,6 +59,21 @@ interface FinalInvoice {
   alreadyCharged: number
 }
 
+interface ChargeRow {
+  id: string
+  invoiceNumber: string | null
+  customerName: string | null
+  gatewayTotal: number
+  cardLast4: string | null
+  status: string
+  authCode: string | null
+  retref: string | null
+  chargedAt: string
+  reversedAt: string | null
+  reversalKind: string | null
+  reversalRetref: string | null
+}
+
 const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
@@ -67,6 +82,8 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [invoices, setInvoices] = useState<RwInvoice[]>([])
   const [finals, setFinals] = useState<FinalInvoice[]>([])
   const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
+  const [charges, setCharges] = useState<ChargeRow[]>([])
+  const [reversing, setReversing] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [invoice, setInvoice] = useState<RwInvoice | null>(null)
   const [amount, setAmount] = useState('')
@@ -110,6 +127,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   useEffect(() => {
     loadFinals()
   }, [loadFinals])
+
+  const loadCharges = useCallback(() => {
+    fetch('/api/collections/charges')
+      .then((r) => r.json())
+      .then((d) => d.ok && setCharges(d.charges ?? []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadCharges()
+  }, [loadCharges])
 
   const loadInvoices = useCallback((query: string) => {
     fetch(`/api/collections/rw-invoices?q=${encodeURIComponent(query)}`)
@@ -231,11 +259,36 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setFinalPick(null)
         loadInvoices(q)
         loadFinals()
+        loadCharges()
       }
     } catch {
       setResult({ ok: false, message: 'Request failed — nothing was charged.' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function reverse(c: ChargeRow) {
+    const reason = window.prompt(
+      `Reverse ${money(c.gatewayTotal)} charged to ****${c.cardLast4 ?? '????'}?\n\n` +
+        'The gateway voids it if it has not settled yet, otherwise it refunds. ' +
+        'Enter a reason (required, min 4 characters):',
+    )
+    if (!reason || reason.trim().length < 4) return
+    setReversing(c.id)
+    try {
+      const r = await fetch(`/api/collections/charges/${c.id}/reverse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      })
+      const d = await r.json()
+      setResult({ ok: !!d.ok, message: d.message || d.error || 'Unknown response' })
+      loadCharges()
+    } catch {
+      setResult({ ok: false, message: 'Reversal request failed.' })
+    } finally {
+      setReversing(null)
     }
   }
 
@@ -368,6 +421,59 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Recent charges + reversal. Without this the history was
+            write-only: a mis-keyed amount had no path back short of a
+            database query, which is not a thing Ana can do mid-call. */}
+        <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5">
+          <h2 className="text-sm font-bold text-white mb-1">Recent charges</h2>
+          <p className="text-xs text-zinc-400 mb-3">
+            Void if it hasn&rsquo;t settled yet, refund if it has — the gateway decides which.
+          </p>
+          {charges.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-2">Nothing charged yet.</p>
+          ) : (
+            <div className="divide-y divide-zinc-800 max-h-[280px] overflow-y-auto">
+              {charges.map((c) => (
+                <div key={c.id} className="py-2.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">
+                      {money(c.gatewayTotal)}
+                      <span className="text-zinc-400 font-normal">
+                        {' '}
+                        ····{c.cardLast4 ?? '????'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                      {c.customerName || c.invoiceNumber || '—'} ·{' '}
+                      {new Date(c.chargedAt).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      {c.status}
+                      {c.authCode ? ` · auth ${c.authCode}` : ''}
+                      {c.retref ? ` · ref ${c.retref}` : ''}
+                    </div>
+                    {c.reversedAt && (
+                      <div className="text-xs text-amber-500 mt-0.5">
+                        {c.reversalKind === 'VOID' ? 'Voided' : 'Refunded'}
+                        {c.reversalRetref ? ` · ref ${c.reversalRetref}` : ''}
+                      </div>
+                    )}
+                  </div>
+                  {c.status === 'APPROVED' && !c.reversedAt && (
+                    <button
+                      onClick={() => reverse(c)}
+                      disabled={reversing === c.id}
+                      className="flex-none rounded-lg border border-zinc-600 hover:border-red-500 hover:text-red-400 text-zinc-300 px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40"
+                    >
+                      {reversing === c.id ? 'Reversing…' : 'Void / Refund'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         </div>
 
