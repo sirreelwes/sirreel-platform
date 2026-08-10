@@ -268,6 +268,13 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setCardToken(null)
         setExpMonth('')
         setExpYear('')
+        // Clear the cardholder's OWN details too. These persisted after a
+        // charge, so the next card keyed on this screen inherited the previous
+        // cardholder's name and billing ZIP — and the ZIP is what the gateway
+        // uses to decide surcharge eligibility, so a stale one silently
+        // applies the wrong state's rules to a different person's card.
+        setCardholderName('')
+        setCardPostal('')
         setCardFormKey((k) => k + 1)
         setAmount('')
         setFinalPick(null)
