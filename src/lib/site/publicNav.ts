@@ -15,8 +15,10 @@
  *   - public doc  → downloads a PDF via the forms proxy
  *   - sensitive   → request-only via the contact intake; NEVER a file
  *                   link. Payment info / ACH is request-only. Credit-card
- *                   authorization is intentionally ABSENT — it lives in
- *                   CardPointe (future); SirReel never stores card data.
+ *                   authorization links out to the Cognito form as an
+ *                   INTERIM until CardPointe production credentials land —
+ *                   the vendor holds the card data; SirReel still never
+ *                   collects, stores or serves it.
  */
 
 const ORDER_FORM_HREF = '/order/supplies'
@@ -118,9 +120,25 @@ export const PUBLIC_NAV: NavEntry[] = [
         items: [
           // SENSITIVE — request-only, never a public file link.
           { label: 'Payment Info & ACH', href: '/payment-info', mode: 'request' },
-          // NOTE: Credit-Card Authorization is intentionally NOT listed.
-          // Card authorization is handled in CardPointe (future integration);
-          // SirReel never collects, stores, or serves card data.
+          // INTERIM. Card authorization belongs in the portal's CardPointe
+          // flow, but that cannot take a real card until Fiserv issues
+          // production credentials — so clients need somewhere to authorize
+          // one in the meantime, and Cognito is where they did it before.
+          //
+          // The invariant is unchanged: SirReel still never collects, stores
+          // or serves card data. Cognito hosts the form and holds the data;
+          // this is a link to them, not a form of ours.
+          //
+          // Points at OUR path, not the Cognito URL. /creditcardauthorization
+          // already redirects there (legacyRedirects), so switching to the
+          // portal flow at go-live is one line in that map — no hunting for
+          // nav entries, emails or docs that hardcoded the vendor URL.
+          {
+            label: 'Credit Card Authorization',
+            href: '/creditcardauthorization',
+            mode: 'link',
+            external: true,
+          },
         ],
       },
     ],
