@@ -96,8 +96,22 @@ export function CcAuthCard({
     const handler = (e: MessageEvent) => {
       if (typeof e.data === 'string' && e.data.startsWith('{"message":')) {
         try {
-          const msg = JSON.parse(e.data)
-          if (msg.message?.token) setCpToken(msg.message.token)
+          // CardSecure posts the token in TWO shapes depending on version:
+          //   {"message":"<token>"}        message IS the token
+          //   {"message":{"token":"…"}}
+          // This handler only knew the object form, so on an account serving
+          // the string form no token ever landed and Authorize stayed dead
+          // with the card visibly filled in. Same defect fixed in the
+          // collections and portal pay surfaces.
+          const raw = JSON.parse(e.data)
+          const inner = raw?.message
+          const tok =
+            typeof inner === 'string'
+              ? inner
+              : typeof inner?.token === 'string'
+                ? inner.token
+                : ''
+          if (tok) setCpToken(tok)
         } catch {}
       }
     }
