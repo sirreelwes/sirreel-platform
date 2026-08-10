@@ -61,13 +61,21 @@ export function RentalAgreementCard({
   const [signerName, setSignerName] = useState('')
   const [signerTitle, setSignerTitle] = useState('')
   const [signerEmail, setSignerEmail] = useState('')
+  const [signerCompany, setSignerCompany] = useState('')
   const [sig, setSig] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [redlineFile, setRedlineFile] = useState<File | null>(null)
   const [redlineUploading, setRedlineUploading] = useState(false)
 
-  const companyName = agreementState?.job?.company || booking.company?.name || 'my company'
+  // Best known company, used to PREFILL the required field below. This used
+  // to fall back to the literal string 'my company', which produced the
+  // attestation "I am authorized to sign on behalf of my company" — a
+  // warranty that names no entity and therefore binds no one.
+  const knownCompany = agreementState?.job?.company || booking.company?.name || intake.company || ''
+  // What the attestation actually names: the signer's own entry. The client
+  // is the authority on their legal entity name; ours may be a shorthand.
+  const companyName = signerCompany.trim() || knownCompany
   const underReview = agreementState && ['REDLINE_UPLOADED', 'UNDER_REVIEW'].includes(agreementState.status)
   const signedState = agreementState && ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED'].includes(agreementState.status)
   const negotiated = agreementState?.status === 'NEGOTIATED_READY'
@@ -82,6 +90,7 @@ export function RentalAgreementCard({
     setSignerName(intake.fullName)
     setSignerTitle(intake.title)
     setSignerEmail(intake.email)
+    setSignerCompany(knownCompany)
     setStep('read')
   }
 
@@ -93,9 +102,14 @@ export function RentalAgreementCard({
   const ackTerms =
     'I have read, understood, and agree to the terms and conditions of this ' +
     'Equipment and Vehicle Rental Agreement.'
-  const ackAuthority =
-    `I am authorized to sign this Agreement on behalf of ${companyName}, and ` +
-    `I have authority to bind ${companyName} to its terms.`
+  // Reads sensibly while the required Company field is still empty — the
+  // signer sees this text update as they type, and Continue is gated on a
+  // non-empty company, so the recorded version always names an entity.
+  const ackAuthority = companyName
+    ? `I am authorized to sign this Agreement on behalf of ${companyName}, and ` +
+      `I have authority to bind ${companyName} to its terms.`
+    : 'I am authorized to sign this Agreement on behalf of the company named ' +
+      'above, and I have authority to bind it to its terms.'
   // Stored verbatim in the audit record, so it must state BOTH attestations
   // the signer actually ticked.
   const ackText = `${ackTerms} ${ackAuthority}`
@@ -353,6 +367,19 @@ export function RentalAgreementCard({
               />
             </div>
             <div className="sm:col-span-2">
+              <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Company *</label>
+              <input
+                value={signerCompany}
+                onChange={(e) => setSignerCompany(e.target.value)}
+                placeholder="Legal entity name, e.g. Critical Role Productions LLC"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">
+                The entity this Agreement binds. Use the full legal name if it
+                differs from what we have on file.
+              </p>
+            </div>
+            <div className="sm:col-span-2">
               <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Email *</label>
               <input
                 type="email"
@@ -388,9 +415,13 @@ export function RentalAgreementCard({
             </button>
             <button
               onClick={() => setStep('sign')}
-              disabled={!acknowledged || !signerName || !signerTitle || !signerEmail}
+              disabled={!acknowledged || !signerName || !signerTitle || !signerEmail || !signerCompany.trim()}
               className="py-2 px-4 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold"
-              style={acknowledged && signerName && signerTitle && signerEmail ? { backgroundColor: TSX.ink } : undefined}
+              style={
+                acknowledged && signerName && signerTitle && signerEmail && signerCompany.trim()
+                  ? { backgroundColor: TSX.ink }
+                  : undefined
+              }
             >
               Continue →
             </button>
