@@ -96,13 +96,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           cc_payment_preference=$8,
           cc_auth_retref=$9, cc_auth_respcode=$10, cc_auth_respstat=$11,
           cc_auth_resptext=$12, cc_auth_validated_at=$13,
+          cc_card_expiry=$14,
           credit_card_auth=true
-        WHERE token=$14`,
+        WHERE token=$15`,
         body.ccCardholderFirst, body.ccCardholderLast,
         body.ccCardType, body.ccToken?.slice(-4), body.ccToken,
         body.ccChargeEstimate ? parseFloat(body.ccChargeEstimate) : null,
         now, paymentPreference,
         authRetref, authRespCode, authRespStat, authRespText, authValidatedAt,
+        // Every later charge against this token needs it; the $0 auth used to
+        // be the only consumer and it was dropped straight afterwards.
+        ccExpiry || null,
         params.token
       )
     }

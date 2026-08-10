@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
         ccCardType: true,
         ccCardholderFirst: true,
         ccCardholderLast: true,
+        ccCardExpiry: true,
       },
     })
     if (!pw?.ccCardNumberEncrypted) {
@@ -125,6 +126,11 @@ export async function POST(req: NextRequest) {
       cardholderName ||
       [pw.ccCardholderFirst, pw.ccCardholderLast].filter(Boolean).join(' ') ||
       null
+    // Captured with the authorization. The saved-card path used to leave this
+    // empty, so a merchant-initiated charge against a card on file reached the
+    // gateway with no expiry — the same defect the keyed path guards against
+    // above, on the branch nobody had exercised yet.
+    cardExpiry = pw.ccCardExpiry ?? ''
     // The client signed this authorization themselves in the portal, so it is
     // not a mail/telephone order.
     moto = false

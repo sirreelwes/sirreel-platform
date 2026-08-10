@@ -142,6 +142,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       amountDollars: total,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName,
+      // The request is REJECTED above without a valid expiry, and then it was
+      // never forwarded — so every client self-service payment reached the
+      // gateway with no expiry, which declines a card auth. The client would
+      // read that as their own card being refused.
+      expiry: cardExpiry,
+      // No stored-credential flags: this route does not retain the token, so
+      // the charge is a plain one-off sale, not a credential being
+      // established. Claiming cofpermission here would assert storage we
+      // don't perform.
     })
   } catch (err) {
     console.error('[pay-card] gateway error:', err)

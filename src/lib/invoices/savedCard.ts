@@ -26,6 +26,8 @@ export interface SavedCard {
   /** Last 4 for display / audit trail. */
   last4: string | null
   cardType: string | null
+  /** MMYY, captured with the authorization. Required on every auth. */
+  expiry: string | null
   cardholderName: string | null
   authSignedAt: Date | null
   /** Client's stated payment intent: 'CARD' (charge the card) or
@@ -60,6 +62,7 @@ export async function resolveSavedCardForInvoice(
       ccCardNumberEncrypted: true,
       ccCardLast4: true,
       ccCardType: true,
+      ccCardExpiry: true,
       ccCardholderFirst: true,
       ccCardholderLast: true,
       ccAuthSignedAt: true,
@@ -75,6 +78,7 @@ export async function resolveSavedCardForInvoice(
     cardToken: pw.ccCardNumberEncrypted,
     last4: pw.ccCardLast4 ?? null,
     cardType: pw.ccCardType ?? null,
+    expiry: pw.ccCardExpiry ?? null,
     cardholderName,
     authSignedAt: pw.ccAuthSignedAt ?? null,
     paymentPreference: pw.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : pw.ccPaymentPreference === 'CARD' ? 'CARD' : null,

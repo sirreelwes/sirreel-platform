@@ -2167,6 +2167,10 @@ model PaperworkRequest {
   // file had actually validated, and the Visa/Mastercard stored-credential
   // framework wants later merchant-initiated charges to reference the
   // retref of the transaction that established the credential.
+  // MMYY. Not sensitive authentication data (unlike PAN/CVV/track), and
+  // required on every auth against the token — without it a merchant-
+  // initiated charge on a card on file has no expiry to send and declines.
+  ccCardExpiry          String?   @map("cc_card_expiry")
   ccAuthRetref          String?   @map("cc_auth_retref")
   ccAuthRespCode        String?   @map("cc_auth_respcode")
   ccAuthRespStat        String?   @map("cc_auth_respstat")

@@ -123,6 +123,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       amountDollars: total,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName: card.cardholderName ?? undefined,
+      // Captured with the authorization. Cards authorized before the expiry
+      // was persisted have none — the charge is still attempted, and the
+      // gateway's own decline is the honest outcome rather than us guessing
+      // a value.
+      expiry: card.expiry ?? undefined,
+      // Charging a card on file with the cardholder not present is
+      // merchant-initiated under the Visa/Mastercard stored-credential
+      // framework. This route sent no flags at all; collections already
+      // sends them. 'unscheduled' because SirReel charges when a job wraps,
+      // not on a fixed cadence.
+      storedCredential: 'merchant',
     })
   } catch (err) {
     console.error('[charge-saved-card] gateway error:', err)
