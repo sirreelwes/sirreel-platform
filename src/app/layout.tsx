@@ -11,7 +11,17 @@ export const metadata: Metadata = {
   metadataBase: new URL(PUBLIC_SITE_ORIGIN),
   title: 'SirReel HQ',
   description: 'Production vehicle fleet management platform',
-  icons: { icon: '/favicon.ico', apple: '/apple-touch-icon.png' },
+  // favicon.ico carries 16→256 frames so the browser picks a size instead of
+  // downscaling one 48px image, which is why the tab icon looked mushy and
+  // clipped the S's wings. PNGs cover Android/PWA surfaces.
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
   // The staff dashboard and client portal share this layout; robots.ts
   // already disallows those hosts wholesale, and this is the belt to that
   // braces. Public pages override it below via the (public) layout.

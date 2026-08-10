@@ -49,6 +49,8 @@ export function AgreementStartForm({
   const [matchedExisting, setMatchedExisting] = useState(false)
   const [authorized, setAuthorized] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
+  // Enough of a name to attest against.
+  const showAttestation = companyName.trim().length >= 2
 
   // Debounced lookup. 250ms is long enough that a fast typist makes one
   // request instead of one per keystroke.
@@ -69,7 +71,9 @@ export function AgreementStartForm({
         if (cancelled) return
         const list = d.companies ?? []
         setSuggestions(list)
-        setMatchedExisting(list.some((c) => c.toLowerCase() === q.toLowerCase()))
+        // Only ever PROMOTE to matched here. An empty or slow response used to
+        // clear a match the user had explicitly selected from the list.
+        if (list.some((c) => c.toLowerCase() === q.toLowerCase())) setMatchedExisting(true)
       } catch {
         if (!cancelled) setSuggestions([])
       }
@@ -92,7 +96,7 @@ export function AgreementStartForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (matchedExisting && !authorized) {
+    if (showAttestation && !authorized) {
       setErr('Please confirm you’re authorized to book for this company.')
       return
     }
@@ -162,6 +166,9 @@ export function AgreementStartForm({
           onChange={(e) => {
             setCompanyName(e.target.value)
             setShowList(true)
+            // Without this the previous submit error stays on screen while
+            // the field it refers to has already changed.
+            setErr(null)
           }}
           onFocus={() => setShowList(true)}
           placeholder="Production company"
@@ -196,7 +203,12 @@ export function AgreementStartForm({
             ))}
           </ul>
         )}
-        {matchedExisting && (
+        {/* Shown whenever a company is named, NOT gated on matchedExisting.
+            That flag is recomputed on every keystroke and a transient empty
+            lookup flips it false — which left the submit error on screen with
+            no checkbox to satisfy it, making the form impossible to submit.
+            Attesting is reasonable for any company, so the gate goes away. */}
+        {showAttestation && (
           <label className="mt-2 flex items-start gap-2 text-[12.5px] leading-relaxed text-[#555] cursor-pointer">
             <input
               type="checkbox"

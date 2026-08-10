@@ -52,6 +52,7 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/_next/',
   '/_vercel/',
   '/favicon',
+  '/icon-',            // icon-192.png / icon-512.png (PWA + Android tab icons)
   '/apple-touch-icon',
   '/sirreel-logo',
   '/s-logo',
@@ -87,6 +88,7 @@ const ORDERS_ALLOWED_PREFIXES = [
   '/_next/',           // Next.js build assets
   '/_vercel/',         // Vercel insights
   '/favicon',
+  '/icon-',            // icon-192.png / icon-512.png (PWA + Android tab icons)
   '/apple-touch-icon',
   '/sirreel-logo',
   '/s-logo',
