@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
 import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
+import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 /**
@@ -718,6 +719,11 @@ export default function JobPortalPage() {
                   PaperworkRow as a fallback for the no-invoice state. */}
               <PaperworkRow label="Invoice" status="Issued" statusKind="success">
                 <PortalPayPanel />
+              </PaperworkRow>
+              {/* Bank details live HERE, not in an email. See
+                  api/portal/job/payment-details for why that ruling changed. */}
+              <PaperworkRow label="Pay by bank transfer" status="No fee" statusKind="success">
+                <PortalBankDetails />
               </PaperworkRow>
             </div>
           </div>

@@ -1,9 +1,26 @@
 /**
  * Structured payment / ACH details (Wes ruled A). The free-text
  * `paymentDetails` blob was removed — these fields are the ONLY entry
- * path. Shared by the admin save route (validation) and the email
- * template (rendering). NEVER rendered on any public/browser surface;
- * delivered by email only.
+ * path. Shared by the admin save route (validation), the email template,
+ * and the authenticated job portal.
+ *
+ * SUPERSEDED: "NEVER rendered on any public/browser surface; delivered by
+ * email only." That held while the only alternative was an unauthenticated
+ * page. It no longer does, and it was defending the wrong property.
+ *
+ * These numbers are not secret — they are on every check a client mails and
+ * in the accounts-payable file of everyone SirReel has invoiced. The risk is
+ * SUBSTITUTION, not disclosure: invoice-redirect fraud, where an attacker in
+ * an email thread swaps the routing number and the client pays them in good
+ * faith. Email cannot defend against that; the recipient has no way to tell
+ * an altered copy from a genuine one. A page served from sirreel.com over
+ * TLS can.
+ *
+ * They may now be rendered to an AUTHENTICATED client in the job portal
+ * (api/portal/job/payment-details, behind the same signed session that
+ * guards the payment routes). Still never on an unauthenticated surface —
+ * not for secrecy, but because an anonymous page is one an attacker can
+ * clone and point a victim at.
  */
 
 export interface PaymentDetailsRecord {
