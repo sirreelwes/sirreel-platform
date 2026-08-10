@@ -2161,6 +2161,18 @@ model PaperworkRequest {
   // signal for staff, not a gate. Null = legacy/unspecified (treat as CARD).
   ccPaymentPreference   String?   @map("cc_payment_preference")
 
+  // Result of the $0 stored-credential authorization run when the card is
+  // saved. Previously the gateway response was thrown away and only logged
+  // on failure, which left two holes: nobody could tell whether a card on
+  // file had actually validated, and the Visa/Mastercard stored-credential
+  // framework wants later merchant-initiated charges to reference the
+  // retref of the transaction that established the credential.
+  ccAuthRetref          String?   @map("cc_auth_retref")
+  ccAuthRespCode        String?   @map("cc_auth_respcode")
+  ccAuthRespStat        String?   @map("cc_auth_respstat")
+  ccAuthRespText        String?   @map("cc_auth_resptext")
+  ccAuthValidatedAt     DateTime? @map("cc_auth_validated_at")
+
   // Signer info
   signerName String? @map("signer_name")
 

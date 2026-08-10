@@ -48,6 +48,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // and the card is stored either way.
       const ccExpiry =
         typeof body.ccExpiry === 'string' ? body.ccExpiry.replace(/\D/g, '').slice(0, 4) : ''
+      // Captured so the outcome survives the request. The response used to be
+      // discarded — logged only on failure — which meant nobody could tell
+      // whether a card on file had actually validated, and the retref that
+      // established the stored credential was lost. The card-brand framework
+      // expects later merchant-initiated charges to reference that retref.
+      let authRetref: string | null = null
+      let authRespCode: string | null = null
+      let authRespStat: string | null = null
+      let authRespText: string | null = null
+      let authValidatedAt: Date | null = null
+
       if (body.ccToken && ccExpiry.length === 4) {
         try {
           const zero = await authorizeStoredCredential({
@@ -58,6 +69,11 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
               .join(' '),
             reference: `AUTH-${params.token.slice(0, 12)}`,
           })
+          authRetref = zero.retref ?? null
+          authRespCode = zero.respcode ?? null
+          authRespStat = zero.respstat ?? null
+          authRespText = zero.resptext?.slice(0, 300) ?? null
+          authValidatedAt = new Date()
           if (!isApproved(zero)) {
             console.error(
               `[cc-auth] $0 validation NOT approved for token ${params.token.slice(0, 8)}: ` +
@@ -66,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           }
         } catch (err) {
           console.error('[cc-auth] $0 validation threw:', err)
+          authRespText = err instanceof Error ? err.message.slice(0, 300) : 'gateway error'
         }
       } else {
         console.error('[cc-auth] no expiry supplied — card stored WITHOUT validation')
@@ -77,12 +94,16 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           cc_card_type=$3, cc_card_last4=$4, cc_card_number_encrypted=$5,
           cc_charge_estimate=$6, cc_auth_signed_at=$7,
           cc_payment_preference=$8,
+          cc_auth_retref=$9, cc_auth_respcode=$10, cc_auth_respstat=$11,
+          cc_auth_resptext=$12, cc_auth_validated_at=$13,
           credit_card_auth=true
-        WHERE token=$9`,
+        WHERE token=$14`,
         body.ccCardholderFirst, body.ccCardholderLast,
         body.ccCardType, body.ccToken?.slice(-4), body.ccToken,
         body.ccChargeEstimate ? parseFloat(body.ccChargeEstimate) : null,
-        now, paymentPreference, params.token
+        now, paymentPreference,
+        authRetref, authRespCode, authRespStat, authRespText, authValidatedAt,
+        params.token
       )
     }
 
