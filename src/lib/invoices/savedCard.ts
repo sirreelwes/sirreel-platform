@@ -28,6 +28,9 @@ export interface SavedCard {
   cardType: string | null
   /** MMYY, captured with the authorization. Required on every auth. */
   expiry: string | null
+  /** Cardholder billing postal, captured with the authorization. The gateway
+   *  needs it to decide surcharge eligibility on card-not-present charges. */
+  postal: string | null
   cardholderName: string | null
   authSignedAt: Date | null
   /** Client's stated payment intent: 'CARD' (charge the card) or
@@ -63,6 +66,7 @@ export async function resolveSavedCardForInvoice(
       ccCardLast4: true,
       ccCardType: true,
       ccCardExpiry: true,
+      ccBillingPostal: true,
       ccCardholderFirst: true,
       ccCardholderLast: true,
       ccAuthSignedAt: true,
@@ -79,6 +83,7 @@ export async function resolveSavedCardForInvoice(
     last4: pw.ccCardLast4 ?? null,
     cardType: pw.ccCardType ?? null,
     expiry: pw.ccCardExpiry ?? null,
+    postal: pw.ccBillingPostal ?? null,
     cardholderName,
     authSignedAt: pw.ccAuthSignedAt ?? null,
     paymentPreference: pw.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : pw.ccPaymentPreference === 'CARD' ? 'CARD' : null,

@@ -104,6 +104,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [expMonth, setExpMonth] = useState('')
   const [expYear, setExpYear] = useState('')
   const [cardholderName, setCardholderName] = useState('')
+  // Cardholder billing ZIP. The gateway decides surcharge eligibility from it
+  // and waives the fee where state law prohibits surcharging, so a keyed card
+  // must carry one. A card on file already has it from the authorization.
+  const [cardPostal, setCardPostal] = useState('')
 
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -202,7 +206,12 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const total = validAmount ? Math.round((base + surcharge) * 100) / 100 : 0
   // MMYY, assembled from our own selects.
   const cardExpiry = expMonth && expYear ? `${expMonth}${expYear}` : ''
-  const cardReady = source === 'saved' ? !!savedId : !!cardToken && cardExpiry.length === 4
+  // A keyed card needs a billing ZIP: once surcharging is enabled the gateway
+  // requires one on every card-not-present auth to judge eligibility.
+  const cardReady =
+    source === 'saved'
+      ? !!savedId
+      : !!cardToken && cardExpiry.length === 4 && cardPostal.trim().length >= 5
   const canCharge = !!invoice && validAmount && cardReady && !busy
 
   const selectedAuth = auths.find((a) => a.id === savedId) ?? null
@@ -243,6 +252,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           cardToken: source === 'new' ? cardToken : undefined,
           expiry: source === 'new' ? cardExpiry : undefined,
           cardholderName: cardholderName || undefined,
+          postal: source === 'new' ? cardPostal || undefined : undefined,
           pdfUrl: pdf?.pdfUrl,
           pdfKey: pdf?.pdfKey,
           note: note || undefined,
@@ -677,6 +687,18 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       value={cardholderName}
                       onChange={(e) => setCardholderName(e.target.value)}
                     />
+                    <input
+                      className={`${input} mt-2`}
+                      placeholder="Billing ZIP"
+                      inputMode="numeric"
+                      value={cardPostal}
+                      onChange={(e) => setCardPostal(e.target.value)}
+                    />
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Needed to work out whether the card fee applies — it is
+                      waived for debit cards and in states that prohibit
+                      surcharging.
+                    </p>
                   </>
                 )}
               </div>

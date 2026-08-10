@@ -161,8 +161,8 @@ export function CcAuthCard({
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">How will you pay your invoices?</div>
             <div className="space-y-2">
               {([
-                { key: 'CARD', title: 'Charge my card on file', sub: 'A 3% processing fee applies to card payments.' },
-                { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No 3% fee. Your card stays on file as security only.' },
+                { key: 'CARD', title: 'Charge my card on file', sub: 'A processing fee of up to 3% applies to card payments, where permitted.' },
+                { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No processing fee. Your card stays on file as security only.' },
               ] as const).map((opt) => (
                 <label
                   key={opt.key}
@@ -298,7 +298,7 @@ export function CcAuthCard({
           </div>
 
           <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-            <span className="font-bold">3% Credit Card Processing Fee.</span> {CC_SURCHARGE_TEXT}
+            <span className="font-bold">Credit Card Processing Fee.</span> {CC_SURCHARGE_TEXT}
           </div>
           <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">{CC_GUARANTEE_TEXT}</div>
           <label className="flex items-start gap-3 cursor-pointer">

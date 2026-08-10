@@ -2171,6 +2171,12 @@ model PaperworkRequest {
   // required on every auth against the token — without it a merchant-
   // initiated charge on a card on file has no expiry to send and declines.
   ccCardExpiry          String?   @map("cc_card_expiry")
+  // Cardholder billing postal code. Once surcharging is enabled on the MID,
+  // the CardPointe gateway REQUIRES this on every card-not-present auth: it
+  // decides surcharge eligibility from the cardholder's region and waives
+  // the fee where state law prohibits it (CT, MA, ...). The portal already
+  // collected it and threw it away.
+  ccBillingPostal       String?   @map("cc_billing_postal")
   ccAuthRetref          String?   @map("cc_auth_retref")
   ccAuthRespCode        String?   @map("cc_auth_respcode")
   ccAuthRespStat        String?   @map("cc_auth_respstat")

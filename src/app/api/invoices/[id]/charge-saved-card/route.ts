@@ -27,7 +27,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { PaymentMethod } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { chargeCard, isApproved } from '@/lib/cardpointe/client'
+import { chargeCard, isApproved, appliedAmounts } from '@/lib/cardpointe/client'
 import { recordPayment } from '@/lib/invoices/recordPayment'
 import { resolveSavedCardForInvoice } from '@/lib/invoices/savedCard'
 import { surchargeBreakdown, CARD_SURCHARGE_LABEL } from '@/lib/payments/surcharge'
@@ -108,19 +108,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 },
     )
   }
-  // Base credits the invoice; the card is charged base + 3% surcharge,
-  // UNLESS staff waived the fee for this charge (courtesy / negotiated).
-  const breakdown = surchargeBreakdown(requested)
-  const base = breakdown.base
-  const surcharge = waiveSurcharge ? 0 : breakdown.surcharge
-  const total = Math.round((base + surcharge) * 100) / 100
+  // Base credits the invoice. The GATEWAY decides the fee — see the
+  // collections route for why we no longer compute it.
+  const base = surchargeBreakdown(requested).base
 
   // ── Charge the card on file through CardPointe ───────────────
   let charge
   try {
     charge = await chargeCard({
       cardToken: card.cardToken,
-      amountDollars: total,
+      amountDollars: base,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName: card.cardholderName ?? undefined,
       // Captured with the authorization. Cards authorized before the expiry
@@ -128,6 +125,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // gateway's own decline is the honest outcome rather than us guessing
       // a value.
       expiry: card.expiry ?? undefined,
+      // Captured with the authorization; the gateway needs it to decide
+      // surcharge eligibility on this card-not-present charge.
+      postal: card.postal ?? undefined,
       // Charging a card on file with the cardholder not present is
       // merchant-initiated under the Visa/Mastercard stored-credential
       // framework. This route sent no flags at all; collections already
@@ -140,6 +140,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json(
       { error: 'Payment gateway unreachable. Please try again.' },
       { status: 502 },
+    )
+  }
+
+  // What the gateway actually charged. `waiveSurcharge` can no longer suppress
+  // a fee: under the Merchant Surcharge Program the gateway applies it, and a
+  // merchant-side flag does not reach that decision. It still records staff
+  // INTENT, and the response below reports the real outcome so a waive that
+  // did not take effect is visible rather than assumed.
+  const { total, surcharge } = appliedAmounts(charge, base)
+  if (waiveSurcharge && surcharge > 0) {
+    console.warn(
+      '[charge-saved-card] fee waive requested but gateway applied $%s on retref %s',
+      surcharge.toFixed(2),
+      charge.retref,
     )
   }
 

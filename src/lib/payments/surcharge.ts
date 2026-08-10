@@ -1,5 +1,17 @@
 /**
- * Credit-card surcharge — single source of truth.
+ * Credit-card surcharge — ESTIMATE ONLY.
+ *
+ * ⚠ This module no longer decides what a client is charged. Under the
+ * CardPointe Merchant Surcharge Program the GATEWAY applies the fee and
+ * waives it when the cardholder is ineligible — debit, prepaid, or a state
+ * that prohibits surcharging (Connecticut, Massachusetts). The authoritative
+ * figure comes back on the auth response; see appliedAmounts() in
+ * lib/cardpointe/client.
+ *
+ * Use these helpers ONLY to show a client what to expect before they pay.
+ * Never send base + computeSurcharge() to the gateway: it would surcharge
+ * twice, and it would apply a fee to cardholders the rules exempt.
+ *
  *
  * SirReel adds a card processing fee on top of the amount applied to an
  * invoice. The invoice total is NOT changed: the client is charged

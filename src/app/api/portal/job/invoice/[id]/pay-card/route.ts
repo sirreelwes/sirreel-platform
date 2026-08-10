@@ -39,7 +39,7 @@ import {
   verifyJobSessionCookieValue,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
-import { chargeCard, isApproved } from '@/lib/cardpointe/client'
+import { chargeCard, isApproved, appliedAmounts } from '@/lib/cardpointe/client'
 import { recordPortalPayment } from '@/lib/invoices/recordPortalPayment'
 import { surchargeBreakdown, CARD_SURCHARGE_LABEL } from '@/lib/payments/surcharge'
 
@@ -48,6 +48,7 @@ export const maxDuration = 30
 
 interface PayCardBody {
   expiry?: unknown
+  postal?: unknown
   cardToken?: unknown
   cardholderName?: unknown
   amount?: unknown
@@ -84,6 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (cardExpiry.length !== 4) {
     return NextResponse.json({ error: 'card expiry required' }, { status: 400 })
   }
+  const cardPostal =
+    typeof body.postal === 'string' ? body.postal.replace(/[^0-9-]/g, '').slice(0, 10) : ''
   const cardholderName =
     typeof body.cardholderName === 'string' && body.cardholderName.trim().length > 0
       ? body.cardholderName.trim().slice(0, 100)
@@ -132,14 +135,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // Base credits the invoice; the card is charged base + 3% surcharge.
-  const { base, surcharge, total } = surchargeBreakdown(amount)
+  // Base only — the gateway applies any surcharge itself and waives it for
+  // ineligible cardholders. See the collections route for the full note.
+  const { base } = surchargeBreakdown(amount)
 
   // ── Charge through CardPointe ────────────────────────────────
   let charge
   try {
     charge = await chargeCard({
       cardToken,
-      amountDollars: total,
+      amountDollars: base,
       invoiceNumber: invoice.invoiceNumber,
       cardholderName,
       // The request is REJECTED above without a valid expiry, and then it was
@@ -147,6 +152,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // gateway with no expiry, which declines a card auth. The client would
       // read that as their own card being refused.
       expiry: cardExpiry,
+      // Required for surcharge eligibility on card-not-present.
+      postal: cardPostal || undefined,
       // No stored-credential flags: this route does not retain the token, so
       // the charge is a plain one-off sale, not a credential being
       // established. Claiming cofpermission here would assert storage we
@@ -169,6 +176,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 402 },
     )
   }
+
+  // What the gateway actually charged, and how much of that was fee.
+  const { total, surcharge } = appliedAmounts(charge, base)
 
   // ── Persist Payment row ──────────────────────────────────────
   // Credit the invoice the BASE; the surcharge is stored separately and

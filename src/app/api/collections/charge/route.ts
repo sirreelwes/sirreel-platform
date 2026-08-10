@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
-import { chargeCard, isApproved, cardDisplayFromToken } from '@/lib/cardpointe/client'
-import { surchargeBreakdown } from '@/lib/payments/surcharge'
+import {
+  chargeCard,
+  isApproved,
+  cardDisplayFromToken,
+  appliedAmounts,
+} from '@/lib/cardpointe/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +24,16 @@ export const dynamic = 'force-dynamic'
  * already a CardSecure token when it arrives — the iframe posts to
  * CardConnect, not to us.
  *
- * SURCHARGE: the 3% fee is computed HERE from the base amount, never trusted
- * from the client. `amount` credits the invoice; the gateway is charged
- * amount + surcharge, matching how Payment splits the two.
+ * SURCHARGE: the GATEWAY applies it, not us. We send the base amount and the
+ * cardholder's postal code; CardPointe adds the fee per the Merchant Surcharge
+ * Program and WAIVES it when the cardholder is ineligible — debit, prepaid, or
+ * a state that prohibits surcharging (Connecticut, Massachusetts).
+ *
+ * This used to add 3% locally and send base + fee. Once surcharging is enabled
+ * on the merchant account that double-charges the client, and it applied the
+ * fee to debit cards and to prohibited states, which the card brands and
+ * federal law forbid. The fee is now read back from the response — it is only
+ * knowable there.
  *
  * MOTO: phone-keyed charges send ecomind 'T'. A saved authorization the
  * client signed in the portal is not MOTO — that one keeps 'E'.
@@ -50,6 +61,7 @@ export async function POST(req: NextRequest) {
     pdfUrl?: unknown
     pdfKey?: unknown
     note?: unknown
+    postal?: unknown
   } | null
   if (!body) return NextResponse.json({ ok: false, error: 'body required' }, { status: 400 })
 
@@ -100,6 +112,10 @@ export async function POST(req: NextRequest) {
     typeof body.cardholderName === 'string' ? body.cardholderName.trim().slice(0, 120) : null
   let moto = true
   let cardExpiry = ''
+  // Gateway needs this to decide surcharge eligibility. Operator-supplied for
+  // a keyed card; taken from the signed authorization for a card on file.
+  let cardPostal =
+    typeof body.postal === 'string' ? body.postal.replace(/[^0-9-]/g, '').slice(0, 10) : ''
 
   if (typeof body.savedPaperworkId === 'string' && body.savedPaperworkId.trim()) {
     const pw = await prisma.paperworkRequest.findUnique({
@@ -111,6 +127,7 @@ export async function POST(req: NextRequest) {
         ccCardholderFirst: true,
         ccCardholderLast: true,
         ccCardExpiry: true,
+        ccBillingPostal: true,
       },
     })
     if (!pw?.ccCardNumberEncrypted) {
@@ -131,6 +148,7 @@ export async function POST(req: NextRequest) {
     // gateway with no expiry — the same defect the keyed path guards against
     // above, on the branch nobody had exercised yet.
     cardExpiry = pw.ccCardExpiry ?? ''
+    cardPostal = cardPostal || (pw.ccBillingPostal ?? '')
     // The client signed this authorization themselves in the portal, so it is
     // not a mail/telephone order.
     moto = false
@@ -169,18 +187,20 @@ export async function POST(req: NextRequest) {
   const customerName =
     typeof body.customerName === 'string' ? body.customerName.trim().slice(0, 200) : null
 
-  const { base, surcharge, total } = surchargeBreakdown(amount)
+  // What the invoice is credited. The gateway decides what is added on top.
+  const base = Math.round((amount + Number.EPSILON) * 100) / 100
 
   let resp: Awaited<ReturnType<typeof chargeCard>>
   try {
     resp = await chargeCard({
       cardToken,
-      // The gateway is charged base + surcharge; `base` is what credits the
-      // invoice. Sending `base` here would silently eat the 3%.
-      amountDollars: total,
+      // BASE ONLY. The gateway applies the surcharge itself; sending
+      // base + fee here would surcharge the client twice.
+      amountDollars: base,
       invoiceNumber: invoiceNumber || rwInvoiceId,
       cardholderName: cardholderName ?? undefined,
       expiry: cardExpiry || undefined,
+      postal: cardPostal || undefined,
       moto,
       // A saved authorization charged after the fact is merchant-initiated —
       // the cardholder isn't present. A freshly keyed card is a plain sale.
@@ -194,7 +214,8 @@ export async function POST(req: NextRequest) {
         invoiceNumber: invoiceNumber || null,
         customerName,
         amount: base,
-        surchargeAmount: surcharge,
+        // Nothing reached the gateway, so no fee was applied.
+        surchargeAmount: 0,
         cardLast4,
         cardType,
         cardholderName,
@@ -216,6 +237,11 @@ export async function POST(req: NextRequest) {
   // resptext 'Approval' with a respcode that isn't '00', and treating that
   // as a decline charges the card without crediting the invoice.
   const approved = isApproved(resp)
+
+  // What the card was ACTUALLY charged, per the gateway. With surcharging on
+  // this exceeds `base`; with it off, or for an ineligible cardholder, the
+  // fee is zero and total === base.
+  const { total, surcharge } = appliedAmounts(resp, base)
 
   const charge = await prisma.rwCollectionCharge.create({
     data: {
@@ -260,8 +286,14 @@ export async function POST(req: NextRequest) {
     total,
     authCode: resp.authcode ?? null,
     retref: resp.retref ?? null,
+    // Reports what the gateway actually did. A waived fee (debit, prepaid, or
+    // a state that prohibits surcharging) must not read as "+ $0.00 fee" —
+    // the operator needs to see that no fee applied, because the client was
+    // told one would.
     message: approved
-      ? `Approved — $${total.toFixed(2)} charged ($${base.toFixed(2)} + $${surcharge.toFixed(2)} fee).`
+      ? surcharge > 0
+        ? `Approved — $${total.toFixed(2)} charged ($${base.toFixed(2)} + $${surcharge.toFixed(2)} fee).`
+        : `Approved — $${total.toFixed(2)} charged. No card fee applied (cardholder not eligible for surcharging).`
       : `Declined: ${resp.resptext || 'no reason given'}`,
   })
 }

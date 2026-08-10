@@ -75,11 +75,19 @@ export const CC_GUARANTEE_TEXT = `This Credit Card Authorization form guarantees
 
 // Surcharge disclosure. Shown prominently near the card entry, and the
 // consent to it is folded into CC_ACK_TEXT below so the signed
-// acknowledgment covers the fee. The "3%" here must match
+// acknowledgment covers the fee.
+//
+// Worded as a CAP ("up to 3%"), not a flat rate: the payment processor applies
+// the fee and waives it entirely for debit, prepaid, and cardholders in states
+// that prohibit surcharging. Promising a flat 3% on every card payment would
+// state something we cannot deliver, and a disclosure that overstates the fee
+// is the part that has to be right.
+//
+// The "3%" here must match
 // CARD_SURCHARGE_RATE in src/lib/payments/surcharge.ts.
-export const CC_SURCHARGE_TEXT = `A 3% processing fee is added to all payments made by credit card. This fee is applied to each amount charged to the card on file. To avoid this fee, payment may be made by check.`
+export const CC_SURCHARGE_TEXT = `A processing fee of up to 3% is added to payments made by credit card, where permitted. The fee is waived on debit and prepaid cards, and for cardholders in states that do not allow it. The exact fee is calculated by our payment processor and shown on your receipt. To avoid this fee, payment may be made by check.`
 
-export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above, plus a 3% credit card processing fee, and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`
+export const CC_ACK_TEXT = `By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above, plus any applicable credit card processing fee of up to 3%, and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.`
 
 // Stage area keys/labels moved to the single source in
 // src/lib/contracts/stageAreas.ts (stageAreaLabel / STAGE_AREAS).

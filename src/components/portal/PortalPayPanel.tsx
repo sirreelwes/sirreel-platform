@@ -505,7 +505,7 @@ function CardPayForm({
             <span>Total charged to card</span>
             <span className="tabular-nums">{fmtUsd(fee.total)}</span>
           </div>
-          <div className="text-[10px] text-amber-700 pt-0.5">To avoid the 3% fee, pay by check.</div>
+          <div className="text-[10px] text-amber-700 pt-0.5">To avoid the card fee, pay by check.</div>
         </div>
       )}
 

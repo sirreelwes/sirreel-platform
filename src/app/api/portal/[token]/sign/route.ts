@@ -48,6 +48,12 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // and the card is stored either way.
       const ccExpiry =
         typeof body.ccExpiry === 'string' ? body.ccExpiry.replace(/\D/g, '').slice(0, 4) : ''
+      // The card already posted this from the client's billing details and
+      // nothing kept it. The gateway needs it on every card-not-present auth
+      // once surcharging is on, to decide whether the cardholder's region
+      // permits a fee at all.
+      const ccPostal =
+        typeof body.ccZip === 'string' ? body.ccZip.replace(/[^0-9-]/g, '').slice(0, 10) : ''
       // Captured so the outcome survives the request. The response used to be
       // discarded — logged only on failure — which meant nobody could tell
       // whether a card on file had actually validated, and the retref that
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
               .filter(Boolean)
               .join(' '),
             reference: `AUTH-${params.token.slice(0, 12)}`,
+            postal: ccPostal || undefined,
           })
           authRetref = zero.retref ?? null
           authRespCode = zero.respcode ?? null
@@ -96,9 +103,9 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           cc_payment_preference=$8,
           cc_auth_retref=$9, cc_auth_respcode=$10, cc_auth_respstat=$11,
           cc_auth_resptext=$12, cc_auth_validated_at=$13,
-          cc_card_expiry=$14,
+          cc_card_expiry=$14, cc_billing_postal=$15,
           credit_card_auth=true
-        WHERE token=$15`,
+        WHERE token=$16`,
         body.ccCardholderFirst, body.ccCardholderLast,
         body.ccCardType, body.ccToken?.slice(-4), body.ccToken,
         body.ccChargeEstimate ? parseFloat(body.ccChargeEstimate) : null,
@@ -107,6 +114,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         // Every later charge against this token needs it; the $0 auth used to
         // be the only consumer and it was dropped straight afterwards.
         ccExpiry || null,
+        ccPostal || null,
         params.token
       )
     }

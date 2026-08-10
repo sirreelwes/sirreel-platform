@@ -153,6 +153,17 @@ export interface AuthRequest {
   /** MMYY. REQUIRED by the gateway for a card authorization — a token alone
    *  is not enough. Captured from the CardSecure iframe alongside the token. */
   expiry?: string
+  /** Cardholder billing postal code.
+   *
+   *  REQUIRED on every card-not-present authorization once surcharging is
+   *  enabled on the merchant account. The gateway decides surcharge
+   *  eligibility from the cardholder's region and waives the fee where state
+   *  law prohibits it (Connecticut, Massachusetts, ...). Omitting it means
+   *  the gateway cannot validate eligibility.
+   *
+   *  Fiserv: "the merchant must provide the cardholder's postal code to
+   *  validate the cardholder's eligibility." */
+  postal?: string
 
   // ── Visa/Mastercard Stored Credential Transaction Framework ──────────
   // Required whenever a card is stored for later use, or a stored card is
@@ -197,6 +208,10 @@ export interface AuthResponse {
   authcode?: string
   /** Settlement batch id (when settled). */
   setlstat?: string
+  /** Amount the gateway ACTUALLY authorized, decimal string. This is the
+   *  authority on what the card was charged — with surcharging enabled the
+   *  gateway adds its own fee, so this can exceed the amount we sent. */
+  amount?: string
   /** Full raw payload — exposed so callers can persist for forensics
    *  without us having to enumerate every optional field. */
   raw: Record<string, unknown>
@@ -246,6 +261,8 @@ export async function authorizeStoredCredential(args: {
   expiry: string
   cardholderName?: string
   reference?: string
+  /** Cardholder billing postal — see AuthRequest.postal. */
+  postal?: string
 }): Promise<AuthResponse> {
   const cfg = readConfig()
   const body: AuthRequest = {
@@ -257,6 +274,7 @@ export async function authorizeStoredCredential(args: {
     orderid: args.reference,
     name: args.cardholderName,
     expiry: args.expiry,
+    postal: args.postal,
     ...storedCredentialFields('initial'),
   }
   return postAuth(cfg, body)
@@ -272,6 +290,9 @@ export async function chargeCard(args: {
   /** True when an operator keyed the card on a phone call (collections).
    *  Sends ecomind 'T' instead of 'E' — see AuthRequest.ecomind. */
   moto?: boolean
+  /** Cardholder billing postal — see AuthRequest.postal. Required on
+   *  card-not-present auths once surcharging is enabled. */
+  postal?: string
   /** Stored-credential framework flags. Omit for a plain one-off sale.
    *  'initial'  — this charge also establishes a credential we will reuse
    *  'merchant' — charging a stored card with the cardholder absent
@@ -288,6 +309,7 @@ export async function chargeCard(args: {
     orderid: args.invoiceNumber,
     name: args.cardholderName,
     expiry: args.expiry,
+    postal: args.postal,
     ...storedCredentialFields(args.storedCredential),
   }
   return postAuth(cfg, body)
@@ -488,13 +510,61 @@ async function postAuth(cfg: CardPointeConfig, body: AuthRequest): Promise<AuthR
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
   return {
+    // respstat is documented as the authoritative approval flag and the type
+    // has always declared it, but this mapping never populated it — so every
+    // caller silently fell through to the respcode fallback and every stored
+    // respstat was null.
+    respstat:
+      json.respstat === 'A' || json.respstat === 'B' || json.respstat === 'C'
+        ? json.respstat
+        : undefined,
     respcode: typeof json.respcode === 'string' ? json.respcode : '',
     resptext: typeof json.resptext === 'string' ? json.resptext : '',
     retref: typeof json.retref === 'string' ? json.retref : undefined,
     authcode: typeof json.authcode === 'string' ? json.authcode : undefined,
     setlstat: typeof json.setlstat === 'string' ? json.setlstat : undefined,
+    amount: typeof json.amount === 'string' ? json.amount : undefined,
     raw: json,
   }
+}
+
+/**
+ * What the gateway ACTUALLY charged, and how much of it was surcharge.
+ *
+ * With the Merchant Surcharge Program enabled, SirReel does NOT compute the
+ * fee — the gateway applies it, and waives it entirely when the cardholder is
+ * ineligible (debit, prepaid, or a state that prohibits surcharging). So the
+ * fee is only knowable from the response, never from our own arithmetic.
+ *
+ * Derived from the authorized amount rather than a named fee field: the
+ * response's `amount` is unambiguous and stable, while the fee is reported
+ * under several names across gateway versions (fee_amount, surchargeamount).
+ * Those are read as a cross-check when present.
+ *
+ * Returns the base we sent when the gateway reports nothing, so a merchant
+ * account with surcharging switched off records a clean zero fee.
+ */
+export function appliedAmounts(
+  resp: AuthResponse,
+  baseDollars: number,
+): { total: number; surcharge: number } {
+  const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+  const base = round(baseDollars)
+
+  const authorized = Number(resp.amount)
+  if (Number.isFinite(authorized) && authorized > 0) {
+    const total = round(authorized)
+    // A gateway total BELOW the base would mean a partial authorization, not
+    // a surcharge; clamp rather than record a negative fee.
+    return { total, surcharge: Math.max(0, round(total - base)) }
+  }
+
+  const named = ['fee_amount', 'feeamount', 'surchargeamount', 'surcharge']
+    .map((k) => Number(resp.raw?.[k]))
+    .find((n) => Number.isFinite(n) && n > 0)
+  if (named != null) return { total: round(base + named), surcharge: round(named) }
+
+  return { total: base, surcharge: 0 }
 }
 
 /**
