@@ -202,6 +202,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // ── derived ─────────────────────────────────────────────────────
   const base = Number(amount)
   const validAmount = Number.isFinite(base) && base > 0
+  // Display estimate only — the CEILING of what the processor may add. The
+  // gateway applies the real fee and waives it entirely for ineligible
+  // cardholders, so these two numbers must never be presented as the amount
+  // the card WILL be charged.
   const surcharge = validAmount ? Math.round(base * 0.03 * 100) / 100 : 0
   const total = validAmount ? Math.round((base + surcharge) * 100) / 100 : 0
   // MMYY, assembled from our own selects.
@@ -533,14 +537,28 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       <span>Applied to invoice</span>
                       <span>{money(base)}</span>
                     </div>
+                    {/* An ESTIMATE, and labelled as one. The processor applies
+                        the fee and waives it for debit, prepaid, and states
+                        that prohibit surcharging — so this panel cannot know
+                        the figure in advance. It previously stated a flat 3%
+                        and a definite total, which after the switch to
+                        gateway-applied surcharging was a promise the charge
+                        would not necessarily keep. */}
                     <div className="flex justify-between text-zinc-400">
-                      <span>3% card processing fee</span>
+                      <span>Card processing fee (up to 3%)</span>
                       <span>{money(surcharge)}</span>
                     </div>
                     <div className="flex justify-between text-white font-bold border-t border-zinc-700 pt-1 mt-1">
                       <span>Card will be charged</span>
-                      <span>{money(total)}</span>
+                      <span>
+                        {money(base)}–{money(total)}
+                      </span>
                     </div>
+                    <p className="text-[11px] text-zinc-500 pt-1">
+                      The processor calculates the fee and waives it where
+                      surcharging isn&rsquo;t allowed. The exact amount is
+                      confirmed after the charge.
+                    </p>
                   </div>
                 )}
               </div>
@@ -725,7 +743,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 disabled={!canCharge}
                 className="w-full rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-900 font-bold px-4 py-2.5 text-sm transition-colors"
               >
-                {busy ? 'Charging…' : validAmount ? `Charge ${money(total)}` : 'Charge'}
+                {/* Names the amount we actually send. The fee is added by the
+                    processor on top, so a single definite total here would be
+                    wrong whenever the fee is waived. */}
+                {busy
+                  ? 'Charging…'
+                  : validAmount
+                    ? `Charge ${money(base)} + fee`
+                    : 'Charge'}
               </button>
             </>
           )}
