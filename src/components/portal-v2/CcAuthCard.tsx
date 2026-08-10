@@ -364,6 +364,16 @@ export function CcAuthCard({
           >
             {submitting ? 'Submitting…' : 'Authorize & Complete ✓'}
           </button>
+          {/* A disabled button with every visible field filled reads as a broken
+              page — the card number lives in a CardSecure iframe, so its
+              encryption can still be pending when everything else looks done.
+              Say which one is missing rather than making the client guess. */}
+          {!submitting && !cpToken && cardholderFirst && cardholderLast && acknowledged && sig && (
+            <p className="mt-2 text-[11px] text-center text-gray-400">
+              Waiting on the card number — click outside the card field to
+              finish encrypting it.
+            </p>
+          )}
         </div>
       )}
     </CardShell>
