@@ -176,6 +176,9 @@ export async function POST(req: NextRequest) {
       cardholderName: cardholderName ?? undefined,
       expiry: cardExpiry || undefined,
       moto,
+      // A saved authorization charged after the fact is merchant-initiated —
+      // the cardholder isn't present. A freshly keyed card is a plain sale.
+      storedCredential: moto === false ? 'merchant' : undefined,
     })
   } catch (err) {
     console.error('[collections] gateway threw:', err)

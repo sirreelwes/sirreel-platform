@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
@@ -31,6 +32,45 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // Payment intent: CHECK_WIRE = client will pay by check/bank
       // transfer, card is on file as SECURITY ONLY. Default CARD.
       const paymentPreference = body.ccPaymentPreference === 'CHECK_WIRE' ? 'CHECK_WIRE' : 'CARD'
+
+      // $0 authorization BEFORE storing. Two reasons:
+      //  1. It validates the card. Previously a token was saved with no
+      //     gateway call at all, so a mistyped or dead card sat in the
+      //     collections queue looking valid until someone tried to charge it
+      //     weeks later — after the job had wrapped.
+      //  2. It establishes the stored credential under the Visa/Mastercard
+      //     framework (cofpermission), which every later merchant-initiated
+      //     charge references.
+      //
+      // Deliberately NON-BLOCKING on the storage itself: if the gateway is
+      // unreachable we still record the client's signed authorization rather
+      // than making them redo the paperwork. The validation result is logged
+      // and the card is stored either way.
+      const ccExpiry =
+        typeof body.ccExpiry === 'string' ? body.ccExpiry.replace(/\D/g, '').slice(0, 4) : ''
+      if (body.ccToken && ccExpiry.length === 4) {
+        try {
+          const zero = await authorizeStoredCredential({
+            cardToken: body.ccToken,
+            expiry: ccExpiry,
+            cardholderName: [body.ccCardholderFirst, body.ccCardholderLast]
+              .filter(Boolean)
+              .join(' '),
+            reference: `AUTH-${params.token.slice(0, 12)}`,
+          })
+          if (!isApproved(zero)) {
+            console.error(
+              `[cc-auth] $0 validation NOT approved for token ${params.token.slice(0, 8)}: ` +
+                `${zero.respcode} ${zero.resptext}`,
+            )
+          }
+        } catch (err) {
+          console.error('[cc-auth] $0 validation threw:', err)
+        }
+      } else {
+        console.error('[cc-auth] no expiry supplied — card stored WITHOUT validation')
+      }
+
       await prisma.$executeRawUnsafe(`
         UPDATE paperwork_requests SET
           cc_cardholder_first=$1, cc_cardholder_last=$2,

@@ -145,7 +145,7 @@ export interface AuthRequest {
    *  Submitting a phone charge as 'E' misrepresents it to the network: it
    *  can downgrade interchange and it weakens SirReel's position in a
    *  dispute, because the record claims the cardholder was present online. */
-  ecomind?: 'E' | 'T'
+  ecomind?: 'E' | 'T' | 'R'
   /** Operator-supplied invoice reference — shows on the merchant
    *  statement. We pass our Invoice number here. */
   orderid?: string
@@ -153,6 +153,27 @@ export interface AuthRequest {
   /** MMYY. REQUIRED by the gateway for a card authorization — a token alone
    *  is not enough. Captured from the CardSecure iframe alongside the token. */
   expiry?: string
+
+  // ── Visa/Mastercard Stored Credential Transaction Framework ──────────
+  // Required whenever a card is stored for later use, or a stored card is
+  // charged. Field names are Fiserv's, from the CardPointe Gateway Developer
+  // Guide ("Scheduling Recurring Payments").
+  //
+  // WITHOUT these, stored-credential charges are non-compliant with the card
+  // brand mandate — they may still authorize, so the omission is invisible
+  // until a dispute or an audit.
+
+  /** 'Y' on the INITIAL transaction that establishes a stored credential —
+   *  asserts the cardholder consented to their card being saved. */
+  cofpermission?: 'Y'
+  /** Who initiated a SUBSEQUENT transaction against a stored credential.
+   *  'C' customer-initiated (they are present), 'M' merchant-initiated
+   *  (we charge without them, e.g. a collections call).
+   *  Documented explicitly for 'M'; 'C' is the counterpart value. */
+  cof?: 'C' | 'M'
+  /** 'Y' for scheduled/recurring, 'N' for a one-off merchant-initiated
+   *  charge. SirReel's collections charges are unscheduled, so 'N'. */
+  cofscheduled?: 'Y' | 'N'
   /** ACH-only routing fields. */
   bankaba?: string // routing number
   bankaccttype?: 'C' | 'S' // Checking / Savings
@@ -188,6 +209,59 @@ export interface AuthResponse {
  * instant — the gateway response tells us approve/decline
  * immediately, and the resulting Payment row writes CLEARED.
  */
+/**
+ * Translate our intent into Fiserv's stored-credential fields.
+ *
+ * Kept in one place so the three call sites can't disagree — a subsequent
+ * charge flagged as an initial one (or vice versa) is exactly the kind of
+ * mismatch the card brands penalise, and it authorizes normally either way.
+ */
+function storedCredentialFields(kind?: 'initial' | 'merchant' | 'customer'): {
+  cofpermission?: 'Y'
+  cof?: 'C' | 'M'
+  cofscheduled?: 'Y' | 'N'
+} {
+  if (kind === 'initial') return { cofpermission: 'Y' }
+  // Unscheduled: SirReel charges when a job wraps, not on a fixed cadence.
+  // 'Y' here would assert a recurring schedule that does not exist.
+  if (kind === 'merchant') return { cof: 'M', cofscheduled: 'N' }
+  if (kind === 'customer') return { cof: 'C', cofscheduled: 'N' }
+  return {}
+}
+
+/**
+ * $0 authorization that VALIDATES a card and establishes it as a stored
+ * credential — no money moves.
+ *
+ * The portal's card-authorization step previously saved a token with no
+ * gateway call whatsoever. Nothing confirmed the card was real, active, or
+ * even correctly keyed; a dead card sat in the collections queue looking
+ * perfectly good until someone tried to charge it weeks later, by which point
+ * the job had wrapped and the leverage was gone.
+ *
+ * capture 'N' — authorize only, never settle.
+ */
+export async function authorizeStoredCredential(args: {
+  cardToken: string
+  expiry: string
+  cardholderName?: string
+  reference?: string
+}): Promise<AuthResponse> {
+  const cfg = readConfig()
+  const body: AuthRequest = {
+    account: args.cardToken,
+    amount: '0',
+    currency: 'USD',
+    capture: 'N',
+    ecomind: 'E',
+    orderid: args.reference,
+    name: args.cardholderName,
+    expiry: args.expiry,
+    ...storedCredentialFields('initial'),
+  }
+  return postAuth(cfg, body)
+}
+
 export async function chargeCard(args: {
   cardToken: string
   amountDollars: number
@@ -198,6 +272,11 @@ export async function chargeCard(args: {
   /** True when an operator keyed the card on a phone call (collections).
    *  Sends ecomind 'T' instead of 'E' — see AuthRequest.ecomind. */
   moto?: boolean
+  /** Stored-credential framework flags. Omit for a plain one-off sale.
+   *  'initial'  — this charge also establishes a credential we will reuse
+   *  'merchant' — charging a stored card with the cardholder absent
+   *  'customer' — cardholder present, paying with their stored card */
+  storedCredential?: 'initial' | 'merchant' | 'customer'
 }): Promise<AuthResponse> {
   const cfg = readConfig()
   const body: AuthRequest = {
@@ -209,6 +288,7 @@ export async function chargeCard(args: {
     orderid: args.invoiceNumber,
     name: args.cardholderName,
     expiry: args.expiry,
+    ...storedCredentialFields(args.storedCredential),
   }
   return postAuth(cfg, body)
 }

@@ -55,6 +55,10 @@ export function CcAuthCard({
   const [sig, setSig] = useState<string | null>(null)
   const [iframeUrl, setIframeUrl] = useState('')
   const [cpToken, setCpToken] = useState('')
+  // Expiry is collected HERE, not in the iframe: the tokenizer does not
+  // reliably return it, and the gateway requires it to validate the card.
+  const [expMonth, setExpMonth] = useState('')
+  const [expYear, setExpYear] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [seeded, setSeeded] = useState(false)
@@ -232,10 +236,34 @@ export function CcAuthCard({
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Card Number *</div>
             <div className={`border rounded-xl overflow-hidden transition-all ${cpToken ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`} style={{ height: 48 }}>
               {iframeUrl ? (
-                <iframe src={iframeUrl} frameBorder="0" scrolling="no" width="100%" height="48" title="Card Entry" />
+                <iframe src={iframeUrl} frameBorder="0" scrolling="no" width="100%" height="150" title="Card Entry" />
               ) : (
                 <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading secure card entry…</div>
               )}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <select
+                value={expMonth}
+                onChange={(e) => setExpMonth(e.target.value)}
+                aria-label="Expiry month"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+              >
+                <option value="">Exp. month</option>
+                {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={expYear}
+                onChange={(e) => setExpYear(e.target.value)}
+                aria-label="Expiry year"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+              >
+                <option value="">Exp. year</option>
+                {Array.from({ length: 15 }, (_, i) => 26 + i).map((y) => (
+                  <option key={y} value={String(y)}>20{y}</option>
+                ))}
+              </select>
             </div>
             {cpToken ? (
               <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
@@ -290,6 +318,9 @@ export function CcAuthCard({
                     ccChargeSummary: chargeSummary,
                     ccChargeEstimate: chargeEstimate,
                     ccToken: cpToken,
+                    // Enables the $0 validation + stored-credential
+                    // establishment server-side.
+                    ccExpiry: `${expMonth}${expYear}`,
                     ccSignatureData: sig || '',
                   }),
                 })
@@ -304,7 +335,16 @@ export function CcAuthCard({
                 setSubmitting(false)
               }
             }}
-            disabled={!cardholderFirst || !cardholderLast || !acknowledged || !sig || !cpToken || submitting}
+            disabled={
+              !cardholderFirst ||
+              !cardholderLast ||
+              !acknowledged ||
+              !sig ||
+              !cpToken ||
+              expMonth.length !== 2 ||
+              expYear.length !== 2 ||
+              submitting
+            }
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ backgroundColor: TSX.ink }}
           >
