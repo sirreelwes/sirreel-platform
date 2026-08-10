@@ -45,6 +45,14 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/stages',           // public stages/studios pages (STUDIOS nav + home tiles)
   '/standing-sets',    // public standing-sets pages (STUDIOS nav + home tiles)
   '/payment-info',     // public "request payment info" page (FORMS → Billing)
+  // Payment-details share link (/pay-details/[token]). MUST be allowed here,
+  // not only on the portal host: the payment-info request form lives on this
+  // host, and the email builds its link from the requesting origin — so a
+  // share minted from sirreel.com points at sirreel.com. Allow-listing it on
+  // the portal host alone sent every one of those recipients to the branded
+  // 404, and the API worked, which made it look like a content problem
+  // rather than a routing one.
+  '/pay-details/',
   '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
   '/stage-contract',   // public stage-contract review page (FORMS → Studio Contract)
   '/order/supplies',
