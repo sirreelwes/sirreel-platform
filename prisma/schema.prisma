@@ -5490,3 +5490,35 @@ model RwInvoicePaidMark {
 
   @@map("sr_rw_invoice_paid_marks")
 }
+
+/// A scoped, revocable link that lets a client's accounts-payable team read
+/// SirReel's banking details WITHOUT holding a portal session.
+///
+/// Producers authorize the job; a separate A/P department pays it. Before
+/// this, the producer read the details in the portal and retyped or forwarded
+/// them — putting the numbers back into email at the client's end, which is
+/// the hop invoice-redirect fraud exploits.
+///
+/// The share email carries NO account numbers, only this token's URL, so
+/// there is nothing in the message for an attacker to alter. Access is
+/// limited to the payment-details page: it is not portal access, and it does
+/// not expose agreements, invoices or the card authorization.
+model PaymentDetailsShare {
+  id             String    @id @default(uuid())
+  /// Random, not sequential — the URL is the credential.
+  token          String    @unique
+  /// The portal session that created the share, for audit.
+  portalAccessId String    @map("portal_access_id")
+  sentToEmail    String    @map("sent_to_email")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  /// First view and running count — an unviewed share is a signal the email
+  /// never landed, and a surprising view count is worth someone looking at.
+  firstViewedAt  DateTime? @map("first_viewed_at")
+  viewCount      Int       @default(0) @map("view_count")
+
+  @@index([token])
+  @@index([portalAccessId])
+  @@map("sr_payment_details_shares")
+}

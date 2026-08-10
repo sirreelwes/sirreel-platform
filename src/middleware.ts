@@ -113,6 +113,7 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/client/',          // legacy /client/[token] route (sibling to /portal/[token])
   '/client-login',     // client magic-link login page (posts to /api/client/auth)
   '/api/client/',      // legacy client API
+  '/pay-details/',     // A/P payment-details share link (/pay-details/[token])
   '/coi/',             // no-login client COI upload (/coi/[token])
   '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
   '/api/cardpointe/',  // portal pay-panel CardPointe config (client payment iframe)

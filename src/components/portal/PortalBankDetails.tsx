@@ -119,6 +119,8 @@ export function PortalBankDetails() {
         <p className="text-xs text-gray-600 whitespace-pre-line">{details.instructions}</p>
       )}
 
+      <ShareToAp />
+
       <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
         <span className="font-semibold">These details never change.</span> SirReel
         will never email you asking to send payment to a different account. If
@@ -126,6 +128,85 @@ export function PortalBankDetails() {
         from a familiar address — call us at the number on your agreement before
         sending anything.
       </div>
+    </div>
+  )
+}
+
+/**
+ * "Send to accounts payable" — the producer authorizes the job, but a
+ * separate A/P department pays it. Without this they retype or forward the
+ * numbers, which puts them back into email at the client's end.
+ *
+ * SirReel sends the link directly, so the account numbers never pass through
+ * the producer's outbox and there is a record of who was sent what.
+ */
+function ShareToAp() {
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const send = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await fetch('/api/portal/job/payment-details/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d?.ok) {
+        setMsg({ ok: true, text: `Sent to ${d.sentTo}.` })
+        setEmail('')
+      } else {
+        setMsg({ ok: false, text: d?.error || 'Could not send that email.' })
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Could not send that email.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs font-semibold text-gray-900 underline"
+      >
+        Send these details to your accounts payable team →
+      </button>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+      <p className="text-xs text-gray-600">
+        We&rsquo;ll email them a secure link to this page. The message
+        won&rsquo;t contain your account numbers.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="ap@productioncompany.com"
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={busy || !email.trim()}
+          className="px-3 py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold disabled:opacity-40"
+        >
+          {busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+      {msg && (
+        <p className={`text-xs ${msg.ok ? 'text-emerald-600' : 'text-red-600'}`}>{msg.text}</p>
+      )}
     </div>
   )
 }
