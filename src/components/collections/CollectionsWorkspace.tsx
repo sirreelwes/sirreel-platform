@@ -78,6 +78,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [savedId, setSavedId] = useState('')
   const [iframeUrl, setIframeUrl] = useState<string | null>(null)
   const [cardToken, setCardToken] = useState<string | null>(null)
+  // Bumped after a successful charge to REMOUNT the tokenizer iframe.
+  // Clearing cardToken alone left the old card still displayed inside the
+  // iframe with no token behind it — the operator saw a filled-in card and
+  // a dead Charge button, with no way to re-tokenize but retyping it.
+  const [cardFormKey, setCardFormKey] = useState(0)
   // Our own expiry, kept out of the iframe — see the config route.
   const [expMonth, setExpMonth] = useState('')
   const [expYear, setExpYear] = useState('')
@@ -221,6 +226,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         setCardToken(null)
         setExpMonth('')
         setExpYear('')
+        setCardFormKey((k) => k + 1)
         setAmount('')
         setFinalPick(null)
         loadInvoices(q)
@@ -502,6 +508,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       // Attributes match the portal's pay panel, which is the
                       // proven configuration for this tokenizer.
                       <iframe
+                        key={cardFormKey}
                         title="Card entry"
                         src={iframeUrl}
                         frameBorder="0"
