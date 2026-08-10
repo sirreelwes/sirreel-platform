@@ -311,6 +311,9 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     if (slug) setFeaturedSlug(slug)
   }, [])
 
+  // True only when ?vehicle= names a vehicle we actually have.
+  const featuredMatch = !!featuredSlug && !!vehicles?.some((v) => v.slug === featuredSlug)
+
   // The requested vehicle moves to the FRONT of the rail. Everything else
   // keeps its configured order.
   const orderedVehicles = useMemo(() => {
@@ -337,8 +340,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
   // the expected outcome, not a scenic route.
   const scrolledRef = useRef(false)
   useEffect(() => {
-    if (scrolledRef.current || !featuredSlug || !vehicles) return
-    if (!vehicles.some((v) => v.slug === featuredSlug)) return
+    if (scrolledRef.current || !featuredMatch) return
     scrolledRef.current = true
 
     let attempts = 0
@@ -359,7 +361,7 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
     return () => {
       if (timer) clearTimeout(timer)
     }
-  }, [featuredSlug, vehicles])
+  }, [featuredMatch])
   useEffect(() => {
     let cancelled = false
     fetch('/api/public/vehicle-categories', { cache: 'no-store' })
@@ -1019,7 +1021,20 @@ export function SupplyOrderApp({ submitEndpoint, signInHref = '/portal/auth/sign
                   stay focused. Vehicles are price-on-quote by default
                   (dailyRate null) — the tile labels them as such. */}
               {!debouncedQuery && vehicles && vehicles.length > 0 && (
-                <section ref={vehicleSectionRef} className={`order-2 mt-2 scroll-mt-[200px] ${focusHideMobile}`}>
+                <section
+                  ref={vehicleSectionRef}
+                  // order-2 keeps Reserve Vehicles BELOW Production Supplies —
+                  // the 2026-07 ruling recorded above, unchanged for ordinary
+                  // visits.
+                  //
+                  // The ONE exception: the client arrived from a specific
+                  // vehicle's page and pressed "Reserve this vehicle". They
+                  // have already said what they came for, and burying it under
+                  // the whole supplies catalog meant a ~9,000px scroll to reach
+                  // it. Hoisting the rail here is scoped to that stated intent
+                  // and does not change the default surface.
+                  className={`${featuredMatch ? 'order-0' : 'order-2'} mt-2 scroll-mt-[200px] ${focusHideMobile}`}
+                >
                   <div className="flex items-baseline gap-3.5 mb-3.5">
                     <h2 className="font-extrabold tracking-tight text-[23px] text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
                       Reserve Vehicles
