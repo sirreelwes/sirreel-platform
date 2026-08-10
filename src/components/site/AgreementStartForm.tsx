@@ -46,7 +46,6 @@ export function AgreementStartForm({
   const [showList, setShowList] = useState(false)
   // Set once the typed name matches a known client — that's when the
   // attestation applies, because the job will attach to their record.
-  const [matchedExisting, setMatchedExisting] = useState(false)
   const [authorized, setAuthorized] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
   // Enough of a name to attest against.
@@ -58,7 +57,6 @@ export function AgreementStartForm({
     const q = companyName.trim()
     if (q.length < 3) {
       setSuggestions([])
-      setMatchedExisting(false)
       return
     }
     let cancelled = false
@@ -71,9 +69,6 @@ export function AgreementStartForm({
         if (cancelled) return
         const list = d.companies ?? []
         setSuggestions(list)
-        // Only ever PROMOTE to matched here. An empty or slow response used to
-        // clear a match the user had explicitly selected from the list.
-        if (list.some((c) => c.toLowerCase() === q.toLowerCase())) setMatchedExisting(true)
       } catch {
         if (!cancelled) setSuggestions([])
       }
@@ -113,7 +108,18 @@ export function AgreementStartForm({
           lastName,
           startDate: startDate || null,
           endDate: endDate || null,
-          authorizedRepresentative: matchedExisting ? authorized : null,
+          // Send what the user actually ticked whenever the attestation was
+          // shown. This was `matchedExisting ? authorized : null`, which made
+          // the client re-derive whether the company is an existing client —
+          // by exact case-insensitive string match against the typeahead
+          // results. The server decides the same question with
+          // companyNameKey(), which normalizes punctuation and entity
+          // suffixes. So "Critical Role Productions LLC" typed by hand could
+          // match server-side while the client still believed it hadn't,
+          // sending null and getting rejected with the box visibly checked
+          // and no way to proceed. The client is not the authority on
+          // matching; it only reports the attestation.
+          authorizedRepresentative: showAttestation ? authorized : null,
           website,
         }),
       })
@@ -192,7 +198,6 @@ export function AgreementStartForm({
                   type="button"
                   onClick={() => {
                     setCompanyName(c)
-                    setMatchedExisting(true)
                     setShowList(false)
                   }}
                   className="w-full text-left px-3 py-2 text-[13.5px] text-[#1a1a1a] bg-transparent border-0 cursor-pointer hover:bg-[#f5f3ee]"

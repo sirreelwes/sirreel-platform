@@ -48,7 +48,16 @@ export function RentalAgreementCard({
   onAgreementStateChange: (next: V2AgreementState) => void
 }) {
   const [step, setStep] = useState<'intro' | 'read' | 'ack' | 'sign'>('intro')
-  const [acknowledged, setAcknowledged] = useState(false)
+  // Two SEPARATE attestations. They were previously collapsed into one
+  // "I confirm the acknowledgment above" checkbox covering both agreeing to
+  // the terms and warranting authority to bind the company. Those are
+  // distinct representations — the second is what makes the signature
+  // enforceable against the company rather than the individual — and a
+  // single bundled tick is materially weaker evidence that the signer was
+  // ever asked the authority question at all.
+  const [agreedTerms, setAgreedTerms] = useState(false)
+  const [authorityConfirmed, setAuthorityConfirmed] = useState(false)
+  const acknowledged = agreedTerms && authorityConfirmed
   const [signerName, setSignerName] = useState('')
   const [signerTitle, setSignerTitle] = useState('')
   const [signerEmail, setSignerEmail] = useState('')
@@ -67,7 +76,8 @@ export function RentalAgreementCard({
 
   const beginSigning = () => {
     setError('')
-    setAcknowledged(false)
+    setAgreedTerms(false)
+    setAuthorityConfirmed(false)
     setSig(null)
     setSignerName(intake.fullName)
     setSignerTitle(intake.title)
@@ -80,9 +90,15 @@ export function RentalAgreementCard({
       ? `/api/portal/${token}/agreement/pdf`
       : `/api/portal/${token}/contract/download?format=pdf`
 
-  const ackText =
-    `I have read, understood, and agree to the terms and conditions of this Equipment and Vehicle Rental Agreement. ` +
-    `I have authority to bind ${companyName} to this Agreement.`
+  const ackTerms =
+    'I have read, understood, and agree to the terms and conditions of this ' +
+    'Equipment and Vehicle Rental Agreement.'
+  const ackAuthority =
+    `I am authorized to sign this Agreement on behalf of ${companyName}, and ` +
+    `I have authority to bind ${companyName} to its terms.`
+  // Stored verbatim in the audit record, so it must state BOTH attestations
+  // the signer actually ticked.
+  const ackText = `${ackTerms} ${ackAuthority}`
 
   const submitNative = async () => {
     setError('')
@@ -318,7 +334,7 @@ export function RentalAgreementCard({
       ) : step === 'ack' ? (
         <div className="space-y-3">
           <p className="text-xs text-gray-500">Step 2 of 3 · Confirm who&rsquo;s signing.</p>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 leading-relaxed">{ackText}</div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Full Name *</label>
@@ -346,15 +362,26 @@ export function RentalAgreementCard({
               />
             </div>
           </div>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-gray-900"
-            />
-            <span className="text-sm text-gray-700 font-medium">I confirm the acknowledgment above.</span>
-          </label>
+          <div className="space-y-2.5 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedTerms}
+                onChange={(e) => setAgreedTerms(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-gray-900 shrink-0"
+              />
+              <span className="text-xs text-gray-700 leading-relaxed">{ackTerms}</span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={authorityConfirmed}
+                onChange={(e) => setAuthorityConfirmed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-gray-900 shrink-0"
+              />
+              <span className="text-xs text-gray-700 leading-relaxed">{ackAuthority}</span>
+            </label>
+          </div>
           <div className="flex justify-between">
             <button onClick={() => setStep('read')} className="text-xs text-gray-500 hover:text-gray-900">
               ← Back
