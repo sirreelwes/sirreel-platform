@@ -6,9 +6,12 @@
  *  - The user-visible response is IDENTICAL for known and unknown
  *    addresses — same status, same body, no redirects. Enumeration of
  *    the CRM through this endpoint must be impossible.
- *  - Details are delivered by EMAIL ONLY, to the RESOLVED on-file
- *    address (resolvePersonByEmail — merge-safe, alias-aware), never
- *    to the submitted string.
+ *  - A LINK is emailed to the RESOLVED on-file address
+ *    (resolvePersonByEmail — merge-safe, alias-aware), never to the
+ *    submitted string. The message contains NO account numbers and NO
+ *    attachments: the details sit behind a scoped, revocable token, so
+ *    there is nothing in the mail for an attacker to rewrite and nothing
+ *    to harvest if it is forwarded on.
  *  - KNOWN = person resolves AND sits on ≥1 Job with status QUOTED /
  *    ACTIVE / WRAPPED. NEW-status jobs and unattached CRM people do
  *    NOT qualify (the CRM is full of stale RentalWorks imports).
@@ -26,8 +29,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
-import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
-import { fetchPaymentAttachments } from '@/lib/email/paymentInfoAttachments'
+import { buildPaymentLinkEmail } from '@/lib/email/templates/paymentInfo'
+import { createPaymentShare } from '@/lib/payments/paymentShare'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
@@ -210,25 +213,30 @@ export async function POST(req: NextRequest) {
     if (qualifies && person && details) {
       // KNOWN — send to the RESOLVED on-file address, never the
       // submitted string (they can differ via aliases/merges).
-      const email = buildPaymentInfoEmail({
-        firstName: person.firstName,
-        details,
+      // The email carries a LINK, not the numbers, and no PDF attachments.
+      //
+      // It used to inline the full record and attach the ACH form and bank
+      // letter. That is the shape invoice-redirect fraud needs: a message
+      // containing banking details, forwarded onward through mailboxes
+      // SirReel cannot see, that the eventual reader has no way to
+      // authenticate. The details and the documents now live behind a
+      // scoped, revocable token on sirreel.com.
+      //
+      // The recipient is unchanged: the RESOLVED on-file address, never the
+      // submitted string.
+      const share = await createPaymentShare({
+        sentToEmail: person.email,
+        createdVia: 'PUBLIC_REQUEST',
+        personId: person.id,
       })
-      // Private-Blob PDF attachments — a fetch failure NEVER blocks the
-      // email; dropped slots are recorded in the audit row below (the
-      // auto-sent path no longer notifies billing@ — Wes ruled B).
-      const { attachments, dropped } = await fetchPaymentAttachments({
-        achFormKey: settings?.paymentAchFormKey ?? null,
-        achFormFilename: settings?.paymentAchFormFilename ?? null,
-        bankInfoKey: settings?.paymentBankInfoKey ?? null,
-        bankInfoFilename: settings?.paymentBankInfoFilename ?? null,
-      })
+      const link = `${new URL(req.url).origin}/pay-details/${share.token}`
+      const email = buildPaymentLinkEmail({ firstName: person.firstName, link })
+      const dropped: string[] = []
       const sent = await sendAgreementEmail({
         to: [person.email],
         subject: email.subject,
         html: email.html,
         text: email.text,
-        attachments: attachments.length > 0 ? attachments : undefined,
         label: 'payment-info',
       })
       await prisma.auditLog.create({
@@ -243,7 +251,11 @@ export async function POST(req: NextRequest) {
           newValues: {
             sentTo: person.email,
             sendOk: sent.ok,
-            attachmentsSent: attachments.length,
+            // No attachments any more — the documents are served behind the
+            // share token. Recording the token would put a working
+            // credential in the audit log, so only its expiry is kept.
+            deliveredVia: 'share-link',
+            shareExpiresAt: share.expiresAt.toISOString(),
             attachmentsDropped: dropped.length,
             at: new Date().toISOString(),
           },

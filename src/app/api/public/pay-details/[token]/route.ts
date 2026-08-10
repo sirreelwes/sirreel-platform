@@ -43,6 +43,10 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       paymentRemittanceEmail: true,
       paymentBankAddress: true,
       paymentInstructions: true,
+      paymentAchFormKey: true,
+      paymentAchFormFilename: true,
+      paymentBankInfoKey: true,
+      paymentBankInfoFilename: true,
     },
   })
   if (!s?.paymentPayeeName || !s?.paymentAccountNumber || !s?.paymentRoutingAch) {
@@ -73,5 +77,15 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       bankAddress: s.paymentBankAddress ?? null,
       instructions: s.paymentInstructions ?? null,
     },
+    // Presence + display name only. The blob keys never leave the server;
+    // the files are fetched through the doc route, behind this same token.
+    documents: [
+      s.paymentAchFormKey
+        ? { slot: 'ach-form', label: s.paymentAchFormFilename || 'ACH authorization form' }
+        : null,
+      s.paymentBankInfoKey
+        ? { slot: 'bank-info', label: s.paymentBankInfoFilename || 'Bank information letter' }
+        : null,
+    ].filter(Boolean),
   })
 }

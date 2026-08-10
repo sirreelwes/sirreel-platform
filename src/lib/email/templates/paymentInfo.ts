@@ -15,6 +15,7 @@
  */
 
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
+import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
 const GOLD = '#D4A547'
 const SLATE = '#0f172a'
@@ -128,6 +129,58 @@ export function buildPaymentInfoEmail(input: {
     </div>
   </div>
 </body></html>`
+
+  return { subject, html, text }
+}
+
+/**
+ * Link-only variant — what the public payment-info flow now sends.
+ *
+ * buildPaymentInfoEmail (above) inlines the full record and is kept for
+ * reference and any operator-driven path that still needs it. It should not
+ * be used for automated sends: a message carrying account numbers can be
+ * forwarded through mailboxes SirReel cannot see, and the eventual reader
+ * has no way to tell an altered copy from a real one. That is precisely the
+ * gap invoice-redirect fraud exploits.
+ */
+export function buildPaymentLinkEmail(input: {
+  firstName: string | null
+  link: string
+}): { subject: string; html: string; text: string } {
+  const first = input.firstName?.trim() || 'there'
+  const subject = 'SirReel — payment information'
+
+  const text = [
+    `Hi ${first},`,
+    '',
+    'As requested, our payment details are here:',
+    input.link,
+    '',
+    'The page includes our ACH and wire information and any forms your',
+    'accounts-payable team needs. You can share the link with them directly.',
+    '',
+    `IMPORTANT: ${SHARE_FRAUD_WARNING}`,
+    '',
+    'Questions: billing@sirreel.com',
+    '',
+    'SirReel Studio Services',
+  ].join('\n')
+
+  const html = `
+    <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:520px;color:#1a1a1a">
+      <p>Hi ${escapeHtml(first)},</p>
+      <p>As requested, our payment details are here:</p>
+      <p style="margin:22px 0">
+        <a href="${input.link}" style="background:#1a1a1a;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View payment details</a>
+      </p>
+      <p style="font-size:14px">The page includes our ACH and wire information and any
+      forms your accounts-payable team needs. You can share the link with them directly.</p>
+      <p style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:11px 13px;font-size:13px;color:#78350f">
+        <strong>${escapeHtml(SHARE_FRAUD_WARNING)}</strong>
+      </p>
+      <p style="font-size:13px;color:#555">Questions: billing@sirreel.com</p>
+      <p style="font-size:13px;color:#555">SirReel Studio Services</p>
+    </div>`
 
   return { subject, html, text }
 }

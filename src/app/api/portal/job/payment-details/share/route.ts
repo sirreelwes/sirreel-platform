@@ -18,7 +18,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import {
   JOB_SESSION_COOKIE,
@@ -27,12 +26,14 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import {
+  createPaymentShare,
+  paymentDetailsConfigured,
+  SHARE_FRAUD_WARNING,
+} from '@/lib/payments/paymentShare'
 
 export const dynamic = 'force-dynamic'
 
-/** Long enough that guessing is hopeless — the URL is the credential. */
-const TOKEN_BYTES = 24
-const TTL_DAYS = 90
 /** Shares one session may create in a rolling day. */
 const MAX_PER_SESSION_PER_DAY = 10
 
@@ -69,11 +70,7 @@ export async function POST(req: NextRequest) {
   // Confirm details EXIST before promising an A/P department a working link.
   // Sending someone to an empty page invites them to go hunting for the
   // numbers in an old email, which is the habit this is meant to break.
-  const s = await prisma.siteSetting.findUnique({
-    where: { id: 'singleton' },
-    select: { paymentPayeeName: true, paymentAccountNumber: true, paymentRoutingAch: true },
-  })
-  if (!s?.paymentPayeeName || !s?.paymentAccountNumber || !s?.paymentRoutingAch) {
+  if (!(await paymentDetailsConfigured())) {
     console.error('[payment-share] details not configured — nothing sent')
     return NextResponse.json(
       { error: 'Payment details are not available yet. Contact billing@sirreel.com.' },
@@ -81,10 +78,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const token = randomBytes(TOKEN_BYTES).toString('hex')
-  const expiresAt = new Date(Date.now() + TTL_DAYS * 86_400_000)
-  await prisma.paymentDetailsShare.create({
-    data: { token, portalAccessId: session.portalAccessId, sentToEmail: to, expiresAt },
+  const { token } = await createPaymentShare({
+    sentToEmail: to,
+    createdVia: 'PORTAL',
+    portalAccessId: session.portalAccessId,
   })
 
   // Built from the host the client is actually on, not a configured origin:
@@ -102,9 +99,7 @@ export async function POST(req: NextRequest) {
     'You can view them here:',
     link,
     '',
-    'We do not send banking details by email, and our details never change.',
-    'If you receive a message claiming our bank account has changed — even from',
-    'a familiar address — call us before sending payment.',
+    SHARE_FRAUD_WARNING,
     '',
     'Questions: billing@sirreel.com',
     '',
@@ -120,9 +115,7 @@ export async function POST(req: NextRequest) {
         <a href="${link}" style="background:#1a1a1a;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View payment details</a>
       </p>
       <p style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:11px 13px;font-size:13px;color:#78350f">
-        <strong>We do not send banking details by email, and our details never change.</strong>
-        If you receive a message claiming our bank account has changed &mdash; even from a
-        familiar address &mdash; call us before sending payment.
+        <strong>${escapeHtml(SHARE_FRAUD_WARNING)}</strong>
       </p>
       <p style="font-size:13px;color:#555">Questions: billing@sirreel.com</p>
       <p style="font-size:13px;color:#555">SirReel Studio Services</p>

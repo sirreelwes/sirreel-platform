@@ -5507,8 +5507,15 @@ model PaymentDetailsShare {
   id             String    @id @default(uuid())
   /// Random, not sequential — the URL is the credential.
   token          String    @unique
-  /// The portal session that created the share, for audit.
-  portalAccessId String    @map("portal_access_id")
+  /// The portal session that created the share, when one did. Null for a
+  /// share minted by the public payment-info request flow, where the
+  /// requester has no portal session.
+  portalAccessId String?   @map("portal_access_id")
+  /// PORTAL — a producer sent it from the job portal.
+  /// PUBLIC_REQUEST — someone asked via the payment-info form.
+  createdVia     String    @default("PORTAL") @map("created_via")
+  /// Resolved CRM person for a PUBLIC_REQUEST share, for audit.
+  personId       String?   @map("person_id")
   sentToEmail    String    @map("sent_to_email")
   createdAt      DateTime  @default(now()) @map("created_at")
   expiresAt      DateTime  @map("expires_at")

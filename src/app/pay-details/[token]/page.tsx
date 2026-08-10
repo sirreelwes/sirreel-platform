@@ -60,8 +60,14 @@ function Row({ label, value }: { label: string; value: string | null }) {
   )
 }
 
+interface Doc {
+  slot: string
+  label: string
+}
+
 export default function PayDetailsPage({ params }: { params: { token: string } }) {
   const [details, setDetails] = useState<Details | null>(null)
+  const [docs, setDocs] = useState<Doc[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'gone'>('loading')
 
   useEffect(() => {
@@ -70,6 +76,7 @@ export default function PayDetailsPage({ params }: { params: { token: string } }
       .then((d) => {
         if (d?.ok && d.details) {
           setDetails(d.details)
+          setDocs(Array.isArray(d.documents) ? d.documents : [])
           setState('ready')
         } else setState('gone')
       })
@@ -125,6 +132,30 @@ export default function PayDetailsPage({ params }: { params: { token: string } }
               <p className="text-sm text-gray-600 mt-4 whitespace-pre-line">
                 {details.instructions}
               </p>
+            )}
+
+            {docs.length > 0 && (
+              <div className="mt-4">
+                <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-1.5">
+                  Documents
+                </div>
+                {/* A/P departments keep a signed bank letter in the vendor
+                    file; these used to be email attachments. */}
+                <ul className="space-y-1">
+                  {docs.map((doc) => (
+                    <li key={doc.slot}>
+                      <a
+                        href={`/api/public/pay-details/${encodeURIComponent(params.token)}/doc/${doc.slot}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-gray-900 underline"
+                      >
+                        {doc.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
