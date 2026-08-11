@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { resolveDefaultSalesAgent } from '@/lib/sales/defaultAgent'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { notifyPublicSubmission } from '@/lib/email/notifyPublicSubmission'
@@ -578,9 +579,11 @@ export async function startNewSubmit(
       .catch(() => {})
 
   try {
-    // Default agent for self-serve entries: first active ADMIN (house book).
-    const agent = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } })
-    if (!agent) throw new Error('no active ADMIN user for self-serve assignment')
+    // Who the client will see as "Your SirReel rep" in the portal. See
+    // lib/sales/defaultAgent — this was "oldest active ADMIN", which routed
+    // every self-serve job to whoever held the oldest admin account and
+    // could never pick a salesperson at all.
+    const agent = await resolveDefaultSalesAgent()
 
     // Job-as-root: startWelcomeInvite REFUSES an invite with no resolved
     // Job, so this path has been dead since that refactor (Jul 2026) —

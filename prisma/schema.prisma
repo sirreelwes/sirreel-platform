@@ -5142,6 +5142,14 @@ model PlanyoSyncEvent {
 /// as a raw blob src.
 model SiteSetting {
   id                 String  @id @default("singleton")
+  /// The rep a self-serve job is assigned to when no agent is involved —
+  /// shown to the client in the portal as "Your SirReel rep".
+  ///
+  /// Previously this was "first active ADMIN, oldest first", which is not a
+  /// business rule: it silently routed every self-serve job to whoever
+  /// happened to hold the oldest admin account, and could never pick a
+  /// salesperson at all because AGENT role rows were excluded.
+  defaultSalesAgentId String? @map("default_sales_agent_id")
   /// Required poster / static-background JPG for the Home hero, and the
   /// <video poster> shown before/if the video plays (private blob URL).
   heroPosterUrl      String? @map("hero_poster_url")

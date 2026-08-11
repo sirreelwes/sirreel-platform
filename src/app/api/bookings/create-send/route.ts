@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveDefaultSalesAgent } from '@/lib/sales/defaultAgent';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { portalTokenUrl, clientTokenUrl } from '@/lib/portal/portalUrl';
@@ -82,10 +83,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get agent - use provided or fall back to first admin
+    // Get agent - use provided or fall back to the configured default rep
     let aId = agentId;
     if (!aId) {
-      const agent = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      // Same routing question as the self-serve path — and the same bug:
+      // this took ANY admin, with no ordering at all, so the assignment
+      // depended on whatever the database returned first.
+      const agent = await resolveDefaultSalesAgent();
       if (agent) aId = agent.id;
     }
     if (!aId) return NextResponse.json({ error: 'No agent found' }, { status: 400 });
