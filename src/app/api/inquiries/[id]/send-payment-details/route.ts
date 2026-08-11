@@ -125,7 +125,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     personName,
     paymentConfigured: !!record,
     status: ctx.inquiry.status,
-    preview: preview ? { subject: preview.subject, text: preview.text } : null,
+    // BOTH bodies. The HTML is what the client sees — branded header, gold
+    // rule, details card, warning panel. Previewing only the plain-text
+    // alternative made a polished email look like a bare dump.
+    preview: preview ? { subject: preview.subject, text: preview.text, html: preview.html } : null,
     attachments: [
       s?.paymentAchFormKey ? s.paymentAchFormFilename || 'ACH form' : null,
       s?.paymentBankInfoKey ? s.paymentBankInfoFilename || 'Bank information' : null,

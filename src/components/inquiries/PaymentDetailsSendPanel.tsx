@@ -22,7 +22,7 @@ interface Eligibility {
   status: string
   /** The exact email the send will produce — the agent approves what will
    *  actually go out, not a description of it. */
-  preview?: { subject: string; text: string } | null
+  preview?: { subject: string; text: string; html?: string } | null
   attachments?: string[]
 }
 interface Hit {
@@ -195,9 +195,36 @@ export function PaymentDetailsSendPanel({
               <div className="text-[11px] uppercase tracking-wider text-zinc-500">Subject</div>
               <div className="text-[12px] text-zinc-200 mb-2">{elig.preview.subject}</div>
               <div className="text-[11px] uppercase tracking-wider text-zinc-500">Body</div>
-              <pre className="text-[11px] text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-auto">
-                {elig.preview.text}
-              </pre>
+              {/* Rendered HTML, because that is what the client opens. The
+                  plain-text alternative below is what a text-only mail client
+                  falls back to — worth being able to check, but it is not the
+                  email most people will see.
+
+                  sandbox="" with no allow-* tokens: this is our own generated
+                  markup, but a preview pane is not a place to grant scripts
+                  or navigation. */}
+              {elig.preview.html ? (
+                <iframe
+                  title="Email preview"
+                  srcDoc={elig.preview.html}
+                  sandbox=""
+                  className="w-full h-96 rounded-lg bg-white border border-zinc-700"
+                />
+              ) : (
+                <pre className="text-[11px] text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-auto">
+                  {elig.preview.text}
+                </pre>
+              )}
+              {elig.preview.html && (
+                <details className="mt-2">
+                  <summary className="text-[11px] text-zinc-500 cursor-pointer">
+                    Plain-text version
+                  </summary>
+                  <pre className="mt-1 text-[11px] text-zinc-400 whitespace-pre-wrap font-mono leading-relaxed max-h-56 overflow-auto">
+                    {elig.preview.text}
+                  </pre>
+                </details>
+              )}
               {(elig.attachments?.length ?? 0) > 0 && (
                 <>
                   <div className="text-[11px] uppercase tracking-wider text-zinc-500 mt-2">
