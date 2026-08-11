@@ -108,6 +108,12 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   // and waives the fee where state law prohibits surcharging, so a keyed card
   // must carry one. A card on file already has it from the authorization.
   const [cardPostal, setCardPostal] = useState('')
+  // Operator-supplied. The brand cannot be recovered after the fact: the
+  // CardSecure token carries the last four but not the BIN, and the gateway's
+  // auth response has no brand field. Without this, keyed charges recorded a
+  // null card type — leaving a disputed payment with nothing identifying the
+  // card beyond its last four.
+  const [cardBrand, setCardBrand] = useState('')
 
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
@@ -212,10 +218,18 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const cardExpiry = expMonth && expYear ? `${expMonth}${expYear}` : ''
   // A keyed card needs a billing ZIP: once surcharging is enabled the gateway
   // requires one on every card-not-present auth to judge eligibility.
+  // Brand is REQUIRED on a keyed charge, not optional. An optional field here
+  // gets skipped on a busy call, which is how keyed charges ended up with no
+  // card type at all — and the one moment it matters is a dispute, months
+  // later, when nobody remembers. It is a single tap while the operator is
+  // already holding the card.
   const cardReady =
     source === 'saved'
       ? !!savedId
-      : !!cardToken && cardExpiry.length === 4 && cardPostal.trim().length >= 5
+      : !!cardToken &&
+        cardExpiry.length === 4 &&
+        cardPostal.trim().length >= 5 &&
+        !!cardBrand
   const canCharge = !!invoice && validAmount && cardReady && !busy
 
   const selectedAuth = auths.find((a) => a.id === savedId) ?? null
@@ -257,6 +271,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
           expiry: source === 'new' ? cardExpiry : undefined,
           cardholderName: cardholderName || undefined,
           postal: source === 'new' ? cardPostal || undefined : undefined,
+          cardType: source === 'new' ? cardBrand || undefined : undefined,
           pdfUrl: pdf?.pdfUrl,
           pdfKey: pdf?.pdfKey,
           note: note || undefined,
@@ -275,6 +290,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         // applies the wrong state's rules to a different person's card.
         setCardholderName('')
         setCardPostal('')
+        setCardBrand('')
         setCardFormKey((k) => k + 1)
         setAmount('')
         setFinalPick(null)
@@ -706,6 +722,22 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         Choose the expiry month and year to continue.
                       </p>
                     )}
+                    <div className="mt-2 flex gap-1.5">
+                      {(['VISA', 'MASTERCARD', 'AMEX', 'DISCOVER'] as const).map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setCardBrand(cardBrand === b ? '' : b)}
+                          className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                            cardBrand === b
+                              ? 'bg-amber-600 text-zinc-900'
+                              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {b === 'MASTERCARD' ? 'MC' : b === 'DISCOVER' ? 'DISC' : b}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       className={`${input} mt-2`}
                       placeholder="Cardholder name"

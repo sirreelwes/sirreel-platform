@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     pdfKey?: unknown
     note?: unknown
     postal?: unknown
+    cardType?: unknown
   } | null
   if (!body) return NextResponse.json({ ok: false, error: 'body required' }, { status: 400 })
 
@@ -173,9 +174,24 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Keyed charges carried neither card type nor last-4, so a disputed payment
-  // had nothing identifying it. Recover both from the token; a saved
-  // authorization already has them stored, so don't overwrite those.
+  // Card brand for a KEYED charge comes from the operator, because it cannot
+  // be recovered afterwards: a CardSecure token carries the last four but not
+  // the BIN, and the gateway's auth response has no brand field either
+  // (bintype comes back empty, and the BIN lookup returns nothing for a
+  // token). The operator is holding the card details on the call, so asking
+  // is the only reliable source — the same thing the portal does by having
+  // the client pick their card type.
+  //
+  // A saved authorization already stored its brand; never overwrite that.
+  const KNOWN_BRANDS = ['VISA', 'MASTERCARD', 'AMEX', 'DISCOVER']
+  if (!cardType && typeof body.cardType === 'string') {
+    const claimed = body.cardType.trim().toUpperCase()
+    if (KNOWN_BRANDS.includes(claimed)) cardType = claimed
+  }
+
+  // Last-4 IS in the token, so it still comes from there. Brand falls back to
+  // the token's best effort, which is usually null — an absent brand is
+  // honest, a guessed one would be wrong in a dispute.
   if (!cardLast4 || !cardType) {
     const d = cardDisplayFromToken(cardToken)
     cardLast4 = cardLast4 ?? d.last4
