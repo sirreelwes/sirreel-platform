@@ -19,6 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { resolvePersonByEmail } from '@/lib/people/email'
@@ -91,6 +92,32 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     personName = q.person ? `${q.person.firstName ?? ''} ${q.person.lastName ?? ''}`.trim() || null : null
   }
 
+  // The EXACT email body the send will produce, so the agent approves what
+  // actually goes out rather than a description of it. Rendered from the same
+  // template with the same record — if this and the send ever disagree, the
+  // preview is worthless, so they share one builder.
+  //
+  // The verification link is illustrative: the real one is minted at send
+  // time, and putting a live token in a preview would leak a working
+  // credential to anyone who can read this response.
+  const preview = record
+    ? buildPaymentInfoEmail({
+        firstName: personName ? personName.split(' ')[0] : null,
+        details: record,
+        verifyLink: 'https://sirreel.com/pay-details/<generated when sent>',
+      })
+    : null
+
+  const s = await prisma.siteSetting.findUnique({
+    where: { id: 'singleton' },
+    select: {
+      paymentAchFormKey: true,
+      paymentAchFormFilename: true,
+      paymentBankInfoKey: true,
+      paymentBankInfoFilename: true,
+    },
+  })
+
   return NextResponse.json({
     ok: true,
     submittedEmail: submitted,
@@ -98,6 +125,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     personName,
     paymentConfigured: !!record,
     status: ctx.inquiry.status,
+    preview: preview ? { subject: preview.subject, text: preview.text } : null,
+    attachments: [
+      s?.paymentAchFormKey ? s.paymentAchFormFilename || 'ACH form' : null,
+      s?.paymentBankInfoKey ? s.paymentBankInfoFilename || 'Bank information' : null,
+    ].filter(Boolean),
   })
 }
 

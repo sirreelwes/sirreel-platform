@@ -20,6 +20,10 @@ interface Eligibility {
   personName: string | null
   paymentConfigured: boolean
   status: string
+  /** The exact email the send will produce — the agent approves what will
+   *  actually go out, not a description of it. */
+  preview?: { subject: string; text: string } | null
+  attachments?: string[]
 }
 interface Hit {
   id: string
@@ -74,6 +78,7 @@ export function PaymentDetailsSendPanel({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const co = useTypeahead('company')
   const jb = useTypeahead('job')
@@ -172,6 +177,43 @@ export function PaymentDetailsSendPanel({
       </div>
 
       {error && <div className="text-[11px] text-rose-300">{error}</div>}
+
+      {/* The agent should know what reached the client before it does. This
+          is rendered from the SAME builder the send uses, so it cannot drift
+          into describing an email we do not actually send. */}
+      {elig?.preview && (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="text-[12px] font-semibold text-zinc-300 underline"
+          >
+            {showPreview ? 'Hide' : 'Review'} the email that will be sent
+          </button>
+          {showPreview && (
+            <div className="mt-2 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-500">Subject</div>
+              <div className="text-[12px] text-zinc-200 mb-2">{elig.preview.subject}</div>
+              <div className="text-[11px] uppercase tracking-wider text-zinc-500">Body</div>
+              <pre className="text-[11px] text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-auto">
+                {elig.preview.text}
+              </pre>
+              {(elig.attachments?.length ?? 0) > 0 && (
+                <>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mt-2">
+                    Attachments
+                  </div>
+                  <ul className="text-[11px] text-zinc-300">
+                    {elig.attachments!.map((a) => (
+                      <li key={a}>· {a}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         onClick={() => void send()}

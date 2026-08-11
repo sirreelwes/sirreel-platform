@@ -29,7 +29,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
-import { sendPaymentDetailsEmail } from '@/lib/payments/sendPaymentDetails'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
@@ -43,7 +42,7 @@ const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
 const UNIFORM_RESPONSE = {
   ok: true,
   message:
-    "If that address is on file, we've just emailed your payment info. If not, a SirReel agent will reach out.",
+    'Thanks — a SirReel agent will send your payment information shortly.',
 }
 
 const RATE: { windowMs: number; max: number } = { windowMs: 60 * 60 * 1000, max: 3 }
@@ -86,7 +85,7 @@ async function notifyBilling(subject: string, lines: string[]): Promise<void> {
  * details. Failure never blocks the response or the Inquiry write.
  */
 async function emitPaymentInfoAlert(input: {
-  kind: 'sent' | 'unmatched'
+  kind: 'sent' | 'unmatched' | 'awaiting-approval'
   title: string
   body: string
   link: string | null
@@ -209,65 +208,53 @@ export async function POST(req: NextRequest) {
     }
     const details = isPaymentConfigured(paymentRecord) ? paymentRecord : null
 
+    // NOTHING AUTO-SENDS. Every request is queued for an agent to review and
+    // send from the inquiry page.
+    //
+    // Wes, 2026-08-11: an agent should know what reached a client before it
+    // reaches them. The email carries SirReel's banking details, and the
+    // person best placed to notice "that requester is not who they say they
+    // are" is the one who knows the account.
+    //
+    // Side benefit: known and unknown addresses now behave IDENTICALLY —
+    // same response, same queue, same timing. Previously one sent an email
+    // and the other did not, which is an enumeration signal the uniform
+    // response text could not hide.
     if (qualifies && person && details) {
-      // KNOWN — send to the RESOLVED on-file address, never the submitted
-      // string (they can differ via aliases/merges).
-      //
-      // The details and the PDFs go IN the email. A client who asked how to
-      // pay us should not have to click anything to find out, and their A/P
-      // department keeps the bank letter in a vendor file. Briefly this sent
-      // a link instead; that traded the client's convenience for a fraud
-      // control the verification link now provides without costing them
-      // anything.
-      //
-      // Shares the operator send's code path so the two cannot drift — the
-      // same details, the same attachments, the same verification anchor.
-      const sent = await sendPaymentDetailsEmail({
-        to: person.email,
-        firstName: person.firstName,
+      const personName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || 'name unknown'
+      const j = qualifyingJobs[0]
+      const clientLabel = j.company?.name || personName
+      const inquiry = await prisma.inquiry.create({
+        data: {
+          source: 'WEB_FORM',
+          status: 'NEW',
+          title: 'Payment info request',
+          description:
+            `Payment info / ACH request from the public site.\n\n` +
+            `Submitted email: ${submitted}\n` +
+            `On file: ${personName} (person ${person.id}) — QUALIFIES via job ${j.jobCode}\n\n` +
+            `Review and send payment details from this page. Nothing has been sent yet.`,
+          personId: person.id,
+          ...(j.company?.id ? { companyId: j.company.id } : {}),
+        },
+        select: { id: true },
       })
-      const dropped = sent.ok ? sent.dropped : []
       await prisma.auditLog.create({
         data: {
           userId: null,
           ipAddress: ip,
-          action: 'public.payment_info_sent',
+          action: 'public.payment_info_request_queued',
           entityType: 'Person',
           entityId: person.id,
           oldValues: { submittedEmail: submitted },
-          // Counts/filenames only — never the details or file contents.
-          newValues: {
-            sentTo: person.email,
-            sendOk: sent.ok,
-            // No attachments any more — the documents are served behind the
-            // share token. Recording the token would put a working
-            // credential in the audit log, so only its expiry is kept.
-            deliveredVia: 'details+verify-link',
-            attachmentsDropped: dropped.length,
-            at: new Date().toISOString(),
-          },
+          newValues: { queued: true, qualifies: true, jobCode: j.jobCode, at: new Date().toISOString() },
         },
       })
-      if (!sent.ok) {
-        console.error('[payment-info] send failed for person', person.id, sent)
-      }
-      const personName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || 'name unknown'
-      const j = qualifyingJobs[0]
-      // NO billing@ notification on the auto-sent path (Wes ruled B,
-      // 2026-07-19): the system already handled this — it's a sales
-      // FYI, not billing work — so pinging billing@ here only dilutes
-      // their signal. billing@ fires ONLY on the unmatched/no-match
-      // and internal-exception paths below. A failed delivery here is
-      // still surfaced (console.error + the Action-Queue alert body
-      // flags it), just not to billing@.
-      // Action-Queue item — send happened; the action is a light-touch
-      // confirm, not a re-send.
-      const clientLabel = j.company?.name || personName
       await emitPaymentInfoAlert({
-        kind: 'sent',
-        title: `Payment info sent to ${clientLabel} — confirm received / follow up`,
-        body: `Requested by ${submitted} · job ${j.jobCode} · ${new Date().toLocaleString('en-US')}${sent.ok ? '' : ' · ⚠ email delivery FAILED, follow up manually'}`,
-        link: j.id ? `/jobs/${j.id}` : j.company?.id ? `/crm/${j.company.id}` : null,
+        kind: 'awaiting-approval',
+        title: `Payment info requested by ${clientLabel} — review and send`,
+        body: `Requested by ${submitted} · job ${j.jobCode} · ${new Date().toLocaleString('en-US')} · nothing sent yet`,
+        link: `/inquiries/${inquiry.id}`,
       })
     } else {
       // UNKNOWN (or details unconfigured) — agent queue, send NOTHING.
