@@ -465,10 +465,23 @@ export interface ReversalResult {
 export async function reverseCardCharge(args: {
   retref: string
   amountDollars?: number
+  /**
+   * Set when reversing LESS than the full charge.
+   *
+   * A void is all-or-nothing: it annuls the whole authorization regardless of
+   * any amount sent. So the void attempt MUST be skipped for a partial, or a
+   * request to return $5 of a $9.27 charge would quietly return all $9.27 and
+   * report success.
+   *
+   * A partial therefore requires settlement, since refund is the only
+   * mechanism that can return part of a transaction. Before settlement the
+   * gateway answers "txn not settled", which is the honest outcome.
+   */
+  partial?: boolean
 }): Promise<ReversalResult> {
-  // 1) Pre-settlement void.
-  let voidErr = ''
-  try {
+  // 1) Pre-settlement void — full reversals only.
+  let voidErr = args.partial ? 'skipped: partial amount cannot be voided' : ''
+  if (!args.partial) try {
     const v = await voidByRetref(args.retref)
     if (isApproved(v)) {
       return { ok: true, kind: 'void', retref: v.retref ?? args.retref, message: v.resptext }

@@ -34,6 +34,12 @@ export async function GET() {
       reversedAt: true,
       reversalKind: true,
       reversalRetref: true,
+      // The ledger — a charge may be partially refunded more than once, so
+      // the single reversal_* columns above cannot tell the whole story.
+      reversals: {
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, kind: true, retref: true, amount: true, reason: true, createdAt: true },
+      },
     },
   })
 
@@ -46,6 +52,10 @@ export async function GET() {
       // What the card was actually debited — reversing returns this, not the
       // invoice-facing base.
       gatewayTotal: Number(r.amount) + Number(r.surchargeAmount ?? 0),
+      reversals: r.reversals.map((v) => ({ ...v, amount: Number(v.amount) })),
+      // What is left to reverse. Drives the UI: no button at zero, and a
+      // partial input that cannot be set above this.
+      reversedTotal: r.reversals.reduce((sum, v) => sum + Number(v.amount), 0),
     })),
   })
 }

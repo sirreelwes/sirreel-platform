@@ -5481,6 +5481,8 @@ model RwCollectionCharge {
   /// decides which is possible, we record which happened. Kept on the charge
   /// rather than as a negative row so a reversed charge reads as one event,
   /// matching how Payment tracks voidedAt instead of negative amounts.
+  reversals       RwCollectionReversal[]
+
   reversedAt      DateTime? @map("reversed_at")
   reversalKind    String?   @map("reversal_kind")
   reversalRetref  String?   @map("reversal_retref")
@@ -5545,4 +5547,32 @@ model PaymentDetailsShare {
   @@index([token])
   @@index([portalAccessId])
   @@map("sr_payment_details_shares")
+}
+
+/// One reversal of a collections charge — a void, a full refund, or a
+/// PARTIAL refund. A ledger, not a flag, because a charge can be refunded
+/// more than once: the single reversal_* columns on RwCollectionCharge could
+/// record exactly one, so a second partial had nowhere to go and the first
+/// one's amount silently became the whole story.
+///
+/// Those columns remain for the rows written before this table existed (they
+/// were backfilled here) but are no longer the source of truth — read this.
+model RwCollectionReversal {
+  id        String   @id @default(uuid())
+  chargeId  String   @map("charge_id")
+  /// VOID annuls the whole authorization pre-settlement and is therefore
+  /// never partial. REFUND returns money post-settlement and may be.
+  kind      String
+  /// Gateway reference for the reversal. A void returns the ORIGINAL retref
+  /// (it annuls that transaction); a refund returns a new one.
+  retref    String?
+  amount    Decimal  @db.Decimal(12, 2)
+  reason    String?
+  createdById String? @map("created_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  charge RwCollectionCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+
+  @@index([chargeId])
+  @@map("sr_rw_collection_reversals")
 }

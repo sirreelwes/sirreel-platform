@@ -71,6 +71,18 @@ interface ChargeRow {
   chargedAt: string
   reversedAt: string | null
   reversalKind: string | null
+  /** Every reversal against this charge. A partially refunded charge has
+   *  more than one, which the single reversal_* fields cannot express. */
+  reversals?: Array<{
+    id: string
+    kind: string
+    retref: string | null
+    amount: number
+    reason: string | null
+    createdAt: string
+  }>
+  /** Sum of the above — how much of the charge has come back. */
+  reversedTotal?: number
   reversalRetref: string | null
 }
 
@@ -306,9 +318,36 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   }
 
   async function reverse(c: ChargeRow) {
+    const remaining = Math.round((c.gatewayTotal - (c.reversedTotal ?? 0)) * 100) / 100
+    // Amount FIRST, because it changes what the gateway can do: a partial can
+    // only ever be a refund, and a refund needs the charge to have settled.
+    // Asking for a reason first and then discovering the amount is impossible
+    // wastes the operator's time on a live call.
+    const amountRaw = window.prompt(
+      `Reverse how much of the ${money(remaining)} remaining on ····${c.cardLast4 ?? '????'}?\n\n` +
+        `Leave blank for the full ${money(remaining)}.\n` +
+        'A partial amount can only be REFUNDED, which requires the charge to ' +
+        'have settled (9:30pm ET). A full reversal can also be voided before then.',
+      '',
+    )
+    if (amountRaw === null) return
+    const trimmed = amountRaw.trim()
+    let amount: number | undefined
+    if (trimmed) {
+      amount = Number(trimmed.replace(/[^0-9.]/g, ''))
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setResult({ ok: false, message: 'Enter a valid amount, or leave it blank for the full reversal.' })
+        return
+      }
+      if (amount > remaining) {
+        setResult({ ok: false, message: `Only ${money(remaining)} remains on that charge.` })
+        return
+      }
+    }
+
+    const label = amount != null && amount < remaining ? `${money(amount)} of ${money(remaining)}` : money(remaining)
     const reason = window.prompt(
-      `Reverse ${money(c.gatewayTotal)} charged to ****${c.cardLast4 ?? '????'}?\n\n` +
-        'The gateway voids it if it has not settled yet, otherwise it refunds. ' +
+      `Reverse ${label} charged to ····${c.cardLast4 ?? '????'}?\n\n` +
         'Enter a reason (required, min 4 characters):',
     )
     if (!reason || reason.trim().length < 4) return
@@ -317,7 +356,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       const r = await fetch(`/api/collections/charges/${c.id}/reverse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason: reason.trim(), amount }),
       })
       const d = await r.json()
       setResult({ ok: !!d.ok, message: d.message || d.error || 'Unknown response' })
@@ -491,14 +530,26 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       {c.authCode ? ` · auth ${c.authCode}` : ''}
                       {c.retref ? ` · ref ${c.retref}` : ''}
                     </div>
-                    {c.reversedAt && (
-                      <div className="text-xs text-amber-500 mt-0.5">
-                        {c.reversalKind === 'VOID' ? 'Voided' : 'Refunded'}
-                        {c.reversalRetref ? ` · ref ${c.reversalRetref}` : ''}
+                    {/* Every reversal, not just the last — a partially
+                        refunded charge has more than one, and showing only
+                        the most recent misstates how much came back. */}
+                    {(c.reversals ?? []).map((v) => (
+                      <div key={v.id} className="text-xs text-amber-500 mt-0.5">
+                        {v.kind === 'VOID' ? 'Voided' : 'Refunded'} {money(v.amount)}
+                        {v.retref ? ` · ref ${v.retref}` : ''}
+                        {v.reason ? ` · ${v.reason}` : ''}
                       </div>
-                    )}
+                    ))}
+                    {(c.reversedTotal ?? 0) > 0 &&
+                      (c.reversedTotal ?? 0) < c.gatewayTotal && (
+                        <div className="text-xs text-zinc-400 mt-0.5">
+                          {money(c.gatewayTotal - (c.reversedTotal ?? 0))} still on the card
+                        </div>
+                      )}
                   </div>
-                  {c.status === 'APPROVED' && !c.reversedAt && (
+                  {/* Available while ANY of the charge is unreversed, so a
+                      partial refund can be followed by another. */}
+                  {c.status === 'APPROVED' && (c.reversedTotal ?? 0) < c.gatewayTotal && (
                     <button
                       onClick={() => reverse(c)}
                       disabled={reversing === c.id}

@@ -54,12 +54,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 },
     )
   }
-  if (charge.reversedAt) {
-    return NextResponse.json(
-      { ok: false, error: 'that charge has already been reversed' },
-      { status: 409 },
-    )
-  }
+  // How much has ALREADY been returned. Read from the ledger, because a
+  // charge can be reversed more than once: two $5 refunds against a $9.27
+  // charge must not both succeed.
+  const prior = await prisma.rwCollectionReversal.aggregate({
+    where: { chargeId: charge.id },
+    _sum: { amount: true },
+  })
+  const alreadyReversed = Number(prior._sum.amount ?? 0)
   if (!charge.retref) {
     return NextResponse.json(
       { ok: false, error: 'no gateway reference on that charge — cannot reverse' },
@@ -67,25 +69,65 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
-  const gatewayTotal = Number(charge.amount) + Number(charge.surchargeAmount ?? 0)
-  const requested = Number(body.amount)
-  const amountDollars =
-    Number.isFinite(requested) && requested > 0 && requested < gatewayTotal
-      ? requested
-      : gatewayTotal
+  const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+  const gatewayTotal = round(Number(charge.amount) + Number(charge.surchargeAmount ?? 0))
+  const remaining = round(gatewayTotal - alreadyReversed)
 
-  const result = await reverseCardCharge({ retref: charge.retref, amountDollars })
+  if (remaining <= 0) {
+    return NextResponse.json(
+      { ok: false, error: 'that charge has already been fully reversed' },
+      { status: 409 },
+    )
+  }
+
+  // An explicit amount is a PARTIAL refund. Absent one, reverse what is left.
+  const requested = Number(body.amount)
+  const wantsPartial = Number.isFinite(requested) && requested > 0 && round(requested) < remaining
+  const amountDollars = wantsPartial ? round(requested) : remaining
+
+  // Refusing to over-refund is the whole point of the ledger: the gateway
+  // will happily return more than was taken if asked repeatedly.
+  if (Number.isFinite(requested) && requested > 0 && round(requested) > remaining) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `only $${remaining.toFixed(2)} remains on that charge (of $${gatewayTotal.toFixed(2)}).`,
+      },
+      { status: 400 },
+    )
+  }
+
+  const result = await reverseCardCharge({
+    retref: charge.retref,
+    amountDollars,
+    // Anything less than the FULL original amount must not attempt a void —
+    // a void ignores the amount and annuls everything.
+    partial: amountDollars < gatewayTotal,
+  })
 
   if (!result.ok) {
     console.error(`[collections] reverse failed for ${charge.id}: ${result.message}`)
     return NextResponse.json({ ok: false, error: result.message }, { status: 502 })
   }
 
+  const kind = result.kind === 'void' ? 'VOID' : 'REFUND'
+  await prisma.rwCollectionReversal.create({
+    data: {
+      chargeId: charge.id,
+      kind,
+      retref: result.retref ?? null,
+      amount: amountDollars,
+      reason,
+      createdById: user.id,
+    },
+  })
+  // Legacy summary columns, kept in step so anything still reading them sees
+  // the latest reversal. The ledger above is the source of truth.
   await prisma.rwCollectionCharge.update({
     where: { id: charge.id },
     data: {
       reversedAt: new Date(),
-      reversalKind: result.kind === 'void' ? 'VOID' : 'REFUND',
+      reversalKind: kind,
       reversalRetref: result.retref ?? null,
       reversalAmount: amountDollars,
       reversalReason: reason,
@@ -98,9 +140,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     kind: result.kind,
     retref: result.retref,
     amount: amountDollars,
+    remaining: round(remaining - amountDollars),
     message:
       result.kind === 'void'
         ? `Voided $${amountDollars.toFixed(2)} — it will not appear on the client's statement.`
-        : `Refunded $${amountDollars.toFixed(2)} — it will appear as a credit in a few days.`,
+        : `Refunded $${amountDollars.toFixed(2)} — it will appear as a credit in a few days.` +
+          (round(remaining - amountDollars) > 0
+            ? ` $${round(remaining - amountDollars).toFixed(2)} of this charge remains.`
+            : ''),
   })
 }
