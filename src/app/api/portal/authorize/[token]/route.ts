@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthorizeToken } from '@/lib/portal/authorizeToken'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -105,6 +106,9 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   })
   // Send the invite — best effort; the rep sees this same URL on the order
   // page anyway, so a delivery failure isn't critical to the approve action.
+  // The client is being emailed with this rep named on it — that act is
+  // what establishes them, so the portal should agree with the email.
+  await markRepVisibleToClient(order.id)
   await sendAgreementEmail({
     label: 'portal/authorize-approved-invite',
     to: [newPerson.email],

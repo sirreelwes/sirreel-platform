@@ -32,6 +32,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { prisma } from '@/lib/prisma'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -149,6 +150,9 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     // Fire-and-don't-block. Resend failures are logged but we still
     // respond ok — failing loudly would tell an attacker their slug
     // attempt mapped to a real order.
+    // The client is being emailed with this rep named on it — that act is
+    // what establishes them, so the portal should agree with the email.
+    await markRepVisibleToClient(order.id)
     void sendAgreementEmail({
       label: `portal/resend-link:${order.orderNumber}`,
       to: [recipientEmail],

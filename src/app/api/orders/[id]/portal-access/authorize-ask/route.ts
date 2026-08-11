@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { signAuthorizeToken } from '@/lib/portal/authorizeToken'
@@ -76,6 +77,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const declineLink = portalAuthorizeUrl(token, 'decline')
 
   const newContactName = [newFirstName, newLastName].filter(Boolean).join(' ') || newEmail
+  // The client is being emailed with this rep named on it — that act is what
+  // establishes them, so the portal should agree with the email.
+  await markRepVisibleToClient(order.id)
   const result = await sendCadenceEmail({
     template: ADD_CONTACT_AUTHORIZATION_TEMPLATE,
     label: 'portal/authorize-ask',

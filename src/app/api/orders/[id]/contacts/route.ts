@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -157,6 +158,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         repPhone: order.agent?.phone || null,
         repEmail: order.agent?.email || null,
       })
+      // The client is being emailed with this rep named on it — that act is
+      // what establishes them, so the portal should agree with the email.
+      await markRepVisibleToClient(order.id)
       emailResult = await sendAgreementEmail({
         label: 'orders/contacts/invite',
         to: [person.email],
