@@ -565,6 +565,24 @@ export default function JobPortalPage() {
                   >
                     Sign agreement →
                   </a>
+                ) : agreementIsReleased(data.paperwork.agreement) ? (
+                  // Released, but this portal has no in-portal signing URL for
+                  // it. Send them to the Cognito form rather than leaving the
+                  // "Ready to sign" badge pointing at nothing. Links our own
+                  // path so go-live is one line in legacyRedirects.
+                  <div className="space-y-1.5">
+                    <a
+                      href="/rentalagreement"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Sign agreement →
+                    </a>
+                    <p className="text-[11px] text-gray-400">
+                      Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
+                    </p>
+                  </div>
                 ) : (
                   <span className="text-xs text-gray-500">Your SirReel rep will send the agreement shortly.</span>
                 )}
@@ -606,6 +624,25 @@ export default function JobPortalPage() {
                       >
                         Sign stage contract →
                       </a>
+                    </div>
+                  ) : describeAgreementStatus(
+                      (data.paperwork.stageContract.status as AgreementStatus | undefined) ?? null,
+                    ).isReleased ? (
+                    // Released with no document to sign — same contradiction the
+                    // rental agreement row had. Send them somewhere they can
+                    // actually sign instead of stranding the badge.
+                    <div className="space-y-1.5">
+                      <a
+                        href="/studiocontract"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                      >
+                        Sign stage contract →
+                      </a>
+                      <p className="text-[11px] text-gray-400">
+                        Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
+                      </p>
                     </div>
                   ) : (
                     <span className="text-xs text-gray-500">Your SirReel rep will send the stage contract shortly.</span>
@@ -926,6 +963,17 @@ function PaperworkRow({
 // delivered. The canonical mapping fixes it.
 function agreementStatusLabel(a: PortalData['paperwork']['agreement']): string {
   return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).label;
+}
+/**
+ * Has the agreement been released to the client for signature?
+ *
+ * The badge and the body of this row were computed independently, so a
+ * released agreement with no in-portal signing URL rendered "Ready to sign"
+ * directly above "Your SirReel rep will send the agreement shortly" — the
+ * client was told simultaneously that it was their turn and that it wasn't.
+ */
+function agreementIsReleased(a: PortalData['paperwork']['agreement']): boolean {
+  return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).isReleased;
 }
 function agreementStatusKind(a: PortalData['paperwork']['agreement']): PaperworkStatusKind {
   return describeAgreementStatus((a?.status as AgreementStatus | undefined) ?? null).kind;

@@ -139,6 +139,12 @@ export const PUBLIC_NAV: NavEntry[] = [
             external: true,
           },
           {
+            label: 'Sign Studio Contract',
+            href: '/studiocontract',
+            mode: 'link',
+            external: true,
+          },
+          {
             label: 'Credit Card Authorization',
             href: '/creditcardauthorization',
             mode: 'link',

@@ -91,9 +91,12 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   '/rentalagreement': 'https://www.cognitoforms.com/SirReel/RentalAgreement',
   '/annualrentalagreement': 'https://www.cognitoforms.com/SirReel/AnnualRentalAgreement',
   '/rental-agreement-online-previous': '/rental-agreement',
-  '/studiocontract': '/stage-contract',
-  '/dluxeventcontract': '/stage-contract',
-  '/dluxeventcontractannual': '/stage-contract',
+  // Same restoration as the rental agreement above: these pointed at
+  // /stage-contract, a REVIEW page with no way to sign. All three are live
+  // and signable in Cognito.
+  '/studiocontract': 'https://www.cognitoforms.com/SirReel/StudioContract',
+  '/dluxeventcontract': 'https://www.cognitoforms.com/SirReel/DluxEventContract',
+  '/dluxeventcontractannual': 'https://www.cognitoforms.com/SirReel/DluxEventContractAnnual',
   '/w9': '/api/public/forms/w9',
   '/coireview': '/api/public/forms/coi',
 
