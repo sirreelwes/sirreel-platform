@@ -30,9 +30,16 @@ interface CartSnapshotLine {
   type: string
   category: string
   unitPrice: number
-  quantity: number
+  /** The public order form writes `qty`. `quantity` is accepted for older
+   *  snapshots — reading only the latter left the QTY column BLANK on every
+   *  inquiry, so an order for 10 ratchet straps read as an order for one. */
+  qty?: number
+  quantity?: number
   days: number | null
   lineTotal: number
+  /** Vehicles are quoted, not priced on the form. Their unitPrice is 0,
+   *  which must not be rendered as "$0" — that reads as free. */
+  priceOnQuote?: boolean
 }
 interface SupplyOrderMetadata {
   kind?: string
@@ -40,7 +47,7 @@ interface SupplyOrderMetadata {
   production?: { companyName?: string | null; productionName?: string | null }
   dates?: { start?: string | null; end?: string | null }
   cart?: CartSnapshotLine[]
-  totals?: { units?: number; amount?: number }
+  totals?: { units?: number; amount?: number; hasPriceOnQuote?: boolean }
   notes?: string | null
   submittedAt?: string
   ipAddress?: string | null
@@ -337,6 +344,11 @@ export default function InquiryDetailPage() {
             <h2 className="text-sm font-semibold text-white">Cart ({cart.length} line{cart.length === 1 ? '' : 's'})</h2>
             <span className="text-xs text-zinc-500">
               {meta?.totals?.units ?? 0} unit{(meta?.totals?.units ?? 0) === 1 ? '' : 's'} · {fmtMoney(meta?.totals?.amount)}
+              {/* The total EXCLUDES quoted lines. Presenting $32 beside a
+                  truck makes the order look like the whole job costs $32. */}
+              {meta?.totals?.hasPriceOnQuote && (
+                <span className="text-amber-500"> + items on quote</span>
+              )}
             </span>
           </div>
           <table className="w-full text-sm">
@@ -358,10 +370,14 @@ export default function InquiryDetailPage() {
                     <div className="text-[10px] text-zinc-500 font-mono">{l.code}</div>
                   </td>
                   <td className="px-3 py-2 text-xs">{l.category}</td>
-                  <td className="px-3 py-2 text-right text-xs font-mono">{l.quantity}</td>
+                  <td className="px-3 py-2 text-right text-xs font-mono">{l.qty ?? l.quantity ?? '—'}</td>
                   <td className="px-3 py-2 text-right text-xs font-mono">{l.days ?? '—'}</td>
-                  <td className="px-3 py-2 text-right text-xs font-mono">{fmtMoney(l.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right text-xs font-mono text-zinc-100">{fmtMoney(l.lineTotal)}</td>
+                  <td className="px-3 py-2 text-right text-xs font-mono">
+                    {l.priceOnQuote ? <span className="text-amber-500">On quote</span> : fmtMoney(l.unitPrice)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs font-mono text-zinc-100">
+                    {l.priceOnQuote ? <span className="text-amber-500">On quote</span> : fmtMoney(l.lineTotal)}
+                  </td>
                 </tr>
               ))}
             </tbody>
