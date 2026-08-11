@@ -4,8 +4,19 @@
  * PortalPayPanel — client-portal invoice pay surface.
  *
  * Phase 6 commit 2 — card path live. ACH path stub gated behind
- * NEXT_PUBLIC_ACH_ENABLED env flag, default off (Commit 3 wires it
- * up).
+ * NEXT_PUBLIC_ACH_ENABLED, default off.
+ *
+ * LEAVE IT OFF. This is not an unfinished feature waiting on Commit 3 —
+ * SirReel evaluated Fiserv's pull-ACH product on 2026-08-10 and declined it
+ * on price (1% uncapped + $0.50/txn, against invoices of $1k–$25k). Clients
+ * push bank transfers from their own banks instead, which costs neither side
+ * anything, and the card on file already provides charge-when-we-want with
+ * the client absorbing the surcharge.
+ *
+ * Enabling this flag would also offer a payment method the merchant account
+ * is not provisioned for. Revisit only if Fiserv offers a CAPPED discount
+ * rate. Clients get bank details from the portal's "Pay by bank transfer"
+ * panel (PortalBankDetails).
  *
  * Mounted on the Job Page portal (src/app/portal/job/[slug]/page.tsx),
  * replacing the "Coming soon" Invoice row when an invoice is payable.
