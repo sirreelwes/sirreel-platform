@@ -21,6 +21,10 @@ const GOLD = '#D4A547'
 const SLATE = '#0f172a'
 
 // Verbatim per ruling — do not edit without Wes.
+/** Our own path, not the vendor URL — see legacyRedirects. When card
+ *  authorization moves into the portal this follows automatically. */
+const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
+
 export const FRAUD_WARNING =
   "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
 
@@ -57,6 +61,17 @@ function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: stri
 export function buildPaymentInfoEmail(input: {
   firstName: string | null
   details: PaymentDetailsRecord
+  /**
+   * Optional link to the same details on sirreel.com.
+   *
+   * The numbers stay in the email — the client should not have to click
+   * anything to pay us. The link is the ANCHOR: if this thread is later
+   * followed by a "our banking details have changed" message, the payer has
+   * somewhere authoritative to check that an attacker cannot rewrite. That
+   * is the fraud this defends against, and it only works if the payer knows
+   * the anchor exists before the fraudulent message arrives.
+   */
+  verifyLink?: string | null
 }): { subject: string; html: string; text: string } {
   const first = input.firstName?.trim() || 'there'
   const payee = input.details.payeeName?.trim() || null
@@ -74,6 +89,18 @@ export function buildPaymentInfoEmail(input: {
     ...rows.map((row) => `${row.label}: ${row.value}`),
     '',
     `IMPORTANT: ${FRAUD_WARNING}`,
+    ...(input.verifyLink
+      ? ['', `You can always confirm these details here: ${input.verifyLink}`]
+      : []),
+    '',
+    // The client asked how to pay us; answering with bank details alone
+    // presents ACH as the only option and quietly decides for them. Card is
+    // a real choice — with a real cost, stated here rather than discovered
+    // on the statement.
+    'Prefer to pay by card? Authorize one here:',
+    CARD_AUTH_URL,
+    'A processing fee of up to 3% applies to card payments, where permitted.',
+    'Bank transfers have no fee.',
     '',
     'Questions? Reply to this email or call (888) 477-7335.',
     payee ? `\n${payee}` : '\nSirReel Studio Services',
@@ -120,11 +147,25 @@ export function buildPaymentInfoEmail(input: {
           <td style="background:#fff7ed;border:1px solid #fdba74;border-left:none;border-radius:0 8px 8px 0;padding:14px 16px;">
             <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#c2410c;margin:0 0 4px;">⚠ Fraud warning</div>
             <div style="font-size:13px;line-height:1.6;color:#7c2d12;">${escapeHtml(FRAUD_WARNING)}</div>
+            ${
+              input.verifyLink
+                ? `<div style="font-size:13px;line-height:1.6;color:#7c2d12;margin-top:8px;">You can always confirm these details at <a href="${input.verifyLink}" style="color:#7c2d12;font-weight:700;">sirreel.com</a>.</div>`
+                : ''
+            }
           </td>
         </tr>
       </table>
 
-      <p style="margin:0 0 4px;font-size:14px;line-height:1.6;">Questions? Reply to this email or call <a href="tel:+18884777335" style="color:${SLATE};font-weight:700;text-decoration:none;">(888) 477-7335</a>.</p>
+      <div style="border:1px solid #e5e2d9;border-radius:10px;padding:16px 18px;margin:20px 0 0;background:#faf9f6;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 8px;">Prefer to pay by card?</div>
+        <p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#374151;">
+          A processing fee of up to 3% applies to card payments, where permitted.
+          Bank transfers have no fee.
+        </p>
+        <a href="${CARD_AUTH_URL}" style="display:inline-block;background:${SLATE};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;">Authorize a card &rarr;</a>
+      </div>
+
+      <p style="margin:20px 0 4px;font-size:14px;line-height:1.6;">Questions? Reply to this email or call <a href="tel:+18884777335" style="color:${SLATE};font-weight:700;text-decoration:none;">(888) 477-7335</a>.</p>
       <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">${payee ? escapeHtml(payee) : 'SirReel Studio Services'}</p>
     </div>
   </div>

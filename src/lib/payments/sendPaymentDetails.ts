@@ -12,6 +12,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
+import { createPaymentShare, paymentShareBaseUrl } from '@/lib/payments/paymentShare'
 import { fetchPaymentAttachments } from '@/lib/email/paymentInfoAttachments'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
@@ -57,7 +58,26 @@ export async function sendPaymentDetailsEmail(opts: {
   const record = await loadPaymentRecord()
   if (!record) return { ok: false, reason: 'not_configured' }
 
-  const email = buildPaymentInfoEmail({ firstName: opts.firstName, details: record })
+  // Mint a verification anchor. Best-effort: if it fails the email still
+  // sends with the details, because the client needs to be able to pay us —
+  // a missing anchor is worse than nothing, but a missing email is worse
+  // still.
+  let verifyLink: string | null = null
+  try {
+    const share = await createPaymentShare({
+      sentToEmail: opts.to,
+      createdVia: 'OPERATOR',
+    })
+    verifyLink = `${paymentShareBaseUrl()}/pay-details/${share.token}`
+  } catch (err) {
+    console.error('[payment-details] could not mint a verification link:', err)
+  }
+
+  const email = buildPaymentInfoEmail({
+    firstName: opts.firstName,
+    details: record,
+    verifyLink,
+  })
 
   // Attachment fetch failure NEVER blocks the email — inline details
   // still send; dropped slots are reported to the caller.

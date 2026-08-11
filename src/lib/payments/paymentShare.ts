@@ -13,12 +13,23 @@
 
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 
 /** The URL is the credential — 24 bytes puts guessing out of reach. */
 const TOKEN_BYTES = 24
 const TTL_DAYS = 90
 
 const SINGLETON = 'singleton'
+
+/**
+ * Origin for a share link built OUTSIDE a request — the operator send has no
+ * incoming request to take a host from. The marketing host serves
+ * /pay-details/[token] (it is in middleware's public allow-list), and it is
+ * the host clients recognise, which matters on a link about money.
+ */
+export function paymentShareBaseUrl(): string {
+  return PUBLIC_SITE_ORIGIN
+}
 
 export interface MintedShare {
   token: string
@@ -40,7 +51,7 @@ export async function paymentDetailsConfigured(): Promise<boolean> {
 
 export async function createPaymentShare(args: {
   sentToEmail: string
-  createdVia: 'PORTAL' | 'PUBLIC_REQUEST'
+  createdVia: 'PORTAL' | 'PUBLIC_REQUEST' | 'OPERATOR'
   portalAccessId?: string | null
   personId?: string | null
 }): Promise<MintedShare> {
