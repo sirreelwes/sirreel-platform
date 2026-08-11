@@ -249,12 +249,11 @@ export default function ClientPortalV2() {
                 </span>
               </>
             )}
-            {booking.agent?.name && (
-              <>
-                <span style={{ color: TSX.gold }}>·</span>
-                <span>Your agent: {booking.agent.name}</span>
-              </>
-            )}
+            {/* No named agent. Bookings carry one, but it is often an
+                automatic assignment rather than a relationship, and naming
+                the wrong person to a client is worse than naming nobody.
+                Reinstate when there is an explicit signal here, as
+                Order.repVisibleToClient provides on the job portal. */}
           </div>
         </div>
       </div>
@@ -305,7 +304,7 @@ export default function ClientPortalV2() {
             <div className="text-4xl mb-2">🎉</div>
             <div className="text-emerald-800 font-bold text-base">All paperwork submitted!</div>
             <div className="text-emerald-600 text-sm mt-1">
-              Everything is on file with SirReel. {booking.agent?.name ? `${booking.agent.name} will` : 'We’ll'} reach out if anything
+              Everything is on file with SirReel. We&rsquo;ll reach out if anything
               else is needed — you&rsquo;re all set.
             </div>
           </div>

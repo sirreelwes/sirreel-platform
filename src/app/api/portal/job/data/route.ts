@@ -125,6 +125,7 @@ export async function GET(req: NextRequest) {
         agent: {
           select: { id: true, name: true, email: true, phone: true, avatarUrl: true, displayTitle: true },
         },
+        repVisibleToClient: true,
         lineItems: {
           select: {
             id: true,
@@ -332,7 +333,11 @@ export async function GET(req: NextRequest) {
     },
     job: order.job,
     countdown: portalCountdownMs != null ? { msUntilPickup: portalCountdownMs } : null,
-    agent: order.agent,
+    // Opt-in. Every order HAS an agent — self-serve jobs get one assigned
+    // automatically — but an automatic assignment is not a relationship, and
+    // presenting one as "Your SirReel rep" showed clients the wrong name,
+    // phone and email. Withheld unless someone actually took the account.
+    agent: order.repVisibleToClient ? order.agent : null,
     afterHoursLine: AFTER_HOURS_LINE,
     leadership: leadership
       ? {

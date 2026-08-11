@@ -2726,6 +2726,15 @@ model Order {
 
   booking      Booking?        @relation(fields: [bookingId], references: [id])
   company      Company         @relation(fields: [companyId], references: [id])
+  /// Show this order's agent to the CLIENT as "Your SirReel rep".
+  ///
+  /// Opt-IN, default false. The agent field is always populated — self-serve
+  /// jobs get one assigned automatically — but an automatic assignment is not
+  /// a relationship, and presenting one as the client's rep put the wrong
+  /// name, phone and email in front of clients. Set this only when someone
+  /// has actually taken the account.
+  repVisibleToClient Boolean @default(false) @map("rep_visible_to_client")
+
   agent        User            @relation("OrderAgent", fields: [agentId], references: [id])
   lineItems    OrderLineItem[]
   invoices     Invoice[]

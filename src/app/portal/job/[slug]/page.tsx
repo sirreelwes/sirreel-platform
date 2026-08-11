@@ -49,7 +49,9 @@ interface PortalData {
     blindReturnInstructions: string | null;
   };
   job: { id: string; name: string; jobCode: string; productionType: string } | null;
-  agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null };
+  /** Null unless a rep has actually been established for this order — an
+   *  automatic assignment is not a relationship. See the data route. */
+  agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null } | null;
   afterHoursLine: string;
   leadership: { id: string; name: string; email: string; phone: string | null; displayTitle: string | null } | null;
   countdown: { msUntilPickup: number } | null;
@@ -354,7 +356,13 @@ export default function JobPortalPage() {
   }
 
   const jobTitle = data.job?.name || data.order.orderNumber;
-  const initials = data.agent.name.split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  const initials = (data.agent?.name ?? '')
+    .split(' ')
+    .map((s) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
@@ -433,22 +441,41 @@ export default function JobPortalPage() {
             })}
           </div>
 
-          {/* Rep contact */}
+          {/* Contact. A NAMED rep only when one has actually been established
+              for this order (Order.repVisibleToClient) — otherwise the house
+              contact. Every order has an agent assigned, but an automatic
+              assignment is not a relationship, and showing one put the wrong
+              person's name, phone and email in front of clients. */}
           <div className="border-t border-gray-100 pt-4 flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
-              {data.agent.avatarUrl ? (
+              {data.agent?.avatarUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={data.agent.avatarUrl} alt={data.agent.name} className="w-12 h-12 rounded-full object-cover" />
-              ) : (
+              ) : data.agent ? (
                 initials
+              ) : (
+                'SR'
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs uppercase tracking-widest text-gray-400 font-semibold">Your SirReel rep</div>
-              <div className="text-sm font-semibold text-gray-900">{data.agent.name}</div>
+              <div className="text-xs uppercase tracking-widest text-gray-400 font-semibold">
+                {data.agent ? 'Your SirReel rep' : 'Questions?'}
+              </div>
+              <div className="text-sm font-semibold text-gray-900">
+                {data.agent ? data.agent.name : 'SirReel Studio Services'}
+              </div>
               <div className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                {data.agent.phone && <a href={`tel:${data.agent.phone}`} className="hover:text-gray-900">{data.agent.phone}</a>}
-                <a href={`mailto:${data.agent.email}`} className="hover:text-gray-900">{data.agent.email}</a>
+                {data.agent ? (
+                  <>
+                    {data.agent.phone && <a href={`tel:${data.agent.phone}`} className="hover:text-gray-900">{data.agent.phone}</a>}
+                    <a href={`mailto:${data.agent.email}`} className="hover:text-gray-900">{data.agent.email}</a>
+                  </>
+                ) : (
+                  <>
+                    <a href="tel:8884777335" className="hover:text-gray-900">(888) 477-7335</a>
+                    <a href="mailto:info@sirreel.com" className="hover:text-gray-900">info@sirreel.com</a>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -844,12 +871,16 @@ export default function JobPortalPage() {
             <div>
               <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-2">Your SirReel team</div>
               <div className="space-y-1.5">
-                <ContactRow
-                  name={data.agent.name}
-                  email={data.agent.email}
-                  badge="REP"
-                  detail={data.agent.phone || undefined}
-                />
+                {/* Same rule as the contact card above — a named REP only
+                    when one has actually been established for this order. */}
+                {data.agent && (
+                  <ContactRow
+                    name={data.agent.name}
+                    email={data.agent.email}
+                    badge="REP"
+                    detail={data.agent.phone || undefined}
+                  />
+                )}
                 {data.leadership && (
                   <ContactRow
                     name={data.leadership.name}
