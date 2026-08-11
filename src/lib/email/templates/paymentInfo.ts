@@ -25,6 +25,9 @@ const SLATE = '#0f172a'
  *  authorization moves into the portal this follows automatically. */
 const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
 
+/** Same asset the rest of the SirReel emails use. */
+const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+
 export const FRAUD_WARNING =
   "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
 
@@ -119,8 +122,21 @@ export function buildPaymentInfoEmail(input: {
   <div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
     <!-- header -->
     <div style="background:${SLATE};padding:24px 28px;border-bottom:3px solid ${GOLD};">
-      <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:0.04em;">SIRREEL</span>
-      <span style="color:${GOLD};font-size:11px;font-weight:700;letter-spacing:0.18em;margin-left:10px;">STUDIO SERVICES</span>
+      <!-- Real mark, matching every other SirReel email (thankYou,
+           tsxWelcome, bookingWelcome, stageSignedConfirmation). This header
+           was set in type, so the one email that hands a client our banking
+           details was the one that looked least like us — exactly the email
+           where looking authentically like SirReel matters most.
+
+           Absolute URL on hq.sirreel.com: mail clients cannot resolve
+           relative paths, and the host serves /sirreel-logo-white.png
+           unauthenticated for this purpose (see middleware's allow-list).
+           The alt text carries the brand for image-blocking clients. -->
+      <img
+        src="${LOGO_URL_WHITE}"
+        alt="SirReel Studio Services"
+        style="height:28px;width:auto;display:block;border:0;"
+      />
     </div>
     <div style="background:#ffffff;padding:28px;">
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">Hi ${escapeHtml(first)},</p>
