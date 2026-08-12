@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { syncRwInvoices } from '@/lib/rentalworks/syncInvoices'
+import { syncRwInvoices, rwTokenExpiry, rwTokenDaysLeft } from '@/lib/rentalworks/syncInvoices'
+import {
+  reportRwSyncFailure,
+  reportRwTokenExpiring,
+  RW_TOKEN_WARN_DAYS,
+} from '@/lib/rentalworks/syncAlert'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -17,7 +22,21 @@ export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && req.headers.get('authorization') === `Bearer ${cronSecret}`) {
     const result = await syncRwInvoices()
-    if (!result.ok) console.error('[rw-invoice-sync cron] failed:', result.error)
+    if (!result.ok) {
+      // A console.error and a 502 to Vercel's cron is what let this fail
+      // nightly for over two weeks unnoticed. Raise something a human sees.
+      console.error('[rw-invoice-sync cron] failed:', result.error)
+      await reportRwSyncFailure(result.error ?? 'unknown error')
+    } else if (
+      result.tokenDaysLeft != null &&
+      result.tokenDaysLeft >= 0 &&
+      result.tokenDaysLeft <= RW_TOKEN_WARN_DAYS
+    ) {
+      // Succeeded, but on borrowed time. There is no refresh mechanism, so
+      // someone has to mint a token by hand — that needs notice, not a
+      // post-mortem.
+      await reportRwTokenExpiring(result.tokenDaysLeft)
+    }
     return NextResponse.json({ ...result }, { status: result.ok ? 200 : 502 })
   }
   const session = await getServerSession()
@@ -26,7 +45,15 @@ export async function GET(req: NextRequest) {
     prisma.rwInvoice.count(),
     prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
   ])
-  return NextResponse.json({ count, syncedAt: latest?.syncedAt ?? null })
+  const exp = rwTokenExpiry(process.env.RENTALWORKS_TOKEN)
+  return NextResponse.json({
+    count,
+    syncedAt: latest?.syncedAt ?? null,
+    // Token health on the status endpoint too, so /admin can show WHY the
+    // mirror is stale instead of just how stale it is.
+    tokenExpiresAt: exp?.toISOString() ?? null,
+    tokenDaysLeft: rwTokenDaysLeft(process.env.RENTALWORKS_TOKEN),
+  })
 }
 
 export async function POST(req: NextRequest) {

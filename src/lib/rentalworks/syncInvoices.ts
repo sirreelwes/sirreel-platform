@@ -25,6 +25,9 @@ export interface RwInvoiceSyncResult {
   pulled: number
   pages: number
   error?: string
+  /** Days until RENTALWORKS_TOKEN expires — negative once lapsed, null when
+   *  the token carries no readable `exp`. Drives the early warning. */
+  tokenDaysLeft?: number | null
 }
 
 type BrowseResponse = {
@@ -50,9 +53,52 @@ function date(v: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
+/**
+ * How long the RentalWorks token has left, read from its own JWT `exp` claim.
+ *
+ * The token is a bearer JWT that expires on a fixed date with no refresh
+ * mechanism, so the sync dies the moment it lapses. It expired 2026-06-13 and
+ * the mirror silently served stale balances for weeks, because the only
+ * symptom of a failed sync is numbers that are quietly wrong.
+ *
+ * Decoding locally, never by calling RW: this must work even when the token
+ * is already dead, and it turns a two-week outage into a week's notice.
+ *
+ * Returns null when there is no readable `exp` — a token we cannot reason
+ * about should not produce false reassurance.
+ */
+export function rwTokenExpiry(token: string | undefined): Date | null {
+  if (!token) return null
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64').toString())
+    return typeof payload?.exp === 'number' ? new Date(payload.exp * 1000) : null
+  } catch {
+    return null
+  }
+}
+
+/** Days until the token expires; negative once it has. */
+export function rwTokenDaysLeft(token: string | undefined): number | null {
+  const exp = rwTokenExpiry(token)
+  if (!exp) return null
+  return Math.floor((exp.getTime() - Date.now()) / 86_400_000)
+}
+
 export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
   const token = process.env.RENTALWORKS_TOKEN
   if (!token) return { ok: false, pulled: 0, pages: 0, error: 'RENTALWORKS_TOKEN not set' }
+
+  // Named before the request so the failure says WHY rather than "HTTP 401",
+  // which is what sent this one undiagnosed for weeks.
+  const daysLeft = rwTokenDaysLeft(token)
+  if (daysLeft != null && daysLeft < 0) {
+    return {
+      ok: false,
+      pulled: 0,
+      pages: 0,
+      error: `RENTALWORKS_TOKEN expired ${Math.abs(daysLeft)} days ago (${rwTokenExpiry(token)?.toISOString().slice(0, 10)}) — a new token is needed from RentalWorks.`,
+    }
+  }
 
   const rows: Array<Record<string, unknown>> = []
   let page = 1
@@ -124,7 +170,14 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
     ),
   ])
 
-  return { ok: true, pulled: rows.length, pages: page }
+  return {
+    ok: true,
+    pulled: rows.length,
+    pages: page,
+    // Passed up so the caller can warn BEFORE the token lapses rather than
+    // discovering it from a fortnight of wrong balances.
+    tokenDaysLeft: daysLeft,
+  }
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

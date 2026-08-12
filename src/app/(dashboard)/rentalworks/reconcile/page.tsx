@@ -91,6 +91,26 @@ const TABS: Array<{ key: Bucket; label: string; hint: string }> = [
   { key: 'linked', label: 'Linked', hint: 'Done' },
 ];
 
+/**
+ * Age of the RentalWorks mirror.
+ *
+ * Amber past a day, red past two: the sync is nightly, so a larger gap means
+ * it stopped running. This page had NO staleness signal at all, while the
+ * sync was failing for over two weeks — so every match suggestion was
+ * computed from balances frozen in July with nothing on screen saying so.
+ */
+function RwSyncAge({ iso }: { iso: string | null }) {
+  if (!iso) return <span className="text-[11px] text-red-500">RW balances never synced</span>;
+  const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000);
+  const label = hours < 1 ? 'just now' : hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
+  const cls = hours >= 48 ? 'text-red-500 font-semibold' : hours >= 24 ? 'text-amber-600' : 'text-lt-fg3';
+  return (
+    <span className={`text-[11px] ${cls}`} title={new Date(iso).toLocaleString()}>
+      RW data as of {label}{hours >= 48 ? ' — sync is behind' : ''}
+    </span>
+  );
+}
+
 export default function ReconcilePage() {
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [counts, setCounts] = useState<Counts | null>(null);
@@ -100,6 +120,10 @@ export default function ReconcilePage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
+  // Age of the RW mirror the suggestions are computed from. Reconcile matches
+  // jobs to orders on invoice evidence, so stale input produces
+  // confident-looking matches against invoices that may already be settled.
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -127,6 +151,7 @@ export default function ReconcilePage() {
     const r = await fetch('/api/rentalworks/reconcile/suggestions');
     const d = r.ok ? await r.json() : { suggestions: [] };
     setSuggestions(d.suggestions ?? []);
+    setSyncedAt(d.syncedAt ?? null);
   }, []);
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
@@ -249,6 +274,7 @@ export default function ReconcilePage() {
         <div className="mb-4 flex items-end justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-lt-fg">Reconcile RentalWorks</h1>
+            <RwSyncAge iso={syncedAt} />
             <p className="text-[12px] text-lt-fg3">
               {counts
                 ? counts.ready > 0

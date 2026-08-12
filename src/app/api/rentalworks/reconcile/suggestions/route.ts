@@ -39,7 +39,13 @@ export async function GET(_req: NextRequest) {
       company: { select: { id: true, name: true, rentalworksCustomerId: true } },
     },
   })
-  if (!jobs.length) return NextResponse.json({ suggestions: [] })
+  // Age of the mirror these suggestions are computed FROM. Reconcile matches
+  // HQ jobs to RW orders on invoice evidence, so a stale mirror produces
+  // confident-looking matches against invoices that may already be settled.
+  const freshest = await prisma.rwInvoice.aggregate({ _max: { syncedAt: true } })
+  const syncedAt = freshest._max.syncedAt ?? null
+
+  if (!jobs.length) return NextResponse.json({ suggestions: [], syncedAt })
 
   // Orders already claimed by ANY job are off the table.
   const claimed = new Set(
@@ -139,5 +145,5 @@ export async function GET(_req: NextRequest) {
       distanceDays: s.distanceDays,
     }))
 
-  return NextResponse.json({ suggestions })
+  return NextResponse.json({ suggestions, syncedAt })
 }

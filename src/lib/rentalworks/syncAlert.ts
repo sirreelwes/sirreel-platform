@@ -1,0 +1,142 @@
+/**
+ * Making a failed RentalWorks sync visible.
+ *
+ * The sync ran nightly and failed for over two weeks with no symptom anyone
+ * would notice: it logged console.error and returned 502 to Vercel's cron, and
+ * nobody reads cron logs. Meanwhile Collections, Receivables and Reconcile all
+ * served balances from a mirror frozen on 2026-07-27, and an operator quoting
+ * one to a client on the phone had no way to know.
+ *
+ * A silent failure that corrupts a number someone reads aloud to a client is
+ * worse than a loud one. So: an Action-Queue alert AND an email, every time.
+ *
+ * De-duplicated per calendar day. A nightly job that fails for a month should
+ * produce thirty reminders, not one that everybody scrolls past — but it must
+ * not produce thirty on a single retry loop either.
+ */
+
+import { prisma } from '@/lib/prisma'
+import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+
+const HQ_INBOX = process.env.HQ_NOTIFY_INBOX || 'hq@sirreel.com'
+const ALERT_TYPE = 'rw_sync_failure'
+
+async function alreadyAlertedToday(type: string): Promise<boolean> {
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  const existing = await prisma.alert.findFirst({
+    where: { type, created_at: { gte: since } },
+    select: { id: true },
+  })
+  return !!existing
+}
+
+/**
+ * Sync could not run. `reason` is shown verbatim to staff, so it must say what
+ * to DO — "token expired, get a new one from RentalWorks" rather than "401".
+ */
+export async function reportRwSyncFailure(reason: string): Promise<void> {
+  try {
+    const latest = await prisma.rwInvoice.aggregate({ _max: { syncedAt: true } })
+    const syncedAt = latest._max.syncedAt
+    const ageDays = syncedAt
+      ? Math.floor((Date.now() - syncedAt.getTime()) / 86_400_000)
+      : null
+
+    const staleness =
+      ageDays == null
+        ? 'The invoice mirror has never been populated.'
+        : `Invoice balances in Collections, Receivables and Reconcile are ${ageDays} day${ageDays === 1 ? '' : 's'} old (last synced ${syncedAt!.toISOString().slice(0, 10)}).`
+
+    if (await alreadyAlertedToday(ALERT_TYPE)) return
+
+    await prisma.alert.create({
+      data: {
+        type: ALERT_TYPE,
+        title: 'RentalWorks invoice sync is failing — balances are stale',
+        body: `${reason}\n\n${staleness}\n\nUntil this is fixed, treat every RW balance in HQ as out of date.`,
+        severity: 'high',
+        link: '/admin/rw-invoice-sync',
+      },
+    })
+
+    await sendAgreementEmail({
+      to: [HQ_INBOX],
+      subject: 'SirReel HQ — RentalWorks invoice sync is failing',
+      text: failureText(reason, staleness),
+      // Internal ops mail, so plain <pre> rather than the client-facing
+      // branded shell — legibility over presentation.
+      html: `<pre style="font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap;">${escapeHtml(failureText(reason, staleness))}</pre>`,
+      label: 'rw-sync-failure',
+    })
+  } catch (err) {
+    // Never let alerting break the caller: the sync already failed, and
+    // throwing here would replace a reported problem with an unreported one.
+    console.error('[rw-sync-alert] could not raise the failure alert:', err)
+  }
+}
+
+/**
+ * Token is still valid but running out. Warned early because there is no
+ * refresh mechanism — someone has to log into RentalWorks and mint a new one,
+ * and that is a task with a lead time, not a button.
+ */
+export async function reportRwTokenExpiring(daysLeft: number): Promise<void> {
+  const type = 'rw_token_expiring'
+  try {
+    if (await alreadyAlertedToday(type)) return
+    await prisma.alert.create({
+      data: {
+        type,
+        title: `RentalWorks token expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+        body:
+          `RENTALWORKS_TOKEN lapses in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. When it does, the nightly ` +
+          'invoice sync stops and every RW balance in HQ silently goes stale.\n\n' +
+          'Mint a new token in RentalWorks and set RENTALWORKS_TOKEN in the Vercel project.',
+        severity: 'medium',
+        link: '/admin/rw-invoice-sync',
+      },
+    })
+    await sendAgreementEmail({
+      to: [HQ_INBOX],
+      subject: `SirReel HQ — RentalWorks token expires in ${daysLeft} days`,
+      text: expiryText(daysLeft),
+      html: `<pre style="font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap;">${escapeHtml(expiryText(daysLeft))}</pre>`,
+      label: 'rw-token-expiring',
+    })
+  } catch (err) {
+    console.error('[rw-sync-alert] could not raise the expiry warning:', err)
+  }
+}
+
+/** Warn from here in. Two weeks is enough to get a token without a scramble. */
+export const RW_TOKEN_WARN_DAYS = 14
+
+function failureText(reason: string, staleness: string): string {
+  return [
+    'The nightly RentalWorks invoice sync could not run.',
+    '',
+    reason,
+    '',
+    staleness,
+    '',
+    'Every RW balance shown in HQ — Collections, Receivables (RW), Reconcile RW —',
+    'is from the last successful sync and should not be quoted to a client',
+    'until this is resolved.',
+  ].join('\n')
+}
+
+function expiryText(daysLeft: number): string {
+  return [
+    `The RentalWorks API token expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
+    '',
+    'When it lapses the nightly invoice sync stops, and Collections,',
+    'Receivables (RW) and Reconcile RW quietly serve out-of-date balances.',
+    '',
+    'Mint a new token in RentalWorks and set RENTALWORKS_TOKEN in Vercel.',
+  ].join('\n')
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
