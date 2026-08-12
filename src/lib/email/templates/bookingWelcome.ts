@@ -1,3 +1,4 @@
+import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
 /**
  * Booking-welcome email — the second TSX-branded HTML email in the
  * platform (sibling to portalInvite.ts). Fires when a SirReel rep
@@ -40,8 +41,9 @@ export interface BookingWelcomeEmailInput {
   /** Agent's personal note (review-modal textarea) — an extra paragraph after
    *  the intro. Escaped + newline-converted here. Empty/null = omitted. */
   personalNote?: string | null
-  /** Write-my-own mode: replaces the standard intro prose. The greeting,
-   *  benefits, CTA button and sign-off stay intact. */
+  /** Write-my-own mode: the rep's prose, rendered BELOW the standard opening
+   *  line rather than replacing it. Greeting, benefits, CTA and sign-off stay
+   *  intact. When empty, the templated TSX-portal paragraph is used instead. */
   customMessage?: string | null
   /** CTA button label — the welcome/job-begin invite passes
    *  "Get Paperwork Started". Defaults to the original portal wording. */
@@ -78,13 +80,28 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
       .split(/\n{2,}/)
       .map((p) => `<p style="${style}">${escapeHtml(p).replace(/\n/g, '<br />')}</p>`)
       .join('')
-  // Write-my-own replaces ONLY the standard intro prose; greeting, benefits,
-  // CTA button and sign-off stay intact. Personal note = extra paragraph(s).
-  const introHtml = customRaw
-    ? toParas(customRaw, 'margin:0 0 16px;')
-    : `<p style="margin:0 0 16px;">We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place &mdash; your TSX portal.</p>`
+  // The STANDARD line always opens (Wes, 2026-08-12) — same sentence as the
+  // quick reply, from one shared constant so the two cannot drift.
+  //
+  // The rep's own words then FOLLOW it rather than replacing it. Previously
+  // write-my-own swapped out the intro entirely, so the client's first
+  // sentence changed depending on who typed it. Greeting, benefits, CTA and
+  // sign-off are unchanged.
+  //
+  // The templated TSX-portal prose is still the fallback when a rep writes
+  // nothing — it is "the rest" in that case.
+  const standardHtml = `<p style="margin:0 0 16px;">${escapeHtml(STANDARD_OPENING_LINE)}</p>`
+  const introHtml =
+    standardHtml +
+    (customRaw
+      ? toParas(customRaw, 'margin:0 0 16px;')
+      : `<p style="margin:0 0 16px;">We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place &mdash; your TSX portal.</p>`)
   const noteHtml = noteRaw ? toParas(noteRaw, 'margin:0 0 16px;color:#1a1a1a;') : ''
-  const introText = customRaw || `We're excited to take care of your team on ${input.projectName || 'this project'}.`
+  // Same order in plain text as in HTML.
+  const introText = [
+    STANDARD_OPENING_LINE,
+    customRaw || `We're excited to take care of your team on ${input.projectName || 'this project'}.`,
+  ].join('\n\n')
 
   const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 

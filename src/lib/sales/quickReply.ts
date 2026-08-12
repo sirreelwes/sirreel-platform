@@ -21,6 +21,7 @@
  * availability pills and the soft-hold backup logic.
  */
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
+import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
 import { getCategoryUtilization } from '@/lib/fleet/utilization'
 import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
 import { SUPPLY_ORDER_URL } from '@/lib/email/supplyUrl'
@@ -116,8 +117,7 @@ export interface QuickReplyTiering {
  * The tier is still computed and still shown to the REP in the review modal;
  * it just no longer writes the client-facing line.
  */
-export const QUICK_REPLY_STANDARD_MESSAGE =
-  "It's great to hear from you and we are looking forward to the opportunity to partner with you on this project."
+export const QUICK_REPLY_STANDARD_MESSAGE = STANDARD_OPENING_LINE
 
 /** Kept as named exports so existing call sites (AI review prompt) keep
  *  working — both now resolve to the same standard sentence. */

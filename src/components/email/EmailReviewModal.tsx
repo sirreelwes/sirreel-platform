@@ -624,9 +624,10 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        {target.kind === 'welcome'
-                          ? '— your message replaces the standard wording; the portal button & sign-off stay.'
-                          : '— added below the standard opening line. No need to repeat the greeting.'}
+                        {/* Both kinds behave the same now: the standard line
+                            leads, this text follows. */}
+                        — added below the standard opening line. No need to repeat the greeting.
+                        {target.kind === 'welcome' ? ' The portal button & sign-off stay.' : ''}
                       </span>
                     </span>
                   </label>
