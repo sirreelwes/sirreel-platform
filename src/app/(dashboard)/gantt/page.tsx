@@ -1691,6 +1691,26 @@ export default function GanttPage() {
                   <div className="py-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 mt-2">{selected.adminNotes}</div>
                 )}
 
+                {/* Create an order for this reservation's JOB.
+                    Job-rooted on purpose: an order belongs to a Job, and a Job
+                    routinely spans several bookings (two bookings, one Cube
+                    each), so there is no single booking an order could point
+                    at. The wizard takes ?jobId= and prefills.
+
+                    Hidden when the booking has no job — there would be nothing
+                    to attach the order to, and the wizard cannot create a Job
+                    (Job-as-root: the resolver does that). */}
+                {selected.jobId && (
+                  <div className="pt-2">
+                    <Link
+                      href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
+                      className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-[12px] font-semibold"
+                    >
+                      + Create order for this job
+                    </Link>
+                  </div>
+                )}
+
                 {/* Job context — clickable orders on this booking (with the
                     unit(s) they're loaded onto) + the booking's other
                     reserved units. Everything on the job, one click away. */}
