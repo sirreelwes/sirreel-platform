@@ -24,6 +24,16 @@ export async function GET(req: NextRequest) {
 
   const q = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 80)
 
+  // Invoices someone has already marked paid in HQ. The mirror still shows a
+  // balance on them — RW has not been told, or has not synced back — so
+  // without this they sat in the collectible list and Ana would chase money
+  // a colleague already recorded as received.
+  const paidMarks = await prisma.rwInvoicePaidMark.findMany({
+    select: { rwInvoiceId: true, markedAt: true, note: true },
+  })
+  const paidMarkById = new Map(paidMarks.map((m) => [m.rwInvoiceId, m]))
+  const paidMarkedIds = paidMarks.map((m) => m.rwInvoiceId)
+
   const where = q
     ? {
         OR: [
@@ -33,7 +43,11 @@ export async function GET(req: NextRequest) {
           { dealName: { contains: q, mode: 'insensitive' as const } },
         ],
       }
-    : { remainingTotal: { gt: 0 } }
+      // The default list is "what is collectible", so paid-marked invoices are
+      // excluded. An explicit SEARCH still returns them — flagged — because
+      // someone looking up a specific number needs to find it, and a mark
+      // made in error must stay visible rather than vanishing.
+    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarkedIds } }
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
@@ -73,14 +87,25 @@ export async function GET(req: NextRequest) {
     byInvoice.set(c.rwInvoiceId, cur)
   }
 
+  // Age of the mirror. A collections list that silently serves two-week-old
+  // balances is worse than one that says how old it is — the operator cannot
+  // otherwise tell they are quoting a stale number to a client on the phone.
+  const freshest = await prisma.rwInvoice.aggregate({ _max: { syncedAt: true } })
+
   return NextResponse.json({
     ok: true,
-    invoices: invoices.map((i) => ({
-      ...i,
-      invoiceTotal: Number(i.invoiceTotal),
-      receivedTotal: Number(i.receivedTotal),
-      remainingTotal: Number(i.remainingTotal),
-      alreadyCharged: byInvoice.get(i.rwInvoiceId) ?? { count: 0, total: 0, last: null },
-    })),
+    syncedAt: freshest._max.syncedAt ?? null,
+    invoices: invoices.map((i) => {
+      const mark = paidMarkById.get(i.rwInvoiceId)
+      return {
+        ...i,
+        invoiceTotal: Number(i.invoiceTotal),
+        receivedTotal: Number(i.receivedTotal),
+        remainingTotal: Number(i.remainingTotal),
+        alreadyCharged: byInvoice.get(i.rwInvoiceId) ?? { count: 0, total: 0, last: null },
+        paidMarkedAt: mark?.markedAt ?? null,
+        paidMarkNote: mark?.note ?? null,
+      }
+    }),
   })
 }

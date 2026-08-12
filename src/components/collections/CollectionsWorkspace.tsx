@@ -44,6 +44,10 @@ interface RwInvoice {
   invoiceTotal: number
   remainingTotal: number
   alreadyCharged: { count: number; total: number; last: string | null }
+  /** Set when someone already recorded this as paid in HQ. Only ever appears
+   *  in SEARCH results — the collectible list excludes them. */
+  paidMarkedAt?: string | null
+  paidMarkNote?: string | null
 }
 
 interface FinalInvoice {
@@ -86,6 +90,33 @@ interface ChargeRow {
   reversalRetref: string | null
 }
 
+/**
+ * How old the RentalWorks mirror is.
+ *
+ * Turns amber past a day and red past two, because the sync is nightly: a
+ * gap that large means it stopped running, and the balances on screen are
+ * no longer what the client owes. Silence was the actual failure mode — the
+ * sync stopped for 15 days and nothing on this page said so.
+ */
+function SyncAge({ iso }: { iso: string | null }) {
+  if (!iso) return <span className="text-[11px] text-red-400">Balances never synced</span>
+  const ageMs = Date.now() - new Date(iso).getTime()
+  const hours = Math.floor(ageMs / 3_600_000)
+  const stale = hours >= 48
+  const aging = hours >= 24
+  const label =
+    hours < 1 ? 'just now' : hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`
+  return (
+    <span
+      className={`text-[11px] ${stale ? 'text-red-400 font-semibold' : aging ? 'text-amber-500' : 'text-zinc-500'}`}
+      title={new Date(iso).toLocaleString()}
+    >
+      Balances as of {label}
+      {stale ? ' — sync is behind' : ''}
+    </span>
+  )
+}
+
 const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
@@ -97,6 +128,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [reversing, setReversing] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  // Age of the RentalWorks mirror. Shown because these balances are a nightly
+  // snapshot, not live — an operator quoting a number to a client needs to
+  // know how old it is.
+  const [syncedAt, setSyncedAt] = useState<string | null>(null)
   const [invoice, setInvoice] = useState<RwInvoice | null>(null)
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -164,7 +199,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const loadInvoices = useCallback((query: string) => {
     fetch(`/api/collections/rw-invoices?q=${encodeURIComponent(query)}`)
       .then((r) => r.json())
-      .then((d) => d.ok && setInvoices(d.invoices ?? []))
+      .then((d) => {
+        if (!d.ok) return
+        setInvoices(d.invoices ?? [])
+        setSyncedAt(d.syncedAt ?? null)
+      })
       .catch(() => {})
   }, [])
 
@@ -450,7 +489,10 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         </div>
 
         <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5">
-          <h2 className="text-sm font-bold text-white mb-3">Or browse RentalWorks invoices</h2>
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <h2 className="text-sm font-bold text-white">Or browse RentalWorks invoices</h2>
+            <SyncAge iso={syncedAt} />
+          </div>
           <input
             className={input}
             placeholder="Search invoice #, customer, order, production… (blank = all with a balance)"
@@ -488,6 +530,17 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                   {i.dealName ? ` · ${i.dealName}` : ''}
                   {i.status ? ` · ${i.status}` : ''}
                 </div>
+                {/* Only reachable via an explicit search — the collectible
+                    list filters these out. Flagged loudly because chasing an
+                    invoice a colleague already settled is the specific
+                    embarrassment this prevents. */}
+                {i.paidMarkedAt && (
+                  <div className="text-xs text-emerald-400 mt-1">
+                    ✓ Already marked paid in HQ on{' '}
+                    {new Date(i.paidMarkedAt).toLocaleDateString()}
+                    {i.paidMarkNote ? ` · ${i.paidMarkNote}` : ''} — RentalWorks has not caught up
+                  </div>
+                )}
                 {i.alreadyCharged.count > 0 && (
                   <div className="text-xs text-amber-500/90 mt-1">
                     ⚠ {i.alreadyCharged.count} charge{i.alreadyCharged.count === 1 ? '' : 's'} already
