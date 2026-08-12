@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({
       ok: true,
+      // See the quick-reply preview — same prefill contract.
+      defaultBody: defaultEmailBody({ kind: 'welcome', projectName: ctx.inquiryTitle }),
       to: { id: ctx.person.id, name: ctx.person.firstName, email: ctx.person.email, role: null, isPrimary: true },
       alternatives: [],
       from: SEND_FROM,

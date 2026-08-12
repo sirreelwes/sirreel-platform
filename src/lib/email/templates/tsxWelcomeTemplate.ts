@@ -188,12 +188,15 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // the rep's prose became the opener and the templated line landed
   // underneath, which read as an afterthought and produced a doubled
   // greeting whenever a rep began with "Hi <name>".
+  // The rep's text is the WHOLE body when present — they are handed the
+  // standard wording prefilled and may edit or delete any of it. With nothing
+  // written, the standard line renders, so the box and the sent email match.
   const opener = withAvailability
-    ? escapeHtml(av!.availabilityMessage)
+    ? (customBodyHtml ?? escapeHtml(av!.availabilityMessage))
     : withQuote ? quoteOpener : welcomeOpener
 
-  // The rep's prose, now rendered AFTER the opener rather than replacing it.
-  const repBodyHtml = withAvailability ? customBodyHtml : null
+  // No longer a separate paragraph — customBody IS the opener above.
+  const repBodyHtml: string | null = null
 
   // The tier line no longer needs a paragraph of its own — it IS the opener.
   const showAvailabilityMessage = false
@@ -424,15 +427,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     `Hi ${first},`,
     '',
     withAvailability
-      ? av!.availabilityMessage
+      ? (customBody ?? av!.availabilityMessage)
       : withQuote
         ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
         : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
-  // Rep's own words directly under the standard opener — same order as HTML.
-  if (customBody) {
-    textParts.push('', customBody)
-  }
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
   }

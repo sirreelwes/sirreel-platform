@@ -1,4 +1,4 @@
-import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
+import { defaultEmailBody } from '@/lib/email/standardOpening'
 /**
  * Booking-welcome email — the second TSX-branded HTML email in the
  * platform (sibling to portalInvite.ts). Fires when a SirReel rep
@@ -90,18 +90,18 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   //
   // The templated TSX-portal prose is still the fallback when a rep writes
   // nothing — it is "the rest" in that case.
-  const standardHtml = `<p style="margin:0 0 16px;">${escapeHtml(STANDARD_OPENING_LINE)}</p>`
-  const introHtml =
-    standardHtml +
-    (customRaw
-      ? toParas(customRaw, 'margin:0 0 16px;')
-      : `<p style="margin:0 0 16px;">We&rsquo;re excited to take care of your team on <strong>${projectName}</strong>. Everything you&rsquo;ll need over the course of this project lives in one place &mdash; your TSX portal.</p>`)
+  // The rep's text is the WHOLE body when present. It is not appended to a
+  // fixed preamble, because the rep is given that preamble prefilled and may
+  // edit or delete any of it — "the entire email should be editable".
+  //
+  // With nothing written, the same default renders, so the box a rep looks at
+  // and the email a client receives are the same words.
+  const introHtml = customRaw
+    ? toParas(customRaw, 'margin:0 0 16px;')
+    : toParas(defaultEmailBody({ kind: 'welcome', projectName: input.projectName }), 'margin:0 0 16px;')
   const noteHtml = noteRaw ? toParas(noteRaw, 'margin:0 0 16px;color:#1a1a1a;') : ''
   // Same order in plain text as in HTML.
-  const introText = [
-    STANDARD_OPENING_LINE,
-    customRaw || `We're excited to take care of your team on ${input.projectName || 'this project'}.`,
-  ].join('\n\n')
+  const introText = customRaw || defaultEmailBody({ kind: 'welcome', projectName: input.projectName })
 
   const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 

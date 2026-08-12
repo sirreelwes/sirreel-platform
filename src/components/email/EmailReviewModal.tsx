@@ -59,6 +59,9 @@ interface AttachmentMeta {
 
 interface CompositionOk {
   ok: true;
+  /** The standard wording, prefilled into "Write my own email" so the rep
+   *  edits real copy instead of starting from an empty box. */
+  defaultBody?: string | null;
   to: RankedContact;
   alternatives: RankedContact[];
   from: string;
@@ -618,7 +621,18 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                       type="checkbox"
                       checked={writeOwn}
                       disabled={sendLocked}
-                      onChange={(e) => { setWriteOwn(e.target.checked); if (!e.target.checked) { setAiFlags(null); setAiPolished(null); setAiError(null); } }}
+                      onChange={(e) => {
+                        const on = e.target.checked
+                        setWriteOwn(on)
+                        // Seed the box with the standard wording the FIRST time
+                        // it is opened, so "editable" means editing real copy
+                        // rather than retyping it. Never overwrite something
+                        // the rep has already written.
+                        if (on && !customMessage.trim() && preview?.defaultBody) {
+                          setCustomMessage(preview.defaultBody)
+                        }
+                        if (!on) { setAiFlags(null); setAiPolished(null); setAiError(null); }
+                      }}
                       className="accent-amber-600"
                     />
                     <span>
@@ -626,8 +640,8 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                       <span className="text-zinc-500">
                         {/* Both kinds behave the same now: the standard line
                             leads, this text follows. */}
-                        — added below the standard opening line. No need to repeat the greeting.
-                        {target.kind === 'welcome' ? ' The portal button & sign-off stay.' : ''}
+                        — the standard wording, yours to edit. The greeting,
+                        {target.kind === 'welcome' ? ' portal button' : ' availability list & supply link'} and sign-off stay.
                       </span>
                     </span>
                   </label>

@@ -14,3 +14,29 @@
  */
 export const STANDARD_OPENING_LINE =
   "It's great to hear from you and we are looking forward to the opportunity to partner with you on this project."
+
+/**
+ * The editable DEFAULT body a rep starts from.
+ *
+ * Wes, 2026-08-12: the standard paragraph is a starting point, not a fixed
+ * preamble — the rep can edit the whole email. So this text is prefilled into
+ * "Write my own email" and, once edited, becomes the entire body. When a rep
+ * writes nothing, the template renders this same text, so what they see in the
+ * box is exactly what the client receives.
+ *
+ * Built server-side because only the server knows the project name.
+ */
+export function defaultEmailBody(input: {
+  kind: 'quick-reply' | 'welcome'
+  projectName?: string | null
+}): string {
+  if (input.kind === 'welcome') {
+    const project = input.projectName?.trim() || 'this project'
+    return [
+      STANDARD_OPENING_LINE,
+      '',
+      `We're excited to take care of your team on ${project}. Everything you'll need over the course of this project lives in one place — your TSX portal.`,
+    ].join('\n')
+  }
+  return STANDARD_OPENING_LINE
+}

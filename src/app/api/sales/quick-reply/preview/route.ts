@@ -6,6 +6,7 @@
  * Reply has no order yet).
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
@@ -52,6 +53,9 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    // Prefills "Write my own email" with exactly what would otherwise be sent,
+    // so the rep edits real wording rather than starting from a blank box.
+    defaultBody: defaultEmailBody({ kind: 'quick-reply' }),
     to: { id: '', name: payload.recipientName || payload.recipientEmail, email: payload.recipientEmail, role: null, isPrimary: true },
     alternatives: [],
     from: SEND_FROM,
