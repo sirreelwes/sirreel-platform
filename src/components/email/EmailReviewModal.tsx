@@ -606,9 +606,11 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                 />
               </div>
 
-              {/* Write my own email — quick-reply + welcome. Replaces the
-                  templated prose with the rep's message; the branded shell +
-                  structural blocks (availability / portal CTA) stay intact. */}
+              {/* Write my own email — quick-reply + welcome.
+                  For QUICK REPLY the rep's message no longer replaces the
+                  opener: the standard sentence always leads and this text
+                  follows it. Copy says "adds below" so a rep does not open
+                  with their own greeting and produce a doubled "Hi <name>". */}
               {(target.kind === 'quick-reply' || target.kind === 'welcome') && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                   <label className="flex items-center gap-2 text-[12px] text-zinc-300 cursor-pointer select-none">
@@ -619,7 +621,14 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                       onChange={(e) => { setWriteOwn(e.target.checked); if (!e.target.checked) { setAiFlags(null); setAiPolished(null); setAiError(null); } }}
                       className="accent-amber-600"
                     />
-                    <span>Write my own email <span className="text-zinc-500">— your message replaces the standard wording; {target.kind === 'welcome' ? 'the portal button & sign-off stay.' : 'the availability list & supply link stay.'}</span></span>
+                    <span>
+                      Write my own email{' '}
+                      <span className="text-zinc-500">
+                        {target.kind === 'welcome'
+                          ? '— your message replaces the standard wording; the portal button & sign-off stay.'
+                          : '— added below the standard opening line. No need to repeat the greeting.'}
+                      </span>
+                    </span>
                   </label>
                   {writeOwn && (
                     <div className="mt-2 space-y-2">

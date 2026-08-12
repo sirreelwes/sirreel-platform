@@ -104,11 +104,26 @@ export interface QuickReplyTiering {
   lines: QuickReplyUtilizationLine[]
 }
 
-export const QUICK_REPLY_POSITIVE_MESSAGE =
-  "We're looking good on availability for your dates — send over your full job info and our team will confirm and get things rolling."
+/**
+ * The ONE standard sentence every quick reply opens with (Wes, 2026-08-12).
+ *
+ * Both tiers say the same thing to the client on purpose. The old copy
+ * differed by tier — "we're looking good on availability" vs a hedge — which
+ * made the template commit, or decline to commit, on the rep's behalf before
+ * anyone had looked at the job. Specifics belong in the rep's own words
+ * underneath.
+ *
+ * The tier is still computed and still shown to the REP in the review modal;
+ * it just no longer writes the client-facing line.
+ */
+export const QUICK_REPLY_STANDARD_MESSAGE =
+  "It's great to hear from you and we are looking forward to the opportunity to partner with you on this project."
 
-export const QUICK_REPLY_NONCOMMITTAL_MESSAGE =
-  "Thanks for reaching out — we'd love to help with your job. Share your dates, location, and what you need, and our team will confirm availability and get everything rolling."
+/** Kept as named exports so existing call sites (AI review prompt) keep
+ *  working — both now resolve to the same standard sentence. */
+export const QUICK_REPLY_POSITIVE_MESSAGE = QUICK_REPLY_STANDARD_MESSAGE
+
+export const QUICK_REPLY_NONCOMMITTAL_MESSAGE = QUICK_REPLY_STANDARD_MESSAGE
 
 /**
  * Pick the reply tier from live fleet utilization.

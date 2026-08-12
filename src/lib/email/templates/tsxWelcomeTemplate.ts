@@ -183,15 +183,20 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const customBodyHtml = customBody
     ? customBody.split(/\n{2,}/).map((para) => escapeHtml(para.trim()).replace(/\n/g, '<br/>')).filter(Boolean).join('</p><p style="font-size: 16px; color: ' + TEXT + '; margin: 12px 0 0; line-height: 1.6;">')
     : null
+  // ORDER (Wes, 2026-08-12): the standard sentence opens EVERY quick reply,
+  // and the rep's own words follow it. It used to be the other way round —
+  // the rep's prose became the opener and the templated line landed
+  // underneath, which read as an afterthought and produced a doubled
+  // greeting whenever a rep began with "Hi <name>".
   const opener = withAvailability
-    ? (customBodyHtml ?? (av!.messageReplacesOpener ? escapeHtml(av!.availabilityMessage) : availabilityOpener))
+    ? escapeHtml(av!.availabilityMessage)
     : withQuote ? quoteOpener : welcomeOpener
 
-  // Whether the tier message still needs its own paragraph: yes unless it
-  // already served as the opener (non-committal, no custom body). With a
-  // custom body it ALWAYS renders — the rep's prose can't drop the
-  // fleet-derived availability statement.
-  const showAvailabilityMessage = withAvailability && (!!customBody || !av!.messageReplacesOpener)
+  // The rep's prose, now rendered AFTER the opener rather than replacing it.
+  const repBodyHtml = withAvailability ? customBodyHtml : null
+
+  // The tier line no longer needs a paragraph of its own — it IS the opener.
+  const showAvailabilityMessage = false
 
   const closer = withAvailability
     ? '' // the tier message carries its own next step
@@ -351,6 +356,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
             <td style="padding: 28px 32px 4px;">
               <p style="font-size: 17px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.5;">${greeting}</p>
               <p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${opener}</p>
+              ${repBodyHtml ? `<p style="font-size: 16px; color: ${TEXT}; margin: 0 0 12px; line-height: 1.6;">${repBodyHtml}</p>` : ''}
             </td>
           </tr>
           ${personalNoteBlock}
@@ -418,11 +424,15 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     `Hi ${first},`,
     '',
     withAvailability
-      ? (customBody ?? (av!.messageReplacesOpener ? av!.availabilityMessage : `Thanks for reaching out about ${av!.jobName} — happy to help get this on the calendar.`))
+      ? av!.availabilityMessage
       : withQuote
         ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
         : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
+  // Rep's own words directly under the standard opener — same order as HTML.
+  if (customBody) {
+    textParts.push('', customBody)
+  }
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
   }
