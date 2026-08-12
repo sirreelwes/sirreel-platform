@@ -155,7 +155,9 @@ export async function GET(req: NextRequest) {
           jobCode: true,
           orders: {
             where: { status: { not: 'CANCELLED' } },
-            select: { id: true, orderNumber: true, status: true },
+            // blindPickup comes from the JOB's orders, not just the booking's.
+            // Orders link to a Job; nothing sets Order.bookingId in practice.
+            select: { id: true, orderNumber: true, status: true, blindPickup: true },
           },
         },
       },
@@ -197,7 +199,7 @@ export async function GET(req: NextRequest) {
   const bookingExtras = new Map<
     string,
     {
-      orders: Array<{ id: string; orderNumber: string; status: string }>
+      orders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean }>
       units: Array<{ unitName: string; category: string; bookingNumber: string }>
     }
   >()
@@ -221,9 +223,11 @@ export async function GET(req: NextRequest) {
   for (const b of bookings) {
     // Union of the job's orders (the real linkage) and any directly
     // booking-linked orders, deduped by id.
-    const orderById = new Map<string, { id: string; orderNumber: string; status: string }>()
-    for (const o of b.job?.orders ?? []) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
-    for (const o of b.orders) orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status })
+    const orderById = new Map<string, { id: string; orderNumber: string; status: string; blindPickup: boolean }>()
+    for (const o of b.job?.orders ?? [])
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup })
+    for (const o of b.orders)
+      orderById.set(o.id, { id: o.id, orderNumber: o.orderNumber, status: o.status, blindPickup: o.blindPickup })
     const ownUnits = b.items.flatMap((it) =>
       it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '', bookingNumber: b.bookingNumber })),
     )
@@ -280,7 +284,11 @@ export async function GET(req: NextRequest) {
       agent: b.agent.name ?? '',
       status,
       stage: status,
-      blindPickup: b.orders.some((o) => o.blindPickup),
+      // Same source as hasOrder below — the job/booking order UNION. This
+      // read `b.orders` (booking-linked only), and nothing sets
+      // Order.bookingId, so the violet blind-pickup bar could never appear
+      // for an order created natively in HQ.
+      blindPickup: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindPickup),
       // Clickable order links for the job detail modal; hasOrder drives
       // the 📄 indicator on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
@@ -414,7 +422,8 @@ export async function GET(req: NextRequest) {
       cat,
       status: mapStatus(a.bookingItem.booking.status),
       bookingStatus: a.bookingItem.booking.status, // raw enum so the UI can decide if Confirm is applicable
-      blindPickup: a.bookingItem.booking.orders.some((o) => o.blindPickup),
+      // See the job-view branch: the union, not the booking's direct orders.
+      blindPickup: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).some((o) => o.blindPickup),
       start: ymd(a.startDate),
       end: ymd(a.endDate),
       adminNotes: '',
