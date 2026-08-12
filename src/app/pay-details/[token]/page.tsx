@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { ZelleDetails } from '@/components/payments/ZelleDetails'
 
 interface Details {
   payeeName: string
@@ -25,6 +26,8 @@ interface Details {
   remittanceEmail: string | null
   bankAddress: string | null
   instructions: string | null
+  zelleHandle: string | null
+  zelleName: string | null
 }
 
 function Row({ label, value }: { label: string; value: string | null }) {
@@ -133,6 +136,10 @@ export default function PayDetailsPage({ params }: { params: { token: string } }
                 {details.instructions}
               </p>
             )}
+
+            <div className="mt-4">
+              <ZelleDetails handle={details.zelleHandle} name={details.zelleName} />
+            </div>
 
             {docs.length > 0 && (
               <div className="mt-4">

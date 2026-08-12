@@ -28,6 +28,10 @@ const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
 /** Same asset the rest of the SirReel emails use. */
 const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 
+/** Zelle QR, same host as the logo. Absolute because mail clients cannot
+ *  resolve relative paths; the marketing host does not serve /payment/. */
+const ZELLE_QR_URL = 'https://hq.sirreel.com/payment/zelle-qr.png'
+
 export const FRAUD_WARNING =
   "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
 
@@ -90,6 +94,20 @@ export function buildPaymentInfoEmail(input: {
       : 'As requested, here is SirReel’s payment information. Feel free to forward this to your accounts-payable team.',
     '',
     ...rows.map((row) => `${row.label}: ${row.value}`),
+    '',
+    ...(input.details.zelleHandle && input.details.zelleName
+      ? [
+          '',
+          'Paying by Zelle:',
+          `  Zelle tag: ${input.details.zelleHandle}`,
+          `  Recipient name to confirm: ${input.details.zelleName}`,
+          // The tag alone is not enough to send safely — the payer confirms
+          // the recipient NAME in their banking app, and that is the check
+          // that catches a wrong or spoofed tag.
+          '  Zelle limits are set by your bank and are often a few thousand',
+          '  dollars per day — for larger invoices use ACH or wire above.',
+        ]
+      : []),
     '',
     `IMPORTANT: ${FRAUD_WARNING}`,
     ...(input.verifyLink
@@ -157,6 +175,27 @@ export function buildPaymentInfoEmail(input: {
       </div>
 
       <!-- fraud warning: distinct callout, not body text -->
+      ${
+        input.details.zelleHandle && input.details.zelleName
+          ? `<div style="border:1px solid #e5e2d9;border-radius:10px;padding:16px 18px;margin:0 0 20px;background:#ffffff;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 10px;">Or pay by Zelle</div>
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td valign="top" style="padding-right:16px;">
+            <img src="${ZELLE_QR_URL}" alt="Zelle QR code" width="104" height="104" style="display:block;border:0;width:104px;height:104px;" />
+          </td>
+          <td valign="top" style="font-size:13px;line-height:1.7;color:#111827;">
+            <div><strong>Zelle tag:</strong> ${escapeHtml(input.details.zelleHandle)}</div>
+            <div><strong>Confirm the name:</strong> ${escapeHtml(input.details.zelleName)}</div>
+            <div style="color:#6b7280;font-size:12px;margin-top:6px;">
+              Your bank will show the recipient name before you send &mdash; check it matches.
+              Zelle limits are set by your bank, so use ACH or wire for larger invoices.
+            </div>
+          </td>
+        </tr></table>
+      </div>`
+          : ''
+      }
+
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 20px;">
         <tr>
           <td style="width:5px;background:#c2410c;border-radius:8px 0 0 8px;">&nbsp;</td>

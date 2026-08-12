@@ -5207,6 +5207,14 @@ model SiteSetting {
   paymentRemittanceEmail  String? @map("payment_remittance_email")
   paymentBankAddress      String? @map("payment_bank_address") @db.Text
   paymentInstructions     String? @map("payment_instructions") @db.Text
+  /// Zelle — the tag a client sends to, and the recipient name their banking
+  /// app will show them to confirm. Zelle was previously ONLY on invoice PDFs
+  /// (ZellePayBlock's hardcoded constants), so a client who asked how to pay
+  /// was offered ACH, wire and card but not a method SirReel actually
+  /// accepts. It belongs with the other payment fields, not inside a PDF
+  /// component.
+  paymentZelleHandle String? @map("payment_zelle_handle")
+  paymentZelleName   String? @map("payment_zelle_name")
   /// Two PRIVATE-Blob PDF attachments for the payment-info email —
   /// "ACH Payment Information Form (bank)" and "ACH / Wire Banking
   /// Information (SirReel)". Stored blobKey (server-side fetch) +

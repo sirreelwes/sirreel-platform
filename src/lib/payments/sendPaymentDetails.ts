@@ -35,6 +35,8 @@ export async function loadPaymentRecord(): Promise<PaymentDetailsRecord | null> 
       paymentRemittanceEmail: true,
       paymentBankAddress: true,
       paymentInstructions: true,
+      paymentZelleHandle: true,
+      paymentZelleName: true,
     },
   })
   const record: PaymentDetailsRecord = {
@@ -47,6 +49,8 @@ export async function loadPaymentRecord(): Promise<PaymentDetailsRecord | null> 
     remittanceEmail: s?.paymentRemittanceEmail ?? null,
     bankAddress: s?.paymentBankAddress ?? null,
     instructions: s?.paymentInstructions ?? null,
+    zelleHandle: s?.paymentZelleHandle ?? null,
+    zelleName: s?.paymentZelleName ?? null,
   }
   return isPaymentConfigured(record) ? record : null
 }

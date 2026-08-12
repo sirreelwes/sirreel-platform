@@ -189,6 +189,8 @@ export async function POST(req: NextRequest) {
         paymentRemittanceEmail: true,
         paymentBankAddress: true,
         paymentInstructions: true,
+      paymentZelleHandle: true,
+      paymentZelleName: true,
         paymentAchFormKey: true,
         paymentAchFormFilename: true,
         paymentBankInfoKey: true,
@@ -205,6 +207,8 @@ export async function POST(req: NextRequest) {
       remittanceEmail: settings?.paymentRemittanceEmail ?? null,
       bankAddress: settings?.paymentBankAddress ?? null,
       instructions: settings?.paymentInstructions ?? null,
+      zelleHandle: settings?.paymentZelleHandle ?? null,
+      zelleName: settings?.paymentZelleName ?? null,
     }
     const details = isPaymentConfigured(paymentRecord) ? paymentRecord : null
 

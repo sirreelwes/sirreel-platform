@@ -43,6 +43,8 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       paymentRemittanceEmail: true,
       paymentBankAddress: true,
       paymentInstructions: true,
+      paymentZelleHandle: true,
+      paymentZelleName: true,
       paymentAchFormKey: true,
       paymentAchFormFilename: true,
       paymentBankInfoKey: true,
@@ -76,6 +78,8 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       remittanceEmail: s.paymentRemittanceEmail ?? null,
       bankAddress: s.paymentBankAddress ?? null,
       instructions: s.paymentInstructions ?? null,
+      zelleHandle: s.paymentZelleHandle ?? null,
+      zelleName: s.paymentZelleName ?? null,
     },
     // Presence + display name only. The blob keys never leave the server;
     // the files are fetched through the doc route, behind this same token.

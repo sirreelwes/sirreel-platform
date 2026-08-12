@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { ZelleDetails } from '@/components/payments/ZelleDetails'
 
 interface Details {
   payeeName: string
@@ -28,6 +29,8 @@ interface Details {
   remittanceEmail: string | null
   bankAddress: string | null
   instructions: string | null
+  zelleHandle: string | null
+  zelleName: string | null
 }
 
 function Row({ label, value }: { label: string; value: string | null }) {
@@ -118,6 +121,8 @@ export function PortalBankDetails() {
       {details.instructions && (
         <p className="text-xs text-gray-600 whitespace-pre-line">{details.instructions}</p>
       )}
+
+      <ZelleDetails handle={details.zelleHandle} name={details.zelleName} tone="compact" />
 
       <ShareToAp />
 

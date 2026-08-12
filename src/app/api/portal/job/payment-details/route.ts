@@ -63,6 +63,8 @@ export async function GET(req: NextRequest) {
       paymentRemittanceEmail: true,
       paymentBankAddress: true,
       paymentInstructions: true,
+      paymentZelleHandle: true,
+      paymentZelleName: true,
     },
   })
 
@@ -89,6 +91,8 @@ export async function GET(req: NextRequest) {
       remittanceEmail: s!.paymentRemittanceEmail ?? null,
       bankAddress: s!.paymentBankAddress ?? null,
       instructions: s!.paymentInstructions ?? null,
+      zelleHandle: s!.paymentZelleHandle ?? null,
+      zelleName: s!.paymentZelleName ?? null,
     },
   })
 }

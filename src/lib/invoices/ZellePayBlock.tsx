@@ -33,6 +33,16 @@ try {
   console.warn('[ZellePayBlock] failed to load public/payment/zelle-qr.png — rendering text fallback:', err instanceof Error ? err.message : err)
 }
 
+/**
+ * NOTE: SiteSetting.paymentZelleHandle / paymentZelleName are now the
+ * authoritative record — the email, the A/P share page and the portal panel
+ * all read from there, and /admin/payment-info edits it.
+ *
+ * These constants remain because this is a synchronous @react-pdf renderer
+ * with no DB access at render time. They were seeded INTO the record so every
+ * surface agrees today; if the record changes, this must be updated to match
+ * or the invoice PDF will contradict the email.
+ */
 export const ZELLE_ACCOUNT_NAME = 'SIRREEL PRODUCTION VEHICLES INC'
 
 /**

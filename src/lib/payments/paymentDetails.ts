@@ -33,6 +33,10 @@ export interface PaymentDetailsRecord {
   remittanceEmail: string | null
   bankAddress: string | null
   instructions: string | null
+  /** Zelle tag the client sends to (e.g. "sirreel"), and the recipient name
+   *  their banking app shows them to confirm before sending. */
+  zelleHandle: string | null
+  zelleName: string | null
 }
 
 /** The Prisma column names, for a field-name-only audit (never values). */
@@ -46,6 +50,8 @@ export const PAYMENT_FIELD_NAMES: readonly string[] = [
   'remittanceEmail',
   'bankAddress',
   'instructions',
+  'zelleHandle',
+  'zelleName',
 ]
 
 /**
@@ -82,6 +88,8 @@ export function validatePaymentDetails(
   const remittanceEmail = str(input.remittanceEmail)
   const bankAddress = str(input.bankAddress)
   const instructions = str(input.instructions)
+  const zelleHandle = str(input.zelleHandle)
+  const zelleName = str(input.zelleName)
 
   // Required core fields.
   if (!payeeName) return { ok: false, field: 'payeeName', error: 'Payee / account holder name is required.' }
@@ -104,6 +112,17 @@ export function validatePaymentDetails(
     return { ok: false, field: 'remittanceEmail', error: 'Remittance email is not a valid email address.' }
   }
 
+  // Zelle is OPTIONAL — not every merchant offers it, and a half-filled pair
+  // is worse than none: a tag with no recipient name gives the payer nothing
+  // to confirm against in their banking app, which is the one check that
+  // catches sending to the wrong person.
+  if (zelleHandle && !zelleName) {
+    return { ok: false, field: 'zelleName', error: 'Add the Zelle recipient name so the payer can confirm it in their bank app.' }
+  }
+  if (zelleName && !zelleHandle) {
+    return { ok: false, field: 'zelleHandle', error: 'Add the Zelle tag (email or phone) clients should send to.' }
+  }
+
   return {
     ok: true,
     record: {
@@ -116,6 +135,8 @@ export function validatePaymentDetails(
       remittanceEmail,
       bankAddress: bankAddress || null,
       instructions: instructions || null,
+      zelleHandle: zelleHandle || null,
+      zelleName: zelleName || null,
     },
   }
 }
