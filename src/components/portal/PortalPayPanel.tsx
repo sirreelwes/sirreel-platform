@@ -255,6 +255,16 @@ function CardPayForm({
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
+        // Card PAYMENT is blocked off production entirely. On UAT the gateway
+        // approves and we would write a CLEARED Payment for money that never
+        // moved — an invoice marked paid with nothing behind it is far worse
+        // than a client being told to pay another way.
+        if (d.live !== true) {
+          setErr(
+            'Card payment is temporarily unavailable — please pay by bank transfer, or contact billing@sirreel.com.',
+          )
+          return
+        }
         if (d.iframeUrl) setIframeUrl(d.iframeUrl)
         else setErr(d.error || 'Card entry unavailable')
       })

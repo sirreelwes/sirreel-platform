@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cardpointeBaseUrl } from '@/lib/cardpointe/client';
+import { cardpointeBaseUrl, cardpointeEnv } from '@/lib/cardpointe/client';
 
 /**
  * GET /api/cardpointe/config
@@ -54,5 +54,17 @@ export async function GET(req: NextRequest) {
     iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=false&usecvv=true&${common}`;
   }
 
-  return NextResponse.json({ iframeUrl, mode });
+  // `live` gates every CLIENT-FACING card surface. On UAT the tokenizer
+  // still works and the gateway still approves, which is precisely the
+  // danger: a real client authorized a real Visa against the sandbox on
+  // 2026-08-13 and it looked successful. Two things were wrong — the token
+  // is environment-scoped and cannot be charged in production, and real
+  // cardholder data went to a test environment Fiserv says must never
+  // receive it.
+  //
+  // Staff surfaces (collections) stay open on UAT: that is deliberate
+  // testing with test cards by someone who knows which environment they
+  // are in.
+  const env = cardpointeEnv();
+  return NextResponse.json({ iframeUrl, mode, env, live: env === 'PROD' });
 }

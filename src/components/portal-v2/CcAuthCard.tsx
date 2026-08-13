@@ -54,6 +54,11 @@ export function CcAuthCard({
   const [acknowledged, setAcknowledged] = useState(false)
   const [sig, setSig] = useState<string | null>(null)
   const [iframeUrl, setIframeUrl] = useState('')
+  // null = still asking. Card capture is HIDDEN until the gateway is in
+  // production: on UAT the tokenizer works and the gateway approves, so the
+  // step looks successful while producing a token that cannot be charged and
+  // sending a real client's card to a test environment.
+  const [cardLive, setCardLive] = useState<boolean | null>(null)
   const [cpToken, setCpToken] = useState('')
   // Expiry is collected HERE, not in the iframe: the tokenizer does not
   // reliably return it, and the gateway requires it to validate the card.
@@ -85,9 +90,12 @@ export function CcAuthCard({
     fetch('/api/cardpointe/config')
       .then((r) => r.json())
       .then((d) => {
-        if (d.iframeUrl) setIframeUrl(d.iframeUrl)
+        setCardLive(d.live === true)
+        if (d.live === true && d.iframeUrl) setIframeUrl(d.iframeUrl)
       })
-      .catch(() => {})
+      // Unknown means DON'T collect. Failing closed is the safe direction
+      // for a card form.
+      .catch(() => setCardLive(false))
   }, [open, iframeUrl, done, locked])
 
   // CardSecure posts the token back via window message — identical
@@ -138,6 +146,30 @@ export function CcAuthCard({
         <LockedNote title="Credit Card Authorization" />
       ) : done ? (
         <DoneNote title="Credit Card Authorized" sub="Authorization on file with SirReel" />
+      ) : cardLive === false ? (
+        // Card capture is not live. Rather than a dead step, point the client
+        // at the form that genuinely holds their details today. Says nothing
+        // about environments — that is our problem, not theirs.
+        <div className="space-y-3">
+          <p className="text-sm text-gray-700">
+            We&rsquo;re finishing our new card system. For now, please authorize
+            your card on our secure form — it takes a minute and covers this job.
+          </p>
+          <a
+            href="/creditcardauthorization"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold"
+          >
+            Authorize your card →
+          </a>
+          <p className="text-[11px] text-gray-400">
+            Prefer to pay by check or bank transfer? Tell your SirReel rep and we
+            will send details — no card needed.
+          </p>
+        </div>
+      ) : cardLive === null ? (
+        <div className="text-xs text-gray-400">Loading secure card entry…</div>
       ) : (
         <div className="space-y-4">
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
