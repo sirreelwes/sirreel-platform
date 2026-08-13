@@ -517,6 +517,14 @@ export default function JobDetailPage() {
     }
   };
 
+  // Hooks MUST sit above the `loading` / `error` early returns below —
+  // declaring them after means they do not run on the first render and do on
+  // the second, which is "rendered more hooks than during the previous
+  // render" and takes the whole page down with a client-side exception.
+  const fileSignedRef = useRef<HTMLInputElement | null>(null);
+  const [fileSignedBusy, setFileSignedBusy] = useState(false);
+  const [fileSignedMsg, setFileSignedMsg] = useState<string | null>(null);
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-zinc-300 text-[15px]">Loading…</div>
@@ -573,10 +581,6 @@ export default function JobDetailPage() {
   // Filing a signed agreement that was executed off-portal (paper, Cognito).
   // Writes SignedAgreement for the order, which is what the CLIENT's portal
   // reads — otherwise they keep being asked to sign something they signed.
-  const fileSignedRef = useRef<HTMLInputElement | null>(null);
-  const [fileSignedBusy, setFileSignedBusy] = useState(false);
-  const [fileSignedMsg, setFileSignedMsg] = useState<string | null>(null);
-
   async function onFileSignedPicked(file: File | null) {
     if (!file || !signTargetOrder) return;
     setFileSignedBusy(true);
