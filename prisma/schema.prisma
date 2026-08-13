@@ -4254,6 +4254,14 @@ enum AgreementStatus {
   NEGOTIATED_READY
   SIGNED_BASELINE
   SIGNED_NEGOTIATED
+  /// Signed on paper (or in Cognito) and FILED by staff on the job page,
+  /// rather than signed through the portal. Counts as signed everywhere —
+  /// the client has signed — but stays distinguishable, because there is no
+  /// in-portal signature record behind it: no signer IP, no captured
+  /// signature image, no acknowledgment text. Presenting that as a portal
+  /// signature would overstate what we hold if the agreement is ever
+  /// disputed.
+  SIGNED_OFFLINE
 }
 
 model SignedAgreement {

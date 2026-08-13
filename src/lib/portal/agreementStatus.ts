@@ -116,6 +116,20 @@ const TABLE: Record<AgreementStatus, AgreementStatusDescription> = {
     isPrepared: false,
     agentVerb: null,
   },
+  SIGNED_OFFLINE: {
+    status: 'SIGNED_OFFLINE',
+    // The CLIENT sees "Signed" — from their side it is signed, and a portal
+    // that says otherwise would be wrong and would nag them to re-sign.
+    label: 'Signed',
+    kind: 'success',
+    // Staff see it is not a portal signature: no signer IP, no captured
+    // signature image, no acknowledgment text behind it.
+    adminBadge: 'bg-emerald-900/40 text-emerald-200',
+    isReleased: true,
+    isSigned: true,
+    isPrepared: false,
+    agentVerb: null,
+  },
   SIGNED_NEGOTIATED: {
     status: 'SIGNED_NEGOTIATED',
     label: 'Signed',

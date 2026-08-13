@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
@@ -570,6 +570,39 @@ export default function JobDetailPage() {
   // The portal link is per-ORDER (portalSlug lives on Order), so pick the
   // order that actually has paperwork waiting; fall back to the first live
   // order when nothing is generated yet.
+  // Filing a signed agreement that was executed off-portal (paper, Cognito).
+  // Writes SignedAgreement for the order, which is what the CLIENT's portal
+  // reads — otherwise they keep being asked to sign something they signed.
+  const fileSignedRef = useRef<HTMLInputElement | null>(null);
+  const [fileSignedBusy, setFileSignedBusy] = useState(false);
+  const [fileSignedMsg, setFileSignedMsg] = useState<string | null>(null);
+
+  async function onFileSignedPicked(file: File | null) {
+    if (!file || !signTargetOrder) return;
+    setFileSignedBusy(true);
+    setFileSignedMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('contractType', 'RENTAL_AGREEMENT');
+      const r = await fetch(`/api/orders/${signTargetOrder.id}/agreement/file-signed`, {
+        method: 'POST',
+        body: fd,
+      });
+      const d = await r.json().catch(() => ({}));
+      setFileSignedMsg(
+        d?.ok
+          ? 'Filed — the client\u2019s portal now shows the rental agreement as signed.'
+          : d?.error || 'Could not file that agreement.',
+      );
+    } catch {
+      setFileSignedMsg('Could not file that agreement.');
+    } finally {
+      setFileSignedBusy(false);
+      if (fileSignedRef.current) fileSignedRef.current.value = '';
+    }
+  }
+
   const signTargetOrder =
     liveOrders.find((o) =>
       o.signedAgreements.some(
@@ -1264,6 +1297,29 @@ export default function JobDetailPage() {
                   ? `Send for signature → ${signatory.person.firstName}`
                   : 'Send for signature'}
             </button>
+            {/* Already signed on paper or in Cognito? File it here. This is
+                the ONLY action that makes the client's portal stop asking —
+                "Link agreement" files the document against the company, which
+                the portal does not read. */}
+            <input
+              ref={fileSignedRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => void onFileSignedPicked(e.target.files?.[0] ?? null)}
+            />
+            <button
+              onClick={() => fileSignedRef.current?.click()}
+              disabled={fileSignedBusy || !signTargetOrder}
+              title={
+                !signTargetOrder
+                  ? 'This job has no live order to file paperwork against'
+                  : 'Upload a signed PDF — marks it signed in the client portal'
+              }
+              className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-emerald-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {fileSignedBusy ? 'Filing…' : '↑ Upload signed agreement'}
+            </button>
             {SHOW_AGREEMENT_ON_FILE && (
               <button
                 onClick={() => setAgreementModalOpen(true)}
@@ -1274,6 +1330,11 @@ export default function JobDetailPage() {
             )}
           </div>
         </div>
+        {fileSignedMsg && (
+          <div className="mb-2.5 text-[12px] text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2">
+            {fileSignedMsg}
+          </div>
+        )}
         {signSendMsg && (
           <div className="mb-2.5 text-[12px] text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2 break-all">
             {signSendMsg}
