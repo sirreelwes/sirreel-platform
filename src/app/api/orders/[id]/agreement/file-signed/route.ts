@@ -85,11 +85,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const safeName = (file.name || 'signed-agreement.pdf').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120)
-  const stored = await put(`agreements/signed/${randomUUID()}/${safeName}`, buffer, {
-    access: 'public',
-    addRandomSuffix: false,
-    contentType: 'application/pdf',
-  })
+  // PRIVATE, matching every other agreement PDF in the codebase. A signed
+  // contract carries the client's signature and terms; a public blob URL is
+  // guessable-forever and needs no auth. The portal streams it back through
+  // streamPrivateBlobAsResponse, which only works for a private blob anyway.
+  //
+  // `'private' as 'public'` is the codebase's existing workaround for the SDK
+  // type not exposing the private literal — see jobs/[id]/agreements.
+  let stored: { url: string }
+  try {
+    stored = await put(`agreements/signed/${randomUUID()}/${safeName}`, buffer, {
+      access: 'private' as 'public',
+      contentType: 'application/pdf',
+    })
+  } catch (err) {
+    // Surfacing the real reason: a generic "could not file" sent the operator
+    // back to the file picker with nothing to act on.
+    console.error('[file-signed] blob upload failed:', err)
+    return NextResponse.json(
+      { error: `Could not store the file: ${err instanceof Error ? err.message : 'upload failed'}` },
+      { status: 502 },
+    )
+  }
 
   // Upsert on (orderId, contractType) — the compound unique. An order that
   // already has a portal-signed agreement is NOT overwritten: a real

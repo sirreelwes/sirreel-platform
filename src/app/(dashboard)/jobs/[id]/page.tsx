@@ -597,7 +597,9 @@ export default function JobDetailPage() {
       setFileSignedMsg(
         d?.ok
           ? 'Filed — the client\u2019s portal now shows the rental agreement as signed.'
-          : d?.error || 'Could not file that agreement.',
+          // Include the status when the server sent no message: a bare
+          // "could not file" gives the operator nothing to report or act on.
+          : d?.error || `Could not file that agreement (HTTP ${r.status}).`,
       );
     } catch {
       setFileSignedMsg('Could not file that agreement.');
