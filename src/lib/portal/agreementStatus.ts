@@ -184,3 +184,21 @@ export const RECOVERABLE_AGREEMENT_STATES: readonly AgreementStatus[] = [
   'UNDER_REVIEW',
   'NEGOTIATED_READY',
 ] as const
+
+/**
+ * Is this status one where the client has signed?
+ *
+ * Exists because three surfaces kept their OWN list of signed statuses —
+ * `SIGNED_STATES` in the job page and in /api/jobs, plus inline comparisons
+ * elsewhere — and adding SIGNED_OFFLINE left every one of them reading a
+ * filed agreement as "Pending". The job header said SIGNED OFFLINE while the
+ * pipeline card, the paperwork strip and the agreements note all still asked
+ * for a signature.
+ *
+ * Derived from the descriptor table above, so a status added there is
+ * counted here automatically and cannot be forgotten again.
+ */
+export function isSignedAgreementStatus(status: string | null | undefined): boolean {
+  if (!status) return false
+  return describeAgreementStatus(status as AgreementStatus).isSigned
+}

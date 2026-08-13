@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
@@ -611,9 +612,9 @@ export default function JobDetailPage() {
 
   const signTargetOrder =
     liveOrders.find((o) =>
-      o.signedAgreements.some(
-        (a) => a.status !== 'SIGNED_BASELINE' && a.status !== 'SIGNED_NEGOTIATED',
-      ),
+      // Target an order whose agreement is NOT yet signed — a filed
+      // offline agreement counts as signed, so it stops being chased.
+      o.signedAgreements.some((a) => !isSignedAgreementStatus(a.status)),
     ) ??
     liveOrders[0] ??
     null;
@@ -675,7 +676,8 @@ export default function JobDetailPage() {
   // jobs) or a per-order contract signed through the portal. `source`
   // lets the chip say "On file" rather than "Signed", because the two
   // mean different things to a rep chasing paperwork.
-  const SIGNED_STATES = new Set(['SIGNED_BASELINE', 'SIGNED_NEGOTIATED']);
+  // Was a local set that did not know about SIGNED_OFFLINE — see
+  // isSignedAgreementStatus.
   type CoverageState = 'signed' | 'pending' | 'expired' | 'none';
   const resolveCoverage = (
     addendum?: JobAgreementAddendum,
@@ -684,7 +686,7 @@ export default function JobDetailPage() {
     if (addendum) {
       return { state: isAnnualExpired(addendum) ? 'expired' : 'signed', source: 'onFile' };
     }
-    if (agreement && SIGNED_STATES.has(agreement.status)) {
+    if (agreement && isSignedAgreementStatus(agreement.status)) {
       return { state: 'signed', source: 'portal' };
     }
     if (agreement) return { state: 'pending', source: 'portal' };

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus'
 import { prisma } from '@/lib/prisma'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { getServerSession } from 'next-auth'
@@ -527,7 +528,8 @@ export async function POST(req: NextRequest) {
 //   - SENT   → at least one out the door but nothing signed
 //   - PARTIAL → some signed, some not (multi-order case)
 //   - SIGNED → every live order has a SIGNED_* row
-const SIGNED_STATES: AgreementStatus[] = ['SIGNED_BASELINE', 'SIGNED_NEGOTIATED']
+// Was a local list that missed SIGNED_OFFLINE, so a filed agreement still
+// read "RENTAL Sent" on the pipeline card. See isSignedAgreementStatus.
 const PRE_RELEASE_STATES: AgreementStatus[] = ['PORTAL_GENERATED']
 
 export type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
@@ -537,7 +539,7 @@ function rollupAgreementState(
   liveOrderCount: number,
 ): { state: AgreementRollupState; count: number } {
   if (rows.length === 0) return { state: 'NONE', count: 0 }
-  const signed = rows.filter((r) => SIGNED_STATES.includes(r.status)).length
+  const signed = rows.filter((r) => isSignedAgreementStatus(r.status)).length
   if (signed === rows.length && rows.length >= liveOrderCount) {
     return { state: 'SIGNED', count: signed }
   }
