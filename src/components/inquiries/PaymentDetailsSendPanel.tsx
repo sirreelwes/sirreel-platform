@@ -78,6 +78,34 @@ export function PaymentDetailsSendPanel({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  // Closing a request that was dealt with OUTSIDE the app — handled by phone,
+  // or details already sent another way. Without this the only way to clear
+  // one was to send an email, so anything handled off-app sat in the queue
+  // looking outstanding.
+  const [handling, setHandling] = useState(false)
+  const [handled, setHandled] = useState<string | null>(null)
+
+  async function markHandled() {
+    const note = window.prompt(
+      'Mark this payment-info request as handled?\n\nOptionally note how it was dealt with (phone, already sent, duplicate):',
+      '',
+    )
+    if (note === null) return
+    setHandling(true)
+    try {
+      const r = await fetch(`/api/inquiries/${inquiryId}/mark-handled`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: note.trim() }),
+      })
+      const d = await r.json().catch(() => ({}))
+      setHandled(d?.ok ? 'Marked handled.' : d?.error || `Could not mark handled (HTTP ${r.status}).`)
+    } catch {
+      setHandled('Could not mark handled.')
+    } finally {
+      setHandling(false)
+    }
+  }
   const [showPreview, setShowPreview] = useState(false)
 
   const co = useTypeahead('company')
@@ -252,6 +280,19 @@ export function PaymentDetailsSendPanel({
       <div className="text-[10px] text-zinc-500 text-center">
         Sends the branded email with the current saved details + attachments and the standing fraud warning. No auto-send — this click only.
       </div>
+
+      {/* Closes the request WITHOUT emailing. Records who and when, so a
+          closed inquiry can be accounted for — the generic status PATCH
+          writes no audit trail, which is why one in the queue is already
+          marked converted with nothing sent and no trace of what did it. */}
+      <button
+        onClick={() => void markHandled()}
+        disabled={handling}
+        className="w-full text-[12px] font-semibold text-zinc-300 hover:text-white border border-zinc-700 hover:border-zinc-500 px-4 py-2 rounded-lg disabled:opacity-40"
+      >
+        {handling ? 'Marking…' : 'Mark as handled (no email)'}
+      </button>
+      {handled && <div className="text-[11px] text-zinc-300 text-center">{handled}</div>}
     </div>
   )
 }
