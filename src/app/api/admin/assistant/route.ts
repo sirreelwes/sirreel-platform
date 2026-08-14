@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAssistantAccess } from '@/lib/assistant/requireAssistantAccess'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
+import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
 
 export const dynamic = 'force-dynamic'
 const SINGLETON = 'singleton'
@@ -59,6 +60,20 @@ export async function GET() {
     select: { id: true, action: true, createdAt: true, ipAddress: true, newValues: true },
   })
 
+  // Usage summary reads a wider window than the 30-row log below it. The log
+  // answers "what happened last"; this answers "is this working at all",
+  // which the log cannot — five of the first seven attempts were denials and
+  // nothing on this page said so.
+  const usageEvents = await prisma.auditLog.findMany({
+    where: {
+      action: { in: ['public.access_released', 'public.access_denied', 'public.emergency_escalation'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    select: { action: true, createdAt: true, ipAddress: true, newValues: true },
+  })
+  const usage = summarizeAssistantUsage(usageEvents)
+
   const emergencyContacts = await prisma.user.findMany({
     where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
@@ -71,6 +86,7 @@ export async function GET() {
     gateCodeUpdatedBy,
     jobs,
     audit,
+    usage,
     emergencyContacts,
   })
 }

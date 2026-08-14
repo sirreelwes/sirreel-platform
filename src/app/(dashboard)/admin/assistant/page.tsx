@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { VISIT_GAP_MINUTES } from '@/lib/assistant/usageSummary'
 
 type Job = {
   id: string
@@ -25,12 +26,31 @@ type EmergencyContact = {
   isEmergencyContact: boolean
   emergencyPhone: string | null
 }
+type Usage = {
+  totals: { attempts: number; released: number; denied: number; escalations: number; lockoutRate: number | null }
+  last30Days: { attempts: number; released: number; denied: number }
+  denialReasons: { reason: string; label: string; count: number }[]
+  factorFailures: { factor: string; failed: number; checked: number }[]
+  visits: {
+    startedAt: string
+    endedAt: string
+    attempts: number
+    outcome: 'released' | 'denied' | 'escalated'
+    reasons: string[]
+    vehicle: string | null
+    jobName: string | null
+  }[]
+  byHour: number[]
+  firstUsedAt: string | null
+  lastUsedAt: string | null
+}
 type Data = {
   gateCode: string
   gateCodeUpdatedAt: string | null
   gateCodeUpdatedBy: string | null
   jobs: Job[]
   audit: AuditRow[]
+  usage: Usage
   emergencyContacts: EmergencyContact[]
 }
 
@@ -59,6 +79,158 @@ function auditLabel(a: AuditRow): string {
     return `⚠ Emergency escalation — released ${String(v.released ?? '?')} number(s)`
   }
   return a.action
+}
+
+/**
+ * Outcome-first. A count of "uses" would have read as healthy traffic while
+ * most of that traffic was people failing to get in — so the lockout rate
+ * leads, and the reasons sit next to it because they are the fixable part.
+ */
+function UsageSection({ usage }: { usage: Usage }) {
+  const { totals, last30Days, denialReasons, factorFailures, visits, byHour } = usage
+  const lockoutPct = totals.lockoutRate == null ? null : Math.round(totals.lockoutRate * 100)
+  const peak = Math.max(1, ...byHour)
+  const hourLabel = (h: number) => (h === 0 ? '12a' : h === 12 ? '12p' : h > 12 ? `${h - 12}p` : `${h}a`)
+
+  return (
+    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Assistant usage</h2>
+      <p className="mt-1 text-xs text-zinc-500">
+        Grouped into visits — repeated tries within {VISIT_GAP_MINUTES} minutes are one person, not
+        several. Times
+        are Pacific.
+      </p>
+
+      {totals.attempts === 0 ? (
+        <p className="mt-4 text-sm text-zinc-400">No one has used the assistant yet.</p>
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div
+              className={`rounded-lg border p-3 ${
+                lockoutPct != null && lockoutPct >= 50
+                  ? 'border-red-600 bg-red-950/40'
+                  : 'border-zinc-700 bg-zinc-950'
+              }`}
+            >
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">Turned away</div>
+              <div
+                className={`mt-1 text-2xl font-semibold ${
+                  lockoutPct != null && lockoutPct >= 50 ? 'text-red-300' : 'text-white'
+                }`}
+              >
+                {lockoutPct == null ? '—' : `${lockoutPct}%`}
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">of visits ended without access</div>
+            </div>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">Visits</div>
+              <div className="mt-1 text-2xl font-semibold">{visits.length}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">{totals.attempts} attempts total</div>
+            </div>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">Released</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-400">{totals.released}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">{totals.denied} denials</div>
+            </div>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">Last 30 days</div>
+              <div className="mt-1 text-2xl font-semibold">{last30Days.attempts}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                {last30Days.released} in · {last30Days.denied} denied
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">Why people were denied</div>
+              {denialReasons.length === 0 ? (
+                <p className="mt-2 text-sm text-zinc-500">No denials.</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {denialReasons.map((r) => (
+                    <li key={r.reason} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-zinc-300">{r.label}</span>
+                      <span className="font-mono text-zinc-400">{r.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {factorFailures.length > 0 && (
+                <>
+                  <div className="mt-4 text-[11px] uppercase tracking-wider text-zinc-400">
+                    Which detail they could not give
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {factorFailures.map((f) => (
+                      <li key={f.factor} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-zinc-300">{f.factor}</span>
+                        <span className="font-mono text-zinc-400">
+                          {f.failed}/{f.checked} wrong
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-zinc-400">
+                When it is used (Pacific)
+              </div>
+              <div className="mt-2 flex h-24 items-end gap-[2px]">
+                {byHour.map((n, h) => (
+                  <div key={h} className="flex-1" title={`${hourLabel(h)} — ${n} attempt${n === 1 ? '' : 's'}`}>
+                    <div
+                      className={`w-full rounded-sm ${n > 0 ? 'bg-amber-600' : 'bg-zinc-800'}`}
+                      style={{ height: `${Math.max(n > 0 ? 8 : 2, (n / peak) * 96)}px` }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-[10px] text-zinc-600">
+                <span>12a</span>
+                <span>6a</span>
+                <span>12p</span>
+                <span>6p</span>
+                <span>11p</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <div className="text-[11px] uppercase tracking-wider text-zinc-400">Recent visits</div>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-sm">
+                <tbody>
+                  {visits.slice(0, 10).map((v) => (
+                    <tr key={v.startedAt} className="border-t border-zinc-800">
+                      <td className="py-2 pr-3 text-zinc-400 whitespace-nowrap">{fmt(v.startedAt)}</td>
+                      <td className="py-2 pr-3">
+                        {v.outcome === 'released' ? (
+                          <span className="text-emerald-400">Got in</span>
+                        ) : v.outcome === 'escalated' ? (
+                          <span className="text-amber-300">Escalated</span>
+                        ) : (
+                          <span className="text-red-300">Turned away</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-3 text-zinc-400">
+                        {v.attempts} {v.attempts === 1 ? 'try' : 'tries'}
+                      </td>
+                      <td className="py-2 pr-3 text-zinc-400">{v.vehicle || v.jobName || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  )
 }
 
 export default function AssistantAdminPage() {
@@ -163,6 +335,10 @@ export default function AssistantAdminPage() {
 
       {data && !loading && (
         <>
+          {/* Usage — placed first because it answers the question the log
+              below cannot: whether people who try this actually get in. */}
+          {data.usage && <UsageSection usage={data.usage} />}
+
           {/* Standing gate code */}
           <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
