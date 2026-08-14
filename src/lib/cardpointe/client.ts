@@ -236,7 +236,14 @@ function storedCredentialFields(kind?: 'initial' | 'merchant' | 'customer'): {
   cof?: 'C' | 'M'
   cofscheduled?: 'Y' | 'N'
 } {
-  if (kind === 'initial') return { cofpermission: 'Y' }
+  // Fiserv validation, 2026-08-14: the $0 token-storage call sent
+  // cofpermission alone. `cof` and `cofscheduled` are required TOO — the
+  // credential is being established by the cardholder, sitting at the portal,
+  // so it is customer-initiated and unscheduled. Sending permission without
+  // them leaves the stored credential non-compliant with the Visa/Mastercard
+  // mandate, and it authorizes normally either way, so nothing surfaced it
+  // until Fiserv read the transactions back to us.
+  if (kind === 'initial') return { cofpermission: 'Y', cof: 'C', cofscheduled: 'N' }
   // Unscheduled: SirReel charges when a job wraps, not on a fixed cadence.
   // 'Y' here would assert a recurring schedule that does not exist.
   if (kind === 'merchant') return { cof: 'M', cofscheduled: 'N' }

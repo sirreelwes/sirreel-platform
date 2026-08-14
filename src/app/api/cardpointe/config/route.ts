@@ -16,6 +16,29 @@ import { cardpointeBaseUrl, cardpointeEnv } from '@/lib/cardpointe/client';
  * against. (In UAT and PROD alike, one host serves both the /itoke/
  * iframe and the /cardconnect/rest gateway.)
  *
+ *   ?mode=card-on-file → card tokenizer WITHOUT the CVV field
+ *
+ * Why card-on-file is separate, Fiserv validation 2026-08-14: our
+ * merchant-initiated $150 charge came back with `cvvresp: N`, meaning a CVV
+ * reached the gateway on a transaction SirReel initiated with the cardholder
+ * absent. Storing or replaying CVV violates PCI-DSS, and Fiserv flagged it.
+ *
+ * We never send a CVV field — the auth request has no such parameter and
+ * postAuth forwards only what is in AuthRequest. It travels WITH the token:
+ * the tokenizer collects CVV when `usecvv=true`, and it rides along on every
+ * later auth that uses that token. So the only place this can be fixed is at
+ * tokenization, and only for tokens we intend to KEEP.
+ *
+ * Hence the split. A token that will be stored and charged later is minted
+ * without CVV, so there is nothing to replay. A token for an immediate sale
+ * — the client paying their own invoice, or an operator keying a card on the
+ * phone — keeps CVV, where it is cardholder-initiated, permitted, and worth
+ * having for fraud and interchange.
+ *
+ * The trade: the $0 verification on a card on file no longer gets a CVV
+ * match, and leans on the postal/AVS check instead. That is the compliant
+ * side of the trade — a CVV we cannot use later is one we must not keep.
+ *
  * The CardConnect iframe takes `useexpiry` / `usecvv` flags to
  * suppress card-only fields for ACH. ACH also takes `usemonthnames`
  * etc. — the card tokenizer enables BOTH (the gateway requires expiry).
@@ -24,7 +47,9 @@ export async function GET(req: NextRequest) {
   const base = cardpointeBaseUrl();
   if (!base) return NextResponse.json({ error: 'CardPointe not configured' }, { status: 500 });
 
-  const mode = req.nextUrl.searchParams.get('mode') === 'echeck' ? 'echeck' : 'card';
+  const raw = req.nextUrl.searchParams.get('mode');
+  // 'card-on-file' is a CARD tokenizer that omits CVV — see below.
+  const mode = raw === 'echeck' ? 'echeck' : raw === 'card-on-file' ? 'card-on-file' : 'card';
   const css = 'body%7Bmargin%3A0%3Bfont-family%3Asans-serif%7Dinput%7Bwidth%3A100%25%3Bbox-sizing%3Aborder-box%3Bborder%3A1px+solid+%23e5e7eb%3Bborder-radius%3A8px%3Bpadding%3A10px+12px%3Bfont-size%3A14px%3Boutline%3Anone%7Dinput%3Afocus%7Bborder-color%3A%23111827%7D';
 
   // Shared params: format input, fire event on validation issues,
@@ -51,7 +76,7 @@ export async function GET(req: NextRequest) {
     // sensitive authentication data (unlike CVV/PIN/track), so handling it
     // outside the iframe is both safe and the common CardConnect pattern.
     // The PAN and CVV never leave the iframe.
-    iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=false&usecvv=true&${common}`;
+    iframeUrl = `${base}/itoke/ajax-tokenizer.html?useexpiry=false&usecvv=${mode === 'card-on-file' ? 'false' : 'true'}&${common}`;
   }
 
   // `live` gates every CLIENT-FACING card surface. On UAT the tokenizer

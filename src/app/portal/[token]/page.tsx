@@ -251,7 +251,9 @@ export default function ClientPortal() {
   useEffect(() => { if (activeTab === 'cc') setTimeout(() => initCanvas(ccSigRef.current, setCcSigDrawn), 200); }, [activeTab]);
   useEffect(() => {
     if (activeTab !== 'cc' || cpIframeUrl) return;
-    fetch('/api/cardpointe/config').then(r => r.json()).then(d => { if (d.iframeUrl) setCpIframeUrl(d.iframeUrl); });
+    // Card ON FILE — stored for later merchant-initiated charges, so the
+    // token must carry no CVV. See /api/cardpointe/config.
+    fetch('/api/cardpointe/config?mode=card-on-file').then(r => r.json()).then(d => { if (d.iframeUrl) setCpIframeUrl(d.iframeUrl); });
   }, [activeTab]);
   useEffect(() => {
     const handler = (e: MessageEvent) => {

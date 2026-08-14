@@ -87,7 +87,10 @@ export function CcAuthCard({
   // same endpoint the live portal uses.
   useEffect(() => {
     if (!open || iframeUrl || done || locked) return
-    fetch('/api/cardpointe/config')
+    // card-on-file: this token is STORED and charged later, merchant-initiated.
+    // The CVV-free tokenizer keeps a CVV from riding along on those charges —
+    // see /api/cardpointe/config.
+    fetch('/api/cardpointe/config?mode=card-on-file')
       .then((r) => r.json())
       .then((d) => {
         setCardLive(d.live === true)
