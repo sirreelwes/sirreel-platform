@@ -5592,3 +5592,49 @@ model RwCollectionReversal {
   @@index([chargeId])
   @@map("sr_rw_collection_reversals")
 }
+
+/// Every call SirReel makes to the CardPointe gateway, with the raw response.
+///
+/// Wes, 2026-08-14: AuthResponse.raw was documented as "exposed so callers can
+/// persist for forensics" and no caller ever did. So when Fiserv's validation
+/// review reported that a merchant-initiated charge returned `cvvresp: N`, we
+/// could not see it ourselves, could not check the other test transactions,
+/// and could not confirm the fix without asking them to re-run it.
+///
+/// Written from the client layer rather than by callers, because "each caller
+/// should persist this" is exactly the arrangement that produced nothing.
+///
+/// Redacted on the way in: tokens and account numbers are reduced to last 4,
+/// and any CVV/PIN/track key is dropped. `cvvresp` and `avsresp` are RESPONSE
+/// CODES, not cardholder data, and are the fields worth keeping — they answer
+/// "what did we send, and what did the network think of it".
+model CardpointeGatewayCall {
+  id        String   @id @default(cuid())
+  /// auth | void | refund | inquire
+  operation String
+  merchid   String?
+  retref    String?
+  /// Authoritative approval flag: A approved, B retry, C declined.
+  respstat  String?
+  respcode  String?
+  resptext  String?
+  /// Amount the gateway reports acting on — with surcharging enabled this
+  /// can exceed what we sent.
+  amount    String?
+  /// CVV match result. Its PRESENCE means a CVV reached the gateway, which
+  /// is the thing that must never be true on a merchant-initiated charge.
+  cvvresp   String?
+  /// Address/postal verification result.
+  avsresp   String?
+  /// HTTP status, so a gateway outage is distinguishable from a decline.
+  httpStatus Int?    @map("http_status")
+  /// Redacted request and response payloads.
+  request   Json?
+  response  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([retref])
+  @@index([operation, createdAt])
+  @@index([createdAt])
+  @@map("sr_cardpointe_gateway_calls")
+}

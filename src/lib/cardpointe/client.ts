@@ -18,6 +18,8 @@
  * decide whether to retry or mark FAILED.
  */
 
+import { prisma } from '@/lib/prisma'
+
 type CardPointeEnv = 'UAT' | 'PROD'
 
 interface CardPointeConfig {
@@ -217,6 +219,85 @@ export interface AuthResponse {
   raw: Record<string, unknown>
 }
 
+// ─── Gateway call log ───────────────────────────────────────────
+
+/**
+ * Reduce a payload to something safe to keep forever.
+ *
+ * Tokens and account numbers become last-4. Anything that is sensitive
+ * authentication data under PCI-DSS — CVV, PIN, magnetic track — is dropped
+ * outright, even though we never knowingly send it: the point of this log is
+ * to catch what we did NOT intend to send, so it must not become the place
+ * that stores it.
+ *
+ * `cvvresp` and `avsresp` are deliberately KEPT. They are the network's
+ * verdict, not the cardholder's secret, and they are the whole reason for
+ * this table.
+ */
+const SENSITIVE = /^(cvv2?|cvc2?|cid|pin(block)?|track[12]?|magstripe|pan|cardnumber)$/i
+const CREDENTIAL = /^(token|account|acctid)$/i
+
+export function redactGatewayPayload(input: unknown): unknown {
+  if (Array.isArray(input)) return input.map(redactGatewayPayload)
+  if (!input || typeof input !== 'object') return input
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (SENSITIVE.test(k)) {
+      out[k] = '[redacted]'
+    } else if (CREDENTIAL.test(k) && typeof v === 'string' && v.length > 4) {
+      out[k] = `****${v.slice(-4)}`
+    } else if (v && typeof v === 'object') {
+      out[k] = redactGatewayPayload(v)
+    } else {
+      out[k] = v
+    }
+  }
+  return out
+}
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+
+/**
+ * Persist one gateway exchange.
+ *
+ * Called from the client layer, not from routes: the previous arrangement
+ * was that each caller COULD persist AuthResponse.raw, and none did, so a
+ * question Fiserv could answer about our traffic had no answer here.
+ *
+ * Never throws and never blocks the payment. A charge that succeeded but
+ * could not be logged is a gap in the record; a charge that FAILED because
+ * logging failed is lost money. The first is strictly better.
+ */
+async function recordGatewayCall(entry: {
+  operation: 'auth' | 'void' | 'refund' | 'inquire'
+  merchid?: string
+  httpStatus?: number
+  request?: unknown
+  response: Record<string, unknown>
+}): Promise<void> {
+  try {
+    const r = entry.response
+    await prisma.cardpointeGatewayCall.create({
+      data: {
+        operation: entry.operation,
+        merchid: entry.merchid ?? null,
+        retref: str(r.retref) ?? null,
+        respstat: str(r.respstat) ?? null,
+        respcode: str(r.respcode) ?? null,
+        resptext: str(r.resptext) ?? null,
+        amount: str(r.amount) ?? null,
+        cvvresp: str(r.cvvresp) ?? null,
+        avsresp: str(r.avsresp) ?? null,
+        httpStatus: entry.httpStatus ?? null,
+        request: (entry.request ? redactGatewayPayload(entry.request) : undefined) as never,
+        response: redactGatewayPayload(r) as never,
+      },
+    })
+  } catch (err) {
+    console.error('[cardpointe] could not record gateway call:', err)
+  }
+}
+
 // ─── Public API ─────────────────────────────────────────────────
 
 /**
@@ -383,6 +464,13 @@ export async function inquireByRetref(retref: string): Promise<InquireResponse> 
     },
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  await recordGatewayCall({
+    operation: 'inquire',
+    merchid: cfg.mid,
+    httpStatus: res.status,
+    request: { retref },
+    response: json,
+  })
   return {
     retref: typeof json.retref === 'string' ? json.retref : retref,
     setlstat: typeof json.setlstat === 'string' ? json.setlstat : undefined,
@@ -409,6 +497,13 @@ export async function voidByRetref(retref: string): Promise<AuthResponse> {
     body: JSON.stringify({ merchid: cfg.mid, retref }),
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  await recordGatewayCall({
+    operation: 'void',
+    merchid: cfg.mid,
+    httpStatus: res.status,
+    request: { retref },
+    response: json,
+  })
   return {
     respcode: typeof json.respcode === 'string' ? json.respcode : '',
     resptext: typeof json.resptext === 'string' ? json.resptext : '',
@@ -442,6 +537,13 @@ export async function refundByRetref(
     body: JSON.stringify(payload),
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  await recordGatewayCall({
+    operation: 'refund',
+    merchid: cfg.mid,
+    httpStatus: res.status,
+    request: payload,
+    response: json,
+  })
   return {
     respcode: typeof json.respcode === 'string' ? json.respcode : '',
     resptext: typeof json.resptext === 'string' ? json.resptext : '',
@@ -529,6 +631,13 @@ async function postAuth(cfg: CardPointeConfig, body: AuthRequest): Promise<AuthR
     body: JSON.stringify(payload),
   })
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  await recordGatewayCall({
+    operation: 'auth',
+    merchid: cfg.mid,
+    httpStatus: res.status,
+    request: payload,
+    response: json,
+  })
   return {
     // respstat is documented as the authoritative approval flag and the type
     // has always declared it, but this mapping never populated it — so every
