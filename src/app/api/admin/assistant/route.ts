@@ -54,7 +54,16 @@ export async function GET() {
   })
 
   const audit = await prisma.auditLog.findMany({
-    where: { action: { in: ['public.access_released', 'public.access_denied', 'public.emergency_escalation'] } },
+    where: {
+      action: {
+        in: [
+          'public.access_released',
+          'public.access_denied',
+          'public.emergency_escalation',
+          'public.stranded_driver',
+        ],
+      },
+    },
     orderBy: { createdAt: 'desc' },
     take: 30,
     select: { id: true, action: true, createdAt: true, ipAddress: true, newValues: true },
@@ -66,7 +75,14 @@ export async function GET() {
   // nothing on this page said so.
   const usageEvents = await prisma.auditLog.findMany({
     where: {
-      action: { in: ['public.access_released', 'public.access_denied', 'public.emergency_escalation'] },
+      action: {
+        in: [
+          'public.access_released',
+          'public.access_denied',
+          'public.emergency_escalation',
+          'public.stranded_driver',
+        ],
+      },
     },
     orderBy: { createdAt: 'desc' },
     take: 500,

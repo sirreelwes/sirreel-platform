@@ -27,6 +27,7 @@ export type AssistantAction =
   | 'public.access_released'
   | 'public.access_denied'
   | 'public.emergency_escalation'
+  | 'public.stranded_driver'
 
 export interface AssistantEvent {
   action: string
@@ -122,7 +123,10 @@ export function summarizeAssistantUsage(events: AssistantEvent[]): AssistantUsag
     byHour[pacificHour(e.createdAt)] += 1
 
     const isRelease = e.action === 'public.access_released'
-    const isEscalation = e.action === 'public.emergency_escalation'
+    // A stranded-driver alert is a rescue, not a denial: the visit ended
+    // with a human contacted rather than someone giving up in the dark.
+    const isEscalation =
+      e.action === 'public.emergency_escalation' || e.action === 'public.stranded_driver'
     if (isRelease) released += 1
     else if (isEscalation) escalations += 1
     else denied += 1

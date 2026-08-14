@@ -335,6 +335,20 @@ export default function AssistantAdminPage() {
 
       {data && !loading && (
         <>
+          {/* Nobody on call means every escalation silently degrades to an
+              email to hq@ that no one reads at 1am. The assistant can only
+              hand a stranded driver a person if a person is reachable. */}
+          {data.emergencyContacts.filter((c) => c.isEmergencyContact && c.emergencyPhone).length === 0 && (
+            <div className="mt-6 rounded-xl border border-red-600 bg-red-950/40 p-4">
+              <div className="text-sm font-semibold text-red-200">No on-call contact is set</div>
+              <p className="mt-1 text-xs text-red-200/80">
+                A driver stuck at the lot cannot be put through to anyone. Escalations fall back to
+                an email to hq@ instead of a text. Set someone as an emergency contact with a mobile
+                number below.
+              </p>
+            </div>
+          )}
+
           {/* Usage — placed first because it answers the question the log
               below cannot: whether people who try this actually get in. */}
           {data.usage && <UsageSection usage={data.usage} />}

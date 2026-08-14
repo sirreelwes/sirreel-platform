@@ -77,7 +77,38 @@ export type ReleaseResult =
       lockboxHint: 'OK' | 'NEED_VEHICLE' | 'AMBIGUOUS' | 'NO_CODE_ON_FILE'
       lockboxCandidates?: string[]
     }
-  | { result: 'NOT_VERIFIED' }
+  | {
+      result: 'NOT_VERIFIED'
+      /**
+       * The VIN last-4 they gave matches an active SirReel vehicle, so they
+       * are physically at one of our trucks even though we could not verify
+       * their booking. NOT an authorization — a VIN is printed on the
+       * windshield and is far too weak to release a gate code on. It only
+       * means a real person is standing in our lot at 1am, which is worth a
+       * human rather than a phone number.
+       */
+      atVehicle?: boolean
+    }
+
+/**
+ * Does this VIN last-4 belong to an active SirReel vehicle?
+ *
+ * Deliberately independent of the job/vehicle resolution above. The driver
+ * locked out on 2026-08-14 never got that far — with no job code there was
+ * nothing to anchor on, so the VIN they DID have was never even looked at.
+ * Whether someone is standing at our truck is knowable regardless.
+ *
+ * Filtered in memory: the fleet is small and a suffix match is not indexable.
+ */
+async function vehicleForVinLast4(vinLast4: string): Promise<{ id: string; unitName: string } | null> {
+  if (!vinLast4 || vinLast4.length < 4) return null
+  const assets = await prisma.asset.findMany({
+    where: { isActive: true, vin: { not: null } },
+    select: { id: true, unitName: true, vin: true },
+  })
+  const hit = assets.find((a) => a.vin && normAlnum(a.vin).endsWith(vinLast4))
+  return hit ? { id: hit.id, unitName: hit.unitName } : null
+}
 
 export async function verifyAndRelease(input: {
   jobCode?: string | null
@@ -159,8 +190,15 @@ export async function verifyAndRelease(input: {
 
   // Nothing to anchor on → can't verify.
   if (!jobId && !vehicleResolvedLegacy) {
-    await audit('public.access_denied', { reason: 'no_resolvable_job_or_vehicle' })
-    return { result: 'NOT_VERIFIED' }
+    // Check the VIN even though nothing anchored — this is precisely the
+    // case that stranded a driver: correct VIN, no job code, dead end.
+    const atVehicle = Boolean(await vehicleForVinLast4(vinLast4))
+    await audit('public.access_denied', {
+      reason: 'no_resolvable_job_or_vehicle',
+      vinLast4Ok: vinLast4 ? atVehicle : undefined,
+      atVehicle,
+    })
+    return { result: 'NOT_VERIFIED', atVehicle }
   }
 
   // ── 3. Find active assignments for the anchor (job and/or vehicle) ──
@@ -267,14 +305,18 @@ export async function verifyAndRelease(input: {
     (jobCodeOk && (vinLast4Ok || nameOk)) || (!jobCodeOk && vehicleResolvedLegacy && nameOk)
 
   if (!authed) {
+    // vinLast4Ok above is scoped to the assignments we resolved; this asks the
+    // broader question of whether the VIN is one of ours at all.
+    const atVehicle = vinLast4Ok || Boolean(await vehicleForVinLast4(vinLast4))
     await audit('public.access_denied', {
       reason: 'insufficient_factors',
       jobCodeOk,
       vinLast4Ok,
       nameOk,
+      atVehicle,
     })
     await notifyDenied(ip, 'insufficient factors', { jobCodeOk, vinLast4Ok, nameOk })
-    return { result: 'NOT_VERIFIED' }
+    return { result: 'NOT_VERIFIED', atVehicle }
   }
 
   const booking0 = assignments[0].bookingItem.booking
@@ -441,6 +483,111 @@ export async function alertOnCallTeam(input: {
     })
   } catch (err) {
     console.error('[after-hours] emergency audit failed:', err)
+  }
+
+  return { result: 'ALERTED', texted, oncall: oncall.length }
+}
+
+export type StrandedResult =
+  | { result: 'ALERTED'; texted: number; oncall: number }
+  | { result: 'NO_ONCALL' }
+  | { result: 'ALREADY_ALERTED' }
+
+/** One escalation per vehicle per hour. */
+const STRANDED_COOLDOWN_MINUTES = 60
+
+/**
+ * A driver is at one of our vehicles and cannot be verified — get them a
+ * person.
+ *
+ * Separate from alertOnCallTeam deliberately. That path is for declared
+ * emergencies and its SMS says EMERGENCY; sending lockouts through it would
+ * either overstate them or, worse, train the on-call team to skim past the
+ * word. This one says what it is: someone is at the lot and stuck.
+ *
+ * It releases NOTHING. A VIN is printed on the windshield, so it cannot
+ * authorize anything on its own — it establishes presence, not permission.
+ * The on-call agent decides what to do, which is exactly the judgement a
+ * verification wall cannot make at 1am.
+ *
+ * Rate-limited per vehicle. The driver who prompted this tried three times in
+ * four minutes; without a cooldown that is three sets of texts to the team.
+ */
+export async function alertStrandedDriver(input: {
+  callerName?: string | null
+  callbackNumber?: string | null
+  vinLast4?: string | null
+  note?: string | null
+  ip: string
+}): Promise<StrandedResult> {
+  const vinLast4 = normAlnum(input.vinLast4 || '').slice(-4)
+  const asset = await vehicleForVinLast4(vinLast4)
+  // Presence is the entire basis for this escalation. Without a VIN that
+  // matches one of ours, anyone on the internet could text the team at 3am.
+  if (!asset) return { result: 'NO_ONCALL' }
+
+  const since = new Date(Date.now() - STRANDED_COOLDOWN_MINUTES * 60_000)
+  const recent = await prisma.auditLog.findFirst({
+    where: { action: 'public.stranded_driver', entityId: asset.id, createdAt: { gte: since } },
+    select: { id: true },
+  })
+  if (recent) return { result: 'ALREADY_ALERTED' }
+
+  const agents = await prisma.user.findMany({
+    where: { isEmergencyContact: true, isActive: true, emergencyPhone: { not: null } },
+    select: { name: true, emergencyPhone: true },
+  })
+  const oncall = agents
+    .map((a) => ({ name: a.name, phone: (a.emergencyPhone ?? '').trim() }))
+    .filter((a) => a.phone)
+
+  const caller = input.callerName?.trim() || 'A driver'
+  const cb = input.callbackNumber?.trim() || 'no number given'
+  const note = (input.note || '').trim().slice(0, 300)
+
+  const lines = [
+    `${caller} is at ${asset.unitName} and could not be verified by the after-hours assistant.`,
+    `Callback: ${cb}`,
+    ...(note ? [`They said: ${note}`] : []),
+    `The VIN they gave matches ${asset.unitName}, so they are at the vehicle. No codes were released.`,
+    `IP: ${input.ip}.`,
+  ]
+
+  if (oncall.length === 0) {
+    await notifyTeam('⚠ Driver stuck at the lot — NO on-call contacts set', [
+      ...lines,
+      'No on-call agents are configured in /admin/assistant, so nobody was texted.',
+    ])
+    return { result: 'NO_ONCALL' }
+  }
+
+  const sms = `SirReel after-hours: ${caller} is at ${asset.unitName} and could NOT be verified for gate/lockbox codes. Callback ${cb}.${note ? ` "${note}"` : ''} No codes released.`
+  let texted = 0
+  for (const a of oncall) {
+    const r = await sendSms(a.phone, sms)
+    if (r.ok) texted++
+    else if (!r.skipped) console.error('[after-hours] stranded SMS to', a.name, 'failed:', r.error)
+  }
+
+  await notifyTeam('Driver stuck at the lot — on-call alerted', [
+    ...lines,
+    `On-call: ${oncall.map((a) => a.name).join(', ')}. SMS delivered ${texted}/${oncall.length}${texted === 0 ? ' (SMS not configured — email only)' : ''}.`,
+  ])
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        ipAddress: input.ip,
+        action: 'public.stranded_driver',
+        entityType: 'Asset',
+        entityId: asset.id,
+        oldValues: { caller, callback: cb, note: note || null },
+        newValues: { vehicle: asset.unitName, oncall: oncall.length, texted, at: new Date().toISOString() },
+      },
+    })
+  } catch (err) {
+    console.error('[after-hours] stranded audit failed:', err)
   }
 
   return { result: 'ALERTED', texted, oncall: oncall.length }
