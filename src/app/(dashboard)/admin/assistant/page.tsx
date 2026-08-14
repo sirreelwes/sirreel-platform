@@ -51,6 +51,7 @@ type Data = {
   jobs: Job[]
   audit: AuditRow[]
   usage: Usage
+  smsConfigured?: boolean
   emergencyContacts: EmergencyContact[]
 }
 
@@ -345,6 +346,20 @@ export default function AssistantAdminPage() {
                 A driver stuck at the lot cannot be put through to anyone. Escalations fall back to
                 an email to hq@ instead of a text. Set someone as an emergency contact with a mobile
                 number below.
+              </p>
+            </div>
+          )}
+
+          {/* Text messaging is the whole delivery mechanism. Without Twilio
+              the alert degrades to an email nobody reads at 1am, and the
+              assistant still tells the driver the team "has been texted". */}
+          {data.smsConfigured === false && (
+            <div className="mt-6 rounded-xl border border-amber-600 bg-amber-950/30 p-4">
+              <div className="text-sm font-semibold text-amber-200">Text messaging is not set up</div>
+              <p className="mt-1 text-xs text-amber-200/80">
+                On-call alerts fall back to email to hq@ — nobody gets a text. Add
+                TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER in Vercel to turn on
+                SMS.
               </p>
             </div>
           )}

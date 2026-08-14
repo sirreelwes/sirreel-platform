@@ -104,6 +104,12 @@ export async function GET() {
     audit,
     usage,
     emergencyContacts,
+    // sendSms no-ops when Twilio is unconfigured, so every "we texted the
+    // on-call team" quietly becomes an email to hq@. The page claims a text
+    // was sent; only the server knows whether one could be.
+    smsConfigured: Boolean(
+      process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER,
+    ),
   })
 }
 
