@@ -420,6 +420,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
+        // Where the rw_sync_failure / rw_token_expiring alerts link. Listed
+        // here too so the mirror's freshness is reachable before an alert
+        // fires, not only after someone clicks one.
+        { id: 'rw-invoice-sync', label: 'RW Invoice Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },
         { id: 'assistant', label: 'Assistant', icon: 'Bot', href: '/admin/assistant' },
         { id: 'who-we-are', label: 'Who We Are', icon: 'Users', href: '/admin/who-we-are' },
