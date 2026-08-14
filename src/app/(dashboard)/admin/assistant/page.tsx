@@ -471,7 +471,15 @@ export default function AssistantAdminPage() {
                   </button>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm text-white">{u.name}</div>
-                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</div>
+                    {/* On-call with no number is the silent half-state: the row
+                        reads as covered while the alert query skips them. */}
+                    {u.isEmergencyContact && !u.emergencyPhone ? (
+                      <div className="text-[10px] uppercase tracking-wider text-red-300">
+                        {u.role} · no number — will not be texted
+                      </div>
+                    ) : (
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500">{u.role}</div>
+                    )}
                   </div>
                   <input
                     defaultValue={u.emergencyPhone ?? ''}
