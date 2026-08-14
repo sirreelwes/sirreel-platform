@@ -425,6 +425,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'who-we-are', label: 'Who We Are', icon: 'Users', href: '/admin/who-we-are' },
         { id: 'forms', label: 'Forms', icon: 'FileText', href: '/admin/forms' },
         { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
+        { id: 'gateway-calls', label: 'Gateway Calls', icon: 'CreditCard', href: '/admin/cardpointe-calls' },
         { id: 'home-tiles', label: 'Home Tiles', icon: 'LayoutDashboard', href: '/admin/home-tiles' },
         { id: 'scheduling', label: 'Scheduling', icon: 'CalendarClock', href: '/scheduling' },
         { id: 'hr', label: 'HR', icon: 'IdCard', href: '/hr' },
