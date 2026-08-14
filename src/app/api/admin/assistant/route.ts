@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAssistantAccess } from '@/lib/assistant/requireAssistantAccess'
 import { generateAssistantAuthCode } from '@/lib/jobs/assistantAuthCode'
 import { summarizeAssistantUsage } from '@/lib/assistant/usageSummary'
+import { resolveTwilioConfig } from '@/lib/sms/sendSms'
 
 export const dynamic = 'force-dynamic'
 const SINGLETON = 'singleton'
@@ -90,6 +91,8 @@ export async function GET() {
   })
   const usage = summarizeAssistantUsage(usageEvents)
 
+  const twilio = resolveTwilioConfig()
+
   const emergencyContacts = await prisma.user.findMany({
     where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
@@ -106,10 +109,11 @@ export async function GET() {
     emergencyContacts,
     // sendSms no-ops when Twilio is unconfigured, so every "we texted the
     // on-call team" quietly becomes an email to hq@. The page claims a text
-    // was sent; only the server knows whether one could be.
-    smsConfigured: Boolean(
-      process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER,
-    ),
+    // was sent; only the server knows whether one could be. The REASON is
+    // returned too — "not set up" and "the SID is the wrong one" need
+    // different actions, and guessing between them costs an evening.
+    smsConfigured: twilio.config !== null,
+    smsProblem: twilio.config === null ? twilio.reason : null,
   })
 }
 

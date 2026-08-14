@@ -52,6 +52,7 @@ type Data = {
   audit: AuditRow[]
   usage: Usage
   smsConfigured?: boolean
+  smsProblem?: string | null
   emergencyContacts: EmergencyContact[]
 }
 
@@ -355,11 +356,19 @@ export default function AssistantAdminPage() {
               assistant still tells the driver the team "has been texted". */}
           {data.smsConfigured === false && (
             <div className="mt-6 rounded-xl border border-amber-600 bg-amber-950/30 p-4">
-              <div className="text-sm font-semibold text-amber-200">Text messaging is not set up</div>
+              <div className="text-sm font-semibold text-amber-200">
+                {data.smsProblem ? 'Text messaging is misconfigured' : 'Text messaging is not set up'}
+              </div>
               <p className="mt-1 text-xs text-amber-200/80">
-                On-call alerts fall back to email to hq@ — nobody gets a text. Add
-                TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER in Vercel to turn on
-                SMS.
+                On-call alerts fall back to email to hq@ — nobody gets a text.{' '}
+                {data.smsProblem ? (
+                  <span className="text-amber-100">{data.smsProblem}</span>
+                ) : (
+                  <>
+                    Set TWILIO_ACCOUNT_SID and TWILIO_FROM_NUMBER in Vercel, plus either
+                    TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET or TWILIO_AUTH_TOKEN.
+                  </>
+                )}
               </p>
             </div>
           )}
