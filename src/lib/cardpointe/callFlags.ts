@@ -33,6 +33,12 @@ export interface CallFlag {
 
 type Payload = Record<string, unknown> | null | undefined
 
+/**
+ * cvvresp values that mean a CVV actually reached the gateway and was judged.
+ * See the reasoning (and the UAT measurements behind it) at the use site.
+ */
+const CVV_EVALUATED = new Set(['M', 'N'])
+
 function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
@@ -55,14 +61,38 @@ export function flagsForCall(input: {
   const cof = str(req.cof)
   const cvvresp = str(input.cvvresp) ?? (res ? str(res.cvvresp) : null)
 
-  // A CVV on a merchant-initiated charge. The presence of any cvvresp means
-  // one was sent — the value does not matter, matched or not.
-  if (cof === 'M' && cvvresp) {
+  // A CVV on a merchant-initiated charge.
+  //
+  // This previously flagged the PRESENCE of any cvvresp, on the assumption that
+  // the field only appears when a CVV was sent. That is wrong, and it made the
+  // check fire on every MIT charge including compliant ones — the flag would
+  // have condemned our own fixed transactions.
+  //
+  // Measured on UAT 2026-08-14, one card, CVV the only variable:
+  //   token minted WITHOUT cvv → cvvresp "P"   (retref 226153175450)
+  //   token minted WITH cvv    → cvvresp "M"   (retref 226811075451)
+  // and re-minting without a CVV returned it to "P" (retref 226815775486),
+  // so the association follows the most recent tokenization.
+  //
+  // So the VALUE is what carries the information:
+  //   M / N  a CVV was submitted and the issuer judged it — definitive
+  //   U      issuer could not verify; a CVV was likely submitted — ambiguous
+  //   P      not processed — no CVV accompanied the authorization
+  //   S      merchant indicated CVV is not present on the card
+  if (cof === 'M' && cvvresp && CVV_EVALUATED.has(cvvresp.toUpperCase())) {
     flags.push({
       code: 'cvv_on_mit',
       severity: 'critical',
       label: 'CVV on merchant-initiated charge',
       detail: `Gateway returned cvvresp "${cvvresp}", so a CVV was sent on a charge the cardholder was not present for. Storing or replaying CVV violates PCI-DSS.`,
+    })
+  } else if (cof === 'M' && cvvresp?.toUpperCase() === 'U') {
+    flags.push({
+      code: 'cvv_on_mit',
+      severity: 'warning',
+      label: 'Possible CVV on merchant-initiated charge',
+      detail:
+        'Gateway returned cvvresp "U" — the issuer could not verify a CVV, which does not distinguish "none was sent" from "one was sent and could not be checked". Worth reading the token\'s origin before dismissing.',
     })
   }
 
