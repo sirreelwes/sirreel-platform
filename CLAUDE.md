@@ -59,7 +59,12 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - The `PLANYO_BACKFILL`-sourced Booking rows already in HQ are a STALE prior-import snapshot, **NOT live commitments**. Do not infer "live" from the `PLANYO_BACKFILL` flag; do not treat HQ's schedule as authoritative; do not build write-back to Planyo.
   - **Full cutover (future, not yet authorized):** a one-time import will pull current Planyo schedule items, assign each to a Job, mark them "imported," and supersede / dedupe the prior backfill snapshot. Until that ships, HQ's scheduling surfaces are read-only-truth-wise even if the UI lets you click.
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
-- **CardPointe** (UAT, MID 496152163887) = card processing
+- **CardPointe** (UAT, MID 810000003214) = card processing. `.env.local` is the
+  authority on the MID, not this file — it changed once already (496152163887 →
+  810000003214, commit dbc94cc) and a stale one here sends you hunting for
+  transactions on a merchant account that has none. Still UAT: production
+  credentials arrive with Fiserv's validation sign-off, and every client-facing
+  card surface fails closed until `CARDPOINTE_ENV=PROD` is set with them.
 
 ### Key Database Concepts
 - **Order** (`sr_orders`) — invoiceable rental, ties to a Job
