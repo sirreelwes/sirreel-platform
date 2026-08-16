@@ -54,6 +54,27 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       // permits a fee at all.
       const ccPostal =
         typeof body.ccZip === 'string' ? body.ccZip.replace(/[^0-9-]/g, '').slice(0, 10) : ''
+
+      // Postal is REQUIRED whenever a card is being stored, and enforced here
+      // rather than only in the form. Both card surfaces now guard the submit
+      // button on a valid ZIP, but a disabled button is not a control: any
+      // request that skips the UI still reaches this route, and the auth would
+      // go to the gateway with no postal at all.
+      //
+      // That distinction matters beyond tidiness — SirReel has told Fiserv
+      // that postal accompanies every card-not-present authorization, and a
+      // client-side check cannot make that true.
+      //
+      // Rejected BEFORE the gateway call, and only when a card is actually
+      // present: the rest of the cc step (signature, payment preference,
+      // cardholder details) must still work for a client who is not putting a
+      // card on file at all.
+      if (body.ccToken && !/^\d{5}(-\d{4})?$/.test(ccPostal)) {
+        return NextResponse.json(
+          { error: 'A billing ZIP is required to authorize a card.' },
+          { status: 400 },
+        )
+      }
       // Captured so the outcome survives the request. The response used to be
       // discarded — logged only on failure — which meant nobody could tell
       // whether a card on file had actually validated, and the retref that
