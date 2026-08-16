@@ -171,6 +171,15 @@ export default function ClientPortal() {
   const [lcdwSigDrawn, setLcdwSigDrawn] = useState(false);
   const [ccSigDrawn, setCcSigDrawn] = useState(false);
   const [cpIframeUrl, setCpIframeUrl] = useState('');
+  // null = still asking. Card capture stays HIDDEN until the gateway is in
+  // production. On UAT the tokenizer works and the gateway approves, so this
+  // step looks successful while tokenizing a real cardholder's PAN in a
+  // sandbox Fiserv says must never receive live card data.
+  //
+  // 4ebb374 added this gate to CcAuthCard (portal v2) and the pay panel, but
+  // not here — and portalTokenUrl() sends clients to THIS page, so the surface
+  // that actually receives the emailed link was the one still collecting.
+  const [cardLive, setCardLive] = useState<boolean | null>(null);
   const [cpToken, setCpToken] = useState('');
 
   useEffect(() => {
@@ -253,7 +262,15 @@ export default function ClientPortal() {
     if (activeTab !== 'cc' || cpIframeUrl) return;
     // Card ON FILE — stored for later merchant-initiated charges, so the
     // token must carry no CVV. See /api/cardpointe/config.
-    fetch('/api/cardpointe/config?mode=card-on-file').then(r => r.json()).then(d => { if (d.iframeUrl) setCpIframeUrl(d.iframeUrl); });
+    fetch('/api/cardpointe/config?mode=card-on-file')
+      .then(r => r.json())
+      .then(d => {
+        setCardLive(d.live === true);
+        if (d.live === true && d.iframeUrl) setCpIframeUrl(d.iframeUrl);
+      })
+      // Unknown means DON'T collect. Failing closed is the safe direction for
+      // a card form.
+      .catch(() => setCardLive(false));
   }, [activeTab]);
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -1343,7 +1360,35 @@ export default function ClientPortal() {
         {/* CC AUTH */}
         {activeTab === 'cc' && (
           locked ? renderLockedCard('Credit Card Authorization') :
-          done.cc ? renderDoneCard('Credit Card Authorized', 'Authorization on file with SirReel') : (
+          done.cc ? renderDoneCard('Credit Card Authorized', 'Authorization on file with SirReel') :
+          cardLive === false ? (
+            // Not live. Rather than a dead step, point the client at the form
+            // that genuinely holds their details today. Says nothing about
+            // environments — that is our problem, not theirs. Same wording as
+            // the v2 card so a client who sees both reads one message.
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+              <h2 className="font-bold text-gray-900 mb-1">Credit Card Authorization</h2>
+              <p className="text-sm text-gray-700">
+                We&rsquo;re finishing our new card system. For now, please authorize
+                your card on our secure form — it takes a minute and covers this job.
+              </p>
+              <a
+                href="/creditcardauthorization"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold"
+              >
+                Authorize your card →
+              </a>
+              <p className="text-[11px] text-gray-400">
+                Prefer to pay by check or bank transfer? Tell your SirReel rep and we
+                will send details — no card needed.
+              </p>
+            </div>
+          ) :
+          cardLive === null ? (
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 text-xs text-gray-400">Loading secure card entry…</div>
+          ) : (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-1">Credit Card Authorization</h2>
