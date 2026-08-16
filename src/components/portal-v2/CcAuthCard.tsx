@@ -64,6 +64,19 @@ export function CcAuthCard({
   // reliably return it, and the gateway requires it to validate the card.
   const [expMonth, setExpMonth] = useState('')
   const [expYear, setExpYear] = useState('')
+  // Billing ZIP is collected HERE rather than read from the saved billing
+  // address. It used to come from intake.billingZip, which is blank whenever
+  // the client never filled in "Your details" — and nothing required it, so
+  // the $0 authorization went to the gateway with no postal at all.
+  //
+  // The gateway needs it on every card-not-present auth: it is the AVS check
+  // that a stored card leans on now that the card-on-file tokenizer no longer
+  // captures a CVV, and with surcharging enabled the gateway also uses the
+  // cardholder's region to decide whether a fee is permitted at all.
+  //
+  // Seeded from the saved address when there is one, so the common case is
+  // still a pre-filled field the client just confirms.
+  const [billingZip, setBillingZip] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [seeded, setSeeded] = useState(false)
@@ -76,6 +89,7 @@ export function CcAuthCard({
     const { first, last } = splitName(intake.fullName)
     setCardholderFirst((v) => v || first)
     setCardholderLast((v) => v || last)
+    setBillingZip((v) => v || (intake.billingZip ?? ''))
     setSeeded(true)
   }, [intake, seeded])
 
@@ -321,6 +335,15 @@ export function CcAuthCard({
                   <option key={y} value={String(y)}>20{y}</option>
                 ))}
               </select>
+              <input
+                value={billingZip}
+                onChange={(e) => setBillingZip(e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                inputMode="numeric"
+                autoComplete="billing postal-code"
+                aria-label="Billing ZIP code"
+                placeholder="Billing ZIP"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900"
+              />
             </div>
             {cpToken ? (
               <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold">
@@ -367,7 +390,7 @@ export function CcAuthCard({
                     ccAddress2: intake.billingAddress2,
                     ccCity: intake.billingCity,
                     ccState: intake.billingState,
-                    ccZip: intake.billingZip,
+                    ccZip: billingZip,
                     ccBillingPhone: formatPhone(intake.phone),
                     ccBillingEmail: intake.email,
                     ccCardType: cardType,
@@ -400,6 +423,10 @@ export function CcAuthCard({
               !cpToken ||
               expMonth.length !== 2 ||
               expYear.length !== 2 ||
+              // 5-digit ZIP or ZIP+4. Guarded here as well as seeded above:
+              // an unsent postal is invisible at the time it happens and only
+              // surfaces later, as a decline or a compliance finding.
+              !/^\d{5}(-\d{4})?$/.test(billingZip) ||
               submitting
             }
             className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
@@ -415,6 +442,15 @@ export function CcAuthCard({
             <p className="mt-2 text-[11px] text-center text-gray-400">
               Waiting on the card — enter the card number and CVV above, then
               click outside the field to finish encrypting it.
+            </p>
+          )}
+          {/* Same reasoning for the ZIP: it is the one required field that can
+              arrive pre-filled, so a client who never saw it type anything is
+              the likeliest person to be staring at a dead button. */}
+          {!submitting && cpToken && !/^\d{5}(-\d{4})?$/.test(billingZip) && (
+            <p className="mt-2 text-[11px] text-center text-gray-400">
+              Add the billing ZIP for this card — your bank checks it against
+              the cardholder&rsquo;s address.
             </p>
           )}
         </div>
