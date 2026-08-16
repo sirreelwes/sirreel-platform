@@ -181,6 +181,25 @@ export default function ClientPortal() {
   // that actually receives the emailed link was the one still collecting.
   const [cardLive, setCardLive] = useState<boolean | null>(null);
   const [cpToken, setCpToken] = useState('');
+  // Expiry is collected HERE, not in the iframe: the card-on-file tokenizer
+  // runs with useexpiry=false because it does not reliably hand the value back
+  // on the postMessage (see /api/cardpointe/config).
+  //
+  // This page had no expiry field at all, and /api/portal/[token]/sign only
+  // runs the $0 stored-credential authorization when an expiry arrives —
+  // without one it logs "card stored WITHOUT validation" and saves the token
+  // with NO gateway call. That is the absence of the stored-credential
+  // transaction itself (no cofpermission / cof / cofscheduled), not merely the
+  // incomplete-fields issue Fiserv raised on 2026-08-14. portalTokenUrl()
+  // points at THIS page, so the surface clients actually receive was the one
+  // storing unvalidated cards. Card capture is gated off until
+  // CARDPOINTE_ENV=PROD (commit 18c0544), so this lands ahead of the gate
+  // opening rather than after.
+  //
+  // The billing ZIP the gateway needs for AVS is already collected above, in
+  // the Billing Address block, and already required by the submit guard.
+  const [ccExpMonth, setCcExpMonth] = useState('');
+  const [ccExpYear, setCcExpYear] = useState('');
 
   useEffect(() => {
     fetch(`/api/portal/${token}`)
@@ -1471,6 +1490,30 @@ export default function ClientPortal() {
                       <div className="flex items-center justify-center h-full text-xs text-gray-400">Loading secure card entry...</div>
                     )}
                   </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <select
+                      value={ccExpMonth}
+                      onChange={e => setCcExpMonth(e.target.value)}
+                      aria-label="Expiry month"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 bg-white"
+                    >
+                      <option value="">Exp. month</option>
+                      {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={ccExpYear}
+                      onChange={e => setCcExpYear(e.target.value)}
+                      aria-label="Expiry year"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 bg-white"
+                    >
+                      <option value="">Exp. year</option>
+                      {Array.from({ length: 15 }, (_, i) => 26 + i).map(y => (
+                        <option key={y} value={String(y)}>20{y}</option>
+                      ))}
+                    </select>
+                  </div>
                   {cpToken && <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 font-semibold"><span>✓</span><span>Card captured securely</span></div>}
                   {!cpToken && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above — it is encrypted and never stored.</div>}
                 </div>
@@ -1483,10 +1526,35 @@ export default function ClientPortal() {
                 <SigCanvas canvasRef={ccSigRef} drawn={ccSigDrawn} onClear={() => clearSig(ccSigRef, setCcSigDrawn)} />
               </div>
               <button onClick={async () => {
-                if (await post('sign', { step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast, ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType, ccPaymentPreference, ccChargeSummary, ccChargeEstimate, ccToken: cpToken, ccSignatureData: sigData(ccSigRef) })) {
+                if (await post('sign', {
+                  step: 'cc', ccRepFirst, ccRepLast, ccRepPhone, ccRepEmail, ccCardholderFirst, ccCardholderLast,
+                  ccAddress1, ccAddress2, ccCity, ccState, ccZip, ccBillingPhone, ccBillingEmail, ccCardType,
+                  ccPaymentPreference, ccChargeSummary, ccChargeEstimate, ccToken: cpToken,
+                  // Without this the sign route skips the $0 authorization
+                  // entirely and stores the token with no gateway call —
+                  // no cofpermission, so no stored credential is ever
+                  // established for the merchant-initiated charges that follow.
+                  ccExpiry: `${ccExpMonth}${ccExpYear}`,
+                  ccSignatureData: sigData(ccSigRef),
+                })) {
                   setDone(d => ({ ...d, cc: true })); setActiveTab('overview');
                 }
-              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || !/^\d{5}(-\d{4})?$/.test(ccZip) || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
+              }} disabled={!ccCardholderFirst || !ccCardholderLast || !ccAcknowledged || !ccSigDrawn || !cpToken || ccExpMonth.length !== 2 || ccExpYear.length !== 2 || !/^\d{5}(-\d{4})?$/.test(ccZip) || submitting} className="w-full bg-gray-900 text-white rounded-xl py-4 font-semibold text-sm hover:bg-gray-800 disabled:opacity-40">{submitting ? 'Submitting...' : 'Authorize & Complete ✓'}</button>
+              {/* A disabled button with every visible field filled reads as a
+                  broken page. The two likeliest culprits are off-screen from
+                  the button: the ZIP lives up in Billing Address, and the card
+                  number lives in a CardSecure iframe whose encryption can still
+                  be pending. Name the missing one rather than making the client
+                  hunt for it. */}
+              {!submitting && !cpToken && ccCardholderFirst && ccCardholderLast && ccAcknowledged && ccSigDrawn && (
+                <p className="mt-2 text-[11px] text-center text-gray-400">Waiting on the card — enter the card number above, then click outside the field to finish encrypting it.</p>
+              )}
+              {!submitting && cpToken && (ccExpMonth.length !== 2 || ccExpYear.length !== 2) && (
+                <p className="mt-2 text-[11px] text-center text-gray-400">Add the card&rsquo;s expiry date — your bank needs it to authorize the card.</p>
+              )}
+              {!submitting && cpToken && ccExpMonth.length === 2 && ccExpYear.length === 2 && !/^\d{5}(-\d{4})?$/.test(ccZip) && (
+                <p className="mt-2 text-[11px] text-center text-gray-400">Add the billing ZIP under Billing Address — your bank checks it against the cardholder&rsquo;s address.</p>
+              )}
             </div>
           )
         )}
