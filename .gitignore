@@ -40,7 +40,6 @@ scripts/*
 !scripts/bind-planyo-backfill-units.ts
 !scripts/merge-proscout-vtr-dup.ts
 !scripts/merge-catalog-near-dups.ts
-!scripts/fix-cp200-analog-aliases.ts
 !scripts/backfill-assistant-auth-code.ts
 .env.local.bak
 .gcp-service-account.json
