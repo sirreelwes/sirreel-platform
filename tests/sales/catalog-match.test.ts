@@ -69,6 +69,11 @@ const CASES: Array<[description: string, expected: string | null]> = [
   ['rolling utility / production carts', 'Rubbermaid Cart'],
   ['utility cart', 'Rubbermaid Cart'],
   ['trash can liners', 'Trash Liners, Roll'],
+  ['trash bags', 'Trash Liners, Roll'],
+  ['garbage bags', 'Trash Liners, Roll'],
+  // …without stranding the disposal service, whose own name contains the
+  // phrase now owned by the liners.
+  ['trash bag disposal', 'Trash Bag Disposal'],
   // The seeded aliases must not swallow their neighbours.
   ['z-rack', 'RollingWardrobe Z-Rack'],
   ["director's chair cart", "Director's Chair Cart, Rolling"],
