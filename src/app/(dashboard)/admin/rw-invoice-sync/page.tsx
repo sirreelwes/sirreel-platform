@@ -18,9 +18,19 @@
  * The token is a bearer JWT with no refresh mechanism — rotation is a manual
  * 10-minute procedure, not a button, and the steps here are a summary of
  * `docs/runbooks/rentalworks-token-rotation.md` rather than a second source of
- * truth. Where that runbook is honest about not having documented the RW admin
- * navigation yet, this page is honest about it too. Inventing plausible menu
- * paths for someone mid-incident is worse than admitting the gap.
+ * truth.
+ *
+ * That runbook used to guess at an "Admin → API → Tokens" page. There isn't
+ * one: RentalWorks has no token-issuance UI at all, and the working token is
+ * the bearer its own web app sends. Both were corrected on 2026-08-16 after a
+ * rotation was done for real. If they drift again, the runbook wins — but a
+ * page that tells someone mid-incident to visit a screen that does not exist
+ * costs more than one that says nothing.
+ *
+ * No token countdown is shown. It was derived from the JWT `exp` claim, which
+ * RW stamps at 300 seconds and does not enforce, so it read EXPIRED forever —
+ * including on tokens working fine. What a reader can actually rely on is
+ * whether the mirror refreshed.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -82,10 +92,17 @@ function absTime(iso: string): string {
   })
 }
 
+/* These banners sit on the dashboard's LIGHT content area, not on a dark
+ * surface. They used to carry dark-theme values (a translucent dark fill with
+ * text-*-200 over it), which on white rendered as pale text on a pale wash —
+ * legible only if you already knew what it said.
+ *
+ * Note this is the opposite of BADGE_STYLES below, which is correct as-is:
+ * badges render INSIDE the bg-zinc-900 cards. Same page, two surfaces. */
 const TONE_STYLES: Record<Tone, string> = {
-  ok: 'bg-emerald-900/20 border-emerald-800/60 text-emerald-200',
-  warn: 'bg-amber-900/20 border-amber-800/60 text-amber-200',
-  bad: 'bg-red-900/20 border-red-800/60 text-red-200',
+  ok: 'bg-emerald-50 border-emerald-300 text-emerald-900',
+  warn: 'bg-amber-50 border-amber-300 text-amber-900',
+  bad: 'bg-red-50 border-red-300 text-red-900',
 }
 
 const BADGE_STYLES: Record<Tone, string> = {
@@ -296,8 +313,8 @@ export default function RwInvoiceSyncPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">RentalWorks Invoice Sync</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <h1 className="text-2xl font-semibold text-zinc-900">RentalWorks Invoice Sync</h1>
+          <p className="text-sm text-zinc-600 mt-1">
             The nightly job ({CRON_LABEL}) that refreshes the invoice mirror behind Collections,
             Receivables (RW) and Reconcile RW. When it stops, those balances quietly go stale.
           </p>
@@ -312,14 +329,14 @@ export default function RwInvoiceSyncPage() {
       </div>
 
       {loading && !status ? (
-        <div className="text-zinc-500 text-sm">Loading…</div>
+        <div className="text-zinc-600 text-sm">Loading…</div>
       ) : !status || !v ? (
-        <div className="text-zinc-500 text-sm">No status available.</div>
+        <div className="text-zinc-600 text-sm">No status available.</div>
       ) : (
         <>
           <div className={`border rounded-xl p-4 mb-4 ${TONE_STYLES[v.tone]}`}>
             <div className="text-sm font-semibold">{v.headline}</div>
-            <div className="text-xs mt-1.5 opacity-90 leading-relaxed">{v.detail}</div>
+            <div className="text-xs mt-1.5 leading-relaxed">{v.detail}</div>
           </div>
 
           {result && (
@@ -335,7 +352,7 @@ export default function RwInvoiceSyncPage() {
               ) : (
                 <>
                   <span className="font-semibold">Sync failed.</span> {result.error}
-                  <div className="mt-1 opacity-90">
+                  <div className="mt-1">
                     The mirror was left untouched — a failed pull never overwrites good data.
                   </div>
                 </>
@@ -412,14 +429,15 @@ export default function RwInvoiceSyncPage() {
               {needsRotation ? 'Rotate the token' : 'Rotating the token'}
             </h2>
             <p className="text-xs text-zinc-500 mb-4">
-              About 10 minutes, and it has to be done by hand — RentalWorks issues tokens from its
-              admin UI and exposes no auth API. Full procedure:{' '}
+              About 10 minutes, and it has to be done by hand — RentalWorks has no
+              token-issuance UI and no auth API, so the token is the bearer its own web app uses.
+              Full procedure:{' '}
               <code className="text-zinc-400">docs/runbooks/rentalworks-token-rotation.md</code>
             </p>
 
             <ol className="text-xs text-zinc-400 space-y-3 list-decimal ml-4">
               <li>
-                <span className="text-zinc-300">Mint a token in the RW admin UI.</span> Log into{' '}
+                <span className="text-zinc-300">Copy the bearer from the RW web app.</span> Log into{' '}
                 <a
                   href="https://sirreel.rentalworks.cloud/"
                   target="_blank"
@@ -428,21 +446,25 @@ export default function RwInvoiceSyncPage() {
                 >
                   sirreel.rentalworks.cloud
                 </a>{' '}
-                with the admin account (1Password → &ldquo;RentalWorks Admin&rdquo;) and generate a
-                new API token.
+                with the admin account (1Password → &ldquo;RentalWorks Admin&rdquo;) and open any
+                module that loads data. Then DevTools → Network → Fetch/XHR → click a{' '}
+                <code>browse</code> request → Headers → Request Headers, and copy{' '}
+                <code>authorization</code> without the leading <code>Bearer </code>.
                 <div className="text-zinc-500 mt-1">
-                  The exact navigation is still undocumented in the runbook — if you find it, write
-                  down the page path and button label so the next person does not have to hunt.
-                  Copy the token straight to your clipboard; it is a bearer credential with full
-                  read/write access to the tenant, so do not save it to a file or paste it into
-                  chat.
+                  There is no Generate-Token page — the whole Administrator menu was checked on
+                  2026-08-16 and has no API or Token entry. Clear the Network filter box first or
+                  the request list stays empty. Stay logged in until step 5 passes: the token is
+                  tied to that session. It is a bearer credential with full read/write access to
+                  the tenant, so do not save it to a file or paste it into chat.
                 </div>
               </li>
               <li>
                 <span className="text-zinc-300">Verify it before deploying.</span> One cheap API
-                call, and it never logs the token:
+                call, and it never logs the token. Quote the value and do not type angle brackets —
+                an unquoted <code>&lt;</code> is shell redirection and fails with &ldquo;File name
+                too long&rdquo;:
                 <pre className="mt-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-300 overflow-x-auto">
-                  RENTALWORKS_TOKEN=&lt;paste&gt; npx tsx scripts/verify-rw-token.ts
+                  RENTALWORKS_TOKEN=&apos;eyJ…&apos; npx tsx scripts/verify-rw-token.ts
                 </pre>
               </li>
               <li>
@@ -455,7 +477,8 @@ export default function RwInvoiceSyncPage() {
               <li>
                 <span className="text-zinc-300">Redeploy.</span> Env-var changes do not reach
                 running functions until a new deploy — push to <code>main</code> (an empty commit is
-                fine) and let the Vercel integration build it.
+                fine) and let the Vercel integration build it. Do not run{' '}
+                <code>vercel --prod</code>; it races the auto-deploy.
               </li>
               <li>
                 <span className="text-zinc-300">Come back here and hit Sync now.</span> A green
