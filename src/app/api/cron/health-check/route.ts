@@ -5,6 +5,16 @@ import { postMessage as slackPost } from '@/lib/slack'
 import type { HealthReport, ServiceHealth } from '@/lib/health/types'
 
 export const dynamic = 'force-dynamic'
+/**
+ * The probes run concurrently, so this budget is the SLOWEST one, not their
+ * sum. RentalWorks is that probe: 15s per attempt and one retry on timeout =
+ * 30s worst case. On the platform default this route would be killed
+ * mid-check, which reports as a total health failure — strictly worse than
+ * the slow vendor it was trying to measure.
+ *
+ * Raise this if any probe's timeout budget grows.
+ */
+export const maxDuration = 60
 
 const SUPPRESSION_WINDOW_MS = 4 * 60 * 60 * 1000 // 4 hours
 const ADMIN_HEALTH_URL = 'https://hq.sirreel.com/admin/health'
