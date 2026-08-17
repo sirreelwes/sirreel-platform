@@ -15,6 +15,7 @@ import {
   type CatalogType,
 } from '@/lib/sales/catalogMatcher'
 import { BILLING_RULES, computeBillableDays } from '@/lib/orders/billing'
+import { deriveWalkieKit } from '@/lib/sales/walkieKit'
 import { PARSING_MODEL } from '@/lib/ai/models'
 import { parseAiJson, AiJsonError } from '@/lib/ai/extractJson'
 
@@ -331,8 +332,50 @@ interface ResolvedItem {
   billableDays: number
   rate: number
   matchedProduct: { id: string; type: CatalogType; name: string; lineType: LineItemType } | null
-  matchSource: 'AI' | 'ALIAS_FALLBACK' | null
+  matchSource: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null
   warnings: string[]
+}
+
+/**
+ * Radios don't leave the building without charging banks and spare
+ * batteries. The client rarely lists them; the warehouse needs them on the
+ * pick list either way. Quantities are ratios off the radio count, so this
+ * is arithmetic the server does — not something the model should estimate.
+ *
+ * The lines are quoted at $0 (included, not charged) and carry a warning so
+ * the rep can see they were added and why.
+ */
+function appendWalkieKit(items: ResolvedItem[]): ResolvedItem[] {
+  const kit = deriveWalkieKit(
+    items.map((i) => ({
+      description: i.description,
+      quantity: i.quantity,
+      matchedProductName: i.matchedProduct?.name ?? null,
+    }))
+  )
+  if (kit.length === 0) return items
+
+  // Ride along with the radio line's dates so the kit can't outlast the gear.
+  const radioLine = items.find((i) => i.department === 'COMMUNICATIONS') ?? items[0]
+  return [
+    ...items,
+    ...kit.map((k) => ({
+      description: k.description,
+      quantity: k.quantity,
+      catalogProductId: null,
+      catalogType: null,
+      department: 'COMMUNICATIONS' as LineItemDepartment,
+      qualifier: null,
+      rateType: radioLine.rateType,
+      pickupDate: radioLine.pickupDate,
+      returnDate: radioLine.returnDate,
+      billableDays: radioLine.billableDays,
+      rate: 0,
+      matchedProduct: null,
+      matchSource: 'AUTO_KIT' as const,
+      warnings: [k.note],
+    })),
+  ]
 }
 
 function inclusiveDayCount(startISO?: string | null, endISO?: string | null): number | null {
@@ -640,11 +683,12 @@ export async function POST(req: NextRequest) {
     }
 
     const rawItems: AiItem[] = Array.isArray(parsed.items) ? parsed.items : []
-    const items: ResolvedItem[] = await Promise.all(
+    const resolved: ResolvedItem[] = await Promise.all(
       rawItems.map((it) =>
         resolveItem(it, { startDate: parsed.startDate, endDate: parsed.endDate })
       )
     )
+    const items = appendWalkieKit(resolved)
 
     // Contacts: dedupe + filter at the gateway, then enrich with Person
     // table match status. The AI is asked to filter @sirreel/noreply too

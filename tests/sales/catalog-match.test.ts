@@ -56,6 +56,13 @@ const CASES: Array<[description: string, expected: string | null]> = [
   // "ac" on Air Conditioner used to fire inside "garment ra{ck}s".
   ['garment rack', 'Wardrobe Rack, Rolling'],
 
+  // …and an alias only counts when it lands on the head noun. All three of
+  // these say "walkie" and none of them is a radio; they matched the radio
+  // at $10/day until the head-noun rule landed.
+  ['Multi-bank walkie chargers', null],
+  ['Spare walkie batteries', null],
+  ['Walkie labels / colored tape', null],
+
   // Evidence floor — one shared generic token ("cart", "kit", "rack") is
   // not a match. Declining sends the rep to the picker; guessing sends a
   // $134 head cart out on a quote that asked for a $20 utility cart.
@@ -132,6 +139,40 @@ async function main(): Promise<void> {
         (gotName === expected ? '' : `  [got: ${gotName ?? 'no match'}]`)
     )
   }
+
+  console.log('\nwalkie kit')
+  const { deriveWalkieKit, spareBatteryCount, chargingBankCount } = await import(
+    '../../src/lib/sales/walkieKit'
+  )
+  check(spareBatteryCount(15) === 8, '15 radios → 8 spare batteries (half, rounded up)')
+  check(chargingBankCount(15) === 1, '15 radios → 1 charging bank')
+  check(chargingBankCount(24) === 2, '24 radios → 2 charging banks')
+  check(chargingBankCount(35) === 2, '35 radios → 2 banks (rounds down)')
+  check(chargingBankCount(6) === 1, '6 radios still gets a bank, not zero')
+
+  const kit = deriveWalkieKit([
+    { description: 'walkies', quantity: 15, matchedProductName: 'Motorola CP200d  UHF Radio (Digital)' },
+    { description: 'surveillance kits', quantity: 15, matchedProductName: 'Surveillance Kit' },
+  ])
+  check(kit.length === 2, 'a radio line pulls in both kit lines')
+  check(kit[0].quantity === 1 && /charging bank/i.test(kit[0].description), '  → 1 charging bank')
+  check(kit[1].quantity === 8 && /batter/i.test(kit[1].description), '  → 8 spare batteries')
+
+  check(
+    deriveWalkieKit([{ description: 'sandbags', quantity: 10 }]).length === 0,
+    'no radios, no kit'
+  )
+  check(
+    deriveWalkieKit([
+      { description: 'walkies', quantity: 12 },
+      { description: 'Multi-bank walkie chargers', quantity: 2 },
+    ]).length === 1,
+    "the client's own charger line is left alone; only batteries are added"
+  )
+  check(
+    deriveWalkieKit([{ description: 'Spare walkie batteries', quantity: 4 }]).length === 0,
+    'an accessory line that says "walkie" is not a radio line'
+  )
 
   console.log('')
   if (failures.length > 0) {

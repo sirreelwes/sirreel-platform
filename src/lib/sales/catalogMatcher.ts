@@ -182,9 +182,17 @@ export async function validateCatalogMatch(
  * aid) — the catalog writes "First Aid Kit" while clients write "first-aid
  * kit", and keeping only the fused token made those two share nothing.
  */
-function tokenize(s: string): string[] {
-  const out: string[] = []
-  const raw = stripSpecs(s)
+/**
+ * The description's own words, in order and unexpanded. This is the set the
+ * coverage test measures against — and its last member is the head noun, the
+ * thing actually being asked for ("chargers" in "multi-bank walkie chargers").
+ */
+function singularize(t: string): string {
+  return t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t
+}
+
+function primaryTokens(s: string): string[] {
+  return stripSpecs(s)
     .replace(/[^\w\s-]/g, ' ')
     .split(/\s+/)
     .filter((t) => t.length >= 2)
@@ -195,15 +203,21 @@ function tokenize(s: string): string[] {
     // matching "Pipe & Drape ... 10'H x 10'W") and diluted the coverage
     // test, since "6ft tables" would count a token no name can explain.
     .filter((t) => !/^\d+(?:\.\d+)?[a-z]*$/.test(t))
+    .map(singularize)
+}
+
+function tokenize(s: string): string[] {
+  const out: string[] = []
+  const raw = primaryTokens(s)
   for (const t of raw) {
     out.push(t)
     if (t.includes('-')) {
       for (const part of t.split('-')) {
-        if (part.length >= 2 && !/^\d+(?:\.\d+)?[a-z]*$/.test(part)) out.push(part)
+        if (part.length >= 2 && !/^\d+(?:\.\d+)?[a-z]*$/.test(part)) out.push(singularize(part))
       }
     }
   }
-  return out.map((t) => (t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t))
+  return out
 }
 
 /**
@@ -315,6 +329,11 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
   if (!desc) return null
   const descTokens = new Set(tokenize(desc))
   const descSpecs = extractSpecs(desc)
+  // Coverage is measured against the words the client actually wrote, not the
+  // hyphen-split expansions — "heavy-duty" is one ask, not three.
+  const descPrimary = primaryTokens(desc)
+  const primarySet = new Set(descPrimary)
+  const descHead = descPrimary[descPrimary.length - 1] ?? null
 
   const invItems = await prisma.inventoryItem.findMany({
     where: { isActive: true },
@@ -331,6 +350,8 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
     aliased: boolean
     /** Share of the description's own tokens this row accounts for. */
     coverage: number
+    /** Explains the head noun — the thing being asked for, not a modifier. */
+    headExplained: boolean
     specs: Set<string>
   }
   const scores: Scored[] = []
@@ -360,11 +381,22 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
       }
     }
     if (score === 0) return null
+    // A hyphenated word counts as explained when its parts are: the catalog
+    // writes "First Aid Kit", the client writes "first-aid kit", and the two
+    // agree on every word that matters.
+    const covers = (t: string): boolean => {
+      if (explained.has(t)) return true
+      if (!t.includes('-')) return false
+      const parts = t.split('-').filter((x) => x.length >= 2).map(singularize)
+      return parts.length > 0 && parts.every((x) => explained.has(x))
+    }
+    const explainedPrimary = [...primarySet].filter(covers)
     return {
       product,
       score,
       aliased,
-      coverage: descTokens.size > 0 ? explained.size / descTokens.size : 0,
+      coverage: primarySet.size > 0 ? explainedPrimary.length / primarySet.size : 0,
+      headExplained: descHead !== null && covers(descHead),
       // Aliases can carry the spec the name leaves implicit ("6 foot table"
       // on a row named "Banquet Table"), so the row's specs are the union.
       specs: extractSpecs([name, ...aliases].join(' ')),
@@ -417,12 +449,18 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
   })
 
   const top = pool[0]
-  // Evidence test, applied before any winner is declared. A curated alias is
-  // intent we wrote down; otherwise the row has to account for most of what
-  // the client actually said. Without this, one shared generic token was
-  // enough to win a whole category — "rolling utility / production carts"
+  // Evidence test, applied before any winner is declared. Either the row
+  // accounts for most of what the client said, or a curated alias lands on
+  // the head noun — the thing being asked for.
+  //
+  // Both halves earn their keep. Without the coverage floor, one shared
+  // generic token won a whole category: "rolling utility / production carts"
   // came back as Director's Chair Cart, Rolling on the strength of "cart".
-  if (!top.aliased && top.coverage < 0.6) return null
+  // Without the head-noun rule, an alias firing on a modifier did the same
+  // damage in reverse: "Multi-bank walkie chargers" and "Spare walkie
+  // batteries" both matched the RADIO on the word "walkie" and billed the
+  // client $10/day each for accessories that ship free.
+  if (top.coverage < 0.6 && !(top.aliased && top.headExplained)) return null
   if (pool.length === 1) return top.product
 
   const runnerUp = pool[1]

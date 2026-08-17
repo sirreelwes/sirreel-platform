@@ -66,7 +66,7 @@ interface ResolvedItem {
   claimedDays?: number | null;
   rate: number;
   matchedProduct: { id: string; type: CatalogType; name: string } | null;
-  matchSource: 'AI' | 'ALIAS_FALLBACK' | null;
+  matchSource: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null;
   warnings: string[];
   // Transient UI-only flag set when an auto-reset fires so we can show
   // the inline note. Cleared on the next user-initiated edit.
