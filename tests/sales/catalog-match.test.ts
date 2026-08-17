@@ -29,7 +29,15 @@ function check(condition: unknown, message: string): void {
   else console.log(`  ok — ${message}`)
 }
 
-/** null expectation = "must decline", i.e. the UI shows the amber picker. */
+/**
+ * null expectation = "must decline", i.e. the UI shows the amber picker.
+ *
+ * Not covered here, deliberately: a bare generic noun we stock N variants of
+ * ("carts", "hangers", "fans", "generator") still resolves to one of them by
+ * the deterministic tiebreak rather than declining. That predates this work
+ * and is what makes a bare "walkies" resolve at all — changing it is a call
+ * for Wes, not a bug in the scoring.
+ */
 const CASES: Array<[description: string, expected: string | null]> = [
   // Spec gate — the size/capacity IS the item. A wrong pick here bills the
   // client at another item's rate and nothing in the UI flags it.
@@ -44,17 +52,26 @@ const CASES: Array<[description: string, expected: string | null]> = [
   ["25' extension cords", "Ext. Cord, 25'"],
   ["50' stingers", "Ext. Cord, 50'"],
 
-  // Aliases match on word boundaries, not as substrings: "ac" (Air
-  // Conditioner) used to fire inside "garment ra-CK-s"… inside "racks".
-  ['z-rack', 'RollingWardrobe Z-Rack'],
+  // Aliases match on word boundaries, not as substrings: the two-letter
+  // "ac" on Air Conditioner used to fire inside "garment ra{ck}s".
+  ['garment rack', 'Wardrobe Rack, Rolling'],
 
   // Evidence floor — one shared generic token ("cart", "kit", "rack") is
   // not a match. Declining sends the rep to the picker; guessing sends a
   // $134 head cart out on a quote that asked for a $20 utility cart.
-  ['rolling utility / production carts', null],
-  ['utility cart', null],
-  ['garment racks + hangers', null],
   ['Basic cleaning kit', null],
+
+  // …and where the vocabulary gap is real — SirReel says "Wardrobe Rack",
+  // the crew says "garment rack" — the translation lives in the row's
+  // aliases (scripts/seed-catalog-aliases.ts), not in the scoring.
+  ['garment racks + hangers', 'Wardrobe Rack, Rolling'],
+  ['clothing racks', 'Wardrobe Rack, Rolling'],
+  ['rolling utility / production carts', 'Rubbermaid Cart'],
+  ['utility cart', 'Rubbermaid Cart'],
+  ['trash can liners', 'Trash Liners, Roll'],
+  // The seeded aliases must not swallow their neighbours.
+  ['z-rack', 'RollingWardrobe Z-Rack'],
+  ["director's chair cart", "Director's Chair Cart, Rolling"],
 
   // …but a row that explains most of the description wins on a narrow lead.
   ['large trash cans + liners', 'Trash Cans, Large'],
