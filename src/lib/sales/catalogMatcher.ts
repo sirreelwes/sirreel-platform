@@ -191,6 +191,24 @@ function singularize(t: string): string {
   return t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t
 }
 
+/**
+ * A search token plus the singular forms of it, for callers matching against
+ * catalog text with plain `contains`.
+ *
+ * SirReel names things in the singular ("Table, 6' Folding") and crews ask in
+ * the plural ("6' folding tables"), so a literal token match drops the very
+ * row the rep is looking for — which is what left the line-item picker
+ * showing nothing at all for "6' folding tables".
+ */
+export function tokenVariants(t: string): string[] {
+  const base = t.toLowerCase()
+  const out = new Set([base])
+  if (base.length > 3 && base.endsWith('ies')) out.add(`${base.slice(0, -3)}y`)
+  if (base.length > 4 && base.endsWith('es')) out.add(base.slice(0, -2))
+  out.add(singularize(base))
+  return [...out]
+}
+
 function primaryTokens(s: string): string[] {
   return stripSpecs(s)
     .replace(/[^\w\s-]/g, ' ')

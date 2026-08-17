@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { tokenVariants } from '@/lib/sales/catalogMatcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,8 +53,13 @@ export async function GET(req: NextRequest) {
   // category, or (name OR description) for packages. Order-insensitive
   // — "6' Table" finds "6' Folding Table", "Studio Lankershim" finds
   // "Lankershim Studio A", "grip pack" finds "Grip Starter Package".
+  //
+  // Each token carries its singular forms, because the catalog names things
+  // in the singular and crews ask in the plural. Matching "tables"
+  // literally excluded "Table, 6' Folding" — every AND-ed token has to hit,
+  // so one plural was enough to empty the whole dropdown.
   const tokens = q.split(/\s+/).filter(Boolean)
-  const lower = (t: string) => t.toLowerCase()
+  const variants = tokens.map(tokenVariants)
 
   const [invItems, packages] = await Promise.all([
     wantsQuantity || wantsUnitTracked
@@ -61,20 +67,22 @@ export async function GET(req: NextRequest) {
           where: {
             isActive: true,
             ...(trackingFilter ? { trackingMode: trackingFilter } : {}),
-            AND: tokens.map((t) => ({
-              OR: [
-                { code: { contains: t, mode: 'insensitive' as const } },
-                { description: { contains: t, mode: 'insensitive' as const } },
-                { slug: { contains: t, mode: 'insensitive' as const } },
-                { aliases: { has: lower(t) } },
-              ],
+            AND: variants.map((vs) => ({
+              OR: vs.flatMap((v) => [
+                { code: { contains: v, mode: 'insensitive' as const } },
+                { description: { contains: v, mode: 'insensitive' as const } },
+                { slug: { contains: v, mode: 'insensitive' as const } },
+                { aliases: { has: v } },
+              ]),
             })),
           },
           select: {
             id: true, code: true, description: true, trackingMode: true,
             department: true, dailyRate: true, weeklyRate: true,
           },
-          take: limit,
+          // Over-fetch so the name-relevance pass below has something to
+          // rank; the slice back to `limit` happens after sorting.
+          take: limit * 3,
           // Unit-tracked rows (vehicles, stages) are the headline answers;
           // warehouse gear ranks under them by how much of it we own.
           orderBy: [{ trackingMode: 'asc' }, { qtyOwned: 'desc' }],
@@ -84,11 +92,11 @@ export async function GET(req: NextRequest) {
       ? prisma.package.findMany({
           where: {
             active: true,
-            AND: tokens.map((t) => ({
-              OR: [
-                { name: { contains: t, mode: 'insensitive' as const } },
-                { description: { contains: t, mode: 'insensitive' as const } },
-              ],
+            AND: variants.map((vs) => ({
+              OR: vs.flatMap((v) => [
+                { name: { contains: v, mode: 'insensitive' as const } },
+                { description: { contains: v, mode: 'insensitive' as const } },
+              ]),
             })),
           },
           select: {
@@ -109,6 +117,26 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve([]),
   ])
+
+  // Relevance pass. The DB filter only says "every token hit something" —
+  // it can't tell a row that hit on its NAME from one that hit on a code or
+  // an alias, and that's the difference between the obvious answer and a
+  // near-miss. Rank by tokens found in the name, then prefer the shorter
+  // (more general) name: "Table, 6' Folding" over "Table, 6' Folding
+  // (Half Fold)".
+  const nameScore = (name: string): number => {
+    const n = name.toLowerCase()
+    return variants.reduce((sum, vs) => sum + (vs.some((v) => n.includes(v)) ? 1 : 0), 0)
+  }
+  const ranked = [...invItems].sort((a, b) => {
+    const an = a.description || a.code
+    const bn = b.description || b.code
+    // Unit-tracked rows keep their headline position.
+    if (a.trackingMode !== b.trackingMode) return a.trackingMode === 'UNIT_TRACKED' ? -1 : 1
+    const diff = nameScore(bn) - nameScore(an)
+    if (diff !== 0) return diff
+    return an.length - bn.length
+  })
 
   const results = [
     // Packages first — they're the "best" answer when they match
@@ -132,7 +160,7 @@ export async function GET(req: NextRequest) {
     })),
     // Every catalog hit is an InventoryItem now, so callers bind
     // inventoryItemId and never assetCategoryId.
-    ...invItems.map((i) => ({
+    ...ranked.map((i) => ({
       id: i.id,
       type: 'INVENTORY' as const,
       trackingMode: i.trackingMode,
