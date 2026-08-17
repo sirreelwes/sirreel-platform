@@ -75,6 +75,29 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           { status: 400 },
         )
       }
+
+      // Expiry gets the same treatment, and for a sharper reason than the
+      // postal: without it the $0 authorization below is SKIPPED ENTIRELY.
+      // Not a degraded auth — no gateway call at all, so no cofpermission and
+      // no stored credential established, while the token is saved and the
+      // step reports success. A card then sits in the collections queue
+      // looking valid until someone tries to charge it, and the
+      // merchant-initiated charges that follow have no initial transaction to
+      // reference under the card-brand framework.
+      //
+      // That is exactly how the v1 portal behaved for its whole life: it had
+      // no expiry field, so every card it stored took the silent path. Both
+      // card forms now guard their submit button on expiry, but a disabled
+      // button is not a control — same argument as the postal above.
+      //
+      // Month is validated, not just length: '9999' is four digits and would
+      // satisfy the auth condition below while being no expiry at all.
+      if (body.ccToken && !/^(0[1-9]|1[0-2])\d{2}$/.test(ccExpiry)) {
+        return NextResponse.json(
+          { error: 'A valid card expiry date is required to authorize a card.' },
+          { status: 400 },
+        )
+      }
       // Captured so the outcome survives the request. The response used to be
       // discarded — logged only on failure — which meant nobody could tell
       // whether a card on file had actually validated, and the retref that
@@ -112,9 +135,14 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           console.error('[cc-auth] $0 validation threw:', err)
           authRespText = err instanceof Error ? err.message.slice(0, 300) : 'gateway error'
         }
-      } else {
-        console.error('[cc-auth] no expiry supplied — card stored WITHOUT validation')
       }
+      // No else-branch log any more. The guard above makes a token without a
+      // valid expiry a 400, so reaching this point with `body.ccToken` set is
+      // impossible — the only way past it is no card at all, which is the
+      // supported CHECK_WIRE path (signature, payment preference and
+      // cardholder details still save). The old message claimed a card had
+      // been "stored WITHOUT validation" and by now it would only ever fire
+      // when nothing was stored.
 
       await prisma.$executeRawUnsafe(`
         UPDATE paperwork_requests SET
