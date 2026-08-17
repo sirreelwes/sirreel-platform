@@ -89,7 +89,14 @@ const CASES: Array<[description: string, expected: string | null]> = [
 
   // Unchanged behavior — the curated-alias path and its deterministic
   // tiebreak among identically-scoring variants.
-  ['walkies', 'Motorola CP200  UHF Radio (Analog)'],
+  // Walkies default to digital (Wes, 8/17); the analog answers only when
+  // the request says so. Same rate either way — this is a pull-sheet
+  // question, not a billing one.
+  ['walkies', 'Motorola CP200d  UHF Radio (Digital)'],
+  ['walkie talkies', 'Motorola CP200d  UHF Radio (Digital)'],
+  ['handhelds', 'Motorola CP200d  UHF Radio (Digital)'],
+  ['analog walkies', 'Motorola CP200  UHF Radio (Analog)'],
+  ['cp200 analog', 'Motorola CP200  UHF Radio (Analog)'],
   ['surveillance kits', 'Surveillance Kit'],
   ['hand mics', 'Hand Mics'],
   ['sandbags', '25 LB. SANDBAG'],
