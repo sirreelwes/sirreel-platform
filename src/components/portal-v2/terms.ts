@@ -1,9 +1,17 @@
 /**
- * Canonical portal legal text, copied verbatim from the live legacy portal
- * (src/app/portal/[token]/page.tsx). Duplicated rather than imported because
- * the legacy page keeps these as private consts and must stay untouched
- * until v2 is verified and cut over. If the legal language changes, update
- * BOTH files until the legacy portal is retired.
+ * Canonical portal legal text, originally copied verbatim from the legacy
+ * portal (src/app/portal/[token]/page.tsx) and duplicated rather than
+ * imported, on the reasoning that the legacy page had to stay untouched until
+ * v2 was cut over. "Update BOTH files" was the maintenance instruction, and it
+ * did not hold: CC_SURCHARGE_TEXT was corrected here from a flat 3% to a cap,
+ * and the legacy page kept promising the flat fee to every client who received
+ * a portal link.
+ *
+ * So the card-authorization strings below are now IMPORTED by the legacy page
+ * rather than mirrored in it — one definition, both surfaces. The remaining
+ * blocks (RENTAL_TERMS, LCDW_TERMS, STUDIO_TERMS) are still private copies on
+ * the legacy page; treat any edit to those as a two-file change until they get
+ * the same treatment.
  */
 
 export const RENTAL_TERMS = [

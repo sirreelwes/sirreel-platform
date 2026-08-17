@@ -4,6 +4,14 @@ import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, LCDW_WAIVED_DAMAGE_LIMIT, usd, usd2 } from '@/lib/contracts/fees';
+// Imported rather than kept as a private copy. These two strings existed here
+// as literals AND in portal-v2/terms.ts, and the two drifted: this page still
+// promised a flat "3% processing fee ... added to all payments made by credit
+// card" long after the shared version was corrected to a cap. The gateway
+// applies the fee and waives it for debit, prepaid, and cardholders in states
+// that prohibit surcharging, so the flat claim overstated what we can deliver.
+// One const, both surfaces — the duplication was the defect.
+import { CC_SURCHARGE_TEXT, CC_ACK_TEXT } from '@/components/portal-v2/terms';
 
 /**
  * Visual restyle pass (May 2026) — see commit history for the version
@@ -1450,8 +1458,8 @@ export default function ClientPortal() {
                     <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">How will you pay your invoices?</div>
                     <div className="space-y-2">
                       {([
-                        { key: 'CARD', title: 'Charge my card on file', sub: 'A 3% processing fee applies to card payments.' },
-                        { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No 3% fee. Your card stays on file as security only.' },
+                        { key: 'CARD', title: 'Charge my card on file', sub: 'A processing fee of up to 3% applies to card payments, where permitted.' },
+                        { key: 'CHECK_WIRE', title: "I'll pay by check or bank transfer", sub: 'No processing fee. Your card stays on file as security only.' },
                       ] as const).map(opt => (
                         <label key={opt.key} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${ccPaymentPreference === opt.key ? 'border-gray-900 bg-gray-50' : 'border-gray-200'}`}>
                           <input type="radio" name="payPref" checked={ccPaymentPreference === opt.key} onChange={() => setCcPaymentPreference(opt.key)} className="mt-0.5 accent-gray-900" />
@@ -1518,8 +1526,8 @@ export default function ClientPortal() {
                   {!cpToken && cpIframeUrl && <div className="mt-1 text-[10px] text-gray-400">Enter your card number above — it is encrypted and never stored.</div>}
                 </div>
                 <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs text-gray-600">This Credit Card Authorization form guarantees the payment of all fees due SirReel Studio Services according to the Rental Agreement. This credit card may be used for Charges and Deposits, Cancellation Fees, Damage to Premises and Equipment, Past Due Balances, Fines, Parking Fees and all fees incurred during a given project/production. I agree that the cardholder is a Personal Guarantor of the charges here described and summarized.</div>
-                <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><span className="font-bold">3% Credit Card Processing Fee.</span> A 3% processing fee is added to all payments made by credit card. This fee is applied to each amount charged to the card on file. To avoid this fee, payment may be made by check.</div>
-                <label className="flex items-start gap-3 cursor-pointer mt-4"><input type="checkbox" checked={ccAcknowledged} onChange={e => setCcAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">By submitting this form, I acknowledge that the information above is correct. By signing this form I am authorizing SirReel to charge my card for all fees listed above, plus a 3% credit card processing fee, and to keep my card information on file with the payment processor until the transaction is completed. I also acknowledge and accept the Terms and Conditions stated by SirReel.</span></label>
+                <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><span className="font-bold">Credit Card Processing Fee.</span> {CC_SURCHARGE_TEXT}</div>
+                <label className="flex items-start gap-3 cursor-pointer mt-4"><input type="checkbox" checked={ccAcknowledged} onChange={e => setCcAcknowledged(e.target.checked)} className="mt-0.5 w-4 h-4 accent-gray-900" /><span className="text-sm text-gray-700 font-medium">{CC_ACK_TEXT}</span></label>
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-5">
                 <h2 className="font-bold text-gray-900 mb-2">Cardholder Signature</h2>
