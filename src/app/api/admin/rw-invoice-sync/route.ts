@@ -39,12 +39,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     count,
     syncedAt: latest?.syncedAt ?? null,
-    // No token expiry reported. It was read from the JWT `exp` claim, which
-    // RW stamps at 300 seconds and does not enforce — so the page showed
-    // "Lapsed" permanently, including for tokens that were working fine.
-    // Staleness of the mirror is the honest signal, and it is right above.
-    tokenExpiresAt: null,
-    tokenDaysLeft: null,
+    // No token expiry is reported. It came from the JWT `exp` claim, which RW
+    // stamps at 300 seconds and does not enforce, so the page read "Lapsed"
+    // permanently — including for tokens working fine. Mirror staleness above
+    // is the honest signal.
   })
 }
 

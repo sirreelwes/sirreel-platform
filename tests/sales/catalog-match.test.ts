@@ -31,6 +31,8 @@ function check(condition: unknown, message: string): void {
 
 /**
  * null expectation = "must decline", i.e. the UI shows the amber picker.
+ * A RegExp expectation asserts the rule rather than the row — use it where a
+ * catalog merge can legitimately move the answer to a different id.
  *
  * Not covered here, deliberately: a bare generic noun we stock N variants of
  * ("carts", "hangers", "fans", "generator") still resolves to one of them by
@@ -38,7 +40,7 @@ function check(condition: unknown, message: string): void {
  * and is what makes a bare "walkies" resolve at all — changing it is a call
  * for Wes, not a bug in the scoring.
  */
-const CASES: Array<[description: string, expected: string | null]> = [
+const CASES: Array<[description: string, expected: string | RegExp | null]> = [
   // Spec gate — the size/capacity IS the item. A wrong pick here bills the
   // client at another item's rate and nothing in the UI flags it.
   ["6' folding tables", 'Table, 6\' Folding'],
@@ -99,11 +101,15 @@ const CASES: Array<[description: string, expected: string | null]> = [
   // Walkies default to digital (Wes, 8/17); the analog answers only when
   // the request says so. Same rate either way — this is a pull-sheet
   // question, not a billing one.
-  ['walkies', 'Motorola CP200d  UHF Radio (Digital)'],
-  ['walkie talkies', 'Motorola CP200d  UHF Radio (Digital)'],
-  ['handhelds', 'Motorola CP200d  UHF Radio (Digital)'],
-  ['analog walkies', 'Motorola CP200  UHF Radio (Analog)'],
-  ['cp200 analog', 'Motorola CP200  UHF Radio (Analog)'],
+  // Matched by rule, not by row: the two digital rows were merged the same
+  // afternoon and the surviving id changed under us. The rule doesn't care
+  // which row wins, and a pinned name can't survive that churn.
+  ['walkies', /Digital/],
+  ['walkie talkies', /Digital/],
+  ['handhelds', /Digital/],
+  ['cp200d', /Digital/],
+  ['analog walkies', /Analog/],
+  ['cp200 analog', /Analog/],
   ['surveillance kits', 'Surveillance Kit'],
   ['hand mics', 'Hand Mics'],
   ['sandbags', '25 LB. SANDBAG'],
@@ -133,10 +139,16 @@ async function main(): Promise<void> {
   for (const [desc, expected] of CASES) {
     const got = await fallbackMatch(desc)
     const gotName = got ? got.name : null
+    const ok =
+      expected === null
+        ? gotName === null
+        : expected instanceof RegExp
+          ? gotName !== null && expected.test(gotName)
+          : gotName === expected
     check(
-      gotName === expected,
-      `${JSON.stringify(desc)} → ${expected === null ? 'no match' : expected}` +
-        (gotName === expected ? '' : `  [got: ${gotName ?? 'no match'}]`)
+      ok,
+      `${JSON.stringify(desc)} → ${expected === null ? 'no match' : String(expected)}` +
+        (ok ? '' : `  [got: ${gotName ?? 'no match'}]`)
     )
   }
 

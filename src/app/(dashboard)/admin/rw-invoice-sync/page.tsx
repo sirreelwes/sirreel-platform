@@ -4,11 +4,14 @@
  * /admin/rw-invoice-sync — why the RentalWorks balances in HQ are stale, and
  * what to do about it.
  *
- * This page is the destination of the `rw_sync_failure` and
- * `rw_token_expiring` Action-Queue alerts raised in
- * `src/lib/rentalworks/syncAlert.ts`. Those alerts have linked here since they
- * were written; the page did not exist, so the one click someone makes at the
- * exact moment they need remediation instructions landed on a 404.
+ * This page is the destination of the `rw_sync_failure` Action-Queue alert
+ * raised in `src/lib/rentalworks/syncAlert.ts`. That alert has linked here
+ * since it was written; the page did not exist, so the one click someone makes
+ * at the exact moment they need remediation instructions landed on a 404.
+ *
+ * There was a second alert, `rw_token_expiring`, removed 2026-08-17 — it
+ * counted down the JWT `exp` claim, which RW stamps at 300 seconds and does
+ * not enforce, so it could never fire in its intended window.
  *
  * Ordered around the question the arriving reader has, which is never "what is
  * the mirror row count" — it is "can I quote this balance to a client, and if
@@ -38,9 +41,6 @@ import { useCallback, useEffect, useState } from 'react'
 interface SyncStatus {
   count: number
   syncedAt: string | null
-  tokenExpiresAt: string | null
-  /** Negative once lapsed; null when the JWT carries no readable `exp`. */
-  tokenDaysLeft: number | null
 }
 
 interface SyncResult {
@@ -62,10 +62,6 @@ const CRON_LABEL = '4:00am Pacific'
  */
 const AGING_HOURS = 26
 const STALE_HOURS = 50
-
-/** Matches RW_TOKEN_WARN_DAYS in syncAlert.ts — the alert and the page should
- *  not disagree about when a token counts as expiring. */
-const TOKEN_WARN_DAYS = 14
 
 function hoursSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 3_600_000
@@ -122,25 +118,21 @@ function Badge({ tone, label }: { tone: Tone; label: string }) {
 }
 
 /**
- * The single verdict line. An expired token outranks a stale mirror even
- * though both are true, because the token is the thing a human can act on —
- * staleness is the symptom and gets reported in the mirror card underneath.
+ * The single verdict line.
+ *
+ * This used to lead with the token: an expired one outranked a stale mirror,
+ * on the reasoning that the token is what a human can act on. That ordering is
+ * gone with the countdown that fed it — expiry is not observable, so mirror
+ * freshness is now both the first question and the only honest one. A token
+ * that has genuinely stopped working shows up as a mirror that stopped
+ * refreshing, one night later.
  */
 function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string } {
-  const { syncedAt, tokenDaysLeft, tokenExpiresAt } = s
+  const { syncedAt } = s
   const age = syncedAt ? hoursSince(syncedAt) : null
   const frozen = syncedAt
     ? `Balances are frozen at ${absTime(syncedAt)} and every RW figure in HQ is that old.`
     : 'No RW balances have ever loaded.'
-
-  if (tokenDaysLeft != null && tokenDaysLeft < 0) {
-    const n = Math.abs(tokenDaysLeft)
-    return {
-      tone: 'bad',
-      headline: `The RentalWorks token expired ${n} day${n === 1 ? '' : 's'} ago.`,
-      detail: `The nightly sync cannot run until someone mints a new token. ${frozen} Do not quote an RW balance to a client until this is resolved.`,
-    }
-  }
 
   if (!syncedAt) {
     return {
@@ -156,18 +148,6 @@ function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string 
       tone: 'bad',
       headline: `The mirror has not refreshed since ${relTime(syncedAt)}.`,
       detail: `At least two nightly runs have been missed and the token is not the cause. ${frozen} Check the cron logs for /api/admin/rw-invoice-sync, then try a manual sync below.`,
-    }
-  }
-
-  if (tokenDaysLeft != null && tokenDaysLeft <= TOKEN_WARN_DAYS) {
-    return {
-      tone: 'warn',
-      headline:
-        tokenDaysLeft === 0
-          ? 'The RentalWorks token expires today.'
-          : `The RentalWorks token expires in ${tokenDaysLeft} day${tokenDaysLeft === 1 ? '' : 's'}.`,
-      detail:
-        'The mirror is current for now. There is no refresh mechanism, so rotate the token before it lapses — once it does, every RW balance in HQ goes stale silently.',
     }
   }
 

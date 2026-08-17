@@ -76,41 +76,23 @@ export async function reportRwSyncFailure(reason: string): Promise<void> {
   }
 }
 
-/**
- * Token is still valid but running out. Warned early because there is no
- * refresh mechanism — someone has to log into RentalWorks and mint a new one,
- * and that is a task with a lead time, not a button.
+/*
+ * reportRwTokenExpiring() and RW_TOKEN_WARN_DAYS lived here until 2026-08-17.
+ *
+ * They warned when the token had RW_TOKEN_WARN_DAYS or fewer left, read from
+ * the JWT `exp` claim. RentalWorks stamps every token with a 300-second `exp`
+ * and then honours it for weeks, so "days left" was negative within five
+ * minutes of any rotation — the warning could never fire in its intended
+ * window, and the same claim drove a pre-flight guard that blocked the invoice
+ * sync entirely for 21 days.
+ *
+ * There is no honest early warning to give: nothing observable predicts when
+ * RW will stop accepting a token. What is left is reportRwSyncFailure() above,
+ * fired on an actual 401, plus the ~50-day calendar cadence in
+ * docs/runbooks/rentalworks-token-rotation.md.
+ *
+ * Do not reintroduce a countdown from `exp`.
  */
-export async function reportRwTokenExpiring(daysLeft: number): Promise<void> {
-  const type = 'rw_token_expiring'
-  try {
-    if (await alreadyAlertedToday(type)) return
-    await prisma.alert.create({
-      data: {
-        type,
-        title: `RentalWorks token expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
-        body:
-          `RENTALWORKS_TOKEN lapses in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. When it does, the nightly ` +
-          'invoice sync stops and every RW balance in HQ silently goes stale.\n\n' +
-          'Mint a new token in RentalWorks and set RENTALWORKS_TOKEN in the Vercel project.',
-        severity: 'medium',
-        link: '/admin/rw-invoice-sync',
-      },
-    })
-    await sendAgreementEmail({
-      to: [HQ_INBOX],
-      subject: `SirReel HQ — RentalWorks token expires in ${daysLeft} days`,
-      text: expiryText(daysLeft),
-      html: `<pre style="font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap;">${escapeHtml(expiryText(daysLeft))}</pre>`,
-      label: 'rw-token-expiring',
-    })
-  } catch (err) {
-    console.error('[rw-sync-alert] could not raise the expiry warning:', err)
-  }
-}
-
-/** Warn from here in. Two weeks is enough to get a token without a scramble. */
-export const RW_TOKEN_WARN_DAYS = 14
 
 function failureText(reason: string, staleness: string): string {
   return [
@@ -123,17 +105,6 @@ function failureText(reason: string, staleness: string): string {
     'Every RW balance shown in HQ — Collections, Receivables (RW), Reconcile RW —',
     'is from the last successful sync and should not be quoted to a client',
     'until this is resolved.',
-  ].join('\n')
-}
-
-function expiryText(daysLeft: number): string {
-  return [
-    `The RentalWorks API token expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
-    '',
-    'When it lapses the nightly invoice sync stops, and Collections,',
-    'Receivables (RW) and Reconcile RW quietly serve out-of-date balances.',
-    '',
-    'Mint a new token in RentalWorks and set RENTALWORKS_TOKEN in Vercel.',
   ].join('\n')
 }
 
