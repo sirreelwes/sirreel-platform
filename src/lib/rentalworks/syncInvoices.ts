@@ -25,9 +25,6 @@ export interface RwInvoiceSyncResult {
   pulled: number
   pages: number
   error?: string
-  /** Days until RENTALWORKS_TOKEN expires — negative once lapsed, null when
-   *  the token carries no readable `exp`. Drives the early warning. */
-  tokenDaysLeft?: number | null
 }
 
 type BrowseResponse = {
@@ -53,52 +50,39 @@ function date(v: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
-/**
- * How long the RentalWorks token has left, read from its own JWT `exp` claim.
+/*
+ * There is deliberately no rwTokenExpiry()/rwTokenDaysLeft() here any more.
  *
- * The token is a bearer JWT that expires on a fixed date with no refresh
- * mechanism, so the sync dies the moment it lapses. It expired 2026-06-13 and
- * the mirror silently served stale balances for weeks, because the only
- * symptom of a failed sync is numbers that are quietly wrong.
+ * They decoded the JWT `exp` claim to predict rotation. RentalWorks stamps
+ * every token with a 300-second `exp` and then honours it for weeks, so the
+ * number they returned was always "expired" — it drove a pre-flight guard that
+ * blocked the sync entirely and an "expires soon" alert that could never be
+ * satisfied by rotating.
  *
- * Decoding locally, never by calling RW: this must work even when the token
- * is already dead, and it turns a two-week outage into a week's notice.
- *
- * Returns null when there is no readable `exp` — a token we cannot reason
- * about should not produce false reassurance.
+ * A token's health is knowable only by using it. The sync reports 401/403 from
+ * the gateway; that is the signal. See docs/runbooks/rentalworks-token-rotation.md.
  */
-export function rwTokenExpiry(token: string | undefined): Date | null {
-  if (!token) return null
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64').toString())
-    return typeof payload?.exp === 'number' ? new Date(payload.exp * 1000) : null
-  } catch {
-    return null
-  }
-}
-
-/** Days until the token expires; negative once it has. */
-export function rwTokenDaysLeft(token: string | undefined): number | null {
-  const exp = rwTokenExpiry(token)
-  if (!exp) return null
-  return Math.floor((exp.getTime() - Date.now()) / 86_400_000)
-}
 
 export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
   const token = process.env.RENTALWORKS_TOKEN
   if (!token) return { ok: false, pulled: 0, pages: 0, error: 'RENTALWORKS_TOKEN not set' }
 
-  // Named before the request so the failure says WHY rather than "HTTP 401",
-  // which is what sent this one undiagnosed for weeks.
-  const daysLeft = rwTokenDaysLeft(token)
-  if (daysLeft != null && daysLeft < 0) {
-    return {
-      ok: false,
-      pulled: 0,
-      pages: 0,
-      error: `RENTALWORKS_TOKEN expired ${Math.abs(daysLeft)} days ago (${rwTokenExpiry(token)?.toISOString().slice(0, 10)}) — a new token is needed from RentalWorks.`,
-    }
-  }
+  // NO pre-flight expiry check. There used to be one here, refusing to run
+  // when the token's `exp` claim was in the past, on the reasonable-sounding
+  // theory that a doomed request is worth skipping.
+  //
+  // RentalWorks stamps every token with a 300-SECOND `exp` and then honours it
+  // for weeks — the server tracks its own session and the claim is not what it
+  // enforces. Measured 2026-08-16: the token rotated that day had `exp` five
+  // minutes after issue, and the same token authenticated fine (HTTP 200
+  // against /api/v1/item and /api/v1/invoice/browse).
+  //
+  // So the guard was permanently true. The sync could not run with ANY token,
+  // however fresh, and emailed a "token expired, get a new one" alert nightly
+  // that no rotation could ever satisfy. The invoice mirror sat 21 days stale
+  // while Collections and Receivables served balances from it.
+  //
+  // The gateway is the only authority on whether a token works. Ask it.
 
   const rows: Array<Record<string, unknown>> = []
   let page = 1
@@ -119,8 +103,19 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
       return { ok: false, pulled: 0, pages: page - 1, error: `network: ${(e as Error).message}` }
     }
     if (!res.ok) {
-      // 401/403 => token expired. Do NOT touch the mirror.
-      return { ok: false, pulled: 0, pages: page - 1, error: `RW HTTP ${res.status}` }
+      // Do NOT touch the mirror on any failure — a partial pull would look
+      // like a real balance set.
+      //
+      // 401/403 is the ONLY signal that the token needs rotating, now that the
+      // `exp` claim is known to be meaningless. It carries the instruction,
+      // because "RW HTTP 401" in an inbox tells a reader nothing about what to
+      // do next, and this alert is read by whoever is on call rather than by
+      // whoever wrote it.
+      const actionable =
+        res.status === 401 || res.status === 403
+          ? `RentalWorks rejected the token (HTTP ${res.status}) — rotate it: docs/runbooks/rentalworks-token-rotation.md`
+          : `RW HTTP ${res.status}`
+      return { ok: false, pulled: 0, pages: page - 1, error: actionable }
     }
     const body = (await res.json().catch(() => ({}))) as BrowseResponse
     const ci = body.ColumnIndex
@@ -174,9 +169,6 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
     ok: true,
     pulled: rows.length,
     pages: page,
-    // Passed up so the caller can warn BEFORE the token lapses rather than
-    // discovering it from a fortnight of wrong balances.
-    tokenDaysLeft: daysLeft,
   }
 }
 

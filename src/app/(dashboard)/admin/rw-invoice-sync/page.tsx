@@ -162,19 +162,10 @@ function verdict(s: SyncStatus): { tone: Tone; headline: string; detail: string 
     }
   }
 
-  if (!tokenExpiresAt) {
-    return {
-      tone: 'warn',
-      headline: 'The mirror is current, but the token carries no readable expiry.',
-      detail:
-        'Its JWT has no `exp` claim, so HQ cannot warn ahead of a lapse — the first symptom will be a failed sync. Rotate on the ~50-day cadence in the runbook rather than waiting for an alert.',
-    }
-  }
-
   return {
     tone: 'ok',
     headline: `The mirror is current as of ${relTime(syncedAt)}.`,
-    detail: `Collections, Receivables (RW) and Reconcile RW are serving balances from ${absTime(syncedAt)}. The token has ${tokenDaysLeft} days left.`,
+    detail: `Collections, Receivables (RW) and Reconcile RW are serving balances from ${absTime(syncedAt)}. A current mirror is itself the proof the token works — RW stamps a 300-second expiry it does not enforce, so there is no countdown to show. Rotate on the ~50-day cadence in the runbook.`,
   }
 }
 
@@ -294,14 +285,10 @@ export default function RwInvoiceSyncPage() {
       : age != null && age > AGING_HOURS
         ? 'warn'
         : 'ok'
-  const tokenTone: Tone =
-    status?.tokenDaysLeft == null
-      ? 'warn'
-      : status.tokenDaysLeft < 0
-        ? 'bad'
-        : status.tokenDaysLeft <= TOKEN_WARN_DAYS
-          ? 'warn'
-          : 'ok'
+  // The token's health is only observable through use: a mirror that refreshed
+  // last night proves the token worked last night. Deriving it from the JWT
+  // `exp` claim showed EXPIRED permanently, including on working tokens.
+  const tokenTone: Tone = mirrorTone
   const needsRotation = tokenTone !== 'ok'
   const showAffected = mirrorTone !== 'ok'
 
@@ -379,30 +366,17 @@ export default function RwInvoiceSyncPage() {
             <Card
               label="RENTALWORKS_TOKEN"
               tone={tokenTone}
-              badge={
-                status.tokenDaysLeft == null
-                  ? 'UNKNOWN'
-                  : status.tokenDaysLeft < 0
-                    ? 'EXPIRED'
-                    : status.tokenDaysLeft <= TOKEN_WARN_DAYS
-                      ? 'EXPIRING'
-                      : 'VALID'
-              }
+              badge={mirrorTone === 'ok' ? 'WORKING' : 'UNVERIFIED'}
               rows={[
                 {
-                  label: 'Expires',
-                  value: status.tokenExpiresAt
-                    ? absTime(status.tokenExpiresAt)
-                    : 'no readable expiry in the JWT',
+                  label: 'Last proven',
+                  value: status.syncedAt
+                    ? `${absTime(status.syncedAt)} — a sync completed`
+                    : 'never — no sync has succeeded',
                 },
                 {
-                  label: status.tokenDaysLeft != null && status.tokenDaysLeft < 0 ? 'Lapsed' : 'Remaining',
-                  value:
-                    status.tokenDaysLeft == null
-                      ? '—'
-                      : status.tokenDaysLeft < 0
-                        ? `${Math.abs(status.tokenDaysLeft)} days ago`
-                        : `${status.tokenDaysLeft} days`,
+                  label: 'Expiry',
+                  value: 'not knowable — RW stamps 300s and ignores it',
                 },
                 { label: 'Refresh', value: 'manual — no refresh mechanism' },
                 { label: 'Rotation cadence', value: 'every ~50 days' },

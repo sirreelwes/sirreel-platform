@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { syncRwInvoices, rwTokenExpiry, rwTokenDaysLeft } from '@/lib/rentalworks/syncInvoices'
-import {
-  reportRwSyncFailure,
-  reportRwTokenExpiring,
-  RW_TOKEN_WARN_DAYS,
-} from '@/lib/rentalworks/syncAlert'
+import { syncRwInvoices } from '@/lib/rentalworks/syncInvoices'
+import { reportRwSyncFailure } from '@/lib/rentalworks/syncAlert'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -27,16 +23,11 @@ export async function GET(req: NextRequest) {
       // nightly for over two weeks unnoticed. Raise something a human sees.
       console.error('[rw-invoice-sync cron] failed:', result.error)
       await reportRwSyncFailure(result.error ?? 'unknown error')
-    } else if (
-      result.tokenDaysLeft != null &&
-      result.tokenDaysLeft >= 0 &&
-      result.tokenDaysLeft <= RW_TOKEN_WARN_DAYS
-    ) {
-      // Succeeded, but on borrowed time. There is no refresh mechanism, so
-      // someone has to mint a token by hand — that needs notice, not a
-      // post-mortem.
-      await reportRwTokenExpiring(result.tokenDaysLeft)
     }
+    // No "expiring soon" warning: it was derived from the token's `exp`
+    // claim, which RentalWorks does not enforce, so it fired on every run
+    // regardless of how fresh the token was. Rotation is driven by the 401
+    // alert above and the calendar reminder in the runbook.
     return NextResponse.json({ ...result }, { status: result.ok ? 200 : 502 })
   }
   const session = await getServerSession()
@@ -45,14 +36,15 @@ export async function GET(req: NextRequest) {
     prisma.rwInvoice.count(),
     prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
   ])
-  const exp = rwTokenExpiry(process.env.RENTALWORKS_TOKEN)
   return NextResponse.json({
     count,
     syncedAt: latest?.syncedAt ?? null,
-    // Token health on the status endpoint too, so /admin can show WHY the
-    // mirror is stale instead of just how stale it is.
-    tokenExpiresAt: exp?.toISOString() ?? null,
-    tokenDaysLeft: rwTokenDaysLeft(process.env.RENTALWORKS_TOKEN),
+    // No token expiry reported. It was read from the JWT `exp` claim, which
+    // RW stamps at 300 seconds and does not enforce — so the page showed
+    // "Lapsed" permanently, including for tokens that were working fine.
+    // Staleness of the mirror is the honest signal, and it is right above.
+    tokenExpiresAt: null,
+    tokenDaysLeft: null,
   })
 }
 
