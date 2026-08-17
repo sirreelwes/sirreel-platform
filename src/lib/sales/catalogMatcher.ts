@@ -175,13 +175,35 @@ export async function validateCatalogMatch(
   }
 }
 
+/**
+ * Split a name or description into comparable word tokens.
+ *
+ * Hyphenated words also yield their parts ("first-aid" → first-aid, first,
+ * aid) — the catalog writes "First Aid Kit" while clients write "first-aid
+ * kit", and keeping only the fused token made those two share nothing.
+ */
 function tokenize(s: string): string[] {
-  return s
-    .toLowerCase()
+  const out: string[] = []
+  const raw = stripSpecs(s)
     .replace(/[^\w\s-]/g, ' ')
     .split(/\s+/)
     .filter((t) => t.length >= 2)
-    .map((t) => (t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t))
+    // A token that is just a number, with or without a unit ("25", "6ft",
+    // "100qt", "2000w"), carries no meaning as a word: it's either a spec —
+    // handled by the gate below, which compares specs properly — or part-
+    // number debris. Left in, it both scored bogus points ("10' table"
+    // matching "Pipe & Drape ... 10'H x 10'W") and diluted the coverage
+    // test, since "6ft tables" would count a token no name can explain.
+    .filter((t) => !/^\d+(?:\.\d+)?[a-z]*$/.test(t))
+  for (const t of raw) {
+    out.push(t)
+    if (t.includes('-')) {
+      for (const part of t.split('-')) {
+        if (part.length >= 2 && !/^\d+(?:\.\d+)?[a-z]*$/.test(part)) out.push(part)
+      }
+    }
+  }
+  return out.map((t) => (t.endsWith('s') && t.length > 3 ? t.slice(0, -1) : t))
 }
 
 /**
@@ -201,6 +223,72 @@ function stripNegativeQualifiers(s: string): string {
 }
 
 /**
+ * Pull dimension/capacity specs ("6'", "6-foot", "30\"", "100 qt", "2000W")
+ * out of a string, normalized to `6ft` / `30in` / `100qt` / `2000w`.
+ *
+ * These are invisible to tokenize(): the apostrophe becomes a space and the
+ * bare number is dropped. Yet for whole families of catalog rows the spec is
+ * the ONLY thing that distinguishes them — Table, 4'/6'/8' Folding,
+ * Cooler 68/100 qt, Generator 2000W/7000W are otherwise identical strings.
+ * Without this, every member scored the same and the shortest-name tiebreak
+ * below handed back an arbitrary one at the wrong daily rate ("8' folding
+ * table" resolved to Table, 6' Folding; "100 qt cooler" to Cooler, 68 qt).
+ */
+const SPEC_PATTERNS: Array<[RegExp, string]> = [
+  // Inches first — 6'' must not read as 6 feet.
+  [/(\d+(?:\.\d+)?)[\s-]*(?:''|"|in\b|inch(?:es)?\b)/g, 'in'],
+  [/(\d+(?:\.\d+)?)[\s-]*(?:'|ft\b|foot\b|feet\b)/g, 'ft'],
+  [/(\d+(?:\.\d+)?)[\s-]*(?:qt\b|quart(?:s)?\b)/g, 'qt'],
+  [/(\d+(?:\.\d+)?)[\s-]*(?:gal\b|gallon(?:s)?\b)/g, 'gal'],
+  [/(\d+(?:\.\d+)?)[\s-]*(?:lb(?:s)?\b|pound(?:s)?\b)/g, 'lb'],
+  [/(\d+(?:\.\d+)?)[\s-]*ton(?:s)?\b/g, 'ton'],
+  [/(\d+(?:\.\d+)?)[\s-]*w(?:att(?:s)?)?\b/g, 'w'],
+  [/(\d+(?:\.\d+)?)[\s-]*amp(?:s)?\b/g, 'amp'],
+  // Lighting shorthand — a 2K and a 5K are different fixtures at different
+  // rates. Deliberately no bare `a` for amps: "2 A-Frame" would read as 2 amps.
+  [/(\d+(?:\.\d+)?)[\s-]*k\b/g, 'k'],
+]
+
+export function extractSpecs(s: string): Set<string> {
+  const out = new Set<string>()
+  const lower = s.toLowerCase()
+  for (const [re, unit] of SPEC_PATTERNS) {
+    for (const m of lower.matchAll(re)) out.add(`${parseFloat(m[1])}${unit}`)
+  }
+  return out
+}
+
+/**
+ * Remove spec phrases so tokenize() never sees their debris. "6-foot folding
+ * tables" would otherwise yield the word tokens "6-foot" and "foot", which no
+ * catalog name can explain, dragging the coverage test below its floor and
+ * rejecting the very row the spec gate had just isolated.
+ */
+function stripSpecs(s: string): string {
+  let out = s.toLowerCase()
+  for (const [re] of SPEC_PATTERNS) out = out.replace(re, ' ')
+  return out
+}
+
+function specsOverlap(a: Set<string>, b: Set<string>): boolean {
+  for (const x of a) if (b.has(x)) return true
+  return false
+}
+
+/**
+ * Does `alias` appear in `desc` as a whole word (allowing a trailing plural)?
+ *
+ * Substring matching was the original rule and it was quietly catastrophic
+ * for the short curated aliases: "ac" (Air Conditioner) fired inside
+ * "garment racks", scoring higher than any real candidate and pricing a
+ * clothes rack at the AC's $150/day.
+ */
+function aliasHit(desc: string, alias: string): boolean {
+  const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:e?s)?(?:$|[^a-z0-9])`, 'i').test(desc)
+}
+
+/**
  * Server-side fallback: when the AI returns catalogProductId=null for a
  * line item, scan the FULL catalog (every alias on every product, plus
  * product names tokenized) for a single unambiguous hit.
@@ -211,6 +299,11 @@ function stripNegativeQualifiers(s: string): string {
  *     the description score 1 each.
  *   - If exactly one product has score > 0 (or one product clearly leads
  *     by >2x over the runner-up), return it. Otherwise null.
+ *   - Physical size is a GATE, not a score: when the description names a
+ *     size, rows whose own size disagrees are dropped outright, and if any
+ *     row's size agrees, only those rows compete. Scoring alone can't do
+ *     this — a size token contributes nothing to the token overlap, so
+ *     4'/6'/8' variants score identically and the tiebreak picks blind.
  *
  * This stays conservative on purpose — false positives on the catalog
  * ID are worse than leaving it null (the user gets an amber "no match"
@@ -221,6 +314,7 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
   const desc = cleaned.toLowerCase().trim()
   if (!desc) return null
   const descTokens = new Set(tokenize(desc))
+  const descSpecs = extractSpecs(desc)
 
   const invItems = await prisma.inventoryItem.findMany({
     where: { isActive: true },
@@ -230,7 +324,15 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
     },
   })
 
-  type Scored = { product: CatalogProduct; score: number }
+  type Scored = {
+    product: CatalogProduct
+    score: number
+    /** Had at least one curated alias hit — evidence in its own right. */
+    aliased: boolean
+    /** Share of the description's own tokens this row accounts for. */
+    coverage: number
+    specs: Set<string>
+  }
   const scores: Scored[] = []
 
   const scoreOne = (
@@ -239,16 +341,34 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
     aliases: string[]
   ): Scored | null => {
     let score = 0
+    let aliased = false
+    // Desc tokens this row explains — via its name or via a hit alias.
+    const explained = new Set<string>()
     for (const a of aliases) {
       const al = a.toLowerCase().trim()
-      if (al && desc.includes(al)) score += al.length
+      if (!al || !aliasHit(desc, al)) continue
+      score += al.length
+      aliased = true
+      for (const at of tokenize(al)) if (descTokens.has(at)) explained.add(at)
     }
-    const nameTokens = tokenize(name)
-    for (const nt of nameTokens) {
-      if (descTokens.has(nt)) score += 1
+    for (const nt of new Set(tokenize(name))) {
+      // Deduped: "Fan, \"RE Fan\" w/stand" scored 2 on "fans" purely by
+      // saying "fan" twice, outranking the plain utility fan.
+      if (descTokens.has(nt)) {
+        score += 1
+        explained.add(nt)
+      }
     }
     if (score === 0) return null
-    return { product, score }
+    return {
+      product,
+      score,
+      aliased,
+      coverage: descTokens.size > 0 ? explained.size / descTokens.size : 0,
+      // Aliases can carry the spec the name leaves implicit ("6 foot table"
+      // on a row named "Banquet Table"), so the row's specs are the union.
+      specs: extractSpecs([name, ...aliases].join(' ')),
+    }
   }
 
   for (const i of invItems) {
@@ -269,22 +389,53 @@ export async function fallbackMatch(description: string): Promise<CatalogProduct
 
   if (scores.length === 0) return null
 
+  // Spec gate. A description that names a spec ("6' folding tables", "100 qt
+  // cooler") can only mean rows of that spec: drop every row that declares a
+  // different one, and once any row declares the right one, unspecced rows
+  // stop competing too — otherwise a generic "6' tables" loses to whatever
+  // sizeless table happens to have the shortest name.
+  let pool = scores
+  if (descSpecs.size > 0) {
+    const compatible = scores.filter(
+      (s) => s.specs.size === 0 || specsOverlap(s.specs, descSpecs)
+    )
+    const sameSpec = compatible.filter((s) => specsOverlap(s.specs, descSpecs))
+    pool = sameSpec.length > 0 ? sameSpec : compatible
+    if (pool.length === 0) return null
+  }
+
   // Sort by score desc; tie-break by preferring non-UTAH (LA-region default)
   // then shorter name (more general). Tie-break is what unblocks "walkies"
   // when 4 CP200 variants score identically — we deterministically pick the
   // LA Analog variant instead of returning null.
-  scores.sort((a, b) => {
+  pool.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score
     const aUtah = a.product.name.toUpperCase().startsWith('UTAH')
     const bUtah = b.product.name.toUpperCase().startsWith('UTAH')
     if (aUtah !== bUtah) return aUtah ? 1 : -1
     return a.product.name.length - b.product.name.length
   })
-  if (scores.length === 1) return scores[0].product
-  // Top wins outright if it beats #2 by 2x OR if it's tied with #2 but our
-  // deterministic tiebreaker (above) put it first. Guards against close-but-
+
+  const top = pool[0]
+  // Evidence test, applied before any winner is declared. A curated alias is
+  // intent we wrote down; otherwise the row has to account for most of what
+  // the client actually said. Without this, one shared generic token was
+  // enough to win a whole category — "rolling utility / production carts"
+  // came back as Director's Chair Cart, Rolling on the strength of "cart".
+  if (!top.aliased && top.coverage < 0.6) return null
+  if (pool.length === 1) return top.product
+
+  const runnerUp = pool[1]
+  // Tied with #2 — the deterministic tiebreaker above already put the
+  // preferred row first (LA over UTAH, more general over more specific).
+  if (top.score === runnerUp.score) return top.product
+  // Top wins outright if it beats #2 by 2x. Guards against close-but-
   // ambiguous cases like "lift" matching both Liftgate Van and Scissor Lift.
-  if (scores[0].score >= scores[1].score * 2) return scores[0].product
-  if (scores[0].score === scores[1].score) return scores[0].product
+  if (top.score >= runnerUp.score * 2) return top.product
+  // Narrower lead: only when the top also explains strictly more of the
+  // description than #2 does — "large trash cans + liners" leads Trash
+  // Liners 3-2, and it's the one that accounts for "large" and "cans".
+  if (top.coverage > runnerUp.coverage) return top.product
   return null
 }
+
