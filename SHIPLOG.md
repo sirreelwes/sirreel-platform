@@ -2,7 +2,7 @@
 
 Append-only record of shipped changes. Newest at top. Each entry: SHA, commit subject, why-it-matters one-liner.
 
-## Hard Rules (standing — read before any verification/cleanup against the live DB)
+## Hard Rules (standing — read before any verification/cleanup against the live DB, and before any commit)
 
 **Self-owned fixtures only.** The dev server and any ad-hoc Prisma scripts hit the SAME Neon DB as production (hq.sirreel.com) — there is no separate test DB. So "test-looking" rows may be real user activity.
 
@@ -11,6 +11,16 @@ Append-only record of shipped changes. Newest at top. Each entry: SHA, commit su
 3. **No proof, no delete.** If you cannot prove by a captured ID that you created a row, leave it and report it — do not delete it.
 
 Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cube } })` destroyed the real audit row for Wes's live $175→$200 Cube Truck edit (the rate survived; the `RateChangeLog` entry was lost and had to be reconstructed).
+
+**Stage explicit paths — the working tree is shared.** More than one Claude session works in `/Users/wesbailey/Downloads/sirreel-platform` at the same time, on the same checkout. Anything a peer has edited but not yet staged is sitting in the tree looking exactly like your own work.
+
+1. **Never `git add -A` or `git add -u`.** Run `git status --short` first and stage only the paths you touched.
+2. **Unexpected modification = someone else's.** If a file you didn't open is dirty, assume a peer owns it and leave it. Don't stage it, don't revert it, don't "fix" it.
+3. **Say what lane you're in.** When sessions overlap, tell the other one which directories you're working in — collisions are cheap to avoid and expensive to unpick after a push.
+4. **`scripts/*` is gitignored behind an allowlist.** A new script there never shows in `git status`, so it can look committed while existing only in one working tree. Add `!scripts/<name>.ts` to `.gitignore` the moment the script is meant to ship.
+5. **A read of the live DB is a sample, not a verdict.** A peer may be mid-write. Re-read immediately before escalating any discrepancy in shared data, and quote the timestamp you read.
+
+Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
 ## 2026-07-19
 
