@@ -252,6 +252,58 @@ async function main() {
     }
   }
 
+  // ── InventoryItem mirrors ─────────────────────────────────────
+  //
+  // Fleet Pricing, the holds route, and the availability engine all read
+  // the MERGED catalog (InventoryItem, keyed by legacyAssetCategoryId) —
+  // AssetCategory is the frozen half. This script predates the merge and
+  // created only AssetCategory rows, which made "Lankershim Studios"
+  // invisible on the Pricing page: no mirror row, no way to set its rate,
+  // and every reader fell back to the frozen $0.
+  //
+  // Runs OUTSIDE the categories-created branch on purpose: a prior run
+  // may have created the category while this mirror step didn't exist
+  // yet (exactly what happened on 2026-08-18), so mirrors are checked
+  // for every proposal, not just fresh categories. Idempotent by
+  // legacyAssetCategoryId.
+  const codeFromName = (name: string) =>
+    `CAT_${name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+  console.log('')
+  console.log('INVENTORY MIRRORS (merged catalog):')
+  console.log('─'.repeat(80))
+  for (const pc of PROPOSED_CATEGORIES) {
+    const cat = categoryBySlug.get(pc.slug)
+    if (!cat) { console.log(`  [SKIP  ] "${pc.name}" — category not present (dry run before create)`); continue }
+    const mirror = await prisma.inventoryItem.findUnique({
+      where: { legacyAssetCategoryId: cat.id },
+      select: { id: true },
+    })
+    if (mirror) { console.log(`  [EXISTS] "${pc.name}" → InventoryItem ${mirror.id}`); continue }
+    if (dryRun) { console.log(`  [NEW   ] "${pc.name}" (dry: would create ${codeFromName(pc.name)})`); continue }
+    const created = await prisma.inventoryItem.create({
+      data: {
+        code: codeFromName(pc.name),
+        slug: pc.slug,
+        description: pc.name,
+        trackingMode: 'UNIT_TRACKED',
+        legacyAssetCategoryId: cat.id,
+        department: pc.department,
+        type: 'EQUIPMENT',
+        dailyRate: pc.dailyRate,
+        weeklyRate: 0,
+        qtyOwned: pc.totalUnits,
+        planyoResourceId: pc.planyoResourceId ?? null,
+        // Mirrors the category's visibility decisions: unpublished until
+        // a human sets a rate and flips it in Fleet Pricing.
+        publicVisible: pc.isPublished ?? false,
+        reservableOnGantt: pc.reservableOnGantt ?? true,
+        isActive: true,
+      },
+      select: { id: true, code: true },
+    })
+    console.log(`  [NEW   ] "${pc.name}" → created InventoryItem ${created.code} (${created.id})`)
+  }
+
   // Validate every proposed Asset has its category resolvable.
   const allCatsForLookup = await prisma.assetCategory.findMany({ select: { id: true, name: true } })
   const catLookup = new Map(allCatsForLookup.map((c) => [c.name, c]))
