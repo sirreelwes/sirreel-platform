@@ -71,6 +71,17 @@ interface ProposedCategory {
   planyoResourceId?: number | null
   description?: string
   reviewNote: string
+  /** Storefront/quote visibility. AssetCategory.isPublished DEFAULTS
+   *  TRUE, and the first --write run shipped both new categories
+   *  published at dailyRate $0 — a pricing decision nobody made,
+   *  surfaced by a migration prep script. Proposals here are created
+   *  UNPUBLISHED unless explicitly opted in; publishing (with a real
+   *  rate) stays a human decision in Fleet Pricing. */
+  isPublished?: boolean
+  /** Operator gantt "+ Hold" picker visibility. Empty placeholder
+   *  categories (0 assets) should opt out — every hold against them
+   *  gate-blocks, so they are pure picker noise. */
+  reservableOnGantt?: boolean
 }
 
 const PROPOSED_CATEGORIES: ProposedCategory[] = [
@@ -95,6 +106,7 @@ const PROPOSED_CATEGORIES: ProposedCategory[] = [
     planyoResourceId: null,
     description: 'Placeholder for a future wardrobe-truck / wardrobe-space buildout. No Assets yet.',
     reviewNote: 'Empty (totalUnits=0) on purpose — placeholder for future expansion.',
+    reservableOnGantt: false,
   },
 ]
 
@@ -229,6 +241,8 @@ async function main() {
           department: pc.department,
           planyoResourceId: pc.planyoResourceId ?? null,
           description: pc.description ?? null,
+          isPublished: pc.isPublished ?? false,
+          reservableOnGantt: pc.reservableOnGantt ?? true,
         },
         select: { id: true, name: true, slug: true },
       })
