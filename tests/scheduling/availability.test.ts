@@ -12,10 +12,19 @@
  * are dynamic — so the global prisma singleton (`@/lib/prisma`)
  * sees DATABASE_URL when it constructs, instead of trying to
  * resolve it from a process.env that hasn't been populated yet.
+ *
+ * The DB-backed sections exercise the REAL route handlers over HTTP:
+ * the routes are session-gated (getServerSession() → next/headers),
+ * which throws "headers was called outside a request scope" when the
+ * handlers are invoked directly under tsx. So this test spawns
+ * `next dev` on a free port and authenticates every request with a
+ * minted next-auth session JWT for an ADMIN user (every scheduling
+ * gate checks canCreateBooking, which ADMIN has).
  */
 
 import { readFileSync } from 'fs'
 import path from 'path'
+import type { ChildProcess } from 'child_process'
 
 // Env load — must run BEFORE any prisma-touching imports.
 const envFile = readFileSync(path.join(process.cwd(), '.env.local'), 'utf8')
@@ -25,6 +34,13 @@ for (const line of envFile.split('\n')) {
 }
 
 const failures: string[] = []
+
+// The `next dev` child serving the route handlers for the DB-backed
+// sections. Killed on every exit path via the process 'exit' hook.
+let devServer: ChildProcess | null = null
+process.on('exit', () => {
+  if (devServer && devServer.exitCode === null) devServer.kill('SIGTERM')
+})
 
 function check(condition: unknown, message: string): void {
   if (!condition) failures.push(message)
@@ -51,12 +67,6 @@ async function main() {
     '../../src/lib/scheduling/availability'
   )
   const { prisma } = await import('../../src/lib/prisma')
-  const holdsRoute = await import('../../src/app/api/scheduling/holds/route')
-  const releaseRoute = await import('../../src/app/api/scheduling/booking-items/[id]/release/route')
-  const promoteRoute = await import('../../src/app/api/scheduling/booking-items/[id]/promote/route')
-  const stackedRoute = await import('../../src/app/api/scheduling/stacked-holds/route')
-  const assignRoute = await import('../../src/app/api/scheduling/booking-items/[id]/assign/route')
-  const confirmRoute = await import('../../src/app/api/scheduling/bookings/[id]/confirm/route')
 
   // ═══════════════════════════════════════════════════════════════
   //                  PURE TESTS (Chunk 2 boundary set)
@@ -163,6 +173,66 @@ async function main() {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //   HTTP TEST CLIENT — dev server + minted session cookie
+  // ═══════════════════════════════════════════════════════════════
+
+  console.log('\nstarting dev server for the HTTP route sections…')
+  const { spawn } = await import('child_process')
+  const net = await import('net')
+  const port: number = await new Promise((resolve, reject) => {
+    const probe = net.createServer()
+    probe.listen(0, '127.0.0.1', () => {
+      const addr = probe.address() as import('net').AddressInfo
+      probe.close(() => resolve(addr.port))
+    })
+    probe.on('error', reject)
+  })
+  const serverLog: string[] = []
+  devServer = spawn(path.join(process.cwd(), 'node_modules', '.bin', 'next'), ['dev', '-p', String(port)], {
+    cwd: process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  devServer.stdout!.on('data', (c) => serverLog.push(String(c)))
+  devServer.stderr!.on('data', (c) => serverLog.push(String(c)))
+  const BASE = `http://127.0.0.1:${port}`
+  {
+    const deadline = Date.now() + 120_000
+    let up = false
+    while (Date.now() < deadline) {
+      try {
+        const r = await fetch(`${BASE}/api/auth/providers`)
+        if (r.status < 500) {
+          up = true
+          break
+        }
+      } catch {
+        /* not listening yet */
+      }
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    if (!up) {
+      console.error(serverLog.slice(-20).join(''))
+      console.error(`fatal: next dev never became ready on ${BASE}`)
+      process.exit(2)
+    }
+  }
+  console.log(`dev server ready on ${BASE}`)
+
+  // Minted once the ADMIN actor is picked (capacity-1 setup below).
+  let sessionCookie = ''
+  async function api(pathname: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}) {
+    const res = await fetch(BASE + pathname, {
+      method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'),
+      headers: {
+        cookie: sessionCookie,
+        ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    })
+    return { status: res.status, json: (await res.json().catch(() => ({}))) as Record<string, unknown> }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   //   DB-BACKED: capacity-1 conflict + backup stack + promotion
   // ═══════════════════════════════════════════════════════════════
   // Exercises the real holds/promote/release/stacked-holds route
@@ -228,61 +298,94 @@ async function main() {
     })
   }
 
-  // Pick FK references for Bookings.
+  // Pick FK references for Bookings. The agent must be ADMIN — it's also
+  // the actor of the minted session, and the route gates check
+  // canCreateBooking against the DB role for the session email.
   const company = await prisma.company.findFirst({ select: { id: true } })
   const person = await prisma.person.findFirst({ select: { id: true } })
-  const agent = await prisma.user.findFirst({ select: { id: true } })
+  const agent = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true, email: true, name: true } })
   if (!company || !person || !agent) {
-    failures.push('CAPACITY-1 SETUP: need at least one Company, Person, and User in the DB to run the DB-backed assertions')
+    failures.push('CAPACITY-1 SETUP: need at least one Company, Person, and ADMIN User in the DB to run the DB-backed assertions')
     return
+  }
+
+  // Mint the session cookie. getServerSession() runs JWT-strategy with the
+  // default cookie name; NEXTAUTH_URL is https so next-auth expects the
+  // __Secure- prefixed name (we send it manually, so http transport is fine).
+  if (!process.env.NEXTAUTH_SECRET) {
+    failures.push('SETUP: NEXTAUTH_SECRET missing from .env.local — cannot mint a session cookie')
+    return
+  }
+  const { encode } = await import('next-auth/jwt')
+  const sessionJwt = await encode({
+    token: { email: agent.email, name: agent.name, sub: agent.id },
+    secret: process.env.NEXTAUTH_SECRET,
+  })
+  const cookieName = (process.env.NEXTAUTH_URL ?? '').startsWith('https://')
+    ? '__Secure-next-auth.session-token'
+    : 'next-auth.session-token'
+  sessionCookie = `${cookieName}=${sessionJwt}`
+
+  // Job-as-root: the holds route requires jobId (jobName-only payloads are
+  // rejected since the resolver-modal cutover). Persistent self-owned
+  // fixture Job, ensured like the category/asset fixtures above. Bookings
+  // the route creates inherit jobName = this Job's name, so the existing
+  // prefix-based cleanup still sweeps them.
+  const CAP1_JOB_CODE = 'ZZTEST-CAP1-JOB'
+  let cap1Job = await prisma.job.findUnique({ where: { jobCode: CAP1_JOB_CODE } })
+  if (!cap1Job) {
+    cap1Job = await prisma.job.create({
+      data: {
+        jobCode: CAP1_JOB_CODE,
+        name: `${FIXTURE_JOB_PREFIX} job`,
+        companyId: company.id,
+        agentId: agent.id,
+      },
+    })
+  }
+  if (cap1Job.companyId !== company.id) {
+    // The holds route verifies job.companyId === body.companyId.
+    cap1Job = await prisma.job.update({ where: { id: cap1Job.id }, data: { companyId: company.id } })
   }
 
   // Defensive cleanup of any leftover fixture bookings before we start.
   await prisma.booking.deleteMany({ where: { jobName: { startsWith: FIXTURE_JOB_PREFIX } } })
 
-  // ── HTTP-handler call helpers ──
+  // ── HTTP call helpers (real routes via the dev server) ──
+  // jobSuffix no longer reaches the Booking rows — jobName is derived from
+  // the fixture Job server-side — but callers keep passing it for log
+  // readability.
   async function postHold(jobSuffix: string, args: { startDate?: string; endDate?: string; isBackup?: boolean } = {}) {
-    const body = {
-      categoryId: fixtureCategory!.id,
-      startDate: args.startDate ?? W_START,
-      endDate: args.endDate ?? W_END,
-      quantity: 1,
-      companyId: company!.id,
-      personId: person!.id,
-      agentId: agent!.id,
-      jobName: `${FIXTURE_JOB_PREFIX} ${jobSuffix}`,
-      isBackup: args.isBackup ?? false,
-    }
-    const req = new Request('http://localhost/api/scheduling/holds', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+    void jobSuffix
+    return api('/api/scheduling/holds', {
+      body: {
+        categoryId: fixtureCategory!.id,
+        startDate: args.startDate ?? W_START,
+        endDate: args.endDate ?? W_END,
+        quantity: 1,
+        companyId: company!.id,
+        personId: person!.id,
+        agentId: agent!.id,
+        jobId: cap1Job!.id,
+        isBackup: args.isBackup ?? false,
+      },
     })
-    const res = await holdsRoute.POST(req as never)
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
   }
 
   async function postRelease(id: string) {
-    const req = new Request(`http://localhost/api/scheduling/booking-items/${id}/release`, { method: 'POST' })
-    const res = await releaseRoute.POST(req as never, { params: { id } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/booking-items/${id}/release`, { method: 'POST' })
   }
 
   async function postPromote(id: string, body: Record<string, unknown> = {}) {
-    const req = new Request(`http://localhost/api/scheduling/booking-items/${id}/promote`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const res = await promoteRoute.POST(req as never, { params: { id } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/booking-items/${id}/promote`, { body })
   }
 
   async function getStacked(start: string = W_START, end: string = W_END) {
-    const url = `http://localhost/api/scheduling/stacked-holds?categoryId=${fixtureCategory!.id}&start=${start}&end=${end}`
-    const req = new Request(url)
-    const res = await stackedRoute.GET(req as never)
-    return { status: res.status, json: (await res.json()) as { ok: boolean; counts: { primary: number; backups: number }; rows: Array<{ bookingItemId: string; holdRank: number; jobName: string }> } }
+    const r = await api(`/api/scheduling/stacked-holds?categoryId=${fixtureCategory!.id}&start=${start}&end=${end}`)
+    return {
+      status: r.status,
+      json: r.json as unknown as { ok: boolean; counts: { primary: number; backups: number }; rows: Array<{ bookingItemId: string; holdRank: number; jobName: string }> },
+    }
   }
 
   // Track created BookingItem IDs for assertions + cleanup.
@@ -313,11 +416,12 @@ async function main() {
       `409 error code is "over-capacity" (got "${dupePrimary.json.error}")`,
     )
 
-    // Double-check nothing got created behind the 409.
-    const stuckCheck = await prisma.bookingItem.findFirst({
-      where: { categoryId: fixtureCategory.id, holdRank: 1, booking: { jobName: `${FIXTURE_JOB_PREFIX} dupe-primary` } },
+    // Double-check nothing got created behind the 409 — the fixture Job
+    // should still own exactly one BookingItem (the accepted primary).
+    const itemsAfterDupe = await prisma.bookingItem.count({
+      where: { categoryId: fixtureCategory.id, booking: { jobId: cap1Job.id } },
     })
-    check(stuckCheck === null, 'no BookingItem was persisted for the rejected dupe-primary attempt')
+    check(itemsAfterDupe === 1, `no BookingItem was persisted for the rejected dupe-primary attempt (job owns ${itemsAfterDupe}, expected 1)`)
 
     // ─────────────────────────────────────────────────────────────
     // 2. BACKUP STACKS WHEN FULL
@@ -434,13 +538,7 @@ async function main() {
     // We bypass postHold's auto-cleanup naming, but the parent
     // FIXTURE_JOB_PREFIX cleanup will still sweep these at end.
     async function callAssign(itemId: string, assetId: string) {
-      const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/assign`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ assetId }),
-      })
-      const res = await assignRoute.POST(req as never, { params: { id: itemId } })
-      return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+      return api(`/api/scheduling/booking-items/${itemId}/assign`, { body: { assetId } })
     }
 
     async function createBookingItemRaw(rank: number, suffix: string) {
@@ -609,10 +707,27 @@ async function main() {
   // — they were validated earlier in this run).
   const company2 = await prisma.company.findFirst({ select: { id: true } })
   const person2 = await prisma.person.findFirst({ select: { id: true } })
-  const agent2 = await prisma.user.findFirst({ select: { id: true } })
+  const agent2 = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true } })
   if (!company2 || !person2 || !agent2) {
-    failures.push('CAPACITY-2 SETUP: required Company/Person/User not present in DB')
+    failures.push('CAPACITY-2 SETUP: required Company/Person/ADMIN User not present in DB')
     return
+  }
+
+  // Persistent fixture Job for the cap2 holds (holds route requires jobId).
+  const CAP2_JOB_CODE = 'ZZTEST-CAP2-JOB'
+  let cap2Job = await prisma.job.findUnique({ where: { jobCode: CAP2_JOB_CODE } })
+  if (!cap2Job) {
+    cap2Job = await prisma.job.create({
+      data: {
+        jobCode: CAP2_JOB_CODE,
+        name: `${CAP2_FIXTURE_PREFIX} job`,
+        companyId: company2.id,
+        agentId: agent2.id,
+      },
+    })
+  }
+  if (cap2Job.companyId !== company2.id) {
+    cap2Job = await prisma.job.update({ where: { id: cap2Job.id }, data: { companyId: company2.id } })
   }
 
   // Defensive cleanup of any leftover fixture rows before we start.
@@ -661,26 +776,22 @@ async function main() {
     })
 
     async function postHold2(jobSuffix: string, args: { quantity: number; isBackup?: boolean; bufferOverride?: boolean }) {
-      const body = {
-        categoryId: cap2Category!.id,
-        startDate: TW_START,
-        endDate: TW_END,
-        quantity: args.quantity,
-        companyId: company2!.id,
-        personId: person2!.id,
-        agentId: agent2!.id,
-        jobName: `${CAP2_FIXTURE_PREFIX} ${jobSuffix}`,
-        isBackup: args.isBackup ?? false,
-        bufferOverride: args.bufferOverride ?? false,
-        bufferDays: 1,
-      }
-      const req = new Request('http://localhost/api/scheduling/holds', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+      void jobSuffix
+      return api('/api/scheduling/holds', {
+        body: {
+          categoryId: cap2Category!.id,
+          startDate: TW_START,
+          endDate: TW_END,
+          quantity: args.quantity,
+          companyId: company2!.id,
+          personId: person2!.id,
+          agentId: agent2!.id,
+          jobId: cap2Job!.id,
+          isBackup: args.isBackup ?? false,
+          bufferOverride: args.bufferOverride ?? false,
+          bufferDays: 1,
+        },
       })
-      const res = await holdsRoute.POST(req as never)
-      return { status: res.status, json: (await res.json()) as Record<string, unknown> }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -708,8 +819,11 @@ async function main() {
     const oversize = await postHold2('oversize', { quantity: 3 })
     check(oversize.status === 409, `qty=3 over capacity-2 → 409 (got ${oversize.status})`)
     check(oversize.json.error === 'over-capacity', `error code === "over-capacity" (got "${oversize.json.error}")`)
+    // The fixture Job owns every route-created BookingItem in this block
+    // (the anchor was created directly without a jobId) — after the 409
+    // it should own none.
     const stuckOversize = await prisma.bookingItem.count({
-      where: { categoryId: cap2Category.id, booking: { jobName: `${CAP2_FIXTURE_PREFIX} oversize` } },
+      where: { categoryId: cap2Category.id, booking: { jobId: cap2Job.id } },
     })
     check(stuckOversize === 0, 'no BookingItem persisted from rejected oversize attempt')
 
@@ -799,28 +913,16 @@ async function main() {
   const ACTION_PREFIX = 'TEST-ACTIONS-FIXTURE'
 
   async function callPromote(itemId: string) {
-    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/promote`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),
-    })
-    const res = await promoteRoute.POST(req as never, { params: { id: itemId } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/booking-items/${itemId}/promote`, { body: {} })
   }
   async function callRelease(itemId: string) {
-    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/release`, { method: 'POST' })
-    const res = await releaseRoute.POST(req as never, { params: { id: itemId } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/booking-items/${itemId}/release`, { method: 'POST' })
   }
   async function callConfirm(bookingId: string) {
-    const req = new Request(`http://localhost/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
-    const res = await confirmRoute.POST(req as never, { params: { id: bookingId } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/bookings/${bookingId}/confirm`, { method: 'POST' })
   }
   async function callAssignAction(itemId: string, assetId: string) {
-    const req = new Request(`http://localhost/api/scheduling/booking-items/${itemId}/assign`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ assetId }),
-    })
-    const res = await assignRoute.POST(req as never, { params: { id: itemId } })
-    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+    return api(`/api/scheduling/booking-items/${itemId}/assign`, { body: { assetId } })
   }
 
   /** Create Booking + BookingItem (status=ASSIGNED at given rank) + BookingAssignment on the fixture stage. */
