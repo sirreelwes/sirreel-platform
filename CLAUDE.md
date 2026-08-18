@@ -59,12 +59,19 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - Planyo (Site ID 36171) remains the team's working surface until Wes announces the switch. Anything booked/edited in Planyo after the import is DRIFT: re-run `scripts/scheduling-planyo-migration.ts --write` for new carts (journal-idempotent, appends by planyoCartId); for edits to already-imported carts use the supersede recipe — release the cart's items (assignments → SWAPPED, items → UNFULFILLED), delete its Reservation journal rows by captured id, re-run `--write`.
   - Still no write-back to Planyo. Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
-- **CardPointe** (UAT, MID 810000003214) = card processing. `.env.local` is the
-  authority on the MID, not this file — it changed once already (496152163887 →
-  810000003214, commit dbc94cc) and a stale one here sends you hunting for
-  transactions on a merchant account that has none. Still UAT: production
-  credentials arrive with Fiserv's validation sign-off, and every client-facing
-  card surface fails closed until `CARDPOINTE_ENV=PROD` is set with them.
+- **CardPointe** = card processing. **LIVE in production since 2026-08-18** —
+  Fiserv signed off, `CARDPOINTE_ENV=PROD` and the four `CARDPOINTE_PROD_*`
+  values are set in Vercel Production, and `/api/cardpointe/config` reports
+  `env: PROD, live: true` on `boltgw.cardconnect.com`. Client card capture and
+  payment are open; staff collections charges real cards.
+  - **Never put production credentials in `.env.local`.** Local dev and every
+    ad-hoc script read it, so a prod value there charges real cards from a
+    laptop. Local stays UAT (MID 810000003214) — which is also why this file
+    can no longer name "the" MID: prod and local are deliberately different.
+    Read the env for whichever one you mean.
+  - The `live` gate (`env === 'PROD'`) still guards every client-facing card
+    surface, so an accidental revert to UAT closes them rather than quietly
+    sending real cards to the sandbox — which is what happened on 2026-08-13.
 
 ### Key Database Concepts
 - **Order** (`sr_orders`) — invoiceable rental, ties to a Job
