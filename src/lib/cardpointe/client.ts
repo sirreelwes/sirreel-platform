@@ -560,8 +560,31 @@ export interface ReversalResult {
   /** Gateway retref of the reversal transaction (refund mints a new one;
    *  void echoes the original). */
   retref?: string
+  /** What the gateway ACTUALLY returned, in dollars, positive.
+   *
+   *  Not the amount requested. With surcharging enabled the gateway returns
+   *  the proportional fee alongside the base: ask it to refund $9.00 of a
+   *  $25.75 charge and it returns $9.27 (`fee_amount` 0.27, `fee_type`
+   *  SURCHRG). A caller that records its own request instead understates the
+   *  reversal by that fee, and its "remaining" figure drifts high by the same
+   *  margin on every partial — until a later refund for the balance is
+   *  rejected with "Above max amount".
+   *
+   *  Same reasoning as appliedAmounts() on the charging side: the fee is only
+   *  ever knowable from the response.
+   *
+   *  Undefined for a VOID — the gateway returns no amount there, and a void
+   *  is all-or-nothing, so the caller's own total is the right figure. */
+  amountDollars?: number
   /** Human-readable gateway text for the failing path, for surfacing. */
   message: string
+}
+
+/** Positive dollar amount from a gateway response. Refunds report a negative
+ *  `amount` ("-9.27"); voids report none at all. */
+function reversedAmount(r: AuthResponse): number | undefined {
+  const n = Number(r.amount)
+  return Number.isFinite(n) && n !== 0 ? Math.abs(n) : undefined
 }
 
 /**
@@ -604,7 +627,13 @@ export async function reverseCardCharge(args: {
   try {
     const r = await refundByRetref(args.retref, args.amountDollars)
     if (isApproved(r)) {
-      return { ok: true, kind: 'refund', retref: r.retref ?? args.retref, message: r.resptext }
+      return {
+        ok: true,
+        kind: 'refund',
+        retref: r.retref ?? args.retref,
+        amountDollars: reversedAmount(r),
+        message: r.resptext,
+      }
     }
     return {
       ok: false,

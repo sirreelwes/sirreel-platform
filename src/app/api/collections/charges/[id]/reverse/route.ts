@@ -111,12 +111,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const kind = result.kind === 'void' ? 'VOID' : 'REFUND'
+  // What the GATEWAY returned, not what we asked for. With surcharging on, a
+  // partial refund comes back larger than the request: ask for $9.00 of a
+  // $25.75 charge and the gateway returns $9.27, the extra being that slice's
+  // proportional fee.
+  //
+  // Recording the request instead understated the ledger by that fee, so
+  // `remaining` above drifted HIGH by the same margin on every partial. The
+  // failure only surfaced later, when a refund for the apparent balance came
+  // back "Above max amount" — the over-refund guard below is only as good as
+  // the number it is subtracting.
+  //
+  // A void reports no amount and annuls everything, so `amountDollars`
+  // (the full remaining) stays correct there.
+  const reversed = result.amountDollars ?? amountDollars
+  const stillRemaining = round(remaining - reversed)
   await prisma.rwCollectionReversal.create({
     data: {
       chargeId: charge.id,
       kind,
       retref: result.retref ?? null,
-      amount: amountDollars,
+      amount: reversed,
       reason,
       createdById: user.id,
     },
@@ -129,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       reversedAt: new Date(),
       reversalKind: kind,
       reversalRetref: result.retref ?? null,
-      reversalAmount: amountDollars,
+      reversalAmount: reversed,
       reversalReason: reason,
       reversedById: user.id,
     },
@@ -139,14 +154,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ok: true,
     kind: result.kind,
     retref: result.retref,
-    amount: amountDollars,
-    remaining: round(remaining - amountDollars),
+    amount: reversed,
+    remaining: stillRemaining,
     message:
       result.kind === 'void'
-        ? `Voided $${amountDollars.toFixed(2)} — it will not appear on the client's statement.`
-        : `Refunded $${amountDollars.toFixed(2)} — it will appear as a credit in a few days.` +
-          (round(remaining - amountDollars) > 0
-            ? ` $${round(remaining - amountDollars).toFixed(2)} of this charge remains.`
-            : ''),
+        ? `Voided $${reversed.toFixed(2)} — it will not appear on the client's statement.`
+        : `Refunded $${reversed.toFixed(2)} — it will appear as a credit in a few days.` +
+          (stillRemaining > 0 ? ` $${stillRemaining.toFixed(2)} of this charge remains.` : ''),
   })
 }
