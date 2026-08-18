@@ -70,11 +70,47 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  const updated = await prisma.booking.update({
-    where: { id },
-    // Mirror the confirm route's confirmedAt stamp when moving to CONFIRMED.
-    data: target === "CONFIRMED" ? { status: target, confirmedAt: new Date() } : { status: target },
-    select: { id: true, status: true },
+  // CANCELLED must release what the booking holds, in the same
+  // transaction as the flip. Without this, the cancelled booking's
+  // BookingAssignments stayed ASSIGNED and its items stayed REQUESTED —
+  // so the units kept counting as booked and the pending demand kept
+  // consuming availableToHold. A cancelled reservation permanently
+  // blocked the calendar until someone found and released each item by
+  // hand. (Planyo releases inventory on cancel; post-cutover this is
+  // the only cancel path, so it has to do the same.)
+  //
+  // Mirrors booking-items/[id]/release exactly: items REQUESTED/ASSIGNED
+  // → UNFULFILLED; their ACTIVE assignments → SWAPPED (terminal-but-
+  // auditable — rows stay for history). Terminal item states are left
+  // untouched. Backups on the same window belong to OTHER bookings and
+  // are not affected by cancelling this one.
+  const updated = await prisma.$transaction(async (tx) => {
+    if (target === "CANCELLED") {
+      const items = await tx.bookingItem.findMany({
+        where: { bookingId: id, status: { in: ["REQUESTED", "ASSIGNED"] } },
+        select: { id: true },
+      });
+      if (items.length) {
+        const itemIds = items.map((i) => i.id);
+        await tx.bookingAssignment.updateMany({
+          where: {
+            bookingItemId: { in: itemIds },
+            status: { in: ["ASSIGNED", "CHECKED_OUT"] },
+          },
+          data: { status: "SWAPPED" },
+        });
+        await tx.bookingItem.updateMany({
+          where: { id: { in: itemIds } },
+          data: { status: "UNFULFILLED" },
+        });
+      }
+    }
+    return tx.booking.update({
+      where: { id },
+      // Mirror the confirm route's confirmedAt stamp when moving to CONFIRMED.
+      data: target === "CONFIRMED" ? { status: target, confirmedAt: new Date() } : { status: target },
+      select: { id: true, status: true },
+    });
   });
   return NextResponse.json({ ok: true, status: updated.status });
 }

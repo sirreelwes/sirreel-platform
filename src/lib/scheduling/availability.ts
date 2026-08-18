@@ -228,7 +228,15 @@ export async function getCategoryAvailability(
   // promotes them. This keeps the conflict math identical to before
   // backups existed; ranking is a queue layer on top, not a change
   // to the availability calculation.
-  const requestedAgg = await prisma.bookingItem.aggregate({
+  // Count only the UNCOVERED remainder of each hold, not its full
+  // quantity. A partially-assigned item stays REQUESTED (partial
+  // coverage keeps it on the stale-holds radar), but its bound units
+  // already show up in bookedCount above — subtracting the full
+  // quantity as well double-counts the covered portion, understating
+  // availableToHold. Repro that motivated this: 3-unit category, one
+  // qty-2 hold with 1 unit bound → free=2 yet availableToHold=0; the
+  // truth is 1 (one bound unit + one unit of remaining demand).
+  const requestedItems = await prisma.bookingItem.findMany({
     where: {
       categoryId,
       status: 'REQUESTED',
@@ -240,9 +248,19 @@ export async function getCategoryAvailability(
         endDate: { gte: startDate },
       },
     },
-    _sum: { quantity: true },
+    select: {
+      quantity: true,
+      _count: {
+        select: {
+          assignments: { where: { status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } } },
+        },
+      },
+    },
   })
-  const requestedQty = requestedAgg._sum.quantity ?? 0
+  const requestedQty = requestedItems.reduce(
+    (sum, item) => sum + Math.max(0, item.quantity - item._count.assignments),
+    0,
+  )
 
   const availableToHold = assets.length - bookedCount - requestedQty
 
