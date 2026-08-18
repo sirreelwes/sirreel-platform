@@ -115,7 +115,12 @@ interface ProposedAsset {
 
 const PROPOSED_ASSETS: ProposedAsset[] = [
   {
-    categoryName: 'ProScout / VTR',
+    // Category was renamed "ProScout / VTR" → "ProScout / VideoVan"
+    // (slug stayed proscout-vtr; see merge-proscout-vtr-dup.ts). The
+    // lookup here is by NAME, so the stale name hard-aborted the whole
+    // run via the unknown-category guard — before Lankershim ever got
+    // proposed.
+    categoryName: 'ProScout / VideoVan',
     unitName: 'Video Van',
     notes:
       'Planyo has two names for this same physical unit: "Video Van (w/ MiFi)" and "Scout Van (No MiFi)". Distinct one-of-a-kind unit. The migration script aliases "Scout Van" → this Asset.',
