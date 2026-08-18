@@ -55,9 +55,9 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 ## Architecture
 
 ### Data Sources of Truth
-- **Scheduling — pre-cutover (current state):** Planyo (Site ID 36171) is the operational source of truth — the team works in Planyo. HQ's native scheduler is the designated replacement, currently in beta.
-  - The `PLANYO_BACKFILL`-sourced Booking rows already in HQ are a STALE prior-import snapshot, **NOT live commitments**. Do not infer "live" from the `PLANYO_BACKFILL` flag; do not treat HQ's schedule as authoritative; do not build write-back to Planyo.
-  - **Full cutover (future, not yet authorized):** a one-time import will pull current Planyo schedule items, assign each to a Job, mark them "imported," and supersede / dedupe the prior backfill snapshot. Until that ships, HQ's scheduling surfaces are read-only-truth-wise even if the UI lets you click.
+- **Scheduling — import executed 2026-08-18 (Wes authorized):** the one-time Planyo import ran clean — 47 bookings / 65 items / 61 assignments, every PLANYO booking linked to a Job, in-progress rentals included (window reaches back 60 days), and the 4 stale prior-backfill carts with drifted units superseded from current Planyo truth. HQ's native scheduler now holds the live book as of that run.
+  - Planyo (Site ID 36171) remains the team's working surface until Wes announces the switch. Anything booked/edited in Planyo after the import is DRIFT: re-run `scripts/scheduling-planyo-migration.ts --write` for new carts (journal-idempotent, appends by planyoCartId); for edits to already-imported carts use the supersede recipe — release the cart's items (assignments → SWAPPED, items → UNFULFILLED), delete its Reservation journal rows by captured id, re-run `--write`.
+  - Still no write-back to Planyo. Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
 - **CardPointe** (UAT, MID 810000003214) = card processing. `.env.local` is the
   authority on the MID, not this file — it changed once already (496152163887 →
