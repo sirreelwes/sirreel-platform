@@ -112,18 +112,22 @@ export async function sendFinalInvoicePaymentOptions(
 
   const cardOnFile = await cardOnFileForJob(fi.job.id)
 
-  // Verification anchor — best-effort, same reasoning as the operator send:
-  // a missing anchor is worse than nothing, a missing email is worse still.
-  let verifyLink: string | null = null
+  // The pay-details link is the ONLY route to the bank details in this email
+  // (link-only, Wes ruled 2026-08-18) — so unlike the operator send's
+  // best-effort anchor, a mint failure here fails the send. An email whose
+  // primary no-fee payment option is missing is not a degraded success; it is
+  // a message we would have to re-send anyway.
+  let payDetailsLink: string
   try {
     const share = await createPaymentShare({
       sentToEmail: recipient.email,
       createdVia: 'OPERATOR',
       personId: recipient.personId,
     })
-    verifyLink = `${paymentShareBaseUrl()}/pay-details/${share.token}`
+    payDetailsLink = `${paymentShareBaseUrl()}/pay-details/${share.token}`
   } catch (err) {
-    console.error('[final-invoice-email] could not mint a verification link:', err)
+    console.error('[final-invoice-email] could not mint the pay-details link:', err)
+    return { ok: false, reason: 'send_failed', detail: 'could not mint the payment-details link' }
   }
 
   // The invoice PDF, from its private blob. Fetch failure drops the
@@ -152,7 +156,7 @@ export async function sendFinalInvoicePaymentOptions(
     amount: Number(fi.amount),
     details,
     cardOnFile,
-    verifyLink,
+    payDetailsLink,
     pdfAttached: !!attachment,
   })
 

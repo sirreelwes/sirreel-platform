@@ -4,16 +4,22 @@
  * to pay" the moment the number exists rather than when Ana reaches them on
  * the phone.
  *
- * SENSITIVE for the same reason as paymentInfo.ts: it carries banking
- * details. The standing ruling (Wes ruled A) is that details may be INLINED
- * when emailed to a resolved on-file address with a human gate. Both hold
- * here — the recipient is a JobContact on the invoiced job, and the gate is
- * the agent recording the invoice. Automated sends to anyone else must use
- * the link-only pattern instead (buildPaymentLinkEmail).
+ * LINK-ONLY for bank details — Wes ruled, 2026-08-18. This is an AUTOMATED
+ * send fired on every final-invoice upload, which makes it SirReel's
+ * highest-volume banking surface: whatever shape it has is the shape clients
+ * learn to trust, and an email that inlines account numbers trains them to
+ * accept the exact email invoice-redirect fraud imitates. The bank option is
+ * a share link to sirreel.com (minted per send, 90-day TTL; a Resend from
+ * collections mints a fresh one). Zelle and card stay inline: a swapped
+ * Zelle tag is caught by confirm-the-name, and the card block carries no
+ * numbers. Carries SHARE_FRAUD_WARNING — "we do not send banking details by
+ * email" — which is only speakable BECAUSE this email does not.
  *
- * Brand and blocks are composed from paymentInfo.ts exports — one source for
- * the details rows, the URLs, and the palette, so the two payment emails
- * cannot drift apart. FRAUD_WARNING is verbatim per ruling.
+ * The operator fast-send (paymentInfo.ts, "ruled A") still inlines: rare,
+ * human-reviewed per send. Aligning it is a separate call.
+ *
+ * Brand composed from paymentInfo.ts exports — one palette, one set of URLs,
+ * so the payment emails cannot drift apart.
  *
  * Reply-To is billing@ — replies are "run my card" / "we're wiring Friday",
  * which is collections work, not the uploading agent's.
@@ -22,13 +28,12 @@
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 import {
   CARD_AUTH_URL,
-  FRAUD_WARNING,
   GOLD,
   LOGO_URL_WHITE,
   SLATE,
   ZELLE_QR_URL,
-  detailRows,
 } from '@/lib/email/templates/paymentInfo'
+import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
 function escapeHtml(s: string): string {
   return s
@@ -55,8 +60,9 @@ export function buildFinalInvoiceEmail(input: {
   details: PaymentDetailsRecord
   /** Signed card authorization already on file for this job, if any. */
   cardOnFile: CardOnFile | null
-  /** Anti-fraud anchor link (pay-details share). Best-effort. */
-  verifyLink: string | null
+  /** The pay-details share link — the ONLY route to the bank details, so the
+   *  caller must have minted one before building this email. */
+  payDetailsLink: string
   /** Whether the invoice PDF is attached to this email. */
   pdfAttached: boolean
 }): { subject: string; html: string; text: string } {
@@ -66,7 +72,6 @@ export function buildFinalInvoiceEmail(input: {
   const subject = input.invoiceNumber
     ? `SirReel — final invoice ${input.invoiceNumber} · ${amount}`
     : `SirReel — your final invoice · ${amount}`
-  const rows = detailRows(input.details)
   const card = input.cardOnFile
   const cardDesc = card
     ? `the ${card.cardType ?? ''} card ending ····${card.last4 ?? '????'}`.replace(/\s+/g, ' ')
@@ -82,8 +87,10 @@ export function buildFinalInvoiceEmail(input: {
     '',
     'HOW TO PAY',
     '',
-    '1. Bank transfer (ACH or wire) — no fee:',
-    ...rows.map((r) => `   ${r.label}: ${r.value}`),
+    '1. Bank transfer (ACH or wire) — no fee. Our details are here:',
+    `   ${input.payDetailsLink}`,
+    '   The page has our ACH and wire information and any forms your',
+    '   accounts-payable team needs — you can share the link with them directly.',
     ...(input.details.zelleHandle && input.details.zelleName
       ? [
           '',
@@ -98,8 +105,7 @@ export function buildFinalInvoiceEmail(input: {
       ? `${input.details.zelleHandle ? '3' : '2'}. Card on file: we hold your signed authorization for ${cardDesc}. Reply to this email and we will run it for ${amount} plus the card processing fee (up to 3%, where permitted).`
       : `${input.details.zelleHandle ? '3' : '2'}. Card: authorize one at ${CARD_AUTH_URL} — a processing fee of up to 3% applies, where permitted. Bank transfers have no fee.`,
     '',
-    `IMPORTANT: ${FRAUD_WARNING}`,
-    ...(input.verifyLink ? ['', `Confirm our payment details any time: ${input.verifyLink}`] : []),
+    `IMPORTANT: ${SHARE_FRAUD_WARNING}`,
     '',
     'Questions? Reply to this email or call (888) 477-7335.',
     '',
@@ -109,15 +115,6 @@ export function buildFinalInvoiceEmail(input: {
     .join('\n')
 
   // ── HTML ──────────────────────────────────────────────────────────
-  const rowsHtml = rows
-    .map(
-      (row, i) => `<tr>
-        <td style="padding:6px 14px 6px 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#6b7280;white-space:nowrap;vertical-align:top;">${escapeHtml(row.label)}</td>
-        <td style="padding:6px 0;font-size:14px;color:#111827;font-weight:${i === 0 ? 700 : 600};">${escapeHtml(row.value)}</td>
-      </tr>`,
-    )
-    .join('')
-
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f4f4f2;">
   <div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
     <div style="background:${SLATE};padding:24px 28px;border-bottom:3px solid ${GOLD};">
@@ -140,14 +137,16 @@ export function buildFinalInvoiceEmail(input: {
 
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#6b7280;margin:0 0 12px;">How to pay</div>
 
-      <!-- bank transfer -->
+      <!-- bank transfer: link-only, never numbers — see file header -->
       <div style="border:1px solid #e5e2d9;border-radius:10px;overflow:hidden;margin:0 0 16px;">
         <div style="padding:18px 20px;background:#faf9f6;">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 4px;">Bank transfer (ACH or wire)</div>
           <div style="font-size:12px;color:#6b7280;margin:0 0 12px;">No fee.</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;">
-            ${rowsHtml}
-          </table>
+          <a href="${input.payDetailsLink}" style="display:inline-block;background:${SLATE};color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;">View payment details &rarr;</a>
+          <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#6b7280;">
+            The page has our ACH and wire information and any forms your
+            accounts-payable team needs &mdash; you can share the link with them directly.
+          </p>
         </div>
       </div>
 
@@ -196,12 +195,7 @@ export function buildFinalInvoiceEmail(input: {
           <td style="width:5px;background:#c2410c;border-radius:8px 0 0 8px;">&nbsp;</td>
           <td style="background:#fff7ed;border:1px solid #fdba74;border-left:none;border-radius:0 8px 8px 0;padding:14px 16px;">
             <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#c2410c;margin:0 0 4px;">⚠ Fraud warning</div>
-            <div style="font-size:13px;line-height:1.6;color:#7c2d12;">${escapeHtml(FRAUD_WARNING)}</div>
-            ${
-              input.verifyLink
-                ? `<div style="font-size:13px;line-height:1.6;color:#7c2d12;margin-top:8px;">You can always confirm these details at <a href="${input.verifyLink}" style="color:#7c2d12;font-weight:700;">sirreel.com</a>.</div>`
-                : ''
-            }
+            <div style="font-size:13px;line-height:1.6;color:#7c2d12;">${escapeHtml(SHARE_FRAUD_WARNING)}</div>
           </td>
         </tr>
       </table>

@@ -48,7 +48,7 @@ function escapeHtml(s: string): string {
  * Blank/optional fields drop out here so they never render as empty
  * rows. Payee is rendered as the first (bold) row.
  */
-export function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: string }> {
+function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = []
   const push = (label: string, value: string | null) => {
     if (value && value.trim()) rows.push({ label, value: value.trim() })
