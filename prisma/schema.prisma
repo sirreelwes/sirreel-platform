@@ -5439,6 +5439,13 @@ model JobFinalInvoice {
   note          String?
   uploadedById  String?  @map("uploaded_by_id")
   uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  /// Payment-options email: when it last went out and to whom. Stamped on
+  /// every send including manual resends — this is delivery state, not an
+  /// audit log (EmailDelivery keeps the per-send record). Null = never sent,
+  /// which the collections queue surfaces so Ana knows the client has NOT
+  /// been told how to pay.
+  emailedAt     DateTime? @map("emailed_at")
+  emailedTo     String?   @map("emailed_to")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

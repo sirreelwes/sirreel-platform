@@ -33,6 +33,8 @@ export async function GET() {
       pdfUrl: true,
       note: true,
       uploadedAt: true,
+      emailedAt: true,
+      emailedTo: true,
       job: {
         select: {
           id: true,
@@ -66,6 +68,8 @@ export async function GET() {
       pdfUrl: r.pdfUrl,
       note: r.note,
       uploadedAt: r.uploadedAt,
+      emailedAt: r.emailedAt,
+      emailedTo: r.emailedTo,
       jobId: r.job.id,
       jobName: r.job.name,
       jobCode: r.job.jobCode,

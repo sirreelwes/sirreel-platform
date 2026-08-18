@@ -61,6 +61,10 @@ interface FinalInvoice {
   jobCode: string | null
   companyName: string | null
   alreadyCharged: number
+  /** Payment-options email state — null emailedAt means the client has NOT
+   *  been told how to pay, which is the first thing Ana needs to see. */
+  emailedAt: string | null
+  emailedTo: string | null
 }
 
 interface ChargeRow {
@@ -180,6 +184,39 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       .then((d) => d.ok && setFinals(d.finalInvoices ?? []))
       .catch(() => {})
   }, [])
+
+  // Payment-options (re)send for a queued final invoice. Same code path as
+  // the automatic send on upload — a resend is a fresh copy, not a replay.
+  const [sendingOptions, setSendingOptions] = useState<string | null>(null)
+  const sendPaymentOptions = useCallback(
+    async (fv: FinalInvoice) => {
+      if (sendingOptions) return
+      if (
+        fv.emailedAt &&
+        !window.confirm(
+          `Payment options were already emailed to ${fv.emailedTo}.\n\nSend again?`,
+        )
+      ) {
+        return
+      }
+      setSendingOptions(fv.id)
+      try {
+        const r = await fetch(`/api/collections/final-invoices/${fv.id}/send`, { method: 'POST' })
+        const d = await r.json()
+        if (d.ok) {
+          setResult({ ok: true, message: `Payment options emailed to ${d.to}.` })
+          loadFinals()
+        } else {
+          setResult({ ok: false, message: d.error || 'Send failed.' })
+        }
+      } catch {
+        setResult({ ok: false, message: 'Send failed — network error.' })
+      } finally {
+        setSendingOptions(null)
+      }
+    },
+    [sendingOptions, loadFinals],
+  )
 
   useEffect(() => {
     loadFinals()
@@ -482,6 +519,29 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       ⚠ {money(fv.alreadyCharged)} already collected against this invoice
                     </div>
                   )}
+                  {/* Payment-options email state. Unsent is the loud case —
+                      the client has the number but not the how-to-pay. */}
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    {fv.emailedAt ? (
+                      <span className="text-xs text-emerald-500/90">
+                        ✓ Payment options emailed to {fv.emailedTo}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-orange-400">
+                        Payment options NOT emailed
+                      </span>
+                    )}
+                    <span
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void sendPaymentOptions(fv)
+                      }}
+                      className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 cursor-pointer shrink-0"
+                    >
+                      {sendingOptions === fv.id ? 'Sending…' : fv.emailedAt ? 'Resend' : 'Send now'}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>

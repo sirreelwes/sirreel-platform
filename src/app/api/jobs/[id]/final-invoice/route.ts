@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { safeFilenameSegment } from '@/lib/claims/uploadClaimDocument'
+import { sendFinalInvoicePaymentOptions } from '@/lib/payments/sendFinalInvoiceEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,9 +125,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { id: true, amount: true, status: true, invoiceNumber: true },
   })
 
+  // Payment-options email, immediately — recording the number IS the moment
+  // the client should hear how to pay it. Never blocks the upload: the row is
+  // already queued for collections, and the queue shows unsent state so a
+  // failed send is a visible follow-up, not a silent gap.
+  const emailed = await sendFinalInvoicePaymentOptions(created.id).catch((err) => {
+    console.error('[final-invoice] payment-options email threw:', err)
+    return { ok: false as const, reason: 'send_failed' as const, detail: 'unexpected error' }
+  })
+
+  const message = emailed.ok
+    ? `Final invoice recorded and payment options emailed to ${emailed.to}. It is queued on the Collections page.`
+    : emailed.reason === 'no_recipient'
+      ? 'Final invoice recorded and queued on Collections — NOT emailed: no job contact has an email address. Add one and resend from Collections.'
+      : emailed.reason === 'not_configured'
+        ? 'Final invoice recorded and queued on Collections — NOT emailed: payment details are not configured in Admin.'
+        : 'Final invoice recorded and queued on Collections — the payment-options email failed to send. Resend it from the Collections page.'
+
   return NextResponse.json({
     ok: true,
     finalInvoice: { ...created, amount: Number(created.amount) },
-    message: 'Final invoice recorded — it is now queued on the Collections page.',
+    emailed: emailed.ok ? { to: emailed.to } : { failed: emailed.reason },
+    message,
   })
 }

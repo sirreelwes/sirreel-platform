@@ -25,7 +25,9 @@ export interface FetchedAttachments {
   dropped: string[]
 }
 
-async function fetchBlobBuffer(key: string): Promise<Buffer> {
+/** Exported for other email flows that attach a single private-Blob PDF
+ *  (the final-invoice payment-options email attaches the invoice itself). */
+export async function fetchBlobBuffer(key: string): Promise<Buffer> {
   const blob = await getBlob(key, { access: 'private' })
   if (!blob || blob.statusCode !== 200 || !blob.stream) {
     throw new Error(`blob not retrievable (status ${blob?.statusCode ?? 'none'})`)

@@ -17,20 +17,20 @@
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
-const GOLD = '#D4A547'
-const SLATE = '#0f172a'
+export const GOLD = '#D4A547'
+export const SLATE = '#0f172a'
 
 // Verbatim per ruling — do not edit without Wes.
 /** Our own path, not the vendor URL — see legacyRedirects. When card
  *  authorization moves into the portal this follows automatically. */
-const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
+export const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
 
 /** Same asset the rest of the SirReel emails use. */
-const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+export const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 
 /** Zelle QR, same host as the logo. Absolute because mail clients cannot
  *  resolve relative paths; the marketing host does not serve /payment/. */
-const ZELLE_QR_URL = 'https://hq.sirreel.com/payment/zelle-qr.png'
+export const ZELLE_QR_URL = 'https://hq.sirreel.com/payment/zelle-qr.png'
 
 export const FRAUD_WARNING =
   "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
@@ -48,7 +48,7 @@ function escapeHtml(s: string): string {
  * Blank/optional fields drop out here so they never render as empty
  * rows. Payee is rendered as the first (bold) row.
  */
-function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: string }> {
+export function detailRows(r: PaymentDetailsRecord): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = []
   const push = (label: string, value: string | null) => {
     if (value && value.trim()) rows.push({ label, value: value.trim() })
