@@ -26,13 +26,7 @@
  */
 
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
-import {
-  CARD_AUTH_URL,
-  GOLD,
-  LOGO_URL_WHITE,
-  SLATE,
-  ZELLE_QR_URL,
-} from '@/lib/email/templates/paymentInfo'
+import { CARD_AUTH_URL, GOLD, LOGO_URL_WHITE, SLATE } from '@/lib/email/templates/paymentInfo'
 import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
 function escapeHtml(s: string): string {
@@ -98,6 +92,7 @@ export function buildFinalInvoiceEmail(input: {
           `   Zelle tag: ${input.details.zelleHandle}`,
           `   Recipient name to confirm: ${input.details.zelleName}`,
           '   Zelle limits are set by your bank — for larger invoices use ACH or wire.',
+          `   Prefer to scan? The Zelle QR code is on our payment-details page: ${input.payDetailsLink}`,
         ]
       : []),
     '',
@@ -154,19 +149,17 @@ export function buildFinalInvoiceEmail(input: {
         input.details.zelleHandle && input.details.zelleName
           ? `<div style="border:1px solid #e5e2d9;border-radius:10px;padding:16px 18px;margin:0 0 16px;background:#ffffff;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 10px;">Zelle</div>
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td valign="top" style="padding-right:16px;">
-            <img src="${ZELLE_QR_URL}" alt="Zelle QR code" width="104" height="104" style="display:block;border:0;width:104px;height:104px;" />
-          </td>
-          <td valign="top" style="font-size:13px;line-height:1.7;color:#111827;">
-            <div><strong>Zelle tag:</strong> ${escapeHtml(input.details.zelleHandle)}</div>
-            <div><strong>Confirm the name:</strong> ${escapeHtml(input.details.zelleName)}</div>
-            <div style="color:#6b7280;font-size:12px;margin-top:6px;">
-              Your bank shows the recipient name before you send &mdash; check it matches.
-              Zelle limits are set by your bank, so use ACH or wire for larger invoices.
-            </div>
-          </td>
-        </tr></table>
+        <div style="font-size:13px;line-height:1.7;color:#111827;">
+          <div><strong>Zelle tag:</strong> ${escapeHtml(input.details.zelleHandle)}</div>
+          <div><strong>Confirm the name:</strong> ${escapeHtml(input.details.zelleName)}</div>
+          <div style="color:#6b7280;font-size:12px;margin-top:6px;">
+            Your bank shows the recipient name before you send &mdash; check it matches.
+            Zelle limits are set by your bank, so use ACH or wire for larger invoices.
+          </div>
+          <div style="font-size:12px;margin-top:8px;">
+            Prefer to scan? <a href="${input.payDetailsLink}" style="color:${SLATE};font-weight:700;">The Zelle QR code is on our payment-details page</a>.
+          </div>
+        </div>
       </div>`
           : ''
       }
