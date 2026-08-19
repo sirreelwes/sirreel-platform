@@ -62,6 +62,10 @@ export default function RwInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshErr, setRefreshErr] = useState<string | null>(null);
+  // High-confidence reconcile suggestions, keyed by RW order number. Same
+  // endpoint the Reconcile queue reads, so a green Reconcile here ALWAYS
+  // corresponds to a one-click suggestion there — one matcher, one meaning.
+  const [suggested, setSuggested] = useState<Map<string, { jobCode: string; jobName: string; reasons: string[] }>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +77,19 @@ export default function RwInvoicesPage() {
   }, [filter, term, offset]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch('/api/rentalworks/reconcile/suggestions')
+      .then((r) => r.json())
+      .then((d) => {
+        const m = new Map<string, { jobCode: string; jobName: string; reasons: string[] }>();
+        for (const s of d.suggestions ?? []) {
+          if (s.orderNumber) m.set(s.orderNumber, { jobCode: s.jobCode, jobName: s.jobName, reasons: s.reasons ?? [] });
+        }
+        setSuggested(m);
+      })
+      .catch(() => {});
+  }, []);
 
   const refresh = async () => {
     setRefreshing(true); setRefreshErr(null);
@@ -241,13 +258,26 @@ export default function RwInvoicesPage() {
                             {i.job.jobCode}
                           </Link>
                         ) : i.company ? (
-                          <Link
-                            href={`/rentalworks/reconcile?q=${encodeURIComponent(i.company.name)}`}
-                            className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg hover:underline"
-                            title="Open Reconcile pre-searched to this client"
-                          >
-                            Reconcile →
-                          </Link>
+                          (() => {
+                            const sug = i.orderNumber ? suggested.get(i.orderNumber) : undefined;
+                            return sug ? (
+                              <Link
+                                href={`/rentalworks/reconcile?q=${encodeURIComponent(i.company.name)}`}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 border border-emerald-500 rounded-md px-1.5 py-0.5 hover:bg-emerald-50"
+                                title={`Likely ${sug.jobCode} — ${sug.jobName}${sug.reasons.length ? ` (${sug.reasons.join(', ')})` : ''}. One click away in Reconcile.`}
+                              >
+                                Reconcile → {sug.jobCode}
+                              </Link>
+                            ) : (
+                              <Link
+                                href={`/rentalworks/reconcile?q=${encodeURIComponent(i.company.name)}`}
+                                className="text-[11px] font-semibold text-lt-fg3 hover:text-lt-fg hover:underline"
+                                title="Open Reconcile pre-searched to this client"
+                              >
+                                Reconcile →
+                              </Link>
+                            );
+                          })()
                         ) : (
                           <span className="text-[11px] text-lt-fg3">—</span>
                         )}
