@@ -40,6 +40,7 @@ interface RwInvoice {
   dealName: string | null
   orderNumber: string | null
   invoiceDate: string | null
+  dueDate: string | null
   status: string | null
   invoiceTotal: number
   remainingTotal: number
@@ -92,6 +93,7 @@ interface FinalInvoice {
 interface CollectionsStats {
   rwOpenTotal: number
   rwOpenCount: number
+  rwAging: { d30: number; d90: number; d180: number; over: number }
   rwSyncedAt: string | null
   queueCount: number
   queueTotal: number
@@ -166,6 +168,20 @@ function SyncAge({ iso }: { iso: string | null }) {
 
 const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+
+/**
+ * Age of an open invoice, for the quiet per-row marker. Current (≤30d) stays
+ * muted — being current is not a warning — and the palette matches the
+ * aging bar in the Outstanding tile so one legend serves both.
+ */
+function invoiceAge(due: string | null, inv: string | null): { days: number; cls: string } | null {
+  const basis = due ?? inv
+  if (!basis) return null
+  const days = Math.floor((Date.now() - new Date(basis).getTime()) / 86_400_000)
+  const cls =
+    days > 180 ? 'text-red-400' : days > 90 ? 'text-orange-400' : days > 30 ? 'text-amber-500' : 'text-zinc-500'
+  return { days, cls }
+}
 
 export function CollectionsWorkspace({ operatorName }: { operatorName: string }) {
   const [auths, setAuths] = useState<Authorization[]>([])
@@ -551,6 +567,29 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 the second line: it is the worked subset, not the total. */}
             <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Outstanding (RW)</div>
             <div className="text-xl font-bold text-amber-500">{money(stats.rwOpenTotal)}</div>
+            {/* Aging at a glance: one slim bar, dollars-proportional. Hover
+                any segment for the amount. Same palette as the row markers. */}
+            {stats.rwAging && stats.rwOpenTotal > 0 && (
+              <div className="flex h-1.5 rounded-full overflow-hidden mt-1.5 mb-0.5 bg-zinc-800">
+                {(
+                  [
+                    ['≤30d', stats.rwAging.d30, 'bg-zinc-500'],
+                    ['31–90d', stats.rwAging.d90, 'bg-amber-500'],
+                    ['91–180d', stats.rwAging.d180, 'bg-orange-500'],
+                    ['180d+', stats.rwAging.over, 'bg-red-500'],
+                  ] as const
+                ).map(([label, amt, cls]) =>
+                  amt > 0 ? (
+                    <div
+                      key={label}
+                      className={cls}
+                      style={{ width: `${Math.max(2, (amt / stats.rwOpenTotal) * 100)}%` }}
+                      title={`${label}: ${money(amt)}`}
+                    />
+                  ) : null,
+                )}
+              </div>
+            )}
             <div className="text-xs text-zinc-400 mt-0.5">
               {stats.rwOpenCount} open invoice{stats.rwOpenCount === 1 ? '' : 's'} · per last sync
             </div>
@@ -625,6 +664,7 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       dealName: fv.jobName,
                       orderNumber: null,
                       invoiceDate: null,
+                      dueDate: null,
                       status: 'FINAL',
                       invoiceTotal: fv.amount,
                       remainingTotal: fv.amount,
@@ -817,8 +857,19 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                   <span className="text-sm font-semibold text-white">
                     {i.invoiceNumber || '(no number)'}
                   </span>
-                  <span className="text-sm text-amber-500 font-semibold">
+                  <span className="text-sm text-amber-500 font-semibold text-right">
                     {money(i.remainingTotal)} due
+                    {(() => {
+                      const a = invoiceAge(i.dueDate, i.invoiceDate)
+                      return a && a.days > 0 ? (
+                        <span
+                          className={`block text-[11px] font-normal leading-tight ${a.cls}`}
+                          title={`${a.days} days past ${i.dueDate ? 'due date' : 'invoice date'}`}
+                        >
+                          {a.days}d
+                        </span>
+                      ) : null
+                    })()}
                   </span>
                 </div>
                 <div className="text-xs text-zinc-400 mt-0.5">

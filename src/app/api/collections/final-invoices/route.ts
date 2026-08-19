@@ -179,13 +179,28 @@ export async function GET() {
   const paidMarked = (
     await prisma.rwInvoicePaidMark.findMany({ select: { rwInvoiceId: true } })
   ).map((m) => m.rwInvoiceId)
-  const rwOpenAgg = await prisma.rwInvoice.aggregate({
-    // NOT VOID: RW keeps remainingTotal populated on voided invoices — 1,197
-    // of them carried $2.0M and made the receivable read 15x reality.
+  // Full rows rather than an aggregate: the tile also renders an aging bar,
+  // and the buckets need each invoice's due date. ~100 real open invoices —
+  // cheap. NOT VOID: RW keeps remainingTotal populated on voided invoices —
+  // 1,197 of them carried $2.0M and made the receivable read 15x reality.
+  const rwOpenRows = await prisma.rwInvoice.findMany({
     where: { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarked }, NOT: { status: 'VOID' } },
-    _sum: { remainingTotal: true },
-    _count: true,
+    select: { remainingTotal: true, dueDate: true, invoiceDate: true },
   })
+  const rwOpenTotalNum = rwOpenRows.reduce((s, r) => s + Number(r.remainingTotal), 0)
+  // Aging buckets by days past due (falling back to invoice date). Undated
+  // invoices land in the first bucket — quiet, not alarming, since their age
+  // is unknown rather than known-old.
+  const rwAging = { d30: 0, d90: 0, d180: 0, over: 0 }
+  for (const r of rwOpenRows) {
+    const basis = r.dueDate ?? r.invoiceDate
+    const age = basis ? (Date.now() - basis.getTime()) / 86_400_000 : 0
+    const amt = Number(r.remainingTotal)
+    if (age <= 30) rwAging.d30 += amt
+    else if (age <= 90) rwAging.d90 += amt
+    else if (age <= 180) rwAging.d180 += amt
+    else rwAging.over += amt
+  }
   const rwSyncedAt = (
     await prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } })
   )?.syncedAt
@@ -243,8 +258,9 @@ export async function GET() {
     finalInvoices: ready.map(shape),
     collected: collected.map(shape),
     stats: {
-      rwOpenTotal: Number(rwOpenAgg._sum.remainingTotal ?? 0),
-      rwOpenCount: rwOpenAgg._count,
+      rwOpenTotal: rwOpenTotalNum,
+      rwOpenCount: rwOpenRows.length,
+      rwAging,
       rwSyncedAt: rwSyncedAt ?? null,
       queueCount: ready.length,
       queueTotal,
