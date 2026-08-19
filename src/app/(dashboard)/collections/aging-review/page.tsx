@@ -164,10 +164,52 @@ export default function AgingReviewPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-semibold text-zinc-900">Aging Review</h1>
-      <p className="text-sm text-zinc-600 mt-1 mb-6">
-        Every open invoice past 60 days, oldest first. Rule on each one — decisions feed the
-        Outstanding number, and write-offs become the bad-debt ledger below.
+      <p className="text-sm text-zinc-600 mt-1 mb-3">
+        Every open invoice past 60 days, oldest first. Rule on each one — the goal is zero
+        undecided. Decisions feed the Outstanding number, write-offs become the bad-debt ledger
+        below, and a ruling isn&rsquo;t a promise to act: it&rsquo;s the record of what we currently
+        believe about this money.
       </p>
+      {/* Full reference collapsed by default: the triage regulars stop
+          needing it after week one, but it has to exist on the page for
+          whoever inherits this queue cold. */}
+      <details className="mb-6 text-sm text-zinc-600 bg-white border border-zinc-200 rounded-xl">
+        <summary className="cursor-pointer select-none px-4 py-2.5 font-medium text-zinc-800">
+          What each ruling means — read once before your first pass
+        </summary>
+        <div className="px-4 pb-4 pt-1 space-y-2 border-t border-zinc-100">
+          <p>
+            <b className="text-emerald-700">Paid</b> — money actually arrived. Check the bank or
+            RentalWorks first, not the client&rsquo;s word. This uses the same mark-paid mechanism as
+            the rest of HQ, so the invoice leaves every collections view at once.
+          </p>
+          <p>
+            <b className="text-sky-700">Still owed</b> — real debt, actively collectible. The
+            invoice stays in Outstanding and on the chase list. This is the honest default when
+            nothing is wrong with the bill and the client simply hasn&rsquo;t paid.
+          </p>
+          <p>
+            <b className="text-orange-700">Dispute</b> — the client contests the bill, the amount is
+            in question, or you think it may never be collectible. Add a note saying who said what.
+            Dispute is also the route to a write-off if you aren&rsquo;t Wes: flag it here and he rules.
+          </p>
+          <p>
+            <b className="text-red-700">Write off</b> — we stop trying to collect. The amount leaves
+            Outstanding permanently and lands on the ledger below, which is the bad-debt list for
+            taxes — that&rsquo;s why this button is Wes-only and why every write-off needs a note.
+          </p>
+          <p className="pt-1 border-t border-zinc-100">
+            Rulings are not tattoos — deciding again replaces the earlier decision, so rule with
+            what you know today. Two badges change your first question:{' '}
+            <b>Never&nbsp;processed</b> means RentalWorks never processed the invoice, so the client
+            may never have received a bill — check RW before chasing anyone.{' '}
+            <b>Insurance</b> means we&rsquo;re waiting on a carrier, not the client — use the
+            &ldquo;insurance matter&rdquo; link on the row to tie it to a claim. And when a row shows
+            &ldquo;$X of $Y received&rdquo;, the client already paid part; you&rsquo;re ruling on the
+            remainder only.
+          </p>
+        </div>
+      </details>
 
       {loading ? (
         <div className="text-zinc-600 text-sm">Loading…</div>
