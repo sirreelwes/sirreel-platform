@@ -191,14 +191,16 @@ export async function GET() {
   // Aging buckets by days past due (falling back to invoice date). Undated
   // invoices land in the first bucket — quiet, not alarming, since their age
   // is unknown rather than known-old.
-  const rwAging = { d30: 0, d90: 0, d180: 0, over: 0 }
+  // 30/60/90 breaks (Wes, 2026-08-19) — the same lines the list's group
+  // dividers draw, so the tile bar and the list teach one scale.
+  const rwAging = { d30: 0, d60: 0, d90: 0, over: 0 }
   for (const r of rwOpenRows) {
     const basis = r.dueDate ?? r.invoiceDate
     const age = basis ? (Date.now() - basis.getTime()) / 86_400_000 : 0
     const amt = Number(r.remainingTotal)
     if (age <= 30) rwAging.d30 += amt
+    else if (age <= 60) rwAging.d60 += amt
     else if (age <= 90) rwAging.d90 += amt
-    else if (age <= 180) rwAging.d180 += amt
     else rwAging.over += amt
   }
   const rwSyncedAt = (

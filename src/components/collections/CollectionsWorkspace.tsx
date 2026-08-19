@@ -93,7 +93,7 @@ interface FinalInvoice {
 interface CollectionsStats {
   rwOpenTotal: number
   rwOpenCount: number
-  rwAging: { d30: number; d90: number; d180: number; over: number }
+  rwAging: { d30: number; d60: number; d90: number; over: number }
   rwSyncedAt: string | null
   queueCount: number
   queueTotal: number
@@ -174,13 +174,17 @@ const money = (n: number) =>
  * muted — being current is not a warning — and the palette matches the
  * aging bar in the Outstanding tile so one legend serves both.
  */
-function invoiceAge(due: string | null, inv: string | null): { days: number; cls: string } | null {
+function invoiceAge(
+  due: string | null,
+  inv: string | null,
+): { days: number; cls: string; bucket: string } | null {
   const basis = due ?? inv
   if (!basis) return null
   const days = Math.floor((Date.now() - new Date(basis).getTime()) / 86_400_000)
   const cls =
-    days > 180 ? 'text-red-400' : days > 90 ? 'text-orange-400' : days > 30 ? 'text-amber-500' : 'text-zinc-500'
-  return { days, cls }
+    days > 90 ? 'text-red-400' : days > 60 ? 'text-orange-400' : days > 30 ? 'text-amber-500' : 'text-zinc-500'
+  const bucket = days > 90 ? '90+ days' : days > 60 ? '61–90 days' : days > 30 ? '31–60 days' : 'Current (≤30d)'
+  return { days, cls, bucket }
 }
 
 export function CollectionsWorkspace({ operatorName }: { operatorName: string }) {
@@ -574,9 +578,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 {(
                   [
                     ['≤30d', stats.rwAging.d30, 'bg-zinc-500'],
-                    ['31–90d', stats.rwAging.d90, 'bg-amber-500'],
-                    ['91–180d', stats.rwAging.d180, 'bg-orange-500'],
-                    ['180d+', stats.rwAging.over, 'bg-red-500'],
+                    ['31–60d', stats.rwAging.d60, 'bg-amber-500'],
+                    ['61–90d', stats.rwAging.d90, 'bg-orange-500'],
+                    ['90d+', stats.rwAging.over, 'bg-red-500'],
                   ] as const
                 ).map(([label, amt, cls]) =>
                   amt > 0 ? (
@@ -842,40 +846,52 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             {invoices.length === 0 && (
               <div className="py-6 text-sm text-zinc-500 text-center">No invoices found.</div>
             )}
-            {invoices.map((i) => (
-              <button
-                key={i.rwInvoiceId}
-                onClick={() => {
-                  setInvoice(i)
-                  setAmount(i.remainingTotal > 0 ? String(i.remainingTotal) : '')
-                }}
-                className={`w-full text-left py-2.5 px-2 rounded transition-colors ${
-                  invoice?.rwInvoiceId === i.rwInvoiceId ? 'bg-amber-600/15' : 'hover:bg-zinc-800'
-                }`}
-              >
+            {invoices.map((i, idx) => {
+              const a = invoiceAge(i.dueDate, i.invoiceDate)
+              // Divider when the aging bucket changes — only meaningful on the
+              // default list, which the server sorts oldest-first. Search is
+              // newest-first, so buckets would interleave into noise.
+              const prev = idx > 0 ? invoiceAge(invoices[idx - 1].dueDate, invoices[idx - 1].invoiceDate) : null
+              const showDivider = !q.trim() && a && (!prev || prev.bucket !== a.bucket)
+              return (
+              <div key={i.rwInvoiceId}>
+                {showDivider && (
+                  <div className={`flex items-center gap-2 pt-2 pb-1 px-2 text-[10px] font-bold uppercase tracking-wider ${a.cls}`}>
+                    <span>{a.bucket}</span>
+                    <span className="flex-1 h-px bg-zinc-800" />
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setInvoice(i)
+                    setAmount(i.remainingTotal > 0 ? String(i.remainingTotal) : '')
+                  }}
+                  className={`w-full text-left py-2.5 px-2 rounded transition-colors ${
+                    invoice?.rwInvoiceId === i.rwInvoiceId ? 'bg-amber-600/15' : 'hover:bg-zinc-800'
+                  }`}
+                >
                 <div className="flex justify-between gap-3">
                   <span className="text-sm font-semibold text-white">
                     {i.invoiceNumber || '(no number)'}
                   </span>
-                  <span className="text-sm text-amber-500 font-semibold text-right">
+                  <span className="text-sm text-amber-500 font-semibold">
                     {money(i.remainingTotal)} due
-                    {(() => {
-                      const a = invoiceAge(i.dueDate, i.invoiceDate)
-                      return a && a.days > 0 ? (
-                        <span
-                          className={`block text-[11px] font-normal leading-tight ${a.cls}`}
-                          title={`${a.days} days past ${i.dueDate ? 'due date' : 'invoice date'}`}
-                        >
-                          {a.days}d
-                        </span>
-                      ) : null
-                    })()}
                   </span>
                 </div>
-                <div className="text-xs text-zinc-400 mt-0.5">
-                  {i.customerName || '—'}
-                  {i.dealName ? ` · ${i.dealName}` : ''}
-                  {i.status ? ` · ${i.status}` : ''}
+                <div className="flex justify-between gap-3 text-xs mt-0.5">
+                  <span className="text-zinc-400 truncate">
+                    {i.customerName || '—'}
+                    {i.dealName ? ` · ${i.dealName}` : ''}
+                    {i.status ? ` · ${i.status}` : ''}
+                  </span>
+                  {a && a.days > 0 && (
+                    <span
+                      className={`shrink-0 ${a.cls}`}
+                      title={`${a.days} days past ${i.dueDate ? 'due date' : 'invoice date'}`}
+                    >
+                      {a.days}d
+                    </span>
+                  )}
                 </div>
                 {/* Only reachable via an explicit search — the collectible
                     list filters these out. Flagged loudly because chasing an
@@ -894,8 +910,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     taken here totalling {money(i.alreadyCharged.total)}
                   </div>
                 )}
-              </button>
-            ))}
+                </button>
+              </div>
+            )})}
           </div>
         </div>
 

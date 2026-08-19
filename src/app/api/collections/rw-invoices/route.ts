@@ -57,7 +57,12 @@ export async function GET(req: NextRequest) {
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
-    orderBy: [{ invoiceDate: 'desc' }],
+    // Default list: oldest debt first — this is a worklist, and the invoice
+    // most in need of a call belongs at the top (Wes, 2026-08-19). SEARCH
+    // keeps newest-first: someone typing a number wants recency, not aging.
+    orderBy: q
+      ? [{ invoiceDate: 'desc' as const }]
+      : [{ dueDate: { sort: 'asc' as const, nulls: 'last' as const } }, { invoiceDate: 'asc' as const }],
     take: 50,
     select: {
       rwInvoiceId: true,
