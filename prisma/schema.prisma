@@ -5446,6 +5446,23 @@ model RwInvoiceTriage {
   @@map("sr_rw_invoice_triage")
 }
 
+/// "This receivable is waiting on an insurance carrier, not the client."
+/// Manual flag (Wes, 2026-08-19) — nothing in RW distinguishes the payer
+/// (every invoice is type BILLING), and the claims pod is too young to
+/// auto-link, so the person who knows sets it. Absence of a row means the
+/// default: waiting on client payment. Optional claimNumber ties it to the
+/// claims pod when one exists.
+model RwInvoiceInsuranceFlag {
+  id          String   @id @default(uuid())
+  rwInvoiceId String   @unique @map("rw_invoice_id")
+  claimNumber String?  @map("claim_number")
+  note        String?
+  flaggedById String?  @map("flagged_by_id")
+  flaggedAt   DateTime @default(now()) @map("flagged_at")
+
+  @@map("sr_rw_invoice_insurance_flags")
+}
+
 /// Links an HQ Job to a RentalWorks ORDER (by order number). One RW order
 /// has many invoices, so linking at the ORDER level rolls every current and
 /// future invoice for that order up to the job automatically.

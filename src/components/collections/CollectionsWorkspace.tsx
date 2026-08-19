@@ -49,6 +49,8 @@ interface RwInvoice {
    *  in SEARCH results — the collectible list excludes them. */
   paidMarkedAt?: string | null
   paidMarkNote?: string | null
+  /** Waiting on an insurance carrier, not the client (aging-review flag). */
+  insurance?: { claimNumber: string | null } | null
 }
 
 interface FinalInvoice {
@@ -93,6 +95,8 @@ interface FinalInvoice {
 interface CollectionsStats {
   rwOpenTotal: number
   rwOpenCount: number
+  rwInsuranceTotal: number
+  rwInsuranceCount: number
   rwAging: { d30: number; d60: number; d90: number; over: number }
   rwSyncedAt: string | null
   queueCount: number
@@ -597,6 +601,12 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
             <div className="text-xs text-zinc-400 mt-0.5">
               {stats.rwOpenCount} open invoice{stats.rwOpenCount === 1 ? '' : 's'} · per last sync
             </div>
+            {stats.rwInsuranceCount > 0 && (
+              <div className="text-xs text-violet-300 mt-0.5">
+                {money(stats.rwInsuranceTotal)} awaiting insurance ({stats.rwInsuranceCount}) ·{' '}
+                {money(stats.rwOpenTotal - stats.rwInsuranceTotal)} on clients
+              </div>
+            )}
             <div className="text-xs text-zinc-500 mt-0.5">
               {stats.queueCount === 0
                 ? 'none queued for collection yet'
@@ -886,6 +896,14 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                     {i.customerName || '—'}
                     {i.dealName ? ` · ${i.dealName}` : ''}
                     {i.status ? ` · ${i.status}` : ''}
+                    {i.insurance && (
+                      <span
+                        className="ml-1.5 text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-violet-900/40 border border-violet-700/50 text-violet-300"
+                        title={i.insurance.claimNumber ? `Carrier claim ${i.insurance.claimNumber}` : 'Awaiting insurance carrier'}
+                      >
+                        INS
+                      </span>
+                    )}
                   </span>
                   {a && a.days > 0 && (
                     <span

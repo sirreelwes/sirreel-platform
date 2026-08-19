@@ -30,6 +30,8 @@ interface Row {
   remainingTotal: number
   ageDays: number
   triage: { decision: string; note: string | null; decidedAt: string; decidedBy: string | null } | null
+  /** Waiting on an insurance carrier rather than the client. */
+  insurance: { claimNumber: string | null; note: string | null } | null
 }
 
 interface WriteOff {
@@ -79,6 +81,26 @@ export default function AgingReviewPage() {
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+
+  const toggleInsurance = useCallback(
+    async (r: Row) => {
+      const on = !r.insurance
+      let claimNumber: string | undefined
+      if (on) {
+        claimNumber = window.prompt('Carrier claim # (optional — leave blank if none yet)') ?? undefined
+        if (claimNumber === undefined) {
+          // prompt cancelled — user backed out entirely
+        }
+      }
+      await fetch('/api/collections/rw-invoices/insurance-flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId, on, claimNumber: claimNumber || undefined }),
+      })
+      load()
+    },
+    [load],
+  )
 
   const decide = useCallback(
     async (rwInvoiceId: string, decision: string, note?: string) => {
@@ -148,6 +170,14 @@ export default function AgingReviewPage() {
                     <span className={`ml-2 text-xs font-semibold ${r.ageDays > 90 ? 'text-red-400' : 'text-orange-400'}`}>
                       {r.ageDays}d
                     </span>
+                    {r.insurance && (
+                      <span
+                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-900/40 border border-violet-700/50 text-violet-300"
+                        title={r.insurance.claimNumber ? `Carrier claim ${r.insurance.claimNumber}` : 'Awaiting insurance carrier'}
+                      >
+                        Insurance{r.insurance.claimNumber ? ` · ${r.insurance.claimNumber}` : ''}
+                      </span>
+                    )}
                     <div className="text-xs text-zinc-400 mt-0.5 truncate">
                       {r.customerName || '—'}
                       {r.dealName ? ` · ${r.dealName}` : ''}
@@ -162,6 +192,14 @@ export default function AgingReviewPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm text-amber-500 font-semibold">{money(r.remainingTotal)}</div>
+                    <span
+                      role="button"
+                      onClick={() => void toggleInsurance(r)}
+                      className="text-[11px] text-zinc-500 hover:text-violet-300 cursor-pointer"
+                      title={r.insurance ? 'Unmark — this is back to waiting on the client' : 'Mark as waiting on an insurance carrier'}
+                    >
+                      {r.insurance ? 'not insurance' : 'insurance?'}
+                    </span>
                   </div>
                 </div>
 

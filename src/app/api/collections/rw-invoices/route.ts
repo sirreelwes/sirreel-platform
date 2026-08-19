@@ -36,6 +36,10 @@ export async function GET(req: NextRequest) {
       select: { rwInvoiceId: true },
     })
   ).map((t) => t.rwInvoiceId)
+  const insuranceFlags = await prisma.rwInvoiceInsuranceFlag.findMany({
+    select: { rwInvoiceId: true, claimNumber: true },
+  })
+  const insuranceBy = new Map(insuranceFlags.map((f) => [f.rwInvoiceId, f]))
   const paidMarks = await prisma.rwInvoicePaidMark.findMany({
     select: { rwInvoiceId: true, markedAt: true, note: true },
   })
@@ -116,8 +120,10 @@ export async function GET(req: NextRequest) {
     syncedAt: freshest._max.syncedAt ?? null,
     invoices: invoices.map((i) => {
       const mark = paidMarkById.get(i.rwInvoiceId)
+      const ins = insuranceBy.get(i.rwInvoiceId)
       return {
         ...i,
+        insurance: ins ? { claimNumber: ins.claimNumber } : null,
         invoiceTotal: Number(i.invoiceTotal),
         receivedTotal: Number(i.receivedTotal),
         remainingTotal: Number(i.remainingTotal),

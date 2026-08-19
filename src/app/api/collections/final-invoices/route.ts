@@ -195,8 +195,17 @@ export async function GET() {
   // 1,197 of them carried $2.0M and made the receivable read 15x reality.
   const rwOpenRows = await prisma.rwInvoice.findMany({
     where: { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarked }, NOT: { status: 'VOID' } },
-    select: { remainingTotal: true, dueDate: true, invoiceDate: true },
+    select: { rwInvoiceId: true, remainingTotal: true, dueDate: true, invoiceDate: true },
   })
+  // Split the receivable by payer: flagged rows wait on an insurance
+  // carrier, everything else waits on the client. Different chases.
+  const insuranceIds = new Set(
+    (await prisma.rwInvoiceInsuranceFlag.findMany({ select: { rwInvoiceId: true } })).map(
+      (f) => f.rwInvoiceId,
+    ),
+  )
+  const insuranceRows = rwOpenRows.filter((r) => insuranceIds.has(r.rwInvoiceId))
+  const rwInsuranceTotal = insuranceRows.reduce((s, r) => s + Number(r.remainingTotal), 0)
   const rwOpenTotalNum = rwOpenRows.reduce((s, r) => s + Number(r.remainingTotal), 0)
   // Aging buckets by days past due (falling back to invoice date). Undated
   // invoices land in the first bucket — quiet, not alarming, since their age
@@ -272,6 +281,8 @@ export async function GET() {
     stats: {
       rwOpenTotal: rwOpenTotalNum,
       rwOpenCount: rwOpenRows.length,
+      rwInsuranceTotal,
+      rwInsuranceCount: insuranceRows.length,
       rwAging,
       rwSyncedAt: rwSyncedAt ?? null,
       queueCount: ready.length,

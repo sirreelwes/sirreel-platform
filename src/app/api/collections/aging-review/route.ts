@@ -80,6 +80,11 @@ export async function GET() {
     .filter((r) => r.ageDays !== null && r.ageDays > MIN_AGE_DAYS)
     .sort((a, b) => b.ageDays! - a.ageDays! || b.remainingTotal - a.remainingTotal)
 
+  const insurance = await prisma.rwInvoiceInsuranceFlag.findMany({
+    select: { rwInvoiceId: true, claimNumber: true, note: true },
+  })
+  const insuranceBy = new Map(insurance.map((f) => [f.rwInvoiceId, f]))
+
   const triage = await prisma.rwInvoiceTriage.findMany({
     select: {
       rwInvoiceId: true,
@@ -119,10 +124,12 @@ export async function GET() {
     canWriteOff: canWriteOff(user.email),
     rows: aged.map((r) => {
       const t = byInvoice.get(r.rwInvoiceId)
+      const ins = insuranceBy.get(r.rwInvoiceId)
       return {
         ...r,
         invoiceDate: r.invoiceDate?.toISOString() ?? null,
         dueDate: r.dueDate?.toISOString() ?? null,
+        insurance: ins ? { claimNumber: ins.claimNumber, note: ins.note } : null,
         triage: t
           ? {
               decision: t.decision,
