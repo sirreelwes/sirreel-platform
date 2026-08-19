@@ -61,10 +61,41 @@ interface FinalInvoice {
   jobCode: string | null
   companyName: string | null
   alreadyCharged: number
+  uploadedAt: string
   /** Payment-options email state — null emailedAt means the client has NOT
    *  been told how to pay, which is the first thing Ana needs to see. */
   emailedAt: string | null
   emailedTo: string | null
+  /** First inbound email from the emailed address after the send. Conservative
+   *  by design — an AP colleague replying from another address won't show. */
+  repliedAt: string | null
+  replySubject: string | null
+  status: string
+  collectedAt: string | null
+  collectedVia: string | null
+  collectedBy: string | null
+  /** RW mirror balance for the linked invoice — 0 on a READY row means the
+   *  money likely already landed at the bank. */
+  rwRemaining: number | null
+  ageDays: number
+}
+
+interface CollectionsStats {
+  queueCount: number
+  queueTotal: number
+  queueOldestDays: number
+  queueEmailed: number
+  collectedMonthCount: number
+  collectedMonthTotal: number
+  avgDaysToCollect: number | null
+  operators: Array<{
+    name: string
+    chargesAttempted: number
+    chargesApproved: number
+    chargedTotal: number
+    invoicesCollected: number
+    collectedTotal: number
+  }>
 }
 
 interface ChargeRow {
@@ -128,6 +159,11 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const [auths, setAuths] = useState<Authorization[]>([])
   const [invoices, setInvoices] = useState<RwInvoice[]>([])
   const [finals, setFinals] = useState<FinalInvoice[]>([])
+  const [collectedRows, setCollectedRows] = useState<FinalInvoice[]>([])
+  const [stats, setStats] = useState<CollectionsStats | null>(null)
+  /** id of the row whose Mark-collected method picker is open */
+  const [collectPicker, setCollectPicker] = useState<string | null>(null)
+  const [collecting, setCollecting] = useState(false)
   const [finalPick, setFinalPick] = useState<FinalInvoice | null>(null)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [reversing, setReversing] = useState<string | null>(null)
@@ -181,9 +217,44 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
   const loadFinals = useCallback(() => {
     fetch('/api/collections/final-invoices')
       .then((r) => r.json())
-      .then((d) => d.ok && setFinals(d.finalInvoices ?? []))
+      .then((d) => {
+        if (!d.ok) return
+        setFinals(d.finalInvoices ?? [])
+        setCollectedRows(d.collected ?? [])
+        setStats(d.stats ?? null)
+      })
       .catch(() => {})
   }, [])
+
+  // Record money that arrived OUTSIDE HQ — wire, ACH push, Zelle, check.
+  // Card collections stamp themselves in the charge route; this action is for
+  // everything the bank sees before we do.
+  const markCollected = useCallback(
+    async (fv: FinalInvoice, via: string) => {
+      if (collecting) return
+      setCollecting(true)
+      try {
+        const r = await fetch(`/api/collections/final-invoices/${fv.id}/collect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ via }),
+        })
+        const d = await r.json()
+        if (d.ok) {
+          setResult({ ok: true, message: `${fv.invoiceNumber || fv.jobName || 'Invoice'} marked collected via ${via.toLowerCase()}.` })
+          setCollectPicker(null)
+          loadFinals()
+        } else {
+          setResult({ ok: false, message: d.error || 'Could not mark collected.' })
+        }
+      } catch {
+        setResult({ ok: false, message: 'Could not mark collected — network error.' })
+      } finally {
+        setCollecting(false)
+      }
+    },
+    [collecting, loadFinals],
+  )
 
   // Payment-options (re)send for a queued final invoice. Same code path as
   // the automatic send on upload — a resend is a fresh copy, not a replay.
@@ -454,10 +525,55 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
         <div>
           <h1 className="text-2xl font-bold text-white">Collections</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Take a card payment against a RentalWorks invoice. Signed in as {operatorName}.
+            Everything owed and everything collected — charge a card, send payment options, mark money received. Signed in as {operatorName}.
           </p>
         </div>
       </div>
+
+      {/* ── tracker stats — stamped rows only, no vibes ─────────────── */}
+      {stats && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Outstanding</div>
+            <div className="text-xl font-bold text-amber-500">{money(stats.queueTotal)}</div>
+            <div className="text-xs text-zinc-400 mt-0.5">
+              {stats.queueCount} invoice{stats.queueCount === 1 ? '' : 's'}
+              {stats.queueCount > 0 && ` · oldest ${stats.queueOldestDays}d`}
+            </div>
+            {stats.queueCount > stats.queueEmailed && (
+              <div className="text-xs text-orange-400 mt-0.5">
+                {stats.queueCount - stats.queueEmailed} not yet emailed
+              </div>
+            )}
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Collected this month</div>
+            <div className="text-xl font-bold text-emerald-500">{money(stats.collectedMonthTotal)}</div>
+            <div className="text-xs text-zinc-400 mt-0.5">
+              {stats.collectedMonthCount} invoice{stats.collectedMonthCount === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Avg days to collect</div>
+            <div className="text-xl font-bold text-white">{stats.avgDaysToCollect ?? '—'}</div>
+            <div className="text-xs text-zinc-500 mt-0.5">upload → money in, last 60 days</div>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">This week</div>
+            {stats.operators.length === 0 ? (
+              <div className="text-sm text-zinc-500 mt-1">No collections activity yet.</div>
+            ) : (
+              stats.operators.map((op) => (
+                <div key={op.name} className="text-xs text-zinc-300 mt-0.5">
+                  <span className="font-semibold text-white">{op.name}</span>
+                  {' — '}{op.invoicesCollected} collected ({money(op.collectedTotal)})
+                  {op.chargesAttempted > 0 && `, ${op.chargesApproved}/${op.chargesAttempted} charges approved`}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr] items-start">
         {/* ── invoices ─────────────────────────────────────────── */}
@@ -519,18 +635,35 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       ⚠ {money(fv.alreadyCharged)} already collected against this invoice
                     </div>
                   )}
-                  {/* Payment-options email state. Unsent is the loud case —
-                      the client has the number but not the how-to-pay. */}
-                  <div className="flex items-center justify-between gap-2 mt-1">
+                  {/* Money may already be in: the RW mirror shows a zero
+                      balance on the linked invoice. Ana confirms and marks it
+                      rather than chasing a client who already paid. */}
+                  {fv.rwRemaining === 0 && (
+                    <div className="text-xs text-emerald-400 mt-1 font-semibold">
+                      ✓ RentalWorks shows this invoice PAID — confirm and mark collected
+                    </div>
+                  )}
+                  {/* The row's story: age → emailed → replied. Unsent is the
+                      loud case — the client has the number but no how-to-pay. */}
+                  <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
+                    <span className={`text-xs ${fv.ageDays >= 14 ? 'text-red-400 font-semibold' : fv.ageDays >= 7 ? 'text-amber-500' : 'text-zinc-500'}`}>
+                      {fv.ageDays === 0 ? 'today' : `${fv.ageDays}d in queue`}
+                    </span>
                     {fv.emailedAt ? (
-                      <span className="text-xs text-emerald-500/90">
-                        ✓ Payment options emailed to {fv.emailedTo}
-                      </span>
+                      <span className="text-xs text-emerald-500/90">✓ emailed {fv.emailedTo}</span>
                     ) : (
-                      <span className="text-xs text-orange-400">
-                        Payment options NOT emailed
+                      <span className="text-xs text-orange-400 font-semibold">NOT emailed</span>
+                    )}
+                    {fv.repliedAt && (
+                      <span
+                        className="text-xs text-sky-400"
+                        title={fv.replySubject ?? undefined}
+                      >
+                        ↩ replied {new Date(fv.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
                     <span
                       role="button"
                       onClick={(e) => {
@@ -539,14 +672,80 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                       }}
                       className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800 cursor-pointer shrink-0"
                     >
-                      {sendingOptions === fv.id ? 'Sending…' : fv.emailedAt ? 'Resend' : 'Send now'}
+                      {sendingOptions === fv.id ? 'Sending…' : fv.emailedAt ? 'Resend options' : 'Send options'}
                     </span>
+                    {collectPicker === fv.id ? (
+                      <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {['WIRE', 'ACH', 'ZELLE', 'CHECK', 'OTHER'].map((via) => (
+                          <span
+                            key={via}
+                            role="button"
+                            onClick={() => void markCollected(fv, via)}
+                            className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-800/50 cursor-pointer"
+                          >
+                            {collecting ? '…' : via}
+                          </span>
+                        ))}
+                        <span
+                          role="button"
+                          onClick={() => setCollectPicker(null)}
+                          className="text-[11px] px-1.5 py-0.5 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                        >
+                          ✕
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCollectPicker(fv.id)
+                        }}
+                        className="text-xs px-2 py-0.5 rounded border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 cursor-pointer shrink-0"
+                        title="Record a payment that arrived at the bank — wire, ACH, Zelle, or check. Card charges record themselves."
+                      >
+                        Mark collected
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
             </div>
           )}
         </div>
+
+        {/* Collected — the other half of tracking. When, how, by whom, so
+            "did that wire ever land" is answered here, not in the bank app. */}
+        {collectedRows.length > 0 && (
+          <div className="bg-zinc-900 border border-emerald-900/50 rounded-xl p-5">
+            <h2 className="text-sm font-bold text-white mb-1">Collected</h2>
+            <p className="text-xs text-zinc-400 mb-3">Last 60 days, newest first.</p>
+            <div className="divide-y divide-zinc-800 max-h-[220px] overflow-y-auto">
+              {collectedRows.map((cv) => (
+                <div key={cv.id} className="py-2.5 px-2">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-sm font-semibold text-white">
+                      {cv.jobName || cv.invoiceNumber || 'Final invoice'}
+                    </span>
+                    <span className="text-sm text-emerald-500 font-semibold">{money(cv.amount)}</span>
+                  </div>
+                  <div className="text-xs text-zinc-400 mt-0.5">
+                    {cv.companyName || '—'}
+                    {cv.invoiceNumber ? ` · ${cv.invoiceNumber}` : ''}
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    ✓ {cv.collectedVia ? cv.collectedVia.toLowerCase() : 'collected'}
+                    {cv.collectedAt &&
+                      ` · ${new Date(cv.collectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                    {cv.collectedBy && ` · by ${cv.collectedBy}`}
+                    {cv.collectedAt &&
+                      ` · ${Math.max(0, Math.round((new Date(cv.collectedAt).getTime() - new Date(cv.uploadedAt).getTime()) / 86_400_000))}d to collect`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5">
           <div className="flex items-baseline justify-between gap-3 mb-3">

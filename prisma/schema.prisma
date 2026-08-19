@@ -5446,6 +5446,13 @@ model JobFinalInvoice {
   /// been told how to pay.
   emailedAt     DateTime? @map("emailed_at")
   emailedTo     String?   @map("emailed_to")
+  /// How the money actually arrived, stamped when status flips COLLECTED.
+  /// CARD is stamped by the charge route; WIRE/ACH/ZELLE/CHECK/OTHER by the
+  /// Mark-collected action, because those arrive at the bank, not through HQ.
+  /// String, not an enum — same interim-model reasoning as `status`.
+  collectedAt   DateTime? @map("collected_at")
+  collectedVia  String?   @map("collected_via")
+  collectedById String?   @map("collected_by_id")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
