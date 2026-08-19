@@ -163,35 +163,35 @@ export default function AgingReviewPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-semibold text-white">Aging Review</h1>
-      <p className="text-sm text-zinc-400 mt-1 mb-6">
+      <h1 className="text-2xl font-semibold text-zinc-900">Aging Review</h1>
+      <p className="text-sm text-zinc-600 mt-1 mb-6">
         Every open invoice past 60 days, oldest first. Rule on each one — decisions feed the
         Outstanding number, and write-offs become the bad-debt ledger below.
       </p>
 
       {loading ? (
-        <div className="text-zinc-500 text-sm">Loading…</div>
+        <div className="text-zinc-600 text-sm">Loading…</div>
       ) : (
         <>
-          <div className="text-xs text-zinc-400 mb-4">
+          <div className="text-xs text-zinc-600 mb-4">
             {rows.length} invoice{rows.length === 1 ? '' : 's'} past 60 days ·{' '}
             {undecided.length} undecided ({money(undecidedTotal)})
           </div>
 
           {matterResult && (
-            <div className="flex items-center justify-between gap-3 bg-violet-900/20 border border-violet-700/50 rounded-xl px-4 py-2.5 mb-4 text-sm text-violet-200">
+            <div className="flex items-center justify-between gap-3 bg-violet-50 border border-violet-300 rounded-xl px-4 py-2.5 mb-4 text-sm text-violet-900">
               <span>{matterResult.text}</span>
               <span className="flex items-center gap-3 shrink-0">
                 {matterResult.claimId ? (
-                  <a href={`/claims/${matterResult.claimId}`} className="font-semibold text-violet-300 hover:text-violet-100 underline">
+                  <a href={`/claims/${matterResult.claimId}`} className="font-semibold text-violet-700 hover:text-violet-900 underline">
                     Open claim →
                   </a>
                 ) : matterResult.kind === 'ambiguous' ? (
-                  <a href="/claims" className="font-semibold text-violet-300 hover:text-violet-100 underline">
+                  <a href="/claims" className="font-semibold text-violet-700 hover:text-violet-900 underline">
                     Claims →
                   </a>
                 ) : null}
-                <span role="button" onClick={() => setMatterResult(null)} className="text-violet-400 hover:text-violet-200 cursor-pointer">✕</span>
+                <span role="button" onClick={() => setMatterResult(null)} className="text-violet-500 hover:text-violet-800 cursor-pointer">✕</span>
               </span>
             </div>
           )}
