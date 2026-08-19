@@ -78,6 +78,15 @@ interface FinalInvoice {
    *  money likely already landed at the bank. */
   rwRemaining: number | null
   ageDays: number
+  /** Client payment behavior — observed days-to-pay ramps from 2026-08-18;
+   *  open exposure is live from the mirror. */
+  client: {
+    avgDaysToPay: number | null
+    observedPayments: number
+    openTotal: number
+    openCount: number
+    oldestOpenDays: number | null
+  } | null
 }
 
 interface CollectionsStats {
@@ -670,6 +679,24 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                         title={fv.replySubject ?? undefined}
                       >
                         ↩ replied {new Date(fv.repliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                    {/* Payment-behavior chip. Latency shows once observed
+                        (n=sample size); until then, current exposure. */}
+                    {fv.client && fv.client.avgDaysToPay !== null && (
+                      <span
+                        className={`text-xs ${fv.client.avgDaysToPay >= 45 ? 'text-red-400' : fv.client.avgDaysToPay >= 30 ? 'text-amber-500' : 'text-zinc-400'}`}
+                        title={`${fv.client.observedPayments} observed payment(s)`}
+                      >
+                        client avg {fv.client.avgDaysToPay}d to pay
+                      </span>
+                    )}
+                    {fv.client && fv.client.avgDaysToPay === null && fv.client.openCount > 1 && (
+                      <span className="text-xs text-zinc-500">
+                        client: {fv.client.openCount} open ({money(fv.client.openTotal)})
+                        {fv.client.oldestOpenDays !== null && fv.client.oldestOpenDays > 30
+                          ? ` · oldest ${fv.client.oldestOpenDays}d`
+                          : ''}
                       </span>
                     )}
                   </div>

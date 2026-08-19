@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireCollectionsUser } from '@/lib/collections/access'
+import { clientPaymentBehavior } from '@/lib/payments/clientPaymentBehavior'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,6 +107,13 @@ export async function GET() {
     if (!firstReply.has(addr)) firstReply.set(addr, { at: m.sentAt, subject: m.subject })
   }
 
+  // Per-client payment behavior for the queue — "this client averages Nd"
+  // is the difference between a routine follow-up and a terms conversation.
+  const clientNames = [
+    ...new Set(ready.map((r) => r.job.company?.name).filter((v): v is string => !!v)),
+  ]
+  const behavior = await clientPaymentBehavior(clientNames)
+
   // Names for collected-by attribution.
   const byIds = [...new Set(rows.map((r) => r.collectedById).filter((v): v is string => !!v))]
   const users = byIds.length
@@ -140,6 +148,20 @@ export async function GET() {
       jobCode: r.job.jobCode,
       companyName: r.job.company?.name ?? null,
       alreadyCharged: r.rwInvoiceId ? (charged.get(r.rwInvoiceId) ?? 0) : 0,
+      client: r.job.company?.name
+        ? (() => {
+            const b = behavior.get(r.job.company.name.trim().toLowerCase())
+            return b
+              ? {
+                  avgDaysToPay: b.avgDaysToPay,
+                  observedPayments: b.observedPayments,
+                  openTotal: b.openTotal,
+                  openCount: b.openCount,
+                  oldestOpenDays: b.oldestOpenDays,
+                }
+              : null
+          })()
+        : null,
     }
   }
 

@@ -5384,6 +5384,38 @@ model RwInvoice {
   @@map("sr_rw_invoices")
 }
 
+/// The payment EVENT the RW mirror cannot express. The mirror is deleted and
+/// recreated on every sync, so "when did this invoice get paid" is knowable
+/// only by noticing the transition: a nightly sync where remaining hits zero
+/// on an invoice that had a balance. One row per invoice, written the first
+/// sync that sees it paid, carrying snapshots (the mirror row it describes
+/// will be dropped on the next sync).
+///
+/// This is the feedstock for days-to-pay per client. observedPaidAt is at
+/// sync granularity (~daily) — good enough for payment-behavior metrics,
+/// useless for intraday anything.
+///
+/// preTracking: rows seeded when tracking began (2026-08-18) for invoices
+/// ALREADY paid — their true payment date is unknown, so they are excluded
+/// from latency math but must exist so later syncs don't "observe" them
+/// freshly and pollute the metric with garbage dates.
+model RwInvoicePaidObservation {
+  id             String    @id @default(uuid())
+  rwInvoiceId    String    @unique @map("rw_invoice_id")
+  invoiceNumber  String?   @map("invoice_number")
+  customerName   String?   @map("customer_name")
+  rwCustomerId   String?   @map("rw_customer_id")
+  invoiceDate    DateTime? @map("invoice_date")
+  dueDate        DateTime? @map("due_date")
+  invoiceTotal   Decimal   @default(0) @db.Decimal(12, 2) @map("invoice_total")
+  observedPaidAt DateTime  @default(now()) @map("observed_paid_at")
+  preTracking    Boolean   @default(false) @map("pre_tracking")
+
+  @@index([customerName])
+  @@index([observedPaidAt])
+  @@map("sr_rw_invoice_paid_observations")
+}
+
 /// Links an HQ Job to a RentalWorks ORDER (by order number). One RW order
 /// has many invoices, so linking at the ORDER level rolls every current and
 /// future invoice for that order up to the job automatically.
