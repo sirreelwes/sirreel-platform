@@ -158,7 +158,9 @@ export async function GET() {
     await prisma.rwInvoicePaidMark.findMany({ select: { rwInvoiceId: true } })
   ).map((m) => m.rwInvoiceId)
   const rwOpenAgg = await prisma.rwInvoice.aggregate({
-    where: { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarked } },
+    // NOT VOID: RW keeps remainingTotal populated on voided invoices — 1,197
+    // of them carried $2.0M and made the receivable read 15x reality.
+    where: { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarked }, NOT: { status: 'VOID' } },
     _sum: { remainingTotal: true },
     _count: true,
   })

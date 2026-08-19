@@ -47,7 +47,13 @@ export async function GET(req: NextRequest) {
       // excluded. An explicit SEARCH still returns them — flagged — because
       // someone looking up a specific number needs to find it, and a mark
       // made in error must stay visible rather than vanishing.
-    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarkedIds } }
+      //
+      // VOID is excluded the same way (found 2026-08-18: 1,197 voided
+      // invoices carried $2.0M of remainingTotal — RW keeps the balance
+      // populated on a void, so "remaining > 0" alone offered Ana cancelled
+      // obligations to charge cards against). Search still surfaces them,
+      // with the status visible on the row.
+    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarkedIds }, NOT: { status: 'VOID' } }
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
