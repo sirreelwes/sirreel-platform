@@ -9,9 +9,9 @@
  * write-off ledger at the bottom, which is the bad-debt list for taxes with
  * decided dates and amounts.
  *
- * "Mark paid" is a link to the existing collections flow rather than a
- * fourth button here — paid already has a mechanism (RwInvoicePaidMark) and
- * a second one would drift.
+ * "Mark paid" is inline but goes through the EXISTING mark-paid route
+ * (RwInvoicePaidMark) — one mechanism for "paid", surfaced here too.
+ * Write off is Wes-only (server-enforced; the button follows).
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -53,11 +53,13 @@ const DECISION_LABEL: Record<string, string> = {
   STILL_OWED: 'Still owed',
   DISPUTE: 'Dispute',
   WRITE_OFF: 'Write off',
+  PAID: 'Paid',
 }
 
 export default function AgingReviewPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [writeOffs, setWriteOffs] = useState<WriteOff[]>([])
+  const [canWriteOff, setCanWriteOff] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [noteFor, setNoteFor] = useState<string | null>(null)
@@ -71,6 +73,7 @@ export default function AgingReviewPage() {
         if (d.ok) {
           setRows(d.rows ?? [])
           setWriteOffs(d.writeOffs ?? [])
+          setCanWriteOff(d.canWriteOff === true)
         }
       })
       .finally(() => setLoading(false))
@@ -81,11 +84,20 @@ export default function AgingReviewPage() {
     async (rwInvoiceId: string, decision: string, note?: string) => {
       setSaving(rwInvoiceId)
       try {
-        const r = await fetch('/api/collections/aging-review', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rwInvoiceId, decision, note }),
-        })
+        // PAID goes through the one mechanism that already exists for it —
+        // the row then leaves this list because paid-marks are excluded.
+        const r =
+          decision === 'PAID'
+            ? await fetch('/api/rentalworks/invoices/mark-paid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rwInvoiceId, note }),
+              })
+            : await fetch('/api/collections/aging-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rwInvoiceId, decision, note }),
+              })
         if ((await r.json()).ok) {
           setNoteFor(null)
           setNoteDraft('')
@@ -162,13 +174,15 @@ export default function AgingReviewPage() {
                       {r.triage.decidedBy ?? 'someone'} · {new Date(r.triage.decidedAt).toLocaleDateString()}
                       {r.triage.note ? ` — ${r.triage.note}` : ''}
                     </span>
-                    <span
-                      role="button"
-                      onClick={() => decide(r.rwInvoiceId, 'CLEAR')}
-                      className="text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
-                    >
-                      undo
-                    </span>
+                    {(r.triage.decision !== 'WRITE_OFF' || canWriteOff) && (
+                      <span
+                        role="button"
+                        onClick={() => decide(r.rwInvoiceId, 'CLEAR')}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                      >
+                        undo
+                      </span>
+                    )}
                   </div>
                 ) : noteFor === r.rwInvoiceId ? (
                   <div className="flex items-center gap-2 mt-2">
@@ -179,7 +193,9 @@ export default function AgingReviewPage() {
                       placeholder={
                         pendingDecision === 'WRITE_OFF'
                           ? 'Why is this uncollectible? (goes in the tax record)'
-                          : 'Note (optional)'
+                          : pendingDecision === 'PAID'
+                            ? 'How was it paid? wire ref / check # (optional)'
+                            : 'Note (optional)'
                       }
                       className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
                       onKeyDown={(e) => {
@@ -199,8 +215,8 @@ export default function AgingReviewPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 mt-2">
-                    {(['STILL_OWED', 'DISPUTE', 'WRITE_OFF'] as const).map((d) => (
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {(['PAID', 'STILL_OWED', 'DISPUTE'] as const).map((d) => (
                       <button
                         key={d}
                         onClick={() => {
@@ -208,18 +224,31 @@ export default function AgingReviewPage() {
                           setPendingDecision(d)
                           setNoteDraft('')
                         }}
-                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border cursor-pointer hover:brightness-125 ${DECISION_STYLE[d]}`}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border cursor-pointer hover:brightness-125 ${
+                          d === 'PAID'
+                            ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
+                            : DECISION_STYLE[d]
+                        }`}
                       >
                         {DECISION_LABEL[d]}
                       </button>
                     ))}
-                    <a
-                      href="/collections"
-                      className="text-[11px] text-zinc-500 hover:text-zinc-300 ml-1"
-                      title="Paid invoices are marked through the main collections page"
-                    >
-                      paid? → collections
-                    </a>
+                    {canWriteOff ? (
+                      <button
+                        onClick={() => {
+                          setNoteFor(r.rwInvoiceId)
+                          setPendingDecision('WRITE_OFF')
+                          setNoteDraft('')
+                        }}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded border cursor-pointer hover:brightness-125 ${DECISION_STYLE.WRITE_OFF}`}
+                      >
+                        Write off
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-zinc-600" title="A write-off is a tax event — flag it as Dispute and Wes will rule on it.">
+                        write-off: Wes only
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

@@ -26,6 +26,16 @@ export const dynamic = 'force-dynamic'
 const DECISIONS = ['STILL_OWED', 'DISPUTE', 'WRITE_OFF', 'CLEAR'] as const
 const MIN_AGE_DAYS = 60
 
+/**
+ * Who may write off a debt — and undo a write-off. A write-off is a tax
+ * event with the owner's name on the filing, so it is the owner's call
+ * (Wes, 2026-08-19). Explicit email allowlist, same pattern and reasoning
+ * as the collections allowlist: the blast radius stays with the person
+ * actually named, not a role someone might be granted later.
+ */
+const WRITE_OFF_AUTHORIZED = ['wes@sirreel.com']
+const canWriteOff = (email: string) => WRITE_OFF_AUTHORIZED.includes(email.toLowerCase())
+
 export async function GET() {
   const user = await requireCollectionsUser()
   if (!user) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 403 })
@@ -106,6 +116,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    canWriteOff: canWriteOff(user.email),
     rows: aged.map((r) => {
       const t = byInvoice.get(r.rwInvoiceId)
       return {
@@ -148,7 +159,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (decision === 'WRITE_OFF' && !canWriteOff(user.email)) {
+    return NextResponse.json(
+      { ok: false, error: 'Only Wes can write off a debt — flag it as Dispute or Still owed and he will rule on it.' },
+      { status: 403 },
+    )
+  }
+  // A write-off requires substance for the tax record.
+  if (decision === 'WRITE_OFF' && !note) {
+    return NextResponse.json(
+      { ok: false, error: 'A write-off needs a note — why is this uncollectible?' },
+      { status: 400 },
+    )
+  }
+
   if (decision === 'CLEAR') {
+    // Undoing a WRITE_OFF is the same authority as making one — otherwise
+    // the gate above is decoration.
+    const existing = await prisma.rwInvoiceTriage.findUnique({
+      where: { rwInvoiceId },
+      select: { decision: true },
+    })
+    if (existing?.decision === 'WRITE_OFF' && !canWriteOff(user.email)) {
+      return NextResponse.json(
+        { ok: false, error: 'Only Wes can undo a write-off.' },
+        { status: 403 },
+      )
+    }
     await prisma.rwInvoiceTriage.deleteMany({ where: { rwInvoiceId } })
     return NextResponse.json({ ok: true, cleared: true })
   }

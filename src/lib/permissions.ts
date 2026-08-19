@@ -357,23 +357,33 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
-        { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
-        { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
-        // Narrow exception to "every tab visible to all": this one takes
-        // client money, so showing it to Julian or Oliver would only offer a
-        // tab that dead-ends in a redirect. Same predicate as the page gate
-        // (src/lib/collections/allowlist.ts) so the two can't drift.
-        //
-        // NB the section comment above cites the HR entry as an email-gated
-        // precedent — it isn't; /hr is currently listed unconditionally. The
-        // fleet "Today" entry is the real precedent for conditional items.
-        ...(canUseCollections(navRole, navEmail)
-          ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
-          : []),
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'paperwork', label: 'Paperwork tools', icon: 'FileSignature', href: '/admin/paperwork' },
+      ],
+    },
+    {
+      // Money in one place (Wes, 2026-08-19): everything about invoicing,
+      // collecting, and reconciling against RentalWorks, plus Incidents —
+      // which live here because a damage claim is a billing event by the
+      // time anyone opens HQ for it.
+      label: 'Billing & Collections',
+      items: [
+        // Narrow exception to "every tab visible to all": this one takes
+        // client money, so showing it to Julian or Oliver would only offer a
+        // tab that dead-ends in a redirect. Same predicate as the page gate
+        // (src/lib/collections/allowlist.ts) so the two can't drift.
+        ...(canUseCollections(navRole, navEmail)
+          ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
+          : []),
+        { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
+        { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
+        // Moved out of Admin: the sync IS a collections concern — when it
+        // stops, every balance on these pages is stale. Still linked from
+        // the rw_sync_failure alert.
+        { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
+        { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
       ],
     },
     {
@@ -397,12 +407,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       ],
     },
     {
-      label: 'Claims',
-      items: [
-        { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
-      ],
-    },
-    {
       label: 'COO',
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
@@ -420,10 +424,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },
         { id: 'locations', label: 'Locations', icon: 'MapPin', href: '/admin/locations' },
         { id: 'health', label: 'Health', icon: 'Activity', href: '/admin/health' },
-        // Where the rw_sync_failure alert links. Listed
-        // here too so the mirror's freshness is reachable before an alert
-        // fires, not only after someone clicks one.
-        { id: 'rw-invoice-sync', label: 'RW Invoice Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },
         { id: 'assistant', label: 'Assistant', icon: 'Bot', href: '/admin/assistant' },
         { id: 'who-we-are', label: 'Who We Are', icon: 'Users', href: '/admin/who-we-are' },
