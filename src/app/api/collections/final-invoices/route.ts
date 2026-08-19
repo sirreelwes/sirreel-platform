@@ -149,6 +149,23 @@ export async function GET() {
   monthStart.setDate(1)
   monthStart.setHours(0, 0, 0, 0)
 
+  // The real receivable: every RW invoice with a balance, minus the ones
+  // already marked paid in HQ — the SAME definition the browse list uses, so
+  // the tile always equals what the list sums. The agent-curated queue is a
+  // subset; leading with it made "Outstanding" read $0 while RW showed money
+  // owed everywhere (Wes, 2026-08-18).
+  const paidMarked = (
+    await prisma.rwInvoicePaidMark.findMany({ select: { rwInvoiceId: true } })
+  ).map((m) => m.rwInvoiceId)
+  const rwOpenAgg = await prisma.rwInvoice.aggregate({
+    where: { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarked } },
+    _sum: { remainingTotal: true },
+    _count: true,
+  })
+  const rwSyncedAt = (
+    await prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } })
+  )?.syncedAt
+
   const [chargesWeek, collectedMonthAgg, collectedWeek] = await Promise.all([
     prisma.rwCollectionCharge.findMany({
       where: { chargedAt: { gte: weekAgo } },
@@ -202,6 +219,9 @@ export async function GET() {
     finalInvoices: ready.map(shape),
     collected: collected.map(shape),
     stats: {
+      rwOpenTotal: Number(rwOpenAgg._sum.remainingTotal ?? 0),
+      rwOpenCount: rwOpenAgg._count,
+      rwSyncedAt: rwSyncedAt ?? null,
       queueCount: ready.length,
       queueTotal,
       queueOldestDays: ready.length

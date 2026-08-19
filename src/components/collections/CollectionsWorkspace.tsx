@@ -81,6 +81,9 @@ interface FinalInvoice {
 }
 
 interface CollectionsStats {
+  rwOpenTotal: number
+  rwOpenCount: number
+  rwSyncedAt: string | null
   queueCount: number
   queueTotal: number
   queueOldestDays: number
@@ -534,15 +537,22 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
       {stats && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-6">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Outstanding</div>
-            <div className="text-xl font-bold text-amber-500">{money(stats.queueTotal)}</div>
+            {/* The REAL receivable — every open RW invoice not marked paid,
+                same definition as the browse list below. The agent queue is
+                the second line: it is the worked subset, not the total. */}
+            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Outstanding (RW)</div>
+            <div className="text-xl font-bold text-amber-500">{money(stats.rwOpenTotal)}</div>
             <div className="text-xs text-zinc-400 mt-0.5">
-              {stats.queueCount} invoice{stats.queueCount === 1 ? '' : 's'}
-              {stats.queueCount > 0 && ` · oldest ${stats.queueOldestDays}d`}
+              {stats.rwOpenCount} open invoice{stats.rwOpenCount === 1 ? '' : 's'} · per last sync
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              {stats.queueCount === 0
+                ? 'none queued for collection yet'
+                : `${stats.queueCount} in queue (${money(stats.queueTotal)})${stats.queueCount > 0 ? ` · oldest ${stats.queueOldestDays}d` : ''}`}
             </div>
             {stats.queueCount > stats.queueEmailed && (
               <div className="text-xs text-orange-400 mt-0.5">
-                {stats.queueCount - stats.queueEmailed} not yet emailed
+                {stats.queueCount - stats.queueEmailed} queued but not emailed
               </div>
             )}
           </div>
