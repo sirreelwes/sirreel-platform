@@ -82,22 +82,41 @@ export default function AgingReviewPage() {
   }, [])
   useEffect(() => { load() }, [load])
 
+  /** Result of the last insurance-matter action, shown as a banner. */
+  const [matterResult, setMatterResult] = useState<{ kind: 'matched' | 'created' | 'ambiguous'; text: string; claimId?: string } | null>(null)
+
   const toggleInsurance = useCallback(
     async (r: Row) => {
-      const on = !r.insurance
-      let claimNumber: string | undefined
-      if (on) {
-        claimNumber = window.prompt('Carrier claim # (optional — leave blank if none yet)') ?? undefined
-        if (claimNumber === undefined) {
-          // prompt cancelled — user backed out entirely
-        }
+      if (r.insurance) {
+        // Unmark: back to waiting on the client. Does not touch any claim.
+        await fetch('/api/collections/rw-invoices/insurance-flag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId, on: false }),
+        })
+        setMatterResult(null)
+        load()
+        return
       }
-      await fetch('/api/collections/rw-invoices/insurance-flag', {
+      // One button: match an open claim, or open a new tracker on /claims.
+      const res = await fetch('/api/collections/rw-invoices/insurance-matter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId, on, claimNumber: claimNumber || undefined }),
+        body: JSON.stringify({ rwInvoiceId: r.rwInvoiceId }),
       })
-      load()
+      const d = await res.json()
+      if (d.ok) {
+        if (d.matched) {
+          setMatterResult({ kind: 'matched', text: `${r.invoiceNumber ?? 'Invoice'} linked to existing claim ${d.matched.claimNumber} (${d.matched.status.toLowerCase()}, filed against ${d.matched.filedAgainst}).`, claimId: d.matched.id })
+        } else if (d.created) {
+          setMatterResult({ kind: 'created', text: `${r.invoiceNumber ?? 'Invoice'} → new claim ${d.created.claimNumber} opened in the tracker. Add the carrier and adjuster there.`, claimId: d.created.id })
+        } else if (d.ambiguous) {
+          setMatterResult({ kind: 'ambiguous', text: `${r.invoiceNumber ?? 'Invoice'} flagged as insurance — this client has ${d.ambiguous.length} open claims, so pick the right one on the Claims page.` })
+        }
+        load()
+      } else {
+        setMatterResult({ kind: 'ambiguous', text: d.error || 'Could not flag as insurance matter.' })
+      }
     },
     [load],
   )
@@ -158,6 +177,24 @@ export default function AgingReviewPage() {
             {undecided.length} undecided ({money(undecidedTotal)})
           </div>
 
+          {matterResult && (
+            <div className="flex items-center justify-between gap-3 bg-violet-900/20 border border-violet-700/50 rounded-xl px-4 py-2.5 mb-4 text-sm text-violet-200">
+              <span>{matterResult.text}</span>
+              <span className="flex items-center gap-3 shrink-0">
+                {matterResult.claimId ? (
+                  <a href={`/claims/${matterResult.claimId}`} className="font-semibold text-violet-300 hover:text-violet-100 underline">
+                    Open claim →
+                  </a>
+                ) : matterResult.kind === 'ambiguous' ? (
+                  <a href="/claims" className="font-semibold text-violet-300 hover:text-violet-100 underline">
+                    Claims →
+                  </a>
+                ) : null}
+                <span role="button" onClick={() => setMatterResult(null)} className="text-violet-400 hover:text-violet-200 cursor-pointer">✕</span>
+              </span>
+            </div>
+          )}
+
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800 mb-8">
             {rows.length === 0 && (
               <div className="p-6 text-sm text-zinc-500">Nothing past 60 days. Good book.</div>
@@ -196,9 +233,9 @@ export default function AgingReviewPage() {
                       role="button"
                       onClick={() => void toggleInsurance(r)}
                       className="text-[11px] text-zinc-500 hover:text-violet-300 cursor-pointer"
-                      title={r.insurance ? 'Unmark — this is back to waiting on the client' : 'Mark as waiting on an insurance carrier'}
+                      title={r.insurance ? 'Unmark — this is back to waiting on the client (the claim itself is untouched)' : 'Link to an open claim, or open a new claim tracker'}
                     >
-                      {r.insurance ? 'not insurance' : 'insurance?'}
+                      {r.insurance ? 'not insurance' : 'insurance matter'}
                     </span>
                   </div>
                 </div>
