@@ -28,6 +28,7 @@ interface Row {
   invoiceTotal: number
   receivedTotal: number
   remainingTotal: number
+  status: string | null
   ageDays: number
   triage: { decision: string; note: string | null; decidedAt: string; decidedBy: string | null } | null
   /** Waiting on an insurance carrier rather than the client. */
@@ -207,6 +208,18 @@ export default function AgingReviewPage() {
                     <span className={`ml-2 text-xs font-semibold ${r.ageDays > 90 ? 'text-red-400' : 'text-orange-400'}`}>
                       {r.ageDays}d
                     </span>
+                    {/* NEW = never processed in RW — zero NEW invoices in
+                        company history have ever received a cent, so the
+                        first question is "was this ever actually sent?",
+                        not "why hasn't the client paid?" */}
+                    {r.status === 'NEW' && (
+                      <span
+                        className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-900/40 border border-amber-700/50 text-amber-300"
+                        title="Never processed in RentalWorks — the client may never have received this bill. Check RW before chasing."
+                      >
+                        Never processed
+                      </span>
+                    )}
                     {r.insurance && (
                       <span
                         className="ml-2 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-900/40 border border-violet-700/50 text-violet-300"
@@ -229,6 +242,15 @@ export default function AgingReviewPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm text-amber-500 font-semibold">{money(r.remainingTotal)}</div>
+                    <a
+                      href={`/api/rentalworks/invoices/${r.rwInvoiceId}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-zinc-500 hover:text-zinc-300 mr-2"
+                      title="Open the invoice PDF"
+                    >
+                      PDF
+                    </a>
                     <span
                       role="button"
                       onClick={() => void toggleInsurance(r)}

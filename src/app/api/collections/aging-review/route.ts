@@ -62,6 +62,7 @@ export async function GET() {
       invoiceTotal: true,
       receivedTotal: true,
       remainingTotal: true,
+      status: true,
     },
   })
 
