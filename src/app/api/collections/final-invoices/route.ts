@@ -179,6 +179,16 @@ export async function GET() {
   const paidMarked = (
     await prisma.rwInvoicePaidMark.findMany({ select: { rwInvoiceId: true } })
   ).map((m) => m.rwInvoiceId)
+  // Written-off invoices are no longer expected money — out of the tile,
+  // same as paid-marks. They live on in the aging review's write-off ledger.
+  paidMarked.push(
+    ...(
+      await prisma.rwInvoiceTriage.findMany({
+        where: { decision: 'WRITE_OFF' },
+        select: { rwInvoiceId: true },
+      })
+    ).map((t) => t.rwInvoiceId),
+  )
   // Full rows rather than an aggregate: the tile also renders an aging bar,
   // and the buckets need each invoice's due date. ~100 real open invoices —
   // cheap. NOT VOID: RW keeps remainingTotal populated on voided invoices —

@@ -607,6 +607,9 @@ export function CollectionsWorkspace({ operatorName }: { operatorName: string })
                 {stats.queueCount - stats.queueEmailed} queued but not emailed
               </div>
             )}
+            <a href="/collections/aging-review" className="text-xs text-amber-500 hover:text-amber-400 font-semibold mt-1 inline-block">
+              Aging review →
+            </a>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Collected this month</div>

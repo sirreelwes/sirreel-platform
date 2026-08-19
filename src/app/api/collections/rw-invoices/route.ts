@@ -28,6 +28,14 @@ export async function GET(req: NextRequest) {
   // balance on them — RW has not been told, or has not synced back — so
   // without this they sat in the collectible list and Ana would chase money
   // a colleague already recorded as received.
+  // WRITE_OFF triage rows leave the collectible list exactly like paid-marks:
+  // deemed uncollectible is not collectible. Search still finds them.
+  const writtenOff = (
+    await prisma.rwInvoiceTriage.findMany({
+      where: { decision: 'WRITE_OFF' },
+      select: { rwInvoiceId: true },
+    })
+  ).map((t) => t.rwInvoiceId)
   const paidMarks = await prisma.rwInvoicePaidMark.findMany({
     select: { rwInvoiceId: true, markedAt: true, note: true },
   })
@@ -53,7 +61,7 @@ export async function GET(req: NextRequest) {
       // populated on a void, so "remaining > 0" alone offered Ana cancelled
       // obligations to charge cards against). Search still surfaces them,
       // with the status visible on the row.
-    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarkedIds }, NOT: { status: 'VOID' } }
+    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: [...paidMarkedIds, ...writtenOff] }, NOT: { status: 'VOID' } }
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
