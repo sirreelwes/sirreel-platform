@@ -52,6 +52,12 @@ export default function PipelinePage() {
   // Phase 6.5b — manual-entry modal moved up from /inquiries to here
   // so the Pipeline header carries the "+ Inquiry" affordance.
   const [showNewInquiry, setShowNewInquiry] = useState(false);
+  // Funnel-mouth badge (Wes, 2026-08-20): Pipeline shows worked deals, and
+  // the raw asks live one surface upstream on /inquiries — invisible from
+  // here. Surface the count of NEW inquiries so an agent standing in
+  // Pipeline can see the intake backlog without checking the other tab.
+  // Null = not loaded; badge renders only when > 0.
+  const [newInquiryCount, setNewInquiryCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (authStatus !== 'authenticated') return;
@@ -74,6 +80,15 @@ export default function PipelinePage() {
   }, [scope, authStatus, refreshKey]);
 
   const refreshAll = () => setRefreshKey((k) => k + 1);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return;
+    // Same endpoint the Inquiries queue reads; NEW is its default filter.
+    fetch('/api/inquiries?status=NEW')
+      .then((r) => r.json())
+      .then((d) => setNewInquiryCount(Array.isArray(d.inquiries) ? d.inquiries.length : null))
+      .catch(() => setNewInquiryCount(null));
+  }, [authStatus, refreshKey]);
 
   if (authStatus === 'loading') {
     return <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-sm">Loading…</div>;
@@ -101,6 +116,15 @@ export default function PipelinePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {newInquiryCount != null && newInquiryCount > 0 && (
+            <a
+              href="/inquiries"
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              title="Untriaged submissions waiting on the Inquiries queue"
+            >
+              {newInquiryCount} new inquir{newInquiryCount === 1 ? 'y' : 'ies'} →
+            </a>
+          )}
           <CopyIntakeLinkButton />
           <button
             onClick={() => setShowNewInquiry(true)}
