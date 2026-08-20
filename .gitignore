@@ -46,3 +46,4 @@ scripts/*
 .gcp-service-account.json
 .e2e-scratch/
 .vercel
+!scripts/rotate-rw-prod.sh

@@ -5,9 +5,20 @@ Rotate `RENTALWORKS_TOKEN` in Vercel Production.
 ## TL;DR — the fast path (added 2026-08-20)
 
 RentalWorks **does** have a login endpoint after all: `POST /api/v1/jwt`.
-`scripts/rotate-rw-token.ts` calls it and mints a fresh token from the admin
-credentials — no browser, no DevTools. The whole rotation is now three
-commands:
+The whole rotation is ONE short command that prompts for the RW admin
+credentials and does everything — mint, verify, replace the Vercel value,
+push the redeploy:
+
+```bash
+bash scripts/rotate-rw-prod.sh
+```
+
+It stops loudly at the first failed step; "ROTATION SCRIPT COMPLETE" means
+every step truly ran. (2026-08-20 lesson: long pasted one-liners can be
+line-wrapped into fragments by a flaky terminal and PARTIALLY executed —
+prefer the short script invocation always.) Then confirm the health tile
+(step 5 below). The manual three-command version, if you ever need the
+pieces separately:
 
 ```bash
 # 1. Mint + verify (credentials from 1Password, nothing touches disk):
