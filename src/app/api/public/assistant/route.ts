@@ -25,6 +25,7 @@ import {
   alertOnCallTeam,
   alertStrandedDriver,
 } from '@/lib/assistant/afterHours'
+import { summarizeCallerMessages } from '@/lib/assistant/summarizeTranscript'
 import { PUBLIC_CONTACT, PUBLIC_SITE_URL } from '@/lib/site/publicNav'
 import { SETUP_GUIDES } from '@/lib/site/setupGuides'
 
@@ -169,6 +170,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'last message must be from the user' }, { status: 400 })
   }
 
+  // What the caller actually typed, captured before the tool loop appends
+  // tool_result turns. When an escalation fires, the alert email carries an
+  // AI summary of this so agents see the caller's own account, not just the
+  // model's one-line paraphrase. Summarized at most once per request, and
+  // only if an escalation tool actually runs.
+  const callerTexts = messages
+    .filter((m) => m.role === 'user' && typeof m.content === 'string')
+    .map((m) => m.content as string)
+  let transcriptSummaryPromise: Promise<string | null> | null = null
+  const getTranscriptSummary = () =>
+    (transcriptSummaryPromise ??= summarizeCallerMessages(callerTexts))
+
   try {
     let rounds = 0
     let response = await client.messages.create({
@@ -207,6 +220,7 @@ export async function POST(req: NextRequest) {
                   name: String(inp.name),
                   contact: String(inp.contact),
                   message: String(inp.message),
+                  transcriptSummary: await getTranscriptSummary(),
                   ip,
                 })
               : { ok: false, error: 'missing fields' }
@@ -216,6 +230,7 @@ export async function POST(req: NextRequest) {
             callerName: inp.callerName ? String(inp.callerName).slice(0, 200) : '',
             callbackNumber: inp.callbackNumber ? String(inp.callbackNumber).slice(0, 60) : '',
             emergency: inp.emergency ? String(inp.emergency).slice(0, 500) : '',
+            transcriptSummary: await getTranscriptSummary(),
             ip,
           })
         } else if (block.name === 'alert_stranded_driver') {
@@ -230,6 +245,7 @@ export async function POST(req: NextRequest) {
             callbackNumber: inp.callbackNumber ? String(inp.callbackNumber).slice(0, 60) : null,
             vinLast4: inp.vinLast4 ? String(inp.vinLast4).slice(0, 20) : null,
             note: inp.note ? String(inp.note).slice(0, 300) : null,
+            transcriptSummary: await getTranscriptSummary(),
             ip,
           })
         } else {
