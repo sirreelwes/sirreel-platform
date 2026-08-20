@@ -605,13 +605,29 @@ async function main() {
         notes: `Auto-created by Planyo migration on ${startedAt.toISOString().slice(0, 10)}`,
       }
       if (!dryRun) {
-        const created = await prisma.person.create({ data: personData, select: { id: true, firstName: true, lastName: true, email: true } })
+        // Upsert-shaped: the person may have appeared AFTER our one-time
+        // preload — the live app's CRM email capture creates Person rows
+        // concurrently, and a P2002 here used to abort the ENTIRE run
+        // (seen 2026-08-20 importing drift carts). On conflict, fetch the
+        // existing row and carry on.
+        let created
+        try {
+          created = await prisma.person.create({ data: personData, select: { id: true, firstName: true, lastName: true, email: true } })
+          report.personsCreated++
+        } catch (e) {
+          if (!/Unique constraint/i.test((e as Error).message)) throw e
+          created = await prisma.person.findUnique({
+            where: { email: placeholderEmail },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+          if (!created) throw e
+        }
         personByEmail.set(created.email.toLowerCase(), created)
         person = created
       } else {
+        report.personsCreated++
         person = { id: 'DRY-NEW-PERSON', firstName: personData.firstName, lastName: personData.lastName, email: personData.email }
       }
-      report.personsCreated++
     }
 
     // ── Agent resolve — for now everyone defaults to the fallback agent ──
