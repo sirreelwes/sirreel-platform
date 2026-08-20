@@ -249,8 +249,8 @@ export default function InventoryWizardPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Values &amp; Photos Wizard</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <h1 className="text-2xl font-semibold text-zinc-900">Values &amp; Photos Wizard</h1>
+          <p className="text-sm text-zinc-600 mt-1">
             Fill in replacement values and a photo for every item, one at a time.
           </p>
         </div>

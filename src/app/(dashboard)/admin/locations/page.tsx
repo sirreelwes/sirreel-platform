@@ -124,8 +124,8 @@ export default function AdminLocationsPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white">Inventory Locations</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <h1 className="text-2xl font-semibold text-zinc-900">Inventory Locations</h1>
+        <p className="text-sm text-zinc-600 mt-1">
           Manage the locations that appear in the inventory edit dropdown. Deactivate to hide from the dropdown without breaking existing items.
         </p>
       </div>

@@ -111,7 +111,7 @@ export default function InquiriesQueuePage() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-4">
       <header>
-        <h1 className="text-2xl font-semibold text-white">Inquiries</h1>
+        <h1 className="text-2xl font-semibold text-zinc-900">Inquiries</h1>
         <p className="text-sm text-zinc-500 mt-1">
           Triage queue for inbound requests — web-form supply orders, manual entries, and Gmail
           conversions. Click a row to open the full detail + actions.

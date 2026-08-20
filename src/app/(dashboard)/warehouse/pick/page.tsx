@@ -86,8 +86,8 @@ export default function WarehousePickQueuePage() {
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Picking Queue</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">
+          <h1 className="text-2xl font-semibold text-zinc-900">Picking Queue</h1>
+          <p className="text-sm text-zinc-600 mt-0.5">
             Warehouse lane — picks by pickup date.
           </p>
         </div>

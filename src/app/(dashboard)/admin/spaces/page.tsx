@@ -134,8 +134,8 @@ export default function AdminSpacesPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Spaces</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <h1 className="text-2xl font-semibold text-zinc-900">Spaces</h1>
+          <p className="text-sm text-zinc-600 mt-1">
             Standing Sets, Stages &amp; LED Wall — public gallery content. A space is client-visible only when <b>published</b> AND it has a photo.
           </p>
         </div>

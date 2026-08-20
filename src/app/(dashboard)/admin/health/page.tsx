@@ -171,8 +171,10 @@ export default function AdminHealthPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">System Health</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          {/* Page chrome sits on the LIGHT dashboard shell — dark ink, same
+              as the aging-review fix (c3fff75). text-white here was invisible. */}
+          <h1 className="text-2xl font-semibold text-zinc-900">System Health</h1>
+          <p className="text-sm text-zinc-600 mt-1">
             Live probes of the external services SirReel HQ depends on. Cron runs hourly; Slack
             alerts fire when something flips to degraded or down (suppressed for 4h after).
           </p>
@@ -192,10 +194,10 @@ export default function AdminHealthPage() {
         <div className="text-zinc-500 text-sm">No data yet — click "Run check now".</div>
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-3 text-sm text-zinc-400">
-            <span className="text-zinc-500">Overall:</span>
+          <div className="mb-4 flex items-center gap-3 text-sm text-zinc-600">
+            <span className="text-zinc-600">Overall:</span>
             <StatusBadge status={current.overall} />
-            <span className="text-zinc-500">
+            <span className="text-zinc-600">
               · last checked {new Date(current.timestamp).toLocaleString()}
             </span>
           </div>
