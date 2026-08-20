@@ -55,12 +55,24 @@ const STATUS_FILTERS: { id: 'NEW' | 'ALL'; label: string }[] = [
   { id: 'NEW', label: 'New' },
   { id: 'ALL', label: 'All' },
 ]
-const SOURCE_FILTERS: { id: 'all' | InquirySource; label: string }[] = [
+// 'ORDER_FORM' is not a DB source — it is the WEB_FORM subset whose
+// sourceMetadata.kind === 'production-order', i.e. the public ORDER form
+// (the money submissions). Deliberately a filter here rather than a rename
+// of the queue: the sidebar already has an "Orders" tab (sr_orders, the
+// invoiceable kind), and this queue also holds contact / stage / intake
+// forms and Gmail leads, so "Orders" as a page name would collide and
+// mislabel. Deep-linkable via /inquiries?filter=orders (Wes, 2026-08-20).
+type SourceFilter = 'all' | InquirySource | 'ORDER_FORM'
+const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'all', label: 'All sources' },
+  { id: 'ORDER_FORM', label: 'Order forms' },
   { id: 'WEB_FORM', label: 'Web form' },
   { id: 'MANUAL', label: 'Manual' },
   { id: 'GMAIL', label: 'Gmail' },
 ]
+
+const isOrderForm = (r: InquiryRow) =>
+  r.source === 'WEB_FORM' && (r.sourceMetadata as { kind?: string } | null)?.kind === 'production-order'
 
 function ageString(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -84,10 +96,18 @@ function fmtDateRange(start: string | null, end: string | null): string {
 
 export default function InquiriesQueuePage() {
   const [statusFilter, setStatusFilter] = useState<'NEW' | 'ALL'>('NEW')
-  const [sourceFilter, setSourceFilter] = useState<'all' | InquirySource>('all')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [data, setData] = useState<InquiryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Deep link: /inquiries?filter=orders opens pre-filtered to order forms.
+  // Read once on mount from location rather than useSearchParams — this
+  // page is fully client-rendered and the param only seeds initial state.
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get('filter')
+    if (f === 'orders') setSourceFilter('ORDER_FORM')
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -105,6 +125,7 @@ export default function InquiriesQueuePage() {
 
   const visible = useMemo(() => {
     if (sourceFilter === 'all') return data
+    if (sourceFilter === 'ORDER_FORM') return data.filter(isOrderForm)
     return data.filter((r) => r.source === sourceFilter)
   }, [data, sourceFilter])
 
