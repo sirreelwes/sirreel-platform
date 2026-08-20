@@ -352,6 +352,13 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // special-cased in the layout to render an unhandled-count badge
         // fed by the same engine (/api/action-items?count=1).
         { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+        // The web-form triage queue (/inquiries) had NO nav entry — the
+        // public order/contact/space/intake forms all write Inquiry rows
+        // and every notification email says "work the queue", but the
+        // queue itself was reachable only by typed URL (found 2026-08-20
+        // when Wes couldn't locate it). Sits above Pipeline because it is
+        // the top of that funnel.
+        { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
         { id: 'pipeline', label: 'Pipeline', icon: 'TrendingUp', href: '/sales/pipeline' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
