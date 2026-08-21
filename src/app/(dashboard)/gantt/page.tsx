@@ -62,6 +62,34 @@ function computeBar(start: string, end: string, renderedStartDate: string, rende
   return { left: s * dayWidth, width: Math.max((e - s + 1) * dayWidth - 2, dayWidth - 2) }
 }
 
+// ── Lane packing — overlapping bookings on one unit's row stack into
+// sub-lanes instead of painting over each other. Dates are inclusive, so
+// bars that share a turnover day (one ends Aug 26, next starts Aug 26)
+// collide on that shared day-cell and split lanes too. Greedy first-fit
+// over start-sorted bookings; single-lane rows keep the classic 32px row.
+const LANE_PITCH = 28 // bar height (h-6 = 24px) + 4px gap
+const LANE_PAD = 4    // top padding — matches the old `top-1`
+function laneRowHeight(laneCount: number) {
+  return LANE_PAD + Math.max(1, laneCount) * LANE_PITCH // 1 lane → 32px (old h-8)
+}
+function assignLanes(bookings: any[]): { bookings: any[]; laneCount: number } {
+  const sorted = [...bookings].sort(
+    (a, b) => String(a.start).localeCompare(String(b.start)) || String(a.end).localeCompare(String(b.end)),
+  )
+  const laneEnds: string[] = []
+  const out = sorted.map((b) => {
+    let lane = laneEnds.findIndex((end) => String(b.start) > end)
+    if (lane === -1) {
+      lane = laneEnds.length
+      laneEnds.push(String(b.end))
+    } else {
+      laneEnds[lane] = String(b.end)
+    }
+    return { ...b, lane }
+  })
+  return { bookings: out, laneCount: Math.max(1, laneEnds.length) }
+}
+
 // Per-drag row highlight state (computed once per target change in the parent;
 // the memoized row re-renders only when ITS state string flips).
 type DropState = 'none' | 'source' | 'valid' | 'valid-hover' | 'invalid'
@@ -152,6 +180,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
   onBackupClick,
 }: TimelineUnitRowProps) {
   const hasBackups = entry.backupBookings.length > 0
+  const mainRowHeight = laneRowHeight(entry.primaryLaneCount ?? 1)
+  const backupRowHeight = laneRowHeight(entry.backupLaneCount ?? 1)
   const grid = (
     <div className="absolute inset-0 flex pointer-events-none">
       {dayMeta.map((d) => (
@@ -170,7 +200,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
       <div
         data-unit-assetid={entry.unit.assetId}
         data-unit-name={entry.unit.unitName}
-        className={`relative h-8 border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
+        className={`relative border-b border-gray-100 ${canSetStatus ? 'cursor-pointer hover:bg-blue-50/20' : ''} ${DROP_STATE_CLASS[dropState]}`}
+        style={{ height: mainRowHeight }}
         onClick={(ev) => onRowClick(entry.unit, ev)}
       >
         {grid}
@@ -202,8 +233,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           return (
             <div
               key={`p-${j}`}
-              className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
-              style={{ left: bar.left, width: bar.width }}
+              className={`absolute h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 hover:opacity-90 transition-opacity overflow-hidden ${canBindUnit ? 'cursor-grab active:cursor-grabbing touch-none' : 'cursor-pointer'}`}
+              style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
               onPointerDown={canBindUnit ? (ev) => onBarPointerDown(ev, b, entry.unit) : undefined}
               onPointerMove={canBindUnit ? onBarPointerMove : undefined}
               onPointerUp={canBindUnit ? onBarPointerUp : undefined}
@@ -227,7 +258,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           clicks delegate to the same asset-row handler. */}
       {hasBackups && (
         <div
-          className={`relative h-8 border-b border-gray-100 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
+          className={`relative border-b border-gray-100 bg-blue-50/60 ${canSetStatus ? 'cursor-pointer hover:bg-blue-100/60' : ''}`}
+          style={{ height: backupRowHeight }}
           onClick={(ev) => onRowClick(entry.unit, ev)}
         >
           {grid}
@@ -239,8 +271,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             return (
               <div
                 key={`b-${j}`}
-                className="absolute top-1 h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
-                style={{ left: bar.left, width: bar.width }}
+                className="absolute h-6 rounded-md bg-blue-200/70 border border-dashed border-blue-400 flex items-center px-1.5 cursor-pointer hover:bg-blue-200 transition-opacity overflow-hidden"
+                style={{ left: bar.left, width: bar.width, top: LANE_PAD + (b.lane ?? 0) * LANE_PITCH }}
                 onClick={(ev) => {
                   ev.stopPropagation()
                   onBackupClick(b, entry.unit, rank)
@@ -1104,7 +1136,7 @@ export default function GanttPage() {
   // holds with zero assignments. Without it those holds drop out of
   // By-Asset entirely (units[] is keyed by Asset, so no-asset → no row).
   type RowEntry =
-    | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[] }
+    | { type: 'unit'; unit: any; primaryBookings: any[]; backupBookings: any[]; primaryLaneCount: number; backupLaneCount: number }
     | { type: 'divider'; label: string; accent?: 'warn' | 'idle' }
     | { type: 'taskBand'; tasks: any[]; bandHeight: number }
   const { rowEntries } = useMemo(() => {
@@ -1167,7 +1199,18 @@ export default function GanttPage() {
 
     for (const u of sorted) {
       const split = splitBookings(u)
-      entries.push({ type: 'unit', unit: u, primaryBookings: split.primary, backupBookings: split.backup })
+      // Overlapping bookings stack into sub-lanes (each bar gets a `lane`
+      // index); the row and its label cell grow to laneRowHeight(count).
+      const primary = assignLanes(split.primary)
+      const backup = assignLanes(split.backup)
+      entries.push({
+        type: 'unit',
+        unit: u,
+        primaryBookings: primary.bookings,
+        backupBookings: backup.bookings,
+        primaryLaneCount: primary.laneCount,
+        backupLaneCount: backup.laneCount,
+      })
     }
     return { rowEntries: entries }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1249,7 +1292,9 @@ export default function GanttPage() {
           - labels column is `sticky left-0` (pins horizontally while dates scroll)
           - date header row is `sticky top-0` (pins vertically while rows scroll)
           - top-left corner cell is sticky on BOTH axes
-          Row heights match exactly between the two columns: h-8 unit rows,
+          Row heights match exactly between the two columns: unit rows are
+          laneRowHeight(laneCount) tall (32px for the common single-lane row,
+          growing when overlapping bookings stack into sub-lanes),
           h-6 divider rows, h-10 header — all with box-sizing border-box
           (Tailwind default) so 1px borders are counted in the height. */}
       <div
@@ -1323,7 +1368,10 @@ export default function GanttPage() {
                 )
                 return (
                   <div key={`u-${entry.unit.assetId}`}>
-                    <div className={`h-8 border-b border-gray-100 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}>
+                    <div
+                      className={`border-b border-gray-100 px-3 flex items-center gap-2 ${onJobToday ? 'bg-emerald-100' : 'bg-gray-50'}`}
+                      style={{ height: laneRowHeight(entry.primaryLaneCount) }}
+                    >
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         style={{ background: TIER_COLORS[entry.unit.tier] || '#9ca3af' }}
@@ -1373,7 +1421,10 @@ export default function GanttPage() {
                       })()}
                     </div>
                     {hasBackups && (
-                      <div className="h-8 border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-100/70">
+                      <div
+                        className="border-b border-gray-100 px-3 flex items-center gap-2 bg-gray-100/70"
+                        style={{ height: laneRowHeight(entry.backupLaneCount) }}
+                      >
                         <span className="text-[9px] text-gray-400">└</span>
                         <div className="text-[10px] text-gray-500 italic truncate">
                           {entry.backupBookings.length === 1 ? '2nd hold queue' : `${entry.backupBookings.length} backups queued`}
