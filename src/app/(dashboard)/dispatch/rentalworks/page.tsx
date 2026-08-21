@@ -7,11 +7,17 @@ function fmt(d: string) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+import { STATUS_CHIPS } from '@/lib/scheduling/statusTokens'
+
+// Planyo feed tokens mapped onto the shared chip palette so this page
+// agrees with the gantt/calendar (previously: confirmed was BLUE here
+// and hold AMBER — the opposite of the board). confirmed and booked are
+// both "green = it's real" in the unified language.
 const STATUS_COLORS: Record<string, string> = {
-  confirmed: 'bg-blue-100 text-blue-700',
-  hold: 'bg-amber-100 text-amber-700',
-  inquiry: 'bg-sky-100 text-sky-700',
-  booked: 'bg-emerald-100 text-emerald-700',
+  confirmed: STATUS_CHIPS.booked,
+  booked: STATUS_CHIPS.booked,
+  hold: STATUS_CHIPS.hold,
+  inquiry: STATUS_CHIPS.inquiry,
 }
 
 export default function DispatchPage() {

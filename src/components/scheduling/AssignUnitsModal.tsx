@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { UNIT_STATE_BADGE, UNIT_STATE_LABEL } from '@/lib/scheduling/statusTokens'
 
 type UnitState = 'free' | 'buffer' | 'booked'
 
@@ -57,14 +58,10 @@ interface AssignUnitsModalProps {
   onChanged?: () => void
 }
 
-const STATE_BADGE: Record<UnitState, string> = {
-  free: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  buffer: 'bg-amber-50 text-amber-800 border-amber-200',
-  booked: 'bg-rose-50 text-rose-700 border-rose-200',
-}
-
-// Plain-English labels — keep schema/enum nouns out of user-facing copy.
-const STATE_LABEL: Record<UnitState, string> = { free: 'available', buffer: 'tight', booked: 'booked' }
+// Unit-availability badges + plain-English labels live in the shared
+// statusTokens module (a different axis than booking status).
+const STATE_BADGE: Record<UnitState, string> = UNIT_STATE_BADGE
+const STATE_LABEL: Record<UnitState, string> = UNIT_STATE_LABEL
 const ITEM_STATUS_LABEL: Record<string, string> = {
   REQUESTED: 'Needs units', ASSIGNED: 'Assigned', SUBSTITUTED: 'Substituted', UNFULFILLED: 'Released',
 }

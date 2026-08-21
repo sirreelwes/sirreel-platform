@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
+import { STATUS_CHIPS } from '@/lib/scheduling/statusTokens';
+import StatusLegend from '@/components/scheduling/StatusLegend';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -28,17 +30,11 @@ type Job = {
 type MaintRecord = { id: string; unit: string; issue: string; start: string; end: string };
 const MAINT: MaintRecord[] = [];
 
-const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  active: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
-  booked: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
-  hold: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
-  quoted: { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
-  inquiry: { bg: 'bg-sky-100', text: 'text-sky-800', border: 'border-sky-200' },
-  // Struck neutral, NOT grey-as-maintenance (grey uniquely means
-  // maintenance per the 2026-08-21 legend ruling). Without this key,
-  // cancelled jobs fell back to the inquiry style and rendered as live.
-  cancelled: { bg: 'bg-zinc-100', text: 'text-zinc-400 line-through', border: 'border-zinc-200' },
-};
+// Month-grid pills use the shared light-chip palette — same hue story as
+// the gantt bars (green=booked, blue=hold, dashed outline=inquiry,
+// struck outline=cancelled; grey stays maintenance-only). Keys are the
+// timeline-native display tokens.
+const STAGE_STYLES: Record<string, string> = STATUS_CHIPS;
 
 // ═══ Component ═══
 export default function CalendarPage() {
@@ -123,13 +119,12 @@ export default function CalendarPage() {
           </div>
           <ScheduleViewToggle current="month" />
         </div>
-        <div className="flex gap-3 text-[10px] text-gray-400">
-          <span>🟢 Active</span>
-          <span>🔵 Booked</span>
-          <span>🟡 Hold</span>
-          <span>🟣 Quoted</span>
-          <span>🔴 Maintenance</span>
-        </div>
+        <StatusLegend>
+          <div className="flex items-center gap-1">
+            <span>🔧</span>
+            <span className="text-gray-500">Maintenance pill</span>
+          </div>
+        </StatusLegend>
       </div>
 
       {/* Calendar grid */}
@@ -170,11 +165,11 @@ export default function CalendarPage() {
                 {/* Job pills */}
                 <div className="space-y-0.5">
                   {dayJobs.slice(0, 4).map(({ job, items }) => {
-                    const st = STAGE_STYLES[job.stage] || STAGE_STYLES.inquiry;
+                    const st = STAGE_STYLES[job.stage] || STAGE_STYLES.booked;
                     const assetSummary = items.map(i => `${i.qty}${CATS[i.cat] || i.cat}`).join('+');
                     return (
                       <div key={job.id} onClick={() => setSelectedJob(job)}
-                        className={`px-1.5 py-0.5 rounded-md text-[9px] font-medium cursor-pointer truncate border ${st.bg} ${st.text} ${st.border} hover:opacity-80`}>
+                        className={`px-1.5 py-0.5 rounded-md text-[9px] font-medium cursor-pointer truncate ${st} hover:opacity-80`}>
                         <span className="font-bold truncate max-w-[80px] inline-block">{job.company}</span>
                         <span className="opacity-60"> {assetSummary}</span>
                       </div>
@@ -202,7 +197,7 @@ export default function CalendarPage() {
             <div className="flex justify-between items-start mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).bg} ${(STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.inquiry).text}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${STAGE_STYLES[selectedJob.stage] || STAGE_STYLES.booked}`}>
                     {selectedJob.stage}
                   </span>
                   <span className="text-[10px] text-gray-400">#{selectedJob.jobNum}</span>

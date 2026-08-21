@@ -14,12 +14,10 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 
-// Keep in lockstep with the gantt page's TIER_COLORS/TIER_LABELS (dot + legend).
-const TIERS = [
-  { value: 'PREMIUM', label: 'Best', color: '#22c55e' },
-  { value: 'STANDARD', label: 'Good', color: '#f97316' },
-  { value: 'ECONOMY', label: 'Workhorse', color: '#eab308' },
-] as const
+import { TIER_COLORS, TIER_LABELS, TIER_ORDER } from '@/lib/scheduling/statusTokens'
+
+// Derived from the shared tokens — same dot colors as the gantt legend.
+const TIERS = TIER_ORDER.map((value) => ({ value, label: TIER_LABELS[value], color: TIER_COLORS[value] }))
 
 interface AssetSummaryPanelProps {
   assetId: string

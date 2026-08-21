@@ -12,6 +12,16 @@ import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 import { getPermissions } from '@/lib/permissions';
+import {
+  barColor,
+  CAT_LABELS,
+  TIER_COLORS,
+  TIER_LABELS,
+  TODAY_COLUMN_TINT,
+  TODAY_HEADER_CLASS,
+  UNIT_NA_COLOR,
+} from '@/lib/scheduling/statusTokens';
+import StatusLegend from '@/components/scheduling/StatusLegend';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -20,61 +30,11 @@ function fDay(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDa
 function fMonth(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 const today = toDS(new Date());
 
-const CAT_COLORS: Record<string, string> = {
-  cube: '#3b82f6', cargo: '#8b5cf6', pass: '#06b6d4', pop: '#f59e0b',
-  cam: '#ec4899', dlux: '#10b981', scout: '#f97316', studio: '#6366f1',
-  stakebed: '#78716c', general: '#9ca3af',
-}
-
-// Condition tier → left-of-name dot. Reuses the existing Asset.tier enum
-// (PREMIUM/STANDARD/ECONOMY); Wes's mapping: Best=green, Good=orange,
-// Workhorse=yellow. Category stays identifiable via the unit's label text.
-const TIER_COLORS: Record<string, string> = {
-  PREMIUM: '#22c55e',  // green — Best
-  STANDARD: '#f97316', // orange — Good
-  ECONOMY: '#eab308',  // yellow — Workhorse
-}
-const TIER_LABELS: Record<string, string> = {
-  PREMIUM: 'Best', STANDARD: 'Good', ECONOMY: 'Workhorse',
-}
-const TIER_ORDER = ['PREMIUM', 'STANDARD', 'ECONOMY'] as const
-
-// Reservations status → bar color. The token is the display token emitted by
-// mapStatus() in /api/timeline-native (inquiry | hold | booked | cancelled) —
-// NOT the raw Prisma BookingStatus. Keep these keys in lockstep with what
-// mapStatus emits (dead keys read as bugs: bars fall back to `booked`).
-const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  inquiry:   { bg: 'bg-green-200', border: 'border-green-400', text: 'text-green-900' }, // quote sent / availability confirmed, no hold yet
-  hold:      { bg: 'bg-blue-500',  border: 'border-blue-600',  text: 'text-white' },      // AI_REVIEW / PENDING_APPROVAL
-  booked:    { bg: 'bg-green-600', border: 'border-green-700', text: 'text-white' },      // CONFIRMED / ACTIVE / RETURNED / ARCHIVED
-  // Cancelled gets its OWN treatment so a cancelled bar never reads as booked:
-  // muted grey + struck-through label. (Previously had no entry and fell back
-  // to booked's color.) `line-through` rides in `text` because that class is
-  // applied directly to the bar's label span — no per-bar JSX branch needed.
-  cancelled: { bg: 'bg-gray-200',  border: 'border-gray-300',  text: 'text-gray-400 line-through' },
-}
-
-// Blind-pickup bar color — a BOOKED bar whose linked order is flagged
-// blindPickup renders violet instead of booked-green (distinct from every
-// status above). Applies to booked bars only; other statuses are unaffected.
-const BLIND_PICKUP_COLOR = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' } as const
-
-// Unit N/A (out-of-service) — an open maintenance window on a unit's row.
-// Grey now uniquely means "unavailable" (backups moved to faded blue below).
-const UNIT_NA_COLOR = { bg: 'bg-gray-400', border: 'border-gray-500', text: 'text-white' } as const
-
-// A booked bar becomes violet when its order is a blind pickup; everything
-// else uses the plain status color (falling back to booked).
-function barColor(status: string, blindPickup?: boolean) {
-  if (status === 'booked' && blindPickup) return BLIND_PICKUP_COLOR
-  return STATUS_COLORS[status] || STATUS_COLORS.booked
-}
-
-const CAT_LABELS: Record<string, string> = {
-  cube: 'Cube', cargo: 'Cargo', pass: 'Pass Van', pop: 'PopVan',
-  cam: 'Cam Cube', dlux: 'DLUX', scout: 'Scout', studio: 'Studio',
-  stakebed: 'Stakebed', general: 'Other',
-}
+// Colors, labels, and the barColor resolver all live in
+// lib/scheduling/statusTokens — the single source shared with the
+// calendar, the modals, and /api/timeline-native. The legend below
+// (StatusLegend) derives from the same constants, so bar and legend
+// cannot drift.
 
 // Would a drop of the dragged bar onto this unit SUCCEED? Mirrors the assign
 // endpoint's HARD blocks so the highlight can't disagree with the real result:
@@ -237,7 +197,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
         {entry.primaryBookings.map((b: any, j: number) => {
           const bar = computeBar(b.start, b.end, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
-          const sc = barColor(b.status, b.blindPickup)
+          const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
           return (
             <div
               key={`p-${j}`}
@@ -998,7 +958,7 @@ export default function GanttPage() {
     if (inFlightReassigns.current.has(b.bookingItemId)) return
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
-    const sc = barColor(b.status, b.blindPickup)
+    const sc = barColor(b.status, { blindPickup: b.blindPickup, hasOrder: b.hasOrder })
     dragState.current = {
       bookingItemId: b.bookingItemId,
       fromAssetId: unit.assetId,
@@ -1244,31 +1204,8 @@ export default function GanttPage() {
         </div>
       </div>
 
-      {/* Legend — must exactly match the tokens mapStatus emits + STATUS_COLORS. */}
-      <div className="flex gap-3 mb-2 text-[10px] flex-wrap">
-        {[
-          { label: 'Inquiry', color: 'bg-green-200', struck: false },
-          { label: 'Hold', color: 'bg-blue-500', struck: false },
-          { label: 'Booked', color: 'bg-green-600', struck: false },
-          { label: 'Booked · Blind Pickup', color: 'bg-violet-500', struck: false },
-          { label: 'Cancelled', color: 'bg-gray-200', struck: true },
-          { label: 'Unit N/A (in service)', color: 'bg-gray-400', struck: false },
-          { label: 'Backup (queued)', color: 'bg-blue-200', struck: false },
-        ].map(l => (
-          <div key={l.label} className="flex items-center gap-1">
-            <div className={`w-3 h-2 rounded-sm border border-black/5 ${l.color}`} />
-            <span className={`text-gray-500 ${l.struck ? 'line-through' : ''}`}>{l.label}</span>
-          </div>
-        ))}
-        {/* Condition-tier key — the left-of-name dot color (Asset.tier). */}
-        <span className="text-gray-300">|</span>
-        <span className="text-gray-400 font-medium">Condition:</span>
-        {TIER_ORDER.map(t => (
-          <div key={t} className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full border border-black/5" style={{ background: TIER_COLORS[t] }} />
-            <span className="text-gray-500">{TIER_LABELS[t]}</span>
-          </div>
-        ))}
+      {/* Legend — derived from statusTokens inside StatusLegend, cannot drift from the bars. */}
+      <StatusLegend showTiers>
         {/* Unit-name cell color — on a job today vs idle. */}
         <span className="text-gray-300">|</span>
         <div className="flex items-center gap-1">
@@ -1279,7 +1216,7 @@ export default function GanttPage() {
           <span>📄</span>
           <span className="text-gray-500">Order attached</span>
         </div>
-      </div>
+      </StatusLegend>
 
       {/* Gantt — single scroll container.
           - outer `overflow-auto` owns both vertical AND horizontal scroll
@@ -1444,22 +1381,21 @@ export default function GanttPage() {
                 <div
                   key={d.ds}
                   style={{ width: dayWidth, minWidth: dayWidth }}
-                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-200 ${d.isToday ? 'bg-blue-50 font-bold text-blue-600' : d.weekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
+                  className={`flex-shrink-0 flex items-center justify-center text-[10px] border-r border-gray-200 ${d.isToday ? TODAY_HEADER_CLASS : d.weekend ? 'bg-gray-200/60 text-gray-500' : 'text-gray-500'}`}
                 >
                   {d.label}
                 </div>
               ))}
             </div>
 
-            {/* Rows + today line */}
+            {/* Rows + today-column tint (Planyo's peach "you are here" column,
+                replacing the old 2px blue line). z-0 keeps it under every bar. */}
             <div className="relative">
               {todayOffset >= 0 && todayOffset < renderedDays && (
                 <div
-                  className="absolute top-0 bottom-0 z-[15] pointer-events-none"
-                  style={{ left: todayOffset * dayWidth + dayWidth / 2, width: 2, background: '#3b82f6' }}
-                >
-                  <div className="absolute -top-0 -left-[3px] w-2 h-2 rounded-full bg-blue-500" />
-                </div>
+                  className={`absolute top-0 bottom-0 z-0 pointer-events-none ${TODAY_COLUMN_TINT}`}
+                  style={{ left: todayOffset * dayWidth, width: dayWidth }}
+                />
               )}
 
               {view === 'asset' ? (
@@ -1552,7 +1488,7 @@ export default function GanttPage() {
                     {(() => {
                       const bar = getBar(job.startDate, job.endDate)
                       if (!bar) return null
-                      const sc = barColor(job.status, job.blindPickup)
+                      const sc = barColor(job.status, { blindPickup: job.blindPickup, hasOrder: job.hasOrder })
                       return (
                         <div
                           className={`absolute top-1 h-6 rounded-md ${sc.bg} border ${sc.border} flex items-center px-1.5 cursor-pointer hover:opacity-90 overflow-hidden`}

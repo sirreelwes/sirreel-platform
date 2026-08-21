@@ -50,18 +50,9 @@ function mapCategoryName(name: string | null | undefined): string {
   return 'general'
 }
 
-const CAT_COLORS: Record<string, string> = {
-  cube: '#3b82f6',
-  cargo: '#8b5cf6',
-  pass: '#06b6d4',
-  pop: '#f59e0b',
-  cam: '#ec4899',
-  dlux: '#10b981',
-  scout: '#f97316',
-  studio: '#6366f1',
-  stakebed: '#78716c',
-  general: '#9ca3af',
-}
+// Category palette — shared with the gantt/calendar via statusTokens
+// (this endpoint embeds the hex in its payload).
+import { CAT_COLORS } from '@/lib/scheduling/statusTokens'
 
 // Match the existing endpoint's lifecycle map: convert a SirReel
 // BookingStatus into the timeline-display token the gantt cares
