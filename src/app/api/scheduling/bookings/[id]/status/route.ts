@@ -62,13 +62,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!booking) {
     return NextResponse.json({ error: "booking not found" }, { status: 404 });
   }
-  // Ownership: agents change only their own reservations; ADMIN changes any.
-  if (actor.role !== "ADMIN" && booking.agentId !== actor.id) {
-    return NextResponse.json(
-      { error: "forbidden", reason: "you can only change status on your own reservations" },
-      { status: 403 },
-    );
-  }
+  // No ownership check (Wes 2026-08-21): status changes are shared
+  // coverage work for anyone with canCreateBooking - see dates route.
 
   // CANCELLED must release what the booking holds, in the same
   // transaction as the flip. Without this, the cancelled booking's

@@ -18,8 +18,10 @@
  * during the convergence-verification window, retires it at Chunk 8.
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
+import { getPermissions } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +91,17 @@ function nameOfPerson(p: { firstName: string | null; lastName: string | null } |
 export async function GET(req: NextRequest) {
   const denied = await requireReadSession()
   if (denied) return denied
+
+  // Data-visibility (Wes 2026-08-21): warehouse/yard roles see company,
+  // job name, and drivers - NOT the production client's person. The
+  // seeClientNames flag (false for MANAGER / FLEET_TECH) was specified
+  // long ago but never enforced on this feed; it is now. Company and
+  // job name ride on seeProductionInfo, which every board role has.
+  const session = await getServerSession()
+  const actor = session?.user?.email
+    ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { role: true } })
+    : null
+  const showClientContacts = actor ? getPermissions(actor.role).seeClientNames : false
 
   // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD. The /gantt page passes
   // these when the operator pans the window past the default; the
@@ -275,7 +288,7 @@ export async function GET(req: NextRequest) {
       jobName: b.jobName,
       jobNum: b.bookingNumber,
       rwOrderNumber: b.rentalworksOrderId,
-      contact: nameOfPerson(b.person),
+      contact: showClientContacts ? nameOfPerson(b.person) : null,
       agent: b.agent.name ?? '',
       status,
       stage: status,

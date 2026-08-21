@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { getPermissions } from '@/lib/permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,11 +169,21 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Pricing rides seePricing (false for MANAGER / FLEET_TECH) - the
+  // gantt modal's Balance chip only renders on a positive number, so
+  // null is a silent, safe redaction. Driver info stays: seeDriverInfo
+  // is true for every yard role (Wes 2026-08-21: warehouse/yard see
+  // company, job name, and drivers).
+  const actor = session?.user?.email
+    ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { role: true } })
+    : null
+  const showPricing = actor ? getPermissions(actor.role).seePricing : false
+
   return NextResponse.json({
     ok: true,
     paperwork: { rental, coi, coiExpires: coiRow?.policyExpiryDate ?? null, lcdw, ccAuth, wc },
     unionStatus: booking.unionStatus,
-    balanceDue,
+    balanceDue: showPricing ? balanceDue : null,
     checkout,
     // 5-digit after-hours access code clients read to the assistant to verify.
     accessCode: booking.job?.assistantAuthCode ?? null,

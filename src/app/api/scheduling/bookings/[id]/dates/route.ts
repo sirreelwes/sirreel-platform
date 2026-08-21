@@ -87,13 +87,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!booking) {
     return NextResponse.json({ error: "booking not found" }, { status: 404 });
   }
-  // Ownership: agents reschedule only their own reservations; ADMIN any.
-  if (actor.role !== "ADMIN" && booking.agentId !== actor.id) {
-    return NextResponse.json(
-      { error: "forbidden", reason: "you can only reschedule your own reservations" },
-      { status: 403 },
-    );
-  }
+  // No ownership check (Wes 2026-08-21): reservation moves are shared
+  // coverage work - anyone with canCreateBooking may reschedule any
+  // booking, not just their own. (The old own-bookings-only rule also
+  // never matched in practice: bookings.agent_id is a CRM Person id,
+  // not the session User id.)
 
   // Every active assignment this booking owns — excluded from its own conflict
   // re-check so the reschedule doesn't collide with itself.
