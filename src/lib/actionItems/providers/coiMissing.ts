@@ -39,7 +39,13 @@ export const coiMissingProvider: ActionItemProvider = {
       WHERE b.status NOT IN ('CANCELLED', 'ARCHIVED')
         AND b.archived_at IS NULL
         AND b.end_date >= now() - interval '1 day'
-        AND b.source <> 'PLANYO_BACKFILL'
+        -- Planyo-imported bookings (live book since 2026-08-18) count
+        -- only once HQ actually TRACKS their paperwork: a missing
+        -- paperwork_request row on an import means "COI state unknown"
+        -- (the COI may exist outside HQ), not "COI missing" — blanket
+        -- inclusion would have dumped ~53 unknowns into the worklist
+        -- at rollout. Native bookings keep no-row-counts-as-missing.
+        AND (b.source <> 'PLANYO_BACKFILL' OR (pr.id IS NOT NULL AND pr.coi_received = false))
         AND (pr.id IS NULL OR pr.coi_received = false)
       ORDER BY b.end_date ASC
       LIMIT 100

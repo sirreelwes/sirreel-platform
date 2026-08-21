@@ -11,6 +11,7 @@
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,9 @@ function parseDate(s: string | null): Date | null {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   const url = new URL(req.url)
   const categoryId = url.searchParams.get('categoryId')
   const start = parseDate(url.searchParams.get('start'))

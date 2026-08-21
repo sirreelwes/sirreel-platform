@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,9 @@ const DEFAULT_THRESHOLD_DAYS = 14
 const MAX_THRESHOLD_DAYS = 365
 
 export async function GET(req: NextRequest) {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   const url = new URL(req.url)
   const requestedDays = parseInt(url.searchParams.get('days') ?? `${DEFAULT_THRESHOLD_DAYS}`, 10)
   const days = Math.min(MAX_THRESHOLD_DAYS, Math.max(0, Number.isFinite(requestedDays) ? requestedDays : DEFAULT_THRESHOLD_DAYS))

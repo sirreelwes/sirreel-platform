@@ -14,6 +14,7 @@
  */
 import { NextResponse } from 'next/server'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,9 @@ function parseISODate(s: string | null): Date | null {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   const url = new URL(req.url)
   const categoryId = url.searchParams.get('categoryId')
   const start = parseISODate(url.searchParams.get('start'))

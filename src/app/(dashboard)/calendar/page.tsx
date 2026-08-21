@@ -34,6 +34,10 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string }>
   hold: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
   quoted: { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
   inquiry: { bg: 'bg-sky-100', text: 'text-sky-800', border: 'border-sky-200' },
+  // Struck neutral, NOT grey-as-maintenance (grey uniquely means
+  // maintenance per the 2026-08-21 legend ruling). Without this key,
+  // cancelled jobs fell back to the inquiry style and rendered as live.
+  cancelled: { bg: 'bg-zinc-100', text: 'text-zinc-400 line-through', border: 'border-zinc-200' },
 };
 
 // ═══ Component ═══

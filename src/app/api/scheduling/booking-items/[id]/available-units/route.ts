@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import type { AssetTier } from '@prisma/client'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,9 @@ const TIER_ORDER: Record<AssetTier, number> = {
 }
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   const bookingItem = await prisma.bookingItem.findUnique({
     where: { id: params.id },
     select: {

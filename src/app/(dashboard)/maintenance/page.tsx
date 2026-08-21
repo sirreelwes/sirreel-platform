@@ -171,6 +171,14 @@ export default function MaintenancePage() {
 
   return (
     <div>
+      {/* This page still runs on the hardcoded RECORDS array below — real
+          maintenance lives in MaintenanceRecord rows (AssetSummaryPanel).
+          Banner stays until this page is wired to real data, so nobody
+          on the rollout treats these rows as the shop's actual state. */}
+      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+        <strong>Preview — sample data.</strong> These records are placeholders, not live shop status.
+        Real unit availability lives on the Reservations board (unit N/A windows).
+      </div>
       {/* Stats bar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex gap-3">

@@ -18,10 +18,14 @@
 import { NextResponse } from 'next/server'
 import { LineItemDepartment } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   // Read the merged catalog rows so name and unit count are live —
   // totalUnits on the frozen AssetCategory is NOT mirrored and drifts as
   // soon as qtyOwned is edited. The returned `id` stays the AssetCategory

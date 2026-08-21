@@ -7,10 +7,10 @@
  * sendAgreementEmail helper) — to lib/fleet/readinessRecipients.ts.
  * Each vehicle line links to its pre-rental inspection checkout page.
  *
- * Scope guards:
- *   - Booking.source PLANYO_BACKFILL is EXCLUDED — those rows are a
- *     stale prior-import snapshot, not live commitments (CLAUDE.md);
- *     reminders fire only for HQ-native bookings until cutover.
+ * Scope guards (shared with /fleet/today via lib/fleet/todayBoard):
+ *   - Booking.source PLANYO_BACKFILL is INCLUDED — since the
+ *     2026-08-18 import those rows ARE the live book; the pre-import
+ *     exclusion was removed 2026-08-21 for the team rollout.
  *   - Assignment.status ASSIGNED only (CHECKED_OUT is already gone;
  *     RETURNED/SWAPPED are stale).
  *

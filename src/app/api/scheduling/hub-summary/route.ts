@@ -8,12 +8,16 @@
  */
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
 const STALE_DAYS = 14
 
 export async function GET() {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   const staleCutoff = new Date(Date.now() - STALE_DAYS * 86_400_000)
 
   const [

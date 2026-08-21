@@ -19,6 +19,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -95,6 +96,9 @@ function nameOfPerson(p: { firstName: string | null; lastName: string | null } |
 }
 
 export async function GET(req: NextRequest) {
+  const denied = await requireReadSession()
+  if (denied) return denied
+
   // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD. The /gantt page passes
   // these when the operator pans the window past the default; the
   // legacy callers (/calendar, /dashboard) keep working unchanged

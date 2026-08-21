@@ -3,10 +3,11 @@
  * BOTH the fleet-readiness cron digest and the /fleet/today mobile
  * board, so the two can never drift.
  *
- * Scope guards (same as the cron always had):
- *   - Booking status CONFIRMED/ACTIVE, source != PLANYO_BACKFILL (the
- *     backfill rows are a stale prior-import snapshot, not live
- *     commitments — CLAUDE.md).
+ * Scope guards:
+ *   - Booking status CONFIRMED/ACTIVE. PLANYO_BACKFILL rows are
+ *     INCLUDED — since the 2026-08-18 import they ARE the live book,
+ *     not a stale snapshot (the pre-import exclusion was removed
+ *     2026-08-21 for the team rollout).
  *   - Assignment status ASSIGNED only (CHECKED_OUT is already gone;
  *     RETURNED/SWAPPED are stale).
  *
@@ -53,7 +54,6 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
       bookingItem: {
         booking: {
           status: { in: ['CONFIRMED', 'ACTIVE'] },
-          source: { not: 'PLANYO_BACKFILL' },
         },
       },
     },
