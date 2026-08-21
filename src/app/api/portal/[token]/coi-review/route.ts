@@ -26,7 +26,7 @@ CRITICAL REQUIREMENTS (must all pass — cannot be waived):
 9. Policy not expired
 
 ALERT REQUIREMENTS (admin judgment call):
-A. Primary & Non-Contributory language
+A. Primary & Non-Contributory language - the certificate must state the insured's coverage is primary and non-contributory as respects SirReel (their policy pays first and cannot demand SirReel's insurance contribute). This wording rarely gets its own coverage line — look for it in the Description of Operations box (e.g. "coverage is primary and non-contributory", "primary & non-contributory as respects the additional insured") or a referenced endorsement form (commonly CG 20 01). Any of those PASSES. FAIL only if no primary/non-contributory language appears anywhere on the cert. When it FAILS, the note must explain the fix: this is a standard endorsement the client's broker can add same-day at no cost — ask the broker to reissue the COI showing primary and non-contributory wording in favor of SirReel Production Vehicles Inc. If the broker says the policy genuinely lacks it, that is a real coverage gap.
 B. Waiver of Subrogation - if SUBR WVD column shows "Y" on ANY policy row, this passes
 C. Umbrella/Excess Liability $1M
 D. Workers Compensation - may be on separate payroll company certificate
