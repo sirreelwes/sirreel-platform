@@ -1,13 +1,12 @@
 /**
  * Server-side guard for the Phase 2 warehouse picking endpoints.
  *
- * Role-gated to ADMIN | MANAGER. AGENT is explicitly excluded — sales
- * agents don't pick warehouse orders, and granting them access muddies
- * the role semantics (per Phase 2 confirmation, answer 5).
- *
- * PARKING LOT: when a dedicated picker user gets provisioned (likely
- * Chris Valencia), add a WAREHOUSE role to UserRole and include it in
- * ALLOWED_ROLES below. No other change needed in this helper.
+ * Derives from the permissions matrix (`getPermissions(role).warehouse`)
+ * instead of a hardcoded role list — the matrix and this gate can no
+ * longer drift (they did until 2026-08-21: two independent ADMIN/MANAGER
+ * lists). Passing roles today: ADMIN, MANAGER, WAREHOUSE. AGENT stays
+ * excluded — sales agents don't pick warehouse orders (Phase 2
+ * confirmation, answer 5).
  *
  * Usage:
  *   const auth = await requirePickerRole()
@@ -19,8 +18,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-
-const ALLOWED_ROLES: ReadonlyArray<UserRole> = ['ADMIN', 'MANAGER'] as const
+import { getPermissions } from '@/lib/permissions'
 
 export type RequirePickerRoleResult =
   | { ok: true; userId: string; role: UserRole }
@@ -46,11 +44,11 @@ export async function requirePickerRole(): Promise<RequirePickerRoleResult> {
     }
   }
 
-  if (!ALLOWED_ROLES.includes(user.role)) {
+  if (!getPermissions(user.role).warehouse) {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: 'forbidden', reason: 'warehouse picking is gated to ADMIN/MANAGER' },
+        { error: 'forbidden', reason: 'warehouse picking is gated to warehouse-enabled roles' },
         { status: 403 },
       ),
     }

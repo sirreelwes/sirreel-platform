@@ -189,6 +189,27 @@ const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canSendEmail: false, canEditCompany: false, canManageUsers: false,
   },
 
+  // Warehouse picking floor (Phase 2, 2026-08-21). Operates pick
+  // sessions (requirePickerRole derives from the `warehouse` flag) and
+  // OBSERVES the reservations board + deliveries board read-only.
+  // Data scope per Wes 2026-08-21: company, job name, and drivers —
+  // no client contacts, no pricing. Zero reservation mutations.
+  // First intended holder: Chris (account deferred — on leave).
+  WAREHOUSE: {
+    calendar: true, gantt: true, bookings: false, pipeline: false, maintenance: false,
+    fleet: false, crm: false, claims: false,
+    reporting: false, ai: false, tasks: false, inspections: false, coverage: false,
+    warehouse: true, billing: false, subRentals: false,
+    seeClientNames: false, seeClientContact: false, seeProductionInfo: true,
+    seeDriverInfo: true, seePricing: false,
+    seeRevenue: false, seeAllBookings: true, seeOtherAgents: false,
+    seeMaintCost: false, seeEmailHistory: false,
+    canCreateBooking: false, canConfirmBooking: false, canCancelBooking: false,
+    canAssignAssets: false, canChangeAssetStatus: false, canCreateMaintenance: false,
+    canManageDrivers: false, canProcessCheckout: false, canManageClaims: false,
+    canSendEmail: false, canEditCompany: false, canManageUsers: false,
+  },
+
   DRIVER: {
     calendar: false, gantt: false, bookings: false, pipeline: false, maintenance: false,
     fleet: false, crm: false, claims: false,
@@ -323,6 +344,7 @@ export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
   if (isSalesRole(role)) return '/sales/pipeline';
   if (isFleetYardRole(role)) return '/fleet/today';
+  if (role === 'WAREHOUSE') return '/warehouse/pick';
   return '/dashboard';
 }
 
@@ -331,6 +353,29 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // Legacy callers pass a bare role and get no email — those users simply
   // don't see email-gated entries, which is the safe default.
   const navEmail: string | undefined = typeof input === 'string' ? undefined : input.email;
+  // WAREHOUSE is the one fully-gated nav (2026-08-21, Phase 2 of the
+  // reservations rollout): pick-floor users get a trimmed IA of only
+  // the surfaces whose APIs actually admit them — everything else in
+  // the fixed IA below would 403 and read as "the app is broken" to a
+  // brand-new audience. Deliberately scoped to this NEW role so the
+  // fixed-IA ruling for existing roles (below) stands untouched.
+  if (navRole === 'WAREHOUSE') {
+    return [
+      {
+        label: 'Warehouse',
+        items: [
+          { id: 'warehouse-pick', label: 'Pick', icon: 'ClipboardList', href: '/warehouse/pick' },
+        ],
+      },
+      {
+        label: 'Schedule',
+        items: [
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+          { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
+        ],
+      },
+    ];
+  }
   // Fixed information architecture — identical for every user. This is a
   // visual + IA surface only; pages enforce their own authorization, so
   // there is intentionally NO role-gating here (every tab is visible to

@@ -42,6 +42,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { FulfillmentLane, OrderStatus, BookingPriority, PickListStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
+import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
 
 export const dynamic = 'force-dynamic'
 
@@ -156,8 +157,16 @@ function labelFor(date: Date, asOf: Date): string {
 
 // ─── Handler ────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
+  // Fleet ops (canAssignAssets) OR the warehouse view — the pick floor
+  // observes what's going out and coming back on this read-only board
+  // (Phase 2, 2026-08-21). Deliberately widened HERE and not inside
+  // requireDispatchAccess: that helper also guards BIT/dot-sheet
+  // paperwork surfaces, which stay fleet-only.
   const auth = await requireDispatchAccess()
-  if (!auth.ok) return auth.response
+  if (!auth.ok) {
+    const fallback = await requirePickerRole()
+    if (!fallback.ok) return auth.response
+  }
 
   const url = req.nextUrl
   const asOf = parseAsOf(url.searchParams.get('asOf'))
