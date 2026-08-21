@@ -3759,6 +3759,11 @@ model Job {
   planyoCartId            String?        @unique @map("planyo_cart_id")
   estimatedValue          Decimal?       @map("estimated_value") @db.Decimal(12, 2)
   notes                   String?        @db.Text
+  /// Free-form job tags. First citizen: 'ART_DEPT' — Planyo's yellow
+  /// reservation color, carried into HQ as a TAG rather than a status
+  /// (Wes 2026-08-21). Rendered as a yellow chip on the scheduling
+  /// surfaces; toggled from the gantt's reservation detail.
+  tags                    String[]       @default([])
   // Physical-return marker — "the gear is back at the warehouse."
   // Deliberately NOT a JobStatus value (WRAPPED = lifecycle close, not
   // physical return). Set/cleared by POST /api/jobs/[id]/mark-returned

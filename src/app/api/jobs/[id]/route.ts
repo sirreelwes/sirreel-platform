@@ -391,6 +391,7 @@ export async function PATCH(
       agentId,
       notes,
       estimatedValue,
+      tags,
     } = body
 
     const job = await prisma.job.update({
@@ -410,6 +411,10 @@ export async function PATCH(
         }),
         ...(agentId !== undefined && { agentId }),
         ...(notes !== undefined && { notes }),
+        // Job tags (e.g. 'ART_DEPT') — full-array replace, strings only.
+        ...(Array.isArray(tags) && {
+          tags: tags.filter((t: unknown): t is string => typeof t === 'string' && t.trim() !== ''),
+        }),
         // startDate/endDate are deliberately NOT written: a job has no
         // dates of its own (lib/jobs/dateRange). Callers may still send
         // them; they're ignored rather than 400'd so older clients don't

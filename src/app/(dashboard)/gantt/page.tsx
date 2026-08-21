@@ -20,6 +20,7 @@ import {
   TODAY_COLUMN_TINT,
   TODAY_HEADER_CLASS,
   UNIT_NA_COLOR,
+  ART_DEPT_TAG_CHIP,
 } from '@/lib/scheduling/statusTokens';
 import StatusLegend from '@/components/scheduling/StatusLegend';
 
@@ -213,6 +214,9 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             >
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                 {b.hasOrder && <span title="Order attached to this reservation">📄 </span>}
+                {(b.tags || []).includes('ART_DEPT') && (
+                  <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
+                )}
                 {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''} · {fMonth(b.start)}–{fMonth(b.end)}
               </span>
             </div>
@@ -543,6 +547,24 @@ export default function GanttPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [fetchRange.from, fetchRange.to])
+
+  // Art Dept job tag toggle (Planyo's yellow, carried over as a TAG).
+  // Optimistic flip on the open modal; the board refetch reconciles bars.
+  const toggleArtDept = useCallback(async () => {
+    setSelected((sel: any) => {
+      if (!sel?.jobId) return sel
+      const tags: string[] = sel.tags || []
+      const next = tags.includes('ART_DEPT') ? tags.filter((t) => t !== 'ART_DEPT') : [...tags, 'ART_DEPT']
+      fetch(`/api/jobs/${sel.jobId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tags: next }),
+      })
+        .then(() => refreshTimeline())
+        .catch(() => {})
+      return { ...sel, tags: next }
+    })
+  }, [refreshTimeline])
 
   // ── Window paging. ‹ / › step by the current visible width
   //    (totalDays) so a 2W window pages two weeks at a time, a 4W
@@ -1216,6 +1238,10 @@ export default function GanttPage() {
           <span>📄</span>
           <span className="text-gray-500">Order attached</span>
         </div>
+        <div className="flex items-center gap-1">
+          <span className={`px-1 rounded-sm text-[8px] font-bold ${ART_DEPT_TAG_CHIP}`}>ART</span>
+          <span className="text-gray-500">Art Dept job tag</span>
+        </div>
       </StatusLegend>
 
       {/* Gantt — single scroll container.
@@ -1497,6 +1523,9 @@ export default function GanttPage() {
                         >
                           <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                             {job.hasOrder && <span title="Order attached">📄 </span>}
+                            {(job.tags || []).includes('ART_DEPT') && (
+                              <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
+                            )}
                             {job.company} · {job.items?.length} unit{job.items?.length !== 1 ? 's' : ''}
                           </span>
                         </div>
@@ -1558,6 +1587,15 @@ export default function GanttPage() {
                       >
                         {selected.jobCode || 'Job'} →
                       </Link>
+                    )}
+                    {selected.jobId && canBindUnit && (
+                      <button
+                        onClick={toggleArtDept}
+                        title="Toggle the Art Dept tag on this job (Planyo's yellow)"
+                        className={`inline-block ml-1.5 mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${(selected.tags || []).includes('ART_DEPT') ? ART_DEPT_TAG_CHIP : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-yellow-50 hover:text-yellow-800'}`}
+                      >
+                        ART DEPT
+                      </button>
                     )}
                     {resContext?.accessCode && (
                       <span className="inline-block ml-1.5 mt-1 text-[10px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5" title="Client access code — read to the after-hours assistant to verify">

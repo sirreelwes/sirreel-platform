@@ -161,6 +161,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           jobCode: true,
+          tags: true,
           orders: {
             where: { status: { not: 'CANCELLED' } },
             // blindPickup comes from the JOB's orders, not just the booking's.
@@ -284,6 +285,7 @@ export async function GET(req: NextRequest) {
       bookingId: b.id, // explicit native id
       jobId: b.job?.id ?? null,
       jobCode: b.job?.jobCode ?? null,
+      tags: b.job?.tags ?? [],
       company: b.company.name,
       jobName: b.jobName,
       jobNum: b.bookingNumber,
@@ -365,7 +367,7 @@ export async function GET(req: NextRequest) {
               status: true,
               jobName: true,
               rentalworksOrderId: true,
-              job: { select: { id: true, jobCode: true } },
+              job: { select: { id: true, jobCode: true, tags: true } },
               company: { select: { name: true } },
               agent: { select: { id: true, name: true } },
               orders: { select: { blindPickup: true } },
@@ -421,6 +423,7 @@ export async function GET(req: NextRequest) {
       cartId: a.bookingItem.booking.bookingNumber,
       jobId: a.bookingItem.booking.job?.id ?? null,
       jobCode: a.bookingItem.booking.job?.jobCode ?? null,
+      tags: a.bookingItem.booking.job?.tags ?? [],
       clientName: a.bookingItem.booking.company.name,
       jobName: a.bookingItem.booking.jobName,
       agent: a.bookingItem.booking.agent.name ?? '',
