@@ -1607,16 +1607,21 @@ function NewQuotePageInner() {
       const jobId: string = existingJobId;
 
       if (discountAmount && parseFloat(discountAmount) !== 0) {
-        await fetch(`/api/orders/${order.id}/line-items`, {
+        // ORDER-scoped OrderDiscount, NOT a legacy DISCOUNT line item. The
+        // old line-item version multiplied like any other line — qty × rate
+        // × billableDays — so a "-$85" discount silently became -$425 the
+        // moment the order's dates spread days onto its lines (Oliver,
+        // 2026-08-20). OrderDiscount is day-proof by construction, clamped
+        // to the subtotal, and shows in the DISCOUNTS section where it can
+        // be edited or made a percentage later.
+        await fetch(`/api/orders/${order.id}/discounts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: 'DISCOUNT',
-            description: discountLabel || 'Discount',
-            quantity: 1,
-            rate: parseFloat(discountAmount),
-            rateType: 'FLAT',
-            department: 'PRO_SUPPLIES',
+            scope: 'ORDER',
+            type: 'FIXED',
+            value: Math.abs(parseFloat(discountAmount)),
+            label: discountLabel || 'Discount',
           }),
         });
       }
