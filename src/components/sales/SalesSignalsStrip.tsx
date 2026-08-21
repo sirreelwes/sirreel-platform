@@ -67,17 +67,19 @@ export function SalesSignalsStrip({ scope, onChange }: { scope: Scope; onChange?
     stale: data?.staleQuotes.length ?? 0,
     dormant: data?.dormantClients.length ?? 0,
     coi: data?.pendingCoi.length ?? 0,
-    inbox: data?.unlinkedEmailCount ?? 0,
+    inbox: 0,
   };
 
+  // Unlinked Emails dropped from the strip (2026-08-21 redesign): the
+  // org-wide count was five digits of un-actionable noise on a sales
+  // signal row. Inbox triage lives at /inbox on its own terms.
   const chips: Array<{ key: PanelKey; label: string; tone: string }> = [
     { key: 'stale',   label: 'Stale Quotes',          tone: 'border-amber-700 text-amber-200 bg-amber-900/20' },
     { key: 'dormant', label: 'Dormant Clients (60d+)', tone: 'border-zinc-700 text-zinc-200 bg-zinc-900/40' },
     { key: 'coi',     label: 'Pending COIs',          tone: 'border-purple-800 text-purple-200 bg-purple-900/20' },
-    { key: 'inbox',   label: 'Unlinked Emails',       tone: 'border-blue-800 text-blue-200 bg-blue-900/20' },
   ];
 
-  const total = counts.stale + counts.dormant + counts.coi + counts.inbox;
+  const total = counts.stale + counts.dormant + counts.coi;
 
   return (
     <section className="space-y-2">

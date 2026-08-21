@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
 import {
   classifyInquiryForPipeline,
   type InquiryClassification,
@@ -36,6 +37,10 @@ const RESPONDED_LIMIT = 8;
 //     stay visible with a "Replied by … ·  when" marker instead of looking
 //     like it was never handled.
 export async function GET() {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000);
 
   const [emails, considered] = await Promise.all([

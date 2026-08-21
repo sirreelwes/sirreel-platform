@@ -7,6 +7,10 @@ import type { InquiryStatus } from '@prisma/client'
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   const inquiry = await prisma.inquiry.findUnique({
     where: { id },
@@ -61,6 +65,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   try {
     const body = await req.json()
@@ -101,6 +109,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       data.preferredEndDate = body.preferredEndDate ? new Date(body.preferredEndDate) : null
     }
     if (body.convertedJobId !== undefined) data.convertedJobId = body.convertedJobId || null
+    // Existing-Job conversions record the created Order instead (the
+    // Job may already own another inquiry's convertedJobId - unique FK).
+    if (body.convertedOrderId !== undefined) data.convertedOrderId = body.convertedOrderId || null
 
     const inquiry = await prisma.inquiry.update({
       where: { id },

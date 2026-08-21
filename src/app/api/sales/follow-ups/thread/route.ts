@@ -31,6 +31,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,10 @@ interface SyntheticMessage {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const orderId = req.nextUrl.searchParams.get('orderId') || ''
   if (!orderId) return NextResponse.json({ error: 'orderId required' }, { status: 400 })
 

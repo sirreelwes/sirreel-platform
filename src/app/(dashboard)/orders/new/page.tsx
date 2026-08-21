@@ -1626,16 +1626,21 @@ function NewQuotePageInner() {
         });
       }
 
-      // Mark inquiry CONVERTED if we came from one (and the agent chose
-      // "Create new" in the resolver — attaching to an existing Job
-      // means the Inquiry was serving a different purpose, leave its
-      // status alone).
-      if (inquiry && eff.created) {
+      // Mark inquiry CONVERTED if we came from one — for BOTH resolver
+      // outcomes (2026-08-21 fix: the old eff.created gate left
+      // attached-to-existing-Job inquiries NEW forever, phantoms in the
+      // queue). New Job → convertedJobId (unique per job); existing Job
+      // → convertedOrderId (this order is always fresh, so unique holds).
+      if (inquiry) {
         try {
           await fetch(`/api/inquiries/${inquiry.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'CONVERTED', convertedJobId: jobId }),
+            body: JSON.stringify(
+              eff.created
+                ? { status: 'CONVERTED', convertedJobId: jobId }
+                : { status: 'CONVERTED', convertedOrderId: orderId },
+            ),
           });
         } catch {
           // Non-fatal

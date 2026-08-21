@@ -1784,7 +1784,7 @@ export default function GanttPage() {
                               Booked / Cancelled. Booked needs no rental agreement.
                               Shown to canCreateBooking users on bookings they own
                               (ADMIN: any). Others see a read-only status pill. */}
-                          {canSetStatus && (sessionRole === 'ADMIN' || (selected.agentId && selected.agentId === sessionUserId)) ? (
+                          {canSetStatus /* shared coverage (Wes 2026-08-21) - matches the server's dropped ownership check */ ? (
                             <div className="flex items-center gap-1">
                               {([['inquiry', 'Inquiry'], ['hold', 'Hold'], ['booked', 'Booked'], ['cancelled', 'Cancelled']] as const).map(([val, lbl]) => {
                                 const active = selected.status === val
@@ -1827,7 +1827,7 @@ export default function GanttPage() {
                         Validated against the same buffer/overlap checks creation
                         uses; buffer encroachment offers an override. */}
                     {!selected.isBackup && selected.bookingId && (
-                      canSetStatus && (sessionRole === 'ADMIN' || (selected.agentId && selected.agentId === sessionUserId)) ? (
+                      canSetStatus /* shared coverage (Wes 2026-08-21) - matches the server's dropped ownership check */ ? (
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[10px] uppercase tracking-wide text-gray-400">Dates</span>

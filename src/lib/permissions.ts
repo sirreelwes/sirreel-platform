@@ -342,7 +342,7 @@ export function isFleetYardRole(role: UserRole): boolean {
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
-  if (isSalesRole(role)) return '/sales/pipeline';
+  if (isSalesRole(role)) return '/inquiries';
   if (isFleetYardRole(role)) return '/fleet/today';
   if (role === 'WAREHOUSE') return '/warehouse/pick';
   return '/dashboard';
@@ -376,6 +376,32 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       },
     ];
   }
+  // AGENT (the sales team: Jose, Oliver) gets a trimmed sales nav
+  // (Wes 2026-08-21 pre-cutover simplification). The fixed IA below
+  // showed them ~36 tabs for a 7-page job, four of which 403'd or
+  // redirect-looped for their role. This is the whole sales journey:
+  // inquiry → quote → reservation → job, plus lookups. Pipeline is
+  // gone (redirects to /inquiries); Collections stays allowlist-gated.
+  if (navRole === 'AGENT') {
+    return [
+      {
+        label: 'Sales',
+        items: [
+          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
+          { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
+          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+          { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+          { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+          ...(canUseCollections(navRole, navEmail)
+            ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
+            : []),
+        ],
+      },
+    ];
+  }
   // Fixed information architecture — identical for every user. This is a
   // visual + IA surface only; pages enforce their own authorization, so
   // there is intentionally NO role-gating here (every tab is visible to
@@ -404,7 +430,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // when Wes couldn't locate it). Sits above Pipeline because it is
         // the top of that funnel.
         { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
-        { id: 'pipeline', label: 'Pipeline', icon: 'TrendingUp', href: '/sales/pipeline' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },

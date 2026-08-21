@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth'
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,10 @@ export const dynamic = 'force-dynamic';
 //   considered: { inquiryId, status } | null,
 // }
 export async function GET(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const emailId = req.nextUrl.searchParams.get('emailId') || '';
   if (!emailId) return NextResponse.json({ error: 'emailId required' }, { status: 400 });
 

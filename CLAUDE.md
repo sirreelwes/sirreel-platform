@@ -119,9 +119,25 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - Counter-PDF is a *negotiation document*, not a contract-to-sign — no signature block. Signing happens through the existing portal flow when client agrees
 
 ## Active Roadmap
-1. Julian's dispatch view
-2. AI fleet optimization
-3. RentalWorks token refresh automation
-4. Standalone /jobs list + /jobs/[id] detail page
-5. Replace new-quote auto-create-job fallback with proper UX
-6. Update Timeline page to use real jobId instead of cart_id
+1. AI fleet optimization
+2. RentalWorks token refresh automation
+3. Update Timeline page to use real jobId instead of cart_id
+4. Reservations go-live announcement (plan artifact: eb4023dd) — 6 stage
+   residuals for Julian/Hugo, then Wes announces; Planyo → read-only
+
+(Removed as shipped: Julian's dispatch view = /dispatch "Deliveries &
+Pickups"; standalone /jobs list + detail; the new-quote auto-create-job
+fallback was replaced by Job-as-root + JobResolverModal.)
+
+## Sales workspace (2026-08-21)
+- `/inquiries` IS the sales home: New inbound (NewInboundColumn) +
+  QuotesOutPanel (the ONE sent-quotes list, follow-up Nudge attached) +
+  SalesReservationsWidget + SalesSignalsStrip. `/sales/pipeline`
+  redirects there; the old kanbans/Prospects/FunnelMetricsStrip/
+  InquiriesSection/OpenQuotesPanel/FollowUpsDuePanel and
+  /api/sales/metrics were DELETED (kanban WON/LOST columns were
+  structurally broken — do not resurrect).
+- AGENT role gets a trimmed 8-tab nav branch in getNavSections;
+  sales lands on /inquiries (defaultLandingPath).
+- Inquiry conversion now always closes the inquiry: new Job →
+  convertedJobId; attach-to-existing-Job → convertedOrderId.

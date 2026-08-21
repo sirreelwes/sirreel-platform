@@ -1,255 +1,115 @@
-'use client'
+'use client';
 
 /**
- * /inquiries — operator triage queue.
+ * Inquiries — THE sales workspace (2026-08-21 redesign, Wes).
  *
- * Phase 4 of the supply-ordering brief. Surfaces DB Inquiry rows
- * (the InquiriesSection in CRM only shows Gmail suggestions, which
- * is a different stream — see InquiriesSection.tsx header comment).
+ * One page for the whole daily loop, replacing the old two-tab split
+ * where /inquiries was a read-only table and /sales/pipeline carried
+ * the same rows again with the real actions plus six more sections
+ * (two structurally-broken kanbans, a dead Prospects placeholder, and
+ * a SENT quote rendered four different ways). /sales/pipeline now
+ * redirects here.
  *
- * Default view: status=NEW, all sources. Source chips filter the
- * client-side list; status chips swap the API filter.
- * Click a row → /inquiries/[id] for structured rendering + actions.
+ * Shape:
+ *   1. New inbound  — live queue (web forms + Gmail suggestions),
+ *      pending vs responded, with Capture & Quote / Add-on / Quick
+ *      Reply / Dismiss inline. 60s poll. (NewInboundColumn — the
+ *      machinery that already worked; only its home changed.)
+ *   2. Quotes out   — the ONE "sent, waiting" list, nudge attached.
+ *   3. Upcoming reservations + signals — glanceable context.
+ *
+ * Won work lives on the Jobs board (/jobs) — linked, not duplicated.
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { NewInboundColumn } from '@/components/sales/NewInboundColumn';
+import { QuotesOutPanel } from '@/components/sales/QuotesOutPanel';
+import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget';
+import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
+import { NewInquiryModal } from '@/components/sales/NewInquiryModal';
+import { CopyIntakeLinkButton } from '@/components/intake/CopyIntakeLinkButton';
 
-type InquiryStatus = 'NEW' | 'CONVERTED' | 'DISMISSED'
-type InquirySource = 'MANUAL' | 'GMAIL' | 'WEB_FORM'
+export default function InquiriesPage() {
+  const { data: session, status: authStatus } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
 
-interface InquiryRow {
-  id: string
-  title: string
-  description: string
-  source: InquirySource
-  status: InquiryStatus
-  estimatedValue: number | null
-  preferredStartDate: string | null
-  preferredEndDate: string | null
-  createdAt: string
-  company: { id: string; name: string } | null
-  person: { id: string; firstName: string; lastName: string; email: string } | null
-  assignedTo: { id: string; name: string } | null
-  convertedJob: { id: string; jobCode: string; name: string } | null
-  sourceMetadata: Record<string, unknown> | null
-}
-
-const SOURCE_LABEL: Record<InquirySource, string> = {
-  MANUAL: 'Manual',
-  GMAIL: 'Gmail',
-  WEB_FORM: 'Web form',
-}
-const SOURCE_BADGE: Record<InquirySource, string> = {
-  MANUAL: 'bg-zinc-100 text-zinc-700 border-zinc-200',
-  GMAIL: 'bg-blue-50 text-blue-700 border-blue-200',
-  WEB_FORM: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-}
-const STATUS_BADGE: Record<InquiryStatus, string> = {
-  NEW: 'bg-amber-50 text-amber-800 border-amber-200',
-  CONVERTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  DISMISSED: 'bg-zinc-50 text-zinc-500 border-zinc-200',
-}
-
-const STATUS_FILTERS: { id: 'NEW' | 'ALL'; label: string }[] = [
-  { id: 'NEW', label: 'New' },
-  { id: 'ALL', label: 'All' },
-]
-// 'ORDER_FORM' is not a DB source — it is the WEB_FORM subset whose
-// sourceMetadata.kind === 'production-order', i.e. the public ORDER form
-// (the money submissions). Deliberately a filter here rather than a rename
-// of the queue: the sidebar already has an "Orders" tab (sr_orders, the
-// invoiceable kind), and this queue also holds contact / stage / intake
-// forms and Gmail leads, so "Orders" as a page name would collide and
-// mislabel. Deep-linkable via /inquiries?filter=orders (Wes, 2026-08-20).
-type SourceFilter = 'all' | InquirySource | 'ORDER_FORM'
-const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
-  { id: 'all', label: 'All sources' },
-  { id: 'ORDER_FORM', label: 'Order forms' },
-  { id: 'WEB_FORM', label: 'Web form' },
-  { id: 'MANUAL', label: 'Manual' },
-  { id: 'GMAIL', label: 'Gmail' },
-]
-
-const isOrderForm = (r: InquiryRow) =>
-  r.source === 'WEB_FORM' && (r.sourceMetadata as { kind?: string } | null)?.kind === 'production-order'
-
-function ageString(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 60) return m <= 1 ? 'just now' : `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h`
-  const d = Math.floor(h / 24)
-  return `${d}d`
-}
-function fmtMoney(n: number | null): string {
-  if (n == null) return '—'
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-}
-function fmtDateRange(start: string | null, end: string | null): string {
-  if (!start && !end) return '—'
-  const fmt = (s: string | null) =>
-    s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?'
-  return `${fmt(start)} → ${fmt(end)}`
-}
-
-export default function InquiriesQueuePage() {
-  const [statusFilter, setStatusFilter] = useState<'NEW' | 'ALL'>('NEW')
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
-  const [data, setData] = useState<InquiryRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Deep link: /inquiries?filter=orders opens pre-filtered to order forms.
-  // Read once on mount from location rather than useSearchParams — this
-  // page is fully client-rendered and the param only seeds initial state.
-  useEffect(() => {
-    const f = new URLSearchParams(window.location.search).get('filter')
-    if (f === 'orders') setSourceFilter('ORDER_FORM')
-  }, [])
+  // AGENT defaults to My Deals; everyone else to Team.
+  const [scope, setScope] = useState<'my' | 'team'>('team');
+  const [showNewInquiry, setShowNewInquiry] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    const params = new URLSearchParams({ status: statusFilter })
-    fetch(`/api/inquiries?${params.toString()}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) throw new Error(d.error)
-        setData(d.inquiries || [])
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
-  }, [statusFilter])
+    if (authStatus !== 'authenticated') return;
+    setScope(role === 'AGENT' ? 'my' : 'team');
+  }, [authStatus, role]);
 
-  const visible = useMemo(() => {
-    if (sourceFilter === 'all') return data
-    if (sourceFilter === 'ORDER_FORM') return data.filter(isOrderForm)
-    return data.filter((r) => r.source === sourceFilter)
-  }, [data, sourceFilter])
+  const refreshAll = () => setRefreshKey((k) => k + 1);
+
+  if (authStatus === 'loading') {
+    return <div className="min-h-[60vh] flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
+  }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-4">
-      <header>
-        <h1 className="text-2xl font-semibold text-zinc-900">Inquiries</h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          Triage queue for inbound requests — web-form supply orders, manual entries, and Gmail
-          conversions. Click a row to open the full detail + actions.
-        </p>
-      </header>
-
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setStatusFilter(f.id)}
-              className={`text-xs px-2.5 py-1 rounded-full border ${
-                statusFilter === f.id
-                  ? 'bg-white text-zinc-900 border-white'
-                  : 'bg-transparent text-zinc-400 border-zinc-700 hover:border-zinc-500 hover:text-zinc-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+    <div className="space-y-6">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Inquiries</h1>
+          <p className="text-[13px] text-gray-500 mt-0.5">
+            Every ask, in one place: answer it, quote it, nudge it. Won work moves to the{' '}
+            <Link href="/jobs" className="text-amber-700 font-semibold hover:underline">Jobs board →</Link>
+          </p>
         </div>
-        <div className="h-5 w-px bg-zinc-700" />
-        <div className="flex items-center gap-1.5">
-          {SOURCE_FILTERS.map((f) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          <CopyIntakeLinkButton />
+          <button
+            onClick={() => setShowNewInquiry(true)}
+            className="text-[12px] font-bold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white"
+          >
+            + Inquiry
+          </button>
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[12px] font-semibold">
             <button
-              key={f.id}
-              onClick={() => setSourceFilter(f.id)}
-              className={`text-xs px-2.5 py-1 rounded-full border ${
-                sourceFilter === f.id
-                  ? 'bg-white text-zinc-900 border-white'
-                  : 'bg-transparent text-zinc-400 border-zinc-700 hover:border-zinc-500 hover:text-zinc-200'
-              }`}
+              onClick={() => setScope('my')}
+              className={scope === 'my' ? 'px-3 py-1.5 bg-gray-900 text-white' : 'px-3 py-1.5 bg-white text-gray-500 hover:bg-gray-50'}
             >
-              {f.label}
+              My Deals
             </button>
-          ))}
+            <button
+              onClick={() => setScope('team')}
+              className={scope === 'team' ? 'px-3 py-1.5 bg-gray-900 text-white' : 'px-3 py-1.5 bg-white text-gray-500 hover:bg-gray-50'}
+            >
+              Team View
+            </button>
+          </div>
         </div>
-        <span className="ml-auto text-xs text-zinc-500">
-          {loading ? 'Loading…' : error ? error : `${visible.length} inquiry${visible.length === 1 ? 'y' : 'ies'}`}
-        </span>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-950/40">
-            <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-              <th className="px-3 py-2.5">Source</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Title</th>
-              <th className="px-3 py-2.5">Contact / Company</th>
-              <th className="px-3 py-2.5">Dates</th>
-              <th className="px-3 py-2.5 text-right">Est. value</th>
-              <th className="px-3 py-2.5">Assigned</th>
-              <th className="px-3 py-2.5 text-right">Age</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {!loading && visible.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-zinc-500 text-sm">
-                  No inquiries match.
-                </td>
-              </tr>
-            )}
-            {visible.map((r) => {
-              const meta = (r.sourceMetadata as { contact?: { name?: string; email?: string } } | null) ?? null
-              const webFormContactName = meta?.contact?.name
-              const contactDisplay =
-                webFormContactName ||
-                (r.person ? `${r.person.firstName} ${r.person.lastName}`.trim() : null) ||
-                meta?.contact?.email ||
-                '—'
-              const companyDisplay = r.company?.name || null
-              return (
-                <tr key={r.id} className="hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${SOURCE_BADGE[r.source]}`}
-                    >
-                      {SOURCE_LABEL[r.source]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${STATUS_BADGE[r.status]}`}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Link href={`/inquiries/${r.id}`} className="text-zinc-100 hover:text-amber-400 font-medium">
-                      {r.title}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-300">
-                    <div className="truncate max-w-[220px]">{contactDisplay}</div>
-                    {companyDisplay && <div className="text-zinc-500 truncate max-w-[220px]">{companyDisplay}</div>}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-400 whitespace-nowrap">
-                    {fmtDateRange(r.preferredStartDate, r.preferredEndDate)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs font-mono text-zinc-100 whitespace-nowrap">
-                    {fmtMoney(r.estimatedValue)}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-zinc-400 truncate max-w-[140px]">
-                    {r.assignedTo?.name || <span className="text-zinc-600">unassigned</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs text-zinc-500 whitespace-nowrap">
-                    {ageString(r.createdAt)}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {/* 1 — the live queue with inline actions */}
+      <NewInboundColumn onChange={refreshAll} />
+
+      {/* 2 + 3 — money out the door, and the next two weeks */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <QuotesOutPanel scope={scope} refreshKey={refreshKey} />
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <SalesReservationsWidget />
+        </div>
       </div>
+
+      {/* Signals — stale quotes / pending COIs / dormant clients */}
+      <SalesSignalsStrip scope={scope} onChange={refreshAll} />
+
+      {showNewInquiry && (
+        <NewInquiryModal
+          open={showNewInquiry}
+          onClose={() => setShowNewInquiry(false)}
+          onCreated={() => {
+            setShowNewInquiry(false);
+            refreshAll();
+          }}
+        />
+      )}
     </div>
-  )
+  );
 }

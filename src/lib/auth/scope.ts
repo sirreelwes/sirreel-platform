@@ -89,5 +89,8 @@ export function jobScopeWhere(scope: ResolvedScope): Record<string, unknown> {
 export function inquiryScopeWhere(scope: ResolvedScope): Record<string, unknown> {
   if (scope.scope === 'TEAM') return {}
   if (!scope.userId) return { assignedToId: '__no_user__' }
-  return { assignedToId: scope.userId }
+  // OWN scope includes UNASSIGNED rows (2026-08-21): the public forms
+  // never set assignedToId, so a strict own-rows filter hid the entire
+  // intake queue from the very agents expected to claim from it.
+  return { OR: [{ assignedToId: scope.userId }, { assignedToId: null }] }
 }
