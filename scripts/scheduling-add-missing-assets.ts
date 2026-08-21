@@ -71,6 +71,17 @@ interface ProposedCategory {
   planyoResourceId?: number | null
   description?: string
   reviewNote: string
+  /** Storefront/quote visibility. AssetCategory.isPublished DEFAULTS
+   *  TRUE, and the first --write run shipped both new categories
+   *  published at dailyRate $0 — a pricing decision nobody made,
+   *  surfaced by a migration prep script. Proposals here are created
+   *  UNPUBLISHED unless explicitly opted in; publishing (with a real
+   *  rate) stays a human decision in Fleet Pricing. */
+  isPublished?: boolean
+  /** Operator gantt "+ Hold" picker visibility. Empty placeholder
+   *  categories (0 assets) should opt out — every hold against them
+   *  gate-blocks, so they are pure picker noise. */
+  reservableOnGantt?: boolean
 }
 
 const PROPOSED_CATEGORIES: ProposedCategory[] = [
@@ -95,6 +106,7 @@ const PROPOSED_CATEGORIES: ProposedCategory[] = [
     planyoResourceId: null,
     description: 'Placeholder for a future wardrobe-truck / wardrobe-space buildout. No Assets yet.',
     reviewNote: 'Empty (totalUnits=0) on purpose — placeholder for future expansion.',
+    reservableOnGantt: false,
   },
 ]
 
@@ -115,7 +127,12 @@ interface ProposedAsset {
 
 const PROPOSED_ASSETS: ProposedAsset[] = [
   {
-    categoryName: 'ProScout / VTR',
+    // Category was renamed "ProScout / VTR" → "ProScout / VideoVan"
+    // (slug stayed proscout-vtr; see merge-proscout-vtr-dup.ts). The
+    // lookup here is by NAME, so the stale name hard-aborted the whole
+    // run via the unknown-category guard — before Lankershim ever got
+    // proposed.
+    categoryName: 'ProScout / VideoVan',
     unitName: 'Video Van',
     notes:
       'Planyo has two names for this same physical unit: "Video Van (w/ MiFi)" and "Scout Van (No MiFi)". Distinct one-of-a-kind unit. The migration script aliases "Scout Van" → this Asset.',
@@ -224,6 +241,8 @@ async function main() {
           department: pc.department,
           planyoResourceId: pc.planyoResourceId ?? null,
           description: pc.description ?? null,
+          isPublished: pc.isPublished ?? false,
+          reservableOnGantt: pc.reservableOnGantt ?? true,
         },
         select: { id: true, name: true, slug: true },
       })
@@ -231,6 +250,58 @@ async function main() {
       categoryBySlug.set(created.slug, created)
       console.log(`           → created (id ${created.id})`)
     }
+  }
+
+  // ── InventoryItem mirrors ─────────────────────────────────────
+  //
+  // Fleet Pricing, the holds route, and the availability engine all read
+  // the MERGED catalog (InventoryItem, keyed by legacyAssetCategoryId) —
+  // AssetCategory is the frozen half. This script predates the merge and
+  // created only AssetCategory rows, which made "Lankershim Studios"
+  // invisible on the Pricing page: no mirror row, no way to set its rate,
+  // and every reader fell back to the frozen $0.
+  //
+  // Runs OUTSIDE the categories-created branch on purpose: a prior run
+  // may have created the category while this mirror step didn't exist
+  // yet (exactly what happened on 2026-08-18), so mirrors are checked
+  // for every proposal, not just fresh categories. Idempotent by
+  // legacyAssetCategoryId.
+  const codeFromName = (name: string) =>
+    `CAT_${name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+  console.log('')
+  console.log('INVENTORY MIRRORS (merged catalog):')
+  console.log('─'.repeat(80))
+  for (const pc of PROPOSED_CATEGORIES) {
+    const cat = categoryBySlug.get(pc.slug)
+    if (!cat) { console.log(`  [SKIP  ] "${pc.name}" — category not present (dry run before create)`); continue }
+    const mirror = await prisma.inventoryItem.findUnique({
+      where: { legacyAssetCategoryId: cat.id },
+      select: { id: true },
+    })
+    if (mirror) { console.log(`  [EXISTS] "${pc.name}" → InventoryItem ${mirror.id}`); continue }
+    if (dryRun) { console.log(`  [NEW   ] "${pc.name}" (dry: would create ${codeFromName(pc.name)})`); continue }
+    const created = await prisma.inventoryItem.create({
+      data: {
+        code: codeFromName(pc.name),
+        slug: pc.slug,
+        description: pc.name,
+        trackingMode: 'UNIT_TRACKED',
+        legacyAssetCategoryId: cat.id,
+        department: pc.department,
+        type: 'EQUIPMENT',
+        dailyRate: pc.dailyRate,
+        weeklyRate: 0,
+        qtyOwned: pc.totalUnits,
+        planyoResourceId: pc.planyoResourceId ?? null,
+        // Mirrors the category's visibility decisions: unpublished until
+        // a human sets a rate and flips it in Fleet Pricing.
+        publicVisible: pc.isPublished ?? false,
+        reservableOnGantt: pc.reservableOnGantt ?? true,
+        isActive: true,
+      },
+      select: { id: true, code: true },
+    })
+    console.log(`  [NEW   ] "${pc.name}" → created InventoryItem ${created.code} (${created.id})`)
   }
 
   // Validate every proposed Asset has its category resolvable.

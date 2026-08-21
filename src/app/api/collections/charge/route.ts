@@ -286,10 +286,20 @@ export async function POST(req: NextRequest) {
   })
 
   // Clear it off Ana's queue. Only on approval — a decline leaves it READY so
-  // the next person still sees it needs collecting.
+  // the next person still sees it needs collecting. Stamps how/when/who so
+  // the collections tracker can answer "what happened to this invoice"
+  // without cross-referencing the charge log.
   if (approved && finalInvoiceId) {
     await prisma.jobFinalInvoice
-      .update({ where: { id: finalInvoiceId }, data: { status: 'COLLECTED' } })
+      .update({
+        where: { id: finalInvoiceId },
+        data: {
+          status: 'COLLECTED',
+          collectedAt: new Date(),
+          collectedVia: 'CARD',
+          collectedById: user.id,
+        },
+      })
       .catch((e) => console.error('[collections] could not mark collected:', e))
   }
 

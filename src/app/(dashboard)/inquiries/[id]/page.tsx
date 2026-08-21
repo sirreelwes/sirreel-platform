@@ -237,7 +237,7 @@ export default function InquiryDetailPage() {
               )}
               <span className="text-[11px] text-zinc-500">submitted {fmtDateTime(inquiry.createdAt)}</span>
             </div>
-            <h1 className="text-xl font-semibold text-white mt-2 break-words">{inquiry.title}</h1>
+            <h1 className="text-xl font-semibold text-zinc-900 mt-2 break-words">{inquiry.title}</h1>
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">

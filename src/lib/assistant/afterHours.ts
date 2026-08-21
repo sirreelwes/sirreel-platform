@@ -387,6 +387,7 @@ export async function fileAfterHoursCallback(input: {
   name: string
   contact: string
   message: string
+  transcriptSummary?: string | null
   ip: string
 }): Promise<{ ok: boolean }> {
   const name = input.name.trim().slice(0, 200) || 'Unknown caller'
@@ -406,6 +407,7 @@ export async function fileAfterHoursCallback(input: {
       `Name: ${name}`,
       `Contact: ${contact}`,
       `Message: ${message}`,
+      ...summaryLines(input.transcriptSummary),
     ])
     return { ok: true }
   } catch (err) {
@@ -429,6 +431,7 @@ export async function alertOnCallTeam(input: {
   callerName: string
   callbackNumber: string
   emergency: string
+  transcriptSummary?: string | null
   ip: string
 }): Promise<AlertResult> {
   const agents = await prisma.user.findMany({
@@ -448,6 +451,7 @@ export async function alertOnCallTeam(input: {
       `A caller reported an emergency but NO on-call agents are configured in /admin/assistant.`,
       `Caller: ${caller} · callback: ${cb}`,
       `Emergency: ${what}`,
+      ...summaryLines(input.transcriptSummary),
       `IP: ${input.ip}.`,
     ])
     return { result: 'NO_ONCALL' }
@@ -465,6 +469,7 @@ export async function alertOnCallTeam(input: {
   await notifyTeam('⚠ After-hours EMERGENCY — on-call alerted', [
     `Caller: ${caller} · callback: ${cb}`,
     `Emergency: ${what}`,
+    ...summaryLines(input.transcriptSummary),
     `On-call: ${oncall.map((a) => a.name).join(', ')}. SMS delivered ${texted}/${oncall.length}${texted === 0 ? ' (SMS not configured — email only)' : ''}.`,
     `IP: ${input.ip}.`,
   ])
@@ -518,6 +523,7 @@ export async function alertStrandedDriver(input: {
   callbackNumber?: string | null
   vinLast4?: string | null
   note?: string | null
+  transcriptSummary?: string | null
   ip: string
 }): Promise<StrandedResult> {
   const vinLast4 = normAlnum(input.vinLast4 || '').slice(-4)
@@ -549,6 +555,7 @@ export async function alertStrandedDriver(input: {
     `${caller} is at ${asset.unitName} and could not be verified by the after-hours assistant.`,
     `Callback: ${cb}`,
     ...(note ? [`They said: ${note}`] : []),
+    ...summaryLines(input.transcriptSummary),
     `The VIN they gave matches ${asset.unitName}, so they are at the vehicle. No codes were released.`,
     `IP: ${input.ip}.`,
   ]
@@ -591,6 +598,18 @@ export async function alertStrandedDriver(input: {
   }
 
   return { result: 'ALERTED', texted, oncall: oncall.length }
+}
+
+/**
+ * Email line carrying the AI summary of what the caller actually typed in
+ * the chat (built in the assistant route from the caller's own messages).
+ * The tool inputs above are the model's one-line paraphrase; this gives the
+ * agent the fuller account without reading a raw transcript. Optional — a
+ * summarizer failure just drops the line, never the alert.
+ */
+function summaryLines(transcriptSummary?: string | null): string[] {
+  const s = (transcriptSummary || '').trim()
+  return s ? [`What they wrote in the chat (AI summary): ${s}`] : []
 }
 
 function escapeHtml(s: string): string {

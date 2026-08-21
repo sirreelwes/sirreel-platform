@@ -111,6 +111,25 @@ export function computePushDatesPreview(args: {
   const offsetDays = Math.round(offsetMs / dayMs())
 
   const projectedItems: ProjectedLineItem[] = items.map((it) => {
+    // Legacy DISCOUNT-type lines are day-INVARIANT: a "-$85" concession is
+    // -$85 whether the job runs 2 days or 10. Deriving billableDays for
+    // them like rental lines multiplied the discount by the new day count
+    // (Oliver, 2026-08-20: -$85 projected to -$425 on a 5-day window).
+    // New discounts are OrderDiscount rows and never enter this map;
+    // existing line-item discounts keep their days and total unchanged,
+    // dates shifted only.
+    if (it.type === 'DISCOUNT') {
+      return {
+        ...it,
+        classification: 'custom_kept',
+        pickupDate: shiftDate(it.pickupDate, offsetMs),
+        returnDate: shiftDate(it.returnDate, offsetMs),
+        billableDaysOld: it.billableDays,
+        billableDaysNew: it.billableDays,
+        lineTotalOld: it.lineTotal,
+        lineTotalNew: it.lineTotal,
+      }
+    }
     if (it.inheritsDates) {
       const newBillable = deriveBillableDays(it.department, newCal)
       const newLineTotal = computeLineTotal({

@@ -90,7 +90,7 @@ export default function CoveragePage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Coverage</h1>
+          <h1 className="text-2xl font-semibold text-zinc-900">Coverage</h1>
           <p className="text-xs text-zinc-500 mt-1">
             Exec view — approvals and sales-execution exceptions in one place.
           </p>

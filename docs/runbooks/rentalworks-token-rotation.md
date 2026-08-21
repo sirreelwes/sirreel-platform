@@ -1,15 +1,62 @@
 # RentalWorks Token Rotation
 
-Manual runbook for rotating `RENTALWORKS_TOKEN` in Vercel Production.
+Rotate `RENTALWORKS_TOKEN` in Vercel Production.
 
-There is **no token-issuance UI in RentalWorks** — verified 2026-08-16, the
-entire `Administrator` menu was walked and contains no API or Token entry
-(`Custom Field, Custom Form, Report Styling/CSS, Custom Report Layout, Data
-Health, Email History, Email Template, Event Log, Group, Plugins, QuikScan
-Setup, Security Settings, System Update, User`), and `User` is a staff list
-with no per-user key. The working token is the **bearer the RentalWorks web
-app mints for itself at login**, read out of the browser. See
-[Why this is manual](#why-this-is-manual).
+## TL;DR — the fast path (added 2026-08-20)
+
+RentalWorks **does** have a login endpoint after all: `POST /api/v1/jwt`.
+The whole rotation is ONE short command that prompts for the RW admin
+credentials and does everything — mint, verify, replace the Vercel value,
+push the redeploy:
+
+```bash
+bash scripts/rotate-rw-prod.sh
+```
+
+It stops loudly at the first failed step; "ROTATION SCRIPT COMPLETE" means
+every step truly ran. (2026-08-20 lesson: long pasted one-liners can be
+line-wrapped into fragments by a flaky terminal and PARTIALLY executed —
+prefer the short script invocation always.) Then confirm the health tile
+(step 5 below). The manual three-command version, if you ever need the
+pieces separately:
+
+```bash
+# 1. Mint + verify (credentials from 1Password, nothing touches disk):
+op run --env-file=<(printf 'RW_USERNAME=op://Private/RentalWorks Admin/username\nRW_PASSWORD=op://Private/RentalWorks Admin/password') -- \
+  npx tsx scripts/rotate-rw-token.ts --verify
+```
+
+Copy the `eyJ…` token it prints, then:
+
+```bash
+# 2. Replace it in Vercel Production (paste the token at the prompt, no quotes):
+vercel env rm RENTALWORKS_TOKEN production && vercel env add RENTALWORKS_TOKEN production
+```
+
+```bash
+# 3. Redeploy so functions pick up the new value:
+git commit --allow-empty -m "chore: redeploy after rentalworks token rotation" && git push origin main
+```
+
+Then confirm the health tile (step 5 below). Everything under
+"Full procedure" is the old browser-scrape method, kept as a fallback if the
+`/jwt` endpoint ever changes.
+
+Whether this can be made **fully hands-off** (a cron that re-mints on 401)
+is discussed under [Automation](#automation) — the blocker was never minting,
+it was safely storing a Vercel-write credential.
+
+---
+
+## Full procedure (fallback — browser scrape)
+
+The token is the **bearer the RentalWorks web app mints for itself at login**.
+Until 2026-08-20 we read it out of the browser because the 2026-08-16
+`Administrator`-menu walk found no token UI (`Custom Field, Custom Form,
+Report Styling/CSS, Custom Report Layout, Data Health, Email History, Email
+Template, Event Log, Group, Plugins, QuikScan Setup, Security Settings,
+System Update, User`), and no per-user key. That walk simply missed the
+`/api/v1/jwt` API endpoint the SPA posts to — see the TL;DR above.
 
 ## When to rotate
 
@@ -119,27 +166,38 @@ five checks on 2026-08-16 failed that way while the token was independently
 broken. A timeout is logged as `down`, same as a 401, so not every red tile
 means a credential problem. Only `HTTP 401` means rotate.
 
-## Why this is manual
+## Automation
 
-RentalWorks runs as an IIS/ASP.NET vendor product with no token-issuance UI
-and no documented auth endpoint. Probing (`/api/v1/login`, `/api/v1/auth/login`,
-`/api/v1/sessions`, `/api/v1/token`, `/api/v1/authentication/logon`,
-`/swagger`) returns 404; `/api/v1/user/logon` exists but allows only
-`DELETE, GET, PUT` and 401s unauthenticated — it is a session-record
-resource, not a login. The SPA's own auth call is buried in a 3.4MB JS
-bundle, and we deliberately chose not to reverse-engineer it:
+The login endpoint (`POST /api/v1/jwt`) means minting is now scriptable, so
+a cron that re-mints on a 401 is technically possible. It is **not built**,
+because minting was never the hard part — safely holding the credentials to
+do it unattended is:
 
-- Vendor-internal auth flows change without notice between RW versions and
-  we would be silently broken on every upgrade.
-- An auto-rotation cron would need a Vercel API token with prod-env-write
-  scope — a credential whose blast radius exceeds the inconvenience saved.
-- Rotation happens ~7 times a year. A 10-minute manual procedure with a
-  calendar reminder is a fine trade.
+- A cron that rewrites the prod env needs a **Vercel API token with
+  prod-env-write scope** — a credential whose blast radius (rewrite any
+  production secret) exceeds the ~10-minute chore it saves.
+- Storing `RW_USERNAME` / `RW_PASSWORD` in the app env to self-heal on 401
+  is smaller, but it parks a full read/write RW login in the same env as
+  everything else, and the password does not rotate the way the token does.
+- Rotation is ~7×/year. The scripted three-command path above already cuts
+  it to about two minutes with no browser.
 
-The open question worth asking RentalWorks support: **is a long-lived API
-key available on this tenant?** A purpose-issued key would beat a scraped
-session bearer, which is tied to someone's login staying alive. If they
-document one, replace this runbook with `scripts/rotate-rw-token.ts`.
+Recommended stopping point: **keep it human-run via `rotate-rw-token.ts`,
+on the 50-day reminder.** Revisit auto-rotation only if RentalWorks confirms
+a purpose-issued, long-lived API key (still worth asking support) — that
+would be safe to park in the app env and self-heal against, at which point
+`rotate-rw-token.ts` becomes the core of a `/api/cron/rw-token` handler.
+
+### Historical note
+
+`/api/v1/jwt` was found 2026-08-20 by probing the endpoint directly. The
+2026-08-16 investigation had concluded auth was un-scriptable after probing
+`/api/v1/login`, `/auth/login`, `/sessions`, `/token`,
+`/authentication/logon`, `/swagger` (all 404) and `/api/v1/user/logon`
+(session-record resource, not a login) — but never tried `/jwt`, the FW
+platform's actual login route. Lesson banked: probe the vendor platform's
+documented convention (Database Works "FW" → `/api/v1/jwt`) before
+concluding an endpoint doesn't exist.
 
 ## Related
 

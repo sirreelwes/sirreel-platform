@@ -15,6 +15,7 @@ import {
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
   CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2, Circle, Banknote, ListChecks, CreditCard, RefreshCw, type LucideIcon,
+  Inbox,
 } from 'lucide-react';
 
 // Maps the `icon` name carried by each NavItem to its lucide component.
@@ -23,7 +24,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
   AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
   CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2,
-  Banknote, ListChecks, CreditCard, RefreshCw,
+  Banknote, ListChecks, CreditCard, RefreshCw, Inbox,
 };
 
 const ROLE_LABELS: Record<string, string> = {

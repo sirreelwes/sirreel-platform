@@ -35,8 +35,18 @@
 
 import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
-import { PrismaClient, type BookingStatus } from '@prisma/client'
+import { PrismaClient, type BookingStatus, type JobStatus } from '@prisma/client'
 import { normalizePlanyoUnitName } from '../src/lib/scheduling/planyoNameNormalizer'
+import { nextJobCode } from '../src/lib/jobs/nextJobCode'
+
+/**
+ * Planyo pseudo-resources that are not rentable inventory and must not
+ * become BookingItems. "Task List" is Planyo's to-do tracker surfaced
+ * as a resource; its rows have unit_assignment values like "01".
+ * Skipped rows are counted in the report (skippedIgnoredResourceRows),
+ * not journaled — they are re-counted (and re-ignored) on every run.
+ */
+const IGNORED_PLANYO_RESOURCES = new Set(['Task List'])
 
 // ──────────────────────────────────────────────────────────────
 // Reconciliation maps — see scheduling-add-missing-assets.ts for
@@ -116,6 +126,17 @@ const args = process.argv.slice(2)
 const dryRun = !args.includes('--write')
 const daysArg = args.find((a) => a.startsWith('--days='))?.split('=')[1] ?? args[args.indexOf('--days') + 1]
 const FORWARD_DAYS = Math.max(1, parseInt(daysArg || '180', 10) || 180)
+// How far BACK the pull window reaches. Planyo's list_reservations
+// start_time filter matches reservations that BEGIN in the window, so a
+// today-forward pull silently drops every rental that is out RIGHT NOW
+// (started before today, returns later). Measured 2026-08-18: 28
+// in-progress reservations missed by the forward-only window — units
+// that would show FREE in native while physically on a job, i.e. the
+// first conflicting hold post-cutover double-books a truck on set.
+// Rows that ENDED before today are filtered after the pull (see
+// skippedReservationsEnded) so the back-window doesn't import history.
+const backArg = args.find((a) => a.startsWith('--back='))?.split('=')[1] ?? args[args.indexOf('--back') + 1]
+const BACK_DAYS = Math.max(0, parseInt(backArg || '60', 10) || 60)
 const defaultAgentEmailArg = args.find((a) => a.startsWith('--default-agent='))?.split('=')[1]
 const DEFAULT_AGENT_EMAIL = defaultAgentEmailArg || 'wes@sirreel.com'
 
@@ -277,27 +298,117 @@ async function main() {
   // synthesize the lookup map as if the backfill had run. Without
   // this, dry-run would always report 0 cart-appends and the
   // preview would be useless for verifying idempotency.
-  type BookingByCart = { id: string; planyoCartId: string | null; bookingNumber: string; startDate: Date; endDate: Date }
+  type BookingByCart = { id: string; planyoCartId: string | null; bookingNumber: string; startDate: Date; endDate: Date; jobId: string | null }
   const bookingByCartId = new Map<string, BookingByCart>()
 
   const directlyStamped = await prisma.booking.findMany({
     where: { planyoCartId: { not: null } },
-    select: { id: true, planyoCartId: true, bookingNumber: true, startDate: true, endDate: true },
+    select: { id: true, planyoCartId: true, bookingNumber: true, startDate: true, endDate: true, jobId: true },
   })
   for (const b of directlyStamped) if (b.planyoCartId) bookingByCartId.set(b.planyoCartId, b)
+
+  // ── Job-as-root (cutover contract: "assign each to a Job"). ──
+  //
+  // This script predates Job-as-root — it created Bookings with only a
+  // jobName string, leaving jobId NULL, which orphans every imported
+  // booking from the flows that resolve through Jobs (orders, portal,
+  // contacts). Jobs are found-or-created keyed on Job.planyoCartId
+  // (@unique — added for exactly this), so re-runs reuse instead of
+  // duplicating. Status: CONFIRMED cart → ACTIVE job, else QUOTED.
+  //
+  // jobCode comes from nextJobCode() (the shared max-suffix helper, not
+  // a naive count) and job.create sits in a small unique-retry loop for
+  // concurrent inserts, same as the holds route.
+  let jobsCreated = 0
+  const jobByCartId = new Map<string, { id: string }>()
+  async function resolveJobForCart(args: {
+    cartId: string
+    name: string
+    companyId: string
+    agentId: string
+    startDate: Date
+    endDate: Date
+    confirmed: boolean
+  }): Promise<{ id: string }> {
+    const cached = jobByCartId.get(args.cartId)
+    if (cached) return cached
+    const existing = await prisma.job.findUnique({ where: { planyoCartId: args.cartId }, select: { id: true } })
+    if (existing) { jobByCartId.set(args.cartId, existing); return existing }
+    jobsCreated++
+    if (dryRun) {
+      const dry = { id: `DRY-NEW-JOB-${args.cartId}` }
+      jobByCartId.set(args.cartId, dry)
+      return dry
+    }
+    const status: JobStatus = args.confirmed ? 'ACTIVE' : 'QUOTED'
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const created = await prisma.job.create({
+          data: {
+            jobCode: await nextJobCode(prisma),
+            name: args.name,
+            companyId: args.companyId,
+            agentId: args.agentId,
+            status,
+            startDate: args.startDate,
+            endDate: args.endDate,
+            planyoCartId: args.cartId,
+            notes: `Auto-created by Planyo migration on ${startedAt.toISOString().slice(0, 10)}`,
+          },
+          select: { id: true },
+        })
+        jobByCartId.set(args.cartId, created)
+        return created
+      } catch (e) {
+        if (attempt < 3 && /Unique constraint/i.test((e as Error).message) && /job_code/i.test((e as Error).message)) continue
+        throw e
+      }
+    }
+  }
+
+  // One-shot backfill: PLANYO_BACKFILL bookings imported before this
+  // change carry planyoCartId but jobId NULL. Link them through the
+  // same find-or-create so the prior snapshot is jobbed too. Live-write
+  // links; dry-run counts what a live run would touch.
+  const jobless = directlyStamped.filter((b) => b.planyoCartId && !b.jobId)
+  let jobsLinkedBackfill = 0
+  if (jobless.length) {
+    const fullRows = await prisma.booking.findMany({
+      where: { id: { in: jobless.map((b) => b.id) } },
+      select: { id: true, planyoCartId: true, jobName: true, companyId: true, agentId: true, startDate: true, endDate: true, status: true },
+    })
+    for (const b of fullRows) {
+      // resolveJobForCart is dry-run-aware (returns a DRY id without
+      // writing), so calling it unconditionally keeps the dry-run's
+      // jobsCreated prediction honest; only the link write is guarded.
+      const job = await resolveJobForCart({
+        cartId: b.planyoCartId!,
+        name: b.jobName,
+        companyId: b.companyId,
+        agentId: b.agentId,
+        startDate: b.startDate,
+        endDate: b.endDate,
+        confirmed: b.status === 'CONFIRMED' || b.status === 'ACTIVE',
+      })
+      if (!dryRun) await prisma.booking.update({ where: { id: b.id }, data: { jobId: job.id } })
+      jobsLinkedBackfill++
+    }
+    console.log(`${dryRun ? 'Would link' : 'Linked'} ${jobsLinkedBackfill} existing jobless PLANYO booking(s) to Jobs.`)
+  }
 
   if (dryRun) {
     // Synthesize: any Booking whose Reservation journal carries a
     // cart_id but the Booking itself doesn't (= what the backfill
     // would stamp on a live run).
-    type JournalRow = { bookingId: string; planyoCartId: string; bookingNumber: string; startDate: Date; endDate: Date }
+    type JournalRow = { bookingId: string; planyoCartId: string; bookingNumber: string; startDate: Date; endDate: Date; jobId: string | null }
     const rawRows = await prisma.$queryRaw<JournalRow[]>`
       SELECT DISTINCT ON (b.id)
         b.id AS "bookingId",
         r.planyo_cart_id AS "planyoCartId",
         b.booking_number AS "bookingNumber",
         b.start_date AS "startDate",
-        b.end_date AS "endDate"
+        b.end_date AS "endDate",
+        b.job_id AS "jobId"
       FROM bookings b
       JOIN reservations r ON r.booking_id = b.id
       WHERE b.planyo_cart_id IS NULL
@@ -307,7 +418,7 @@ async function main() {
       if (!bookingByCartId.has(r.planyoCartId)) {
         bookingByCartId.set(r.planyoCartId, {
           id: r.bookingId, planyoCartId: r.planyoCartId,
-          bookingNumber: r.bookingNumber, startDate: r.startDate, endDate: r.endDate,
+          bookingNumber: r.bookingNumber, startDate: r.startDate, endDate: r.endDate, jobId: r.jobId,
         })
       }
     }
@@ -316,19 +427,47 @@ async function main() {
     console.log(`Existing Bookings with planyoCartId stamped: ${bookingByCartId.size}`)
   }
 
-  // ── Pull Planyo forward book ──
-  const from = new Date(); from.setUTCHours(0, 0, 0, 0)
-  const to = new Date(from.getTime() + FORWARD_DAYS * 86_400_000)
+  // ── Pull Planyo book: BACK_DAYS back (to catch in-progress rentals —
+  //    see the BACK_DAYS note at the flags) through FORWARD_DAYS ahead. ──
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0)
+  const from = new Date(today.getTime() - BACK_DAYS * 86_400_000)
+  const to = new Date(today.getTime() + FORWARD_DAYS * 86_400_000)
   const fmt = (d: Date) => d.toISOString().slice(0, 10) + ' 00:00:00'
-  const data = await planyo('list_reservations', {
-    start_time: fmt(from),
-    end_time: fmt(to),
-    detail_level: '3',
-    results_per_page: '500',
+  // Paginate — Planyo caps a page at results_per_page and silently
+  // truncates beyond it. The back-dated window overflowed one page the
+  // first time it ran (500 rows returned, sorted by start ascending, so
+  // the page filled with already-ended history and the FUTURE book fell
+  // off the end). Loop pages until a short page arrives.
+  const PAGE_SIZE = 500
+  const pulled: PlanyoReservation[] = []
+  for (let page = 0; ; page++) {
+    const data = await planyo('list_reservations', {
+      start_time: fmt(from),
+      end_time: fmt(to),
+      detail_level: '3',
+      results_per_page: String(PAGE_SIZE),
+      page: String(page),
+    })
+    if (data.response_code !== 0) throw new Error(`Planyo error: ${data.response_message}`)
+    const rows = (data.data?.results ?? []) as PlanyoReservation[]
+    pulled.push(...rows)
+    if (rows.length < PAGE_SIZE) break
+    if (page > 20) throw new Error('Planyo pagination runaway (>20 pages) — check the window flags')
+  }
+  // The back-window exists ONLY to catch in-progress rentals. Rows that
+  // already ENDED are history, not forward book — drop them here so they
+  // never become Bookings. (end_time >= today keeps: still-out rentals
+  // and everything future.)
+  let skippedReservationsEnded = 0
+  let skippedIgnoredResourceRows = 0
+  const reservations = pulled.filter((r) => {
+    const endMs = Date.parse((r.end_time ?? '').replace(' ', 'T') + 'Z')
+    if (Number.isFinite(endMs) && endMs < today.getTime()) { skippedReservationsEnded++; return false }
+    if (IGNORED_PLANYO_RESOURCES.has((r.name ?? '').trim())) { skippedIgnoredResourceRows++; return false }
+    return true
   })
-  if (data.response_code !== 0) throw new Error(`Planyo error: ${data.response_message}`)
-  const reservations = (data.data?.results ?? []) as PlanyoReservation[]
-  console.log(`Pulled ${reservations.length} Planyo reservation rows in window ${fmt(from)} → ${fmt(to)}`)
+  console.log(`Pulled ${pulled.length} Planyo rows in window ${fmt(from)} → ${fmt(to)}`)
+  console.log(`  kept ${reservations.length} · dropped ${skippedReservationsEnded} already-ended · ${skippedIgnoredResourceRows} ignored-resource (${[...IGNORED_PLANYO_RESOURCES].join(', ')})`)
 
   // ── Group by cart ──
   const cartMap = new Map<string, PlanyoReservation[]>()
@@ -466,13 +605,29 @@ async function main() {
         notes: `Auto-created by Planyo migration on ${startedAt.toISOString().slice(0, 10)}`,
       }
       if (!dryRun) {
-        const created = await prisma.person.create({ data: personData, select: { id: true, firstName: true, lastName: true, email: true } })
+        // Upsert-shaped: the person may have appeared AFTER our one-time
+        // preload — the live app's CRM email capture creates Person rows
+        // concurrently, and a P2002 here used to abort the ENTIRE run
+        // (seen 2026-08-20 importing drift carts). On conflict, fetch the
+        // existing row and carry on.
+        let created
+        try {
+          created = await prisma.person.create({ data: personData, select: { id: true, firstName: true, lastName: true, email: true } })
+          report.personsCreated++
+        } catch (e) {
+          if (!/Unique constraint/i.test((e as Error).message)) throw e
+          created = await prisma.person.findUnique({
+            where: { email: placeholderEmail },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+          if (!created) throw e
+        }
         personByEmail.set(created.email.toLowerCase(), created)
         person = created
       } else {
+        report.personsCreated++
         person = { id: 'DRY-NEW-PERSON', firstName: personData.firstName, lastName: personData.lastName, email: personData.email }
       }
-      report.personsCreated++
     }
 
     // ── Agent resolve — for now everyone defaults to the fallback agent ──
@@ -493,6 +648,23 @@ async function main() {
     // existing-cart scenario — append BookingItems below, don't
     // create a duplicate Booking). Otherwise create fresh and stamp
     // planyoCartId on the new row for future re-runs.
+    // ── Job resolve (Job-as-root) — one Job per Planyo cart. ──
+    let job: { id: string }
+    try {
+      job = await resolveJobForCart({
+        cartId: String(cartId),
+        name: jobName,
+        companyId: company.id,
+        agentId,
+        startDate,
+        endDate,
+        confirmed: bookingStatus === 'CONFIRMED',
+      })
+    } catch (e) {
+      report.errors.push({ cart: cartId, error: `job resolve: ${(e as Error).message.slice(0, 120)}` })
+      continue
+    }
+
     const existingBookingForCart = bookingByCartId.get(String(cartId)) ?? null
     let bookingId = 'DRY-NEW-BOOKING'
     let isAppendingToExisting = false
@@ -501,6 +673,13 @@ async function main() {
       bookingId = existingBookingForCart.id
       isAppendingToExisting = true
       report.cartsAppendedToExisting++
+      // Appended-to bookings created before Job-as-root may still be
+      // jobless — patch the link while we're here (backfill pre-pass
+      // covers most, but a cart can also gain its Job in this run).
+      if (!existingBookingForCart.jobId && !dryRun) {
+        await prisma.booking.update({ where: { id: bookingId }, data: { jobId: job.id } })
+        existingBookingForCart.jobId = job.id
+      }
     } else {
       bookingSeq++
       const bookingNumber = `SR-${yearPrefix}-${String(bookingSeq).padStart(4, '0')}`
@@ -509,20 +688,21 @@ async function main() {
           const created = await prisma.booking.create({
             data: {
               bookingNumber, companyId: company.id, personId: person.id, agentId,
+              jobId: job.id,
               jobName, productionName, startDate, endDate,
               status: bookingStatus, source: 'PLANYO_BACKFILL',
               rentalworksOrderId,
               planyoCartId: String(cartId),
               notes: `Imported from Planyo cart ${cartId} on ${startedAt.toISOString().slice(0, 10)}`,
             },
-            select: { id: true, bookingNumber: true, planyoCartId: true, startDate: true, endDate: true },
+            select: { id: true, bookingNumber: true, planyoCartId: true, startDate: true, endDate: true, jobId: true },
           })
           bookingId = created.id
           // Stamp the lookup map so any further cart-additions in the
           // same run reuse this Booking.
           bookingByCartId.set(String(cartId), {
             id: created.id, planyoCartId: created.planyoCartId, bookingNumber: created.bookingNumber,
-            startDate: created.startDate, endDate: created.endDate,
+            startDate: created.startDate, endDate: created.endDate, jobId: created.jobId,
           })
         }
         report.bookingsCreated++
@@ -748,6 +928,10 @@ async function main() {
     cartsSkippedAllCancelled: report.cartsSkippedAllCancelled,
     cartsAppendedToExisting: report.cartsAppendedToExisting,
     bookingsBackfilledWithCartId: backfilledCartIds,
+    jobsCreated,
+    jobsLinkedBackfill,
+    skippedReservationsEnded,
+    skippedIgnoredResourceRows,
     bookingsCreated: report.bookingsCreated,
     bookingItemsCreated: report.bookingItemsCreated,
     bookingAssignmentsCreated: report.bookingAssignmentsCreated,
@@ -771,9 +955,13 @@ async function main() {
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
     dryRun,
-    flags: { FORWARD_DAYS, DEFAULT_AGENT_EMAIL },
+    flags: { FORWARD_DAYS, BACK_DAYS, DEFAULT_AGENT_EMAIL },
     counts: {
       cartsProcessed: report.cartsProcessed,
+      jobsCreated,
+      jobsLinkedBackfill,
+      skippedReservationsEnded,
+      skippedIgnoredResourceRows,
       bookingsCreated: report.bookingsCreated,
       bookingItemsCreated: report.bookingItemsCreated,
       bookingAssignmentsCreated: report.bookingAssignmentsCreated,

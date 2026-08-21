@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
+import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
@@ -18,6 +19,13 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         body.signerName, params.token
       )
       await prisma.booking.update({ where: { id: request.bookingId }, data: { rentalAgreement: true } })
+      // Fire-and-forget hq@ notification with a deep link to the job —
+      // mirrors the per-form emails the Cognito flow used to send.
+      notifyPortalPaperwork({
+        token: params.token,
+        step: 'agreement',
+        details: [{ label: 'Signed by', value: String(body.signerName ?? '—') }],
+      })
     }
 
     if (body.step === 'lcdw') {
@@ -26,6 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         WHERE token=$1`,
         params.token
       )
+      notifyPortalPaperwork({ token: params.token, step: 'lcdw' })
     }
 
     if (body.step === 'cc') {
@@ -166,6 +175,33 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         ccPostal || null,
         params.token
       )
+      notifyPortalPaperwork({
+        token: params.token,
+        step: 'cc',
+        details: [
+          {
+            label: 'Cardholder',
+            value: [body.ccCardholderFirst, body.ccCardholderLast].filter(Boolean).join(' ') || '—',
+          },
+          {
+            label: 'Card',
+            value: `${body.ccCardType || 'card'} ····${typeof body.ccToken === 'string' ? body.ccToken.slice(-4) : '????'}`,
+          },
+          {
+            label: 'Validation',
+            value:
+              authRespStat === 'A'
+                ? `approved ($0 auth ${authRetref ?? ''})`.trim()
+                : authRespStat
+                  ? `NOT approved — ${authRespCode ?? ''} ${authRespText ?? ''}`.trim()
+                  : 'no gateway response recorded',
+          },
+          {
+            label: 'Pays invoices by',
+            value: paymentPreference === 'CHECK_WIRE' ? 'check / wire (card is security only)' : 'card on file',
+          },
+        ],
+      })
     }
 
     if (body.step === 'studio') {
@@ -177,6 +213,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
         WHERE token=$2`,
         now, params.token
       )
+      notifyPortalPaperwork({ token: params.token, step: 'studio' })
     }
 
     return NextResponse.json({ ok: true })

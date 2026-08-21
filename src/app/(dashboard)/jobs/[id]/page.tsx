@@ -338,6 +338,38 @@ export default function JobDetailPage() {
       return next;
     });
 
+  // Add-contact form on the Contacts card. Contacts previously attached only
+  // through order flows; since the payment-options email routes by them
+  // (ACCOUNTING first), a job with a wrong contact set needs fixing in place.
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactForm, setContactForm] = useState({ email: '', firstName: '', lastName: '', role: 'OTHER' });
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const submitContact = async () => {
+    if (contactSaving) return;
+    setContactError(null);
+    setContactSaving(true);
+    try {
+      const r = await fetch(`/api/jobs/${id}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contactForm),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.ok) {
+        setContactError(d.error || 'Could not add contact');
+      } else {
+        setAddingContact(false);
+        setContactForm({ email: '', firstName: '', lastName: '', role: 'OTHER' });
+        load();
+      }
+    } catch {
+      setContactError('Network error');
+    } finally {
+      setContactSaving(false);
+    }
+  };
+
   const load = () => {
     setLoading(true);
     setError(null);
@@ -1408,7 +1440,15 @@ export default function JobDetailPage() {
           after-hours via a single tap. tel: link triggers native
           dialer on mobile / Mac Continuity Calling on desktop. */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-        <h2 className="text-[15px] font-semibold text-white mb-2.5 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
+        <div className="flex items-center justify-between mb-2.5">
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
+          <button
+            onClick={() => { setAddingContact((v) => !v); setContactError(null); }}
+            className="text-[12px] font-semibold px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+          >
+            {addingContact ? 'Cancel' : '+ Add contact'}
+          </button>
+        </div>
         {job.jobContacts.length === 0 ? (
           <div className="text-[15px] text-zinc-300">No contacts yet.</div>
         ) : (
@@ -1453,6 +1493,56 @@ export default function JobDetailPage() {
                 </span>
               </div>
             ))}
+          </div>
+        )}
+        {addingContact && (
+          <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={contactForm.email}
+                onChange={(e) => setContactForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="Email *"
+                type="email"
+                className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+              />
+              <input
+                value={contactForm.firstName}
+                onChange={(e) => setContactForm((f) => ({ ...f, firstName: e.target.value }))}
+                placeholder="First name"
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+              />
+              <input
+                value={contactForm.lastName}
+                onChange={(e) => setContactForm((f) => ({ ...f, lastName: e.target.value }))}
+                placeholder="Last name"
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-amber-600"
+              />
+            </div>
+            <select
+              value={contactForm.role}
+              onChange={(e) => setContactForm((f) => ({ ...f, role: e.target.value }))}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-amber-600"
+            >
+              <option value="PRODUCER">Producer</option>
+              <option value="PM">Production Manager</option>
+              <option value="PC">Production Coordinator</option>
+              <option value="TRANSPO">Transpo</option>
+              <option value="ACCOUNTING">Accounting</option>
+              <option value="OTHER">Other</option>
+            </select>
+            {/* The role is routing, not just a label — say so where it is picked. */}
+            <p className="text-[11px] text-zinc-500">
+              Accounting receives payment emails (final invoices, payment options).
+              Without one, they go to the primary contact.
+            </p>
+            {contactError && <p className="text-[12px] text-red-400">{contactError}</p>}
+            <button
+              onClick={submitContact}
+              disabled={contactSaving || !contactForm.email.trim()}
+              className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            >
+              {contactSaving ? 'Adding…' : 'Add contact'}
+            </button>
           </div>
         )}
       </div>

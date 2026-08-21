@@ -132,6 +132,21 @@ export default function CompanyDetailPage() {
 
   useEffect(() => { fetchCompany(); }, [fetchCompany]);
 
+  // Payment behavior — days-to-pay flywheel. Observed latency ramps from
+  // 2026-08-18 (payment events are recorded at RW-sync granularity); open
+  // exposure is live from the mirror.
+  const [payBehavior, setPayBehavior] = useState<{
+    openCount: number; openTotal: number; oldestOpenDays: number | null;
+    observedPayments: number; avgDaysToPay: number | null; medianDaysToPay: number | null;
+    lastPaidAt: string | null; preTrackingPayments: number;
+  } | null>(null);
+  useEffect(() => {
+    fetch(`/api/crm/companies/${companyId}/payment-behavior`)
+      .then((r) => r.json())
+      .then((d) => d.ok && setPayBehavior(d.behavior))
+      .catch(() => {});
+  }, [companyId]);
+
   // Dedicated CRM Notes card (Company.notes) — always-visible, quick-save,
   // shared with every job for this client. Synced from the loaded company.
   const [crmNotesDraft, setCrmNotesDraft] = useState('');
@@ -843,6 +858,53 @@ export default function CompanyDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Payment behavior — how this client actually pays. Drives terms
+              decisions (deposit? card on file?) at the moment they're made. */}
+          {payBehavior && (payBehavior.openCount > 0 || payBehavior.observedPayments > 0 || payBehavior.preTrackingPayments > 0) && (
+            <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+              <h2 className="text-base font-semibold text-lt-fg mb-3">Payment Behavior</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-xs text-lt-fg3 uppercase">Open balance</div>
+                  <div className={`text-lg font-semibold ${payBehavior.openTotal > 0 ? 'text-amber-600' : 'text-lt-fg'}`}>{fmt(payBehavior.openTotal)}</div>
+                  <div className="text-xs text-lt-fg3">
+                    {payBehavior.openCount} invoice{payBehavior.openCount === 1 ? '' : 's'}
+                    {payBehavior.oldestOpenDays !== null && payBehavior.oldestOpenDays > 0
+                      ? ` · oldest ${payBehavior.oldestOpenDays}d`
+                      : ''}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-lt-fg3 uppercase">Avg days to pay</div>
+                  <div className="text-lg font-semibold text-lt-fg">
+                    {payBehavior.avgDaysToPay !== null ? `${payBehavior.avgDaysToPay}d` : '—'}
+                  </div>
+                  <div className="text-xs text-lt-fg3">
+                    {payBehavior.observedPayments > 0
+                      ? `${payBehavior.observedPayments} observed since Aug 2026`
+                      : 'tracking began Aug 2026'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-lt-fg3 uppercase">Median</div>
+                  <div className="text-lg font-semibold text-lt-fg">
+                    {payBehavior.medianDaysToPay !== null ? `${payBehavior.medianDaysToPay}d` : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-lt-fg3 uppercase">Payment history</div>
+                  <div className="text-lg font-semibold text-lt-fg">
+                    {payBehavior.observedPayments + payBehavior.preTrackingPayments}
+                  </div>
+                  <div className="text-xs text-lt-fg3">
+                    paid invoices on record
+                    {payBehavior.lastPaidAt ? ` · last ${fmtDate(payBehavior.lastPaidAt)}` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Orders */}
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">

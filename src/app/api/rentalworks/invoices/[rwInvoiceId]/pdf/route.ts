@@ -38,11 +38,16 @@ export async function GET(_req: NextRequest, { params }: { params: { rwInvoiceId
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     })
     if (r.ok) inv = (await r.json()) as RwInvoiceDetail
-    else if (r.status === 401 || r.status === 403) {
-      return NextResponse.json(
-        { error: 'RentalWorks rejected the token — rotate it, then retry.' },
-        { status: 502 },
-      )
+    else {
+      // 2026-08-19: this used to short-circuit on 401/403 with "rotate the
+      // token" — while the SAME token was returning 200 on the health probe
+      // and the nightly browse minutes apart. RW rejects the per-record
+      // invoice GET for a session bearer that list/browse endpoints accept;
+      // the token is fine and rotating it fixes nothing. Whatever RW's
+      // reason, the mirror row below has every field this PDF renders, so
+      // any live-fetch failure degrades to the mirror instead of erroring.
+      // Logged so the endpoint question stays visible in the function logs.
+      console.error(`[rw-invoice-pdf] live fetch ${id} → HTTP ${r.status}; serving from mirror`)
     }
   } catch {
     /* fall through to mirror */

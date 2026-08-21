@@ -55,16 +55,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 ## Architecture
 
 ### Data Sources of Truth
-- **Scheduling — pre-cutover (current state):** Planyo (Site ID 36171) is the operational source of truth — the team works in Planyo. HQ's native scheduler is the designated replacement, currently in beta.
-  - The `PLANYO_BACKFILL`-sourced Booking rows already in HQ are a STALE prior-import snapshot, **NOT live commitments**. Do not infer "live" from the `PLANYO_BACKFILL` flag; do not treat HQ's schedule as authoritative; do not build write-back to Planyo.
-  - **Full cutover (future, not yet authorized):** a one-time import will pull current Planyo schedule items, assign each to a Job, mark them "imported," and supersede / dedupe the prior backfill snapshot. Until that ships, HQ's scheduling surfaces are read-only-truth-wise even if the UI lets you click.
+- **Scheduling — import executed 2026-08-18 (Wes authorized):** the one-time Planyo import ran clean — 47 bookings / 65 items / 61 assignments, every PLANYO booking linked to a Job, in-progress rentals included (window reaches back 60 days), and the 4 stale prior-backfill carts with drifted units superseded from current Planyo truth. HQ's native scheduler now holds the live book as of that run.
+  - Planyo (Site ID 36171) remains the team's working surface until Wes announces the switch. Anything booked/edited in Planyo after the import is DRIFT: re-run `scripts/scheduling-planyo-migration.ts --write` for new carts (journal-idempotent, appends by planyoCartId); for edits to already-imported carts use the supersede recipe — release the cart's items (assignments → SWAPPED, items → UNFULFILLED), delete its Reservation journal rows by captured id, re-run `--write`.
+  - Still no write-back to Planyo. Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
-- **CardPointe** (UAT, MID 810000003214) = card processing. `.env.local` is the
-  authority on the MID, not this file — it changed once already (496152163887 →
-  810000003214, commit dbc94cc) and a stale one here sends you hunting for
-  transactions on a merchant account that has none. Still UAT: production
-  credentials arrive with Fiserv's validation sign-off, and every client-facing
-  card surface fails closed until `CARDPOINTE_ENV=PROD` is set with them.
+- **CardPointe** = card processing. **LIVE in production since 2026-08-18** —
+  Fiserv signed off, `CARDPOINTE_ENV=PROD` and the four `CARDPOINTE_PROD_*`
+  values are set in Vercel Production, and `/api/cardpointe/config` reports
+  `env: PROD, live: true` on `boltgw.cardconnect.com`. Client card capture and
+  payment are open; staff collections charges real cards.
+  - **Never put production credentials in `.env.local`.** Local dev and every
+    ad-hoc script read it, so a prod value there charges real cards from a
+    laptop. Local stays UAT (MID 810000003214) — which is also why this file
+    can no longer name "the" MID: prod and local are deliberately different.
+    Read the env for whichever one you mean.
+  - The `live` gate (`env === 'PROD'`) still guards every client-facing card
+    surface, so an accidental revert to UAT closes them rather than quietly
+    sending real cards to the sandbox — which is what happened on 2026-08-13.
 
 ### Key Database Concepts
 - **Order** (`sr_orders`) — invoiceable rental, ties to a Job

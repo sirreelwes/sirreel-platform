@@ -28,6 +28,18 @@ export async function GET(req: NextRequest) {
   // balance on them — RW has not been told, or has not synced back — so
   // without this they sat in the collectible list and Ana would chase money
   // a colleague already recorded as received.
+  // WRITE_OFF triage rows leave the collectible list exactly like paid-marks:
+  // deemed uncollectible is not collectible. Search still finds them.
+  const writtenOff = (
+    await prisma.rwInvoiceTriage.findMany({
+      where: { decision: 'WRITE_OFF' },
+      select: { rwInvoiceId: true },
+    })
+  ).map((t) => t.rwInvoiceId)
+  const insuranceFlags = await prisma.rwInvoiceInsuranceFlag.findMany({
+    select: { rwInvoiceId: true, claimNumber: true },
+  })
+  const insuranceBy = new Map(insuranceFlags.map((f) => [f.rwInvoiceId, f]))
   const paidMarks = await prisma.rwInvoicePaidMark.findMany({
     select: { rwInvoiceId: true, markedAt: true, note: true },
   })
@@ -47,11 +59,22 @@ export async function GET(req: NextRequest) {
       // excluded. An explicit SEARCH still returns them — flagged — because
       // someone looking up a specific number needs to find it, and a mark
       // made in error must stay visible rather than vanishing.
-    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: paidMarkedIds } }
+      //
+      // VOID is excluded the same way (found 2026-08-18: 1,197 voided
+      // invoices carried $2.0M of remainingTotal — RW keeps the balance
+      // populated on a void, so "remaining > 0" alone offered Ana cancelled
+      // obligations to charge cards against). Search still surfaces them,
+      // with the status visible on the row.
+    : { remainingTotal: { gt: 0 }, rwInvoiceId: { notIn: [...paidMarkedIds, ...writtenOff] }, NOT: { status: 'VOID' } }
 
   const invoices = await prisma.rwInvoice.findMany({
     where,
-    orderBy: [{ invoiceDate: 'desc' }],
+    // Default list: oldest debt first — this is a worklist, and the invoice
+    // most in need of a call belongs at the top (Wes, 2026-08-19). SEARCH
+    // keeps newest-first: someone typing a number wants recency, not aging.
+    orderBy: q
+      ? [{ invoiceDate: 'desc' as const }]
+      : [{ dueDate: { sort: 'asc' as const, nulls: 'last' as const } }, { invoiceDate: 'asc' as const }],
     take: 50,
     select: {
       rwInvoiceId: true,
@@ -97,8 +120,10 @@ export async function GET(req: NextRequest) {
     syncedAt: freshest._max.syncedAt ?? null,
     invoices: invoices.map((i) => {
       const mark = paidMarkById.get(i.rwInvoiceId)
+      const ins = insuranceBy.get(i.rwInvoiceId)
       return {
         ...i,
+        insurance: ins ? { claimNumber: ins.claimNumber } : null,
         invoiceTotal: Number(i.invoiceTotal),
         receivedTotal: Number(i.receivedTotal),
         remainingTotal: Number(i.remainingTotal),

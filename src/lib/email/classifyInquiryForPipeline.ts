@@ -159,11 +159,28 @@ export function classifyInquiryForPipeline(input: InquiryClassifyInput): Inquiry
   return classifyBySubject(stripped, input.inReplyTo)
 }
 
+// HQ's OWN portal-paperwork notifications (src/lib/email/notifyPortalPaperwork.ts,
+// added 2026-08-20). They arrive in the sales team's personal inboxes — which
+// are CRM-captured — with pipe-shaped subjects like
+// "Card authorization submitted | Miniac | Etsy". "Rental agreement signed"
+// already excludes via the rental-agreement keyword rule below, but the other
+// step labels would fall through to the DEFAULT-INCLUDE branch and surface our
+// own notifications as pipeline "leads". Excluded by exact prefix here.
+const PORTAL_PAPERWORK_SUBJECT =
+  /^\s*(rental agreement signed|lcdw decision submitted|card authorization submitted|studio contract signed)\s*\|/i
+
 function classifyBySubject(
   strippedSubject: string,
   inReplyTo: string | null,
   reasonPrefix = '',
 ): InquiryClassifyResult {
+  if (PORTAL_PAPERWORK_SUBJECT.test(strippedSubject)) {
+    return {
+      include: false,
+      classification: 'paperwork',
+      reason: `${reasonPrefix}subject matches an HQ portal-paperwork notification`,
+    }
+  }
   const formType = inferFormTypeFromSubject(strippedSubject)
   switch (formType) {
     case 'JOB_AGREEMENT':

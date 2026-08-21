@@ -17,20 +17,19 @@
 import type { PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 import { SHARE_FRAUD_WARNING } from '@/lib/payments/paymentShare'
 
-const GOLD = '#D4A547'
-const SLATE = '#0f172a'
+export const GOLD = '#D4A547'
+export const SLATE = '#0f172a'
 
 // Verbatim per ruling — do not edit without Wes.
 /** Our own path, not the vendor URL — see legacyRedirects. When card
  *  authorization moves into the portal this follows automatically. */
-const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
+export const CARD_AUTH_URL = 'https://sirreel.com/creditcardauthorization'
 
 /** Same asset the rest of the SirReel emails use. */
-const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+export const LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 
 /** Zelle QR, same host as the logo. Absolute because mail clients cannot
  *  resolve relative paths; the marketing host does not serve /payment/. */
-const ZELLE_QR_URL = 'https://hq.sirreel.com/payment/zelle-qr.png'
 
 export const FRAUD_WARNING =
   "SirReel's payment details never change. If you receive any notice of updated banking information, call (888) 477-7335 before sending funds."
@@ -180,9 +179,6 @@ export function buildPaymentInfoEmail(input: {
           ? `<div style="border:1px solid #e5e2d9;border-radius:10px;padding:16px 18px;margin:0 0 20px;background:#ffffff;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:${GOLD};margin:0 0 10px;">Or pay by Zelle</div>
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td valign="top" style="padding-right:16px;">
-            <img src="${ZELLE_QR_URL}" alt="Zelle QR code" width="104" height="104" style="display:block;border:0;width:104px;height:104px;" />
-          </td>
           <td valign="top" style="font-size:13px;line-height:1.7;color:#111827;">
             <div><strong>Zelle tag:</strong> ${escapeHtml(input.details.zelleHandle)}</div>
             <div><strong>Confirm the name:</strong> ${escapeHtml(input.details.zelleName)}</div>

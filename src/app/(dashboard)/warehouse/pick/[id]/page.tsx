@@ -231,7 +231,7 @@ export default function WarehousePickDetailPage() {
                 <span className="text-[11px] text-zinc-400">· assigned to {picklist.assignedTo.name}</span>
               )}
             </div>
-            <h1 className="text-xl font-semibold text-white mt-1">
+            <h1 className="text-xl font-semibold text-zinc-900 mt-1">
               {picklist.order.company.name}
               {picklist.order.job && <span className="text-zinc-500 font-normal"> · {picklist.order.job.name}</span>}
             </h1>

@@ -5384,6 +5384,85 @@ model RwInvoice {
   @@map("sr_rw_invoices")
 }
 
+/// The payment EVENT the RW mirror cannot express. The mirror is deleted and
+/// recreated on every sync, so "when did this invoice get paid" is knowable
+/// only by noticing the transition: a nightly sync where remaining hits zero
+/// on an invoice that had a balance. One row per invoice, written the first
+/// sync that sees it paid, carrying snapshots (the mirror row it describes
+/// will be dropped on the next sync).
+///
+/// This is the feedstock for days-to-pay per client. observedPaidAt is at
+/// sync granularity (~daily) — good enough for payment-behavior metrics,
+/// useless for intraday anything.
+///
+/// preTracking: rows seeded when tracking began (2026-08-18) for invoices
+/// ALREADY paid — their true payment date is unknown, so they are excluded
+/// from latency math but must exist so later syncs don't "observe" them
+/// freshly and pollute the metric with garbage dates.
+model RwInvoicePaidObservation {
+  id             String    @id @default(uuid())
+  rwInvoiceId    String    @unique @map("rw_invoice_id")
+  invoiceNumber  String?   @map("invoice_number")
+  customerName   String?   @map("customer_name")
+  rwCustomerId   String?   @map("rw_customer_id")
+  invoiceDate    DateTime? @map("invoice_date")
+  dueDate        DateTime? @map("due_date")
+  invoiceTotal   Decimal   @default(0) @db.Decimal(12, 2) @map("invoice_total")
+  observedPaidAt DateTime  @default(now()) @map("observed_paid_at")
+  preTracking    Boolean   @default(false) @map("pre_tracking")
+
+  @@index([customerName])
+  @@index([observedPaidAt])
+  @@map("sr_rw_invoice_paid_observations")
+}
+
+/// Ana's ruling on an aged receivable — the review that used to live in
+/// emailed spreadsheets, kept in HQ instead (Wes, 2026-08-19). One row per
+/// invoice, upserted; the latest decision stands and EmailDelivery-style
+/// history is deliberately not kept (the decision is the record, not the
+/// deliberation).
+///
+///   STILL_OWED  keep chasing — stays in the receivable and the worklist
+///   DISPUTE     contested — stays in the receivable, flagged
+///   WRITE_OFF   deemed uncollectible — leaves the Outstanding tile and the
+///               collectible list (like a paid-mark), and becomes a line in
+///               the bad-debt tax report with the decided date and amount
+///
+/// Snapshots (number/customer/amount) because the mirror row this describes
+/// is recreated nightly and may vanish entirely — a tax-claim line must
+/// outlive its source, same reasoning as RwCollectionCharge.
+model RwInvoiceTriage {
+  id            String   @id @default(uuid())
+  rwInvoiceId   String   @unique @map("rw_invoice_id")
+  decision      String
+  note          String?
+  invoiceNumber String?  @map("invoice_number")
+  customerName  String?  @map("customer_name")
+  amount        Decimal  @default(0) @db.Decimal(12, 2)
+  decidedById   String?  @map("decided_by_id")
+  decidedAt     DateTime @default(now()) @map("decided_at")
+
+  @@index([decision])
+  @@map("sr_rw_invoice_triage")
+}
+
+/// "This receivable is waiting on an insurance carrier, not the client."
+/// Manual flag (Wes, 2026-08-19) — nothing in RW distinguishes the payer
+/// (every invoice is type BILLING), and the claims pod is too young to
+/// auto-link, so the person who knows sets it. Absence of a row means the
+/// default: waiting on client payment. Optional claimNumber ties it to the
+/// claims pod when one exists.
+model RwInvoiceInsuranceFlag {
+  id          String   @id @default(uuid())
+  rwInvoiceId String   @unique @map("rw_invoice_id")
+  claimNumber String?  @map("claim_number")
+  note        String?
+  flaggedById String?  @map("flagged_by_id")
+  flaggedAt   DateTime @default(now()) @map("flagged_at")
+
+  @@map("sr_rw_invoice_insurance_flags")
+}
+
 /// Links an HQ Job to a RentalWorks ORDER (by order number). One RW order
 /// has many invoices, so linking at the ORDER level rolls every current and
 /// future invoice for that order up to the job automatically.
@@ -5439,6 +5518,20 @@ model JobFinalInvoice {
   note          String?
   uploadedById  String?  @map("uploaded_by_id")
   uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  /// Payment-options email: when it last went out and to whom. Stamped on
+  /// every send including manual resends — this is delivery state, not an
+  /// audit log (EmailDelivery keeps the per-send record). Null = never sent,
+  /// which the collections queue surfaces so Ana knows the client has NOT
+  /// been told how to pay.
+  emailedAt     DateTime? @map("emailed_at")
+  emailedTo     String?   @map("emailed_to")
+  /// How the money actually arrived, stamped when status flips COLLECTED.
+  /// CARD is stamped by the charge route; WIRE/ACH/ZELLE/CHECK/OTHER by the
+  /// Mark-collected action, because those arrive at the bank, not through HQ.
+  /// String, not an enum — same interim-model reasoning as `status`.
+  collectedAt   DateTime? @map("collected_at")
+  collectedVia  String?   @map("collected_via")
+  collectedById String?   @map("collected_by_id")
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

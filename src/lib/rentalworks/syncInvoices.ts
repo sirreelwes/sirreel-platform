@@ -165,6 +165,50 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
     ),
   ])
 
+  // Record payment EVENTS the mirror itself cannot keep: the first sync that
+  // sees an invoice fully received writes one observation row, and that date
+  // is the payment date at sync granularity. Feeds days-to-pay per client.
+  // Never blocks the sync — the mirror is the product, observations are the
+  // byproduct. Paid = received the full total, and not VOID: a voided
+  // invoice's balance going to zero is a cancellation, not a payment.
+  try {
+    const paidNow = rows.filter(
+      (r) =>
+        Number(r.remainingTotal) <= 0 &&
+        Number(r.receivedTotal) > 0 &&
+        r.status !== 'VOID',
+    )
+    if (paidNow.length > 0) {
+      const seen = new Set(
+        (
+          await prisma.rwInvoicePaidObservation.findMany({
+            where: { rwInvoiceId: { in: paidNow.map((r) => r.rwInvoiceId as string) } },
+            select: { rwInvoiceId: true },
+          })
+        ).map((o) => o.rwInvoiceId),
+      )
+      const fresh = paidNow.filter((r) => !seen.has(r.rwInvoiceId as string))
+      if (fresh.length > 0) {
+        await prisma.rwInvoicePaidObservation.createMany({
+          data: fresh.map((r) => ({
+            rwInvoiceId: r.rwInvoiceId as string,
+            invoiceNumber: (r.invoiceNumber as string | null) ?? null,
+            customerName: (r.customerName as string | null) ?? null,
+            rwCustomerId: (r.rwCustomerId as string | null) ?? null,
+            invoiceDate: (r.invoiceDate as Date | null) ?? null,
+            dueDate: (r.dueDate as Date | null) ?? null,
+            invoiceTotal: Number(r.invoiceTotal ?? 0),
+            observedPaidAt: syncedAt,
+          })),
+          skipDuplicates: true,
+        })
+        console.log(`[rw-sync] recorded ${fresh.length} new paid observation(s)`)
+      }
+    }
+  } catch (err) {
+    console.error('[rw-sync] paid-observation capture failed (sync unaffected):', err)
+  }
+
   return {
     ok: true,
     pulled: rows.length,
