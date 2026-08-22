@@ -2251,10 +2251,15 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
   const ccTone = p.ccAuth === 'done' ? 'good' : p.ccAuth === 'pending' ? 'warn' : 'muted'
   const wcTone = p.wc === 'received' ? 'good' : p.wc === 'pending' ? 'warn' : 'muted'
   const coiExp = p.coiExpires ? new Date(p.coiExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
-  // Chip destinations on the Job page: COI and the agreement have their
-  // own anchored sections; LCDW / CC-Auth / WC / balance live around the
-  // paperwork strip + orders at the top of the page.
+  // Chip destinations on the Job page. COI, the agreement, the reserved-
+  // asset list (per-unit LCDW badges) and the card-on-file panel each have
+  // their own anchored section, so those chips land ON the document rather
+  // than at the top of the page. WC and balance have no section of their
+  // own — WC's uploaded certificate is stored (paperwork_requests
+  // .wc_file_url) but nothing renders it yet — so they fall back to the
+  // job page and its paperwork strip.
   const jobHref = jobId ? `/jobs/${jobId}` : null
+  const jobSection = (hash: string) => (jobId ? `/jobs/${jobId}${hash}` : null)
   return (
     <div className="pt-2">
       <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Job paperwork</div>
@@ -2272,8 +2277,8 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
           }
           tone={coiTone}
         />
-        <PaperChip href={jobHref} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
-        <PaperChip href={jobHref} label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
+        <PaperChip href={jobSection('#reserved-assets')} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
+        <PaperChip href={jobSection('#card-auth')} label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
         <PaperChip href={jobHref} label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
         {typeof ctx.balanceDue === 'number' && ctx.balanceDue > 0 && (
           <PaperChip href={jobHref} label="Balance" value={`$${Math.round(ctx.balanceDue).toLocaleString('en-US')} due`} tone="bad" />
