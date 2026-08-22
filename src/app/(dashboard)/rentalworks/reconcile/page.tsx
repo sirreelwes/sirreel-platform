@@ -502,6 +502,7 @@ function ReconcilePanel({
   const [rw, setRw] = useState<RwData | null>(null);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState('');
+  const [warn, setWarn] = useState<{ attempted: string; message: string; suggestOrder: string | null } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showAllCands, setShowAllCands] = useState(false);
 
@@ -516,14 +517,27 @@ function ReconcilePanel({
 
   useEffect(() => { load(); }, [load]);
 
-  const link = async (orderNumber: string) => {
+  const link = async (orderNumber: string, force = false) => {
     if (!orderNumber.trim()) return;
     setBusy(true);
     try {
-      await fetch(`/api/jobs/${jobId}/rw-orders`, {
+      const r = await fetch(`/api/jobs/${jobId}/rw-orders`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rwOrderNumber: orderNumber.trim() }),
+        body: JSON.stringify({ rwOrderNumber: orderNumber.trim(), force }),
       });
+      // 409 = not a known RW order number (probably an invoice number).
+      // Surface the warning; the user can take the invoice's real order or
+      // override for a quote too new for the mirror.
+      if (r.status === 409) {
+        const j = await r.json().catch(() => null);
+        setWarn({
+          attempted: orderNumber.trim(),
+          message: j?.message ?? `#${orderNumber.trim()} isn't a known RW order.`,
+          suggestOrder: j?.invoice?.orderNumber ?? null,
+        });
+        return;
+      }
+      setWarn(null);
       setManual('');
       onLinked();
     } finally { setBusy(false); }
@@ -757,10 +771,37 @@ function ReconcilePanel({
               })}
             </div>
 
+            {warn && (
+              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+                <div className="text-[12px] text-amber-900">{warn.message}</div>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {warn.suggestOrder && (
+                    <button
+                      onClick={() => link(warn.suggestOrder!)}
+                      disabled={busy}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40"
+                    >
+                      Link order #{warn.suggestOrder} instead
+                    </button>
+                  )}
+                  <button
+                    onClick={() => link(warn.attempted, true)}
+                    disabled={busy}
+                    className="px-2.5 py-1 text-[11px] font-semibold rounded border border-lt-hairline bg-lt-inner text-lt-fg hover:border-lt-fg3 disabled:opacity-40"
+                  >
+                    Link #{warn.attempted} anyway
+                  </button>
+                  <button onClick={() => setWarn(null)} className="text-[11px] text-lt-fg3 hover:text-lt-fg">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-lt-hairline">
               <input
                 value={manual}
-                onChange={(e) => setManual(e.target.value)}
+                onChange={(e) => { setManual(e.target.value); setWarn(null); }}
                 placeholder="Know the RW order number? Enter it…"
                 className="flex-1 px-2.5 py-1.5 bg-lt-inner border border-lt-hairline rounded-lg text-[12px] text-lt-fg focus:outline-none focus:border-lt-fg3"
               />

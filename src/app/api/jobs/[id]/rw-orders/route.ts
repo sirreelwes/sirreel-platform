@@ -155,12 +155,56 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = (await req.json().catch(() => ({}))) as { rwOrderNumber?: unknown }
+  const body = (await req.json().catch(() => ({}))) as { rwOrderNumber?: unknown; force?: unknown }
   const rwOrderNumber = String(body.rwOrderNumber ?? '').trim().slice(0, 40)
+  const force = body.force === true
   if (!rwOrderNumber) return NextResponse.json({ error: 'rwOrderNumber required' }, { status: 400 })
 
   const job = await prisma.job.findUnique({ where: { id: params.id }, select: { id: true } })
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+
+  // Guard against pasting the wrong kind of number. On 2026-08-22 a job was
+  // linked to an INVOICE number belonging to a different client — order and
+  // invoice numbers look alike, and a bad link silently rolls a stranger's
+  // AR into the job. The number must exist as an ORDER number in either
+  // mirror (RwQuote.orderNumber covers quotes RW hasn't invoiced yet).
+  // `force: true` skips the check: the mirror syncs on a delay, so a
+  // brand-new quote can legitimately be a day ahead of it.
+  if (!force) {
+    const [asOrder, asQuote] = await Promise.all([
+      prisma.rwInvoice.findFirst({ where: { orderNumber: rwOrderNumber }, select: { id: true } }),
+      prisma.rwQuote.findFirst({ where: { orderNumber: rwOrderNumber }, select: { id: true } }),
+    ])
+    if (!asOrder && !asQuote) {
+      const asInvoice = await prisma.rwInvoice.findFirst({
+        where: { invoiceNumber: rwOrderNumber },
+        orderBy: { invoiceDate: 'desc' },
+        select: { invoiceNumber: true, orderNumber: true, customerName: true, dealName: true },
+      })
+      if (asInvoice) {
+        return NextResponse.json(
+          {
+            ok: false,
+            warning: 'invoice_number',
+            message:
+              `#${rwOrderNumber} is an INVOICE number` +
+              (asInvoice.customerName ? ` (${asInvoice.customerName})` : '') +
+              (asInvoice.orderNumber ? ` — its order is #${asInvoice.orderNumber}.` : ', not an order number.'),
+            invoice: asInvoice,
+          },
+          { status: 409 },
+        )
+      }
+      return NextResponse.json(
+        {
+          ok: false,
+          warning: 'unknown_order',
+          message: `#${rwOrderNumber} isn't a known RW order — did you paste an invoice number? (If it's a brand-new quote the mirror may not have it yet — you can link it anyway.)`,
+        },
+        { status: 409 },
+      )
+    }
+  }
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
