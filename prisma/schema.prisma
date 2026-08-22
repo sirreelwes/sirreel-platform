@@ -732,7 +732,48 @@ model Driver {
   licenseNumber   String?   @map("license_number") @db.VarChar(30)
   licenseState    String?   @map("license_state") @db.VarChar(5)
   licenseExpiry   DateTime? @map("license_expiry")
+  /// DEPRECATED — predates the front/back capture below and was never
+  /// written by any code path (0 rows). Kept so the column isn't dropped;
+  /// new writes go to licenseFrontUrl / licenseBackUrl.
   licensePhotoUrl String?   @map("license_photo_url")
+
+  // ── License images. A driver's licence is sensitive PII, so both
+  //    sides live in the PRIVATE blob store and are served only through
+  //    the authed proxy at /api/drivers/[id]/license/[side]. The URL
+  //    never reaches the browser. Same treatment as COI / WC.
+  licenseFrontKey      String?   @map("license_front_key")
+  licenseFrontUrl      String?   @map("license_front_url")
+  licenseFrontMimeType String?   @map("license_front_mime_type")
+  licenseBackKey       String?   @map("license_back_key")
+  licenseBackUrl       String?   @map("license_back_url")
+  licenseBackMimeType  String?   @map("license_back_mime_type")
+  licenseUploadedAt    DateTime? @map("license_uploaded_at")
+
+  // ── What the AI read off the card. This is EXTRACTION, not validation:
+  //    it tells us what the licence says, never whether the state still
+  //    considers it good. `licenseExpired` is the one real check we can
+  //    make offline (expiry date vs today). A DMV/MVR status check would
+  //    need a third-party service and is deliberately not attempted.
+  licenseAiReview   Json?     @map("license_ai_review")
+  licenseReviewAt   DateTime? @map("license_review_at")
+  licenseExpired    Boolean?  @map("license_expired")
+  dateOfBirth       DateTime? @map("date_of_birth")
+  licenseClass      String?   @map("license_class") @db.VarChar(10)
+  licenseEndorsements String? @map("license_endorsements") @db.VarChar(60)
+  licenseRestrictions String? @map("license_restrictions") @db.VarChar(60)
+
+  // Staff sign-off — a human looked at the images and accepted them.
+  // Separate from the AI read, which is only ever an assist.
+  licenseVerified     Boolean   @default(false) @map("license_verified")
+  licenseVerifiedAt   DateTime? @map("license_verified_at")
+  licenseVerifiedById String?   @map("license_verified_by_id")
+
+  // ── Driver portal access. One live token per driver: staff mint it and
+  //    either email it to the driver or open it on a tablet at pickup.
+  //    Nullable so a driver record can exist without portal access.
+  portalToken     String?   @unique @map("portal_token")
+  portalTokenAt   DateTime? @map("portal_token_at")
+  portalExpiresAt DateTime? @map("portal_expires_at")
 
   type      DriverType @default(EXTERNAL)
   companyId String?    @map("company_id") // Which production sent them (external drivers)
