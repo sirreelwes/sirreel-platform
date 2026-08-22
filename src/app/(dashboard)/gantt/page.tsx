@@ -98,17 +98,37 @@ function assignLanes(bookings: any[]): { bookings: any[]; laneCount: number } {
 // non-click marker rather than a dead link.
 const ORDER_BADGE_CLASS =
   'mr-1 inline-flex h-4 w-4 flex-none items-center justify-center rounded-sm bg-red-600 border border-white/80 text-[10px] leading-none text-white'
-function OrderBadge({ order }: { order?: { id: string; orderNumber: string } | null }) {
-  if (!order) return <span className={ORDER_BADGE_CLASS} title="Order attached">✎</span>
-  return (
-    <a
-      href={`/orders/${order.id}`}
-      className={`${ORDER_BADGE_CLASS} hover:bg-red-500 cursor-pointer`}
-      title={`Order ${order.orderNumber} attached — click to open`}
-      onClick={(ev) => ev.stopPropagation()}
-      onPointerDown={(ev) => ev.stopPropagation()}
-    >✎</a>
-  )
+function OrderBadge({ order, rwOrderNumber, jobId }: {
+  order?: { id: string; orderNumber: string } | null
+  /** First linked RentalWorks order number (JobRwOrder) — the fallback
+   *  destination when the job has no HQ order yet (RW quote linked
+   *  pre-invoice). Lands on the job's RW billing panel. */
+  rwOrderNumber?: string | null
+  jobId?: string | null
+}) {
+  if (order) {
+    return (
+      <a
+        href={`/orders/${order.id}`}
+        className={`${ORDER_BADGE_CLASS} hover:bg-red-500 cursor-pointer`}
+        title={`Order ${order.orderNumber} attached — click to open`}
+        onClick={(ev) => ev.stopPropagation()}
+        onPointerDown={(ev) => ev.stopPropagation()}
+      >✎</a>
+    )
+  }
+  if (rwOrderNumber && jobId) {
+    return (
+      <a
+        href={`/jobs/${jobId}#rw-billing`}
+        className={`${ORDER_BADGE_CLASS} hover:bg-red-500 cursor-pointer`}
+        title={`RW order ${rwOrderNumber} attached — click to open the job's RW billing`}
+        onClick={(ev) => ev.stopPropagation()}
+        onPointerDown={(ev) => ev.stopPropagation()}
+      >✎</a>
+    )
+  }
+  return <span className={ORDER_BADGE_CLASS} title="Order attached">✎</span>
 }
 
 // Per-drag row highlight state (computed once per target change in the parent;
@@ -264,7 +284,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
                 onBarClick(b, entry.unit)
               }}
             >
-              {b.hasOrder && <OrderBadge order={b.orders?.[0]} />}
+              {b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                 {(b.tags || []).includes('ART_DEPT') && (
                   <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
@@ -1593,7 +1613,7 @@ export default function GanttPage() {
                           style={{ left: bar.left, width: bar.width }}
                           onClick={() => setSelected(job)}
                         >
-                          {job.hasOrder && <OrderBadge order={job.orders?.[0]} />}
+                          {job.hasOrder && <OrderBadge order={job.orders?.[0]} rwOrderNumber={job.rwOrderNumbers?.[0]} jobId={job.jobId} />}
                           <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                             {(job.tags || []).includes('ART_DEPT') && (
                               <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
@@ -1746,7 +1766,30 @@ export default function GanttPage() {
                     Hidden when the booking has no job — there would be nothing
                     to attach the order to, and the wizard cannot create a Job
                     (Job-as-root: the resolver does that). */}
-                {selected.jobId && (
+                {selected.jobId && Array.isArray(selected.rwOrderNumbers) && selected.rwOrderNumbers.length > 0 && (!Array.isArray(selected.orders) || selected.orders.length === 0) ? (
+                  /* RW-linked, no HQ order (Wes 2026-08-22): the order this
+                     job runs on lives in RentalWorks — lead with it instead
+                     of demanding a duplicate HQ order. Create stays available
+                     as a quiet secondary for the native-billing path. */
+                  <div className="pt-2">
+                    {selected.rwOrderNumbers.map((n: string) => (
+                      <Link
+                        key={n}
+                        href={`/jobs/${selected.jobId}#rw-billing`}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[12px] font-semibold mb-1"
+                      >
+                        <span>✎ RW order #{n} attached</span>
+                        <span className="opacity-80">billing on the job →</span>
+                      </Link>
+                    ))}
+                    <Link
+                      href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
+                      className="block text-center text-[11px] text-gray-400 hover:text-gray-600 hover:underline pt-1"
+                    >
+                      + create an HQ order instead
+                    </Link>
+                  </div>
+                ) : selected.jobId ? (
                   <div className="pt-2">
                     <Link
                       href={`/orders/new?jobId=${encodeURIComponent(selected.jobId)}`}
@@ -1755,7 +1798,7 @@ export default function GanttPage() {
                       + Create order for this job
                     </Link>
                   </div>
-                )}
+                ) : null}
 
                 {/* Job context — clickable orders on this booking (with the
                     unit(s) they're loaded onto) + the booking's other

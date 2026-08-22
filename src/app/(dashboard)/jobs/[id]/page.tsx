@@ -1954,8 +1954,11 @@ export default function JobDetailPage() {
       </div>
 
       {/* Email threads filed in this Job (email-in-Job, step 6). */}
-      {/* RW billing: linked RW order → its invoices + balance. */}
-      <JobRwBillingPanel jobId={job.id} />
+      {/* RW billing: linked RW order → its invoices + balance. Anchored —
+          the gantt's order badge / modal deep-link here for RW-linked jobs. */}
+      <div id="rw-billing" className="scroll-mt-4">
+        <JobRwBillingPanel jobId={job.id} />
+      </div>
       {/* Sales -> collections handoff. Sits under RW billing because the
           agent is already looking at the job's RW invoices here. */}
       <JobFinalInvoicePanel jobId={job.id} />

@@ -162,11 +162,11 @@ export async function GET(req: NextRequest) {
           id: true,
           jobCode: true,
           tags: true,
-          // Existence probe only — RW-linked orders count as "order
-          // attached" on the board (Wes 2026-08-22): a quote made in
-          // RW and linked via JobRwOrder turns the bar dark red just
-          // like an HQ order would.
-          rwOrders: { select: { id: true }, take: 1 },
+          // RW-linked orders count as "order attached" on the board
+          // (Wes 2026-08-22), and the payload carries the numbers so
+          // the badge/modal can link to the RW billing panel instead
+          // of dead-ending in "+ Create order".
+          rwOrders: { select: { rwOrderNumber: true } },
           orders: {
             where: { status: { not: 'CANCELLED' } },
             // blindPickup comes from the JOB's orders, not just the booking's.
@@ -291,6 +291,7 @@ export async function GET(req: NextRequest) {
       jobId: b.job?.id ?? null,
       jobCode: b.job?.jobCode ?? null,
       tags: b.job?.tags ?? [],
+      rwOrderNumbers: (b.job?.rwOrders ?? []).map((r) => r.rwOrderNumber),
       company: b.company.name,
       jobName: b.jobName,
       jobNum: b.bookingNumber,
@@ -372,7 +373,7 @@ export async function GET(req: NextRequest) {
               status: true,
               jobName: true,
               rentalworksOrderId: true,
-              job: { select: { id: true, jobCode: true, tags: true, rwOrders: { select: { id: true }, take: 1 } } },
+              job: { select: { id: true, jobCode: true, tags: true, rwOrders: { select: { rwOrderNumber: true } } } },
               company: { select: { name: true } },
               agent: { select: { id: true, name: true } },
               orders: { select: { blindPickup: true } },
@@ -429,6 +430,7 @@ export async function GET(req: NextRequest) {
       jobId: a.bookingItem.booking.job?.id ?? null,
       jobCode: a.bookingItem.booking.job?.jobCode ?? null,
       tags: a.bookingItem.booking.job?.tags ?? [],
+      rwOrderNumbers: (a.bookingItem.booking.job?.rwOrders ?? []).map((r) => r.rwOrderNumber),
       clientName: a.bookingItem.booking.company.name,
       jobName: a.bookingItem.booking.jobName,
       agent: a.bookingItem.booking.agent.name ?? '',
