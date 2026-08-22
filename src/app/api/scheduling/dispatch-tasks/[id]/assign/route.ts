@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { evaluateLicenseGate } from "@/lib/drivers/licenseGate";
 import { can } from "@/lib/permissions";
 
 type Params = { params: Promise<{ id: string }> };
@@ -53,11 +54,26 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!task) {
     return NextResponse.json({ error: "task not found" }, { status: 404 });
   }
+  // Licence state travels with the response but does NOT block here.
+  // Dispatch assignment is planning, often days ahead of the vehicle
+  // moving; the hard gate lives at physical handover
+  // (POST /api/fleet/checkouts/[id]/driver). Blocking the plan would just
+  // push dispatch to assign a placeholder driver and fix it later, which
+  // hides the problem instead of surfacing it. The UI shows this as a
+  // warning so the licence gets sorted before pickup day.
+  let licenseGate: ReturnType<typeof evaluateLicenseGate> | null = null;
   if (driverId) {
-    const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { id: true } });
+    const driver = await prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true, licenseFrontUrl: true, licenseBackUrl: true,
+        licenseExpiry: true, licenseExpired: true, licenseVerified: true,
+      },
+    });
     if (!driver) {
       return NextResponse.json({ error: "driver not found" }, { status: 400 });
     }
+    licenseGate = evaluateLicenseGate(driver);
   }
 
   const updated = await prisma.dispatchTask.update({
@@ -65,5 +81,5 @@ export async function POST(req: NextRequest, { params }: Params) {
     data: { towVehicle: tow, assignedTo: driverId },
     select: { id: true, towVehicle: true, assignedTo: true, status: true },
   });
-  return NextResponse.json({ ok: true, task: updated });
+  return NextResponse.json({ ok: true, task: updated, licenseGate });
 }
