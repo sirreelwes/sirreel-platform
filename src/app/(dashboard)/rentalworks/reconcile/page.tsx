@@ -37,6 +37,7 @@ type Suggestion = {
   orderNumber: string; dealName: string | null; orderDescription: string | null;
   agent: string | null; billingStartDate: string | null; billingEndDate: string | null;
   invoiceCount: number; invoiced: number; outstanding: number;
+  source?: 'invoice' | 'quote';
   score: number; reasons: string[]; distanceDays: number | null;
 };
 
@@ -316,8 +317,19 @@ export default function ReconcilePage() {
                   <span className="font-mono text-[13px] text-lt-fg">#{s.orderNumber}</span>
                   {s.dealName && <span className="text-[13px] font-semibold text-lt-fg">{s.dealName}</span>}
                   {s.orderDescription && <span className="text-[12px] text-lt-fg2">· {s.orderDescription}</span>}
+                  {s.source === 'quote' && (
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200"
+                      title="From the RW quote mirror — no invoices yet. Linking now means every future invoice on this number rolls up automatically."
+                    >
+                      QUOTE · pre-invoice
+                    </span>
+                  )}
                   <span className="text-[11px] text-lt-fg3">
-                    {s.companyName} · {s.invoiceCount} inv · {usd(s.invoiced)}
+                    {s.companyName}
+                    {s.source === 'quote'
+                      ? <> · quoted {usd(s.invoiced)}</>
+                      : <> · {s.invoiceCount} inv · {usd(s.invoiced)}</>}
                     {s.outstanding > 0.005 && <span className="text-amber-700 font-semibold"> · {usd(s.outstanding)} open</span>}
                   </span>
                   <span className="flex items-center gap-1 flex-wrap">

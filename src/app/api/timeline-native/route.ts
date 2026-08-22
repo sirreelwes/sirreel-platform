@@ -162,6 +162,11 @@ export async function GET(req: NextRequest) {
           id: true,
           jobCode: true,
           tags: true,
+          // Existence probe only — RW-linked orders count as "order
+          // attached" on the board (Wes 2026-08-22): a quote made in
+          // RW and linked via JobRwOrder turns the bar dark red just
+          // like an HQ order would.
+          rwOrders: { select: { id: true }, take: 1 },
           orders: {
             where: { status: { not: 'CANCELLED' } },
             // blindPickup comes from the JOB's orders, not just the booking's.
@@ -303,7 +308,7 @@ export async function GET(req: NextRequest) {
       // the order badge on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
       orders: bookingExtras.get(b.id)?.orders ?? [],
-      hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0,
+      hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0 || (b.job?.rwOrders?.length ?? 0) > 0,
       // Units on the same JOB but on other bookings — a job's fleet
       // often spans multiple bookings (one per unit).
       otherJobUnits: (b.job?.id ? jobUnits.get(b.job.id) ?? [] : []).filter(
@@ -367,7 +372,7 @@ export async function GET(req: NextRequest) {
               status: true,
               jobName: true,
               rentalworksOrderId: true,
-              job: { select: { id: true, jobCode: true, tags: true } },
+              job: { select: { id: true, jobCode: true, tags: true, rwOrders: { select: { id: true }, take: 1 } } },
               company: { select: { name: true } },
               agent: { select: { id: true, name: true } },
               orders: { select: { blindPickup: true } },
@@ -446,7 +451,7 @@ export async function GET(req: NextRequest) {
       // this one. Only this bar's own (unit, booking) entry is
       // excluded, so the same unit on another booking still shows.
       orders: bookingExtras.get(a.bookingItem.booking.id)?.orders ?? [],
-      hasOrder: (bookingExtras.get(a.bookingItem.booking.id)?.orders.length ?? 0) > 0,
+      hasOrder: (bookingExtras.get(a.bookingItem.booking.id)?.orders.length ?? 0) > 0 || (a.bookingItem.booking.job?.rwOrders?.length ?? 0) > 0,
       siblingUnits: (bookingExtras.get(a.bookingItem.booking.id)?.units ?? []).filter(
         (u) => !(u.unitName === a.asset.unitName && u.bookingNumber === a.bookingItem.booking.bookingNumber),
       ),

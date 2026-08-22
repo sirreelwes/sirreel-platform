@@ -68,6 +68,9 @@ export async function GET(_req: NextRequest) {
     orderNumber: string; dealName: string | null; orderDescription: string | null;
     agent: string | null; billingStartDate: Date | null; billingEndDate: Date | null;
     firstInvoiceDate: Date | null; invoiceCount: number; invoiced: number; outstanding: number;
+    /// 'invoice' = grounded in invoice rows; 'quote' = pre-invoice, from the
+    /// RW quote mirror (2026-08-22) — connect the job BEFORE the money lands.
+    source: 'invoice' | 'quote';
   }
   const byCustomer = new Map<string, Map<string, Group>>()
   for (const inv of invoices) {
@@ -80,6 +83,7 @@ export async function GET(_req: NextRequest) {
       orderNumber: ord, dealName: inv.dealName, orderDescription: inv.orderDescription,
       agent: inv.agent, billingStartDate: inv.billingStartDate, billingEndDate: inv.billingEndDate,
       firstInvoiceDate: inv.invoiceDate, invoiceCount: 0, invoiced: 0, outstanding: 0,
+      source: 'invoice' as const,
     }
     g.invoiceCount++
     g.invoiced += n(inv.invoiceTotal)
@@ -89,6 +93,33 @@ export async function GET(_req: NextRequest) {
     // invoices are date-desc; the last row seen is the earliest
     g.firstInvoiceDate = inv.invoiceDate ?? g.firstInvoiceDate
     orders.set(ord, g)
+  }
+
+  // Fold in QUOTE evidence (2026-08-22): RW quotes share the order-number
+  // sequence, so a pre-invoice quote suggests the same link an invoice
+  // would — just earlier. Invoice evidence wins when both exist for a
+  // number (the invoice grouping above already claimed the map slot).
+  const quotes = await prisma.rwQuote.findMany({
+    where: { rwCustomerId: { in: customerIds }, orderNumber: { not: null } },
+    select: {
+      rwCustomerId: true, orderNumber: true, dealName: true, description: true,
+      agent: true, startDate: true, endDate: true, quoteDate: true, total: true,
+    },
+  })
+  for (const q of quotes) {
+    const cid = q.rwCustomerId as string
+    const ord = q.orderNumber as string
+    if (claimed.has(ord)) continue
+    if (!byCustomer.has(cid)) byCustomer.set(cid, new Map())
+    const orders = byCustomer.get(cid)!
+    if (orders.has(ord)) continue // invoice evidence already covers it
+    orders.set(ord, {
+      orderNumber: ord, dealName: q.dealName, orderDescription: q.description,
+      agent: q.agent, billingStartDate: q.startDate, billingEndDate: q.endDate,
+      firstInvoiceDate: q.quoteDate, invoiceCount: 0,
+      invoiced: Number(q.total ?? 0), outstanding: 0,
+      source: 'quote' as const,
+    })
   }
 
   // Best suggestable order per job.
@@ -140,6 +171,7 @@ export async function GET(_req: NextRequest) {
       invoiceCount: s.order.invoiceCount,
       invoiced: Math.round(s.order.invoiced * 100) / 100,
       outstanding: Math.round(s.order.outstanding * 100) / 100,
+      source: s.order.source,
       score: s.score,
       reasons: s.reasons,
       distanceDays: s.distanceDays,

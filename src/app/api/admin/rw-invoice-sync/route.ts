@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { syncRwInvoices } from '@/lib/rentalworks/syncInvoices'
+import { syncRwQuotes } from '@/lib/rentalworks/syncQuotes'
 import { reportRwSyncFailure } from '@/lib/rentalworks/syncAlert'
 
 export const dynamic = 'force-dynamic'
@@ -24,11 +25,17 @@ export async function GET(req: NextRequest) {
       console.error('[rw-invoice-sync cron] failed:', result.error)
       await reportRwSyncFailure(result.error ?? 'unknown error')
     }
+    // Quotes ride along (2026-08-22) so RW quotes reach the reconcile
+    // queue BEFORE their first invoice. Deliberately non-fatal: the
+    // invoice mirror is the money-critical product; a quote-endpoint
+    // hiccup must never 502 the cron or block the invoice pull.
+    const quotes = await syncRwQuotes().catch((e) => ({ ok: false as const, pulled: 0, pages: 0, error: String(e) }))
+    if (!quotes.ok) console.error('[rw-quote-sync cron] failed (non-fatal):', quotes.error)
     // No "expiring soon" warning: it was derived from the token's `exp`
     // claim, which RentalWorks does not enforce, so it fired on every run
     // regardless of how fresh the token was. Rotation is driven by the 401
     // alert above and the calendar reminder in the runbook.
-    return NextResponse.json({ ...result }, { status: result.ok ? 200 : 502 })
+    return NextResponse.json({ ...result, quotes }, { status: result.ok ? 200 : 502 })
   }
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -60,5 +67,8 @@ export async function POST(req: NextRequest) {
     console.error('[rw-invoice-sync] failed:', result.error)
     return NextResponse.json({ ...result }, { status: 502 })
   }
-  return NextResponse.json({ ...result })
+  // Quotes ride along — non-fatal (see the cron branch).
+  const quotes = await syncRwQuotes().catch((e) => ({ ok: false as const, pulled: 0, pages: 0, error: String(e) }))
+  if (!quotes.ok) console.error('[rw-quote-sync] failed (non-fatal):', quotes.error)
+  return NextResponse.json({ ...result, quotes })
 }

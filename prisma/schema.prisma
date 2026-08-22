@@ -5481,6 +5481,37 @@ model RwInvoiceInsuranceFlag {
 /// Deliberately its OWN table keyed on the order number rather than a column
 /// on RwInvoice: the mirror is deleted and recreated on every sync, so a link
 /// stored on those rows would be wiped. Retire with RW.
+/// Mirror of RentalWorks QUOTES — pre-invoice orders. RW quotes share the
+/// order-number sequence (a quote's number survives conversion to an order,
+/// verified 2026-08-22: quote 304485 sits in the same 30xxxx sequence as the
+/// invoice mirror's order numbers), so linking a JobRwOrder against a QUOTE's
+/// number is future-proof: the invoices that eventually carry it roll up
+/// automatically. Wiped and rebuilt on every sync like RwInvoice; `raw`
+/// keeps the full named row so unmapped columns are never lost. Retire with RW.
+model RwQuote {
+  id           String    @id @default(uuid())
+  rwQuoteId    String    @map("rw_quote_id")
+  quoteNumber  String?   @map("quote_number")
+  orderNumber  String?   @map("order_number")
+  status       String?
+  quoteDate    DateTime? @map("quote_date")
+  rwCustomerId String?   @map("rw_customer_id")
+  customerName String?   @map("customer_name")
+  dealName     String?   @map("deal_name")
+  dealNumber   String?   @map("deal_number")
+  description  String?
+  agent        String?
+  startDate    DateTime? @map("start_date")
+  endDate      DateTime? @map("end_date")
+  total        Decimal?  @db.Decimal(12, 2)
+  raw          Json?
+  syncedAt     DateTime  @map("synced_at")
+
+  @@index([rwCustomerId])
+  @@index([orderNumber])
+  @@map("sr_rw_quotes")
+}
+
 model JobRwOrder {
   id            String   @id @default(uuid())
   jobId         String   @map("job_id")
