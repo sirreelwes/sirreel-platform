@@ -8,8 +8,12 @@
 # A short `bash scripts/rotate-rw-prod.sh` cannot be wrapped apart, and
 # each step aborts loudly, so "complete" means every step truly ran.
 set -euo pipefail
-WT="/Users/wesbailey/Downloads/sirreel-platform/.claude/worktrees/friendly-tereshkova-251d2f"
-cd "$WT"
+# Any checkout of the repo works — steps use git plumbing against origin,
+# never a working tree (2026-08-22 fix: the old version committed from a
+# pinned worktree whose branch had gone stale behind main, so the redeploy
+# push failed as a non-fast-forward).
+REPO="/Users/wesbailey/Downloads/sirreel-platform"
+cd "$REPO"
 
 printf 'RW username [Dani]: '
 read -r RWU
@@ -18,25 +22,39 @@ printf 'RW password (hidden): '
 read -rs RWP
 echo
 
-echo "── [1/5] minting token from RentalWorks…"
+echo "── [1/6] minting token from RentalWorks…"
 TOK=$(printf '%s\n%s\n' "$RWU" "$RWP" | npx tsx scripts/rotate-rw-token.ts --verify --stdin --quiet)
 unset RWP
 if [ -z "$TOK" ]; then echo "✗ mint failed — stopping (nothing changed)"; exit 1; fi
 case "$TOK" in eyJ*) ;; *) echo "✗ minted value doesn't look like a token — stopping"; exit 1;; esac
 echo "✓ token minted and verified (length ${#TOK})"
 
-echo "── [2/5] removing old production value…"
+echo "── [2/6] removing old production value…"
 vercel env rm RENTALWORKS_TOKEN production -y >/dev/null
 echo "✓ removed"
 
-echo "── [3/5] storing new value (piped — no paste)…"
+echo "── [3/6] storing new value (piped — no paste)…"
 printf '%s' "$TOK" | vercel env add RENTALWORKS_TOKEN production >/dev/null
 echo "✓ stored"
 
-echo "── [4/5] pushing redeploy commit from the worktree…"
-git -C "$WT" commit --allow-empty -q -m "chore: redeploy after rentalworks token rotation"
-git -C "$WT" push -q origin HEAD:main
+echo "── [4/6] updating local .env.local (dev + scripts read it)…"
+python3 - "$TOK" << 'PYEOF'
+import sys, re
+tok = sys.argv[1]
+path = "/Users/wesbailey/Downloads/sirreel-platform/.env.local"
+src = open(path).read()
+out, n = re.subn(r'^RENTALWORKS_TOKEN=.*$', f'RENTALWORKS_TOKEN="{tok}"', src, count=1, flags=re.M)
+if n != 1:
+    out = src.rstrip("\n") + f'\nRENTALWORKS_TOKEN="{tok}"\n'
+open(path, "w").write(out)
+PYEOF
+echo "✓ .env.local updated"
+
+echo "── [5/6] pushing redeploy commit (plumbing — no working tree involved)…"
+git fetch -q origin main
+NEWC=$(git commit-tree 'origin/main^{tree}' -p origin/main -m "chore: redeploy after rentalworks token rotation")
+git push -q origin "$NEWC":main
 echo "✓ pushed — Vercel deploying"
 
-echo "── [5/5] done. Claude is watching the health endpoint from his side."
+echo "── [6/6] done. Tell Claude — he verifies the quote sync from his side."
 echo "ROTATION SCRIPT COMPLETE"
