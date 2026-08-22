@@ -39,8 +39,16 @@ interface DriverRow {
   hasLiveLink: boolean
 }
 
+// Licence dates are date-only values stored at UTC midnight. Formatting
+// them in local time renders the PREVIOUS day west of UTC — a card reading
+// EXP 03/14 showed as Mar 13, which is exactly the kind of off-by-one that
+// makes a rep at the counter distrust the whole screen. Force UTC.
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+  d
+    ? new Date(d).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+      })
+    : '—'
 
 export default function GuestDriversPage() {
   const [drivers, setDrivers] = useState<DriverRow[] | null>(null)
