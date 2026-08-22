@@ -2152,6 +2152,26 @@ model PaperworkRequest {
   studioContractSigned Boolean @default(false) @map("studio_contract_signed")
   creditCardAuth       Boolean @default(false) @map("credit_card_auth")
 
+  // Workers' Comp certificate — the client's separate WC proof when it
+  // isn't carried on the main COI (payroll companies like EP / Cast &
+  // Crew issue their own). Stored in the PRIVATE blob store exactly like
+  // CoiCheck (never inline base64), viewed by staff through the authed
+  // proxy at /api/wc/download/[id].
+  //
+  // 2026-08-22: these columns did not exist in the live DB. The upload
+  // route had been creating them with `ALTER TABLE ... IF NOT EXISTS`
+  // inside a swallowed try/catch, which never succeeded — so every
+  // client WC upload 500'd after paying for the AI review and nothing
+  // was ever stored. Declared here so the column is real and typed.
+  wcFileKey          String?   @map("wc_file_key")
+  wcFileUrl          String?   @map("wc_file_url")
+  wcOriginalFilename String?   @map("wc_original_filename")
+  wcMimeType         String?   @map("wc_mime_type")
+  wcFileSize         Int?      @map("wc_file_size")
+  wcUploadedAt       DateTime? @map("wc_uploaded_at")
+  wcAiReview         Json?     @map("wc_ai_review")
+  wcReviewAt         DateTime? @map("wc_review_at")
+
   // CC Auth details
   ccCardholderFirst     String?   @map("cc_cardholder_first")
   ccCardholderLast      String?   @map("cc_cardholder_last")

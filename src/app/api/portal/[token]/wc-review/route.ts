@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
+import { uploadWcDocument } from '@/lib/wc/uploadWcDocument'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -80,24 +81,34 @@ export async function POST(
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     const review = parseAiJson<any>(text, { tag: 'wc-review', stopReason: response.stop_reason })
 
-    // Add columns if not exist
-    try {
-      await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS wc_file_url TEXT`)
-      await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS wc_uploaded_at TIMESTAMP`)
-      await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS wc_ai_review JSONB`)
-      await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS wc_review_at TIMESTAMP`)
-      await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS wc_received BOOLEAN DEFAULT FALSE`)
-    } catch {}
+    // Store the certificate itself in the PRIVATE blob store (same
+    // treatment as a COI) and record it with a typed write. This used to
+    // run `ALTER TABLE ... IF NOT EXISTS` inside a swallowed try/catch and
+    // then stuff the whole file into a TEXT column as a base64 data: URI —
+    // the columns never got created, so the UPDATE threw and every upload
+    // 500'd with nothing saved. The columns are declared on the model now.
+    const uploaded = await uploadWcDocument({
+      filename: file.name || 'workers-comp',
+      contentType: file.type || 'application/octet-stream',
+      data: Buffer.from(bytes),
+    })
 
-    const fileUrl = `data:${file.type};base64,${base64}`
-    await prisma.$executeRawUnsafe(
-      `UPDATE paperwork_requests SET 
-        wc_file_url=$1, wc_uploaded_at=$2, 
-        wc_ai_review=$3::jsonb, wc_review_at=$4,
-        wc_received=$5
-      WHERE token=$6`,
-      fileUrl, new Date(), JSON.stringify(review), new Date(), review.pass, params.token
-    )
+    await prisma.paperworkRequest.update({
+      where: { token: params.token },
+      data: {
+        wcFileKey: uploaded.blobKey,
+        wcFileUrl: uploaded.fileUrl,
+        wcOriginalFilename: file.name || 'workers-comp',
+        wcMimeType: file.type || 'application/octet-stream',
+        wcFileSize: bytes.byteLength,
+        wcUploadedAt: new Date(),
+        wcAiReview: review,
+        wcReviewAt: new Date(),
+        // The document is on file either way — `pass` is the AI's verdict
+        // on the coverage, not on whether we received something.
+        wcReceived: true,
+      },
+    })
 
     return NextResponse.json({ ok: true, review })
   } catch (err: any) {
