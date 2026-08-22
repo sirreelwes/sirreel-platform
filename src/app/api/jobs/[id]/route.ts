@@ -265,6 +265,7 @@ export async function GET(
           where: { bookingId: { in: jobBookingIds } },
           orderBy: { sentAt: 'desc' },
           select: {
+            id: true,
             bookingId: true,
             ccCardNumberEncrypted: true,
             ccCardLast4: true,
@@ -273,6 +274,14 @@ export async function GET(
             ccCardholderLast: true,
             ccPaymentPreference: true,
             lcdwAccepted: true,
+            // Workers' Comp certificate — metadata + AI verdict only. The
+            // file itself is a private blob served by /api/wc/download/[id];
+            // the URL never leaves the server.
+            wcReceived: true,
+            wcOriginalFilename: true,
+            wcUploadedAt: true,
+            wcAiReview: true,
+            wcFileUrl: true,
           },
         })
       : []
@@ -298,6 +307,27 @@ export async function GET(
       // ordered sentAt desc → the first row seen per booking is the latest
       if (!(p.bookingId in lcdwByBooking)) lcdwByBooking[p.bookingId] = !!p.lcdwAccepted
     }
+    // Workers' Comp certificates actually on file for this job's bookings.
+    // `wcFileUrl` decides — wcReceived alone can be true on legacy rows
+    // whose upload predates real storage. Only the download id is exposed.
+    const wcCerts = paperwork
+      .filter((p) => !!p.wcFileUrl)
+      .map((p) => {
+        const r = (p.wcAiReview ?? null) as Record<string, unknown> | null
+        const str = (k: string) => (typeof r?.[k] === 'string' ? (r[k] as string) : null)
+        return {
+          id: p.id,
+          bookingId: p.bookingId,
+          filename: p.wcOriginalFilename || 'Workers Comp certificate',
+          uploadedAt: p.wcUploadedAt,
+          pass: typeof r?.pass === 'boolean' ? (r.pass as boolean) : null,
+          provider: str('provider') || str('payrollProviderName'),
+          insuredName: str('insuredName'),
+          expiryDate: str('expiryDate'),
+          expired: typeof r?.expired === 'boolean' ? (r.expired as boolean) : null,
+          issues: Array.isArray(r?.issues) ? (r.issues as unknown[]).filter((i): i is string => typeof i === 'string') : [],
+        }
+      })
 
     // Deal value from RentalWorks: total invoiced (non-VOID) across the
     // RW orders linked to this job. Used as the header Deal Value when the
@@ -359,6 +389,7 @@ export async function GET(
         activity,
         cardAuth,
         lcdwByBooking,
+        wcCerts,
       },
     })
   } catch (error) {

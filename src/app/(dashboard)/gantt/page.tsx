@@ -2251,13 +2251,11 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
   const ccTone = p.ccAuth === 'done' ? 'good' : p.ccAuth === 'pending' ? 'warn' : 'muted'
   const wcTone = p.wc === 'received' ? 'good' : p.wc === 'pending' ? 'warn' : 'muted'
   const coiExp = p.coiExpires ? new Date(p.coiExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
-  // Chip destinations on the Job page. COI, the agreement, the reserved-
-  // asset list (per-unit LCDW badges) and the card-on-file panel each have
-  // their own anchored section, so those chips land ON the document rather
-  // than at the top of the page. WC and balance have no section of their
-  // own — WC's uploaded certificate is stored (paperwork_requests
-  // .wc_file_url) but nothing renders it yet — so they fall back to the
-  // job page and its paperwork strip.
+  // Chip destinations on the Job page. COI, WC, the agreement, the
+  // reserved-asset list (per-unit LCDW badges) and the card-on-file panel
+  // each have their own anchored section, so those chips land ON the
+  // document rather than at the top of the page. Balance is the one
+  // exception — it's status, not a document — and falls back to the job.
   const jobHref = jobId ? `/jobs/${jobId}` : null
   const jobSection = (hash: string) => (jobId ? `/jobs/${jobId}${hash}` : null)
   return (
@@ -2279,7 +2277,7 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
         />
         <PaperChip href={jobSection('#reserved-assets')} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
         <PaperChip href={jobSection('#card-auth')} label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
-        <PaperChip href={jobHref} label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
+        <PaperChip href={jobSection('#wc')} label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
         {typeof ctx.balanceDue === 'number' && ctx.balanceDue > 0 && (
           <PaperChip href={jobHref} label="Balance" value={`$${Math.round(ctx.balanceDue).toLocaleString('en-US')} due`} tone="bad" />
         )}

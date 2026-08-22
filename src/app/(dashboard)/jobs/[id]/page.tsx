@@ -234,6 +234,13 @@ interface JobDetail {
   // bookingId → LCDW accepted, so each reserved asset shows its
   // vehicle's collision-waiver state.
   lcdwByBooking: Record<string, boolean>;
+  // Workers' Comp certificates on file across the job's bookings. `id` is
+  // the PaperworkRequest id — the download proxy key, not the file URL.
+  wcCerts?: Array<{
+    id: string; bookingId: string; filename: string; uploadedAt: string | null;
+    pass: boolean | null; provider: string | null; insuredName: string | null;
+    expiryDate: string | null; expired: boolean | null; issues: string[];
+  }>;
 }
 
 interface JobBooking {
@@ -794,6 +801,9 @@ export default function JobDetailPage() {
     return [...seen.values()].sort((x, y) => x.unitName.localeCompare(y.unitName, undefined, { numeric: true }))
   })()
 
+  // Workers' Comp certificates on file (payload is optional — an older
+  // cached response or a job with no bookings simply has none).
+  const wcCerts = job.wcCerts ?? [];
   const coiStatus: 'Verified' | 'Pending' | 'Expired' | 'Missing' = (() => {
     const checks = job.coiChecks ?? [];
     if (checks.length === 0) return 'Missing';
@@ -1294,6 +1304,65 @@ export default function JobDetailPage() {
                     className="text-[13px] font-semibold text-amber-400 hover:text-amber-300 flex-shrink-0"
                   >
                     View PDF →
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Workers' Comp — the client's separate WC proof when it isn't
+          carried on the main COI (payroll companies issue their own).
+          Sits directly under COI: both are insurance documents, and a rep
+          chasing coverage reads them together. Empty state is explanatory
+          rather than alarming — WC on the main COI is the common case and
+          needs no separate upload. */}
+      <div id="wc" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Workers&rsquo; Compensation</h2>
+          {wcCerts.length > 0 && (
+            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+              wcCerts.some((w) => w.pass) ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+            }`}>{wcCerts.some((w) => w.pass) ? 'Verified' : 'Needs review'}</span>
+          )}
+        </div>
+        {wcCerts.length === 0 ? (
+          <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
+            No separate certificate on file. Workers&rsquo; Comp is usually carried on the
+            main COI above — a separate upload is only needed when the client&rsquo;s payroll
+            company (EP, Cast &amp; Crew, ADP&hellip;) issues its own.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {wcCerts.map((w) => {
+              const tone = w.expired ? 'text-rose-300 bg-rose-500/10'
+                : w.pass ? 'text-emerald-300 bg-emerald-500/10'
+                : 'text-amber-300 bg-amber-500/10';
+              const label = w.expired ? 'Expired' : w.pass ? 'Verified' : 'Needs review';
+              return (
+                <div key={w.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${tone}`}>{label}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] text-white truncate">{w.filename}</div>
+                    <div className="text-[12px] text-zinc-300">
+                      {w.provider ? `${w.provider}` : 'Client upload'}
+                      {w.uploadedAt && <> &middot; added {fmtDate(w.uploadedAt)}</>}
+                      {w.expiryDate && <> &middot; expires {w.expiryDate}</>}
+                    </div>
+                    {w.issues.length > 0 && (
+                      <div className="text-[12px] text-amber-300/90 mt-0.5 truncate" title={w.issues.join(' · ')}>
+                        {w.issues.join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                  <a
+                    href={`/api/wc/download/${w.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[13px] font-semibold text-amber-400 hover:text-amber-300 flex-shrink-0"
+                  >
+                    View PDF &rarr;
                   </a>
                 </div>
               );
