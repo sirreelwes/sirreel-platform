@@ -1136,8 +1136,9 @@ export default function JobDetailPage() {
                   ? 'Attach to cover'
                   : 'Send for signature'}</div>
           </a>
-          {/* Card Authorization */}
-          <div className="rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
+          {/* Card Authorization — `id` is the deep-link target for the
+              CC Auth chip in the reservation pop-up on /gantt. */}
+          <div id="card-auth" className="scroll-mt-4 rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
             <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Card Authorization</div>
             {cardOnFile ? (
               <>
