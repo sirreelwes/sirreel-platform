@@ -1707,7 +1707,7 @@ export default function GanttPage() {
                     ))}
                   </div>
                 )}
-                <ReservationPaperwork ctx={resContext} loading={resContextLoading} />
+                <ReservationPaperwork ctx={resContext} loading={resContextLoading} jobId={selected?.jobId ?? null} />
                 <DriverCard checkout={resContext?.checkout} loading={resContextLoading} unitName={selected.unitName} />
 
                 {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
@@ -1887,7 +1887,7 @@ export default function GanttPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <ReservationPaperwork ctx={resContext} loading={resContextLoading} />
+                <ReservationPaperwork ctx={resContext} loading={resContextLoading} jobId={selected?.jobId ?? null} />
                 {/* Orders on the job — clickable, with the units they're
                     loaded onto. */}
                 {Array.isArray(selected.orders) && selected.orders.length > 0 && (
@@ -2132,23 +2132,42 @@ export default function GanttPage() {
 // no signal yet. LCDW / CC-auth / WC exist only on the booking's
 // PaperworkRequest completion flags — "unknown" means no paperwork
 // request has been sent for this booking at all.
-function PaperChip({ label, value, tone }: { label: string; value: string; tone: 'good' | 'warn' | 'bad' | 'muted' }) {
+function PaperChip({ label, value, tone, href }: { label: string; value: string; tone: 'good' | 'warn' | 'bad' | 'muted'; href?: string | null }) {
   const cls =
     tone === 'good' ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
     : tone === 'warn' ? 'bg-amber-50 border-amber-300 text-amber-800'
     : tone === 'bad' ? 'bg-red-50 border-red-300 text-red-700'
     : 'bg-white border-dashed border-gray-300 text-gray-400'
   const icon = tone === 'good' ? '✓' : tone === 'warn' ? '⏱' : tone === 'bad' ? '⚠' : '−'
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-semibold ${cls}`}>
+  const body = (
+    <>
       <span aria-hidden="true">{icon}</span>
       <span className="uppercase tracking-wide text-[9px] opacity-70">{label}</span>
       <span>{value}</span>
+    </>
+  )
+  // With an href the chip is a real button into the job's paperwork
+  // (Wes 2026-08-21): clicking RENTAL/COI/etc from the reservation
+  // pop-up lands on that job's paperwork section instead of dead-ending.
+  if (href) {
+    return (
+      <Link
+        href={href}
+        title={`Open ${label} paperwork for this job`}
+        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-semibold ${cls} hover:ring-2 hover:ring-amber-300 hover:border-amber-400 transition-shadow`}
+      >
+        {body}
+      </Link>
+    )
+  }
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-semibold ${cls}`}>
+      {body}
     </span>
   )
 }
 
-function ReservationPaperwork({ ctx, loading }: { ctx: any; loading: boolean }) {
+function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: boolean; jobId?: string | null }) {
   if (loading && !ctx) {
     return <div className="py-2 text-[11px] text-gray-400">Loading job paperwork…</div>
   }
@@ -2160,12 +2179,17 @@ function ReservationPaperwork({ ctx, loading }: { ctx: any; loading: boolean }) 
   const ccTone = p.ccAuth === 'done' ? 'good' : p.ccAuth === 'pending' ? 'warn' : 'muted'
   const wcTone = p.wc === 'received' ? 'good' : p.wc === 'pending' ? 'warn' : 'muted'
   const coiExp = p.coiExpires ? new Date(p.coiExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+  // Chip destinations on the Job page: COI and the agreement have their
+  // own anchored sections; LCDW / CC-Auth / WC / balance live around the
+  // paperwork strip + orders at the top of the page.
+  const jobHref = jobId ? `/jobs/${jobId}` : null
   return (
     <div className="pt-2">
       <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5">Job paperwork</div>
       <div className="flex flex-wrap gap-1.5">
-        <PaperChip label="Rental" value={p.rental === 'signed' ? 'Signed' : p.rental === 'sent' ? 'Sent' : 'Missing'} tone={rentalTone} />
+        <PaperChip href={jobId ? `/jobs/${jobId}#agreement` : null} label="Rental" value={p.rental === 'signed' ? 'Signed' : p.rental === 'sent' ? 'Sent' : 'Missing'} tone={rentalTone} />
         <PaperChip
+          href={jobId ? `/jobs/${jobId}#coi` : null}
           label="COI"
           value={
             p.coi === 'verified' ? `Verified${coiExp ? ` · exp ${coiExp}` : ''}`
@@ -2176,11 +2200,11 @@ function ReservationPaperwork({ ctx, loading }: { ctx: any; loading: boolean }) 
           }
           tone={coiTone}
         />
-        <PaperChip label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
-        <PaperChip label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
-        <PaperChip label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
+        <PaperChip href={jobHref} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
+        <PaperChip href={jobHref} label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
+        <PaperChip href={jobHref} label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
         {typeof ctx.balanceDue === 'number' && ctx.balanceDue > 0 && (
-          <PaperChip label="Balance" value={`$${Math.round(ctx.balanceDue).toLocaleString('en-US')} due`} tone="bad" />
+          <PaperChip href={jobHref} label="Balance" value={`$${Math.round(ctx.balanceDue).toLocaleString('en-US')} due`} tone="bad" />
         )}
         {ctx.unionStatus && ctx.unionStatus !== 'UNKNOWN' && (
           <PaperChip label="Union" value={String(ctx.unionStatus).replace(/_/g, ' ').toLowerCase()} tone="good" />
