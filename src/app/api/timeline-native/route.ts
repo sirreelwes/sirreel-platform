@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
       person: { select: { id: true, firstName: true, lastName: true } },
       agent: { select: { id: true, name: true } },
       // Linked Order(s) — id/number/status feed the clickable order
-      // links in the reservation detail + the 📄 bar indicator;
+      // links in the reservation detail + the order-badge bar indicator;
       // blindPickup keeps its existing "any order flagged" semantics.
       orders: { select: { id: true, orderNumber: true, status: true, blindPickup: true } },
       adminNotes: true,
@@ -300,7 +300,7 @@ export async function GET(req: NextRequest) {
       // for an order created natively in HQ.
       blindPickup: (bookingExtras.get(b.id)?.orders ?? []).some((o) => o.blindPickup),
       // Clickable order links for the job detail modal; hasOrder drives
-      // the 📄 indicator on job-view bars. Sourced via the Job join
+      // the order badge on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
       orders: bookingExtras.get(b.id)?.orders ?? [],
       hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0,
@@ -441,7 +441,7 @@ export async function GET(req: NextRequest) {
       qty: 1,
       holdRank: a.bookingItem.holdRank,
       // Job context for the reservation detail: clickable orders (with
-      // hasOrder driving the 📄 bar indicator) and the JOB's other
+      // hasOrder driving the order-badge bar indicator) and the JOB's other
       // assigned units — across ALL of the job's bookings, not just
       // this one. Only this bar's own (unit, booking) entry is
       // excluded, so the same unit on another booking still shows.
