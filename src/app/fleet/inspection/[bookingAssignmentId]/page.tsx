@@ -109,6 +109,15 @@ export default async function FleetInspectionPage({ params }: Params) {
             <p className="text-zinc-400 text-sm mt-1">
               {existing.inspectionDate.toISOString().slice(0, 16).replace('T', ' ')} by {existing.inspectedByUser.name || 'fleet'}
             </p>
+            {/* The walkaround's actual next step: the driver turns up and the
+                keys move. Without this the handover screen has no entry point
+                and a rep would have to be handed the URL. */}
+            <a
+              href={`/fleet/pickup/${assignment.id}`}
+              className="mt-4 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500"
+            >
+              Hand over to driver →
+            </a>
           </div>
         ) : (
           <InspectionCheckoutForm bookingAssignmentId={assignment.id} />

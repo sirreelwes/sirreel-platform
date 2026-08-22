@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireFleetInspectionAccess } from '@/lib/fleet/requireFleetInspectionAccess'
+import { requireVehicleHandoverAccess } from '@/lib/fleet/requireVehicleHandoverAccess'
 import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +37,7 @@ const DRIVER_LICENSE_SELECT = {
 /** GET — can this checkout be handed over, and to whom? Lets the UI show
  *  the blocker BEFORE someone tries, instead of failing on submit. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireFleetInspectionAccess()
+  const auth = await requireVehicleHandoverAccess()
   if (!auth.ok) return auth.response
   const { id } = await params
   const rec = await prisma.checkoutRecord.findUnique({
@@ -66,7 +66,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
  * 409 with { gate } when the licence fails and no reason was supplied.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireFleetInspectionAccess()
+  const auth = await requireVehicleHandoverAccess()
   if (!auth.ok) return auth.response
   const { id } = await params
   const body = (await req.json().catch(() => null)) as {

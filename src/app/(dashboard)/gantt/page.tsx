@@ -1823,7 +1823,7 @@ export default function GanttPage() {
                   </div>
                 )}
                 <ReservationPaperwork ctx={resContext} loading={resContextLoading} jobId={selected?.jobId ?? null} />
-                <DriverCard checkout={resContext?.checkout} loading={resContextLoading} unitName={selected.unitName} />
+                <DriverCard checkout={resContext?.checkout} loading={resContextLoading} unitName={selected.unitName} assignmentId={selected.assignmentId} />
 
                 {Array.isArray(selected.siblingUnits) && selected.siblingUnits.length > 0 && (
                   <div className="pt-2">
@@ -2336,7 +2336,7 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
 // Who physically has (or had) the unit — from the CheckoutRecord on
 // the clicked BookingAssignment. Violet card while out, emerald once
 // returned; flagged drivers get a red banner with the reason.
-function DriverCard({ checkout, loading, unitName }: { checkout: any; loading: boolean; unitName?: string }) {
+function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: any; loading: boolean; unitName?: string; assignmentId?: string | null }) {
   if (loading && checkout === undefined) return null
   const fmt = (d: string | Date | null | undefined) =>
     d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
@@ -2344,6 +2344,17 @@ function DriverCard({ checkout, loading, unitName }: { checkout: any; loading: b
     return (
       <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
         🚚 Not checked out yet — no driver on record for {unitName || 'this unit'}.
+        {/* The way in to the handover screen. Warehouse runs pickup (Wes
+            2026-08-22) and their nav is the board, not the fleet pages —
+            without this they'd have no route to it at all. */}
+        {assignmentId && (
+          <a
+            href={`/fleet/pickup/${assignmentId}`}
+            className="ml-1.5 font-semibold text-amber-600 hover:text-amber-500 hover:underline"
+          >
+            Hand over to driver →
+          </a>
+        )}
       </div>
     )
   }
