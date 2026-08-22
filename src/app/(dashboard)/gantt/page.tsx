@@ -90,6 +90,27 @@ function assignLanes(bookings: any[]): { bookings: any[]; laneCount: number } {
   return { bookings: out, laneCount: Math.max(1, laneEnds.length) }
 }
 
+// ── Order badge — red square + pen glyph on a bar whose reservation has an
+// Order attached (Wes 2026-08-22: the 📄 marker was too easy to miss).
+// Clicking it deep-links to the order instead of opening the reservation
+// modal; pointer-down is stopped so the badge can't start a bar drag. When
+// the booking somehow lacks a linked order id, it falls back to a plain
+// non-click marker rather than a dead link.
+const ORDER_BADGE_CLASS =
+  'mr-1 inline-flex h-4 w-4 flex-none items-center justify-center rounded-sm bg-red-600 border border-white/80 text-[10px] leading-none text-white'
+function OrderBadge({ order }: { order?: { id: string; orderNumber: string } | null }) {
+  if (!order) return <span className={ORDER_BADGE_CLASS} title="Order attached">✎</span>
+  return (
+    <a
+      href={`/orders/${order.id}`}
+      className={`${ORDER_BADGE_CLASS} hover:bg-red-500 cursor-pointer`}
+      title={`Order ${order.orderNumber} attached — click to open`}
+      onClick={(ev) => ev.stopPropagation()}
+      onPointerDown={(ev) => ev.stopPropagation()}
+    >✎</a>
+  )
+}
+
 // Per-drag row highlight state (computed once per target change in the parent;
 // the memoized row re-renders only when ITS state string flips).
 type DropState = 'none' | 'source' | 'valid' | 'valid-hover' | 'invalid'
@@ -243,8 +264,8 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
                 onBarClick(b, entry.unit)
               }}
             >
+              {b.hasOrder && <OrderBadge order={b.orders?.[0]} />}
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                {b.hasOrder && <span title="Order attached to this reservation">📄 </span>}
                 {(b.tags || []).includes('ART_DEPT') && (
                   <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                 )}
@@ -1278,8 +1299,8 @@ export default function GanttPage() {
           <span className="text-gray-500">Unit on a job today</span>
         </div>
         <div className="flex items-center gap-1">
-          <span>📄</span>
-          <span className="text-gray-500">Order attached</span>
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-red-600 text-[10px] leading-none text-white">✎</span>
+          <span className="text-gray-500">Order attached · click opens order</span>
         </div>
         <div className="flex items-center gap-1">
           <span className={`px-1 rounded-sm text-[8px] font-bold ${ART_DEPT_TAG_CHIP}`}>ART</span>
@@ -1572,8 +1593,8 @@ export default function GanttPage() {
                           style={{ left: bar.left, width: bar.width }}
                           onClick={() => setSelected(job)}
                         >
+                          {job.hasOrder && <OrderBadge order={job.orders?.[0]} />}
                           <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
-                            {job.hasOrder && <span title="Order attached">📄 </span>}
                             {(job.tags || []).includes('ART_DEPT') && (
                               <span className={`mr-1 px-1 rounded-sm text-[8px] font-bold align-middle ${ART_DEPT_TAG_CHIP}`}>ART</span>
                             )}
