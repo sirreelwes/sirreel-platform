@@ -100,7 +100,10 @@ export async function GET(_req: NextRequest) {
   // would — just earlier. Invoice evidence wins when both exist for a
   // number (the invoice grouping above already claimed the map slot).
   const quotes = await prisma.rwQuote.findMany({
-    where: { rwCustomerId: { in: customerIds }, orderNumber: { not: null } },
+    // CANCELLED quotes are dead paper — suggesting them would link jobs to
+    // money that will never arrive. (Live statuses 2026-08-22: ORDERED,
+    // ACTIVE, PROSPECT, HOLD, CLOSED, CANCELLED.)
+    where: { rwCustomerId: { in: customerIds }, orderNumber: { not: null }, status: { not: 'CANCELLED' } },
     select: {
       rwCustomerId: true, orderNumber: true, dealName: true, description: true,
       agent: true, startDate: true, endDate: true, quoteDate: true, total: true,
