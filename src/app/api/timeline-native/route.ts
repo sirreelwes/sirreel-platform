@@ -171,7 +171,21 @@ export async function GET(req: NextRequest) {
             where: { status: { not: 'CANCELLED' } },
             // blindPickup comes from the JOB's orders, not just the booking's.
             // Orders link to a Job; nothing sets Order.bookingId in practice.
-            select: { id: true, orderNumber: true, status: true, blindPickup: true },
+            select: {
+              id: true, orderNumber: true, status: true, blindPickup: true,
+              // Asset-bearing lines only — feeds the "order covers more than
+              // the reservation" check (Wes 2026-08-22). Supplies lines are
+              // deliberately excluded: a truck order that also carries
+              // consumables is still "for" the reserved truck.
+              lineItems: {
+                where: { department: { in: ['VEHICLES', 'STAGES'] } },
+                select: {
+                  quantity: true,
+                  assetCategoryId: true,
+                  inventoryItem: { select: { legacyAssetCategoryId: true } },
+                },
+              },
+            },
           },
         },
       },
@@ -232,6 +246,67 @@ export async function GET(req: NextRequest) {
       }
     }
     jobUnits.set(b.job.id, arr)
+  }
+
+  // ── "Order attached" refinement (Wes 2026-08-22): the badge means
+  //    "the attached paperwork covers something OTHER than what this
+  //    job has reserved" — an order that simply IS the reservation's
+  //    own billing doc is the normal paired state and must not flag.
+  //
+  //    Two order sources, two checks (both computed at the JOB level,
+  //    window-local, since a job's fleet spans sibling bookings):
+  //      · RW-linked orders: header-only mirror, no lines to compare —
+  //        an RW number is "paired" iff SOME booking on the job carries
+  //        it as its own rentalworksOrderId (parsed from Planyo notes).
+  //        Only unpaired RW numbers flag.
+  //      · HQ orders: compare VEHICLES/STAGES lines against the job's
+  //        reserved category quantities. Only PROVABLE extras flag —
+  //        lines with no catalog/category linkage get the benefit of
+  //        the doubt (free-text lines can't be compared).
+  const jobPairedRw = new Map<string, Set<string>>()
+  const jobReservedQty = new Map<string, Map<string, number>>()
+  for (const b of bookings) {
+    if (!b.job?.id) continue
+    if (b.rentalworksOrderId) {
+      const set = jobPairedRw.get(b.job.id) ?? new Set<string>()
+      set.add(b.rentalworksOrderId)
+      jobPairedRw.set(b.job.id, set)
+    }
+    const qty = jobReservedQty.get(b.job.id) ?? new Map<string, number>()
+    for (const it of b.items) {
+      if (it.category?.id) qty.set(it.category.id, (qty.get(it.category.id) ?? 0) + it.quantity)
+    }
+    jobReservedQty.set(b.job.id, qty)
+  }
+
+  type OrderWithLines = {
+    lineItems?: Array<{
+      quantity: number
+      assetCategoryId: string | null
+      inventoryItem: { legacyAssetCategoryId: string | null } | null
+    }>
+  }
+  function orderCoversBeyondReservation(order: OrderWithLines, reserved: Map<string, number>): boolean {
+    const wanted = new Map<string, number>()
+    for (const li of order.lineItems ?? []) {
+      const catId = li.assetCategoryId ?? li.inventoryItem?.legacyAssetCategoryId ?? null
+      if (!catId) continue // un-linkable line — cannot prove a mismatch
+      wanted.set(catId, (wanted.get(catId) ?? 0) + li.quantity)
+    }
+    for (const [catId, q] of wanted) {
+      if (q > (reserved.get(catId) ?? 0)) return true
+    }
+    return false
+  }
+
+  const hasOrderByBookingId = new Map<string, boolean>()
+  for (const b of bookings) {
+    const jobId = b.job?.id ?? null
+    const paired = jobId ? jobPairedRw.get(jobId) ?? new Set<string>() : new Set<string>()
+    const reserved = jobId ? jobReservedQty.get(jobId) ?? new Map<string, number>() : new Map<string, number>()
+    const extraRw = (b.job?.rwOrders ?? []).some((r) => !paired.has(r.rwOrderNumber))
+    const hqBeyond = (b.job?.orders ?? []).some((o) => orderCoversBeyondReservation(o as OrderWithLines, reserved))
+    hasOrderByBookingId.set(b.id, extraRw || hqBeyond)
   }
 
   for (const b of bookings) {
@@ -309,7 +384,7 @@ export async function GET(req: NextRequest) {
       // the order badge on job-view bars. Sourced via the Job join
       // (see bookingExtras above).
       orders: bookingExtras.get(b.id)?.orders ?? [],
-      hasOrder: (bookingExtras.get(b.id)?.orders.length ?? 0) > 0 || (b.job?.rwOrders?.length ?? 0) > 0,
+      hasOrder: hasOrderByBookingId.get(b.id) ?? false,
       // Units on the same JOB but on other bookings — a job's fleet
       // often spans multiple bookings (one per unit).
       otherJobUnits: (b.job?.id ? jobUnits.get(b.job.id) ?? [] : []).filter(
@@ -453,7 +528,7 @@ export async function GET(req: NextRequest) {
       // this one. Only this bar's own (unit, booking) entry is
       // excluded, so the same unit on another booking still shows.
       orders: bookingExtras.get(a.bookingItem.booking.id)?.orders ?? [],
-      hasOrder: (bookingExtras.get(a.bookingItem.booking.id)?.orders.length ?? 0) > 0 || (a.bookingItem.booking.job?.rwOrders?.length ?? 0) > 0,
+      hasOrder: hasOrderByBookingId.get(a.bookingItem.booking.id) ?? false,
       siblingUnits: (bookingExtras.get(a.bookingItem.booking.id)?.units ?? []).filter(
         (u) => !(u.unitName === a.asset.unitName && u.bookingNumber === a.bookingItem.booking.bookingNumber),
       ),
