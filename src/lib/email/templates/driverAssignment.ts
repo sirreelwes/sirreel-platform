@@ -59,6 +59,10 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
   ]
   if (input.companyName) rows.push({ label: 'Company', value: input.companyName })
   if (day) rows.push({ label: 'Pickup', value: day })
+  // Every driver enters the same way, and the mailing address alone puts
+  // them on the wrong side of the lot. In the email as well as the page,
+  // because this is what gets read the night before.
+  rows.push({ label: 'Entrance', value: 'Gate 1 off Kewen Ave' })
 
   const licenseAsk = input.needsLicense
     ? calloutBox(
@@ -101,6 +105,7 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
     `Production: ${input.productionName}`,
     ...(input.companyName ? [`Company: ${input.companyName}`] : []),
     ...(day ? [`Pickup: ${day}`] : []),
+    `Entrance: Gate 1 off Kewen Ave`,
     ``,
     ...(input.needsLicense
       ? [
