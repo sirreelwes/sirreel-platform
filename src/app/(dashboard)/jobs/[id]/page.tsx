@@ -30,6 +30,7 @@ import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
+import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
@@ -783,8 +784,32 @@ export default function JobDetailPage() {
   // Unique reserved units across this job's live bookings — for the
   // Reserved Assets section + quick-nav tile. Each links to its reservation
   // on the calendar.
+// ── Driver display helpers ───────────────────────────────────────────
+// One definition, used by both the asset card and the Drivers section, so
+// the two can never label the same driver differently.
+const driverName = (d: any) =>
+  `${d?.driver?.firstName ?? ''} ${d?.driver?.lastName ?? ''}`.trim() || d?.emailSentTo || 'Driver'
+
+/** What a rep needs: can this vehicle actually leave with this person. */
+const driverStateLabel = (d: any): string => {
+  const dr = d?.driver
+  if (!dr) return 'unknown'
+  if (dr.licenseExpired) return 'licence expired'
+  if (dr.licenseVerified) return 'licence checked'
+  if (dr.licenseFrontUrl || dr.licenseBackUrl) return 'licence needs check'
+  return d?.firstViewedAt ? 'opened, no licence' : 'invited'
+}
+
+const driverTone = (d: any): string => {
+  const dr = d?.driver
+  if (dr?.licenseExpired) return 'text-rose-300'
+  if (dr?.licenseVerified) return 'text-emerald-300'
+  if (dr?.licenseFrontUrl || dr?.licenseBackUrl) return 'text-amber-300'
+  return 'text-zinc-400'
+}
+
   const reservedAssets = (() => {
-    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string }>()
+    const seen = new Map<string, { assetId: string; unitName: string; category: string; startDate: string; endDate: string; status: string; bookingId: string; bookingAssignmentId: string; drivers: any[] }>()
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       for (const it of b.items) {
@@ -793,6 +818,8 @@ export default function JobDetailPage() {
             seen.set(a.asset.id, {
               assetId: a.asset.id, unitName: a.asset.unitName, category: it.category.name,
               startDate: a.startDate, endDate: a.endDate, status: a.status, bookingId: b.id,
+              bookingAssignmentId: a.id,
+              drivers: (a as any).driverAssignments ?? [],
             })
           }
         }
@@ -1225,6 +1252,20 @@ export default function JobDetailPage() {
                 </div>
                 <div className="mt-0.5 text-[12px] text-zinc-300 truncate">{a.category}</div>
                 <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDate(a.startDate)} – {fmtDate(a.endDate)}</div>
+                {/* Who's driving it — the question a rep asks while looking
+                    at the unit, so answered here rather than only in the
+                    Drivers section below. */}
+                <div className="mt-1.5 text-[11px] truncate">
+                  {a.drivers.length === 0 ? (
+                    <span className="text-zinc-500">No driver named</span>
+                  ) : (
+                    <span className={driverTone(a.drivers[0])}>
+                      🧑‍✈️ {driverName(a.drivers[0])}
+                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
+                      {' · '}{driverStateLabel(a.drivers[0])}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
             ))}
@@ -1236,6 +1277,18 @@ export default function JobDetailPage() {
           uploads land here via the portal link; offline COIs (email,
           broker, RentalWorks) are attached with "Upload COI" so HQ stays
           the source of truth without a re-sign. */}
+      {/* Drivers — who's taking each unit out. Sits directly under the
+          reserved assets it describes. */}
+      <JobDriversSection
+        vehicles={reservedAssets.map((a) => ({
+          bookingAssignmentId: a.bookingAssignmentId,
+          unitName: a.unitName,
+          category: a.category,
+          drivers: a.drivers,
+        }))}
+        onChanged={load}
+      />
+
       <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">

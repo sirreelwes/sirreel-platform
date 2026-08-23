@@ -42,7 +42,7 @@ const APPLE_MAPS = `https://maps.apple.com/?daddr=${mapsQuery}`
 const GOOGLE_MAPS = `https://maps.google.com/?q=${mapsQuery}`
 
 interface DriveData {
-  driver: { firstName: string | null }
+  driver: { firstName: string | null; lastName: string | null; phone: string | null; needsDetails: boolean }
   license: { hasFront: boolean; hasBack: boolean; ok: boolean; code: string; message: string }
   vehicle: { unitName: string; description: string | null; makeModel: string | null; licensePlate: string | null }
   job: { productionName: string; companyName: string | null; startDate: string; endDate: string }
@@ -62,6 +62,12 @@ export default function DriverJobPage({ params }: { params: { token: string } })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState<Side | null>(null)
   const [upErr, setUpErr] = useState<string | null>(null)
+  const [first, setFirst] = useState('')
+  const [last, setLast] = useState('')
+  const [phone, setPhone] = useState('')
+  const [savingMe, setSavingMe] = useState(false)
+  const [meErr, setMeErr] = useState<string | null>(null)
+  const [meSaved, setMeSaved] = useState(false)
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/drive/${token}`)
@@ -73,9 +79,30 @@ export default function DriverJobPage({ params }: { params: { token: string } })
       )
       return
     }
-    setData(await res.json())
+    const j = await res.json()
+    setData(j)
+    // Prefill from what we hold so a returning driver isn't retyping.
+    setFirst((v) => v || j.driver?.firstName || '')
+    setLast((v) => v || j.driver?.lastName || '')
+    setPhone((v) => v || j.driver?.phone || '')
   }, [token])
   useEffect(() => { void load() }, [load])
+
+  async function saveDetails() {
+    setSavingMe(true); setMeErr(null)
+    try {
+      const res = await fetch(`/api/drive/${token}/profile`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ firstName: first, lastName: last, phone }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.ok) throw new Error(j.error || 'Could not save that.')
+      setMeSaved(true)
+      await load()
+    } catch (e) {
+      setMeErr(e instanceof Error ? e.message : 'Could not save that.')
+    } finally { setSavingMe(false) }
+  }
 
   async function upload(side: Side, file: File) {
     setBusy(side); setUpErr(null)
@@ -158,6 +185,40 @@ export default function DriverJobPage({ params }: { params: { token: string } })
             ✓ License received — nothing else needed from you before pickup.
           </div>
         )}
+
+        {/* Who they are. An invite carries only an email, so without this
+            the roster shows a guessed name and dispatch has no number to
+            call when someone is late at the gate. Asked of the driver
+            rather than typed by an agent from a phone call. */}
+        <Section title="Your details" tone={data.driver.needsDetails && !meSaved ? 'warn' : undefined}>
+          {data.driver.needsDetails && !meSaved && (
+            <p className="mb-2.5 text-[14px] leading-relaxed text-zinc-200">
+              Confirm your name and a number we can reach you on if there&rsquo;s a problem
+              at pickup.
+            </p>
+          )}
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input value={first} onChange={(e) => { setFirst(e.target.value); setMeSaved(false) }}
+                placeholder="First name" autoComplete="given-name"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-3 text-[16px] text-white placeholder:text-zinc-500" />
+              <input value={last} onChange={(e) => { setLast(e.target.value); setMeSaved(false) }}
+                placeholder="Last name" autoComplete="family-name"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-3 text-[16px] text-white placeholder:text-zinc-500" />
+            </div>
+            {/* type=tel brings up the phone keypad on a phone. */}
+            <input value={phone} onChange={(e) => { setPhone(e.target.value); setMeSaved(false) }}
+              type="tel" inputMode="tel" autoComplete="tel" placeholder="Mobile number"
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3.5 py-3 text-[16px] text-white placeholder:text-zinc-500" />
+            {meErr && <p className="text-[13px] text-rose-300">{meErr}</p>}
+            <button type="button" onClick={saveDetails} disabled={savingMe || !first.trim()}
+              className={`w-full rounded-xl px-4 py-3 text-[15px] font-semibold disabled:opacity-40 ${
+                meSaved ? 'bg-zinc-800 text-zinc-200' : 'bg-amber-600 text-white hover:bg-amber-500'
+              }`}>
+              {savingMe ? 'Saving…' : meSaved ? '✓ Saved' : 'Save my details'}
+            </button>
+          </div>
+        </Section>
 
         <Section title="When">
           <p className="text-[15px] text-white">{fmtDay(data.job.startDate)}</p>

@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       id: true, status: true, expiresAt: true, firstViewedAt: true, gateCodeViewedAt: true,
       driver: {
         select: {
-          id: true, firstName: true,
+          id: true, firstName: true, lastName: true, phone: true, email: true,
           licenseFrontUrl: true, licenseBackUrl: true,
           licenseExpiry: true, licenseExpired: true, licenseVerified: true,
         },
@@ -140,7 +140,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   return NextResponse.json({
     ok: true,
-    driver: { firstName: da.driver.firstName },
+    driver: {
+      firstName: da.driver.firstName,
+      lastName: da.driver.lastName,
+      phone: da.driver.phone,
+      // An invite only carries an email, so the name we hold may just be
+      // the address's local part. The form nags until they confirm it.
+      needsDetails: !da.driver.lastName || !da.driver.phone,
+    },
     license: {
       hasFront: !!da.driver.licenseFrontUrl,
       hasBack: !!da.driver.licenseBackUrl,

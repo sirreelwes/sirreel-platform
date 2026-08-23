@@ -185,6 +185,28 @@ export async function GET(
                     endDate: true,
                     status: true,
                     asset: { select: { id: true, unitName: true } },
+                    // Who's been named to drive this unit. Licence state
+                    // rides along so the job page can show a rep whether
+                    // the vehicle can actually leave — booleans only, no
+                    // licence numbers or image URLs on a list surface.
+                    driverAssignments: {
+                      where: { status: { not: 'CANCELLED' } },
+                      orderBy: { invitedAt: 'desc' },
+                      select: {
+                        id: true,
+                        status: true,
+                        emailSentTo: true,
+                        firstViewedAt: true,
+                        invitedBySource: true,
+                        driver: {
+                          select: {
+                            id: true, firstName: true, lastName: true, phone: true,
+                            licenseFrontUrl: true, licenseBackUrl: true,
+                            licenseExpired: true, licenseVerified: true,
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },
