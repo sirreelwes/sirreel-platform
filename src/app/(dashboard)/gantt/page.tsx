@@ -2336,13 +2336,107 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
 // Who physically has (or had) the unit — from the CheckoutRecord on
 // the clicked BookingAssignment. Violet card while out, emerald once
 // returned; flagged drivers get a red banner with the reason.
+// ─── Name a driver for this vehicle ──────────────────────────────────
+// The Reservations-side entry point (Wes 2026-08-22). Email IS the
+// identity: a driver who has worked before is matched on it and keeps
+// their file — and their licence — instead of becoming a duplicate. That
+// is why this is an email box and not a name field.
+function NameDriverBox({ assignmentId }: { assignmentId: string }) {
+  const [named, setNamed] = useState<any[] | null>(null)
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [first, setFirst] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/driver-assignments?bookingAssignmentId=${encodeURIComponent(assignmentId)}`)
+    if (res.ok) setNamed((await res.json()).drivers ?? [])
+  }, [assignmentId])
+  useEffect(() => { void load() }, [load])
+
+  async function invite() {
+    setBusy(true); setErr(null); setMsg(null)
+    try {
+      const res = await fetch('/api/driver-assignments', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bookingAssignmentId: assignmentId, email, firstName: first || undefined }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Could not send that invite')
+      // An email that silently failed to send is worse than none — say so
+      // and hand over the link so the rep can text it instead.
+      setMsg(j.emailSent
+        ? `Emailed ${email}.${j.needsLicense ? ' They still need to upload a licence.' : ''}`
+        : `Driver added, but the email did not send (${j.emailError || 'unknown'}). Link: ${j.url}`)
+      setEmail(''); setFirst('')
+      await load()
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not send that invite') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Driver</span>
+        <button onClick={() => setOpen((v) => !v)} className="text-[11px] font-semibold text-blue-700 hover:underline">
+          {open ? 'Close' : '+ Name a driver'}
+        </button>
+      </div>
+
+      {named && named.length > 0 && (
+        <div className="mt-1.5 space-y-1">
+          {named.map((d) => (
+            <div key={d.id} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="min-w-0 truncate text-gray-800">
+                {d.name}{d.email ? ` · ${d.email}` : ''}
+              </span>
+              <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                d.licenseExpired ? 'bg-rose-100 text-rose-700'
+                  : d.licenseVerified ? 'bg-emerald-100 text-emerald-700'
+                  : d.hasLicense ? 'bg-amber-100 text-amber-700'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {d.licenseExpired ? 'Expired'
+                  : d.licenseVerified ? 'Checked'
+                  : d.hasLicense ? 'Needs check'
+                  : d.firstViewedAt ? 'Opened link' : 'Invited'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email"
+            placeholder="Driver email" className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-[12px]" />
+          <input value={first} onChange={(e) => setFirst(e.target.value)}
+            placeholder="First name (optional)" className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-[12px]" />
+          <button onClick={invite} disabled={busy || !email.trim()}
+            className="w-full rounded-lg bg-blue-700 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-blue-600 disabled:opacity-40">
+            {busy ? 'Sending…' : 'Send driver link'}
+          </button>
+          <p className="text-[10px] leading-snug text-gray-500">
+            They get an email with the vehicle, the dates, and a page to upload their licence.
+          </p>
+        </div>
+      )}
+      {msg && <p className="mt-1.5 text-[11px] text-emerald-700">{msg}</p>}
+      {err && <p className="mt-1.5 text-[11px] text-rose-700">{err}</p>}
+    </div>
+  )
+}
+
 function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: any; loading: boolean; unitName?: string; assignmentId?: string | null }) {
   if (loading && checkout === undefined) return null
   const fmt = (d: string | Date | null | undefined) =>
     d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
   if (!checkout) {
     return (
-      <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
+      <>
+        <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
         🚚 Not checked out yet — no driver on record for {unitName || 'this unit'}.
         {/* The way in to the handover screen. Warehouse runs pickup (Wes
             2026-08-22) and their nav is the board, not the fleet pages —
@@ -2355,7 +2449,12 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
             Hand over to driver →
           </a>
         )}
-      </div>
+        </div>
+        {/* Name the driver ahead of the day — the Reservations-side entry
+            Wes asked for. Sales, warehouse and fleet all use this one box;
+            the production client does the same from their portal job page. */}
+        {assignmentId && <NameDriverBox assignmentId={assignmentId} />}
+      </>
     )
   }
   const d = checkout.driver

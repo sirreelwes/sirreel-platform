@@ -791,11 +791,67 @@ model Driver {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  company         Company?         @relation(fields: [companyId], references: [id])
-  checkoutRecords CheckoutRecord[]
-  dispatchTasks   DispatchTask[]   @relation("TaskDriver")
+  company           Company?           @relation(fields: [companyId], references: [id])
+  checkoutRecords   CheckoutRecord[]
+  dispatchTasks     DispatchTask[]     @relation("TaskDriver")
+  driverAssignments DriverAssignment[]
 
   @@map("drivers")
+}
+
+enum DriverAssignmentStatus {
+  INVITED   // email sent, driver hasn't opened it
+  VIEWED    // driver opened their job page
+  READY     // licence on file, checked, unexpired
+  PICKED_UP // handed over (CheckoutRecord carries the authoritative record)
+  CANCELLED
+}
+
+/// A named driver for ONE vehicle on ONE job — the spine of the driver
+/// workflow. Distinct from CheckoutRecord.driverId, which records who
+/// physically took the keys; this is the plan, created days earlier by
+/// whoever knows: the production client from their job page, the sales
+/// agent, or warehouse/fleet from the board.
+///
+/// Carries its own token because the driver's page is per-ASSIGNMENT
+/// (this vehicle, this job, these instructions) while a licence is
+/// per-PERSON — so licence uploads from this page still write to Driver.
+model DriverAssignment {
+  id                  String  @id @default(uuid())
+  driverId            String  @map("driver_id")
+  bookingAssignmentId String  @map("booking_assignment_id")
+
+  /// No-login credential for the driver's job page. Separate from
+  /// Driver.portalToken (licence-only, per-person) so revoking one
+  /// job's link doesn't lock a driver out of every other job.
+  token     String    @unique
+  expiresAt DateTime? @map("expires_at")
+
+  status DriverAssignmentStatus @default(INVITED)
+
+  /// Who named this driver. `invitedByUserId` is null when the
+  /// production client did it from their own portal job page —
+  /// they have no HQ User — so `invitedBySource` is the honest record.
+  invitedByUserId String?  @map("invited_by_user_id")
+  invitedBySource String   @default("STAFF") @map("invited_by_source") // STAFF | CLIENT
+  invitedAt       DateTime @default(now()) @map("invited_at")
+  emailSentTo     String?  @map("email_sent_to")
+  firstViewedAt   DateTime? @map("first_viewed_at")
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  driver            Driver            @relation(fields: [driverId], references: [id])
+  bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
+  invitedByUser     User?             @relation("DriverAssignmentInvitedBy", fields: [invitedByUserId], references: [id])
+
+  /// One live row per driver per vehicle-assignment; re-inviting the same
+  /// driver updates rather than piling up duplicates.
+  @@unique([driverId, bookingAssignmentId])
+  @@index([bookingAssignmentId])
+  @@map("driver_assignments")
 }
 
 // ═══════════════════════════════════════
@@ -1034,6 +1090,8 @@ model BookingAssignment {
   asset           Asset            @relation(fields: [assetId], references: [id])
   checkoutRecords CheckoutRecord[]
   inspections     Inspection[]     @relation("AssignmentInspections")
+
+  driverAssignments DriverAssignment[]
 
   @@map("booking_assignments")
 }
@@ -2101,6 +2159,8 @@ model User {
   // Phase 5 commit 3 — native payment recording.
   paymentsRecorded Payment[] @relation("PaymentRecorder")
   paymentsVoided   Payment[] @relation("PaymentVoider")
+
+  driverAssignmentsInvited DriverAssignment[] @relation("DriverAssignmentInvitedBy")
 
   @@map("users")
 }
