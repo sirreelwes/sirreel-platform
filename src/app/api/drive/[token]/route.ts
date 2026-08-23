@@ -8,30 +8,33 @@ export const dynamic = 'force-dynamic'
  * GET /api/drive/[token] — everything the driver's job page renders.
  * NO LOGIN: the token is the credential.
  *
- * ── On gate codes ────────────────────────────────────────────────────
- * This route deliberately does NOT return SiteSetting.gateCode or
- * Asset.accessCode. Both are documented in the schema as "released ONLY
- * through server-side driver verification, never rendered on any
- * public/portal surface", and they are SHARED secrets — the lot code is
- * one value for every driver until someone physically reprograms the
- * gate. Printing it on a page that lives in a driver's inbox for 45 days
- * would leak it permanently to everyone who ever drove for us.
+ * ── On gate codes (Wes 2026-08-22) ───────────────────────────────────
+ * A named driver DOES get the real lot gate code here. They were named by
+ * the production or an agent, they hold a personal token, and they cannot
+ * do the job without getting through the gate — routing them via the
+ * assistant just adds a step to a task we already authorised.
  *
- * Instead the page shows the job's assistantAuthCode — the existing,
- * purpose-built high-entropy factor the client portal already surfaces —
- * and points at the assistant, which verifies and releases the real code.
- * That is the pattern already in production for clients.
+ * The job's assistantAuthCode is deliberately NOT sent to the driver. It
+ * is the PRODUCTION's auth factor: handing it over would let a driver
+ * present themselves to the assistant as the client. Job code stays with
+ * production and the agent; gate code goes to the driver. Different
+ * secrets, different holders.
  *
- * Wes asked for "(eventually their unique) gate code". Per-driver codes
- * are the right answer and this route is where they'd surface once the
- * gate hardware can carry them; until then this is the honest version.
+ * The lockbox code for the assigned vehicle is released only when the
+ * pickup is unattended — the instructions in that case are literally
+ * "keys are in the lockbox" and nobody is there to open it. Never for a
+ * vehicle they aren't driving.
+ *
+ * Every release is stamped on DriverAssignment.gateCodeViewedAt: the lot
+ * code is still a shared secret, so if it walks, there is a list of who
+ * held it and from when.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const da = await prisma.driverAssignment.findUnique({
     where: { token },
     select: {
-      id: true, status: true, expiresAt: true, firstViewedAt: true,
+      id: true, status: true, expiresAt: true, firstViewedAt: true, gateCodeViewedAt: true,
       driver: {
         select: {
           id: true, firstName: true,
@@ -45,6 +48,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
           asset: {
             select: {
               unitName: true, make: true, model: true, licensePlate: true,
+              // Released only on an unattended pickup — see the header.
+              accessCode: true,
               category: { select: { name: true } },
             },
           },
@@ -54,7 +59,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
                 select: {
                   jobName: true,
                   company: { select: { name: true } },
-                  job: { select: { id: true, assistantAuthCode: true } },
+                  // assistantAuthCode deliberately NOT selected — it is the
+                  // production's factor, not the driver's. See the header.
+                  job: { select: { id: true } },
                 },
               },
             },
@@ -118,6 +125,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     })),
   )
 
+  // Real gate code for a named driver. Read late so the cheap failure
+  // paths (bad token, expired) never touch the secret at all.
+  const site = await prisma.siteSetting.findFirst({ select: { gateCode: true } })
+  const gateCode = site?.gateCode ?? null
+  if (gateCode && !da.gateCodeViewedAt) {
+    await prisma.driverAssignment.update({
+      where: { id: da.id },
+      data: { gateCodeViewedAt: new Date() },
+    })
+  }
+
   const gate = evaluateLicenseGate(da.driver)
 
   return NextResponse.json({
@@ -148,9 +166,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       unattendedPickup: isBlindPickup,
       unattendedReturn: isBlindReturn,
     },
-    // NOT the gate code — the factor the assistant checks before releasing
-    // it. See the header comment.
-    access: { assistantAuthCode: booking.job?.assistantAuthCode ?? null },
+    access: {
+      gateCode,
+      // Only for the vehicle they're driving, only when nobody will be
+      // there to hand over keys.
+      lockboxCode: isBlindPickup ? (asg.asset.accessCode ?? null) : null,
+    },
     loadList,
   })
 }

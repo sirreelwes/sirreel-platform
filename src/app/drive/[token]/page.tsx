@@ -25,7 +25,7 @@ interface DriveData {
   vehicle: { unitName: string; description: string | null; makeModel: string | null; licensePlate: string | null }
   job: { productionName: string; companyName: string | null; startDate: string; endDate: string }
   instructions: { pickup: string | null; dropoff: string | null; unattendedPickup: boolean; unattendedReturn: boolean }
-  access: { assistantAuthCode: string | null }
+  access: { gateCode: string | null; lockboxCode: string | null }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
 }
 
@@ -178,20 +178,27 @@ export default function DriverJobPage({ params }: { params: { token: string } })
           </Section>
         )}
 
-        {/* Access. The code below is NOT the gate code — it's how the
-            assistant verifies you before giving you one. */}
-        {data.access.assistantAuthCode && (
-          <Section title="Gate & lockbox access">
-            <p className="text-[14px] leading-relaxed text-zinc-300">
-              Give this code to the SirReel assistant and it will release the gate code
-              (and vehicle lockbox code) for you — any hour, no need to reach a person.
-            </p>
-            <div className="mt-2.5 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Your access code</div>
-              <div className="mt-1 font-mono text-[26px] font-bold tracking-[0.2em] text-white">
-                {data.access.assistantAuthCode}
-              </div>
+        {/* Real access codes — a named driver gets these directly
+            (Wes 2026-08-22). Kept together and marked, because a driver
+            forwarding this screenshot is how a lot code walks. */}
+        {(data.access.gateCode || data.access.lockboxCode) && (
+          <Section title="Getting in">
+            <div className="space-y-2.5">
+              {data.access.gateCode && (
+                <CodeBlock label="Lot gate code" value={data.access.gateCode} />
+              )}
+              {data.access.lockboxCode && (
+                <CodeBlock
+                  label={`Lockbox — ${data.vehicle.unitName}`}
+                  value={data.access.lockboxCode}
+                  hint="The keys are in the lockbox on this vehicle."
+                />
+              )}
             </div>
+            <p className="mt-2.5 text-[12px] leading-relaxed text-zinc-500">
+              These are for you and this job. Please don&rsquo;t pass them on or post a photo
+              of this screen — the gate code is the same one every driver uses.
+            </p>
           </Section>
         )}
 
@@ -240,6 +247,16 @@ function Section({ title, children, tone }: { title: string; children: React.Rea
       <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-400">{title}</h2>
       {children}
     </section>
+  )
+}
+
+function CodeBlock({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
+      <div className="mt-1 font-mono text-[28px] font-bold tracking-[0.18em] text-white">{value}</div>
+      {hint && <div className="mt-0.5 text-[12px] text-zinc-400">{hint}</div>}
+    </div>
   )
 }
 
