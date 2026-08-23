@@ -86,14 +86,21 @@ export default function InquiriesPage() {
         </div>
       </div>
 
-      {/* 1 — the live queue with inline actions */}
-      <NewInboundColumn onChange={refreshAll} />
-
-      {/* 2 + 3 — money out the door, and the next two weeks */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <QuotesOutPanel scope={scope} refreshKey={refreshKey} />
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <SalesReservationsWidget />
+      {/* Two-column workspace (Wes, 2026-08-22): NEW INBOUND lives in the
+          RIGHT column; Quotes out + Upcoming reservations stack in the
+          LEFT column. DOM order keeps the live inbound queue FIRST so
+          single-column (mobile) still leads with it; lg:order-* swaps the
+          visual sides on desktop. items-start stops the left stack from
+          stretching to the inbound column's height. */}
+      <div className="grid gap-4 lg:grid-cols-2 items-start">
+        <div className="lg:order-2">
+          <NewInboundColumn onChange={refreshAll} />
+        </div>
+        <div className="lg:order-1 space-y-4">
+          <QuotesOutPanel scope={scope} refreshKey={refreshKey} />
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <SalesReservationsWidget />
+          </div>
         </div>
       </div>
 

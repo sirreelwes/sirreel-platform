@@ -124,6 +124,10 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/pay-details/',     // A/P payment-details share link (/pay-details/[token])
   '/coi/',             // no-login client COI upload (/coi/[token])
   '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
+  '/driver/',          // no-login driver licence upload (/driver/[token])
+  '/api/driver-portal/', // driver portal read + licence upload (token-gated)
+  '/drive/',           // no-login driver JOB page (/drive/[token])
+  '/api/drive/',       // driver job page data + licence upload (token-gated)
   '/api/cardpointe/',  // portal pay-panel CardPointe config (client payment iframe)
   '/intake/',          // public agent-shared intake forms (/intake + /intake/[slug])
   '/api/intake/',      // intake submit
@@ -314,6 +318,12 @@ export function middleware(req: NextRequest): NextResponse {
       pathname.startsWith('/api/client/') ||
       pathname.startsWith('/intake/') ||
       pathname.startsWith('/api/intake/') ||
+      // A driver link pasted with the hq host would otherwise hit the
+      // staff app and demand a Google login the driver doesn't have.
+      pathname.startsWith('/driver/') ||
+      pathname.startsWith('/api/driver-portal/') ||
+      pathname.startsWith('/drive/') ||
+      pathname.startsWith('/api/drive/') ||
       pathname.startsWith('/order/supplies')
     ) {
       const url = req.nextUrl.clone()

@@ -732,7 +732,48 @@ model Driver {
   licenseNumber   String?   @map("license_number") @db.VarChar(30)
   licenseState    String?   @map("license_state") @db.VarChar(5)
   licenseExpiry   DateTime? @map("license_expiry")
+  /// DEPRECATED — predates the front/back capture below and was never
+  /// written by any code path (0 rows). Kept so the column isn't dropped;
+  /// new writes go to licenseFrontUrl / licenseBackUrl.
   licensePhotoUrl String?   @map("license_photo_url")
+
+  // ── License images. A driver's licence is sensitive PII, so both
+  //    sides live in the PRIVATE blob store and are served only through
+  //    the authed proxy at /api/drivers/[id]/license/[side]. The URL
+  //    never reaches the browser. Same treatment as COI / WC.
+  licenseFrontKey      String?   @map("license_front_key")
+  licenseFrontUrl      String?   @map("license_front_url")
+  licenseFrontMimeType String?   @map("license_front_mime_type")
+  licenseBackKey       String?   @map("license_back_key")
+  licenseBackUrl       String?   @map("license_back_url")
+  licenseBackMimeType  String?   @map("license_back_mime_type")
+  licenseUploadedAt    DateTime? @map("license_uploaded_at")
+
+  // ── What the AI read off the card. This is EXTRACTION, not validation:
+  //    it tells us what the licence says, never whether the state still
+  //    considers it good. `licenseExpired` is the one real check we can
+  //    make offline (expiry date vs today). A DMV/MVR status check would
+  //    need a third-party service and is deliberately not attempted.
+  licenseAiReview   Json?     @map("license_ai_review")
+  licenseReviewAt   DateTime? @map("license_review_at")
+  licenseExpired    Boolean?  @map("license_expired")
+  dateOfBirth       DateTime? @map("date_of_birth")
+  licenseClass      String?   @map("license_class") @db.VarChar(10)
+  licenseEndorsements String? @map("license_endorsements") @db.VarChar(60)
+  licenseRestrictions String? @map("license_restrictions") @db.VarChar(60)
+
+  // Staff sign-off — a human looked at the images and accepted them.
+  // Separate from the AI read, which is only ever an assist.
+  licenseVerified     Boolean   @default(false) @map("license_verified")
+  licenseVerifiedAt   DateTime? @map("license_verified_at")
+  licenseVerifiedById String?   @map("license_verified_by_id")
+
+  // ── Driver portal access. One live token per driver: staff mint it and
+  //    either email it to the driver or open it on a tablet at pickup.
+  //    Nullable so a driver record can exist without portal access.
+  portalToken     String?   @unique @map("portal_token")
+  portalTokenAt   DateTime? @map("portal_token_at")
+  portalExpiresAt DateTime? @map("portal_expires_at")
 
   type      DriverType @default(EXTERNAL)
   companyId String?    @map("company_id") // Which production sent them (external drivers)
@@ -750,11 +791,67 @@ model Driver {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  company         Company?         @relation(fields: [companyId], references: [id])
-  checkoutRecords CheckoutRecord[]
-  dispatchTasks   DispatchTask[]   @relation("TaskDriver")
+  company           Company?           @relation(fields: [companyId], references: [id])
+  checkoutRecords   CheckoutRecord[]
+  dispatchTasks     DispatchTask[]     @relation("TaskDriver")
+  driverAssignments DriverAssignment[]
 
   @@map("drivers")
+}
+
+enum DriverAssignmentStatus {
+  INVITED   // email sent, driver hasn't opened it
+  VIEWED    // driver opened their job page
+  READY     // licence on file, checked, unexpired
+  PICKED_UP // handed over (CheckoutRecord carries the authoritative record)
+  CANCELLED
+}
+
+/// A named driver for ONE vehicle on ONE job — the spine of the driver
+/// workflow. Distinct from CheckoutRecord.driverId, which records who
+/// physically took the keys; this is the plan, created days earlier by
+/// whoever knows: the production client from their job page, the sales
+/// agent, or warehouse/fleet from the board.
+///
+/// Carries its own token because the driver's page is per-ASSIGNMENT
+/// (this vehicle, this job, these instructions) while a licence is
+/// per-PERSON — so licence uploads from this page still write to Driver.
+model DriverAssignment {
+  id                  String  @id @default(uuid())
+  driverId            String  @map("driver_id")
+  bookingAssignmentId String  @map("booking_assignment_id")
+
+  /// No-login credential for the driver's job page. Separate from
+  /// Driver.portalToken (licence-only, per-person) so revoking one
+  /// job's link doesn't lock a driver out of every other job.
+  token     String    @unique
+  expiresAt DateTime? @map("expires_at")
+
+  status DriverAssignmentStatus @default(INVITED)
+
+  /// Who named this driver. `invitedByUserId` is null when the
+  /// production client did it from their own portal job page —
+  /// they have no HQ User — so `invitedBySource` is the honest record.
+  invitedByUserId String?  @map("invited_by_user_id")
+  invitedBySource String   @default("STAFF") @map("invited_by_source") // STAFF | CLIENT
+  invitedAt       DateTime @default(now()) @map("invited_at")
+  emailSentTo     String?  @map("email_sent_to")
+  firstViewedAt   DateTime? @map("first_viewed_at")
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  driver            Driver            @relation(fields: [driverId], references: [id])
+  bookingAssignment BookingAssignment @relation(fields: [bookingAssignmentId], references: [id])
+  invitedByUser     User?             @relation("DriverAssignmentInvitedBy", fields: [invitedByUserId], references: [id])
+
+  /// One live row per driver per vehicle-assignment; re-inviting the same
+  /// driver updates rather than piling up duplicates.
+  @@unique([driverId, bookingAssignmentId])
+  @@index([bookingAssignmentId])
+  @@map("driver_assignments")
 }
 
 // ═══════════════════════════════════════
@@ -993,6 +1090,8 @@ model BookingAssignment {
   asset           Asset            @relation(fields: [assetId], references: [id])
   checkoutRecords CheckoutRecord[]
   inspections     Inspection[]     @relation("AssignmentInspections")
+
+  driverAssignments DriverAssignment[]
 
   @@map("booking_assignments")
 }
@@ -2060,6 +2159,8 @@ model User {
   // Phase 5 commit 3 — native payment recording.
   paymentsRecorded Payment[] @relation("PaymentRecorder")
   paymentsVoided   Payment[] @relation("PaymentVoider")
+
+  driverAssignmentsInvited DriverAssignment[] @relation("DriverAssignmentInvitedBy")
 
   @@map("users")
 }
@@ -5530,6 +5631,30 @@ model RwQuote {
   @@index([rwCustomerId])
   @@index([orderNumber])
   @@map("sr_rw_quotes")
+}
+
+/// Number → internal-id reference for RentalWorks ORDERS, plus enough
+/// header to label a link. RW's browse endpoints reject every
+/// server-side filter shape (same defect the invoice + quote syncs
+/// document), and GET /api/v1/order/{id} takes only the internal
+/// OrderId — so opening "RW order #304486" requires this mapping.
+/// Populated lazily: a cache miss triggers a full order/browse page
+/// scan that upserts every row (~4k), so one miss warms the whole
+/// table. See src/lib/rentalworks/orderRef.ts.
+model RwOrderRef {
+  id           String    @id @default(uuid())
+  rwOrderId    String    @unique @map("rw_order_id")
+  orderNumber  String    @map("order_number")
+  description  String?
+  customerName String?   @map("customer_name")
+  dealName     String?   @map("deal_name")
+  status       String?
+  total        Decimal?  @db.Decimal(12, 2)
+  orderDate    DateTime? @map("order_date")
+  syncedAt     DateTime  @map("synced_at")
+
+  @@index([orderNumber])
+  @@map("sr_rw_order_refs")
 }
 
 model JobRwOrder {
