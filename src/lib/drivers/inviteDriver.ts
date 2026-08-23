@@ -74,7 +74,10 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
   })
   if (!driver) {
     const first = (args.firstName || '').trim() || email.split('@')[0]
-    const last = (args.lastName || '').trim() || '—'
+    // Empty, not a placeholder glyph: every display site composes
+    // `${firstName} ${lastName}`.trim(), so '' disappears cleanly while
+    // '—' shows up as "Wes —" in the roster.
+    const last = (args.lastName || '').trim()
     driver = await prisma.driver.create({
       data: {
         firstName: first, lastName: last, email,
@@ -141,6 +144,10 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
     subject: mail.subject,
     html: mail.html,
     text: mail.text,
+    // Labelled so driver invites are filterable in EmailDelivery next to
+    // portal/invite and the rest — an unlabelled row is invisible when
+    // someone asks "did the driver ever get their link?".
+    label: 'driver/assignment',
   })
 
   return { driverId: driver.id, driverAssignmentId: da.id, url, emailResult, needsLicense }

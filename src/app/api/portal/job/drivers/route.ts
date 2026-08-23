@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       endDate: a.endDate.toISOString().slice(0, 10),
       drivers: a.driverAssignments.map((d) => ({
         id: d.id,
-        name: `${d.driver.firstName} ${d.driver.lastName}`.replace(/\s+—$/, '').trim(),
+        name: `${d.driver.firstName} ${d.driver.lastName}`.trim(),
         email: d.emailSentTo,
         // Client-safe status only. They don't need (and shouldn't get)
         // our licence verdicts — "we're still waiting on them" is enough.

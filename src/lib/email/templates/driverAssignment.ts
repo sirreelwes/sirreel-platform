@@ -81,7 +81,11 @@ export function buildDriverAssignmentEmail(input: DriverAssignmentEmailInput): B
 
   const html = renderEmailShell({
     eyebrow: 'Driver assignment',
-    heading: `You&rsquo;re driving ${input.unitName}`,
+    // LITERAL apostrophe, not &rsquo; — renderEmailShell esc()s heading,
+    // eyebrow, preheader and cta.label, so an entity here is escaped a
+    // second time and the reader sees "You&rsquo;re driving". Only
+    // bodyHtml (p/calloutBox/detailTable content) takes markup.
+    heading: `You’re driving ${input.unitName}`,
     preheader: input.needsLicense
       ? `Upload your license before pickup — ${input.productionName}`
       : `Your driver page for ${input.productionName}`,
