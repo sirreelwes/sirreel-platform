@@ -41,8 +41,7 @@ import { categoryNameForLine } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import type { FulfillmentLane, OrderStatus, BookingPriority, PickListStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
-import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
+import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,13 +52,31 @@ const ALL_LIVE_STATUSES: OrderStatus[] = [...OUTBOUND_STATUSES, ...INBOUND_STATU
 const DEFAULT_DAYS = 2
 const MAX_DAYS = 30
 
+// How far back a RESERVATION-derived movement may still count as
+// overdue. The Planyo era left ~150 assignments whose rentals really
+// came back but were never marked returned in HQ (nobody was working
+// in HQ yet), and every one of them looks "late to return" forever.
+// Showing the fleet 153 red cards on day one would burn the board's
+// credibility, so overdue is bounded to the last week — what a human
+// can still act on — and everything older is COUNTED, not hidden.
+const RESERVATION_OVERDUE_DAYS = 7
+
 // ─── Card shapes ────────────────────────────────────────────────
 export interface FleetCard {
   kind: 'FLEET'
-  // Stable id for React: line id OR (when a BA was adopted) `ba:<id>`.
+  // Stable id for React: line id, or `ba:<id>` for a reservation-derived card.
   cardId: string
-  lineId: string
-  orderId: string
+  /** Where this card came from. 'reservation' cards are built straight
+   *  from BookingAssignment rows — the truck movements the schedule
+   *  knows about — and exist because most live work has no HQ order
+   *  line (Planyo-imported bookings, RW-billed jobs). Before this the
+   *  board could be empty while nine vehicles were due back. */
+  source: 'order' | 'reservation'
+  lineId: string | null
+  orderId: string | null
+  /** Present on reservation cards so the card can link somewhere useful. */
+  jobId: string | null
+  /** Order number, or the booking number for reservation cards. */
   orderNumber: string
   status: OrderStatus
   companyName: string
@@ -123,6 +140,10 @@ export interface DispatchPayload {
   overdue: {
     lateToShip: DispatchCard[]
     lateToReturn: DispatchCard[]
+    /** Reservations whose return date passed more than
+     *  RESERVATION_OVERDUE_DAYS ago and were never marked returned —
+     *  Planyo-era leftovers. Counted, not listed. */
+    staleUnreturned: number
   }
   days: DispatchDay[]
 }
@@ -157,16 +178,14 @@ function labelFor(date: Date, asOf: Date): string {
 
 // ─── Handler ────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  // Fleet ops (canAssignAssets) OR the warehouse view — the pick floor
-  // observes what's going out and coming back on this read-only board
-  // (Phase 2, 2026-08-21). Deliberately widened HERE and not inside
-  // requireDispatchAccess: that helper also guards BIT/dot-sheet
-  // paperwork surfaces, which stay fleet-only.
-  const auth = await requireDispatchAccess()
-  if (!auth.ok) {
-    const fallback = await requirePickerRole()
-    if (!fallback.ok) return auth.response
-  }
+  // Any signed-in staff session (2026-08-23). This is READ-ONLY board
+  // data — the same movements the Reservations board already shows
+  // every role — and the Reservations "Out / Back" strip renders it
+  // for sales too. Widened HERE and never inside requireDispatchAccess,
+  // which still guards the BIT / dot-sheet paperwork surfaces as
+  // fleet-only. Mutations elsewhere keep their own stricter gates.
+  const denied = await requireReadSession()
+  if (denied) return denied
 
   const url = req.nextUrl
   const asOf = parseAsOf(url.searchParams.get('asOf'))
@@ -291,8 +310,10 @@ export async function GET(req: NextRequest) {
     return {
       kind: 'FLEET',
       cardId: r.line.id,
+      source: 'order',
       lineId: r.line.id,
       orderId: r.line.order.id,
+      jobId: r.line.order.job?.id ?? null,
       orderNumber: r.line.order.orderNumber,
       status: r.line.order.status,
       companyName: r.line.order.company.name,
@@ -350,11 +371,94 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Reservation-derived movements ────────────────────────────
+  // The board used to read ONLY order line items, so a truck with a
+  // reservation but no HQ order line was invisible — which on
+  // 2026-08-23 meant 11 real movements in three days and an empty
+  // board. BookingAssignment is what the schedule actually knows, so
+  // it is the primary source here; order lines still bring warehouse
+  // pick-lists and blind-handoff flags.
+  const assignments = await prisma.bookingAssignment.findMany({
+    where: {
+      status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
+      OR: [
+        { startDate: { gte: windowStart, lte: windowEnd } },
+        { endDate: { gte: windowStart, lte: windowEnd } },
+      ],
+      bookingItem: { booking: { status: { in: ['CONFIRMED', 'ACTIVE'] } } },
+    },
+    select: {
+      id: true,
+      startDate: true,
+      endDate: true,
+      status: true,
+      asset: { select: { unitName: true } },
+      bookingItem: {
+        select: {
+          category: { select: { name: true } },
+          booking: {
+            select: {
+              id: true,
+              bookingNumber: true,
+              jobName: true,
+              priority: true,
+              status: true,
+              company: { select: { name: true } },
+              job: { select: { id: true, jobCode: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  const reservationCards: FleetCard[] = assignments.map((a) => {
+    const b = a.bookingItem.booking
+    return {
+      kind: 'FLEET' as const,
+      cardId: `ba:${a.id}`,
+      source: 'reservation' as const,
+      lineId: null,
+      orderId: null,
+      jobId: b.job?.id ?? null,
+      orderNumber: b.bookingNumber,
+      // Honest status: out on the road once checked out, otherwise the
+      // booking's own state. Bucketing below keys on DATES, not this —
+      // a CONFIRMED booking that was never marked checked out still has
+      // to appear on the day it comes back.
+      status: (a.status === 'CHECKED_OUT' || b.status === 'ACTIVE' ? 'ON_JOB' : 'BOOKED') as OrderStatus,
+      companyName: b.company.name,
+      jobName: b.jobName,
+      jobCode: b.job?.jobCode ?? null,
+      assetUnitName: a.asset.unitName,
+      categoryName: a.bookingItem.category?.name ?? null,
+      effectivePickupDate: toYmd(a.startDate),
+      effectiveReturnDate: toYmd(a.endDate),
+      priority: b.priority,
+      // Blind-handoff flags live on Orders; a reservation-only movement
+      // has none to read.
+      blindPickup: false,
+      blindReturn: false,
+    }
+  })
+
+  // Bookings now represented unit-by-unit. Their FLEET order lines are
+  // suppressed so one movement isn't listed twice — the assignment card
+  // names the actual unit, the line only names a category. WAREHOUSE
+  // cards are untouched: they're about picking a load, not a vehicle.
+  const bookingsCoveredByReservations = new Set(
+    assignments.map((a) => a.bookingItem.booking.id),
+  )
+
   // Pre-emit fleet cards by their effective pickup date for outbound
   // bucketing. Inbound bucketing uses effective return date.
-  const allFleetCards = resolved
-    .filter((r) => r.line.fulfillmentLane === 'FLEET')
-    .map(toFleetCard)
+  const allFleetCards = [
+    ...resolved
+      .filter((r) => r.line.fulfillmentLane === 'FLEET')
+      .filter((r) => !(r.line.order.booking && bookingsCoveredByReservations.has(r.line.order.booking.id)))
+      .map(toFleetCard),
+    ...reservationCards,
+  ]
   const allWarehouseCards = Array.from(warehouseGroups.entries()).map(([k, g]) => toWarehouseCard(k, g))
 
   // ── Bucket ───────────────────────────────────────────────────
@@ -365,15 +469,22 @@ export async function GET(req: NextRequest) {
     days.push({
       date: ymd,
       label: labelFor(date, asOf),
+      // Reservation cards bucket on DATES alone: a booking that was
+      // never marked checked out still goes out and comes back, and
+      // order-status semantics don't apply to it.
       outboundFleet: allFleetCards.filter(
-        (c) => OUTBOUND_STATUSES.includes(c.status) && c.effectivePickupDate === ymd,
+        (c) =>
+          c.effectivePickupDate === ymd &&
+          (c.source === 'reservation' || OUTBOUND_STATUSES.includes(c.status)),
       ),
       outboundWarehouse: allWarehouseCards.filter(
         (c) => OUTBOUND_STATUSES.includes(c.status) && c.effectivePickupDate === ymd,
       ),
       inbound: [
         ...allFleetCards.filter(
-          (c) => INBOUND_STATUSES.includes(c.status) && c.effectiveReturnDate === ymd,
+          (c) =>
+            c.effectiveReturnDate === ymd &&
+            (c.source === 'reservation' || INBOUND_STATUSES.includes(c.status)),
         ),
         ...allWarehouseCards.filter(
           (c) => INBOUND_STATUSES.includes(c.status) && c.effectiveReturnDate === ymd,
@@ -382,10 +493,25 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  const overdueFloor = toYmd(addDays(asOf, -RESERVATION_OVERDUE_DAYS))
+  // Never-closed-out rentals older than the window. Reported so the
+  // board can say so out loud instead of silently dropping them.
+  const staleUnreturned = allFleetCards.filter(
+    (c) => c.source === 'reservation' && c.effectiveReturnDate < overdueFloor,
+  ).length
+
   const overdue = {
     lateToShip: [
       ...allFleetCards.filter(
-        (c) => OUTBOUND_STATUSES.includes(c.status) && c.effectivePickupDate < today,
+        (c) =>
+          c.effectivePickupDate < today &&
+          (c.source === 'reservation'
+            ? // Should be out RIGHT NOW and isn't: pickup passed, return
+              // still ahead, not checked out — and recent enough to act on.
+              c.status !== 'ON_JOB' &&
+              c.effectiveReturnDate >= today &&
+              c.effectivePickupDate >= overdueFloor
+            : OUTBOUND_STATUSES.includes(c.status)),
       ),
       ...allWarehouseCards.filter(
         (c) => OUTBOUND_STATUSES.includes(c.status) && c.effectivePickupDate < today,
@@ -393,12 +519,17 @@ export async function GET(req: NextRequest) {
     ],
     lateToReturn: [
       ...allFleetCards.filter(
-        (c) => INBOUND_STATUSES.includes(c.status) && c.effectiveReturnDate < today,
+        (c) =>
+          c.effectiveReturnDate < today &&
+          (c.source === 'reservation'
+            ? c.effectiveReturnDate >= overdueFloor
+            : INBOUND_STATUSES.includes(c.status)),
       ),
       ...allWarehouseCards.filter(
         (c) => INBOUND_STATUSES.includes(c.status) && c.effectiveReturnDate < today,
       ),
     ],
+    staleUnreturned,
   }
 
   const payload: DispatchPayload = {

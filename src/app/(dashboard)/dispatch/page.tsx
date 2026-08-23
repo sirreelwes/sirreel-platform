@@ -85,7 +85,7 @@ interface DispatchDay {
 interface DispatchPayload {
   asOfDate: string
   horizonDays: number
-  overdue: { lateToShip: DispatchCard[]; lateToReturn: DispatchCard[] }
+  overdue: { lateToShip: DispatchCard[]; lateToReturn: DispatchCard[]; staleUnreturned?: number }
   days: DispatchDay[]
 }
 
@@ -272,6 +272,12 @@ function OverdueBand({
         <OverdueSection label="Late to ship" cards={overdue.lateToShip} />
         <OverdueSection label="Late to return" cards={overdue.lateToReturn} />
       </div>
+      {!!overdue.staleUnreturned && (
+        <p className="px-4 py-2 text-[11px] text-lt-fg3 border-t border-chip-bad-fg/20">
+          {overdue.staleUnreturned} older reservation{overdue.staleUnreturned === 1 ? '' : 's'} passed
+          their return date over a week ago and were never checked in — Planyo-era leftovers, not listed here.
+        </p>
+      )}
     </div>
   )
 }

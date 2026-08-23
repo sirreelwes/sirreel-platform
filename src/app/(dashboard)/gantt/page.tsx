@@ -23,6 +23,7 @@ import {
   ART_DEPT_TAG_CHIP,
 } from '@/lib/scheduling/statusTokens';
 import StatusLegend from '@/components/scheduling/StatusLegend';
+import OutBackStrip from '@/components/scheduling/OutBackStrip';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
@@ -1309,6 +1310,11 @@ export default function GanttPage() {
           )}
         </div>
       </div>
+
+      {/* What leaves and what comes home, next 3 days (Wes 2026-08-23).
+          Fleet and warehouse live on this board post-cutover; this
+          answers their whole question without a tab change. */}
+      <OutBackStrip />
 
       {/* Legend — derived from statusTokens inside StatusLegend, cannot drift from the bars. */}
       <StatusLegend showTiers>
