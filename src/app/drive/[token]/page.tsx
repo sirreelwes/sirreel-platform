@@ -19,13 +19,35 @@ import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 
 type Side = 'front' | 'back'
 
+// ── Getting to the yard ──────────────────────────────────────────────
+// Drivers do NOT enter at the Lankershim address — that's the mailing
+// address. Vehicle access is Gate 1 off Kewen Ave (Wes 2026-08-23), so
+// the instruction is shown on every pickup regardless of what the order
+// says, and both map links carry it in the destination label.
+//
+// NOTE: the map pin is still the Lankershim address, which is the only
+// location we hold. If Gate 1 has its own street number or coordinates,
+// putting them here points the pin at the right kerb.
+const YARD = {
+  label: 'SirReel — Gate 1, Kewen Ave',
+  address: '8500 Lankershim Blvd, Sun Valley, CA 91352',
+  gateInstruction: 'Enter through Gate 1 off Kewen Ave',
+} as const
+
+// Apple Maps understands ?daddr= and opens the native app on iOS; on a
+// desktop it falls back to the web viewer. Google takes ?q=. Both get the
+// same destination string so the two buttons can't disagree.
+const mapsQuery = encodeURIComponent(YARD.address)
+const APPLE_MAPS = `https://maps.apple.com/?daddr=${mapsQuery}`
+const GOOGLE_MAPS = `https://maps.google.com/?q=${mapsQuery}`
+
 interface DriveData {
   driver: { firstName: string | null }
   license: { hasFront: boolean; hasBack: boolean; ok: boolean; code: string; message: string }
   vehicle: { unitName: string; description: string | null; makeModel: string | null; licensePlate: string | null }
   job: { productionName: string; companyName: string | null; startDate: string; endDate: string }
   instructions: { pickup: string | null; dropoff: string | null; unattendedPickup: boolean; unattendedReturn: boolean }
-  access: { assistantAuthCode: string | null }
+  access: { gateCode: string | null; lockboxCode: string | null }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
 }
 
@@ -148,23 +170,36 @@ export default function DriverJobPage({ params }: { params: { token: string } })
           {data.instructions.unattendedPickup && (
             <Badge>Unattended pickup — nobody will meet you</Badge>
           )}
+
+          {/* Always shown. Every driver enters the same way, and a driver
+              who follows the mailing address alone ends up at the wrong
+              side of the lot. */}
+          <div className="mb-2.5 rounded-xl border border-amber-700/60 bg-amber-950/25 px-3.5 py-2.5">
+            <div className="text-[15px] font-semibold text-amber-200">🚧 {YARD.gateInstruction}</div>
+            <div className="mt-0.5 text-[13px] text-zinc-300">{YARD.address}</div>
+          </div>
+
           {data.instructions.pickup ? (
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-zinc-200">
               {data.instructions.pickup}
             </p>
           ) : (
             <p className="text-[14px] leading-relaxed text-zinc-400">
-              8500 Lankershim Blvd, Sun Valley, CA 91352. Someone will meet you at the yard —
-              if it&rsquo;s outside business hours, use the assistant below.
+              Someone will meet you at the yard — if it&rsquo;s outside business hours,
+              use the assistant below.
             </p>
           )}
-          <a
-            href="https://maps.google.com/?q=8500+Lankershim+Blvd,+Sun+Valley,+CA+91352"
-            target="_blank" rel="noopener noreferrer"
-            className="mt-2.5 inline-block rounded-lg bg-zinc-800 px-3.5 py-2 text-[13px] font-semibold text-zinc-100 hover:bg-zinc-700"
-          >
-            Directions to the yard ↗
-          </a>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <a href={APPLE_MAPS} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg bg-zinc-800 px-3 py-2.5 text-center text-[13px] font-semibold text-zinc-100 hover:bg-zinc-700">
+              Apple Maps ↗
+            </a>
+            <a href={GOOGLE_MAPS} target="_blank" rel="noopener noreferrer"
+              className="rounded-lg bg-zinc-800 px-3 py-2.5 text-center text-[13px] font-semibold text-zinc-100 hover:bg-zinc-700">
+              Google Maps ↗
+            </a>
+          </div>
         </Section>
 
         {(data.instructions.dropoff || data.instructions.unattendedReturn) && (
@@ -178,20 +213,27 @@ export default function DriverJobPage({ params }: { params: { token: string } })
           </Section>
         )}
 
-        {/* Access. The code below is NOT the gate code — it's how the
-            assistant verifies you before giving you one. */}
-        {data.access.assistantAuthCode && (
-          <Section title="Gate & lockbox access">
-            <p className="text-[14px] leading-relaxed text-zinc-300">
-              Give this code to the SirReel assistant and it will release the gate code
-              (and vehicle lockbox code) for you — any hour, no need to reach a person.
-            </p>
-            <div className="mt-2.5 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-center">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Your access code</div>
-              <div className="mt-1 font-mono text-[26px] font-bold tracking-[0.2em] text-white">
-                {data.access.assistantAuthCode}
-              </div>
+        {/* Real access codes — a named driver gets these directly
+            (Wes 2026-08-22). Kept together and marked, because a driver
+            forwarding this screenshot is how a lot code walks. */}
+        {(data.access.gateCode || data.access.lockboxCode) && (
+          <Section title="Getting in">
+            <div className="space-y-2.5">
+              {data.access.gateCode && (
+                <CodeBlock label="Lot gate code" value={data.access.gateCode} />
+              )}
+              {data.access.lockboxCode && (
+                <CodeBlock
+                  label={`Lockbox — ${data.vehicle.unitName}`}
+                  value={data.access.lockboxCode}
+                  hint="The keys are in the lockbox on this vehicle."
+                />
+              )}
             </div>
+            <p className="mt-2.5 text-[12px] leading-relaxed text-zinc-500">
+              These are for you and this job. Please don&rsquo;t pass them on or post a photo
+              of this screen — the gate code is the same one every driver uses.
+            </p>
           </Section>
         )}
 
@@ -240,6 +282,16 @@ function Section({ title, children, tone }: { title: string; children: React.Rea
       <h2 className="mb-2 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-400">{title}</h2>
       {children}
     </section>
+  )
+}
+
+function CodeBlock({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
+      <div className="mt-1 font-mono text-[28px] font-bold tracking-[0.18em] text-white">{value}</div>
+      {hint && <div className="mt-0.5 text-[12px] text-zinc-400">{hint}</div>}
+    </div>
   )
 }
 

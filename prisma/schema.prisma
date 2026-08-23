@@ -153,10 +153,14 @@ model Asset {
   bitCertificateUrl       String?   @map("bit_certificate_url")
   bitCertificateExpiresAt DateTime? @map("bit_certificate_expires_at") @db.Date
 
-  // Per-vehicle keypad / lockbox access code — INTERNAL. Released to
-  // clients ONLY through the after-hours assistant's server-side driver
-  // verification (name + vehicle match against the active booking) or
-  // by an agent verbally. Never rendered on any public/portal surface.
+  // Per-vehicle keypad / lockbox access code. Released through the
+  // after-hours assistant's server-side verification, by an agent
+  // verbally, or — Wes 2026-08-22 — to a NAMED DRIVER on their own
+  // /drive/[token] page for THE VEHICLE THEY ARE ASSIGNED TO and only
+  // when that pickup is unattended (blindPickup), since the instructions
+  // in that case are literally "keys are in the lockbox" and there is no
+  // one there to let them in. Never for a vehicle they aren't driving,
+  // and never on a client-facing or public surface.
   accessCode String? @map("access_code") @db.VarChar(40)
 
   // Integration IDs
@@ -837,6 +841,10 @@ model DriverAssignment {
   invitedAt       DateTime @default(now()) @map("invited_at")
   emailSentTo     String?  @map("email_sent_to")
   firstViewedAt   DateTime? @map("first_viewed_at")
+  /// First time this driver was shown the real gate code. Stamped so a
+  /// leaked code can be traced to who had it and from when — the price
+  /// of putting a shared secret on a page.
+  gateCodeViewedAt DateTime? @map("gate_code_viewed_at")
 
   notes String? @db.Text
 
@@ -5309,12 +5317,20 @@ model SiteSetting {
 
   /// Standing lot GATE CODE — the single code shared by all drivers until
   /// it's physically reprogrammed at the gate. This field only RECORDS the
-  /// current value so the after-hours assistant can release it on a passing
-  /// verification; changing it here does NOT change the physical gate.
+  /// current value; changing it here does NOT change the physical gate.
   /// Sales agents (AGENT) + admins may edit it; edits are audit-logged by
   /// field name (mirroring the payment-info convention) plus who/when below.
-  /// Released ONLY through server-side driver verification, never rendered
-  /// on any public/portal surface.
+  ///
+  /// RELEASE POLICY (Wes 2026-08-22, superseding "never on a portal
+  /// surface"): released two ways only —
+  ///   1. the after-hours assistant, on a passing server-side verification
+  ///   2. a NAMED DRIVER on their own /drive/[token] page, once production
+  ///      or an agent has assigned them to a specific vehicle
+  /// A driver has been named by the client or an agent, holds a personal
+  /// token, and cannot do the job without getting through the gate. Every
+  /// driver view is stamped on DriverAssignment.gateCodeViewedAt so a leak
+  /// has a trail. Still never on a client-facing or public surface: the
+  /// CLIENT gets the job's assistantAuthCode instead, which is theirs.
   gateCode            String?   @map("gate_code")
   gateCodeUpdatedAt   DateTime? @map("gate_code_updated_at")
   gateCodeUpdatedById String?   @map("gate_code_updated_by_id")

@@ -6,6 +6,7 @@ import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
 import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
+import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 /**
@@ -841,6 +842,9 @@ export default function JobPortalPage() {
             <span className="text-gray-900 font-bold">{fmtCurrency(data.order.total)}</span>
           </div>
         </section>
+
+        {/* ── Your drivers ─────────────────────────────────────────────────── */}
+        <PortalDriversSection />
 
         {/* ── Contacts ────────────────────────────────────────────────────── */}
         <section className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
