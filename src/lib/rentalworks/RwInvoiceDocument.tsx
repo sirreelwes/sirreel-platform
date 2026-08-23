@@ -2,6 +2,7 @@ import * as React from 'react'
 import fs from 'fs'
 import path from 'path'
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import '@/lib/pdf/hyphenation'
 
 /**
  * HQ-rendered duplicate of a RentalWorks invoice, styled to MATCH the

@@ -1,31 +1,13 @@
 import React from 'react'
 import fs from 'fs'
 import path from 'path'
-import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { computeOrderTotals } from '@/lib/orders/discountedTotals'
 
-// Mid-word breaks are off by default — keeps real words intact
-// (e.g. "Productions" stays whole, not "Produc-tions") because the
-// engine's default hyphenation looks broken on client-facing quotes.
-//
-// Exception: inventory-code shape — long, ALL-CAPS, only letters /
-// digits / hyphens (e.g. "TEN-CARAVAN-CANOPY-10X10"). The default
-// "treat as one atomic word" path overflows narrow columns like the
-// 11%-wide ITEM cell and overprints the DESCRIPTION cell to its right.
-//
-// Preferred fold: at hyphen boundaries — splits on the existing
-// hyphens in the code so the visual wrap reads cleanly as
-// "TEN- / CARAVAN- / CANOPY- / 10X10" instead of awkward mid-segment
-// breaks. The lookbehind regex keeps the hyphen as a trailing char on
-// each part so the wrapped lines still display the original glyphs.
-// Fallback fold: per-character — only for long all-caps tokens that
-// have no hyphens to break on (rare edge case).
-Font.registerHyphenationCallback((word) => {
-  if (word.length > 14 && /^[A-Z0-9-]+$/.test(word)) {
-    return word.includes('-') ? word.split(/(?<=-)/) : word.split('')
-  }
-  return [word]
-})
+// Hyphenation is registered ONCE in lib/pdf/hyphenation (it's a global,
+// last-registration-wins setting — see that module for the policy and
+// the load-order bug this replaces). Do not register a callback here.
+import '@/lib/pdf/hyphenation'
 
 // Load the SirReel logo once at module load (server-only — the QuoteDocument
 // is rendered exclusively via renderToBuffer in the API route). Passing the
@@ -390,7 +372,7 @@ const styles = StyleSheet.create({
   },
   rowAlt: { backgroundColor: C.zebra },
   // Column widths sum to 100
-  colCode: { width: '11%', fontSize: 9 },
+  colCode: { width: '11%', fontSize: 9, paddingRight: 4 },
   colDesc: { width: '40%', fontSize: 9, paddingRight: 4 },
   colQty: { width: '7%', fontSize: 9, textAlign: 'right' },
   colDays: { width: '8%', fontSize: 9, textAlign: 'right' },

@@ -1,5 +1,6 @@
 import React from 'react'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
+import '@/lib/pdf/hyphenation'
 import {
   SignedAgreementDocument,
   type SignedAgreementDocumentProps,

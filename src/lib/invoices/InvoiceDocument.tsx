@@ -1,7 +1,7 @@
 import React from 'react'
 import fs from 'fs'
 import path from 'path'
-import { Document, Page, Text, View, Image, Font, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { ZellePayBlock } from './ZellePayBlock'
 
 /**
@@ -18,7 +18,10 @@ import { ZellePayBlock } from './ZellePayBlock'
  * INVOICE. Same template covers both.
  */
 
-Font.registerHyphenationCallback((word) => [word])
+// Hyphenation is registered ONCE in lib/pdf/hyphenation (global,
+// last-registration-wins — this file's old `(word) => [word]` silently
+// disabled code-wrapping on QUOTES too whenever it loaded last).
+import '@/lib/pdf/hyphenation'
 
 const LOGO_PATH = path.join(process.cwd(), 'public', 'sirreel-logo.png')
 let LOGO_BUFFER: Buffer | null = null
