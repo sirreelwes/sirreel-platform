@@ -164,11 +164,20 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   const q = input.quote
   const av = input.availability
 
-  // [[PLACEHOLDER]] subject — Wes review.
+  // Subject — reviewed by Wes 2026-08-23.
+  //
+  // The quote subject says SIRREEL, not TSX (Wes, from a live client
+  // reply reading "Re: Your TSX quote for The Watch Party"): TSX is the
+  // name of the client PORTAL experience, and a quote is not a portal
+  // thing. A subject line is also often the first words a new client
+  // ever reads from us — it has to be the name they recognize. The
+  // follow-up cadence templates already said "SirReel quote"; this was
+  // the one outlier. The welcome-only subject keeps TSX on purpose —
+  // that email exists to introduce the portal brand.
   const subject = withAvailability
     ? `Re: ${av!.jobName} — availability${av!.dateRange ? ` for ${av!.dateRange}` : ''}`
     : withQuote
-      ? `Your TSX quote for ${q!.jobName}`
+      ? `Your SirReel quote for ${q!.jobName}`
       : `Welcome to TSX — The SirReel Experience`
 
   // [[PLACEHOLDER]] body copy — Wes review.
