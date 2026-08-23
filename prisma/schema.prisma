@@ -5573,6 +5573,30 @@ model RwQuote {
   @@map("sr_rw_quotes")
 }
 
+/// Number → internal-id reference for RentalWorks ORDERS, plus enough
+/// header to label a link. RW's browse endpoints reject every
+/// server-side filter shape (same defect the invoice + quote syncs
+/// document), and GET /api/v1/order/{id} takes only the internal
+/// OrderId — so opening "RW order #304486" requires this mapping.
+/// Populated lazily: a cache miss triggers a full order/browse page
+/// scan that upserts every row (~4k), so one miss warms the whole
+/// table. See src/lib/rentalworks/orderRef.ts.
+model RwOrderRef {
+  id           String    @id @default(uuid())
+  rwOrderId    String    @unique @map("rw_order_id")
+  orderNumber  String    @map("order_number")
+  description  String?
+  customerName String?   @map("customer_name")
+  dealName     String?   @map("deal_name")
+  status       String?
+  total        Decimal?  @db.Decimal(12, 2)
+  orderDate    DateTime? @map("order_date")
+  syncedAt     DateTime  @map("synced_at")
+
+  @@index([orderNumber])
+  @@map("sr_rw_order_refs")
+}
+
 model JobRwOrder {
   id            String   @id @default(uuid())
   jobId         String   @map("job_id")

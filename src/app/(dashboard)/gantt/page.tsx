@@ -1661,7 +1661,7 @@ export default function GanttPage() {
                         </span>
                       )}
                       {selected.rwOrderNumber && (
-                        <a href={`/jobs?rw=${selected.rwOrderNumber}`} className="text-[10px] text-blue-600 hover:underline">RW #{selected.rwOrderNumber} →</a>
+                        <a href={`/rentalworks/orders/${selected.rwOrderNumber}`} className="text-[10px] text-blue-600 hover:underline" title="Open this RW order">RW #{selected.rwOrderNumber} →</a>
                       )}
                     </div>
                   </>
