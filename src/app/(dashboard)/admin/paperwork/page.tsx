@@ -1,19 +1,22 @@
 'use client'
 
 /**
- * /admin/paperwork — paperwork tools picker.
+ * /admin/paperwork — the paperwork surface: what has come in, and the
+ * tools for handling it.
  *
- * Phase 7 consolidation. Three pre-existing tools (COI Check,
- * Contract Review, Contract History) collapsed under one nav entry.
- * Each card links to its existing route — pages themselves are
+ * Phase 7 consolidation collapsed the pre-existing one-off tools (COI
+ * Check, Contract Review, Contract History, ...) under one nav entry.
+ * Each card still links to its existing route — those pages are
  * untouched.
  *
- * If/when these become tabs of one shared layout, the routes can
- * collapse without changing this page (it just becomes the parent
- * with three tab links). For now: three cards, three destinations.
+ * The submissions feed on top is the newer half: paperwork was only
+ * findable inside the job that owns it, so "did that COI ever come in?"
+ * meant opening jobs one by one. This is the cross-job index; rows link
+ * back into the job page section where the document is reviewed.
  */
 
 import Link from 'next/link'
+import RecentSubmissions from '@/components/paperwork/RecentSubmissions'
 
 const TOOLS = [
   {
@@ -52,11 +55,20 @@ export default function PaperworkToolsIndex() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Paperwork tools</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Paperwork</h1>
         <p className="text-sm text-gray-500 mt-1">
-          One-off AI surfaces for client paperwork — pick a tool to open it.
+          Everything clients have sent in, and the tools for reviewing it.
         </p>
       </header>
+
+      <div className="mb-8">
+        <RecentSubmissions />
+      </div>
+
+      <h2 className="text-sm font-semibold text-gray-900 mb-1">Tools</h2>
+      <p className="text-[12px] text-gray-500 mb-3">
+        One-off AI surfaces for client paperwork — pick a tool to open it.
+      </p>
 
       <div className="grid gap-4 md:grid-cols-2">
         {TOOLS.map((t) => (
