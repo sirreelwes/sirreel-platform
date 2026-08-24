@@ -18,6 +18,13 @@ const todayDate = () => new Date(`${new Date().toISOString().slice(0, 10)}T00:00
  *   action: 'refer'   → SALES (canCreateBooking) opens a precautionary,
  *                       open-ended referral record (greys the unit immediately,
  *                       pending fleet triage).
+ *
+ * `note` (optional, <=280 chars) is what is actually WRONG with the unit —
+ * "driver side mirror cracked", "check engine light on I-5". Stored as the
+ * record's description; without it the record carried only boilerplate and
+ * fleet had to phone whoever greyed the truck (Wes, 2026-08-24). The
+ * boilerplate is retained as a prefix so provenance (who flagged it, sales
+ * vs fleet) survives alongside the symptom.
  *   action: 'mark-na' → FLEET (canAssignAssets) opens a fleet-confirmed
  *                       out-of-service record.
  *   action: 'clear'   → FLEET (canAssignAssets) closes the unit's OPEN records
@@ -41,6 +48,11 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const body = await req.json().catch(() => null);
   const action = body && typeof body.action === "string" ? body.action : "";
+  // Trimmed and capped — this is a one-line symptom, not a work order.
+  const note =
+    body && typeof body.note === "string" && body.note.trim()
+      ? body.note.trim().slice(0, 280)
+      : null;
   if (action !== "refer" && action !== "mark-na" && action !== "clear") {
     return NextResponse.json({ error: "action must be refer | mark-na | clear" }, { status: 400 });
   }
@@ -81,15 +93,20 @@ export async function POST(req: NextRequest, { params }: Params) {
       unitName: asset.unitName,
       type: "OTHER",
       title: isReferral ? NA_REFERRAL_TITLE : NA_FLEET_TITLE,
-      description: isReferral
-        ? "Flagged by sales as needing maintenance review. Greys the unit pending fleet triage."
-        : "Marked out of service by fleet.",
+      description: [
+        isReferral
+          ? "Flagged by sales as needing maintenance review. Greys the unit pending fleet triage."
+          : "Marked out of service by fleet.",
+        note,
+      ]
+        .filter(Boolean)
+        .join(" — "),
       startDate: todayDate(),
       endDate: null,
       status: isReferral ? "SCHEDULED" : "IN_PROGRESS",
       createdBy: actor.id,
     },
-    select: { id: true, status: true },
+    select: { id: true, status: true, description: true },
   });
-  return NextResponse.json({ ok: true, action, recordId: record.id });
+  return NextResponse.json({ ok: true, action, recordId: record.id, description: record.description });
 }
