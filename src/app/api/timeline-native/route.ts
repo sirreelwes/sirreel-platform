@@ -592,7 +592,7 @@ export async function GET(req: NextRequest) {
   const units = [...unitMap.values()]
     .map((u) => ({ ...u, naWindows: naByAsset.get(u.assetId) ?? [], bookings: u.bookings.sort((a, b) => String(a.start).localeCompare(String(b.start))) }))
     .sort((a, b) => {
-      const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
+      const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'stakebed', 'general', 'studio'] // studio LAST: stages are their own section below the vehicles (2026-08-24)
       const ca = catOrder.indexOf(a.cat); const cb = catOrder.indexOf(b.cat)
       if (ca !== cb) return ca - cb
       return a.unitName.localeCompare(b.unitName, undefined, { numeric: true })

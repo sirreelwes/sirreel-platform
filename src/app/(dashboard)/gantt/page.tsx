@@ -24,6 +24,7 @@ import {
   ART_DEPT_TAG_CHIP,
 } from '@/lib/scheduling/statusTokens';
 import StatusLegend from '@/components/scheduling/StatusLegend';
+import { StageAreasPicker } from '@/components/scheduling/StageAreasPicker';
 import OutBackStrip from '@/components/scheduling/OutBackStrip';
 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -1211,7 +1212,12 @@ export default function GanttPage() {
     // Canonical unit order — MUST match the server sort (timeline-native):
     // category order, then numeric unitName. A reassign settles the moved
     // vehicle into its sorted spot — no positional row swap.
-    const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'studio', 'stakebed', 'general']
+    //
+    // `studio` sorts LAST (2026-08-24) so the Stages & Studios section is
+    // contiguous: before this, restroom trailers (category "2 Unit
+    // Restroom Trailer" → the `general` key) sorted after studios and
+    // produced a second "Vehicles" heading below the stages.
+    const catOrder = ['cube', 'cargo', 'pass', 'pop', 'cam', 'dlux', 'scout', 'stakebed', 'general', 'studio']
     const canonicalCmp = (a: any, b: any) => {
       const ca = catOrder.indexOf(a.cat)
       const cb = catOrder.indexOf(b.cat)
@@ -1862,6 +1868,15 @@ export default function GanttPage() {
                     ))}
                   </div>
                 )}
+                {/* Stage areas (Wes 2026-08-24) — rooms and lots this stage
+                    rental occupies. Areas don't consume capacity; STAGES
+                    holds only. */}
+                {selected.cat === 'studio' && (selected.bookingItemId ?? selected.reservationId) && (
+                  <StageAreasPicker
+                    bookingItemId={(selected.bookingItemId ?? selected.reservationId) as string}
+                    canEdit={canSetStatus}
+                  />
+                )}
                 <ReservationPaperwork ctx={resContext} loading={resContextLoading} jobId={selected?.jobId ?? null} />
                 <DriverCard checkout={resContext?.checkout} loading={resContextLoading} unitName={selected.unitName} assignmentId={selected.assignmentId} />
 
@@ -2042,6 +2057,15 @@ export default function GanttPage() {
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Stage areas (Wes 2026-08-24) — rooms and lots this stage
+                    rental occupies. Areas don't consume capacity; STAGES
+                    holds only. */}
+                {selected.cat === 'studio' && (selected.bookingItemId ?? selected.reservationId) && (
+                  <StageAreasPicker
+                    bookingItemId={(selected.bookingItemId ?? selected.reservationId) as string}
+                    canEdit={canSetStatus}
+                  />
+                )}
                 <ReservationPaperwork ctx={resContext} loading={resContextLoading} jobId={selected?.jobId ?? null} />
                 {/* Orders on the job — clickable, with the units they're
                     loaded onto. */}

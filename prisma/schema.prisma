@@ -1075,6 +1075,7 @@ model BookingItem {
 
   @@index([catalogItemId])
   @@map("booking_items")
+  stageAreas    BookingItemStageArea[]
 }
 
 enum AssignmentStatus {
@@ -5690,6 +5691,49 @@ model RwOrderRef {
 
   @@index([orderNumber])
   @@map("sr_rw_order_refs")
+}
+
+/// A bookable stage's INTERIOR AREAS — the rooms and lots that live inside
+/// a stage rental rather than being rented on their own (Wes 2026-08-24:
+/// "we will only have 3 options: Standing Sets, LED/Volume Stage and Black
+/// Box. The rest should be selectable as utilized areas under that rental";
+/// parking lots are "additional spaces that can be connected to a hold").
+///
+/// These were Assets until 2026-08-24 — one board row each, 14 rows for a
+/// studio that can really only be sold three ways. They carried ZERO
+/// BookingAssignments (verified before the move), so nothing was lost by
+/// retiring those Asset rows; the names live on here.
+///
+/// Areas do NOT consume capacity. Selecting six rooms on a Standing Sets
+/// hold still occupies exactly one stage.
+model StageArea {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  /// ROOM (interior set/office) or PARKING (exterior lot). Groups the picker.
+  kind      String   @default("ROOM")
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  bookingItems BookingItemStageArea[]
+
+  @@map("sr_stage_areas")
+}
+
+/// Which areas a given stage hold is using. Join is explicit so an area
+/// can later carry per-booking notes without a schema rewrite.
+model BookingItemStageArea {
+  id            String   @id @default(uuid())
+  bookingItemId String   @map("booking_item_id")
+  stageAreaId   String   @map("stage_area_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  bookingItem BookingItem @relation(fields: [bookingItemId], references: [id], onDelete: Cascade)
+  stageArea   StageArea   @relation(fields: [stageAreaId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingItemId, stageAreaId])
+  @@index([stageAreaId])
+  @@map("sr_booking_item_stage_areas")
 }
 
 model JobRwOrder {
