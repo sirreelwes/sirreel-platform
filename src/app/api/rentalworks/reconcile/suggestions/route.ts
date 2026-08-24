@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { getPermissions } from '@/lib/permissions'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { scoreOrderMatch, isSuggestable } from '@/lib/rentalworks/matchOrders'
 
@@ -22,6 +23,15 @@ const n = (v: unknown) => Number(v ?? 0)
 export async function GET(_req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true, salesOnly: true, email: true },
+  })
+  // Billing surface — same predicate as the nav group (salesOnly strip
+  // honored). See 2026-08-24 by-URL probe.
+  if (!actor || !getPermissions({ role: actor.role, salesOnly: actor.salesOnly, email: actor.email }).billing) {
+    return NextResponse.json({ error: 'forbidden', reason: 'reconcile is a billing surface' }, { status: 403 })
+  }
 
   const jobs = await prisma.job.findMany({
     where: {

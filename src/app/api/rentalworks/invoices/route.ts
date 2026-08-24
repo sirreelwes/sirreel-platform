@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { getPermissions } from '@/lib/permissions'
 import type { Prisma } from '@prisma/client'
 import { OPEN_WHERE, RW_VOID, RW_PAID, getHqPaidInvoiceIds } from '@/lib/rentalworks/arStatus'
 
@@ -21,6 +22,18 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true, salesOnly: true, email: true },
+  })
+  // Org-wide receivables are a BILLING surface (revenue totals, every
+  // client's balance). Same predicate as the nav group: getPermissions
+  // honors the salesOnly strip, so Jose/Oliver (sales-only agents) are
+  // out while Ana (BILLING) and admins are in. Found 2026-08-24 when a
+  // by-URL probe as a sales agent returned 44KB of revenue data.
+  if (!actor || !getPermissions({ role: actor.role, salesOnly: actor.salesOnly, email: actor.email }).billing) {
+    return NextResponse.json({ error: 'forbidden', reason: 'receivables is a billing surface' }, { status: 403 })
+  }
 
   const sp = req.nextUrl.searchParams
   const q = (sp.get('q') || '').trim()

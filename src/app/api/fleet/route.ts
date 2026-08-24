@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import type { AssetStatus } from '@prisma/client'
+import { getPermissions } from '@/lib/permissions'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
@@ -19,6 +20,16 @@ const TERMINAL_STATUSES: readonly AssetStatus[] = ['RETIRED', 'SOLD', 'STOLEN', 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const fleetActor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true, salesOnly: true, email: true },
+  })
+  // Fleet roster is an ops surface (unit statuses, maintenance flags) —
+  // same predicate as the nav's Fleet view. 2026-08-24: a by-URL probe
+  // as a sales agent returned the full 34KB roster on a session-only gate.
+  if (!fleetActor || !getPermissions({ role: fleetActor.role, salesOnly: fleetActor.salesOnly, email: fleetActor.email }).fleet) {
+    return NextResponse.json({ error: 'forbidden', reason: 'fleet roster is an ops surface' }, { status: 403 })
+  }
   try {
     const { searchParams } = new URL(req.url)
     const categoryId = searchParams.get('categoryId')

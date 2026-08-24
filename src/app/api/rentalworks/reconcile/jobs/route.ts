@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { getPermissions } from '@/lib/permissions'
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange'
 import type { Prisma } from '@prisma/client'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
@@ -25,6 +26,15 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true, salesOnly: true, email: true },
+  })
+  // Billing surface — same predicate as the nav group (salesOnly strip
+  // honored). See 2026-08-24 by-URL probe.
+  if (!actor || !getPermissions({ role: actor.role, salesOnly: actor.salesOnly, email: actor.email }).billing) {
+    return NextResponse.json({ error: 'forbidden', reason: 'reconcile is a billing surface' }, { status: 403 })
+  }
 
   const sp = req.nextUrl.searchParams
   const bucket = (sp.get('bucket') || 'ready').toLowerCase()
@@ -132,6 +142,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { role: true, salesOnly: true, email: true },
+  })
+  // Billing surface — same predicate as the nav group (salesOnly strip
+  // honored). See 2026-08-24 by-URL probe.
+  if (!actor || !getPermissions({ role: actor.role, salesOnly: actor.salesOnly, email: actor.email }).billing) {
+    return NextResponse.json({ error: 'forbidden', reason: 'reconcile is a billing surface' }, { status: 403 })
+  }
 
   const body = (await req.json().catch(() => ({}))) as { jobIds?: unknown; notApplicable?: unknown }
   const jobIds = Array.isArray(body.jobIds) ? body.jobIds.filter((x): x is string => typeof x === 'string') : []
