@@ -57,6 +57,7 @@ function mapCategoryName(name: string | null | undefined): string {
 // (this endpoint embeds the hex in its payload).
 import { CAT_COLORS } from '@/lib/scheduling/statusTokens'
 import { bookingInfoGaps, companyLabel } from '@/lib/scheduling/infoGaps'
+import { naSummary } from '@/lib/scheduling/naTitles'
 
 // Match the existing endpoint's lifecycle map: convert a SirReel
 // BookingStatus into the timeline-display token the gantt cares
@@ -574,7 +575,19 @@ export async function GET(req: NextRequest) {
   //    does NOT touch booking/assign availability. ──
   const naByAsset = new Map<
     string,
-    Array<{ recordId: string; start: string; end: string | null; kind: 'referral' | 'fleet'; title: string }>
+    Array<{
+      recordId: string
+      start: string
+      end: string | null
+      kind: 'referral' | 'fleet'
+      title: string
+      /** What's actually wrong, boilerplate stripped — the text the gantt
+       *  prints on the grey bar. Null when the record says nothing beyond
+       *  the boilerplate (pre-symptom-prompt records). */
+      summary: string | null
+      /** Full stored description, for the bar's hover tooltip. */
+      description: string | null
+    }>
   >()
   const naMaint = await prisma.maintenanceRecord.findMany({
     where: {
@@ -587,6 +600,9 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       title: true,
+      // The symptom lives here — the maintenance route stores it as
+      // "<boilerplate> — <what's wrong>" (see naSummary).
+      description: true,
       startDate: true,
       endDate: true,
       asset: { select: { id: true, unitName: true, categoryId: true, tier: true, category: { select: { name: true } } } },
@@ -597,7 +613,15 @@ export async function GET(req: NextRequest) {
     if (!m.asset) continue
     const kind: 'referral' | 'fleet' = /referral|pending fleet review/i.test(m.title) ? 'referral' : 'fleet'
     const arr = naByAsset.get(m.asset.id) ?? []
-    arr.push({ recordId: m.id, start: ymd(m.startDate), end: m.endDate ? ymd(m.endDate) : null, kind, title: m.title })
+    arr.push({
+      recordId: m.id,
+      start: ymd(m.startDate),
+      end: m.endDate ? ymd(m.endDate) : null,
+      kind,
+      title: m.title,
+      summary: naSummary(m.title, m.description),
+      description: m.description ?? null,
+    })
     naByAsset.set(m.asset.id, arr)
     // Surface a booking-less out-of-service unit as its own row (only
     // relevant for units outside the roster — roster rows already exist).

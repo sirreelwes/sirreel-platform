@@ -269,20 +269,32 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
         {grid}
         {/* Unit N/A — open maintenance windows (grey, informational,
             click-through so the +Hold row gesture still works). Drawn
-            before bookings so a real booking bar sits on top. */}
+            before bookings so a real booking bar sits on top.
+
+            The bar prints WHAT'S WRONG when the record says (Wes,
+            2026-08-24) — "N/A · driver-side mirror cracked" rather than a
+            generic "out of service" that sent fleet hunting for whoever
+            greyed the truck. Referral-vs-fleet is still readable off the
+            dashed amber border and the N/A? chip in the label column, so
+            the symptom gets the scarce horizontal space. Records with
+            nothing beyond boilerplate keep the old wording. */}
         {(entry.unit.naWindows || []).map((w: any, k: number) => {
           const bar = computeBar(w.start, w.end || lastRenderedDate, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
           const referral = w.kind === 'referral'
+          const summary: string | null = w.summary || null
+          const window = w.end ? `(${w.start} – ${w.end})` : `(from ${w.start})`
           return (
             <div
               key={`na-${k}`}
               className={`absolute top-1 h-6 rounded-md ${UNIT_NA_COLOR.bg} border ${referral ? 'border-dashed border-amber-400' : UNIT_NA_COLOR.border} flex items-center px-1.5 overflow-hidden pointer-events-none opacity-90`}
               style={{ left: bar.left, width: bar.width }}
-              title={`${w.title || 'Unit N/A'}${w.end ? ` (${w.start} – ${w.end})` : ` (from ${w.start})`}`}
+              // Tooltip keeps the FULL story the truncated bar can't: the
+              // record title, the untrimmed description, and the window.
+              title={[w.title || 'Unit N/A', w.description || null, window].filter(Boolean).join('\n')}
             >
               <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
-                N/A · {referral ? 'pending review' : 'out of service'}
+                N/A · {summary ?? (referral ? 'pending review' : 'out of service')}
               </span>
             </div>
           )
@@ -1504,7 +1516,16 @@ export default function GanttPage() {
                         return (
                           <div className="ml-auto flex items-center gap-1">
                             {isNa && (
-                              <span className={`text-[8px] font-bold px-1 rounded ${referralPending ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-600'}`}>
+                              <span
+                                className={`text-[8px] font-bold px-1 rounded ${referralPending ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-600'}`}
+                                // The grey bar carries the symptom too, but it
+                                // scrolls out of view with the timeline — this
+                                // chip doesn't.
+                                title={
+                                  na.map((w) => w.summary).filter(Boolean).join(' · ') ||
+                                  (referralPending ? 'Referred to maintenance — pending fleet review' : 'Out of service')
+                                }
+                              >
                                 {referralPending ? 'N/A?' : 'N/A'}
                               </span>
                             )}

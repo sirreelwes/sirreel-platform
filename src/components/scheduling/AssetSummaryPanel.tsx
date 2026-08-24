@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { TIER_COLORS, TIER_LABELS, TIER_ORDER } from '@/lib/scheduling/statusTokens'
+import { naSummary } from '@/lib/scheduling/naTitles'
 
 // Derived from the shared tokens — same dot colors as the gantt legend.
 const TIERS = TIER_ORDER.map((value) => ({ value, label: TIER_LABELS[value], color: TIER_COLORS[value] }))
@@ -120,6 +121,12 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-[11px] text-gray-900 truncate">{m.title}</div>
+        {/* What's actually wrong, boilerplate stripped — same text the
+            gantt's grey N/A bar shows. Suppressed when it would just
+            repeat the title (real maintenance-module records). */}
+        {naSummary(m.title, m.description) && naSummary(m.title, m.description) !== m.title && (
+          <div className="text-[10px] text-gray-600">{naSummary(m.title, m.description)}</div>
+        )}
         <div className="text-[9px] text-gray-400">
           {String(m.type).toLowerCase()} · {fDate(m.startDate)}{m.endDate ? ` – ${fDate(m.endDate)}` : ' – open'}
           {m.vendor ? ` · ${m.vendor}` : ''}{fCost(m) ? ` · ${fCost(m)}` : ''}

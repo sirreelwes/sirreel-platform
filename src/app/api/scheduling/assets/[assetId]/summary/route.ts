@@ -52,6 +52,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
           id: true,
           type: true,
           title: true,
+          // Carries the symptom on gantt-greyed records ("<boilerplate> —
+          // driver-side mirror cracked"); the panel prints it under the
+          // title so the drill-down says the same thing as the bar.
+          description: true,
           status: true,
           startDate: true,
           endDate: true,
