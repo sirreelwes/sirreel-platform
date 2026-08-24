@@ -12,6 +12,7 @@ import { AssetSummaryPanel } from '@/components/scheduling/AssetSummaryPanel';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 import { getPermissions } from '@/lib/permissions';
+import { readViewAsCookie } from '@/lib/auth/viewAs';
 import {
   barColor,
   CAT_LABELS,
@@ -339,7 +340,11 @@ export default function GanttPage() {
   // so a user without assign rights makes a general hold instead of orphaning
   // on a 403. Drives the bar drag-reassign + "Assign / change units".
   const { data: session } = useSession()
-  const sessionRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
+  const realRole = (session?.user as { role?: UserRole } | undefined)?.role ?? null
+  // Admin "View As": the board's controls render as the previewed role
+  // (downgrade-only; the server applies the same rule to its payloads).
+  const viewAs = typeof window !== 'undefined' && realRole === 'ADMIN' ? readViewAsCookie() : null
+  const sessionRole = (viewAs as UserRole | null) ?? realRole
   const canBindUnit = sessionRole ? getPermissions(sessionRole).canCreateBooking : false
   // FLEET capability (canAssignAssets) — N/A mark/clear, condition tier, asset
   // notes (AssetSummaryPanel edit). Split off canBindUnit in the re-split.

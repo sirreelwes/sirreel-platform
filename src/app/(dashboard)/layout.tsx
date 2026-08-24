@@ -6,6 +6,7 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import { getPermissions, getNavSections, isSalesRole, isFleetYardRole } from '@/lib/permissions';
+import { readViewAsCookie, writeViewAsCookie } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 import { NewJobLauncher } from '@/components/jobs/NewJobLauncher';
@@ -50,7 +51,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('viewAsRole');
+      // Heal the legacy localStorage override (banned by CLAUDE.md, and
+      // it once left Wes silently browsing as Billing for days). One-way:
+      // read nothing from it, just delete it.
+      try { localStorage.removeItem('viewAsRole'); } catch { /* ignore */ }
+      const saved = readViewAsCookie();
       if (saved) setViewAsRole(saved as UserRole);
     }
   }, []);
@@ -248,11 +253,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       value={viewAsRole || ''}
                       onChange={(e) => {
                         const val = e.target.value as UserRole | '';
-                        if (val) {
-                          localStorage.setItem('viewAsRole', val);
-                        } else {
-                          localStorage.removeItem('viewAsRole');
-                        }
+                        writeViewAsCookie(val || null);
+                        // Full reload on purpose: pages and API responses
+                        // read the cookie at request time, so this flips
+                        // nav, page controls, AND server-redacted data in
+                        // one motion — "exactly what they see".
                         window.location.reload();
                       }}
                       className="w-full px-2 py-1 text-[11px] border border-amber-300 rounded bg-white"
@@ -261,8 +266,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <option value="MANAGER">Manager</option>
                       <option value="AGENT">Sales Agent</option>
                       <option value="BILLING">Billing</option>
-                      <option value="DISPATCHER">Deliveries &amp; Pickups</option>
                       <option value="FLEET_TECH">Fleet Tech</option>
+                      <option value="WAREHOUSE">Warehouse</option>
                       <option value="DRIVER">Driver</option>
                       <option value="CLIENT">Client</option>
                     </select>
@@ -299,7 +304,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Content + AI */}
         <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-4">{children}</main>
+          <main className="flex-1 overflow-y-auto p-4">
+            {/* Unmissable while previewing another role — the old tiny
+                footer label let an override go unnoticed for days. */}
+            {actualRole === 'ADMIN' && viewAsRole && (
+              <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2">
+                <span className="text-[12px] font-bold text-amber-900">
+                  Previewing as {ROLE_LABELS[viewAsRole] || viewAsRole}
+                </span>
+                <span className="text-[11px] text-amber-800">
+                  Nav, pages, and data render as that role sees them. Clears when you close the browser.
+                </span>
+                <button
+                  onClick={() => {
+                    writeViewAsCookie(null);
+                    window.location.reload();
+                  }}
+                  className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-500 text-white"
+                >
+                  Back to Admin
+                </button>
+              </div>
+            )}
+            {children}
+          </main>
           {aiOpen && perms.ai && (
             <AIChat role={role} userName={user.name} onClose={() => setAiOpen(false)} />
           )}

@@ -22,6 +22,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { getPermissions } from '@/lib/permissions'
+import { effectiveViewRole } from '@/lib/auth/viewAs'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,7 +102,9 @@ export async function GET(req: NextRequest) {
   const actor = session?.user?.email
     ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { role: true } })
     : null
-  const showClientContacts = actor ? getPermissions(actor.role).seeClientNames : false
+  // Admin "View As" preview downgrades the rendered view (never a
+  // non-admin upgrade) so the board shows exactly what that role gets.
+  const showClientContacts = actor ? getPermissions(effectiveViewRole(actor.role, req)).seeClientNames : false
 
   // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD. The /gantt page passes
   // these when the operator pans the window past the default; the

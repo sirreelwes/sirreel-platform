@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { getPermissions } from '@/lib/permissions'
+import { effectiveViewRole } from '@/lib/auth/viewAs'
 
 export const dynamic = 'force-dynamic'
 
@@ -177,7 +178,7 @@ export async function GET(req: NextRequest) {
   const actor = session?.user?.email
     ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { role: true } })
     : null
-  const showPricing = actor ? getPermissions(actor.role).seePricing : false
+  const showPricing = actor ? getPermissions(effectiveViewRole(actor.role, req)).seePricing : false
 
   return NextResponse.json({
     ok: true,
