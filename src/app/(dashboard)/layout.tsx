@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
-import { getPermissions, getNavSections, isSalesRole, isFleetYardRole } from '@/lib/permissions';
+import { getPermissions, getNavSections, isSalesRole, isFleetYardRole, isBillingRole } from '@/lib/permissions';
 import { readViewAsCookie, writeViewAsCookie } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
@@ -142,6 +142,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // /fleet/today on any viewport. Respects the admin view-as toggle.
   if (typeof window !== 'undefined' && isFleetYardRole(role) && pathname === '/dashboard') {
     router.replace('/fleet/today');
+  }
+
+  // Billing (Ana) works from the collections workspace; Dashboard isn't
+  // in her nav either, so bounce the same way. Respects view-as.
+  if (typeof window !== 'undefined' && isBillingRole(role) && pathname === '/dashboard') {
+    router.replace('/collections');
   }
 
   const initials = user.name
