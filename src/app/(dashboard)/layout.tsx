@@ -266,16 +266,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         // one motion — "exactly what they see".
                         window.location.reload();
                       }}
-                      className="w-full px-2 py-1 text-[11px] border border-amber-300 rounded bg-white"
+                      // bg-white with no text colour inherited the menu's muted
+                      // grey, so the current selection read as light-on-white.
+                      // Both the control and the options are pinned explicitly.
+                      className="w-full px-2 py-1 text-[11px] border border-amber-300 rounded bg-white text-gray-900"
                     >
-                      <option value="">Admin (default)</option>
-                      <option value="MANAGER">Manager</option>
-                      <option value="AGENT">Sales Agent</option>
-                      <option value="BILLING">Billing</option>
-                      <option value="FLEET_TECH">Fleet Tech</option>
-                      <option value="WAREHOUSE">Warehouse</option>
-                      <option value="DRIVER">Driver</option>
-                      <option value="CLIENT">Client</option>
+                      <option value="" className="text-gray-900">Admin (default)</option>
+                      <option value="MANAGER" className="text-gray-900">Manager</option>
+                      <option value="AGENT" className="text-gray-900">Sales Agent</option>
+                      <option value="BILLING" className="text-gray-900">Billing</option>
+                      <option value="FLEET_TECH" className="text-gray-900">Fleet Tech</option>
+                      <option value="WAREHOUSE" className="text-gray-900">Warehouse</option>
+                      <option value="DRIVER" className="text-gray-900">Driver</option>
+                      <option value="CLIENT" className="text-gray-900">Client</option>
                     </select>
                   </div>
                 )}
