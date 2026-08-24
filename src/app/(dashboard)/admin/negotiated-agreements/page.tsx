@@ -70,7 +70,7 @@ export default function NegotiatedAgreementsRegistryPage() {
           href="/admin/paperwork"
           className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block"
         >
-          ← Paperwork tools
+          ← Paperwork
         </Link>
         <header className="flex items-end justify-between gap-3 flex-wrap mb-6">
           <div>

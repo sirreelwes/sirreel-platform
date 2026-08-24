@@ -449,7 +449,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // invoice, and Paperwork tools covers the COI / contract-review
           // side of chasing a job's documents.
           { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
-          { id: 'paperwork', label: 'Paperwork tools', icon: 'FileSignature', href: '/admin/paperwork' },
+          { id: 'paperwork', label: 'Paperwork', icon: 'FileSignature', href: '/admin/paperwork' },
         ],
       },
     ];
@@ -510,7 +510,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
-        { id: 'paperwork', label: 'Paperwork tools', icon: 'FileSignature', href: '/admin/paperwork' },
+        { id: 'paperwork', label: 'Paperwork', icon: 'FileSignature', href: '/admin/paperwork' },
       ],
     },
     {
