@@ -28,7 +28,6 @@ import { NewInboundColumn } from '@/components/sales/NewInboundColumn';
 import { QuotesOutPanel } from '@/components/sales/QuotesOutPanel';
 import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget';
 import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip';
-import { NewInquiryModal } from '@/components/sales/NewInquiryModal';
 import { CopyIntakeLinkButton } from '@/components/intake/CopyIntakeLinkButton';
 
 export default function InquiriesPage() {
@@ -37,7 +36,6 @@ export default function InquiriesPage() {
 
   // AGENT defaults to My Deals; everyone else to Team.
   const [scope, setScope] = useState<'my' | 'team'>('team');
-  const [showNewInquiry, setShowNewInquiry] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -62,13 +60,12 @@ export default function InquiriesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* "+ Inquiry" removed (Wes 2026-08-24): 6 manual inquiries ever,
+              4 of them tests, all dismissed, zero converted. The queue's real
+              intake is automatic (Gmail + web forms); creation is "+ New Job"
+              in the global header — one button, lands on the job. A phone
+              lead worth tracking goes through the intake link instead. */}
           <CopyIntakeLinkButton />
-          <button
-            onClick={() => setShowNewInquiry(true)}
-            className="text-[12px] font-bold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white"
-          >
-            + Inquiry
-          </button>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[12px] font-semibold">
             <button
               onClick={() => setScope('my')}
@@ -107,16 +104,6 @@ export default function InquiriesPage() {
       {/* Signals — stale quotes / pending COIs / dormant clients */}
       <SalesSignalsStrip scope={scope} onChange={refreshAll} />
 
-      {showNewInquiry && (
-        <NewInquiryModal
-          open={showNewInquiry}
-          onClose={() => setShowNewInquiry(false)}
-          onCreated={() => {
-            setShowNewInquiry(false);
-            refreshAll();
-          }}
-        />
-      )}
     </div>
   );
 }

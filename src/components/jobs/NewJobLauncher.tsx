@@ -73,14 +73,12 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
   }
 
   const onResolved = (job: ResolvedJob) => {
-    setConfirmation(
-      job.created
-        ? `Created ${job.jobCode} — ${job.name}`
-        : `Added to existing ${job.jobCode} — ${job.name}`,
-    )
+    // Land ON the job (Wes 2026-08-24): this is the one creation button,
+    // and the old toast-and-refresh left you hunting the /jobs board for
+    // the thing you just made. Created or matched, the destination is
+    // the same — the Job page is home base.
     reset()
-    router.refresh()
-    setTimeout(() => setConfirmation(null), 6000)
+    router.push(`/jobs/${job.id}`)
   }
 
   const typed = company.trim()
