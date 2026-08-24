@@ -2,6 +2,14 @@
  * The walkie kit — what goes out with every radio order whether or not the
  * client thought to ask for it.
  *
+ * SUPERSEDED (2026-08-24) by InventoryKitPiece + src/lib/inventory/kitPieces.ts,
+ * which holds the same idea as per-item data and emits lines linked to real
+ * catalog rows. This module is now the FALLBACK for the one case that
+ * replacement can't serve: a quote where nothing matched the catalog, so
+ * there is no parent row to hang a kit off. Its lines stay text-only —
+ * nothing to scan, nothing to count back in. Don't add items here; add a
+ * kit piece in the inventory drawer.
+ *
  * Radios are useless on day two without power, so SirReel has always sent
  * charging banks and spare batteries alongside them, at no charge. That was
  * knowledge living in Hugo's and Julian's heads: nothing in a parsed quote

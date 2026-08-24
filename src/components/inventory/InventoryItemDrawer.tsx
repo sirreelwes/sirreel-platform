@@ -15,6 +15,7 @@
  *   - Restore   → PUT  /api/inventory/items/[id]  { isActive:true }
  *   - Delete    → DELETE /api/inventory/items/[id]  (zero-ref only)
  *   - Photo     → POST/DELETE /api/inventory/items/[id]/image
+ *   - Kit       → PUT  /api/inventory/items/[id]/kit-pieces (on Save)
  *
  * Price contract: InventoryItem is the live catalog; existing
  * OrderLineItems snapshot their own rate and are NOT touched. A MANUAL
@@ -23,6 +24,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { uploadInventoryItemImage, ACCEPT_IMAGE, MAX_IMAGE_BYTES } from '@/lib/inventory/resizeImage'
+import { KitPiecesEditor, type KitPiecesHandle } from './KitPiecesEditor'
 
 export interface DrawerItem {
   id: string
@@ -86,8 +88,10 @@ export function InventoryItemDrawer({
   // Delete flow: confirmText must equal DELETE to enable; refs holds the
   // server's reference count once checked.
   const [confirmText, setConfirmText] = useState('')
-  const [refs, setRefs] = useState<{ total: number; orderLineItems: number; packageItems: number; subRentals: number } | null>(null)
+  const [refs, setRefs] = useState<{ total: number; orderLineItems: number; packageItems: number; subRentals: number; kitPieces?: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Included accessories own their own state; Save commits both.
+  const kitRef = useRef<KitPiecesHandle>(null)
 
   const archived = !!item && item.isActive === false
 
@@ -156,6 +160,11 @@ export function InventoryItemDrawer({
         vendorItemUrl: vendorItemUrl.trim() || null,
         aliases: aliasesInput.split(',').map((s) => s.trim()).filter(Boolean),
       })
+      // After the item, so a kit that references a field the item edit
+      // just changed can't land against a stale row. A kit failure
+      // surfaces as an error with the item change already committed —
+      // the two are independent writes, not a transaction.
+      await kitRef.current?.save()
       onSaved()
       onClose()
     } catch (err) {
@@ -410,6 +419,11 @@ export function InventoryItemDrawer({
               )}
             </div>
           </div>
+
+          {/* Included accessories */}
+          {!archived && (
+            <KitPiecesEditor ref={kitRef} itemId={item.id} itemName={description || item.code} />
+          )}
 
           {/* Actions */}
           <div className="border-t border-lt-hairline pt-4 flex items-center gap-2">

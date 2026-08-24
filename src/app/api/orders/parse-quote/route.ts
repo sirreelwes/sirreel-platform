@@ -16,6 +16,7 @@ import {
 } from '@/lib/sales/catalogMatcher'
 import { BILLING_RULES, computeBillableDays } from '@/lib/orders/billing'
 import { deriveWalkieKit } from '@/lib/sales/walkieKit'
+import { deriveKitPieceLines } from '@/lib/inventory/kitPieces'
 import { PARSING_MODEL } from '@/lib/ai/models'
 import { parseAiJson, AiJsonError } from '@/lib/ai/extractJson'
 
@@ -337,29 +338,89 @@ interface ResolvedItem {
 }
 
 /**
- * Radios don't leave the building without charging banks and spare
- * batteries. The client rarely lists them; the warehouse needs them on the
- * pick list either way. Quantities are ratios off the radio count, so this
- * is arithmetic the server does — not something the model should estimate.
+ * Accessories that ride along with what was ordered — charging banks
+ * and spare batteries with radios, and whatever else the catalog says.
  *
- * The lines are quoted at $0 (included, not charged) and carry a warning so
- * the rep can see they were added and why.
+ * The ratios are per-item data now (InventoryKitPiece), not code: an
+ * operator sets them in the inventory drawer. Quantities are still
+ * arithmetic the SERVER does off the resolved line quantities — never
+ * something the model estimates.
+ *
+ * Kit lines carry the accessory's real catalog id, so downstream they
+ * are ordinary inventory lines: scannable on the pick list, countable
+ * on the way out, chargeable if one doesn't come back. They quote at $0
+ * (the FREE default) and carry a warning so the rep can see they were
+ * added and why.
+ *
+ * Legacy fallback: a radio line the catalog didn't claim (unmatched, or
+ * matched to an item with no kit configured yet) has no parent row to
+ * hang a kit off. The old text-heuristic walkie kit still covers that
+ * case — a short pick list is worse than an unlinked line — and drops
+ * whichever accessory the catalog already supplied, so configuring the
+ * CP200 kit doesn't put two chargers on the quote.
  */
-function appendWalkieKit(items: ResolvedItem[]): ResolvedItem[] {
-  const kit = deriveWalkieKit(
+async function appendKitPieces(items: ResolvedItem[]): Promise<ResolvedItem[]> {
+  const kit = await deriveKitPieceLines(
+    items.map((i) => ({
+      inventoryItemId: i.catalogType === 'INVENTORY' ? i.catalogProductId : null,
+      quantity: i.quantity,
+    })),
+  )
+
+  // Ride along with the parent's dates so the kit can't outlast the gear.
+  const anchorFor = (k: (typeof kit)[number]) =>
+    items.find((i) => i.catalogProductId && k.parentItemIds.includes(i.catalogProductId)) ??
+    items[0]
+
+  const kitLines: ResolvedItem[] = kit.map((k) => {
+    const anchor = anchorFor(k)
+    return {
+      description: k.description,
+      quantity: k.quantity,
+      catalogProductId: k.pieceItemId,
+      catalogType: 'INVENTORY' as CatalogType,
+      department: k.department,
+      qualifier: null,
+      rateType: anchor.rateType,
+      pickupDate: anchor.pickupDate,
+      returnDate: anchor.returnDate,
+      billableDays: anchor.billableDays,
+      rate: k.rate,
+      matchedProduct: {
+        id: k.pieceItemId,
+        type: 'INVENTORY' as CatalogType,
+        name: k.description,
+        lineType: k.lineType,
+      },
+      matchSource: 'AUTO_KIT' as const,
+      warnings: [k.note],
+    }
+  })
+
+  // Legacy fallback for radios the catalog didn't claim — either the
+  // line never matched, or the matched radio has no kit configured yet.
+  // Dropped per accessory when the catalog already produced that kind of
+  // piece, so configuring the kit doesn't double the charger.
+  const legacy = deriveWalkieKit(
     items.map((i) => ({
       description: i.description,
       quantity: i.quantity,
       matchedProductName: i.matchedProduct?.name ?? null,
     }))
-  )
-  if (kit.length === 0) return items
+  ).filter((l) => {
+    const kind = /charg/i.test(l.description) ? /charg/i
+      : /batter/i.test(l.description) ? /batter/i
+      : null
+    return kind ? !kit.some((k) => kind.test(k.description)) : true
+  })
 
-  // Ride along with the radio line's dates so the kit can't outlast the gear.
+  if (kitLines.length === 0 && legacy.length === 0) return items
+
   const radioLine = items.find((i) => i.department === 'COMMUNICATIONS') ?? items[0]
   return [
     ...items,
-    ...kit.map((k) => ({
+    ...kitLines,
+    ...legacy.map((k) => ({
       description: k.description,
       quantity: k.quantity,
       catalogProductId: null,
@@ -688,7 +749,7 @@ export async function POST(req: NextRequest) {
         resolveItem(it, { startDate: parsed.startDate, endDate: parsed.endDate })
       )
     )
-    const items = appendWalkieKit(resolved)
+    const items = await appendKitPieces(resolved)
 
     // Contacts: dedupe + filter at the gateway, then enrich with Person
     // table match status. The AI is asked to filter @sirreel/noreply too

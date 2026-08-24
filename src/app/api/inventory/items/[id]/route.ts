@@ -169,7 +169,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 /**
  * DELETE — guarded permanent delete. Only allowed when the item is
- * referenced by ZERO order line items / package items / sub-rentals;
+ * referenced by ZERO order line items / package items / sub-rentals /
+ * kits that include it as an accessory;
  * otherwise the caller must archive instead (we return 409 with the
  * counts). RateChangeLog cascades, so it isn't counted as a blocker.
  */
@@ -180,17 +181,20 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   }
   const { id } = await params;
 
-  const [orderLineItems, packageItems, subRentals] = await Promise.all([
+  const [orderLineItems, packageItems, subRentals, kitPieces] = await Promise.all([
     prisma.orderLineItem.count({ where: { inventoryItemId: id } }),
     prisma.packageItem.count({ where: { inventoryItemId: id } }),
     prisma.subRental.count({ where: { inventoryItemId: id } }),
+    // This item is an accessory in someone else's kit — the FK is
+    // Restrict, so archive is the only honest answer.
+    prisma.inventoryKitPiece.count({ where: { pieceItemId: id } }),
   ]);
-  const total = orderLineItems + packageItems + subRentals;
+  const total = orderLineItems + packageItems + subRentals + kitPieces;
   if (total > 0) {
     return NextResponse.json(
       {
         error: "referenced",
-        references: { orderLineItems, packageItems, subRentals, total },
+        references: { orderLineItems, packageItems, subRentals, kitPieces, total },
       },
       { status: 409 },
     );
