@@ -1244,7 +1244,26 @@ export default function GanttPage() {
       entries.push({ type: 'taskBand', tasks: stacked, bandHeight: maxStack * TASK_SLOT + 6 })
     }
 
+    // Section dividers between departments (Wes 2026-08-24). The board
+    // is one long unit list; vehicles and stages are different worlds
+    // and read as one undifferentiated wall without a break. `studio` is
+    // the stage short-key from CAT_COLORS/statusTokens; anything after
+    // the vehicle keys gets its own heading. The divider row type and
+    // its renderer already existed but nothing had ever pushed one.
+    const SECTION_OF = (cat: string): string =>
+      cat === 'studio' ? 'Stages & Studios' : 'Vehicles'
+    let currentSection: string | null = null
+
     for (const u of sorted) {
+      const section = SECTION_OF(u.cat)
+      if (section !== currentSection) {
+        // Skip the leading divider only when the list starts with
+        // vehicles — a stage-filtered view should still say so.
+        if (currentSection !== null || section !== 'Vehicles') {
+          entries.push({ type: 'divider', label: section })
+        }
+        currentSection = section
+      }
       const split = splitBookings(u)
       // Overlapping bookings stack into sub-lanes (each bar gets a `lane`
       // index); the row and its label cell grow to laneRowHeight(count).
