@@ -28,13 +28,24 @@ export async function GET(req: NextRequest) {
   // spec). Role filter is intentionally NOT included in the stats
   // clause — narrowing stats by the active role would zero every other
   // chip and defeat the point of showing the chip strip.
+  // Multi-word queries are matched TOKEN BY TOKEN, each token having to
+  // appear in one of the three fields. Matching the raw string against a
+  // single column meant a properly-split contact could never be found by
+  // their full name: "ian menzies" returned ZERO, because no one field
+  // contains that string — firstName is "Ian", lastName is "Menzies".
+  // (It only appeared to work for the many legacy rows that cram a whole
+  // name into firstName with lastName ".".)
+  const searchTokens = search.trim().split(/\s+/).filter(Boolean);
+  const tokenClause = (t: string) => ({
+    OR: [
+      { firstName: { contains: t, mode: "insensitive" as const } },
+      { lastName: { contains: t, mode: "insensitive" as const } },
+      { email: { contains: t, mode: "insensitive" as const } },
+    ],
+  });
   const searchClause: Record<string, unknown> = {};
-  if (search) {
-    searchClause.OR = [
-      { firstName: { contains: search, mode: "insensitive" } },
-      { lastName: { contains: search, mode: "insensitive" } },
-      { email: { contains: search, mode: "insensitive" } },
-    ];
+  if (searchTokens.length) {
+    searchClause.AND = searchTokens.map(tokenClause);
   }
   // "Internal staff" exclusion for the COUNT only — the spec calls
   // this out as a counting rule, not a visibility rule, so the list
@@ -87,7 +98,10 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { totalSpend: "desc" },
-    take: 100,
+    // While searching, over-fetch and rank below: token matching widens
+    // the net ("ian m" matches anything with "ian" AND an "m"), and a
+    // spend-ordered cap of 100 would bury or drop the exact person typed.
+    take: searchTokens.length ? 400 : 100,
   });
 
   // Collect distinct companyIds across all current affiliations of
@@ -182,6 +196,38 @@ export async function GET(req: NextRequest) {
       primaryCompanyBadgeFacts: primary ? badgeFacts.get(primary.id) ?? null : null,
     };
   });
+
+  // ── Relevance ranking (search only) ──────────────────────────────
+  // Token matching is deliberately generous, so order it so the person
+  // actually typed is first. Without this, "ian menzies" could match and
+  // still be invisible: the list is spend-ordered and nearly every
+  // contact is $0, making position effectively random.
+  if (searchTokens.length) {
+    const q = search.trim().toLowerCase();
+    const score = (p: { firstName?: string | null; lastName?: string | null; email?: string | null }) => {
+      const first = (p.firstName ?? '').toLowerCase();
+      const last = (p.lastName ?? '').toLowerCase();
+      const email = (p.email ?? '').toLowerCase();
+      // Legacy rows keep the whole name in firstName with lastName "."
+      // — strip that so a full-name query scores the same either way.
+      const full = `${first} ${last === '.' ? '' : last}`.trim();
+      if (full === q) return 0;                       // exact person
+      if (full.startsWith(q)) return 1;               // "ian men" → Ian Menzies
+      if (first.startsWith(q) || last.startsWith(q)) return 2;
+      if (email.startsWith(q)) return 3;
+      if (full.includes(q)) return 4;
+      return 5;                                       // token-only match
+    };
+    enriched.sort((a, b) => {
+      const d = score(a) - score(b);
+      if (d !== 0) return d;
+      // Within a tier keep the previous behaviour: bigger clients first.
+      const spend = Number(b.totalSpend ?? 0) - Number(a.totalSpend ?? 0);
+      if (spend !== 0) return spend;
+      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+    });
+    return NextResponse.json({ people: enriched.slice(0, 100), roleStats });
+  }
 
   return NextResponse.json({ people: enriched, roleStats });
 }
