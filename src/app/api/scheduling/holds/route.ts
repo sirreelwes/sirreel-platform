@@ -26,6 +26,7 @@ import { prisma } from '@/lib/prisma'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import { getServerSession } from 'next-auth'
 import { can } from '@/lib/permissions'
+import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,12 +35,17 @@ interface HoldBody {
   startDate?: string // YYYY-MM-DD
   endDate?: string // YYYY-MM-DD
   quantity?: number
+  /** OPTIONAL since 2026-08-24 (call-in intake) — a client can phone in
+   *  a reservation before the production company is known. Omit it and
+   *  the Booking is created with companyId NULL and flagged incomplete
+   *  (see src/lib/scheduling/infoGaps.ts). */
   companyId?: string
   personId?: string
   agentId?: string
-  /** The Job this Booking lives in — REQUIRED (Job-as-root). Every
-   *  caller resolves the Job through the resolver BEFORE creating the
-   *  hold; this route creates no Jobs. */
+  /** The Job this Booking lives in. Normally resolved through the
+   *  JobResolverModal BEFORE the hold — this route still creates no
+   *  Jobs. OPTIONAL since 2026-08-24 for the same call-in reason; when
+   *  omitted the Booking gets jobName '' and an open "Job name" gap. */
   jobId?: string
   /** Legacy display name — still accepted in the payload but ignored:
    *  Booking.jobName is always derived from the resolved Job. */
@@ -56,6 +62,9 @@ interface HoldBody {
    *  in the window) + 1. */
   holdRank?: number
   isBackup?: boolean
+  /** Call-in intake: the agent expects an Order to be attached later.
+   *  Keeps the incomplete-info triangle up until one exists. */
+  expectsOrder?: boolean
 }
 
 function parseDate(s: string | undefined | null): Date | null {
@@ -104,21 +113,18 @@ export async function POST(req: NextRequest) {
   if (!start || !end) return NextResponse.json({ error: 'startDate and endDate (YYYY-MM-DD) required' }, { status: 400 })
   if (end < start) return NextResponse.json({ error: 'endDate must be >= startDate' }, { status: 400 })
   if (qty <= 0) return NextResponse.json({ error: 'quantity must be >= 1' }, { status: 400 })
-  if (!body.companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 })
   if (!body.personId) return NextResponse.json({ error: 'personId required' }, { status: 400 })
 
-  // Job linkage (Job-as-root). Every hold lives inside an EXISTING Job
-  // — every caller (gantt +Hold, Quick Reply) resolves the Job through
-  // the JobResolverModal BEFORE creating the hold. The inline
-  // newJobName creation and the bare-jobName tolerance are both CLOSED
-  // (step 3 closed jobName-only; step 4 closed newJobName once Quick
-  // Reply converted). This route creates no Jobs, ever.
-  if (!body.jobId) {
-    return NextResponse.json(
-      { error: 'jobId required — resolve the Job (resolver modal) before creating a hold' },
-      { status: 400 },
-    )
-  }
+  // Job linkage (Job-as-root). A hold normally lives inside an EXISTING
+  // Job, resolved through the JobResolverModal BEFORE the hold is
+  // created. This route creates no Jobs, ever — the inline newJobName
+  // path stays closed.
+  //
+  // Call-in exception (Wes, 2026-08-24): a phoned-in reservation may have
+  // neither company nor job yet. Rather than lose the booking, the hold
+  // is created INCOMPLETE (companyId NULL, jobName '') and carries its
+  // own to-do list — see src/lib/scheduling/infoGaps.ts. You cannot,
+  // however, have a Job without its company: a jobId always implies one.
   if (typeof body === 'object' && body !== null && 'newJobName' in body && (body as Record<string, unknown>).newJobName) {
     return NextResponse.json(
       { error: 'inline job creation was removed — resolve the Job via the resolver, then pass jobId' },
@@ -227,26 +233,37 @@ export async function POST(req: NextRequest) {
     const bookingNumber = await nextBookingNumber(year)
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Resolve the (existing) Job — verify it belongs to companyId.
-        const existing = await tx.job.findUnique({
-          where: { id: body.jobId! },
-          select: { id: true, name: true, companyId: true },
-        })
-        if (!existing) throw new Error(`Job ${body.jobId} not found`)
-        if (existing.companyId !== body.companyId) {
-          throw new Error(`Job ${body.jobId} belongs to a different company`)
+        // Resolve the (existing) Job when one was passed. A Job carries
+        // its own company, so it is the authority: a jobId with no
+        // companyId adopts the Job's, and a mismatched pair is refused.
+        // With no jobId the Booking is created job-less — jobName ''
+        // is the "not named yet" marker infoGaps.ts reads.
+        let resolvedJobId: string | null = null
+        let resolvedJobName = ''
+        let resolvedCompanyId: string | null = body.companyId ?? null
+        if (body.jobId) {
+          const existing = await tx.job.findUnique({
+            where: { id: body.jobId },
+            select: { id: true, name: true, companyId: true },
+          })
+          if (!existing) throw new Error(`Job ${body.jobId} not found`)
+          if (resolvedCompanyId && existing.companyId !== resolvedCompanyId) {
+            throw new Error(`Job ${body.jobId} belongs to a different company`)
+          }
+          resolvedJobId = existing.id
+          resolvedJobName = existing.name
+          resolvedCompanyId = existing.companyId
         }
-        const resolvedJobId = existing.id
-        const resolvedJobName = existing.name
 
         const booking = await tx.booking.create({
           data: {
             bookingNumber,
-            companyId: body.companyId!,
+            companyId: resolvedCompanyId,
             personId: body.personId!,
             agentId: agentId!,
             jobId: resolvedJobId,
             jobName: resolvedJobName,
+            expectsOrder: body.expectsOrder === true,
             productionName: body.productionName?.trim() || null,
             startDate: start,
             endDate: end,
@@ -255,7 +272,10 @@ export async function POST(req: NextRequest) {
             source: body.source ?? 'AGENT_DIRECT',
             notes: body.notes?.trim() || null,
           },
-          select: { id: true, bookingNumber: true, jobName: true, jobId: true, startDate: true, endDate: true },
+          select: {
+            id: true, bookingNumber: true, jobName: true, jobId: true,
+            companyId: true, expectsOrder: true, startDate: true, endDate: true,
+          },
         })
         const bookingItem = await tx.bookingItem.create({
           data: {
@@ -276,6 +296,15 @@ export async function POST(req: NextRequest) {
           ok: true,
           booking: result.booking,
           bookingItem: result.bookingItem,
+          // What the agent still owes on this reservation (empty when
+          // the hold was created complete). Drives the ⚠ triangle.
+          infoGaps: bookingInfoGaps({
+            companyId: result.booking.companyId,
+            jobId: result.booking.jobId,
+            jobName: result.booking.jobName,
+            expectsOrder: result.booking.expectsOrder,
+            orderCount: 0,
+          }),
           // Department drives whether the new-hold flow opens the unit-pick
           // drawer (asset-bearing VEHICLES / STAGES only — not bulk supplies).
           department: category.department,

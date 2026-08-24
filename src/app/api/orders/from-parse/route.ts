@@ -326,6 +326,25 @@ export async function POST(req: NextRequest) {
       //    implemented). Capacity conflicts on VEHICLES/STAGES are
       //    captured as warnings — the line still gets created
       //    without a hold so the rep can resolve on /orders/[id].
+      // Free included accessories (InventoryKitPiece) legitimately land
+      // at $0 against an item whose catalog rate isn't zero. Resolve
+      // which ids those are from the KIT TABLE, against the parents
+      // actually on this order — never from a client-sent flag, since
+      // it silences the rate-override audit.
+      const freeKitPieceIds = new Set<string>()
+      {
+        const parentIds = itemsSafe
+          .map((i) => i.inventoryItemId)
+          .filter((v): v is string => !!v)
+        if (parentIds.length > 0) {
+          const kits = await tx.inventoryKitPiece.findMany({
+            where: { parentItemId: { in: parentIds }, billing: 'FREE', isActive: true },
+            select: { pieceItemId: true },
+          })
+          for (const k of kits) freeKitPieceIds.add(k.pieceItemId)
+        }
+      }
+
       let sortOrder = 0
       for (const raw of itemsSafe) {
         const quantity = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
@@ -339,6 +358,7 @@ export async function POST(req: NextRequest) {
           rateType,
           clientRate: raw.rate ?? 0,
           isPackageMember: !!(raw.packageInstanceId && !raw.isPackageHeader),
+          isKitPiece: !!(raw.inventoryItemId && freeKitPieceIds.has(raw.inventoryItemId)),
         }, tx)
         if (!rr) {
           throw new Error(`unparseable rate on parsed line "${raw.description}"`)

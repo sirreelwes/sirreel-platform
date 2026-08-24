@@ -315,7 +315,7 @@ export default async function PortalAccountPage() {
                         <StatusBadge status={b.status} />
                       </div>
                       <div className="text-sm font-semibold text-zinc-900 mt-0.5 truncate">{b.jobName}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">{b.company.name}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">{b.company?.name ?? '—'}</div>
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">
                       <div>

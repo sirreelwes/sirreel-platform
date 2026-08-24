@@ -20,6 +20,15 @@
  * inputs here, POSTed to /api/crm/people (+ affiliation) at submit,
  * before the hold. Agent defaults from session on the server side.
  *
+ * Call-in intake (2026-08-24, Wes): a client phones in a reservation
+ * before the production company / job name exist. Blocking on that loses
+ * the booking — the unit has to come off the board NOW — so Company and
+ * Job are OPTIONAL here. Submitting without them creates an INCOMPLETE
+ * hold that carries its own to-do list (src/lib/scheduling/infoGaps.ts);
+ * the gantt flags it with a ⚠ triangle until an agent finishes it. The
+ * same amber panel carries "an Order will be attached", a third to-do the
+ * agent can declare up front.
+ *
  * Job-as-root (step 3): the Job is resolved BEFORE the hold exists.
  * The Job field opens JobResolverModal seeded with this modal's live
  * context (dates, company, contact); the agent picks an existing Job
@@ -33,6 +42,7 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { ContactPicker, type ContactPickerValue } from '@/components/shared/ContactPicker'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal'
+import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
 
 interface AvailabilitySummary {
   serviceableCount: number
@@ -43,6 +53,7 @@ interface AvailabilitySummary {
 }
 
 interface CreatedHold {
+  /** jobName is '' on a call-in hold created before the job was named. */
   booking: { id: string; bookingNumber: string; jobName: string; startDate: string; endDate: string }
   bookingItem: { id: string; quantity: number; status: string; holdRank?: number }
   /** Category department from the holds response — drives whether the
@@ -152,6 +163,10 @@ export function NewHoldModal({
     defaultJob ? { jobId: defaultJob.id, jobCode: defaultJob.jobCode, name: defaultJob.name } : null,
   )
   const [resolverOpen, setResolverOpen] = useState(false)
+  // Call-in intake: the agent declares up front that a billable Order is
+  // coming. Purely a to-do marker — it keeps the reservation flagged
+  // incomplete until an Order actually lands on the job.
+  const [expectsOrder, setExpectsOrder] = useState(false)
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
@@ -186,13 +201,19 @@ export function NewHoldModal({
       contact.name.trim().split(/\s+/).length >= 2 &&
       /\S+@\S+\.\S+/.test(contact.email.trim()))
 
-  const canSubmit =
-    !!company &&
-    contactReady &&
-    !!job &&
-    quantity > 0 &&
-    datesValid &&
-    !submitting
+  // Company and Job are deliberately NOT required — see the call-in note
+  // in the header. What IS required is a real person to call back, the
+  // dates, and a quantity. Everything else can be filled in later.
+  const canSubmit = contactReady && quantity > 0 && datesValid && !submitting
+
+  // What this hold would still owe if submitted right now. Empty = complete.
+  const pendingGaps = bookingInfoGaps({
+    companyId: company?.id ?? null,
+    jobId: job?.jobId ?? null,
+    jobName: job?.name ?? null,
+    expectsOrder,
+    orderCount: 0,
+  })
 
   // JobResolverModal callback — the agent either picked an existing Job
   // or created one inside the resolver; both arrive with a real id. If
@@ -245,8 +266,7 @@ export function NewHoldModal({
   }
 
   async function submit(bufferOverride: boolean) {
-    if (!company || !contactReady) return
-    if (!job) return
+    if (!contactReady) return
     setSubmitting(true)
     setHardError(null)
     if (!bufferOverride) setBufferWarning(null)
@@ -277,24 +297,27 @@ export function NewHoldModal({
         }
         personId = personJson.id
         // Affiliation ties the new person to the company for CRM
-        // hygiene; a failure here shouldn't kill the hold.
-        await fetch('/api/crm/affiliations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ personId, companyId: company.id, isCurrent: true }),
-        }).catch(() => {})
+        // hygiene; a failure here shouldn't kill the hold. Skipped on a
+        // call-in with no company yet — there is nothing to affiliate to.
+        if (company) {
+          await fetch('/api/crm/affiliations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId, companyId: company.id, isCurrent: true }),
+          }).catch(() => {})
+        }
         setContact({ ...contact, mode: 'selected_existing', personId })
       }
       if (!personId) {
         setSubmitting(false)
         return
       }
-      // Job is always resolved up front (Job-as-root) — the payload
-      // always carries jobId; the route's newJobName branch is not
-      // used from this flow anymore.
+      // Job is resolved up front when it's known (Job-as-root) — the
+      // route's newJobName branch is not used from this flow. On a
+      // call-in the key is simply absent and the Booking lands job-less.
       // productionName intentionally omitted from new holds — it was
       // redundant with jobName; the column stays for legacy rows.
-      const jobPayload = { jobId: job.jobId, jobName: job.name }
+      const jobPayload = job ? { jobId: job.jobId, jobName: job.name } : {}
 
       const res = await fetch('/api/scheduling/holds', {
         method: 'POST',
@@ -304,13 +327,14 @@ export function NewHoldModal({
           startDate: startDateInput,
           endDate: endDateInput,
           quantity,
-          companyId: company.id,
+          ...(company ? { companyId: company.id } : {}),
           personId,
           ...jobPayload,
           notes: notes.trim() || null,
           bufferDays,
           bufferOverride,
           isBackup: asBackup,
+          expectsOrder,
         }),
       })
       const json = await res.json()
@@ -507,7 +531,9 @@ export function NewHoldModal({
           </label>
 
           <div>
-            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Company</span>
+            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">
+              Company <span className="normal-case tracking-normal text-zinc-400">(optional — can follow later)</span>
+            </span>
             <CompanyPicker
               value={company?.id ?? null}
               selectedName={company?.name ?? null}
@@ -610,7 +636,9 @@ export function NewHoldModal({
           </div>
 
           <div>
-            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">Job</span>
+            <span className="text-xs uppercase tracking-wide text-zinc-600 block mb-1">
+              Job <span className="normal-case tracking-normal text-zinc-400">(optional — can follow later)</span>
+            </span>
             {job ? (
               <div className="flex items-center justify-between gap-2 rounded border border-zinc-300 bg-zinc-50 px-3 py-2">
                 <div className="text-sm text-zinc-900 truncate">
@@ -638,8 +666,47 @@ export function NewHoldModal({
             <p className="text-[11px] text-zinc-500 mt-1">
               {company
                 ? 'Every hold lives inside a Job — we check this client’s open jobs against these dates before creating a new one.'
-                : 'Pick the company first — jobs are matched per client.'}
+                : 'Jobs are matched per client — pick the company first, or leave both blank and finish the reservation later.'}
             </p>
+          </div>
+
+          {/* Call-in to-do list. Mirrors what the gantt's ⚠ triangle will
+              show on this reservation: what is still missing, plus the
+              agent's own declaration that an Order is coming. */}
+          <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={expectsOrder}
+                onChange={(e) => setExpectsOrder(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+              />
+              <span className="text-sm text-amber-900">
+                An order will be attached
+                <span className="block text-[11px] text-amber-700 font-normal">
+                  Flags the reservation as awaiting its order until one lands on the job.
+                </span>
+              </span>
+            </label>
+
+            {pendingGaps.length > 0 ? (
+              <div className="flex items-start gap-2 border-t border-amber-200 pt-2">
+                <span aria-hidden className="text-amber-600 text-base leading-none mt-0.5">⚠</span>
+                <div className="text-[11px] text-amber-800">
+                  <span className="font-semibold">
+                    Incomplete — {pendingGaps.map((g) => g.label).join(', ')}
+                  </span>
+                  <span className="block">
+                    You can still create the hold now; the reservation carries a ⚠ on the board until
+                    someone fills this in.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-amber-200 pt-2 text-[11px] text-amber-700">
+                Nothing outstanding — this reservation is complete.
+              </div>
+            )}
           </div>
 
           <label className="block">
@@ -686,7 +753,7 @@ export function NewHoldModal({
               disabled={!canSubmit}
               className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-sm font-medium px-4 py-1.5 rounded"
             >
-              {submitting ? 'Creating…' : 'Create hold'}
+              {submitting ? 'Creating…' : pendingGaps.length ? 'Create hold (incomplete)' : 'Create hold'}
             </button>
           )}
         </footer>

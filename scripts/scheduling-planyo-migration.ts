@@ -370,6 +370,9 @@ async function main() {
   // change carry planyoCartId but jobId NULL. Link them through the
   // same find-or-create so the prior snapshot is jobbed too. Live-write
   // links; dry-run counts what a live run would touch.
+  // companyId can be NULL on call-in holds (see infoGaps.ts) — a Job
+  // needs a company, and a Planyo-imported row always has one, so those
+  // rows are simply not candidates here.
   const jobless = directlyStamped.filter((b) => b.planyoCartId && !b.jobId)
   let jobsLinkedBackfill = 0
   if (jobless.length) {
@@ -378,6 +381,7 @@ async function main() {
       select: { id: true, planyoCartId: true, jobName: true, companyId: true, agentId: true, startDate: true, endDate: true, status: true },
     })
     for (const b of fullRows) {
+      if (!b.companyId) continue
       // resolveJobForCart is dry-run-aware (returns a DRY id without
       // writing), so calling it unconditionally keeps the dry-run's
       // jobsCreated prediction honest; only the link write is guarded.

@@ -17,6 +17,7 @@
     "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
+    "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts"
   },
   "prisma": {

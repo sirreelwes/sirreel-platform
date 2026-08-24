@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
+import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { AssignTaskModal } from '@/components/scheduling/AssignTaskModal';
@@ -132,6 +133,23 @@ function OrderBadge({ order, rwOrderNumber, jobId }: {
     )
   }
   return <span className={ORDER_BADGE_CLASS} title="Order attached">✎</span>
+}
+
+// ── Incomplete-info triangle — a call-in reservation created before the
+// production company / job name existed (see src/lib/scheduling/infoGaps.ts),
+// or one still waiting on the order the agent said was coming. Clicking it
+// opens the reservation modal, whose "Finish this reservation" panel is where
+// the blanks get filled; pointer-down is stopped so it can't start a bar drag.
+function IncompleteBadge({ gaps }: { gaps?: Array<{ key: string; label: string }> | null }) {
+  if (!gaps || gaps.length === 0) return null
+  return (
+    <span
+      className="mr-1 inline-flex h-4 w-4 flex-none items-center justify-center rounded-sm bg-amber-400 border border-white/80 text-[10px] leading-none text-amber-950"
+      title={`Incomplete — missing ${gaps.map((g) => g.label).join(', ')}`}
+      aria-label={`Incomplete reservation — missing ${gaps.map((g) => g.label).join(', ')}`}
+      onPointerDown={(ev) => ev.stopPropagation()}
+    >⚠</span>
+  )
 }
 
 // Per-drag row highlight state (computed once per target change in the parent;
@@ -287,6 +305,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
                 onBarClick(b, entry.unit)
               }}
             >
+              <IncompleteBadge gaps={b.infoGaps} />
               {b.hasOrder && <OrderBadge order={b.orders?.[0]} rwOrderNumber={b.rwOrderNumbers?.[0]} jobId={b.jobId} />}
               <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                 {(b.tags || []).includes('ART_DEPT') && (
@@ -323,6 +342,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
                 }}
                 title={`${rankLabel} hold — ${b.clientName}${b.jobName ? ` · ${b.jobName}` : ''}`}
               >
+                <IncompleteBadge gaps={b.infoGaps} />
                 <span className="text-[9px] font-semibold text-blue-800 truncate whitespace-nowrap">
                   {rankLabel} · {b.clientName}{b.jobName ? ` · ${b.jobName}` : ''}
                 </span>
@@ -1366,6 +1386,10 @@ export default function GanttPage() {
           <span className="text-gray-500">Order attached · click opens order</span>
         </div>
         <div className="flex items-center gap-1">
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-amber-400 text-[10px] leading-none text-amber-950">⚠</span>
+          <span className="text-gray-500">Missing info · open to finish</span>
+        </div>
+        <div className="flex items-center gap-1">
           <span className={`px-1 rounded-sm text-[8px] font-bold ${ART_DEPT_TAG_CHIP}`}>ART</span>
           <span className="text-gray-500">Art Dept job tag</span>
         </div>
@@ -1526,7 +1550,10 @@ export default function GanttPage() {
                   onClick={() => setSelected(job)}
                 >
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-gray-900 truncate">{job.company}</div>
+                    <div className="text-[11px] font-semibold text-gray-900 truncate flex items-center gap-1">
+                      <IncompleteBadge gaps={job.infoGaps} />
+                      <span className="truncate">{job.company}</span>
+                    </div>
                     <div className="text-[9px] text-gray-400 truncate">{job.items?.length} unit{job.items?.length !== 1 ? 's' : ''} · {fMonth(job.startDate)}</div>
                   </div>
                 </div>
@@ -1659,6 +1686,7 @@ export default function GanttPage() {
                           style={{ left: bar.left, width: bar.width }}
                           onClick={() => setSelected(job)}
                         >
+                          <IncompleteBadge gaps={job.infoGaps} />
                           {job.hasOrder && <OrderBadge order={job.orders?.[0]} rwOrderNumber={job.rwOrderNumbers?.[0]} jobId={job.jobId} />}
                           <span className={`text-[9px] font-bold ${sc.text} truncate whitespace-nowrap`}>
                             {(job.tags || []).includes('ART_DEPT') && (
@@ -1745,6 +1773,54 @@ export default function GanttPage() {
               </div>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
+
+            {/* Call-in completion — company / job name / expected order.
+                Shown for both the unit-bar and job-view shapes; the two
+                carry the client name and dates under different keys. */}
+            {selected.bookingId && (
+              <CompleteReservationPanel
+                bookingId={selected.bookingId}
+                value={{
+                  companyId: selected.companyId ?? null,
+                  // clientName/company are already display-fallbacked to
+                  // "Company TBD" upstream — only pass a real name.
+                  companyName: selected.companyId
+                    ? (selected.clientName ?? selected.company ?? null)
+                    : null,
+                  jobId: selected.jobId ?? null,
+                  jobCode: selected.jobCode ?? null,
+                  jobName: selected.jobName ?? '',
+                  expectsOrder: !!selected.expectsOrder,
+                }}
+                orderCount={Array.isArray(selected.orders) ? selected.orders.length : 0}
+                dates={
+                  selected.start && selected.end
+                    ? { start: selected.start, end: selected.end }
+                    : selected.startDate && selected.endDate
+                      ? { start: selected.startDate, end: selected.endDate }
+                      : null
+                }
+                canEdit={canSetStatus}
+                onSaved={(next, gaps) => {
+                  setSelected((prev: any) =>
+                    prev
+                      ? {
+                          ...prev,
+                          companyId: next.companyId,
+                          clientName: next.companyName ?? prev.clientName,
+                          company: next.companyName ?? prev.company,
+                          jobId: next.jobId,
+                          jobCode: next.jobCode,
+                          jobName: next.jobName,
+                          expectsOrder: next.expectsOrder,
+                          infoGaps: gaps,
+                        }
+                      : prev,
+                  )
+                  refreshTimeline()
+                }}
+              />
+            )}
 
             {/* Stage paperwork entry — shown ONLY for STAGES-department
                 holds (department-gated, not name-matched). Additive:

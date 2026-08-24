@@ -143,7 +143,8 @@ export interface LineRateResult {
  * Server-side line-item rate resolution. The client-sent `rate` is an
  * OVERRIDE REQUEST, not truth: when it differs from the resolved catalog
  * rate the line stores both and flips `rateOverridden` (caller logs the
- * override). $0 package members / includedFree items are NOT overrides.
+ * override). $0 package members / includedFree items / free included
+ * accessories are NOT overrides.
  *
  * Returns null when clientRate is unparseable — caller should 400.
  */
@@ -155,6 +156,13 @@ export async function resolveLineRate(
     clientRate: unknown
     /** package-member lines legitimately carry rate=0 */
     isPackageMember?: boolean
+    /**
+     * A free InventoryKitPiece line (the charging bank that ships with
+     * the radios) — $0 by policy, not by a rep discounting the charger.
+     * Callers must VERIFY this against the kit table rather than take a
+     * client flag, since it silences the override audit.
+     */
+    isKitPiece?: boolean
   },
   db: Db = prisma,
 ): Promise<LineRateResult | null> {
@@ -176,8 +184,9 @@ export async function resolveLineRate(
   if (clientDec.equals(catalogRate)) {
     return { rate: catalogRate, resolvedRate: catalogRate, rateOverridden: false }
   }
-  if (clientDec.isZero() && input.isPackageMember) {
-    // includedFree-style $0 line inside a package — priced by the header.
+  if (clientDec.isZero() && (input.isPackageMember || input.isKitPiece)) {
+    // Priced by the header (package) or free by catalog policy (kit
+    // piece) — the divergence from the catalog rate is the point.
     return { rate: clientDec, resolvedRate: catalogRate, rateOverridden: false }
   }
   if (clientDec.isZero() && input.inventoryItemId) {

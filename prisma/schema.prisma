@@ -907,7 +907,12 @@ enum UnionStatus {
 model Booking {
   id             String          @id @default(uuid())
   bookingNumber  String          @unique @map("booking_number") // SR-2026-0042
-  companyId      String          @map("company_id")
+  /// NULLABLE since 2026-08-24 (call-in intake): a client can phone in a
+  /// reservation before the production company is known. A Booking with
+  /// companyId = NULL is INCOMPLETE — the gantt shows a warning triangle
+  /// until an agent fills it in (see src/lib/scheduling/infoGaps.ts).
+  /// Everything created through a normal quote/order flow still carries one.
+  companyId      String?         @map("company_id")
   personId       String          @map("person_id") // Who called / requested (coordinator or UPM)
   referredById   String?         @map("referred_by_id") // The UPM, if a coordinator called on their behalf
   agentId        String          @map("agent_id")
@@ -918,6 +923,9 @@ model Booking {
   /// scheduling engine does NOT read this column.
   jobId          String?         @map("job_id")
   productionName String?         @map("production_name") // "Stranger Things S5" — legacy free-text; new holds skip it
+  /// EMPTY STRING = "job not named yet" (call-in intake). Kept NOT NULL so
+  /// the ~460 existing read sites stay string-typed; use
+  /// src/lib/scheduling/infoGaps.ts rather than testing for '' by hand.
   jobName        String          @map("job_name")
   startDate      DateTime        @map("start_date") @db.Date
   endDate        DateTime        @map("end_date") @db.Date
@@ -958,6 +966,11 @@ model Booking {
   /// Booking. NULL on Bookings created via the +Hold flow.
   planyoCartId String? @unique @map("planyo_cart_id")
 
+  /// Call-in intake: the agent expects a billable Order to be attached to
+  /// this reservation later. A declared expectation, not a derived fact —
+  /// it keeps the incomplete-info triangle up until an Order exists.
+  expectsOrder Boolean @default(false) @map("expects_order")
+
   source BookingSource @default(PHONE)
 
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -973,7 +986,13 @@ model Booking {
   archivedAt  DateTime? @map("archived_at")
 
   // Relations
-  company           Company            @relation(fields: [companyId], references: [id])
+  /// onDelete: Restrict is PINNED. Making companyId optional flipped
+  /// Prisma's implicit default to SetNull, which would silently orphan real
+  /// bookings when a company row is deleted (the CRM duplicate-merge path
+  /// deletes companies without re-pointing bookings). Restrict keeps the
+  /// pre-2026-08-24 guarantee: you cannot delete a company that still has
+  /// bookings.
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   person            Person             @relation("BookingContact", fields: [personId], references: [id])
   referredBy        Person?            @relation("BookingReferrer", fields: [referredById], references: [id])
   agent             User               @relation("BookingAgent", fields: [agentId], references: [id])
@@ -2693,6 +2712,12 @@ model InventoryItem {
   category     InventoryCategory? @relation(fields: [categoryId], references: [id])
   lineItems    OrderLineItem[]
   packageItems PackageItem[]
+  // Included accessories (see InventoryKitPiece). `kitPieces` = what goes
+  // out WITH this item; `kitPieceOf` = the parents this item rides along
+  // with. Both directions are needed: the same battery hangs off three
+  // different radios.
+  kitPieces    InventoryKitPiece[] @relation("KitParent")
+  kitPieceOf   InventoryKitPiece[] @relation("KitPiece")
   subRentals   SubRental[]
   rateChanges  RateChangeLog[]
   location     Location           @default(LANKERSHIM)
@@ -2753,6 +2778,89 @@ model InventoryItem {
 enum CatalogTrackingMode {
   UNIT_TRACKED
   QUANTITY
+}
+
+// Rounding direction for a kit piece's derived quantity. Both are
+// load-bearing and neither is a safe global default: spare batteries
+// round UP (15 radios → 8 spares, never 7 — a crew short a battery is
+// a call to the warehouse), charging banks round DOWN with minQty=1
+// (13 radios don't need a second bank, but 5 radios still need one).
+enum KitPieceRounding {
+  CEIL
+  FLOOR
+}
+
+// Whether the piece rides along free or bills at its own catalog rate.
+// FREE is the whole point of the feature — CHARGED exists so an item
+// that must ALWAYS accompany another (and is billable when it does)
+// can use the same auto-add machinery instead of being remembered.
+enum KitPieceBilling {
+  FREE
+  CHARGED
+}
+
+// Included accessories — the pieces that leave the building with a
+// rented item whether or not the client thought to ask for them: the
+// 6-bank charger and spare batteries that go out with every walkie
+// order.
+//
+// A kit piece is a LINK to a real catalog row, never a sub-item created
+// under a parent. The charger is stock SirReel owns — it has a qty, a
+// replacement cost, a photo, a scannable code, and it gets lost. Child
+// rows invented under "CP200 (Analog)" would be a second, shadow
+// inventory that the counts page, the pick-list scanner and any loss
+// billing can't see. It's also many-to-many in practice: one battery
+// serves the analog radio, the digital radio and the sub.
+//
+// Quantity is a RATIO off the parent line's quantity, not a fixed
+// count — see resolveKitQuantity() in src/lib/inventory/kitPieces.ts,
+// which is the only place the arithmetic lives.
+//
+// Ratios in production today are Wes's, 2026-08-17, carried over from
+// the hardcoded walkie kit this replaces: spare batteries at 50% of the
+// radio count, one charging bank per 12 radios (min 1).
+model InventoryKitPiece {
+  id           String @id @default(uuid())
+  parentItemId String @map("parent_item_id")
+  pieceItemId  String @map("piece_item_id")
+
+  // qty = round(parentQty / perUnits * qtyPer), then floored at minQty.
+  // 0.5-per-1 CEIL = spare batteries; 1-per-12 FLOOR min 1 = charge bank.
+  qtyPer   Decimal          @default(1) @map("qty_per") @db.Decimal(10, 4)
+  perUnits Int              @default(1) @map("per_units")
+  rounding KitPieceRounding @default(CEIL)
+  minQty   Int              @default(0) @map("min_qty")
+
+  billing KitPieceBilling @default(FREE)
+
+  // Prints on the client's quote/invoice as an included line. False =
+  // warehouse-only; the pick list sees the piece either way, since pick
+  // membership follows the line's department, not its visibility.
+  clientVisible Boolean @default(true) @map("client_visible")
+
+  // The client listed this accessory themselves — leave their line
+  // alone rather than shipping (and quoting) it twice.
+  suppressIfOrdered Boolean @default(true) @map("suppress_if_ordered")
+
+  // Rep-facing explanation stamped onto the auto-added line. Null =
+  // generated from the ratio ("Included with 12 radios — no charge").
+  note String? @db.Text
+
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  parent InventoryItem @relation("KitParent", fields: [parentItemId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade: deleting the charger should fail loudly while
+  // three radios still promise it, not silently empty their kits. The
+  // item DELETE route counts these as references and archives instead.
+  piece  InventoryItem @relation("KitPiece", fields: [pieceItemId], references: [id], onDelete: Restrict)
+
+  @@unique([parentItemId, pieceItemId])
+  @@index([parentItemId, sortOrder])
+  @@index([pieceItemId])
+  @@map("inventory_kit_pieces")
 }
 
 model Order {
