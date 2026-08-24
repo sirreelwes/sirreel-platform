@@ -331,6 +331,13 @@ export function isSalesRole(role: UserRole): boolean {
   return role === UserRole.AGENT;
 }
 
+// BILLING's home is the collections workspace — Dashboard is not in her
+// nav (see getNavSections), and login lands on /dashboard by default, so
+// the layout bounces her the same way it does sales and yard roles.
+export function isBillingRole(role: UserRole): boolean {
+  return role === UserRole.BILLING;
+}
+
 // Roles whose home is the mobile-first /fleet/today board. The layout
 // auto-redirects /dashboard → /fleet/today for these (mirrors the
 // sales-role pattern above) and their nav gets a "Today" entry.
@@ -382,6 +389,49 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // redirect-looped for their role. This is the whole sales journey:
   // inquiry → quote → reservation → job, plus lookups. Pipeline is
   // gone (redirects to /inquiries); Collections stays allowlist-gated.
+  // BILLING (Ana) — collections + the sales context needed to bill it,
+  // and nothing else (Wes, 2026-08-24). She previously fell through to
+  // the full nav: Fleet, Warehouse, COO reporting, and ~15 Admin
+  // entries, none of which her own ROLE_PERMISSIONS grant
+  // (reporting/fleet/warehouse/coverage are all false for BILLING).
+  // The pages already refused her; the tabs were just noise pointing at
+  // redirects.
+  //
+  // Kept deliberately: Incidents (she is the claims-pod handler via the
+  // email allowlist) and Payment Info (client bank details are billing's
+  // to send). Reservations/Inventory/Deliveries are NOT here — they are
+  // ops surfaces; add back if she asks.
+  if (navRole === 'BILLING') {
+    return [
+      {
+        label: 'Billing & Collections',
+        items: [
+          ...(canUseCollections(navRole, navEmail)
+            ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
+            : []),
+          { id: 'rw-invoices', label: 'Receivables (RW)', icon: 'Receipt', href: '/rentalworks/invoices' },
+          { id: 'rw-reconcile', label: 'Reconcile RW', icon: 'ListChecks', href: '/rentalworks/reconcile' },
+          { id: 'rw-invoice-sync', label: 'RW Sync', icon: 'RefreshCw', href: '/admin/rw-invoice-sync' },
+          { id: 'incidents', label: 'Incidents', icon: 'AlertTriangle', href: '/incidents' },
+          { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
+        ],
+      },
+      {
+        label: 'Sales',
+        items: [
+          // Action Items carries her billing queue — the BILLING role
+          // exists precisely so those scope to BILLING + admin.
+          { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
+          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+          { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+          { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+        ],
+      },
+    ];
+  }
+
   if (navRole === 'AGENT') {
     return [
       {

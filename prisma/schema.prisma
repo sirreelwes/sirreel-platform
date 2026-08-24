@@ -546,6 +546,7 @@ model Person {
   totalSpend    Decimal    @default(0) @map("total_spend") @db.Decimal(12, 2)
   totalBookings Int        @default(0) @map("total_bookings")
   activities    Activity[]
+  dispatchTasks DispatchTask[]
   lastBookingAt DateTime?  @map("last_booking_at")
 
   // "Works with" — e.g. UPM's regular coordinator
@@ -1224,8 +1225,23 @@ enum TaskStatus {
 
 model DispatchTask {
   id            String     @id @default(uuid())
+  /// One-line human label — "Delivery of Honda Generator". Dispatch reads
+  /// the board by what's moving, not by address; without this every
+  /// standalone task rendered as a bare address (Wes, 2026-08-24).
+  /// Optional so pre-existing tasks stay valid; the UI falls back to
+  /// type + address when absent.
+  title         String?
   bookingId     String?    @map("booking_id")
   orderId       String?    @map("order_id")
+  /// Direct Job link for standalone tasks. Order/booking-originated
+  /// tasks reach a Job through those FKs, but a "+ Schedule" task has
+  /// neither — this is how a generator drop lands on the job it serves.
+  jobId         String?    @map("job_id")
+  /// On-site contact as a PERSON record rather than only loose
+  /// name/phone strings, so dispatch gets the client's real contact
+  /// card. contactName/contactPhone remain for one-off site contacts
+  /// who aren't in the CRM.
+  personId      String?    @map("person_id")
   assetId       String?    @map("asset_id")
   type          TaskType
   assignedTo    String?    @map("assigned_to") // FK to Driver (internal)
@@ -1251,6 +1267,8 @@ model DispatchTask {
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id])
   order   Order?   @relation(fields: [orderId], references: [id])
+  job     Job?     @relation(fields: [jobId], references: [id])
+  person  Person?  @relation(fields: [personId], references: [id])
   asset   Asset?   @relation(fields: [assetId], references: [id])
   driver  Driver?  @relation("TaskDriver", fields: [assignedTo], references: [id])
 
@@ -3924,6 +3942,7 @@ model Job {
   productionTypeProfile ProductionTypeProfile? @relation("JobProductionTypeProfile", fields: [productionTypeProfileId], references: [id])
   orders                Order[]
   bookings              Booking[]
+  dispatchTasks         DispatchTask[]
   jobContacts           JobContact[]
   contractReviews       ContractReview[]
   coiChecks             CoiCheck[]

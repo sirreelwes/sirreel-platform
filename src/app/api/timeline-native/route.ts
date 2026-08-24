@@ -615,9 +615,12 @@ export async function GET(req: NextRequest) {
     },
     select: {
       id: true, type: true, scheduledDate: true, scheduledTime: true,
-      siteAddress: true, deliveryItems: true,
+      siteAddress: true, deliveryItems: true, title: true,
       order: { select: { orderNumber: true, company: { select: { name: true } }, job: { select: { name: true, jobCode: true } } } },
       booking: { select: { jobName: true, company: { select: { name: true } } } },
+      // Standalone tasks reach a Job directly (added 2026-08-24) — without
+      // this the board showed a bare address for "+ Schedule" tasks.
+      job: { select: { name: true, jobCode: true, company: { select: { name: true } } } },
     },
     orderBy: { scheduledDate: 'asc' },
   })
@@ -635,10 +638,12 @@ export async function GET(req: NextRequest) {
       scheduledTime: t.scheduledTime ?? '',
       siteAddress: t.siteAddress ?? '',
       deliveryItems: t.deliveryItems ?? '',
+      title: t.title ?? '',
       // Standalone tasks have no order/booking — fall back to the site address
       // so the lane label reads "Delivery · <site>" rather than a blank dash.
-      clientName: t.order?.company?.name ?? t.booking?.company?.name ?? t.siteAddress ?? '—',
-      jobName: t.order?.job?.name ?? t.booking?.jobName ?? t.order?.orderNumber ?? '',
+      clientName:
+        t.order?.company?.name ?? t.booking?.company?.name ?? t.job?.company?.name ?? t.siteAddress ?? '—',
+      jobName: t.order?.job?.name ?? t.booking?.jobName ?? t.job?.name ?? t.order?.orderNumber ?? '',
     }
   })
 
