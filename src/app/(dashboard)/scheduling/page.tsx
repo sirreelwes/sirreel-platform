@@ -166,6 +166,11 @@ export default function SchedulingHubPage() {
             badge={c ? { label: `${c.staleHolds} stale`, tone: staleTone } : undefined}
           />
           <DiagTile
+            href="/planyo-cancellations"
+            title="Planyo cancellations"
+            description="Holds cancelled in Planyo that still hold a unit here. The sync flags them; releasing is deliberate and manual."
+          />
+          <DiagTile
             href="/gantt"
             title="Timeline (gantt)"
             description="Production Timeline view — live book."
