@@ -136,13 +136,23 @@ function titleToRole(title: string | null): PersonRole {
 
 type Mode = 'NEEDS_REVIEW' | 'AUTO_CAPTURED' | 'SKIPPED'
 
-export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
+/**
+ * `forceCollapsed` — the People tab collapses this while a search is
+ * active. The widget is a big daily-triage panel that sits between the
+ * search box and the results, so typing a name pushed the matches far
+ * below the fold and searching looked broken.
+ */
+export function CaptureReviewWidget({ onChanged, forceCollapsed }: { onChanged?: () => void; forceCollapsed?: boolean }) {
   const [rows, setRows] = useState<CaptureRow[] | null>(null)
   const [counts, setCounts] = useState<Counts | null>(null)
   const [mode, setMode] = useState<Mode>('NEEDS_REVIEW')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState(false)
+  // null = follow the caller's default; true/false = the user decided.
+  // Keeps `forceCollapsed` as a DEFAULT rather than a lock, so someone
+  // mid-search can still expand the panel if they want it.
+  const [userCollapsed, setUserCollapsed] = useState<boolean | null>(null)
+  const isCollapsed = userCollapsed ?? !!forceCollapsed
   const [pendingId, setPendingId] = useState<string | null>(null)
   // Thread viewer (slide-over) state.
   const [viewingId, setViewingId] = useState<string | null>(null)
@@ -324,7 +334,7 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
     <div className="bg-lt-card border border-lt-hairline rounded-xl mb-6">
       <button
         type="button"
-        onClick={() => setCollapsed((v) => !v)}
+        onClick={() => setUserCollapsed(!isCollapsed)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-lt-inner transition-colors"
       >
         <div className="flex items-center gap-3">
@@ -339,10 +349,10 @@ export function CaptureReviewWidget({ onChanged }: { onChanged?: () => void }) {
             <span className="text-lt-fg3">{counters.skippedThisWeek} skipped</span>
           </span>
         </div>
-        <span className="text-xs text-lt-fg2">{collapsed ? 'Expand' : 'Collapse'}</span>
+        <span className="text-xs text-lt-fg2">{isCollapsed ? 'Expand' : 'Collapse'}</span>
       </button>
 
-      {!collapsed && (
+      {!isCollapsed && (
         <div className="border-t border-lt-hairline">
           <div className="px-4 py-2 flex items-center gap-2 text-xs">
             {(['NEEDS_REVIEW', 'AUTO_CAPTURED', 'SKIPPED'] as Mode[]).map((m) => (

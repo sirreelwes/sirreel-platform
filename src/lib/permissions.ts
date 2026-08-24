@@ -399,8 +399,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   //
   // Kept deliberately: Incidents (she is the claims-pod handler via the
   // email allowlist) and Payment Info (client bank details are billing's
-  // to send). Reservations/Inventory/Deliveries are NOT here — they are
-  // ops surfaces; add back if she asks.
+  // to send). Inventory + Paperwork tools were added back at Wes's
+  // request the same day — billing looks up what a line item is when an
+  // invoice is disputed, and chases COIs/contracts. Reservations and
+  // Deliveries stay out as pure ops surfaces.
   if (navRole === 'BILLING') {
     return [
       {
@@ -427,6 +429,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+          // Added back 2026-08-24 (Wes): billing needs to look up what a
+          // line item IS and what it rents for when a client disputes an
+          // invoice, and Paperwork tools covers the COI / contract-review
+          // side of chasing a job's documents.
+          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+          { id: 'paperwork', label: 'Paperwork tools', icon: 'FileSignature', href: '/admin/paperwork' },
         ],
       },
     ];

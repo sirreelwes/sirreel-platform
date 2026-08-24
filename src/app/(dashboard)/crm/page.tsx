@@ -527,7 +527,11 @@ export default function CRMPage() {
           reload. */}
       {tab === 'people' && (
         <ErrorBoundary label="email review">
-          <CaptureReviewWidget onChanged={() => { fetchPeople(); }} />
+          {/* Collapsed while searching: this panel sits between the search
+              box and the results, so a typed name pushed its matches
+              hundreds of pixels down and searching looked like it did
+              nothing. Still expandable by hand. */}
+          <CaptureReviewWidget onChanged={() => { fetchPeople(); }} forceCollapsed={!!search.trim()} />
         </ErrorBoundary>
       )}
 
