@@ -402,8 +402,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // to send). Inventory + Paperwork tools were added back at Wes's
   // request the same day — billing looks up what a line item is when an
   // invoice is disputed, chases COIs/contracts, and reads Reservations
-  // to settle a disputed rental window. Deliveries/Fleet/Warehouse and
-  // the COO reporting section stay out as pure ops surfaces.
+  // to settle a disputed rental window, and watches Deliveries &
+  // Pickups (read-only board data). Fleet, Warehouse and the COO
+  // reporting section stay out — all map to permissions that are false
+  // for BILLING, so those tabs would dead-end.
   if (navRole === 'BILLING') {
     return [
       {
@@ -434,6 +436,14 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
           { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+          // Deliveries & Pickups added 2026-08-24 (Wes). READ-ONLY for
+          // her by construction: /api/dispatch takes any signed-in staff
+          // session (widened 2026-08-23 — it is the same movement data
+          // the Reservations board already shows everyone), while the
+          // fleet paperwork surfaces stay behind requireDispatchAccess
+          // and task mutations behind canCreateBooking, which BILLING
+          // does hold. Cross-listed with Fleet, same as Sales & Ops.
+          { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
           // Added back 2026-08-24 (Wes): billing needs to look up what a
           // line item IS and what it rents for when a client disputes an
           // invoice, and Paperwork tools covers the COI / contract-review
