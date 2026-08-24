@@ -1,5 +1,11 @@
 node_modules/
 .next/
+# Alternate build output — a session running `next build` into its own
+# distDir so it can't clobber a teammate's running dev server .next
+# (the collision happened for real 2026-08-24). Ignored so those
+# artifacts can never be staged; the matching tsconfig `include` line
+# is per-session and should be reverted, not committed.
+.next-verify/
 .env
 .env.local
 *.tsbuildinfo
