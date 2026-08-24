@@ -2273,8 +2273,15 @@ function ReviewRow({
               </span>
             )}
           </div>
+          {/* Wes 2026-08-24: the old line ("we only charge for days you're
+              working") stated a policy we don't have — rentals bill by
+              24-hour period / calendar day. Shoot days is a REQUEST an
+              agent reviews, not an automatic discount, which is also what
+              DayClaimsPanel says internally: billable days is
+              authoritative once set. Don't promise a reduction here. */}
           <div className="text-[10.5px] text-[#8b857a] mt-1 leading-snug">
-            We only charge for days you&rsquo;re working. Your agent will confirm.
+            Rentals bill by calendar day (24-hour periods), including days you&rsquo;re not
+            shooting. Tell us your shoot days and your agent will review.
           </div>
         </div>
       )}
