@@ -26,7 +26,12 @@ import {
 } from '@/lib/sync/planyo/importNewCartsRun'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Raised from 60 after every run from 2026-08-19 onward died mid-plan and
+// was left RUNNING: the plan phase was already taking 42s of the 60s
+// budget on 2026-08-18, and that day's Planyo import added enough HQ rows
+// to tip it over. The probes are pooled now (see runSync), which is the
+// real fix; this is headroom so growth doesn't silently kill the cron again.
+export const maxDuration = 300
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET

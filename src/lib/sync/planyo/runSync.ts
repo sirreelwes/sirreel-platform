@@ -237,6 +237,28 @@ async function computeEvents(
   // Absence pass — HQ rows in scope whose Reservation falls inside the
   // pull window but the pull didn't return them.
   //
+  // Probes run POOLED, not one-at-a-time. Each is an independent HTTPS
+  // round-trip to Planyo, and doing them sequentially is what killed this
+  // cron: the plan phase hit 42s of a 60s budget on 2026-08-18, and the
+  // import that same day added enough HQ rows to push it over. Every run
+  // from 2026-08-19 to 2026-08-24 died mid-plan and was left RUNNING, so
+  // no cancellation was detected and no Slack alert fired for six days.
+  //
+  // Concurrency is deliberately modest — this is someone else's API and
+  // the win from 1→6 is already an order of magnitude.
+  const PROBE_CONCURRENCY = 6
+  async function probeAll<T>(items: T[], fn: (item: T) => Promise<void>): Promise<void> {
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(PROBE_CONCURRENCY, items.length) }, async () => {
+      for (;;) {
+        const i = cursor++
+        if (i >= items.length) return
+        await fn(items[i])
+      }
+    })
+    await Promise.all(workers)
+  }
+
   // Cancellation detection: Planyo drops cancelled reservations from
   // `list_reservations` (verified on 19710795). So the ABSENT set is
   // the high-probability candidate pool. For each absent row we do a
@@ -248,11 +270,14 @@ async function computeEvents(
   // Trade-off: this misses cancellations on rows that Planyo STILL
   // returns in list_reservations. Those will be caught on subsequent
   // syncs as they drop out of the pull.
-  for (const hq of hqResv) {
-    if (!hq.planyoReservationId) continue
-    if (planyoRidSet.has(hq.planyoReservationId)) continue
-    if (!inScopeCarts.has(hq.planyoCartId ?? '')) continue
-
+  // Type predicate so planyoReservationId is non-null inside the probe.
+  const absentTargets = hqResv.filter(
+    (hq): hq is typeof hq & { planyoReservationId: string } =>
+      !!hq.planyoReservationId &&
+      !planyoRidSet.has(hq.planyoReservationId) &&
+      inScopeCarts.has(hq.planyoCartId ?? ''),
+  )
+  await probeAll(absentTargets, async (hq) => {
     const detail = await getReservationData(hq.planyoReservationId)
     if (detail.ok && isReservationCancelled(detail.data)) {
       counts.releaseCandidate++
@@ -280,7 +305,7 @@ async function computeEvents(
         before: { startTime: hq.startTime, endTime: hq.endTime, unitName: hq.unitName },
       })
     }
-  }
+  })
 
   // Future-held overlay pass — `list_reservations` does NOT reliably drop
   // cancelled rows. Planyo sometimes serves them for days/weeks after a
@@ -298,6 +323,10 @@ async function computeEvents(
       probedRids.add(ev.planyoReservationId)
     }
   }
+  // Same pooling as the ABSENT pass. Indices are captured up front so the
+  // in-place `events[i]` rewrite below stays correct under concurrency —
+  // each worker only ever touches its own index.
+  const overlayTargets: number[] = []
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]
     if (probedRids.has(ev.planyoReservationId)) continue
@@ -307,9 +336,15 @@ async function computeEvents(
     if (hq.endTime < today) continue // past — skip
     if (!inScopeCarts.has(hq.planyoCartId ?? '')) continue
     probedRids.add(ev.planyoReservationId)
+    overlayTargets.push(i)
+  }
+  await probeAll(overlayTargets, async (i) => {
+    const ev = events[i]
+    const hq = hqByRid.get(ev.planyoReservationId)
+    if (!hq) return
     const detail = await getReservationData(ev.planyoReservationId)
-    if (!detail.ok) continue
-    if (!isReservationCancelled(detail.data)) continue
+    if (!detail.ok) return
+    if (!isReservationCancelled(detail.data)) return
     // Cancelled but still in the pull — demote prior op and promote to candidate.
     switch (ev.op) {
       case 'NO_CHANGE': counts.noChange--; break
@@ -330,7 +365,7 @@ async function computeEvents(
       before: { startTime: hq.startTime, endTime: hq.endTime, unitName: hq.unitName },
       after: { userText: detail.data.user_text ?? null },
     }
-  }
+  })
 
   return {
     events,
