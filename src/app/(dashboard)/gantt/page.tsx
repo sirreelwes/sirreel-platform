@@ -1308,9 +1308,9 @@ export default function GanttPage() {
             <button
               onClick={() => setNewTaskOpen(true)}
               className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[11px] font-semibold"
-              title="Delivery / pickup task (no order) — lands in the needs-assignment lane"
+              title="Schedule a delivery or pickup (no order) — lands in the needs-assignment lane"
             >
-              + New Task
+              Schedule Delivery/Pickup
             </button>
           )}
         </div>
@@ -1556,7 +1556,10 @@ export default function GanttPage() {
                           const bar = getBar(t.start, t.end)
                           if (!bar) return null
                           const isPickup = t.taskType === 'PICKUP'
-                          const label = isPickup ? 'Pickup' : 'Delivery'
+                          // The task's own one-line title wins over the bare
+                          // type word — "Delivery of Honda Generator" tells
+                          // dispatch what is moving (Wes, 2026-08-24).
+                          const label = t.title || (isPickup ? 'Pickup' : 'Delivery')
                           const detail = [t.jobName, t.scheduledTime, t.siteAddress, t.deliveryItems].filter(Boolean).join(' · ')
                           const chipColor = isPickup
                             ? 'bg-violet-200 border-violet-500 text-violet-900 hover:bg-violet-300'

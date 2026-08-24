@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
   const {
     type, scheduledDate, scheduledTime, siteAddress, contactName, contactPhone,
-    deliveryItems, notes,
+    deliveryItems, notes, title, jobId, personId,
   } = body as Record<string, unknown>;
 
   if (type !== "DELIVERY" && type !== "PICKUP") {
@@ -54,6 +54,19 @@ export async function POST(req: NextRequest) {
   }
 
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+  // Job / contact links are OPTIONAL, but a supplied id must be real —
+  // a bad id would otherwise fail the insert with a raw FK error.
+  const jobIdStr = str(jobId);
+  if (jobIdStr) {
+    const exists = await prisma.job.findUnique({ where: { id: jobIdStr }, select: { id: true } });
+    if (!exists) return NextResponse.json({ error: "jobId not found" }, { status: 400 });
+  }
+  const personIdStr = str(personId);
+  if (personIdStr) {
+    const exists = await prisma.person.findUnique({ where: { id: personIdStr }, select: { id: true } });
+    if (!exists) return NextResponse.json({ error: "personId not found" }, { status: 400 });
+  }
   const fromLocation: Location | null = type === "DELIVERY" ? DEPOT_ENUM : null;
   const toLocation: string | null = type === "PICKUP" ? DEPOT_LABEL : null;
 
@@ -61,6 +74,9 @@ export async function POST(req: NextRequest) {
     data: {
       orderId: null,
       bookingId: null,
+      jobId: jobIdStr,
+      personId: personIdStr,
+      title: str(title),
       type: type as TaskType,
       status: "PENDING",
       scheduledDate: new Date(`${scheduledDate}T00:00:00`),
@@ -74,7 +90,7 @@ export async function POST(req: NextRequest) {
       toLocation,
       // assignedTo (driver) + towVehicle left empty — fleet fills those.
     },
-    select: { id: true, type: true, status: true, scheduledDate: true },
+    select: { id: true, type: true, status: true, scheduledDate: true, title: true, jobId: true },
   });
 
   return NextResponse.json({ ok: true, task });
