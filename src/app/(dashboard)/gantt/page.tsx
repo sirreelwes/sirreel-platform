@@ -359,7 +359,7 @@ export default function GanttPage() {
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id ?? null
   // Unit N/A (out-of-service) per-row action menu. Positioned fixed (the label
   // column scrolls, so an absolute dropdown would clip).
-  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; isNa: boolean; tier: string; x: number; y: number }>(null)
+  const [unitMenu, setUnitMenu] = useState<null | { assetId: string; unitName: string; isNa: boolean; tier: string; x: number; y: number }>(null)
   // Asset summary panel — opened by clicking a unit's NAME (asset view).
   const [summaryAssetId, setSummaryAssetId] = useState<string | null>(null)
   // Standalone "+ New Task" (delivery/pickup DispatchTask, orderId null).
@@ -370,6 +370,11 @@ export default function GanttPage() {
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [naBusy, setNaBusy] = useState(false)
   const [naErr, setNaErr] = useState<string | null>(null)
+  // What's WRONG with the unit — captured at the moment it's greyed so
+  // fleet doesn't have to phone whoever flagged it (Wes, 2026-08-24).
+  // Holds the pending refer/mark-na action while the note is typed.
+  const [naPrompt, setNaPrompt] = useState<null | { assetId: string; action: 'refer' | 'mark-na'; unitName: string }>(null)
+  const [naNote, setNaNote] = useState('')
   // Drag-to-reassign (FLEET only): drag an assigned primary bar onto another
   // unit row to rebind for the SAME dates via the existing assign/unassign
   // endpoints. Dates never change (that's the modal reschedule).
@@ -898,18 +903,20 @@ export default function GanttPage() {
   // Sales "Refer to Maintenance" (canCreateBooking) / fleet "Mark Not Available"
   // + "Clear" (canAssignAssets) — open/close OPEN MaintenanceRecords, flowing
   // through the shipped N/A grey display. Server enforces the per-action perm.
-  async function handleUnitNa(assetId: string, action: 'refer' | 'mark-na' | 'clear') {
+  async function handleUnitNa(assetId: string, action: 'refer' | 'mark-na' | 'clear', note?: string) {
     setNaBusy(true)
     setNaErr(null)
     try {
       const res = await fetch(`/api/scheduling/assets/${assetId}/maintenance`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, note: note?.trim() || undefined }),
       })
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.reason || json.error || `failed (${res.status})`)
       setUnitMenu(null)
+      setNaPrompt(null)
+      setNaNote('')
       refreshTimeline()
     } catch (e) {
       setNaErr(e instanceof Error ? e.message : String(e))
@@ -1461,7 +1468,7 @@ export default function GanttPage() {
                                   setUnitMenu(
                                     unitMenu?.assetId === entry.unit.assetId
                                       ? null
-                                      : { assetId: entry.unit.assetId, isNa, tier: entry.unit.tier, x: r.right, y: r.bottom },
+                                      : { assetId: entry.unit.assetId, unitName: entry.unit.unitName, isNa, tier: entry.unit.tier, x: r.right, y: r.bottom },
                                   )
                                 }}
                                 className="text-gray-400 hover:text-gray-700 text-[13px] leading-none px-1"
@@ -2212,6 +2219,42 @@ export default function GanttPage() {
       )}
 
       {/* Unit N/A action menu — fixed so the scrolling label column can't clip it. */}
+      {naPrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!naBusy) { setNaPrompt(null); setNaNote('') } }}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900">
+              {naPrompt.action === 'refer' ? 'Refer to maintenance' : 'Mark not available'} · {naPrompt.unitName}
+            </h3>
+            <p className="text-[12px] text-gray-500 mt-1">
+              What&rsquo;s wrong with it? Fleet sees this on the unit — one line is plenty.
+            </p>
+            <textarea
+              value={naNote}
+              onChange={(e) => setNaNote(e.target.value.slice(0, 280))}
+              rows={3}
+              autoFocus
+              placeholder="e.g. Driver-side mirror cracked; check engine light came on I-5"
+              className="mt-2 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 resize-y"
+            />
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[10px] text-gray-400">{naNote.length}/280</span>
+              {naErr && <span className="text-[10px] text-rose-600">{naErr}</span>}
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => { setNaPrompt(null); setNaNote('') }} disabled={naBusy}
+                className="text-[12px] text-gray-600 hover:text-gray-900 px-3 py-1.5">Cancel</button>
+              <button
+                onClick={() => handleUnitNa(naPrompt.assetId, naPrompt.action, naNote)}
+                disabled={naBusy || !naNote.trim()}
+                title={!naNote.trim() ? 'Add a short description first' : undefined}
+                className="text-[12px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded disabled:opacity-40">
+                {naBusy ? 'Saving…' : naPrompt.action === 'refer' ? 'Refer' : 'Mark N/A'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {unitMenu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setUnitMenu(null)} />
@@ -2220,15 +2263,19 @@ export default function GanttPage() {
             style={{ left: Math.max(8, unitMenu.x - 208), top: unitMenu.y + 4 }}
           >
             {canSetStatus && !unitMenu.isNa && (
-              <button onClick={() => handleUnitNa(unitMenu.assetId, 'refer')} disabled={naBusy}
+              <button
+                onClick={() => { setNaNote(''); setNaErr(null); setNaPrompt({ assetId: unitMenu.assetId, action: 'refer', unitName: unitMenu.unitName }); setUnitMenu(null) }}
+                disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
-                Refer to Maintenance
+                Refer to Maintenance…
               </button>
             )}
             {canFleetOps && !unitMenu.isNa && (
-              <button onClick={() => handleUnitNa(unitMenu.assetId, 'mark-na')} disabled={naBusy}
+              <button
+                onClick={() => { setNaNote(''); setNaErr(null); setNaPrompt({ assetId: unitMenu.assetId, action: 'mark-na', unitName: unitMenu.unitName }); setUnitMenu(null) }}
+                disabled={naBusy}
                 className="w-full text-left px-3 py-1.5 text-[12px] hover:bg-gray-50 disabled:opacity-40">
-                Mark Not Available
+                Mark Not Available…
               </button>
             )}
             {canFleetOps && unitMenu.isNa && (
