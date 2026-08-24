@@ -56,6 +56,7 @@ function mapCategoryName(name: string | null | undefined): string {
 // Category palette — shared with the gantt/calendar via statusTokens
 // (this endpoint embeds the hex in its payload).
 import { CAT_COLORS } from '@/lib/scheduling/statusTokens'
+import { bookingInfoGaps, companyLabel } from '@/lib/scheduling/infoGaps'
 
 // Match the existing endpoint's lifecycle map: convert a SirReel
 // BookingStatus into the timeline-display token the gantt cares
@@ -192,6 +193,8 @@ export async function GET(req: NextRequest) {
           },
         },
       },
+      companyId: true,
+      expectsOrder: true,
       company: { select: { id: true, name: true } },
       person: { select: { id: true, firstName: true, lastName: true } },
       agent: { select: { id: true, name: true } },
@@ -370,8 +373,19 @@ export async function GET(req: NextRequest) {
       jobCode: b.job?.jobCode ?? null,
       tags: b.job?.tags ?? [],
       rwOrderNumbers: (b.job?.rwOrders ?? []).map((r) => r.rwOrderNumber),
-      company: b.company.name,
+      company: companyLabel(b.company?.name),
+      companyId: b.companyId,
       jobName: b.jobName,
+      // Call-in reservations can be created before the company / job /
+      // order are known — the board shows a ⚠ triangle until they are.
+      expectsOrder: b.expectsOrder,
+      infoGaps: bookingInfoGaps({
+        companyId: b.companyId,
+        jobId: b.job?.id ?? null,
+        jobName: b.jobName,
+        expectsOrder: b.expectsOrder,
+        orderCount: (bookingExtras.get(b.id)?.orders ?? []).length,
+      }),
       jobNum: b.bookingNumber,
       rwOrderNumber: b.rentalworksOrderId,
       contact: showClientContacts ? nameOfPerson(b.person) : null,
@@ -450,6 +464,8 @@ export async function GET(req: NextRequest) {
               bookingNumber: true,
               status: true,
               jobName: true,
+              companyId: true,
+              expectsOrder: true,
               rentalworksOrderId: true,
               job: { select: { id: true, jobCode: true, tags: true, rwOrders: { select: { rwOrderNumber: true } } } },
               company: { select: { name: true } },
@@ -509,8 +525,17 @@ export async function GET(req: NextRequest) {
       jobCode: a.bookingItem.booking.job?.jobCode ?? null,
       tags: a.bookingItem.booking.job?.tags ?? [],
       rwOrderNumbers: (a.bookingItem.booking.job?.rwOrders ?? []).map((r) => r.rwOrderNumber),
-      clientName: a.bookingItem.booking.company.name,
+      clientName: companyLabel(a.bookingItem.booking.company?.name),
+      companyId: a.bookingItem.booking.companyId,
       jobName: a.bookingItem.booking.jobName,
+      expectsOrder: a.bookingItem.booking.expectsOrder,
+      infoGaps: bookingInfoGaps({
+        companyId: a.bookingItem.booking.companyId,
+        jobId: a.bookingItem.booking.job?.id ?? null,
+        jobName: a.bookingItem.booking.jobName,
+        expectsOrder: a.bookingItem.booking.expectsOrder,
+        orderCount: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).length,
+      }),
       agent: a.bookingItem.booking.agent.name ?? '',
       agentId: a.bookingItem.booking.agent?.id ?? null, // owner — gates the sales status control
       rwOrderNumber: a.bookingItem.booking.rentalworksOrderId ?? null,

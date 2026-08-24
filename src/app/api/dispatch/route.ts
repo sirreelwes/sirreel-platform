@@ -42,6 +42,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { FulfillmentLane, OrderStatus, BookingPriority, PickListStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
+import { companyLabel } from '@/lib/scheduling/infoGaps'
 
 export const dynamic = 'force-dynamic'
 
@@ -427,7 +428,7 @@ export async function GET(req: NextRequest) {
       // a CONFIRMED booking that was never marked checked out still has
       // to appear on the day it comes back.
       status: (a.status === 'CHECKED_OUT' || b.status === 'ACTIVE' ? 'ON_JOB' : 'BOOKED') as OrderStatus,
-      companyName: b.company.name,
+      companyName: companyLabel(b.company?.name),
       jobName: b.jobName,
       jobCode: b.job?.jobCode ?? null,
       assetUnitName: a.asset.unitName,

@@ -907,7 +907,12 @@ enum UnionStatus {
 model Booking {
   id             String          @id @default(uuid())
   bookingNumber  String          @unique @map("booking_number") // SR-2026-0042
-  companyId      String          @map("company_id")
+  /// NULLABLE since 2026-08-24 (call-in intake): a client can phone in a
+  /// reservation before the production company is known. A Booking with
+  /// companyId = NULL is INCOMPLETE — the gantt shows a warning triangle
+  /// until an agent fills it in (see src/lib/scheduling/infoGaps.ts).
+  /// Everything created through a normal quote/order flow still carries one.
+  companyId      String?         @map("company_id")
   personId       String          @map("person_id") // Who called / requested (coordinator or UPM)
   referredById   String?         @map("referred_by_id") // The UPM, if a coordinator called on their behalf
   agentId        String          @map("agent_id")
@@ -918,6 +923,9 @@ model Booking {
   /// scheduling engine does NOT read this column.
   jobId          String?         @map("job_id")
   productionName String?         @map("production_name") // "Stranger Things S5" — legacy free-text; new holds skip it
+  /// EMPTY STRING = "job not named yet" (call-in intake). Kept NOT NULL so
+  /// the ~460 existing read sites stay string-typed; use
+  /// src/lib/scheduling/infoGaps.ts rather than testing for '' by hand.
   jobName        String          @map("job_name")
   startDate      DateTime        @map("start_date") @db.Date
   endDate        DateTime        @map("end_date") @db.Date
@@ -958,6 +966,11 @@ model Booking {
   /// Booking. NULL on Bookings created via the +Hold flow.
   planyoCartId String? @unique @map("planyo_cart_id")
 
+  /// Call-in intake: the agent expects a billable Order to be attached to
+  /// this reservation later. A declared expectation, not a derived fact —
+  /// it keeps the incomplete-info triangle up until an Order exists.
+  expectsOrder Boolean @default(false) @map("expects_order")
+
   source BookingSource @default(PHONE)
 
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -973,7 +986,13 @@ model Booking {
   archivedAt  DateTime? @map("archived_at")
 
   // Relations
-  company           Company            @relation(fields: [companyId], references: [id])
+  /// onDelete: Restrict is PINNED. Making companyId optional flipped
+  /// Prisma's implicit default to SetNull, which would silently orphan real
+  /// bookings when a company row is deleted (the CRM duplicate-merge path
+  /// deletes companies without re-pointing bookings). Restrict keeps the
+  /// pre-2026-08-24 guarantee: you cannot delete a company that still has
+  /// bookings.
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
   person            Person             @relation("BookingContact", fields: [personId], references: [id])
   referredBy        Person?            @relation("BookingReferrer", fields: [referredById], references: [id])
   agent             User               @relation("BookingAgent", fields: [agentId], references: [id])

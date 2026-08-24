@@ -17,6 +17,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { companyLabel } from '@/lib/scheduling/infoGaps'
 
 /** YYYY-MM-DD in America/Los_Angeles, offset by N days. */
 export function pacificYmd(offsetDays = 0): string {
@@ -94,7 +95,7 @@ export async function fleetMovementsOn(dbDate: Date, edge: 'start' | 'end'): Pro
       category: r.bookingItem.category.name,
       bookingNumber: r.bookingItem.booking.bookingNumber,
       jobName: r.bookingItem.booking.jobName,
-      company: r.bookingItem.booking.company.name,
+      company: companyLabel(r.bookingItem.booking.company?.name),
       deliveryTime: r.bookingItem.booking.deliveryTime,
       pickupTime: r.bookingItem.booking.pickupTime,
       inspection: insp

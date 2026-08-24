@@ -93,7 +93,7 @@ export default async function FleetInspectionPage({ params }: Params) {
             <span className="text-zinc-400 font-normal"> · {assignment.asset.category.name}</span>
           </h1>
           <p className="text-zinc-400 text-sm mt-1">
-            {booking.jobName} — {booking.company.name} ({booking.bookingNumber})
+            {booking.jobName} — {booking.company?.name ?? '—'} ({booking.bookingNumber})
           </p>
           <p className="text-zinc-500 text-xs mt-0.5">
             {[assignment.asset.make, assignment.asset.model].filter(Boolean).join(' ')}

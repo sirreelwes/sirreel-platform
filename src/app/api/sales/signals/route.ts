@@ -77,9 +77,11 @@ export async function GET(req: NextRequest) {
   ]);
 
   // Filter dormant client candidates: latest return < dormantCutoff.
+  // companyId is nullable (call-in holds with no company yet) — those
+  // rows can't identify a dormant client, so they drop out here.
   const dormantCompanyIds = dormantBookings
-    .filter((b) => b._max.returnedAt && b._max.returnedAt < dormantCutoff)
-    .map((b) => b.companyId);
+    .filter((b) => b.companyId && b._max.returnedAt && b._max.returnedAt < dormantCutoff)
+    .map((b) => b.companyId as string);
 
   // Exclude companies that already have an active or quoted job to avoid noise.
   let dormantClients: Array<{
@@ -112,7 +114,9 @@ export async function GET(req: NextRequest) {
         },
         take: 25,
       });
-      const lastReturnedById = new Map(dormantBookings.map((b) => [b.companyId, b._max.returnedAt]));
+      const lastReturnedById = new Map(
+        dormantBookings.filter((b) => b.companyId).map((b) => [b.companyId as string, b._max.returnedAt]),
+      );
       dormantClients = companies
         .map((c) => ({
           id: c.id,
