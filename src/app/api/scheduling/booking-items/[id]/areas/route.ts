@@ -22,18 +22,32 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession()
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Which stage is this hold on? Areas that live INSIDE a specific stage
+  // (Hospital / Police-Jail / Morgue are sets within Standing Sets) are
+  // only offered when that stage is the one assigned. Complex-wide areas
+  // — green rooms, offices, parking — always apply. An unassigned hold
+  // sees everything, since the stage isn't chosen yet.
+  const item = await prisma.bookingItem.findUnique({
+    where: { id: params.id },
+    select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } }, select: { asset: { select: { unitName: true } } }, take: 1 } },
+  })
+  const stageName = item?.assignments[0]?.asset.unitName ?? null
+
   const [areas, selected] = await Promise.all([
     prisma.stageArea.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(stageName ? { OR: [{ parentStage: null }, { parentStage: stageName }] } : {}),
+      },
       orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }],
-      select: { id: true, name: true, kind: true },
+      select: { id: true, name: true, kind: true, parentStage: true },
     }),
     prisma.bookingItemStageArea.findMany({
       where: { bookingItemId: params.id },
       select: { stageAreaId: true },
     }),
   ])
-  return NextResponse.json({ areas, selectedIds: selected.map((s) => s.stageAreaId) })
+  return NextResponse.json({ areas, selectedIds: selected.map((s) => s.stageAreaId), stageName })
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

@@ -18,6 +18,8 @@ interface Area {
   id: string
   name: string
   kind: string
+  /** Set when the area lives inside one specific stage. */
+  parentStage?: string | null
 }
 
 export function StageAreasPicker({
@@ -30,6 +32,7 @@ export function StageAreasPicker({
   const [areas, setAreas] = useState<Area[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [stageName, setStageName] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -39,6 +42,7 @@ export function StageAreasPicker({
         if (!live || !d) return
         setAreas(d.areas || [])
         setSelected(new Set<string>(d.selectedIds || []))
+        setStageName(d.stageName ?? null)
       })
       .catch(() => { if (live) setAreas([]) })
     return () => { live = false }
@@ -95,6 +99,7 @@ export function StageAreasPicker({
         <span className="text-[10px] font-bold text-gray-400 uppercase">Areas in use</span>
         <span className="text-[10px] text-gray-400">
           {selected.size === 0 ? 'none selected' : `${selected.size} selected`}
+          {stageName ? ` · in ${stageName}` : ' · pick a stage to narrow these'}
           {saving && ' · saving…'}
         </span>
       </div>

@@ -5819,6 +5819,13 @@ model StageArea {
   name      String   @unique
   /// ROOM (interior set/office) or PARKING (exterior lot). Groups the picker.
   kind      String   @default("ROOM")
+  /// The stage this area lives INSIDE, by unit name — e.g. Hospital,
+  /// Police/Jail and Morgue are sets within Standing Sets (Wes
+  /// 2026-08-24: "Lankershim Studios has three main stages within the
+  /// complex"). NULL = complex-wide and offered on every stage (green
+  /// rooms, offices, parking). Scoped by NAME rather than assetId so a
+  /// retired/re-created stage Asset can't orphan the mapping.
+  parentStage String?  @map("parent_stage")
   sortOrder Int      @default(0) @map("sort_order")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
