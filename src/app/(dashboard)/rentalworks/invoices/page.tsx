@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 /**
  * RentalWorks invoices — the AR workspace.
@@ -53,7 +54,7 @@ const ago = (d: string | null) => {
 
 const PAGE = 100;
 
-export default function RwInvoicesPage() {
+function RwInvoicesPageInner() {
   const [data, setData] = useState<Payload | null>(null);
   const [filter, setFilter] = useState<string>('open');
   const [q, setQ] = useState('');
@@ -346,5 +347,16 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub?:
       <div className={`text-2xl font-extrabold tabular-nums ${cls}`}>{value}</div>
       {sub && <div className="text-[10px] text-lt-fg3 mt-0.5">{sub}</div>}
     </div>
+  );
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function RwInvoicesPage() {
+  return (
+    <SurfaceGuard need="billing" label="Receivables">
+      <RwInvoicesPageInner />
+    </SurfaceGuard>
   );
 }

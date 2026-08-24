@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
 import { ClientRwCustomerLink } from '@/components/rentalworks/ClientRwCustomerLink';
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 /**
  * RentalWorks reconciliation workspace.
@@ -112,7 +113,7 @@ function RwSyncAge({ iso }: { iso: string | null }) {
   );
 }
 
-export default function ReconcilePage() {
+function ReconcilePageInner() {
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [bucket, setBucket] = useState<Bucket>('ready');
@@ -776,5 +777,16 @@ function ReconcilePanel({
         )}
       </div>
     </div>
+  );
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function ReconcilePage() {
+  return (
+    <SurfaceGuard need="billing" label="RentalWorks reconcile">
+      <ReconcilePageInner />
+    </SurfaceGuard>
   );
 }

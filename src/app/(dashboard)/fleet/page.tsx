@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import { getPermissions } from '@/lib/permissions';
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 type Asset = {
   id: string;
@@ -71,7 +72,7 @@ function CatThumb({ assetId, hasImage, name }: { assetId: string; hasImage: bool
   );
 }
 
-export default function FleetPage() {
+function FleetPageInner() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
@@ -424,5 +425,16 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
         </div>
       </div>
     </div>
+  );
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function FleetPage() {
+  return (
+    <SurfaceGuard need="fleet" label="Fleet">
+      <FleetPageInner />
+    </SurfaceGuard>
   );
 }

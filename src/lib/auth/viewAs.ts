@@ -44,6 +44,17 @@ export function effectiveViewRole(realRole: UserRole, req: NextRequest): UserRol
   return realRole
 }
 
+/**
+ * The real-world shape of a previewed role. Every AGENT on the roster is
+ * salesOnly (Jose, Oliver) — Ana moved to BILLING — so previewing "Sales"
+ * must carry the salesOnly strip or it shows a department nobody occupies
+ * and quietly grants billing surfaces Jose can't reach (caught 2026-08-24
+ * when previewing Sales still rendered Receivables).
+ */
+export function previewSalesOnly(role: string | null | undefined): boolean {
+  return role === 'AGENT'
+}
+
 /** Client side: read the active preview role, if any. */
 export function readViewAsCookie(): string | null {
   if (typeof document === 'undefined') return null

@@ -6,7 +6,7 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import { getPermissions, getNavSections, isSalesRole, isFleetYardRole, isBillingRole } from '@/lib/permissions';
-import { readViewAsCookie, writeViewAsCookie } from '@/lib/auth/viewAs';
+import { readViewAsCookie, writeViewAsCookie, previewSalesOnly } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
 import { NewJobLauncher } from '@/components/jobs/NewJobLauncher';
@@ -112,7 +112,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Admins using viewAsRole inherit the target role's default surface
   // (non-sales-only) — they're previewing a baseline operational view.
   // Their actual sales-only flag only applies when not impersonating.
-  const salesOnly: boolean = actualRole === 'ADMIN' && viewAsRole ? false : actualSalesOnly;
+  // Previewing a role reproduces that DEPARTMENT, salesOnly strip included
+  // (every real AGENT is salesOnly) — otherwise the preview shows a shape
+  // nobody on the roster actually has.
+  const salesOnly: boolean = actualRole === 'ADMIN' && viewAsRole ? previewSalesOnly(viewAsRole) : actualSalesOnly;
   // email passed so getNavSections can gate the HR entry on the
   // hardcoded allowlist (Wes + Dani). Not used by getPermissions —
   // the HR API is the actual authorization gate.
@@ -134,7 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // them to the pipeline on any visit to /dashboard. Respects the
   // admin view-as toggle so previewing as AGENT routes correctly.
   if (typeof window !== 'undefined' && isSalesRole(role) && pathname === '/dashboard') {
-    router.replace('/sales/pipeline');
+    router.replace('/inquiries');
   }
 
   // Yard roles (FLEET_TECH / DISPATCHER) live on the mobile Fleet Today

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -85,7 +86,7 @@ const FLEET_TEAM = ['Hugo', 'Julian', 'Chris'];
 const CATEGORIES = ['Cube Truck', 'Cargo Van', 'PopVan', 'Passenger Van', 'DLUX', 'Camera Cube', 'Studios', 'ProScout/VTR', 'Stakebed'];
 
 // ═══ Component ═══
-export default function MaintenancePage() {
+function MaintenancePageInner() {
   const [records, setRecords] = useState<MaintRecord[]>(RECORDS);
   const [tab, setTab] = useState<'active' | 'damage' | 'scheduled' | 'history'>('active');
   const [selected, setSelected] = useState<MaintRecord | null>(null);
@@ -474,5 +475,16 @@ export default function MaintenancePage() {
 
       {toast && <div className="fixed bottom-4 right-4 px-4 py-2 rounded-lg bg-emerald-500 text-white text-[12px] font-semibold shadow-lg z-50">{toast}</div>}
     </div>
+  );
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function MaintenancePage() {
+  return (
+    <SurfaceGuard need="maintenance" label="Maintenance">
+      <MaintenancePageInner />
+    </SurfaceGuard>
   );
 }

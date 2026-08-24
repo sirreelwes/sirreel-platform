@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 interface QueueItem {
   id: string
@@ -51,7 +52,7 @@ function fmtDate(d: string | null) {
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function WarehousePickQueuePage() {
+function WarehousePickQueuePageInner() {
   const [picklists, setPicklists] = useState<QueueItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [includeTerminal, setIncludeTerminal] = useState(false)
@@ -163,4 +164,15 @@ export default function WarehousePickQueuePage() {
       )}
     </div>
   )
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function WarehousePickQueuePage() {
+  return (
+    <SurfaceGuard need="warehouse" label="Warehouse picking">
+      <WarehousePickQueuePageInner />
+    </SurfaceGuard>
+  );
 }

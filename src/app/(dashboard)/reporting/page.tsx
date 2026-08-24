@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 // ═══ Helpers ═══
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
@@ -10,7 +11,7 @@ const today = toDS(new Date());
 const monthName = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
 // ═══ Component ═══
-export default function ReportingPage() {
+function ReportingPageInner() {
   const [period, setPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
 
   // Revenue data
@@ -296,5 +297,16 @@ export default function ReportingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Page-level guard (Wes 2026-08-24): a clean explanation instead of an
+// empty skeleton when someone reaches this by URL. Cosmetic only — the
+// APIs behind this page already refuse the same roles.
+export default function ReportingPage() {
+  return (
+    <SurfaceGuard need="reporting" label="Reporting">
+      <ReportingPageInner />
+    </SurfaceGuard>
   );
 }
