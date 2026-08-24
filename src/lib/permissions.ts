@@ -401,8 +401,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // email allowlist) and Payment Info (client bank details are billing's
   // to send). Inventory + Paperwork tools were added back at Wes's
   // request the same day — billing looks up what a line item is when an
-  // invoice is disputed, and chases COIs/contracts. Reservations and
-  // Deliveries stay out as pure ops surfaces.
+  // invoice is disputed, chases COIs/contracts, and reads Reservations
+  // to settle a disputed rental window. Deliveries/Fleet/Warehouse and
+  // the COO reporting section stay out as pure ops surfaces.
   if (navRole === 'BILLING') {
     return [
       {
@@ -425,6 +426,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // exists precisely so those scope to BILLING + admin.
           { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
           { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
+          // Reservations back 2026-08-24 (Wes). BILLING already has
+          // gantt:true — seeing what actually went out, and when it came
+          // back, is how a disputed rental window gets settled.
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
