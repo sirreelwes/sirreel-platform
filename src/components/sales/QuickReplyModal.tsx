@@ -94,6 +94,15 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // The contact the parser resolved, kept even when the company didn't —
   // a company pick plus this is enough to enable soft holds.
   const [parsedPersonId, setParsedPersonId] = useState<string | null>(null);
+
+  // Job typeahead (Wes, 2026-08-25) — same shape as the company one above.
+  // Beyond convenience: picking an EXISTING job pre-resolves `job`, so the
+  // send path no longer has to stop and open the JobResolverModal, and a
+  // client asking for more gear on a job we already have stops spawning a
+  // duplicate.
+  const [jobHits, setJobHits] = useState<Array<{ id: string; jobCode: string; name: string; companyId: string | null; companyName: string | null; status: string }>>([]);
+  const [jobOpen, setJobOpen] = useState(false);
+  const adoptedJobName = useRef<string | null>(null);
   const [jobName, setJobName] = useState<string | null>(null);
   const [pickup, setPickup] = useState<string | null>(null);
   const [ret, setRet] = useState<string | null>(null);
@@ -199,6 +208,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
       adoptedName.current = (parsed.clientName ?? '').trim() || null;
       setClientName(parsed.clientName ?? null);
+      adoptedJobName.current = (parsed.productionName ?? '').trim() || null;
       setJobName(parsed.productionName ?? null);
       // Default the "ask the client" toggle ON when we have neither the
       // production company nor a job name — the reply will request them.
@@ -287,6 +297,51 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       setSoftHold(false);
     }
   }, [matchedCompanyId, parsedPersonId]);
+
+  // Debounced job lookup. Scoped to the matched company when we have one —
+  // "Neon Nights" for THIS client beats every Neon Nights in the book.
+  useEffect(() => {
+    const q = (jobName ?? '').trim();
+    if (adoptedJobName.current !== null && q === adoptedJobName.current) return;
+    adoptedJobName.current = null;
+    // Editing the name detaches any previously picked job: the holds must
+    // not land on a job the agent has moved away from.
+    setJob(null);
+    if (q.length < 2) {
+      setJobHits([]);
+      return;
+    }
+    const shape = (d: { jobs?: unknown }) =>
+      (Array.isArray(d.jobs) ? d.jobs : []).slice(0, 6).map((j: {
+        id: string; jobCode: string; name: string; status: string;
+        company?: { id: string; name: string } | null;
+      }) => ({
+        id: j.id, jobCode: j.jobCode, name: j.name, status: j.status,
+        companyId: j.company?.id ?? null, companyName: j.company?.name ?? null,
+      }));
+    const search = async (companyId: string | null) => {
+      const params = new URLSearchParams({ search: q, statuses: 'QUOTED,ACTIVE' });
+      if (companyId) params.set('companyId', companyId);
+      const r = await fetch(`/api/jobs?${params.toString()}`);
+      return shape(await r.json());
+    };
+    const t = setTimeout(() => {
+      (async () => {
+        // Scoped first — this client's own jobs are what the agent means
+        // nine times in ten. If the scope finds nothing, fall back to an
+        // org-wide search rather than silently insisting the project is
+        // new: the parser may have matched the wrong company, or this may
+        // be a new contact at a company we already work with. Picking a
+        // cross-company hit moves the company with it (handled at the
+        // click), so the agent can't half-attach.
+        let hits = await search(matchedCompanyId);
+        if (hits.length === 0 && matchedCompanyId) hits = await search(null);
+        setJobHits(hits);
+        setJobOpen(hits.length > 0);
+      })().catch(() => setJobHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [jobName, matchedCompanyId]);
 
   useEffect(() => { run(); }, [run]);
 
@@ -556,14 +611,63 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Project / job name</label>
                     <input
                       value={jobName ?? ''}
                       onChange={(e) => setJobName(e.target.value)}
+                      onFocus={() => { if (jobHits.length && !job) setJobOpen(true); }}
                       placeholder="e.g. Neon Nights"
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
                     />
+                    {job ? (
+                      <div className="mt-1 text-[10px] text-emerald-700">
+                        ✓ Existing job {job.jobCode} — holds land here
+                      </div>
+                    ) : (jobName ?? '').trim().length >= 2 ? (
+                      <div className="mt-1 text-[10px] text-gray-400">New project — a job gets created</div>
+                    ) : null}
+                    {jobOpen && jobHits.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 top-[52px] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {jobHits.map((j) => (
+                          <button
+                            key={j.id}
+                            type="button"
+                            onClick={() => {
+                              adoptedJobName.current = j.name;
+                              setJobName(j.name);
+                              setJob({ jobId: j.id, jobCode: j.jobCode, name: j.name });
+                              // Attaching to a job under a different company
+                              // moves the company too — the Job is the root,
+                              // and holds follow it (same rule onJobResolved
+                              // applies when the resolver is used instead).
+                              if (j.companyId && j.companyId !== matchedCompanyId) {
+                                setMatchedCompanyId(j.companyId);
+                                if (j.companyName) {
+                                  adoptedName.current = j.companyName;
+                                  setClientName(j.companyName);
+                                }
+                              }
+                              setJobOpen(false);
+                            }}
+                            className="block w-full text-left px-2.5 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="text-[12px] text-gray-800">{j.name}</span>
+                            <span className="block text-[10px] text-gray-400">
+                              <span className="font-mono">{j.jobCode}</span>
+                              {j.companyName ? ` · ${j.companyName}` : ''} · {j.status.toLowerCase()}
+                            </span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setJobOpen(false)}
+                          className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                        >
+                          Keep &ldquo;{jobName}&rdquo; as a new project
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* Ask only for the field(s) we don't have. Hidden entirely
