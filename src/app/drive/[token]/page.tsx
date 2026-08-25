@@ -240,16 +240,29 @@ export default function DriverJobPage({ params }: { params: { token: string } })
             <div className="mt-0.5 text-[13px] text-zinc-300">{YARD.address}</div>
           </div>
 
-          {data.instructions.pickup ? (
+          {data.instructions.pickup && (
             <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-zinc-200">
               {data.instructions.pickup}
             </p>
-          ) : (
-            <p className="text-[14px] leading-relaxed text-zinc-400">
-              Someone will meet you at the yard — if it&rsquo;s outside business hours,
-              use the assistant below.
-            </p>
           )}
+
+          {/* One closing line, chosen by how the pickup is staffed. Unattended
+              is the case that goes wrong: there is nobody on site to catch a
+              driver's mistake, so the instructions stop being a courtesy and
+              become the procedure. Never paired with "check in with staff" —
+              that is the opposite instruction. */}
+          {data.instructions.unattendedPickup ? (
+            <p className={`text-[14px] leading-relaxed text-amber-200/90 ${data.instructions.pickup ? 'mt-2.5' : ''}`}>
+              {data.instructions.pickup
+                ? 'Nobody will be on site to meet you — please follow these pickup instructions exactly. If anything is unclear, or what you find does not match, use the assistant below before moving the vehicle.'
+                : 'Nobody will be on site to meet you, and no pickup instructions have been posted yet. Use the assistant below to get them before you arrive — do not attempt the pickup without them.'}
+            </p>
+          ) : !data.instructions.pickup ? (
+            <p className="text-[14px] leading-relaxed text-zinc-400">
+              Please check in with SirReel staff to sign out the vehicle — if it&rsquo;s
+              outside business hours, use the assistant below.
+            </p>
+          ) : null}
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <a href={APPLE_MAPS} target="_blank" rel="noopener noreferrer"
