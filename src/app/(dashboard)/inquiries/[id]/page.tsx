@@ -468,7 +468,7 @@ export default function InquiryDetailPage() {
         onClose={() => setWelcomeTarget(null)}
         onSent={(info) => {
           setWelcomeTarget(null)
-          setWelcomeFlash(`Sent to ${info.recipient} — a plain reply, no portal link. Use Convert to quote when they're ready for paperwork.`)
+          setWelcomeFlash(`Sent to ${info.recipient} — your message plus a “Start your order” button. Their click mints the Order inside the resolved Job.`)
           window.setTimeout(() => setWelcomeFlash(null), 8000)
         }}
       />

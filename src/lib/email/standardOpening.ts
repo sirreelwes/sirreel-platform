@@ -27,9 +27,15 @@ export const STANDARD_OPENING_LINE =
  * Built server-side because only the server knows the project name.
  */
 export function defaultEmailBody(input: {
-  kind: 'quick-reply' | 'welcome'
+  kind: 'quick-reply' | 'welcome' | 'quick-respond'
   projectName?: string | null
 }): string {
+  // Quick Respond gets the bare standard line and NOTHING else. Wes
+  // 2026-08-25: "Do NOT tell client anything about availability etc. …
+  // Generic language would be acceptable: Great to hear from you etc,
+  // nothing specific." No project name, no portal, no promises — the rep
+  // writes anything particular themselves.
+  if (input.kind === 'quick-respond') return STANDARD_OPENING_LINE
   if (input.kind === 'welcome') {
     const project = input.projectName?.trim() || 'this project'
     return [

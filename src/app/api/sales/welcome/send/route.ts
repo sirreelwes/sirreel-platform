@@ -81,12 +81,31 @@ export async function POST(req: NextRequest) {
       data: { assignedToId: ctx.agent.id },
     })
 
-    // Quick Respond carries no portal button, so it mints no invite — a
-    // token nothing links to is dead weight. It also must NOT hit the
-    // already-used guard below: refusing to reply to a client because they
-    // already started paperwork would be nonsense for a plain email.
+    // Quick Respond carries a "Start your order" button (Wes 2026-08-25), so
+    // it needs a live token — but it must NOT hit the already-used refusal
+    // below: declining to reply to someone because they already started
+    // paperwork would be nonsense for a plain email. It also REUSES an
+    // unexpired invite rather than rotating it, so a link the client is
+    // already holding keeps working. (A used invite is fine either way —
+    // welcomeStart resolves straight to the existing order.)
     let token = ''
-    if (!quickRespond) {
+    if (quickRespond) {
+      const live = await prisma.welcomeInvite.findUnique({
+        where: { inquiryId },
+        select: { token: true, expiresAt: true },
+      })
+      if (live && live.expiresAt > new Date()) {
+        token = live.token
+      } else {
+        token = randomBytes(32).toString('hex') // 256-bit
+        const expiresAt = new Date(Date.now() + WELCOME_INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
+        await prisma.welcomeInvite.upsert({
+          where: { inquiryId },
+          create: { token, inquiryId, personId: ctx.person.id, expiresAt, jobId },
+          update: { token, personId: ctx.person.id, expiresAt, jobId },
+        })
+      }
+    } else {
       // One invite per inquiry: upsert refreshes token + expiry on re-send
       // (old emailed link dies, the new one carries the fresh token). If the
       // invite was already USED, the job exists — refuse rather than re-invite.

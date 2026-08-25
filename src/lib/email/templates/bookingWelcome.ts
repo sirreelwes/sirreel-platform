@@ -62,12 +62,13 @@ export interface BookingWelcomeEmailInput {
    *   1. No prepopulated prose. An empty box must send an empty body, not
    *      silently fall back to the default copy — otherwise the rep sees
    *      blank and the client receives the standard welcome.
-   *   2. No portal apparatus. "drop the portal button for quick respond" —
-   *      and with the button gone, everything that sells the portal has to
-   *      go with it, or the email advertises a portal it never links to:
-   *      the CTA block, the "Your TSX portal" bullet, the preheader, and
-   *      the TSX brand framing. TSX is the portal brand ONLY (Wes 8/23),
-   *      so non-portal client copy says SirReel.
+   *   2. No portal PITCH. "drop the portal button for quick respond" took
+   *      out the whole apparatus that sells the portal — the "Your TSX
+   *      portal" bullet, the preheader, the TSX brand framing — because an
+   *      email that advertises a portal it never links to reads as broken.
+   *      TSX is the portal brand ONLY (Wes 8/23), so what is left says
+   *      SirReel. A single "Start your order" button came back afterwards
+   *      (same day): one next step, offered without the sales pitch.
    *
    * Greeting, the rep's own words, rep/support bullets, sign-off and the
    * SirReel footer all still render.
@@ -76,6 +77,16 @@ export interface BookingWelcomeEmailInput {
   /** CTA button label — the welcome/job-begin invite passes
    *  "Get Paperwork Started". Defaults to the original portal wording. */
   ctaLabel?: string
+  /**
+   * Quick Respond's SECOND button (Wes 2026-08-25: "the paperwork button
+   * should remain there also"). Passed in rather than imported, because
+   * welcomeEmail.ts — where the labels live — imports THIS module.
+   *
+   * Both buttons point at the same invite URL: today "start your order" and
+   * "start your paperwork" are one flow, the invite landing mints the Order
+   * and opens the portal where paperwork lives.
+   */
+  secondaryCtaLabel?: string | null
 }
 
 export interface BookingWelcomeEmail {
@@ -99,6 +110,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const repEmail = input.repEmail ? escapeHtml(input.repEmail) : ''
   const portalLink = input.portalLink
   const ctaLabel = escapeHtml(input.ctaLabel || 'Click here for your TSX portal')
+  const secondaryCta = input.secondaryCtaLabel ? escapeHtml(input.secondaryCtaLabel) : ''
   const noteRaw = (input.personalNote || '').trim()
   const customRaw = (input.customMessage || '').trim()
   // HTML-safe, newline→paragraph conversion for the injected agent copy.
@@ -124,8 +136,11 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   // With nothing written, the same default renders, so the box a rep looks at
   // and the email a client receives are the same words.
   const quick = !!input.quickRespond
+  // Quick Respond opens on the generic standard line — never the welcome's
+  // portal paragraph, and never anything specific about units, dates or
+  // availability. The rep replaces or extends it.
   const defaultIntro = quick
-    ? ''
+    ? defaultEmailBody({ kind: 'quick-respond' })
     : defaultEmailBody({ kind: 'welcome', projectName: input.projectName })
   const introHtml = customRaw
     ? toParas(customRaw, 'margin:0 0 16px;')
@@ -150,7 +165,11 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ...(noteRaw ? ['', noteRaw] : []),
     ``,
     ...(quick
-      ? [`  ✓ One team on your job — reply any time and whoever is closest picks it up`]
+      ? [
+          `  ✓ One team on your job — reply any time and whoever is closest picks it up`,
+          ``,
+          `${[input.ctaLabel || 'Start your order', input.secondaryCtaLabel].filter(Boolean).join(' / ')}: ${portalLink}`,
+        ]
       : [
           `Everything you'll need lives in one place:`,
           `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
@@ -271,10 +290,47 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           </tr>
 
           <!-- ── CTA ───────────────────────────────────────────────── -->
-          ${/* Dropped entirely in Quick Respond: no portal button, and so no
-                copy that promises one. Kept as a JS comment, not an HTML one
-                — an HTML comment here ships inside the client's email. */
-            quick ? '' : `<tr>
+          ${/* Two different buttons, not one with two labels. The welcome
+                CTA announces a portal ("Your portal for X is ready", the
+                progress footnote); Quick Respond offers one next step and
+                says nothing about a portal, because the rest of that email
+                does not pitch one. Same destination either way — the invite
+                landing mints the Order. Kept as a JS comment, not an HTML
+                one: an HTML comment here ships inside the client's email. */
+            quick ? `<tr>
+            <td style="padding:24px 36px 4px;text-align:center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td style="padding:0 6px;">
+                    <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:46px;v-text-anchor:middle;width:180px;" arcsize="13%" stroke="f" fillcolor="${GOLD}">
+                      <w:anchorlock/>
+                      <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">${ctaLabel}</center>
+                    </v:roundrect>
+                    <![endif]-->
+                    <!--[if !mso]><!-- -->
+                    <a href="${portalLink}" style="display:inline-block;background-color:${GOLD};color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:13px 26px;border-radius:6px;">
+                      ${ctaLabel} &rarr;
+                    </a>
+                    <!--<![endif]-->
+                  </td>
+                  ${!secondaryCta ? '' : `<td style="padding:0 6px;">
+                    <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${portalLink}" style="height:46px;v-text-anchor:middle;width:200px;" arcsize="13%" strokecolor="${GOLD}" fillcolor="#ffffff">
+                      <w:anchorlock/>
+                      <center style="color:#1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;">${secondaryCta}</center>
+                    </v:roundrect>
+                    <![endif]-->
+                    <!--[if !mso]><!-- -->
+                    <a href="${portalLink}" style="display:inline-block;background-color:#ffffff;color:#1a1a1a;text-decoration:none;font-weight:600;font-size:14px;padding:12px 24px;border:1px solid ${GOLD};border-radius:6px;">
+                      ${secondaryCta} &rarr;
+                    </a>
+                    <!--<![endif]-->
+                  </td>`}
+                </tr>
+              </table>
+            </td>
+          </tr>` : `<tr>
             <td style="padding:28px 36px 8px;text-align:center;">
               <p style="margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#1a1a1a;">
                 Your portal for <strong>${projectName}</strong> is ready.

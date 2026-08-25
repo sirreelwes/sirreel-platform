@@ -355,11 +355,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
     setSendState('idle');
   }, [target, quickRespond]);
 
-  // Welcome sends compose in one box. A REAL welcome seeds it once with the
-  // standard wording, so "editable" means editing real copy rather than
-  // retyping it; Quick Respond deliberately seeds nothing.
+  // Welcome sends compose in one box, seeded once with the standard wording so
+  // "editable" means editing real copy rather than retyping it. Quick Respond
+  // seeds the GENERIC opener only — never anything about availability, units
+  // or dates (Wes 2026-08-25); the server decides which default that is.
   useEffect(() => {
-    if (!target || target.kind !== 'welcome' || quickRespond) return;
+    if (!target || target.kind !== 'welcome') return;
     if (seededRef.current || customMessage.trim() || !preview?.defaultBody) return;
     seededRef.current = true;
     setCustomMessage(preview.defaultBody);
@@ -705,7 +706,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
                         maxLength={5000}
                         placeholder={
                           quickRespond
-                            ? 'Write your reply. The greeting and sign-off are added around it.'
+                            ? 'A generic opener is prefilled — replace or extend it. Nothing specific about availability, units or dates goes out unless you write it.'
                             : singleBox
                               ? 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'
                               : 'Write your message to the client. It appears under the greeting, above the real availability block.'

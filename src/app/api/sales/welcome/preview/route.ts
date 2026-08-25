@@ -56,7 +56,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       // See the quick-reply preview — same prefill contract.
-      defaultBody: defaultEmailBody({ kind: 'welcome', projectName: ctx.inquiryTitle }),
+      defaultBody: quickRespond
+        ? defaultEmailBody({ kind: 'quick-respond' })
+        : defaultEmailBody({ kind: 'welcome', projectName: ctx.inquiryTitle }),
       to: { id: ctx.person.id, name: ctx.person.firstName, email: ctx.person.email, role: null, isPrimary: true },
       alternatives: [],
       from: SEND_FROM,

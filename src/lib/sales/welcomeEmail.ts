@@ -15,6 +15,12 @@ import { portalBaseUrl } from '@/lib/portal/portalUrl'
  */
 
 export const WELCOME_CTA_LABEL = 'Get Paperwork Started'
+/**
+ * Quick Respond's button (Wes 2026-08-25). Deliberately NOT "Get Paperwork
+ * Started" — the reply does not pitch the portal, it offers the one next step
+ * a lead might want. Same destination: the invite landing mints the Order.
+ */
+export const QUICK_RESPOND_CTA_LABEL = 'Start your order'
 export const WELCOME_INVITE_TTL_DAYS = 7
 
 export function welcomeInviteUrl(token: string): string {
@@ -115,6 +121,9 @@ export function composeWelcomeEmail(args: {
     personalNote: args.personalNote ?? null,
     customMessage: args.customMessage ?? null,
     quickRespond: args.quickRespond ?? false,
-    ctaLabel: WELCOME_CTA_LABEL,
+    ctaLabel: args.quickRespond ? QUICK_RESPOND_CTA_LABEL : WELCOME_CTA_LABEL,
+    // Quick Respond carries BOTH buttons. Same destination for now — see the
+    // note on secondaryCtaLabel in the template.
+    secondaryCtaLabel: args.quickRespond ? WELCOME_CTA_LABEL : null,
   })
 }
