@@ -137,8 +137,11 @@ export type EmailReviewTarget =
 
 interface Props {
   target: EmailReviewTarget | null;
-  /** Start in "write my own" mode with an empty body — no templated prose. */
-  blankCompose?: boolean;
+  /**
+   * Quick Respond: a reply to an inquiry, not a portal onboarding. Opens in
+   * "write my own" with an EMPTY body, and the server drops the portal CTA.
+   */
+  quickRespond?: boolean;
   onClose: () => void;
   /** Called after a successful real send. The caller refreshes its
    *  list / shows a toast / etc. */
@@ -191,7 +194,7 @@ function buildPreviewBody(
   overrideContactId: string | null,
   customNote: string,
   customMessage = '',
-  suppressDefaultBody = false,
+  quickRespond = false,
 ): unknown {
   const base: Record<string, unknown> = {};
   if (overrideContactId) base.overrideContactId = overrideContactId;
@@ -215,9 +218,9 @@ function buildPreviewBody(
     base.inquiryId = target.inquiryId;
     base.jobId = target.jobId;
     base.customMessage = customMessage.trim() || null;
-    // Blank-compose entry points mean it: an empty box sends an empty body
-    // rather than falling back to the templated welcome prose.
-    if (suppressDefaultBody) base.suppressDefaultBody = true;
+    // Quick Respond means it: an empty box sends an empty body rather than
+    // falling back to templated prose, and no portal button goes out.
+    if (quickRespond) base.quickRespond = true;
   }
   return base;
 }
@@ -227,9 +230,9 @@ function buildSendBody(
   overrideContactId: string | null,
   customNote: string,
   customMessage = '',
-  suppressDefaultBody = false,
+  quickRespond = false,
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customNote, customMessage, suppressDefaultBody);
+  return buildPreviewBody(target, overrideContactId, customNote, customMessage, quickRespond);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -246,7 +249,7 @@ function fmtInsightDate(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Props) {
+export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Props) {
   const [preview, setPreview] = useState<CompositionOk | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -279,7 +282,7 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
   // Some entry points open with NOTHING pre-written (Wes 2026-08-25:
   // "Quick Respond … not have any prepopulated message in email") — the
   // rep writes the whole body themselves.
-  const [writeOwn, setWriteOwn] = useState(!!blankCompose);
+  const [writeOwn, setWriteOwn] = useState(!!quickRespond);
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -307,7 +310,7 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
         const res = await fetch(endpoints.preview, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom, !!blankCompose)),
+          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom, !!quickRespond)),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.ok === false) {
@@ -326,7 +329,7 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
         setRefreshing(false);
       }
     },
-    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom, blankCompose],
+    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom, quickRespond],
   );
 
   // Reset state when target changes (e.g. opening for a different order).
@@ -335,17 +338,17 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
-    // Blank-compose entry points stay in write-my-own across target changes;
-    // resetting to false here would drop a Quick Respond back into templated
-    // prose the moment the modal re-opened for a different inquiry.
-    setWriteOwn(!!blankCompose);
+    // Quick Respond stays in write-my-own across target changes; resetting to
+    // false here would drop it back into templated prose the moment the modal
+    // re-opened for a different inquiry.
+    setWriteOwn(!!quickRespond);
     setCustomMessage('');
     setAiFlags(null);
     setAiPolished(null);
     setAiError(null);
     sendInFlightRef.current = false;
     setSendState('idle');
-  }, [target, blankCompose]);
+  }, [target, quickRespond]);
 
   // Initial fetch when target changes.
   useEffect(() => {
@@ -376,7 +379,7 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!blankCompose) as Record<string, unknown>;
+      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!quickRespond) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -651,8 +654,8 @@ export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Prop
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        {blankCompose
-                          ? '— nothing is written for you. The greeting, portal button and sign-off stay.'
+                        {quickRespond
+                          ? '— nothing is written for you, and no portal button goes out. The greeting and sign-off stay.'
                           : /* Both kinds behave the same: the standard line
                                leads, this text follows. */
                             `— the standard wording, yours to edit. The greeting,${

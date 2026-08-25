@@ -31,6 +31,11 @@ export const dynamic = 'force-dynamic'
  * is created here — the client's click on /portal/welcome/[token] mints
  * the Order inside the already-resolved Job. A re-send after the invite
  * was used is refused (the portal already exists).
+ *
+ * Quick Respond (`quickRespond: true`) is the SAME endpoint in a different
+ * mode: a plain reply to someone who has only inquired. No invite is minted,
+ * no portal button is rendered, the used-invite refusal is skipped, and the
+ * body is whatever the rep wrote — nothing is prefilled.
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -53,9 +58,9 @@ export async function POST(req: NextRequest) {
   const message: string | null = typeof body.message === 'string' && body.message.trim() ? body.message : null
   const customMessage: string | null =
     typeof body.customMessage === 'string' && body.customMessage.trim() ? body.customMessage : null
-  // Quick Respond composes from an empty box; without this the empty box
-  // would fall back to the templated welcome prose.
-  const suppressDefaultBody = body.suppressDefaultBody === true
+  // Quick Respond: reply to an inquiry, not a portal onboarding. Empty box
+  // sends an empty body, and no portal CTA is rendered or minted.
+  const quickRespond = body.quickRespond === true
 
   try {
     const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email, jobId || null)
@@ -76,26 +81,33 @@ export async function POST(req: NextRequest) {
       data: { assignedToId: ctx.agent.id },
     })
 
-    // One invite per inquiry: upsert refreshes token + expiry on re-send
-    // (old emailed link dies, the new one carries the fresh token). If the
-    // invite was already USED, the job exists — refuse rather than re-invite.
-    const existing = await prisma.welcomeInvite.findUnique({
-      where: { inquiryId },
-      select: { id: true, usedAt: true, createdJobId: true },
-    })
-    if (existing?.usedAt || existing?.createdJobId) {
-      return NextResponse.json(
-        { ok: false, error: 'The client already started paperwork from this invite — the job exists.' },
-        { status: 409 },
-      )
+    // Quick Respond carries no portal button, so it mints no invite — a
+    // token nothing links to is dead weight. It also must NOT hit the
+    // already-used guard below: refusing to reply to a client because they
+    // already started paperwork would be nonsense for a plain email.
+    let token = ''
+    if (!quickRespond) {
+      // One invite per inquiry: upsert refreshes token + expiry on re-send
+      // (old emailed link dies, the new one carries the fresh token). If the
+      // invite was already USED, the job exists — refuse rather than re-invite.
+      const existing = await prisma.welcomeInvite.findUnique({
+        where: { inquiryId },
+        select: { id: true, usedAt: true, createdJobId: true },
+      })
+      if (existing?.usedAt || existing?.createdJobId) {
+        return NextResponse.json(
+          { ok: false, error: 'The client already started paperwork from this invite — the job exists.' },
+          { status: 409 },
+        )
+      }
+      token = randomBytes(32).toString('hex') // 256-bit
+      const expiresAt = new Date(Date.now() + WELCOME_INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
+      await prisma.welcomeInvite.upsert({
+        where: { inquiryId },
+        create: { token, inquiryId, personId: ctx.person.id, expiresAt, jobId },
+        update: { token, personId: ctx.person.id, expiresAt, jobId },
+      })
     }
-    const token = randomBytes(32).toString('hex') // 256-bit
-    const expiresAt = new Date(Date.now() + WELCOME_INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
-    await prisma.welcomeInvite.upsert({
-      where: { inquiryId },
-      create: { token, inquiryId, personId: ctx.person.id, expiresAt, jobId },
-      update: { token, personId: ctx.person.id, expiresAt, jobId },
-    })
 
     // Email-in-Job: the agent resolved the Job in the resolver before
     // this send — file the inquiry's source thread in it (fill-only).
@@ -106,7 +118,7 @@ export async function POST(req: NextRequest) {
       inviteUrl: welcomeInviteUrl(token),
       personalNote: message,
       customMessage,
-      suppressDefaultBody,
+      quickRespond,
     })
     const result = await sendAgreementEmail({
       to: [ctx.person.email],
@@ -114,13 +126,18 @@ export async function POST(req: NextRequest) {
       html,
       text,
       attachments: [],
-      label: 'welcome-invite',
+      label: quickRespond ? 'quick-respond' : 'welcome-invite',
     })
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.reason || 'send failed' }, { status: 502 })
     }
 
-    return NextResponse.json({ ok: true, recipient: ctx.person.email, order: { orderNumber: 'Welcome' } })
+    return NextResponse.json({
+      ok: true,
+      recipient: ctx.person.email,
+      quickRespond,
+      order: { orderNumber: quickRespond ? 'Reply' : 'Welcome' },
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Send failed'
     return NextResponse.json({ ok: false, error: msg }, { status: msg === 'Inquiry not found' ? 404 : 400 })

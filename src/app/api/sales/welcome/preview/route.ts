@@ -39,9 +39,9 @@ export async function POST(req: NextRequest) {
   const message: string | null = typeof body.message === 'string' && body.message.trim() ? body.message : null
   const customMessage: string | null =
     typeof body.customMessage === 'string' && body.customMessage.trim() ? body.customMessage : null
-  // Quick Respond composes from an empty box; without this the empty box
-  // would fall back to the templated welcome prose.
-  const suppressDefaultBody = body.suppressDefaultBody === true
+  // Quick Respond: reply to an inquiry, not a portal onboarding. Empty box
+  // sends an empty body, and no portal CTA is rendered or minted.
+  const quickRespond = body.quickRespond === true
 
   try {
     const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email, jobId || null)
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       inviteUrl: welcomeInviteUrl('preview-not-a-real-token'),
       personalNote: message,
       customMessage,
-      suppressDefaultBody,
+      quickRespond,
     })
     return NextResponse.json({
       ok: true,

@@ -464,11 +464,11 @@ export default function InquiryDetailPage() {
       {/* Welcome / Job Begin review + confirm-send */}
       <EmailReviewModal
         target={welcomeTarget}
-        blankCompose
+        quickRespond
         onClose={() => setWelcomeTarget(null)}
         onSent={(info) => {
           setWelcomeTarget(null)
-          setWelcomeFlash(`Sent to ${info.recipient} — their paperwork portal opens inside the resolved Job when they click “Get Paperwork Started”.`)
+          setWelcomeFlash(`Sent to ${info.recipient} — a plain reply, no portal link. Use Convert to quote when they're ready for paperwork.`)
           window.setTimeout(() => setWelcomeFlash(null), 8000)
         }}
       />

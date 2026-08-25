@@ -587,7 +587,7 @@ export function NewInboundColumn({
       {/* Quick Respond, step 2 — compose. Opens blank on purpose. */}
       <EmailReviewModal
         target={respondTarget}
-        blankCompose
+        quickRespond
         onClose={() => setRespondTarget(null)}
         onSent={() => { setRespondTarget(null); load() }}
       />

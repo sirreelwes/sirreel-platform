@@ -46,13 +46,23 @@ export interface BookingWelcomeEmailInput {
    *  intact. When empty, the templated TSX-portal paragraph is used instead. */
   customMessage?: string | null
   /**
-   * Quick Respond opens with an empty box (Wes 2026-08-25: "not have any
-   * prepopulated message in email"). Without this flag an empty box would
-   * silently fall back to the templated prose, so the rep would see blank
-   * and the client would receive the standard welcome — the exact mismatch
-   * the flag exists to prevent. Greeting, CTA and sign-off still render.
+   * Quick Respond mode (Wes 2026-08-25) — a reply to someone who has only
+   * INQUIRED, not a portal onboarding. Two things follow from that:
+   *
+   *   1. No prepopulated prose. An empty box must send an empty body, not
+   *      silently fall back to the default copy — otherwise the rep sees
+   *      blank and the client receives the standard welcome.
+   *   2. No portal apparatus. "drop the portal button for quick respond" —
+   *      and with the button gone, everything that sells the portal has to
+   *      go with it, or the email advertises a portal it never links to:
+   *      the CTA block, the "Your TSX portal" bullet, the preheader, and
+   *      the TSX brand framing. TSX is the portal brand ONLY (Wes 8/23),
+   *      so non-portal client copy says SirReel.
+   *
+   * Greeting, the rep's own words, rep/support bullets, sign-off and the
+   * SirReel footer all still render.
    */
-  suppressDefaultBody?: boolean
+  quickRespond?: boolean
   /** CTA button label — the welcome/job-begin invite passes
    *  "Get Paperwork Started". Defaults to the original portal wording. */
   ctaLabel?: string
@@ -104,7 +114,8 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   //
   // With nothing written, the same default renders, so the box a rep looks at
   // and the email a client receives are the same words.
-  const defaultIntro = input.suppressDefaultBody
+  const quick = !!input.quickRespond
+  const defaultIntro = quick
     ? ''
     : defaultEmailBody({ kind: 'welcome', projectName: input.projectName })
   const introHtml = customRaw
@@ -116,26 +127,36 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   // Same order in plain text as in HTML.
   const introText = customRaw || defaultIntro
 
-  const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
+  // "Let's get started" is onboarding language — wrong for a reply to an
+  // inquiry that may never become a job.
+  const subject = quick
+    ? `${input.projectName || 'Your inquiry'} | SirReel Studio Services`
+    : `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
   const text = [
-    `Welcome to TSX — The SirReel Experience.`,
-    ``,
+    ...(quick ? [] : [`Welcome to TSX — The SirReel Experience.`, ``]),
     `Hi ${input.firstName || 'there'},`,
     ``,
     ...(introText ? [introText] : []),
     ...(noteRaw ? ['', noteRaw] : []),
     ``,
-    `Everything you'll need lives in one place:`,
-    `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
-    `  ✓ Your dedicated rep — me, from estimate to wrap`,
-    `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
+    ...(quick
+      ? [
+          `  ✓ Your dedicated rep — me, from estimate to wrap`,
+          `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
+        ]
+      : [
+          `Everything you'll need lives in one place:`,
+          `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
+          `  ✓ Your dedicated rep — me, from estimate to wrap`,
+          `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
+          ``,
+          `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
+          ``,
+          `Your progress saves automatically, so feel free to come back any time.`,
+        ]),
     ``,
-    `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
-    ``,
-    `Your progress saves automatically, so feel free to come back any time.`,
-    ``,
-    `Looking forward to the project,`,
+    quick ? `Looking forward to hearing from you,` : `Looking forward to the project,`,
     `${input.repName || 'the SirReel team'}`,
     repPhone ? repPhone : '',
     repEmail ? repEmail : '',
@@ -154,7 +175,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
      inversion bug this prevents. -->
 <meta name="color-scheme" content="light" />
 <meta name="supported-color-schemes" content="light" />
-<title>Let&rsquo;s get started \u00b7 ${projectName}</title>
+<title>${quick ? projectName : `Let&rsquo;s get started \u00b7 ${projectName}`}</title>
 <style type="text/css">
   :root { color-scheme: light; supported-color-schemes: light; }
 </style>
@@ -167,7 +188,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <!-- Preheader (hidden in body, shown in inbox preview) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    Your SirReel job portal for ${projectName} is ready \u2014 paperwork, schedule, equipment, all in one place.
+    ${quick ? `A note from ${repName} at SirReel Studio Services about ${projectName}.` : `Your SirReel job portal for ${projectName} is ready \u2014 paperwork, schedule, equipment, all in one place.`}
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">
@@ -184,12 +205,12 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                   <td style="width:48px;height:2px;background-color:${GOLD};line-height:2px;font-size:0;">&nbsp;</td>
                 </tr>
               </table>
-              <div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
+              ${quick ? '' : `<div style="margin-top:14px;color:${GOLD};font-size:10px;letter-spacing:2.5px;text-transform:uppercase;font-weight:600;">
                 Presents
               </div>
               <div style="margin-top:6px;color:#ffffff;font-size:32px;letter-spacing:6px;font-weight:300;">
                 TSX
-              </div>
+              </div>`}
             </td>
           </tr>
 
@@ -197,7 +218,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:36px 36px 0;text-align:center;">
               <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;font-weight:400;color:#1a1a1a;">
-                Welcome to TSX &mdash; The SirReel Experience.
+                ${quick ? 'Thanks for reaching out.' : 'Welcome to TSX &mdash; The SirReel Experience.'}
               </h1>
             </td>
           </tr>
@@ -214,7 +235,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <tr>
             <td style="padding:8px 36px 8px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                <tr>
+                ${quick ? '' : `<tr>
                   <td style="padding:10px 0;border-top:1px solid #ececec;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                       <tr>
@@ -226,7 +247,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                       </tr>
                     </table>
                   </td>
-                </tr>
+                </tr>`}
                 <tr>
                   <td style="padding:10px 0;border-top:1px solid #ececec;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
@@ -258,7 +279,10 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           </tr>
 
           <!-- ── CTA ───────────────────────────────────────────────── -->
-          <tr>
+          ${/* Dropped entirely in Quick Respond: no portal button, and so no
+                copy that promises one. Kept as a JS comment, not an HTML one
+                — an HTML comment here ships inside the client's email. */
+            quick ? '' : `<tr>
             <td style="padding:28px 36px 8px;text-align:center;">
               <p style="margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#1a1a1a;">
                 Your portal for <strong>${projectName}</strong> is ready.
@@ -278,12 +302,12 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                 Your progress saves automatically &mdash; come back any time.
               </p>
             </td>
-          </tr>
+          </tr>`}
 
           <!-- ── Sign-off ──────────────────────────────────────────── -->
           <tr>
             <td style="padding:28px 36px 32px;font-size:14px;line-height:1.55;color:#333333;border-top:1px solid #ececec;margin-top:24px;">
-              <p style="margin:0 0 6px;">Looking forward to the project,</p>
+              <p style="margin:0 0 6px;">${quick ? 'Looking forward to hearing from you,' : 'Looking forward to the project,'}</p>
               <p style="margin:0;">
                 <strong style="color:#1a1a1a;">${repName}</strong><br />
                 ${repPhone ? `<span style="color:#555555;">${repPhone}</span><br />` : ''}

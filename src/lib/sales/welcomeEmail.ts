@@ -102,8 +102,8 @@ export function composeWelcomeEmail(args: {
   inviteUrl: string
   personalNote?: string | null
   customMessage?: string | null
-  /** Quick Respond: an empty box means an empty body, not the default prose. */
-  suppressDefaultBody?: boolean
+  /** Quick Respond: empty box means empty body, and no portal CTA. */
+  quickRespond?: boolean
 }): { subject: string; html: string; text: string } {
   return buildBookingWelcomeEmail({
     firstName: args.ctx.person.firstName,
@@ -114,7 +114,7 @@ export function composeWelcomeEmail(args: {
     repEmail: args.ctx.agent.email,
     personalNote: args.personalNote ?? null,
     customMessage: args.customMessage ?? null,
-    suppressDefaultBody: args.suppressDefaultBody ?? false,
+    quickRespond: args.quickRespond ?? false,
     ctaLabel: WELCOME_CTA_LABEL,
   })
 }
