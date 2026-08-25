@@ -85,9 +85,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [companyHits, setCompanyHits] = useState<Array<{ id: string; name: string }>>([]);
   const [companyOpen, setCompanyOpen] = useState(false);
   const [matchedCompanyId, setMatchedCompanyId] = useState<string | null>(null);
-  // Suppresses the search that setClientName would otherwise trigger right
-  // after a pick or the initial parse prefill.
-  const skipCompanySearch = useRef(false);
+  // The exact name WE set (parse prefill or a dropdown pick). Compared by
+  // VALUE, not consumed like a boolean flag: React double-invokes effects
+  // in dev, which desynced a boolean guard and swallowed the agent's first
+  // real edit — the match label stayed green while the field said something
+  // else entirely (caught in preview, 2026-08-25).
+  const adoptedName = useRef<string | null>(null);
   // The contact the parser resolved, kept even when the company didn't —
   // a company pick plus this is enough to enable soft holds.
   const [parsedPersonId, setParsedPersonId] = useState<string | null>(null);
@@ -190,7 +193,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           endDate: parsed.endDate ?? '',
         }));
 
-      skipCompanySearch.current = true;
+      adoptedName.current = (parsed.clientName ?? '').trim() || null;
       setClientName(parsed.clientName ?? null);
       setJobName(parsed.productionName ?? null);
       // Default the "ask the client" toggle ON when we have neither the
@@ -236,11 +239,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
   // Debounced company lookup against the same endpoint CompanyPicker uses.
   useEffect(() => {
-    if (skipCompanySearch.current) {
-      skipCompanySearch.current = false;
-      return;
-    }
     const q = (clientName ?? '').trim();
+    // A name we adopted ourselves keeps its match and doesn't re-search.
+    if (adoptedName.current !== null && q === adoptedName.current) return;
+    adoptedName.current = null;
     // Typing a NEW name invalidates any previously matched company — the
     // hold must not stay armed against the wrong client.
     setMatchedCompanyId(null);
@@ -258,6 +260,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           // typed the company's real name, no need to make them click.
           const exact = hits.find((c: { name: string }) => c.name.toLowerCase() === q.toLowerCase());
           if (exact) {
+            adoptedName.current = exact.name;
             setMatchedCompanyId(exact.id);
             setCompanyOpen(false);
           } else {
@@ -518,7 +521,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                             key={c.id}
                             type="button"
                             onClick={() => {
-                              skipCompanySearch.current = true;
+                              adoptedName.current = c.name;
                               setClientName(c.name);
                               setMatchedCompanyId(c.id);
                               setCompanyOpen(false);
