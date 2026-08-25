@@ -4,6 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
+import { signCoiToken } from '@/lib/coi/coiUploadToken'
+import { coiUploadUrl } from '@/lib/portal/portalUrl'
+import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -27,6 +31,14 @@ export const maxDuration = 60
  */
 
 const DECISIONS = new Set(['APPROVED', 'REJECTED', 'PENDING'])
+
+function escapeHtml(v: string): string {
+  return v
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
 /** Names this COI could legitimately be issued to, best first. */
 function candidateNames(coi: {
@@ -68,6 +80,15 @@ const coiSelect = {
       jobCode: true,
       companyId: true,
       company: { select: { id: true, name: true } },
+      // Recipients for "Request fix" — the certificate is the client's to
+      // correct, so the ask goes to the job's contacts (primary first).
+      jobContacts: {
+        select: {
+          role: true,
+          isPrimary: true,
+          person: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+      },
       orders: {
         orderBy: { createdAt: 'asc' as const },
         select: {
@@ -112,6 +133,45 @@ function serialize(coi: NonNullable<CoiRow>) {
       })),
   )
 
+  // Who the "what's still missing" note should go to. The person who
+  // actually sent the certificate wins — they are the one talking to the
+  // broker — then the job's primary contact, then anyone else on the job.
+  const contacts: { name: string; email: string; role: string | null }[] = []
+  const seenEmail = new Set<string>()
+  const pushContact = (name: string, email: string | null | undefined, role: string | null) => {
+    const e = (email || '').trim()
+    if (!e || seenEmail.has(e.toLowerCase())) return
+    seenEmail.add(e.toLowerCase())
+    contacts.push({ name: name.trim() || e, email: e, role })
+  }
+  if (coi.source === 'CLIENT_UPLOAD') {
+    pushContact(coi.clientUploaderName || 'Uploader', coi.clientUploaderEmail, 'Sent this certificate')
+  }
+  for (const jc of [...(coi.job?.jobContacts ?? [])].sort(
+    (a, b) => Number(!!b.isPrimary) - Number(!!a.isPrimary),
+  )) {
+    pushContact(`${jc.person.firstName} ${jc.person.lastName}`, jc.person.email, jc.role)
+  }
+
+  const uploadUrl =
+    coi.job || coi.company
+      ? coiUploadUrl(
+          signCoiToken({
+            jobId: coi.job?.id,
+            companyId: coi.job?.companyId ?? coi.company?.id ?? undefined,
+          }),
+        )
+      : null
+
+  const fixDraft = buildCoiFixDraft({
+    ai: ai as Parameters<typeof buildCoiFixDraft>[0]['ai'],
+    match,
+    policyExpiryDate: coi.policyExpiryDate,
+    jobName: coi.job?.name ?? null,
+    uploadUrl,
+    contactFirstName: contacts[0]?.name?.split(' ')[0] ?? null,
+  })
+
   return {
     id: coi.id,
     originalFilename: coi.originalFilename,
@@ -149,6 +209,8 @@ function serialize(coi: NonNullable<CoiRow>) {
     companyName: coi.job?.company?.name ?? coi.company?.name ?? null,
     match,
     signedAgreements,
+    contacts,
+    fixDraft,
   }
 }
 
@@ -186,6 +248,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     decision?: unknown
     note?: unknown
     policyExpiryDate?: unknown
+    to?: unknown
+    message?: unknown
   }
   const action = typeof body.action === 'string' ? body.action : 'DECIDE'
   const note = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) || null : null
@@ -201,6 +265,62 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const fresh = await loadCoi(id)
     return NextResponse.json({ ok: true, coi: serialize(fresh!) })
+  }
+
+  // Ask the client to fix it — the third option beside Approve/Reject.
+  // Rejecting told the CLIENT nothing; someone then hand-wrote an email
+  // reconstructing which checks failed. This sends the reviewer's edited
+  // draft and parks the row in COUNTERED ("changes requested") so the desk
+  // can tell "nobody has looked" from "we asked, we're waiting on them".
+  if (action === 'REQUEST_FIX') {
+    const to = typeof body.to === 'string' ? body.to.trim() : ''
+    const message = typeof body.message === 'string' ? body.message.trim() : ''
+    if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+      return NextResponse.json({ error: 'A valid client email is required.' }, { status: 400 })
+    }
+    if (!message) {
+      return NextResponse.json({ error: 'The message cannot be empty.' }, { status: 400 })
+    }
+
+    const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
+    const sent = await sendAgreementEmail({
+      to: [to],
+      // Replies belong with the reviewer, not notifications@ — they are the
+      // one who read the certificate and can answer the broker's question.
+      replyTo: session.user.email,
+      subject: jobLabel
+        ? `Certificate of insurance — more needed for ${jobLabel}`
+        : 'Certificate of insurance — more needed',
+      label: 'coi-request-fix',
+      // The reviewer sends exactly what they read in the box: escape it and
+      // keep the line breaks rather than re-rendering from the draft, or the
+      // email and the audit note drift apart.
+      html: `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${escapeHtml(
+        message,
+      )}</div>`,
+      text: message,
+    })
+    if (!sent.ok) {
+      return NextResponse.json(
+        { error: `The email did not send (${sent.reason}). Nothing was changed.` },
+        { status: 502 },
+      )
+    }
+
+    await prisma.coiCheck.update({
+      where: { id },
+      data: {
+        humanDecision: 'COUNTERED',
+        humanDecisionById: reviewer?.id ?? null,
+        humanDecisionAt: new Date(),
+        // Never a sign-off: a certificate we asked to have corrected is not
+        // verified coverage.
+        coverageVerified: false,
+        humanDecisionNote: note || `Fix requested — emailed ${to}.`,
+      },
+    })
+    const after = await loadCoi(id)
+    return NextResponse.json({ ok: true, coi: serialize(after!), sentTo: to })
   }
 
   const decision = typeof body.decision === 'string' ? body.decision.toUpperCase() : ''

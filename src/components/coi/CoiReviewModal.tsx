@@ -63,6 +63,10 @@ interface CoiReviewData {
   companyName: string | null;
   match: InsuredMatchResult;
   signedAgreements: StaleAgreement[];
+  /** Who we can send the "still missing" note to, best recipient first. */
+  contacts: { name: string; email: string; role: string | null }[];
+  /** Server-built draft of what the certificate still needs. */
+  fixDraft: { issues: string[]; message: string };
 }
 
 function fmtDate(iso: string | null): string {
@@ -85,6 +89,13 @@ export function CoiReviewModal({
 }) {
   const [data, setData] = useState<CoiReviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  // "Ask the client to fix it" compose state. Opens inline rather than as a
+  // second modal — the reviewer is reading the certificate on the left while
+  // they write. Named ask* because fix* already belongs to the
+  // fix-the-production-company sub-flow below.
+  const [askOpen, setAskOpen] = useState(false);
+  const [askTo, setAskTo] = useState('');
+  const [askMsg, setAskMsg] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -102,6 +113,15 @@ export function CoiReviewModal({
       setData(d);
       setNote(d.humanDecisionNote || '');
       setExpiry(d.policyExpiryDate ? d.policyExpiryDate.slice(0, 10) : '');
+      // Seed the compose fields only while the panel is closed — a re-run or
+      // a company change mid-compose must not wipe what the reviewer typed.
+      setAskOpen((open) => {
+        if (!open) {
+          setAskTo(d.contacts[0]?.email || '');
+          setAskMsg(d.fixDraft?.message || '');
+        }
+        return open;
+      });
     },
     [],
   );
@@ -158,6 +178,14 @@ export function CoiReviewModal({
             ? 'Rejected. The client needs a corrected certificate.'
             : 'Moved back to pending.',
       );
+    }
+  };
+
+  const requestFix = async () => {
+    const d = await post({ action: 'REQUEST_FIX', to: askTo, message: askMsg, note }, 'REQUEST_FIX');
+    if (d) {
+      setAskOpen(false);
+      setFlash(`Sent to ${askTo} — marked as changes requested.`);
     }
   };
 
@@ -373,7 +401,11 @@ export function CoiReviewModal({
                   <div className="flex flex-col justify-end text-[12px] text-zinc-400 pb-2">
                     {data.humanDecision !== 'PENDING' ? (
                       <span>
-                        {data.humanDecision === 'APPROVED' ? 'Approved' : 'Rejected'}
+                        {data.humanDecision === 'APPROVED'
+                          ? 'Approved'
+                          : data.humanDecision === 'COUNTERED'
+                            ? 'Changes requested'
+                            : 'Rejected'}
                         {data.humanDecisionBy ? ` by ${data.humanDecisionBy}` : ''} ·{' '}
                         {fmtDate(data.humanDecisionAt)}
                       </span>
@@ -389,6 +421,81 @@ export function CoiReviewModal({
                   placeholder="Note (what you checked, what the client still owes us)"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white placeholder-zinc-500"
                 />
+                {/* Ask the client to fix it — the third option. Rejecting is the
+                    end of the conversation inside HQ; this is the one that
+                    actually tells the client what to go get. */}
+                {askOpen ? (
+                  <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                        Ask the client to fix it
+                      </span>
+                      <button
+                        onClick={() => setAskOpen(false)}
+                        className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {data.contacts.length > 1 && (
+                      <select
+                        value={askTo}
+                        onChange={(e) => setAskTo(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white"
+                      >
+                        {data.contacts.map((c) => (
+                          <option key={c.email} value={c.email}>
+                            {c.name} · {c.email}
+                            {c.role ? ` · ${c.role}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="email"
+                      value={askTo}
+                      onChange={(e) => setAskTo(e.target.value)}
+                      placeholder="client@example.com"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white placeholder-zinc-500"
+                    />
+                    <textarea
+                      value={askMsg}
+                      onChange={(e) => setAskMsg(e.target.value)}
+                      rows={10}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[12px] text-white leading-relaxed"
+                    />
+                    <p className="text-[11px] text-zinc-500">
+                      Sends exactly what&rsquo;s in the box, replies come back to you, and the
+                      certificate moves to <span className="text-zinc-300">Changes requested</span>.
+                    </p>
+                    <button
+                      onClick={requestFix}
+                      disabled={!!busy || !askTo.trim() || !askMsg.trim()}
+                      className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
+                    >
+                      {busy === 'REQUEST_FIX' ? 'Sending…' : 'Send to client'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setFlash(null);
+                      setAskOpen(true);
+                    }}
+                    disabled={!!busy || data.contacts.length === 0}
+                    title={
+                      data.contacts.length === 0
+                        ? 'No client contact on this job to email — add one on the job first.'
+                        : 'Email the client what this certificate is still missing'
+                    }
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-amber-300 text-[13px] font-semibold rounded-lg py-2"
+                  >
+                    Request fix from client
+                    {data.fixDraft?.issues?.length ? ` · ${data.fixDraft.issues.length} issue${data.fixDraft.issues.length === 1 ? '' : 's'}` : ''}
+                  </button>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => decide('APPROVED')}
