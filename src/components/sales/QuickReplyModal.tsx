@@ -19,7 +19,7 @@
  * instead of silently spawning a duplicate.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef} from 'react';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal';
 
@@ -75,6 +75,21 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const [clientName, setClientName] = useState<string | null>(null);
+  // Company typeahead (Wes, 2026-08-25). The field was free text, so an
+  // agent could type a company we already know and still be told "add the
+  // client & contact to the CRM first" — soft holds were gated on
+  // `holdable`, which is only ever set from the AI parse's EXACT match at
+  // open time. Picking a known company here resolves that same companyId,
+  // so the hold checkbox unlocks without leaving the modal.
+  const [companyHits, setCompanyHits] = useState<Array<{ id: string; name: string }>>([]);
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [matchedCompanyId, setMatchedCompanyId] = useState<string | null>(null);
+  // Suppresses the search that setClientName would otherwise trigger right
+  // after a pick or the initial parse prefill.
+  const skipCompanySearch = useRef(false);
+  // The contact the parser resolved, kept even when the company didn't —
+  // a company pick plus this is enough to enable soft holds.
+  const [parsedPersonId, setParsedPersonId] = useState<string | null>(null);
   const [jobName, setJobName] = useState<string | null>(null);
   const [pickup, setPickup] = useState<string | null>(null);
   const [ret, setRet] = useState<string | null>(null);
@@ -174,6 +189,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           endDate: parsed.endDate ?? '',
         }));
 
+      skipCompanySearch.current = true;
       setClientName(parsed.clientName ?? null);
       setJobName(parsed.productionName ?? null);
       // Default the "ask the client" toggle ON when we have neither the
@@ -200,7 +216,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       // a company + person. The parser finding nothing is no longer
       // disqualifying, because the agent can add lines themselves.
       const canHold = !!companyId && !!personId;
+      setMatchedCompanyId(companyId);
       setHoldable(canHold ? { companyId: companyId!, personId: personId! } : null);
+      // Remember the parsed contact even when the company didn't resolve —
+      // if the agent then PICKS the company below, that's all we need to
+      // enable holds.
+      setParsedPersonId(personId);
       if (!canHold) setSoftHold(false);
       else if (assetCats.length === 0) setSoftHold(false); // nothing to hold YET — agent opts in after adding
 
@@ -211,6 +232,53 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       setPhase('error');
     }
   }, [emailText, defaultRecipientEmail, defaultRecipientName, refreshAvailability]);
+
+  // Debounced company lookup against the same endpoint CompanyPicker uses.
+  useEffect(() => {
+    if (skipCompanySearch.current) {
+      skipCompanySearch.current = false;
+      return;
+    }
+    const q = (clientName ?? '').trim();
+    // Typing a NEW name invalidates any previously matched company — the
+    // hold must not stay armed against the wrong client.
+    setMatchedCompanyId(null);
+    if (q.length < 2) {
+      setCompanyHits([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/companies?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const hits = Array.isArray(d.companies) ? d.companies : [];
+          setCompanyHits(hits);
+          // Exact (case-insensitive) name → adopt silently; the agent
+          // typed the company's real name, no need to make them click.
+          const exact = hits.find((c: { name: string }) => c.name.toLowerCase() === q.toLowerCase());
+          if (exact) {
+            setMatchedCompanyId(exact.id);
+            setCompanyOpen(false);
+          } else {
+            setCompanyOpen(hits.length > 0);
+          }
+        })
+        .catch(() => setCompanyHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [clientName]);
+
+  // Keep `holdable` in step with the company the agent has actually chosen.
+  useEffect(() => {
+    if (matchedCompanyId && parsedPersonId) {
+      setHoldable((prev) =>
+        prev?.companyId === matchedCompanyId ? prev : { companyId: matchedCompanyId, personId: parsedPersonId },
+      );
+    } else if (!matchedCompanyId) {
+      setHoldable(null);
+      setSoftHold(false);
+    }
+  }, [matchedCompanyId, parsedPersonId]);
 
   useEffect(() => { run(); }, [run]);
 
@@ -428,14 +496,46 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
             <>
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2.5">
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div>
+                  <div className="relative">
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Production company</label>
                     <input
                       value={clientName ?? ''}
                       onChange={(e) => setClientName(e.target.value)}
+                      onFocus={() => { if (companyHits.length && !matchedCompanyId) setCompanyOpen(true); }}
                       placeholder="e.g. Golden Heart Films"
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
                     />
+                    {matchedCompanyId ? (
+                      <div className="mt-1 text-[10px] text-emerald-700">✓ Matched a client we already have</div>
+                    ) : (clientName ?? '').trim().length >= 2 ? (
+                      <div className="mt-1 text-[10px] text-gray-400">New client — not in the CRM yet</div>
+                    ) : null}
+                    {companyOpen && companyHits.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 top-[52px] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {companyHits.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              skipCompanySearch.current = true;
+                              setClientName(c.name);
+                              setMatchedCompanyId(c.id);
+                              setCompanyOpen(false);
+                            }}
+                            className="block w-full text-left px-2.5 py-1.5 text-[12px] text-gray-800 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setCompanyOpen(false)}
+                          className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                        >
+                          Keep &ldquo;{clientName}&rdquo; as a new client
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Project / job name</label>
