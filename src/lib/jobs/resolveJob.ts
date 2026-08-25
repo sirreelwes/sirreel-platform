@@ -69,6 +69,10 @@ export interface JobDraft {
   /** Agent explicitly has no company yet — create a provisional one and
    *  let the reply ask the client. See lib/companies/provisional.ts. */
   companyUnknown?: boolean
+  /** Everyone the client CC'd on the inbound email. Each becomes a
+   *  Person (email is the dedup anchor) and a JobContact, so the people
+   *  already on the thread are on the Job too. See lib/email/inboundCc.ts. */
+  ccContactEmails?: string[]
   contactName?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
@@ -409,6 +413,30 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
       'Contact not saved: an email address is required to create or match a person record (dedup anchor). Add one on the Job later.'
   }
 
+  // ── CC'd clients become Job contacts ─────────────────────────────
+  // Wes 2026-08-25: the people the client copied belong on the Job, not
+  // just on the reply. Email is the dedup anchor exactly as it is for the
+  // lead, so a coordinator already in the CRM is LINKED, never duplicated.
+  // The lead is skipped — they're added below as primary.
+  const ccPersonIds: string[] = []
+  for (const raw of draft.ccContactEmails ?? []) {
+    const email = normalizeEmail(raw || '')
+    if (!email) continue
+    if (contactEmail && email === contactEmail) continue
+    const existing = await resolvePersonByEmail(email)
+    if (existing) {
+      if (!ccPersonIds.includes(existing.id)) ccPersonIds.push(existing.id)
+      continue
+    }
+    // No name to work from — the header gave us an address. A placeholder
+    // first name keeps the row findable and the email is what matters.
+    const created = await prisma.person.create({
+      data: { firstName: email.split('@')[0] || '(unknown)', lastName: '', email },
+      select: { id: true },
+    })
+    if (!ccPersonIds.includes(created.id)) ccPersonIds.push(created.id)
+  }
+
   const jobCode = await nextJobCode(prisma)
   const assistantAuthCode = await generateAssistantAuthCode(prisma)
   const job = await prisma.job.create({
@@ -429,8 +457,16 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
       notes:
         [draft.notes, companyResolution ? `[company: ${companyResolution}]` : null].filter(Boolean).join('\n') || null,
       estimatedValue: draft.estimatedValue == null ? null : draft.estimatedValue,
-      ...(draft.contacts && draft.contacts.length > 0
-        ? {
+      // Contacts: an explicit list wins; otherwise the lead (primary) plus
+      // anyone the client CC'd. CC'd people get role OTHER and isPrimary
+      // false — we know they were on the thread, not what they do on the
+      // production, and guessing a role would be worse than leaving it
+      // for whoever works the job. The composite unique is
+      // (jobId, personId, role), so a CC who IS the lead would collide;
+      // they're filtered out above.
+      ...(() => {
+        if (draft.contacts && draft.contacts.length > 0) {
+          return {
             jobContacts: {
               create: draft.contacts.map((c) => ({
                 personId: c.personId,
@@ -439,9 +475,17 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
               })),
             },
           }
-        : leadContactPersonId
-          ? { jobContacts: { create: [{ personId: leadContactPersonId, role: 'OTHER', isPrimary: true }] } }
-          : {}),
+        }
+        const rows: Array<{ personId: string; role: 'OTHER'; isPrimary: boolean }> = []
+        if (leadContactPersonId) {
+          rows.push({ personId: leadContactPersonId, role: 'OTHER', isPrimary: true })
+        }
+        for (const pid of ccPersonIds) {
+          if (pid === leadContactPersonId) continue
+          rows.push({ personId: pid, role: 'OTHER', isPrimary: false })
+        }
+        return rows.length > 0 ? { jobContacts: { create: rows } } : {}
+      })(),
     },
     select: { id: true, jobCode: true, name: true, status: true, companyId: true },
   })

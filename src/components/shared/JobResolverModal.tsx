@@ -25,6 +25,9 @@ export interface ResolverContext {
   contactEmail?: string | null
   contactName?: string | null
   contactPhone?: string | null
+  /** Everyone the client CC'd on the inbound email. Each becomes a
+   *  JobContact so the Job starts with the people already on the thread. */
+  ccContactEmails?: string[]
   jobNameHint?: string | null
   dates?: { start: string; end: string } | null
   threadId?: string | null
@@ -213,6 +216,9 @@ export function JobResolverModal({
           companyId: companyUnknown ? undefined : dCompanyId || undefined,
           companyName: companyUnknown ? '' : dCompany,
           companyUnknown,
+          // Anyone the client CC'd on the inbound email, so the Job starts
+          // with the same people the thread has.
+          ccContactEmails: context.ccContactEmails ?? [],
           contactName: dContactName,
           contactEmail: dContactEmail,
           contactPhone: dContactPhone,

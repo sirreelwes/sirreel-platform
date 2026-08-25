@@ -468,6 +468,9 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           companyId: holdable?.companyId ?? null,
           companyName: clientName?.trim() || null,
           contactEmail: recipientEmail || null,
+          // Same list that seeds the reply's CC — the Job gets the people
+          // the client actually looped in, not just the sender.
+          ccContactEmails: inboundCc,
           contactName: recipientName || null,
           jobNameHint: jobName?.trim() || null,
           dates: pickup && ret ? { start: pickup.slice(0, 10), end: ret.slice(0, 10) } : null,

@@ -469,6 +469,10 @@ export async function POST(req: NextRequest) {
         companyId: companyId || null,
         companyName: typeof body.companyName === 'string' ? body.companyName : null,
         companyUnknown: body.companyUnknown === true,
+        // Everyone the client CC'd on the inquiry — becomes a JobContact.
+        ccContactEmails: Array.isArray(body.ccContactEmails)
+          ? body.ccContactEmails.filter((e: unknown): e is string => typeof e === 'string')
+          : [],
         contactName: typeof body.contactName === 'string' ? body.contactName : null,
         contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
         contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,
