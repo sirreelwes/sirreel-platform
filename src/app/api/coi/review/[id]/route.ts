@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
-import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 export const dynamic = 'force-dynamic'
@@ -134,6 +133,12 @@ function serialize(coi: NonNullable<CoiRow>) {
     aiNotes: typeof ai?.notes === 'string' ? ai.notes : null,
     aiOverallPass: ai?.overallPass === true,
     aiRan: !!coi.aiRiskLevel || !!ai,
+    // Whether the STORED review was produced by a prompt that asked for the
+    // named insured at all. Reviews filed before the field existed have no
+    // such key, so their blank insured name is "never looked" — not "looked
+    // and found nothing". The modal says so rather than offering a bare
+    // "Re-run" that reads as redundant.
+    aiHasInsuredName: !!ai && Object.prototype.hasOwnProperty.call(ai, 'namedInsured'),
     humanDecision: coi.humanDecision,
     humanDecisionNote: coi.humanDecisionNote,
     humanDecisionAt: coi.humanDecisionAt,
@@ -190,31 +195,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // that came in through the link needs this before it can be judged —
   // including reading the named insured off it.
   if (action === 'RERUN_AI') {
-    const buffer = await readPrivateBlobBuffer(existing.fileUrl)
-    if (!buffer) {
-      return NextResponse.json({ error: 'Could not read the stored file to review it.' }, { status: 502 })
+    const outcome = await rerunCoiAiReview(id)
+    if (!outcome.ok) {
+      return NextResponse.json({ error: outcome.error }, { status: outcome.error === 'not found' ? 404 : 502 })
     }
-    const ai = await runCoiAiReview(buffer, existing.mimeType || 'application/pdf')
-    const aiExpiry =
-      typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
-        ? new Date(ai.policyExpiryDate)
-        : null
-    await prisma.coiCheck.update({
-      where: { id },
-      data: {
-        aiResponse: ai as object,
-        aiRiskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
-        aiRecommendation: ai.overallPass ? 'accept' : 'review',
-        namedInsured:
-          typeof ai.namedInsured === 'string' && ai.namedInsured.trim()
-            ? ai.namedInsured.trim().slice(0, 300)
-            : existing.namedInsured,
-        // Never downgrade an expiry a human typed in; only fill a blank.
-        ...(existing.policyExpiryDate == null && aiExpiry ? { policyExpiryDate: aiExpiry } : {}),
-        // AI never flips additionalInsured off — it only confirms it.
-        ...(ai.additionalInsured === true ? { additionalInsured: true } : {}),
-      },
-    })
     const fresh = await loadCoi(id)
     return NextResponse.json({ ok: true, coi: serialize(fresh!) })
   }

@@ -20,6 +20,7 @@ next-env.d.ts
 scripts/*
 # Reusable scripts (re-runnable, ship with repo) — exempt from the
 # blanket scripts/ ignore.
+!scripts/backfill-coi-named-insured.ts
 !scripts/rw-catalog-import.ts
 !scripts/rw-catalog-triage.ts
 !scripts/generate-agreement-template.py
