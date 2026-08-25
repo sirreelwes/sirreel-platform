@@ -33,18 +33,25 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const inquiryId = typeof body.inquiryId === 'string' ? body.inquiryId : ''
   if (!inquiryId) return NextResponse.json({ ok: false, error: 'inquiryId required' }, { status: 400 })
+  // Optional here (preview works before the Job is picked); when present
+  // it lets the loader backfill a missing company from the resolved Job.
+  const jobId = typeof body.jobId === 'string' ? body.jobId : ''
   const message: string | null = typeof body.message === 'string' && body.message.trim() ? body.message : null
   const customMessage: string | null =
     typeof body.customMessage === 'string' && body.customMessage.trim() ? body.customMessage : null
+  // Quick Respond composes from an empty box; without this the empty box
+  // would fall back to the templated welcome prose.
+  const suppressDefaultBody = body.suppressDefaultBody === true
 
   try {
-    const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email)
+    const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email, jobId || null)
     const { subject, html, text } = composeWelcomeEmail({
       ctx,
       // Placeholder — never resolvable; the live token exists only after Send.
       inviteUrl: welcomeInviteUrl('preview-not-a-real-token'),
       personalNote: message,
       customMessage,
+      suppressDefaultBody,
     })
     return NextResponse.json({
       ok: true,

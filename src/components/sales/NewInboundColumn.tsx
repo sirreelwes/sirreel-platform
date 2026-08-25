@@ -44,6 +44,8 @@ import { ThreadDrawer } from './ThreadDrawer'
 import { QuickReplyLauncher } from './QuickReplyLauncher'
 import { FormTypeBadge, type FormType } from './FormTypeBadge'
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
+import { JobResolverModal } from '@/components/shared/JobResolverModal'
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -179,9 +181,32 @@ export function NewInboundColumn({
   // order. Phase 1b: persistent inquiries only — suggestion cards
   // would need a 2-step capture-then-pick flow that's out of scope.
   const [addOnInquiry, setAddOnInquiry] = useState<PersistentInquiry | null>(null)
+  // Quick Respond — write back to whoever sent the inquiry without
+  // committing to a quote (Wes 2026-08-25: "some are just inquiries").
+  // Same two-step the detail page runs: resolve the Job, then compose.
+  // The composer opens EMPTY; the rep writes the message.
+  const [respondInquiry, setRespondInquiry] = useState<PersistentInquiry | null>(null)
+  const [respondContact, setRespondContact] = useState<
+    { email: string | null; name: string | null; phone: string | null } | null
+  >(null)
+  const [respondTarget, setRespondTarget] = useState<EmailReviewTarget | null>(null)
   // Clock time of the last successful list refresh — surfaced as a subtle
   // "updated HH:MM" so the user can see the auto-refresh is live.
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
+
+  const openQuickRespond = useCallback(async (row: PersistentInquiry) => {
+    setRespondContact(null)
+    try {
+      const res = await fetch(`/api/inquiries/${row.id}/resolve-contact`, { method: 'POST' })
+      if (res.ok) {
+        const d = await res.json()
+        setRespondContact({ email: d.email ?? null, name: d.name ?? null, phone: d.phone ?? null })
+      }
+    } catch {
+      /* prefill is a convenience, not a precondition */
+    }
+    setRespondInquiry(row)
+  }, [])
 
   const load = useCallback(() => {
     // Both streams in parallel. We replace state in place (never reset to
@@ -414,6 +439,7 @@ export function NewInboundColumn({
                     busy={busyId === item.row.id}
                     onCapture={() => capturePersistent(item.row.id)}
                     onAddOn={() => setAddOnInquiry(item.row)}
+                    onQuickRespond={() => openQuickRespond(item.row)}
                     onDismiss={() => dismissPersistent(item.row.id)}
                   />
                 ) : (
@@ -464,6 +490,7 @@ export function NewInboundColumn({
                         busy={busyId === item.row.id}
                         onCapture={() => capturePersistent(item.row.id)}
                         onAddOn={() => setAddOnInquiry(item.row)}
+                        onQuickRespond={() => openQuickRespond(item.row)}
                         onDismiss={() => dismissPersistent(item.row.id)}
                       />
                     ) : (
@@ -517,6 +544,53 @@ export function NewInboundColumn({
           onConfirm={(jobId) => submitAddOn(addOnInquiry.id, jobId)}
         />
       )}
+
+      {/* Quick Respond, step 1 — which Job does this belong to? Same
+          Job-as-root resolution the detail page runs, so a reply from
+          the queue lands on a real Job rather than floating free. */}
+      {respondInquiry && (
+        <JobResolverModal
+          context={{
+            companyId: respondInquiry.company?.id ?? null,
+            companyName: respondInquiry.company?.name ?? null,
+            contactEmail: respondContact?.email ?? respondInquiry.person?.email ?? null,
+            contactName:
+              respondContact?.name ??
+              (respondInquiry.person
+                ? `${respondInquiry.person.firstName} ${respondInquiry.person.lastName}`.trim()
+                : null),
+            contactPhone: respondContact?.phone ?? null,
+            jobNameHint: respondInquiry.title,
+            dates:
+              respondInquiry.preferredStartDate && respondInquiry.preferredEndDate
+                ? {
+                    start: respondInquiry.preferredStartDate.slice(0, 10),
+                    end: respondInquiry.preferredEndDate.slice(0, 10),
+                  }
+                : null,
+            sourceRef: 'sales:welcome',
+          }}
+          draftExtras={
+            respondInquiry.estimatedValue != null
+              ? { estimatedValue: respondInquiry.estimatedValue }
+              : undefined
+          }
+          onResolved={(r) => {
+            const inquiryId = respondInquiry.id
+            setRespondInquiry(null)
+            setRespondTarget({ kind: 'welcome', inquiryId, jobId: r.id })
+          }}
+          onClose={() => setRespondInquiry(null)}
+        />
+      )}
+
+      {/* Quick Respond, step 2 — compose. Opens blank on purpose. */}
+      <EmailReviewModal
+        target={respondTarget}
+        blankCompose
+        onClose={() => setRespondTarget(null)}
+        onSent={() => { setRespondTarget(null); load() }}
+      />
     </section>
   )
 }
@@ -662,12 +736,14 @@ function PersistentCard({
   busy,
   onCapture,
   onAddOn,
+  onQuickRespond,
   onDismiss,
 }: {
   inquiry: PersistentInquiry
   busy: boolean
   onCapture: () => void
   onAddOn: () => void
+  onQuickRespond: () => void
   onDismiss: () => void
 }) {
   const contactName = inquiry.person
@@ -738,6 +814,19 @@ function PersistentCard({
           className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-gray-500 hover:text-gray-900 disabled:opacity-50 px-3 py-1.5 rounded-lg"
         >
           Add on to existing job
+        </button>
+        {/* Quick Respond (Wes 2026-08-25) — reply to the person who wrote
+            in, without committing to a quote. Same flow the detail page
+            ran under the "Send Welcome" label; renamed because most of
+            this queue is still just an inquiry, and it opens with an
+            EMPTY body rather than templated prose. */}
+        <button
+          onClick={onQuickRespond}
+          disabled={busy}
+          title="Write back to this contact — you compose the message"
+          className="text-xs font-semibold border border-gray-300 text-gray-700 hover:border-amber-400 hover:text-amber-700 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+        >
+          Quick Respond
         </button>
         <button
           onClick={onDismiss}

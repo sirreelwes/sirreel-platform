@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { ensureInquiryContact } from '@/lib/inquiries/resolveContact'
 import { buildBookingWelcomeEmail } from '@/lib/email/templates/bookingWelcome'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
 
@@ -37,7 +38,27 @@ export interface WelcomeInquiryContext {
 export async function loadWelcomeInquiryContext(
   inquiryId: string,
   fallbackAgentEmail: string,
+  /** The agent-resolved Job. Used to backfill a missing inquiry company
+   *  (the Job already has one) so the send stops failing on a
+   *  precondition the agent has effectively already answered. */
+  resolvedJobId?: string | null,
 ): Promise<WelcomeInquiryContext> {
+  // Derive the contact from what the inquiry arrived with (Gmail From
+  // header / web-form contact block) before demanding one. Every inquiry
+  // carried a usable email and NONE had a linked Person, so this
+  // precondition used to fail on essentially all of them (Wes 2026-08-25).
+  await ensureInquiryContact(inquiryId).catch(() => null)
+
+  if (resolvedJobId) {
+    const current = await prisma.inquiry.findUnique({ where: { id: inquiryId }, select: { companyId: true } })
+    if (!current?.companyId) {
+      const job = await prisma.job.findUnique({ where: { id: resolvedJobId }, select: { companyId: true } })
+      if (job?.companyId) {
+        await prisma.inquiry.update({ where: { id: inquiryId }, data: { companyId: job.companyId } })
+      }
+    }
+  }
+
   const inquiry = await prisma.inquiry.findUnique({
     where: { id: inquiryId },
     select: {
@@ -81,6 +102,8 @@ export function composeWelcomeEmail(args: {
   inviteUrl: string
   personalNote?: string | null
   customMessage?: string | null
+  /** Quick Respond: an empty box means an empty body, not the default prose. */
+  suppressDefaultBody?: boolean
 }): { subject: string; html: string; text: string } {
   return buildBookingWelcomeEmail({
     firstName: args.ctx.person.firstName,
@@ -91,6 +114,7 @@ export function composeWelcomeEmail(args: {
     repEmail: args.ctx.agent.email,
     personalNote: args.personalNote ?? null,
     customMessage: args.customMessage ?? null,
+    suppressDefaultBody: args.suppressDefaultBody ?? false,
     ctaLabel: WELCOME_CTA_LABEL,
   })
 }

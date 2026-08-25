@@ -45,6 +45,14 @@ export interface BookingWelcomeEmailInput {
    *  line rather than replacing it. Greeting, benefits, CTA and sign-off stay
    *  intact. When empty, the templated TSX-portal paragraph is used instead. */
   customMessage?: string | null
+  /**
+   * Quick Respond opens with an empty box (Wes 2026-08-25: "not have any
+   * prepopulated message in email"). Without this flag an empty box would
+   * silently fall back to the templated prose, so the rep would see blank
+   * and the client would receive the standard welcome — the exact mismatch
+   * the flag exists to prevent. Greeting, CTA and sign-off still render.
+   */
+  suppressDefaultBody?: boolean
   /** CTA button label — the welcome/job-begin invite passes
    *  "Get Paperwork Started". Defaults to the original portal wording. */
   ctaLabel?: string
@@ -96,12 +104,17 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   //
   // With nothing written, the same default renders, so the box a rep looks at
   // and the email a client receives are the same words.
+  const defaultIntro = input.suppressDefaultBody
+    ? ''
+    : defaultEmailBody({ kind: 'welcome', projectName: input.projectName })
   const introHtml = customRaw
     ? toParas(customRaw, 'margin:0 0 16px;')
-    : toParas(defaultEmailBody({ kind: 'welcome', projectName: input.projectName }), 'margin:0 0 16px;')
+    : defaultIntro
+      ? toParas(defaultIntro, 'margin:0 0 16px;')
+      : ''
   const noteHtml = noteRaw ? toParas(noteRaw, 'margin:0 0 16px;color:#1a1a1a;') : ''
   // Same order in plain text as in HTML.
-  const introText = customRaw || defaultEmailBody({ kind: 'welcome', projectName: input.projectName })
+  const introText = customRaw || defaultIntro
 
   const subject = `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
@@ -110,7 +123,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ``,
     `Hi ${input.firstName || 'there'},`,
     ``,
-    introText,
+    ...(introText ? [introText] : []),
     ...(noteRaw ? ['', noteRaw] : []),
     ``,
     `Everything you'll need lives in one place:`,

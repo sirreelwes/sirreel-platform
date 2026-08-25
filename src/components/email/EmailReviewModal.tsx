@@ -137,6 +137,8 @@ export type EmailReviewTarget =
 
 interface Props {
   target: EmailReviewTarget | null;
+  /** Start in "write my own" mode with an empty body — no templated prose. */
+  blankCompose?: boolean;
   onClose: () => void;
   /** Called after a successful real send. The caller refreshes its
    *  list / shows a toast / etc. */
@@ -189,6 +191,7 @@ function buildPreviewBody(
   overrideContactId: string | null,
   customNote: string,
   customMessage = '',
+  suppressDefaultBody = false,
 ): unknown {
   const base: Record<string, unknown> = {};
   if (overrideContactId) base.overrideContactId = overrideContactId;
@@ -212,6 +215,9 @@ function buildPreviewBody(
     base.inquiryId = target.inquiryId;
     base.jobId = target.jobId;
     base.customMessage = customMessage.trim() || null;
+    // Blank-compose entry points mean it: an empty box sends an empty body
+    // rather than falling back to the templated welcome prose.
+    if (suppressDefaultBody) base.suppressDefaultBody = true;
   }
   return base;
 }
@@ -221,8 +227,9 @@ function buildSendBody(
   overrideContactId: string | null,
   customNote: string,
   customMessage = '',
+  suppressDefaultBody = false,
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customNote, customMessage);
+  return buildPreviewBody(target, overrideContactId, customNote, customMessage, suppressDefaultBody);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -239,7 +246,7 @@ function fmtInsightDate(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-export function EmailReviewModal({ target, onClose, onSent }: Props) {
+export function EmailReviewModal({ target, blankCompose, onClose, onSent }: Props) {
   const [preview, setPreview] = useState<CompositionOk | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -269,7 +276,10 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
   // "Write my own email" (quick-reply only): the rep's own prose replaces the
   // templated body; the branded shell + real availability block stay. Debounced
   // into the live preview re-fetch like the note.
-  const [writeOwn, setWriteOwn] = useState(false);
+  // Some entry points open with NOTHING pre-written (Wes 2026-08-25:
+  // "Quick Respond … not have any prepopulated message in email") — the
+  // rep writes the whole body themselves.
+  const [writeOwn, setWriteOwn] = useState(!!blankCompose);
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -297,7 +307,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
         const res = await fetch(endpoints.preview, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom)),
+          body: JSON.stringify(buildPreviewBody(target, overrideContactId, debouncedNote, debouncedCustom, !!blankCompose)),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.ok === false) {
@@ -316,7 +326,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
         setRefreshing(false);
       }
     },
-    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom],
+    [target, endpoints, overrideContactId, debouncedNote, debouncedCustom, blankCompose],
   );
 
   // Reset state when target changes (e.g. opening for a different order).
@@ -325,14 +335,17 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
-    setWriteOwn(false);
+    // Blank-compose entry points stay in write-my-own across target changes;
+    // resetting to false here would drop a Quick Respond back into templated
+    // prose the moment the modal re-opened for a different inquiry.
+    setWriteOwn(!!blankCompose);
     setCustomMessage('');
     setAiFlags(null);
     setAiPolished(null);
     setAiError(null);
     sendInFlightRef.current = false;
     setSendState('idle');
-  }, [target]);
+  }, [target, blankCompose]);
 
   // Initial fetch when target changes.
   useEffect(() => {
@@ -363,7 +376,7 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '') as Record<string, unknown>;
+      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!blankCompose) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -638,10 +651,13 @@ export function EmailReviewModal({ target, onClose, onSent }: Props) {
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        {/* Both kinds behave the same now: the standard line
-                            leads, this text follows. */}
-                        — the standard wording, yours to edit. The greeting,
-                        {target.kind === 'welcome' ? ' portal button' : ' availability list & supply link'} and sign-off stay.
+                        {blankCompose
+                          ? '— nothing is written for you. The greeting, portal button and sign-off stay.'
+                          : /* Both kinds behave the same: the standard line
+                               leads, this text follows. */
+                            `— the standard wording, yours to edit. The greeting,${
+                              target.kind === 'welcome' ? ' portal button' : ' availability list & supply link'
+                            } and sign-off stay.`}
                       </span>
                     </span>
                   </label>

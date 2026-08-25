@@ -53,9 +53,12 @@ export async function POST(req: NextRequest) {
   const message: string | null = typeof body.message === 'string' && body.message.trim() ? body.message : null
   const customMessage: string | null =
     typeof body.customMessage === 'string' && body.customMessage.trim() ? body.customMessage : null
+  // Quick Respond composes from an empty box; without this the empty box
+  // would fall back to the templated welcome prose.
+  const suppressDefaultBody = body.suppressDefaultBody === true
 
   try {
-    const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email)
+    const ctx = await loadWelcomeInquiryContext(inquiryId, session.user.email, jobId || null)
 
     // The resolved Job must be real and open — the client's click will
     // mint the Order inside it.
@@ -103,6 +106,7 @@ export async function POST(req: NextRequest) {
       inviteUrl: welcomeInviteUrl(token),
       personalNote: message,
       customMessage,
+      suppressDefaultBody,
     })
     const result = await sendAgreementEmail({
       to: [ctx.person.email],

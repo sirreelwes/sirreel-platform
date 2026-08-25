@@ -121,7 +121,32 @@ export default function InquiryDetailPage() {
   // NEW), THEN reviews + sends in EmailReviewModal. The client's click
   // mints the Order inside that already-resolved Job.
   const [welcomeResolverOpen, setWelcomeResolverOpen] = useState(false)
+
+  /**
+   * Quick Respond — resolve who wrote in, THEN open the Job resolver.
+   * Failing to resolve isn't fatal: the resolver still opens and the
+   * agent can pick the contact by hand, same as before.
+   */
+  const openQuickRespond = useCallback(async () => {
+    if (!inquiry) return
+    try {
+      const res = await fetch(`/api/inquiries/${inquiry.id}/resolve-contact`, { method: 'POST' })
+      if (res.ok) {
+        const d = await res.json()
+        setResolvedContact({ email: d.email ?? null, name: d.name ?? null, phone: d.phone ?? null })
+      }
+    } catch {
+      /* prefill is a convenience, not a precondition */
+    }
+    setWelcomeResolverOpen(true)
+  }, [inquiry])
   const [welcomeTarget, setWelcomeTarget] = useState<EmailReviewTarget | null>(null)
+  // What the inquiry's own metadata says about the sender, after the
+  // server has turned them into a Person. Prefills the resolver so the
+  // agent never has to retype an address that arrived with the email.
+  const [resolvedContact, setResolvedContact] = useState<
+    { email: string | null; name: string | null; phone: string | null } | null
+  >(null)
   const [welcomeFlash, setWelcomeFlash] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -269,11 +294,11 @@ export default function InquiryDetailPage() {
                         readable error otherwise. The agent resolves the Job
                         HERE (Job-as-root); the client's click mints the Order. */}
                     <button
-                      onClick={() => setWelcomeResolverOpen(true)}
+                      onClick={openQuickRespond}
                       disabled={actionPending != null}
                       className="text-xs font-semibold border border-amber-600/60 text-amber-500 hover:bg-amber-600/10 px-3 py-1.5 rounded-lg disabled:opacity-40"
                     >
-                      Send Welcome →
+                      Quick Respond →
                     </button>
                     <Link
                       href={`/orders/new?inquiryId=${inquiry.id}`}
@@ -415,8 +440,11 @@ export default function InquiryDetailPage() {
           context={{
             companyId: inquiry.company?.id ?? null,
             companyName: inquiry.company?.name ?? null,
-            contactEmail: inquiry.person?.email ?? null,
-            contactName: inquiry.person ? `${inquiry.person.firstName} ${inquiry.person.lastName}`.trim() : null,
+            contactEmail: resolvedContact?.email ?? inquiry.person?.email ?? null,
+            contactName:
+              resolvedContact?.name ??
+              (inquiry.person ? `${inquiry.person.firstName} ${inquiry.person.lastName}`.trim() : null),
+            contactPhone: resolvedContact?.phone ?? null,
             jobNameHint: inquiry.title,
             dates:
               inquiry.preferredStartDate && inquiry.preferredEndDate
@@ -436,10 +464,11 @@ export default function InquiryDetailPage() {
       {/* Welcome / Job Begin review + confirm-send */}
       <EmailReviewModal
         target={welcomeTarget}
+        blankCompose
         onClose={() => setWelcomeTarget(null)}
         onSent={(info) => {
           setWelcomeTarget(null)
-          setWelcomeFlash(`Welcome sent to ${info.recipient} — their paperwork portal opens inside the resolved Job when they click “Get Paperwork Started”.`)
+          setWelcomeFlash(`Sent to ${info.recipient} — their paperwork portal opens inside the resolved Job when they click “Get Paperwork Started”.`)
           window.setTimeout(() => setWelcomeFlash(null), 8000)
         }}
       />
