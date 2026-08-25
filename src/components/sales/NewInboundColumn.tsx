@@ -42,6 +42,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ThreadDrawer } from './ThreadDrawer'
 import { QuickReplyLauncher } from './QuickReplyLauncher'
+import { ClientDetailSuggestion, type ClientDetailReply } from '@/components/intake/ClientDetailSuggestion'
 import { FormTypeBadge, type FormType } from './FormTypeBadge'
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
 import { JobResolverModal } from '@/components/shared/JobResolverModal'
@@ -175,6 +176,9 @@ export function NewInboundColumn({
   // Quick Reply launched straight from a suggestion row (same modal the
   // inquiry-mode ThreadDrawer opens — shared launcher, no duplicated logic).
   const [quickReplyEmailId, setQuickReplyEmailId] = useState<string | null>(null)
+  // Client answers keyed by inquiry id — see the details link in the Quick
+  // Reply email (src/lib/intake/detailsToken.ts).
+  const [detailReplies, setDetailReplies] = useState<Record<string, ClientDetailReply>>({})
   // Add-on triage state. When set, the modal is open against this
   // persistent inquiry; the rep picks an existing Job, then confirm
   // hits POST /api/inquiries/[id]/add-on and redirects to the new
@@ -215,7 +219,26 @@ export function NewInboundColumn({
       fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
       fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
     ]).then(([inqData, sugData]) => {
-      setInquiries((inqData?.inquiries ?? []) as PersistentInquiry[])
+      const rows = (inqData?.inquiries ?? []) as PersistentInquiry[]
+      setInquiries(rows)
+      // Client answers to the emailed details link, batched for the whole
+      // column — one request per refresh, not one per row on a 60s poll.
+      const ids = rows.map((r) => r.id).filter(Boolean)
+      if (ids.length) {
+        fetch(`/api/client-details?inquiryIds=${encodeURIComponent(ids.join(','))}`)
+          .then((r) => r.json())
+          .then((d) => {
+            if (!d?.ok) return
+            const byInquiry: Record<string, ClientDetailReply> = {}
+            for (const reply of (d.replies ?? []) as ClientDetailReply[]) {
+              if (reply.inquiryId && !byInquiry[reply.inquiryId]) byInquiry[reply.inquiryId] = reply
+            }
+            setDetailReplies(byInquiry)
+          })
+          .catch(() => {})
+      } else {
+        setDetailReplies({})
+      }
       // Suggested-inquiries endpoint returns { newInquiries | suggestions, followUps, hidden }.
       // Same convention as InquiriesSection.
       const sug = (sugData?.newInquiries ?? sugData?.suggestions ?? []) as SuggestionRecord[]
@@ -437,6 +460,8 @@ export function NewInboundColumn({
                     key={`inq-${item.row.id}`}
                     inquiry={item.row}
                     busy={busyId === item.row.id}
+                    detailReply={detailReplies[item.row.id] ?? null}
+                    onDetailReplyResolved={load}
                     onCapture={() => capturePersistent(item.row.id)}
                     onAddOn={() => setAddOnInquiry(item.row)}
                     onQuickRespond={() => openQuickRespond(item.row)}
@@ -488,6 +513,8 @@ export function NewInboundColumn({
                         key={`inq-${item.row.id}`}
                         inquiry={item.row}
                         busy={busyId === item.row.id}
+                        detailReply={detailReplies[item.row.id] ?? null}
+                        onDetailReplyResolved={load}
                         onCapture={() => capturePersistent(item.row.id)}
                         onAddOn={() => setAddOnInquiry(item.row)}
                         onQuickRespond={() => openQuickRespond(item.row)}
@@ -734,6 +761,8 @@ function AddOnModal({
 function PersistentCard({
   inquiry,
   busy,
+  detailReply,
+  onDetailReplyResolved,
   onCapture,
   onAddOn,
   onQuickRespond,
@@ -741,6 +770,11 @@ function PersistentCard({
 }: {
   inquiry: PersistentInquiry
   busy: boolean
+  /** The client's own answer to the Quick Reply email's "what's the
+   *  production company and project name?" ask, typed on /details/<token>.
+   *  Fetched once for the whole column, not per row. */
+  detailReply?: ClientDetailReply | null
+  onDetailReplyResolved?: () => void
   onCapture: () => void
   onAddOn: () => void
   onQuickRespond: () => void
@@ -797,6 +831,16 @@ function PersistentCard({
       )}
       {value && (
         <div className="mt-1 text-[11px] text-gray-500">Est. value {value}</div>
+      )}
+
+      {/* The client filled in the details link we emailed. Read-only here —
+          the values are applied when the inquiry is captured/quoted, which
+          is where the company and job actually get resolved. Dismiss clears
+          it from the queue. */}
+      {detailReply && (
+        <div className="mt-2">
+          <ClientDetailSuggestion reply={detailReply} onResolved={onDetailReplyResolved} compact />
+        </div>
       )}
 
       <div className="mt-2.5 flex items-center gap-2 flex-wrap">

@@ -100,6 +100,15 @@ export function portalResendLandingUrl(slug: string): string {
 }
 
 /**
+ * No-login client COI upload — `/coi/[token]`. On the portal host
+ * allowlist (see middleware), so it routes through the same base as every
+ * other client-facing link rather than an ad-hoc request origin.
+ */
+export function coiUploadUrl(token: string): string {
+  return `${portalBaseUrl()}/coi/${encodeURIComponent(token)}`
+}
+
+/**
  * Legacy `/client/[token]` route — sibling to `/portal/[token]`,
  * sent in some older booking emails. Kept here so that prefix is
  * also routed through the centralized base URL.

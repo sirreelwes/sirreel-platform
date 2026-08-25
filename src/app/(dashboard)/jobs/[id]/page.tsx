@@ -31,6 +31,7 @@ import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
 import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
+import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
@@ -340,6 +341,8 @@ export default function JobDetailPage() {
   // Which filed certificate is open in the review desk (approve/reject, AI
   // re-run, named-insured mismatch + its fixes).
   const [reviewCoiId, setReviewCoiId] = useState<string | null>(null);
+  // Header affordance for re-pointing the job at the right production company.
+  const [companyChangeOpen, setCompanyChangeOpen] = useState(false);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
   // "Send for signature" — the paperwork portal invite, surfaced here
   // because this is where both contracts' status already lives. The only
@@ -951,7 +954,27 @@ const driverTone = (d: any): string => {
                   {job.company.name}
                 </Link>
               </span>
+              {/* Booked under the wrong entity happens — a COI naming someone
+                  else is how it usually surfaces. Fixable from here as well as
+                  from the COI review desk, since by the time somebody KNOWS
+                  the company is wrong they are just as likely to be standing
+                  on the job page. */}
+              <button
+                onClick={() => setCompanyChangeOpen((v) => !v)}
+                className="text-[12px] font-semibold text-zinc-500 hover:text-amber-400 transition-colors"
+              >
+                {companyChangeOpen ? 'Cancel' : 'Change'}
+              </button>
             </div>
+            {companyChangeOpen && (
+              <div className="mt-2.5 max-w-md rounded-xl border border-amber-500/30 bg-amber-500/[0.04] px-3.5 py-3">
+                <ChangeProductionCompany
+                  jobId={job.id}
+                  currentCompanyName={job.company.name}
+                  onChanged={load}
+                />
+              </div>
+            )}
             {primaryContact && (
               <div className="mt-3 inline-flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-800/40 px-3 py-2">
                 <span className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-700/40 flex items-center justify-center text-[12px] font-bold text-amber-300" style={{ fontFamily: "Georgia, serif" }}>

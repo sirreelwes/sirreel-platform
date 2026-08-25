@@ -194,6 +194,12 @@ export function JobResolverModal({
     onResolved({ id: j.jobId, jobCode: j.jobCode, name: j.name, companyId: j.companyId, companyName: j.companyName, created: false })
   }
 
+  // Wes 2026-08-25: an inbound lead often has a person and a request but
+  // no production company, and the reply shouldn't be blocked on it. The
+  // agent enters it when they have it, or ticks this and the Quick Reply
+  // asks the client — which that modal already knows how to do.
+  const [companyUnknown, setCompanyUnknown] = useState(false)
+
   const createNew = async () => {
     setSubmitting(true)
     setError('')
@@ -204,8 +210,9 @@ export function JobResolverModal({
         body: JSON.stringify({
           ...(draftExtras ?? {}),
           name: dName,
-          companyId: dCompanyId || undefined,
-          companyName: dCompany,
+          companyId: companyUnknown ? undefined : dCompanyId || undefined,
+          companyName: companyUnknown ? '' : dCompany,
+          companyUnknown,
           contactName: dContactName,
           contactEmail: dContactEmail,
           contactPhone: dContactPhone,
@@ -338,18 +345,32 @@ export function JobResolverModal({
                   <input value={dName} onChange={(e) => setDName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
                 </div>
                 <div className="relative">
-                  <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Production company *</label>
+                  <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Production company {companyUnknown ? <span className="font-normal text-gray-400">— we&rsquo;ll ask the client</span> : '*'}</label>
                   <input
-                    value={dCompany}
+                    value={companyUnknown ? '' : dCompany}
+                    disabled={companyUnknown}
                     onChange={(e) => searchCompanies(e.target.value)}
                     onFocus={() => { if (dCompany.trim().length > 0 && !dCompanyId) setCompanyOpen(true) }}
                     placeholder="Search existing or type a new company…"
                     autoComplete="off"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
                   />
-                  {dCompanyId && (
+                  {dCompanyId && !companyUnknown && (
                     <div className="text-[10px] text-emerald-600 mt-0.5">✓ existing company — will be linked, not duplicated</div>
                   )}
+                  <label className="mt-1.5 flex items-start gap-1.5 text-[11px] text-gray-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox" checked={companyUnknown} className="mt-0.5 accent-sky-600"
+                      onChange={(e) => setCompanyUnknown(e.target.checked)}
+                    />
+                    <span>
+                      I don&rsquo;t know their production company yet
+                      <span className="block text-[10px] text-gray-400">
+                        The Job is created against a placeholder and the reply asks the client — set the real
+                        company from the job page when they answer.
+                      </span>
+                    </span>
+                  </label>
                   {companyOpen && dCompany.trim().length > 0 && (
                     <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto">
                       {companySearching && <div className="px-3 py-2 text-xs text-gray-400">Searching…</div>}
@@ -386,7 +407,7 @@ export function JobResolverModal({
                 {error && <div className="text-[11px] text-red-600">{error}</div>}
                 <button
                   onClick={createNew}
-                  disabled={submitting || !dName.trim() || !dCompany.trim()}
+                  disabled={submitting || !dName.trim() || (!companyUnknown && !dCompany.trim())}
                   className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold"
                 >
                   {submitting ? 'Creating…' : 'Create new Job (starts as NEW) →'}

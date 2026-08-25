@@ -15,13 +15,15 @@
  *   3. the fixes — correct the production company, and re-issue an agreement
  *      that was signed under the wrong one
  *
- * (3) is here rather than buried on the job page because the mismatch is
- * discovered HERE. Sending someone to go find the right screen is how a
- * wrong-entity agreement stays out in the world.
+ * (3) is here — not only on the job page — because the mismatch is
+ * discovered HERE. Sending someone off to find the right screen is how a
+ * wrong-entity agreement stays out in the world. The panel itself
+ * (ChangeProductionCompany) is shared with the job header, so the two
+ * entry points cannot drift on what a company change costs.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { CompanyPicker } from '@/components/orders/CompanyPicker';
+import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import {
   INSURED_MATCH_LABEL,
   INSURED_MATCH_TONE,
@@ -52,6 +54,7 @@ interface CoiReviewData {
   aiNotes: string | null;
   aiOverallPass: boolean;
   aiRan: boolean;
+  aiHasInsuredName: boolean;
   humanDecision: string;
   humanDecisionNote: string | null;
   humanDecisionAt: string | null;
@@ -60,6 +63,10 @@ interface CoiReviewData {
   companyName: string | null;
   match: InsuredMatchResult;
   signedAgreements: StaleAgreement[];
+  /** Who we can send the "still missing" note to, best recipient first. */
+  contacts: { name: string; email: string; role: string | null }[];
+  /** Server-built draft of what the certificate still needs. */
+  fixDraft: { issues: string[]; message: string };
 }
 
 function fmtDate(iso: string | null): string {
@@ -82,6 +89,13 @@ export function CoiReviewModal({
 }) {
   const [data, setData] = useState<CoiReviewData | null>(null);
   const [loading, setLoading] = useState(true);
+  // "Ask the client to fix it" compose state. Opens inline rather than as a
+  // second modal — the reviewer is reading the certificate on the left while
+  // they write. Named ask* because fix* already belongs to the
+  // fix-the-production-company sub-flow below.
+  const [askOpen, setAskOpen] = useState(false);
+  const [askTo, setAskTo] = useState('');
+  const [askMsg, setAskMsg] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -89,20 +103,25 @@ export function CoiReviewModal({
   const [note, setNote] = useState('');
   const [expiry, setExpiry] = useState('');
 
-  // Fix-the-company sub-flow
+  // Fix-the-company sub-flow. The panel owns the move, the fallout and the
+  // re-issue (shared with the job header) — this modal only decides when to
+  // show it and refreshes the verdict afterwards.
   const [fixOpen, setFixOpen] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string | null>(null);
-  const [newCompanyName, setNewCompanyName] = useState('');
-  const [staleAgreements, setStaleAgreements] = useState<StaleAgreement[] | null>(null);
-  const [priorCompanyName, setPriorCompanyName] = useState<string | null>(null);
-  const [reissueReason, setReissueReason] = useState('');
 
   const apply = useCallback(
     (d: CoiReviewData) => {
       setData(d);
       setNote(d.humanDecisionNote || '');
       setExpiry(d.policyExpiryDate ? d.policyExpiryDate.slice(0, 10) : '');
+      // Seed the compose fields only while the panel is closed — a re-run or
+      // a company change mid-compose must not wipe what the reviewer typed.
+      setAskOpen((open) => {
+        if (!open) {
+          setAskTo(d.contacts[0]?.email || '');
+          setAskMsg(d.fixDraft?.message || '');
+        }
+        return open;
+      });
     },
     [],
   );
@@ -162,89 +181,28 @@ export function CoiReviewModal({
     }
   };
 
+  const requestFix = async () => {
+    const d = await post({ action: 'REQUEST_FIX', to: askTo, message: askMsg, note }, 'REQUEST_FIX');
+    if (d) {
+      setAskOpen(false);
+      setFlash(`Sent to ${askTo} — marked as changes requested.`);
+    }
+  };
+
   const rerun = async () => {
     const d = await post({ action: 'RERUN_AI' }, 'RERUN');
     if (d) setFlash('AI review re-run against the stored file.');
   };
 
-  const fixCompany = async () => {
-    if (!data?.job) return;
-    const payload = companyId ? { companyId } : { companyName: newCompanyName.trim() };
-    if (!companyId && !newCompanyName.trim()) {
-      setError('Pick an existing company or type the correct name.');
-      return;
-    }
-    setBusy('FIX');
-    setError(null);
-    setFlash(null);
-    try {
-      const res = await fetch(`/api/jobs/${data.job.id}/company`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d?.ok) {
-        setError(d?.error || 'Could not change the production company.');
-        return;
-      }
-      setPriorCompanyName(d.previousCompanyName ?? null);
-      setStaleAgreements(d.staleAgreements || []);
-      setReissueReason(
-        `The agreement was signed under ${d.previousCompanyName || 'the previous company'}; this rental is under ${d.company.name}.`,
-      );
-      setFixOpen(false);
-      setFlash(
-        `Moved to ${d.company.name}${d.ordersMoved ? ` (${d.ordersMoved} order${d.ordersMoved === 1 ? '' : 's'} re-pointed)` : ''}.`,
-      );
-      onChanged?.();
-      // Refresh so the match banner re-evaluates against the new company.
-      const fresh = await fetch(`/api/coi/review/${coiId}`).then((r) => r.json());
-      if (fresh?.ok) apply(fresh.coi);
-    } catch {
-      setError('Could not change the production company.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const reissue = async (a: StaleAgreement) => {
-    if (!reissueReason.trim()) {
-      setError('Say why it is being re-issued — it becomes the audit record.');
-      return;
-    }
-    setBusy(`REISSUE:${a.orderId}`);
-    setError(null);
-    try {
-      const res = await fetch(`/api/orders/${a.orderId}/agreement/reissue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: reissueReason.trim(),
-          contractType: a.contractType,
-          priorCompanyName,
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d?.ok) {
-        setError(d?.error || 'Could not re-issue that agreement.');
-        return;
-      }
-      setStaleAgreements((prev) => (prev || []).filter((x) => x.orderId !== a.orderId));
-      setFlash(
-        d.needsStageRegeneration
-          ? `${a.orderNumber}: signature cleared — regenerate the stage contract before it can be signed.`
-          : d.emailed
-            ? `${a.orderNumber}: re-issued and emailed to the client to sign.`
-            : `${a.orderNumber}: re-issued. ${d.emailError || 'Send the portal link manually.'}`,
-      );
-      onChanged?.();
-    } catch {
-      setError('Could not re-issue that agreement.');
-    } finally {
-      setBusy(null);
-    }
-  };
+  // Re-read after a company change so the match banner re-evaluates against
+  // the company the job is NOW under.
+  const refresh = useCallback(async () => {
+    onChanged?.();
+    const fresh = await fetch(`/api/coi/review/${coiId}`)
+      .then((r) => r.json())
+      .catch(() => null);
+    if (fresh?.ok) apply(fresh.coi);
+  }, [coiId, apply, onChanged]);
 
   const match = data?.match;
   const attention = !!match?.needsAttention;
@@ -327,10 +285,7 @@ export function CoiReviewModal({
                   </dl>
                   {attention && data.job && (
                     <button
-                      onClick={() => {
-                        setFixOpen((v) => !v);
-                        if (!newCompanyName && match.namedInsured) setNewCompanyName(match.namedInsured);
-                      }}
+                      onClick={() => setFixOpen((v) => !v)}
                       className="mt-2.5 text-[12px] font-semibold text-amber-300 hover:text-amber-200"
                     >
                       {fixOpen ? 'Cancel' : 'Fix the production company →'}
@@ -347,87 +302,19 @@ export function CoiReviewModal({
 
               {/* Correct the production company, then offer the re-issue. */}
               {fixOpen && data.job && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] px-3.5 py-3 space-y-2.5">
-                  <div className="text-[12px] text-zinc-300">
-                    Move this job (and its orders) to the company that is actually renting.
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-zinc-400 mb-1">Existing company</label>
-                    <CompanyPicker
-                      value={companyId}
-                      selectedName={companyName}
-                      onChange={(id, name) => {
-                        setCompanyId(id || null);
-                        setCompanyName(name || null);
-                      }}
-                    />
-                  </div>
-                  {!companyId && (
-                    <div>
-                      <label className="block text-[11px] text-zinc-400 mb-1">
-                        …or create it from the certificate
-                      </label>
-                      <input
-                        value={newCompanyName}
-                        onChange={(e) => setNewCompanyName(e.target.value)}
-                        placeholder="Production company name"
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
-                      />
-                    </div>
-                  )}
-                  <button
-                    onClick={fixCompany}
-                    disabled={busy === 'FIX'}
-                    className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
-                  >
-                    {busy === 'FIX' ? 'Moving…' : 'Change production company'}
-                  </button>
-                </div>
-              )}
-
-              {/* Anything already signed under the old company. */}
-              {staleAgreements && staleAgreements.length > 0 && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-500/5 px-3.5 py-3 space-y-2.5">
-                  <div className="text-[13px] font-semibold text-rose-200">
-                    Signed under the old company — re-issue to the new one
-                  </div>
-                  <textarea
-                    value={reissueReason}
-                    onChange={(e) => setReissueReason(e.target.value)}
-                    rows={2}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[12px] text-white"
-                    placeholder="Why it is being re-issued (goes to the client and into the audit record)"
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] px-3.5 py-3">
+                  <ChangeProductionCompany
+                    jobId={data.job.id}
+                    currentCompanyName={data.companyName}
+                    suggestedName={match?.namedInsured ?? null}
+                    onChanged={refresh}
                   />
-                  {staleAgreements.map((a) => (
-                    <div key={`${a.orderId}:${a.contractType}`} className="flex items-center gap-2">
-                      <div className="min-w-0 flex-1 text-[12px] text-zinc-300">
-                        <span className="text-white">{a.orderNumber}</span>
-                        <span className="text-zinc-500">
-                          {' '}
-                          · {a.contractType === 'STAGE_CONTRACT' ? 'Stage contract' : 'Rental agreement'} ·
-                          signed {fmtDate(a.signedAt)}
-                          {a.signerName ? ` by ${a.signerName}` : ''}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => reissue(a)}
-                        disabled={busy === `REISSUE:${a.orderId}`}
-                        className="shrink-0 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-rose-200 text-[12px] font-semibold rounded-lg px-2.5 py-1.5"
-                      >
-                        {busy === `REISSUE:${a.orderId}` ? 'Re-issuing…' : 'Re-issue & email'}
-                      </button>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-zinc-500">
-                    The old signature is kept as an audit record; the client is asked to sign the corrected
-                    agreement.
-                  </p>
                 </div>
               )}
 
               {/* Certificate already signed and NOT (yet) invalidated — shown
                   so a reviewer knows what a company change would cost. */}
-              {!staleAgreements && data.signedAgreements.length > 0 && attention && (
+              {!fixOpen && data.signedAgreements.length > 0 && attention && (
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5 text-[12px] text-zinc-400">
                   Heads up: {data.signedAgreements.length} agreement
                   {data.signedAgreements.length === 1 ? ' is' : 's are'} already signed on this job. Changing
@@ -447,9 +334,26 @@ export function CoiReviewModal({
                     disabled={busy === 'RERUN'}
                     className="text-[12px] font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-50"
                   >
-                    {busy === 'RERUN' ? 'Running…' : data.aiRan ? 'Re-run' : 'Run AI review'}
+                    {busy === 'RERUN'
+                      ? 'Running…'
+                      : !data.aiRan
+                        ? 'Run AI review'
+                        : !data.aiHasInsuredName
+                          ? 'Check insured name'
+                          : 'Re-run'}
                   </button>
                 </div>
+                {/* A review filed before the prompt asked for the named insured
+                    CANNOT produce a name match, so "Re-run" reads as an
+                    optional redo of work already done. Say what is actually
+                    missing instead. */}
+                {data.aiRan && !data.aiHasInsuredName && (
+                  <div className="mb-2 rounded-lg border border-amber-700/50 bg-amber-950/25 px-2.5 py-2 text-[12px] leading-relaxed text-amber-200/90">
+                    This review predates insured-name checking, so the certificate has
+                    never been read for who it insures. Run it to compare against the
+                    production company.
+                  </div>
+                )}
                 {data.aiRan ? (
                   <>
                     <div className="flex items-center gap-2 mb-1.5">
@@ -497,7 +401,11 @@ export function CoiReviewModal({
                   <div className="flex flex-col justify-end text-[12px] text-zinc-400 pb-2">
                     {data.humanDecision !== 'PENDING' ? (
                       <span>
-                        {data.humanDecision === 'APPROVED' ? 'Approved' : 'Rejected'}
+                        {data.humanDecision === 'APPROVED'
+                          ? 'Approved'
+                          : data.humanDecision === 'COUNTERED'
+                            ? 'Changes requested'
+                            : 'Rejected'}
                         {data.humanDecisionBy ? ` by ${data.humanDecisionBy}` : ''} ·{' '}
                         {fmtDate(data.humanDecisionAt)}
                       </span>
@@ -513,6 +421,81 @@ export function CoiReviewModal({
                   placeholder="Note (what you checked, what the client still owes us)"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white placeholder-zinc-500"
                 />
+                {/* Ask the client to fix it — the third option. Rejecting is the
+                    end of the conversation inside HQ; this is the one that
+                    actually tells the client what to go get. */}
+                {askOpen ? (
+                  <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                        Ask the client to fix it
+                      </span>
+                      <button
+                        onClick={() => setAskOpen(false)}
+                        className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {data.contacts.length > 1 && (
+                      <select
+                        value={askTo}
+                        onChange={(e) => setAskTo(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white"
+                      >
+                        {data.contacts.map((c) => (
+                          <option key={c.email} value={c.email}>
+                            {c.name} · {c.email}
+                            {c.role ? ` · ${c.role}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="email"
+                      value={askTo}
+                      onChange={(e) => setAskTo(e.target.value)}
+                      placeholder="client@example.com"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white placeholder-zinc-500"
+                    />
+                    <textarea
+                      value={askMsg}
+                      onChange={(e) => setAskMsg(e.target.value)}
+                      rows={10}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[12px] text-white leading-relaxed"
+                    />
+                    <p className="text-[11px] text-zinc-500">
+                      Sends exactly what&rsquo;s in the box, replies come back to you, and the
+                      certificate moves to <span className="text-zinc-300">Changes requested</span>.
+                    </p>
+                    <button
+                      onClick={requestFix}
+                      disabled={!!busy || !askTo.trim() || !askMsg.trim()}
+                      className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
+                    >
+                      {busy === 'REQUEST_FIX' ? 'Sending…' : 'Send to client'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setFlash(null);
+                      setAskOpen(true);
+                    }}
+                    disabled={!!busy || data.contacts.length === 0}
+                    title={
+                      data.contacts.length === 0
+                        ? 'No client contact on this job to email — add one on the job first.'
+                        : 'Email the client what this certificate is still missing'
+                    }
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-amber-300 text-[13px] font-semibold rounded-lg py-2"
+                  >
+                    Request fix from client
+                    {data.fixDraft?.issues?.length ? ` · ${data.fixDraft.issues.length} issue${data.fixDraft.issues.length === 1 ? '' : 's'}` : ''}
+                  </button>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => decide('APPROVED')}

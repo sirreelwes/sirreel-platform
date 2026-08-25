@@ -11,6 +11,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
+import { buildDetailsLink } from '@/lib/intake/detailsLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,9 @@ interface QuickReplyPayload {
   heldFrom?: string | null
   heldTo?: string | null
   customMessage?: string | null
+  /** EmailMessage id of the inbound being replied to — resolves the Inquiry
+   *  the details link binds to. Mirrors the send route's payload. */
+  inboundEmailMessageId?: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -41,6 +45,19 @@ export async function POST(req: NextRequest) {
   const message: string | null = typeof body.message === 'string' ? body.message : null
 
   const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
+
+  // Preview renders the REAL link, not a placeholder, so what the rep
+  // approves in EmailReviewModal is what the client receives. Signing is
+  // cheap and stateless — no row is written until the client submits.
+  const askForCompany = !!payload.askForDetails && !payload.clientName?.trim()
+  const askForProject = !!payload.askForDetails && !payload.jobName?.trim()
+  const detailsUrl = await buildDetailsLink({
+    askForCompany,
+    askForProject,
+    sentTo: payload.recipientEmail,
+    inboundEmailMessageId: payload.inboundEmailMessageId ?? null,
+  })
+
   const { subject, html, text } = composeQuickReply({
     recipientName: payload.recipientName,
     clientName: payload.clientName,
@@ -51,6 +68,7 @@ export async function POST(req: NextRequest) {
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,
+    detailsUrl,
     heldFrom: typeof payload.heldFrom === 'string' ? payload.heldFrom : null,
     heldTo: typeof payload.heldTo === 'string' ? payload.heldTo : null,
     customMessage: payload.customMessage ?? null,

@@ -19,9 +19,10 @@
  * instead of silently spawning a duplicate.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef} from 'react';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal';
+import { isProvisionalCompanyName } from '@/lib/companies/provisional';
 
 interface MatchedProduct { id: string; type: string; name: string; lineType?: string | null }
 interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
@@ -41,6 +42,13 @@ interface Line { id: string; name: string; requested: number; availableToHold: n
 /** Availability is per (category, window) — the same van over two different
  *  windows has two different answers, so lines are keyed by both. */
 const lineKey = (categoryId: string, start: string, end: string) => `${categoryId}|${start}|${end}`
+
+/**
+ * The stage complex, matched on the picker's own label so a rename shows
+ * up here without a code change. Only this line offers area checkboxes —
+ * vehicles have no areas.
+ */
+const isStageComplex = (categoryName: string) => /lankershim/i.test(categoryName)
 
 interface Props {
   emailText: string;
@@ -68,6 +76,21 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const [clientName, setClientName] = useState<string | null>(null);
+  // Company typeahead (Wes, 2026-08-25). The field was free text, so an
+  // agent could type a company we already know and still be told "add the
+  // client & contact to the CRM first" — soft holds were gated on
+  // `holdable`, which is only ever set from the AI parse's EXACT match at
+  // open time. Picking a known company here resolves that same companyId,
+  // so the hold checkbox unlocks without leaving the modal.
+  const [companyHits, setCompanyHits] = useState<Array<{ id: string; name: string }>>([]);
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [matchedCompanyId, setMatchedCompanyId] = useState<string | null>(null);
+  // Suppresses the search that setClientName would otherwise trigger right
+  // after a pick or the initial parse prefill.
+  const skipCompanySearch = useRef(false);
+  // The contact the parser resolved, kept even when the company didn't —
+  // a company pick plus this is enough to enable soft holds.
+  const [parsedPersonId, setParsedPersonId] = useState<string | null>(null);
   const [jobName, setJobName] = useState<string | null>(null);
   const [pickup, setPickup] = useState<string | null>(null);
   const [ret, setRet] = useState<string | null>(null);
@@ -86,6 +109,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // Default ON when the parse gave us neither — that's the "missing info" case.
   const [askForDetails, setAskForDetails] = useState(false);
   const [holdStatus, setHoldStatus] = useState<string | null>(null);
+  // Stage areas the agent can name on a Lankershim hold (Wes 2026-08-25).
+  // Checking one does NOT hold that stage on its own: the client is asked
+  // to confirm the areas in the reply, and the formal hold follows. So
+  // this records WHAT was asked for without silently consuming capacity.
+  const [stageAreas, setStageAreas] = useState<Array<{ id: string; name: string; kind: string }>>([]);
+  const [areasByCat, setAreasByCat] = useState<Record<string, string[]>>({});
+
   // Categories the agent can add by hand (GET /api/scheduling/categories —
   // the same list the gantt's "+ New Hold" picker uses, so ids line up with
   // what POST /api/scheduling/holds expects).
@@ -160,6 +190,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           endDate: parsed.endDate ?? '',
         }));
 
+      skipCompanySearch.current = true;
       setClientName(parsed.clientName ?? null);
       setJobName(parsed.productionName ?? null);
       // Default the "ask the client" toggle ON when we have neither the
@@ -186,7 +217,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       // a company + person. The parser finding nothing is no longer
       // disqualifying, because the agent can add lines themselves.
       const canHold = !!companyId && !!personId;
+      setMatchedCompanyId(companyId);
       setHoldable(canHold ? { companyId: companyId!, personId: personId! } : null);
+      // Remember the parsed contact even when the company didn't resolve —
+      // if the agent then PICKS the company below, that's all we need to
+      // enable holds.
+      setParsedPersonId(personId);
       if (!canHold) setSoftHold(false);
       else if (assetCats.length === 0) setSoftHold(false); // nothing to hold YET — agent opts in after adding
 
@@ -198,10 +234,61 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     }
   }, [emailText, defaultRecipientEmail, defaultRecipientName, refreshAvailability]);
 
+  // Debounced company lookup against the same endpoint CompanyPicker uses.
+  useEffect(() => {
+    if (skipCompanySearch.current) {
+      skipCompanySearch.current = false;
+      return;
+    }
+    const q = (clientName ?? '').trim();
+    // Typing a NEW name invalidates any previously matched company — the
+    // hold must not stay armed against the wrong client.
+    setMatchedCompanyId(null);
+    if (q.length < 2) {
+      setCompanyHits([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/companies?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const hits = Array.isArray(d.companies) ? d.companies : [];
+          setCompanyHits(hits);
+          // Exact (case-insensitive) name → adopt silently; the agent
+          // typed the company's real name, no need to make them click.
+          const exact = hits.find((c: { name: string }) => c.name.toLowerCase() === q.toLowerCase());
+          if (exact) {
+            setMatchedCompanyId(exact.id);
+            setCompanyOpen(false);
+          } else {
+            setCompanyOpen(hits.length > 0);
+          }
+        })
+        .catch(() => setCompanyHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [clientName]);
+
+  // Keep `holdable` in step with the company the agent has actually chosen.
+  useEffect(() => {
+    if (matchedCompanyId && parsedPersonId) {
+      setHoldable((prev) =>
+        prev?.companyId === matchedCompanyId ? prev : { companyId: matchedCompanyId, personId: parsedPersonId },
+      );
+    } else if (!matchedCompanyId) {
+      setHoldable(null);
+      setSoftHold(false);
+    }
+  }, [matchedCompanyId, parsedPersonId]);
+
   useEffect(() => { run(); }, [run]);
 
   useEffect(() => {
     let live = true;
+    fetch('/api/scheduling/stage-areas?picker=quickreply')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d) setStageAreas(d.areas || []); })
+      .catch(() => {});
     fetch('/api/scheduling/categories')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (live && d) setPickCats(d.categories || d.rows || (Array.isArray(d) ? d : [])); })
@@ -293,7 +380,21 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       try {
         const r = await fetch('/api/scheduling/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const j = await r.json();
-        if (r.ok && j.ok) created++;
+        if (r.ok && j.ok) {
+          created++;
+          // Record which areas were asked for. Best-effort and AFTER the
+          // hold: losing the area list is a note lost, losing the hold is
+          // a truck lost, so a failure here must never fail the hold.
+          const areaIds = areasByCat[c.id] ?? [];
+          if (areaIds.length && j.bookingItem?.id) {
+            try {
+              await fetch(`/api/scheduling/booking-items/${j.bookingItem.id}/areas`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ areaIds }),
+              });
+            } catch { /* the hold stands regardless */ }
+          }
+        }
       } catch { /* best-effort; reported in the count */ }
     }
     const attempted = cats.filter((c) => c.startDate && c.endDate).length;
@@ -396,14 +497,46 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
             <>
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2.5">
                 <div className="grid grid-cols-2 gap-2.5">
-                  <div>
+                  <div className="relative">
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Production company</label>
                     <input
                       value={clientName ?? ''}
                       onChange={(e) => setClientName(e.target.value)}
+                      onFocus={() => { if (companyHits.length && !matchedCompanyId) setCompanyOpen(true); }}
                       placeholder="e.g. Golden Heart Films"
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
                     />
+                    {matchedCompanyId ? (
+                      <div className="mt-1 text-[10px] text-emerald-700">✓ Matched a client we already have</div>
+                    ) : (clientName ?? '').trim().length >= 2 ? (
+                      <div className="mt-1 text-[10px] text-gray-400">New client — not in the CRM yet</div>
+                    ) : null}
+                    {companyOpen && companyHits.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 top-[52px] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {companyHits.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              skipCompanySearch.current = true;
+                              setClientName(c.name);
+                              setMatchedCompanyId(c.id);
+                              setCompanyOpen(false);
+                            }}
+                            className="block w-full text-left px-2.5 py-1.5 text-[12px] text-gray-800 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setCompanyOpen(false)}
+                          className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                        >
+                          Keep &ldquo;{clientName}&rdquo; as a new client
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Project / job name</label>
@@ -419,7 +552,11 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                     when both are filled — there's nothing to ask. The label
                     names exactly what the reply will request. */}
                 {(() => {
-                  const companyMissing = !clientName?.trim();
+                  // A provisional "(company TBC)" placeholder is a company
+                  // in the schema but not in reality — treat it as missing
+                  // so the reply still asks, which is the whole point of
+                  // letting the Job be created without one.
+                  const companyMissing = !clientName?.trim() || isProvisionalCompanyName(clientName);
                   const jobMissing = !jobName?.trim();
                   if (!companyMissing && !jobMissing) return null;
                   const askField =
@@ -488,6 +625,31 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                               ×
                             </button>
                           </div>
+                          {isStageComplex(c.name) && stageAreas.length > 0 && (
+                            <div className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2">
+                              <div className="text-[11px] font-semibold text-gray-600 mb-1">
+                                Which areas? <span className="font-normal text-gray-400">any or all — we confirm with the client before it&rsquo;s formally held</span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                                {stageAreas.map((a) => {
+                                  const picked = areasByCat[c.id] ?? [];
+                                  const on = picked.includes(a.id);
+                                  return (
+                                    <label key={a.id} className="flex items-center gap-1.5 text-[12px] text-gray-700 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox" checked={on} className="accent-emerald-600"
+                                        onChange={(e) => setAreasByCat((m) => {
+                                          const cur = m[c.id] ?? [];
+                                          return { ...m, [c.id]: e.target.checked ? [...cur, a.id] : cur.filter((x) => x !== a.id) };
+                                        })}
+                                      />
+                                      {a.name}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-1 flex items-center gap-2">
                             {badRange ? (
                               <span className="text-[11px] text-rose-600">End date is before the start date.</span>

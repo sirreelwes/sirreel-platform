@@ -22,6 +22,7 @@
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
+    "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts"
   },
   "prisma": {
