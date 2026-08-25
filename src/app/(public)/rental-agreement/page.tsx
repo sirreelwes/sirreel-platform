@@ -1,20 +1,15 @@
 import type { Metadata } from 'next'
-import {
-  CANONICAL_CLAUSES,
-  RENTAL_POLICIES,
-  FLEET_AGREEMENT,
-  LCDW_ADDENDUM,
-} from '@/lib/contracts/contractClauses'
+import { RentalAgreementBody, agreementToc } from '@/components/contracts/RentalAgreementBody'
 import { SWatermark } from '@/components/site/SWatermark'
 import { AgreementEmailGate } from '@/components/site/AgreementEmailGate'
 
 /**
  * Public /rental-agreement — interactive review page for the approved rental
  * agreement (FORMS → Rental Agreement). LEGAL-SENSITIVE: render-only. Every
- * word of agreement text comes from contractClauses.ts (RENTAL_POLICIES →
- * the numbered CANONICAL_CLAUSES → FLEET_AGREEMENT → LCDW_ADDENDUM — the same
- * order ContractDocument prints), so this page, the portal's document-to-sign,
- * and the "Download PDF" button (which regenerates from the same source via
+ * word of agreement text comes from contractClauses.ts, rendered by the shared
+ * RentalAgreementBody — the SAME component the client's signing page uses, so
+ * this page, the document a client reviews before signing, and the "Download
+ * PDF" button (which regenerates from the same source via
  * /api/public/rental-agreement/pdf) can never drift. No signing here — signing
  * stays in the client portal flow.
  */
@@ -24,12 +19,6 @@ export const metadata: Metadata = {
   description:
     'The SirReel Studio Rentals rental agreement — policies, terms & conditions, fleet agreement and LCDW addendum. Review online or download the PDF.',
 }
-
-// Mirrors ContractDocument's Terms & Conditions lede verbatim (presentation
-// copy printed on the PDF, kept in lockstep by eye — clause text itself is
-// imported, never re-typed).
-const TERMS_LEDE =
-  'Please read carefully. You are liable for our equipment and vehicles from the time they leave our premises until the time they are returned to us and we sign for them.'
 
 const PDF_HREF = '/api/public/rental-agreement/pdf'
 
@@ -51,13 +40,7 @@ function DownloadButton({ compact = false }: { compact?: boolean }) {
 }
 
 export default function RentalAgreementPage() {
-  const toc: Array<{ id: string; label: string }> = [
-    { id: 'policies', label: 'Rental Policies' },
-    { id: 'terms', label: 'Terms & Conditions' },
-    ...CANONICAL_CLAUSES.map((c) => ({ id: `clause-${c.ref}`, label: `${c.ref}. ${c.title}` })),
-    { id: 'fleet', label: FLEET_AGREEMENT.title },
-    { id: 'lcdw', label: LCDW_ADDENDUM.title },
-  ]
+  const toc = agreementToc()
 
   return (
     <>
@@ -118,62 +101,8 @@ export default function RentalAgreementPage() {
 
           {/* Agreement content — same section order as the printed PDF. */}
           <div className="min-w-0">
-            {/* Rental Policies */}
-            <section id="policies" className="scroll-mt-6">
-              <h2 className="text-[22px] sm:text-[26px] font-black tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                Rental Policies
-              </h2>
-              <div className="mt-4 space-y-3">
-                {RENTAL_POLICIES.map((p) => (
-                  <div key={p.title} className="bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5">
-                    <h3 className="text-[14px] font-bold" style={{ fontFamily: 'Archivo, sans-serif' }}>{p.title}</h3>
-                    <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f]">{p.body}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Terms & Conditions — the 29 numbered clauses */}
-            <section id="terms" className="scroll-mt-6 mt-10">
-              <h2 className="text-[22px] sm:text-[26px] font-black tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                Equipment and/or Vehicle Terms &amp; Conditions
-              </h2>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-[#6d6759] italic max-w-[70ch]">{TERMS_LEDE}</p>
-              <div className="mt-4 space-y-3">
-                {CANONICAL_CLAUSES.map((cc) => (
-                  <div key={cc.ref} id={`clause-${cc.ref}`} className="scroll-mt-6 bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5">
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="text-[13px] font-black text-[#c39a3f] tabular-nums" style={{ fontFamily: 'Archivo, sans-serif' }}>{cc.ref}.</span>
-                      <h3 className="text-[14px] font-bold" style={{ fontFamily: 'Archivo, sans-serif' }}>{cc.title}</h3>
-                    </div>
-                    <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#3d392f] whitespace-pre-line">{cc.body}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Fleet Agreement */}
-            <section id="fleet" className="scroll-mt-6 mt-10">
-              <h2 className="text-[22px] sm:text-[26px] font-black tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                {FLEET_AGREEMENT.title}
-              </h2>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-[#6d6759] italic max-w-[70ch]">{FLEET_AGREEMENT.intro}</p>
-              <div className="mt-4 bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5">
-                <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{FLEET_AGREEMENT.fuelPolicy}</p>
-              </div>
-            </section>
-
-            {/* LCDW Addendum */}
-            <section id="lcdw" className="scroll-mt-6 mt-10">
-              <h2 className="text-[22px] sm:text-[26px] font-black tracking-tight" style={{ fontFamily: 'Archivo, sans-serif' }}>
-                {LCDW_ADDENDUM.title}
-              </h2>
-              <div className="mt-4 bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5 space-y-2">
-                <p className="text-[13.5px] leading-relaxed font-bold text-[#1b1a17]">{LCDW_ADDENDUM.rate}</p>
-                <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{LCDW_ADDENDUM.scope}</p>
-                <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{LCDW_ADDENDUM.note}</p>
-              </div>
-            </section>
+            {/* Agreement content — same section order as the printed PDF. */}
+            <RentalAgreementBody />
 
             {/* Tail CTA — review-only page; signing happens in the client portal. */}
             <div className="mt-12 bg-[#0c0c0d] text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-4 justify-between relative overflow-hidden">
