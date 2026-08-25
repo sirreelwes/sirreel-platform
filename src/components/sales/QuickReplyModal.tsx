@@ -42,6 +42,13 @@ interface Line { id: string; name: string; requested: number; availableToHold: n
  *  windows has two different answers, so lines are keyed by both. */
 const lineKey = (categoryId: string, start: string, end: string) => `${categoryId}|${start}|${end}`
 
+/**
+ * The stage complex, matched on the picker's own label so a rename shows
+ * up here without a code change. Only this line offers area checkboxes —
+ * vehicles have no areas.
+ */
+const isStageComplex = (categoryName: string) => /lankershim/i.test(categoryName)
+
 interface Props {
   emailText: string;
   defaultRecipientEmail?: string | null;
@@ -86,6 +93,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // Default ON when the parse gave us neither — that's the "missing info" case.
   const [askForDetails, setAskForDetails] = useState(false);
   const [holdStatus, setHoldStatus] = useState<string | null>(null);
+  // Stage areas the agent can name on a Lankershim hold (Wes 2026-08-25).
+  // Checking one does NOT hold that stage on its own: the client is asked
+  // to confirm the areas in the reply, and the formal hold follows. So
+  // this records WHAT was asked for without silently consuming capacity.
+  const [stageAreas, setStageAreas] = useState<Array<{ id: string; name: string; kind: string }>>([]);
+  const [areasByCat, setAreasByCat] = useState<Record<string, string[]>>({});
+
   // Categories the agent can add by hand (GET /api/scheduling/categories —
   // the same list the gantt's "+ New Hold" picker uses, so ids line up with
   // what POST /api/scheduling/holds expects).
@@ -202,6 +216,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
   useEffect(() => {
     let live = true;
+    fetch('/api/scheduling/stage-areas?picker=quickreply')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d) setStageAreas(d.areas || []); })
+      .catch(() => {});
     fetch('/api/scheduling/categories')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (live && d) setPickCats(d.categories || d.rows || (Array.isArray(d) ? d : [])); })
@@ -293,7 +311,21 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       try {
         const r = await fetch('/api/scheduling/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const j = await r.json();
-        if (r.ok && j.ok) created++;
+        if (r.ok && j.ok) {
+          created++;
+          // Record which areas were asked for. Best-effort and AFTER the
+          // hold: losing the area list is a note lost, losing the hold is
+          // a truck lost, so a failure here must never fail the hold.
+          const areaIds = areasByCat[c.id] ?? [];
+          if (areaIds.length && j.bookingItem?.id) {
+            try {
+              await fetch(`/api/scheduling/booking-items/${j.bookingItem.id}/areas`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ areaIds }),
+              });
+            } catch { /* the hold stands regardless */ }
+          }
+        }
       } catch { /* best-effort; reported in the count */ }
     }
     const attempted = cats.filter((c) => c.startDate && c.endDate).length;
@@ -488,6 +520,31 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                               ×
                             </button>
                           </div>
+                          {isStageComplex(c.name) && stageAreas.length > 0 && (
+                            <div className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2">
+                              <div className="text-[11px] font-semibold text-gray-600 mb-1">
+                                Which areas? <span className="font-normal text-gray-400">any or all — we confirm with the client before it&rsquo;s formally held</span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                                {stageAreas.map((a) => {
+                                  const picked = areasByCat[c.id] ?? [];
+                                  const on = picked.includes(a.id);
+                                  return (
+                                    <label key={a.id} className="flex items-center gap-1.5 text-[12px] text-gray-700 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox" checked={on} className="accent-emerald-600"
+                                        onChange={(e) => setAreasByCat((m) => {
+                                          const cur = m[c.id] ?? [];
+                                          return { ...m, [c.id]: e.target.checked ? [...cur, a.id] : cur.filter((x) => x !== a.id) };
+                                        })}
+                                      />
+                                      {a.name}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-1 flex items-center gap-2">
                             {badRange ? (
                               <span className="text-[11px] text-rose-600">End date is before the start date.</span>
