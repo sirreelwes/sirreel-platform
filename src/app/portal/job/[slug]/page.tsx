@@ -210,6 +210,16 @@ export default function JobPortalPage() {
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiUploading, setCoiUploading] = useState(false);
   const [coiError, setCoiError] = useState<string>('');
+  // Quote approval. Two-step on purpose — approving is a commitment that
+  // releases the rental agreement, so it should not be a single stray tap.
+  const [approveConfirming, setApproveConfirming] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string>('');
+  const [justApproved, setJustApproved] = useState(false);
+  // Whether the approve call actually released the agreement. The route
+  // treats release as best-effort, so "approved" and "ready to sign" are
+  // two different facts — never promise the second on the first.
+  const [agreementReady, setAgreementReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,11 +294,51 @@ export default function JobPortalPage() {
     }
   };
 
+  const approveQuote = async () => {
+    setApproving(true);
+    setApproveError('');
+    try {
+      const r = await fetch('/api/portal/job/approve-quote', { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setApproveError(body.error || 'Could not approve the quote. Please try again.');
+        return;
+      }
+      setApproveConfirming(false);
+      setJustApproved(true);
+      setAgreementReady(!body.agreementError);
+      // Refetch so the Rental Agreement row picks up its released state and
+      // the header stage advances — the whole point of approving here.
+      const res = await fetch('/api/portal/job/data');
+      if (res.ok) setData(await res.json());
+    } catch {
+      setApproveError('Could not approve the quote. Please try again.');
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const currentStage = useMemo(() => {
     if (!data) return 0;
     const idx = STATUS_STAGE.findIndex((s) => s.matches.includes(data.order.cadenceState));
     return idx >= 0 ? idx : 0;
   }, [data]);
+
+  // Approvability keys off Order.status (the full lifecycle field), not
+  // cadenceState — APPROVED is the status the approve route writes, and it
+  // is what gates booking. Mirrors APPROVABLE_FROM in the route so the
+  // button never offers something the server will refuse.
+  const quoteIsApprovable = !!(
+    data &&
+    data.paperwork.quotePdfUrl &&
+    (data.order.status === 'DRAFT' || data.order.status === 'QUOTE_SENT')
+  );
+  const quoteIsApproved = !!(
+    data &&
+    data.order.status !== 'DRAFT' &&
+    data.order.status !== 'QUOTE_SENT' &&
+    data.order.status !== 'CANCELLED'
+  );
 
   if (loading) {
     return (
@@ -740,18 +790,91 @@ export default function JobPortalPage() {
             <div className="space-y-3">
               <PaperworkRow
                 label="Quote PDF"
-                status={data.paperwork.quotePdfUrl ? 'Available' : 'Pending'}
+                status={
+                  quoteIsApproved ? 'Approved' : data.paperwork.quotePdfUrl ? 'Available' : 'Pending'
+                }
                 statusKind={data.paperwork.quotePdfUrl ? 'success' : 'pending'}
               >
                 {data.paperwork.quotePdfUrl ? (
-                  <a
-                    href={data.paperwork.quotePdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-                  >
-                    Download quote PDF
-                  </a>
+                  <div className="space-y-2.5">
+                    <a
+                      href={data.paperwork.quotePdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block text-xs font-semibold text-amber-700 hover:text-amber-900"
+                    >
+                      Download quote PDF
+                    </a>
+
+                    {/* Approve — the client's yes. Releases the rental
+                        agreement into this same portal, so the row below
+                        turns signable without a rep in the loop. Hidden
+                        once the order is past the quote stage. */}
+                    {quoteIsApprovable && !approveConfirming && (
+                      <div>
+                        <button
+                          onClick={() => {
+                            setApproveError('');
+                            setApproveConfirming(true);
+                          }}
+                          className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                        >
+                          Approve quote →
+                        </button>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Approving sends you the rental agreement to sign.
+                        </p>
+                      </div>
+                    )}
+
+                    {quoteIsApprovable && approveConfirming && (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                        <p className="text-[12px] text-gray-700 leading-relaxed">
+                          Approve <strong>{data.order.orderNumber}</strong> for{' '}
+                          <strong>${Number(data.order.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>?
+                          We&rsquo;ll send the rental agreement straight to this page for you to sign.
+                        </p>
+                        {approveError && (
+                          <p className="text-[11px] text-red-600">{approveError}</p>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={approveQuote}
+                            disabled={approving}
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-semibold rounded-lg"
+                          >
+                            {approving ? 'Approving…' : 'Yes, approve'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setApproveConfirming(false);
+                              setApproveError('');
+                            }}
+                            disabled={approving}
+                            className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {justApproved && (
+                      <p className="text-[11px] text-emerald-700 font-semibold">
+                        {agreementReady
+                          ? 'Approved — your rental agreement is ready to sign below.'
+                          : 'Approved — your rep is preparing your rental agreement.'}
+                      </p>
+                    )}
+                    {!justApproved && quoteIsApproved && (
+                      <p className="text-[11px] text-gray-400">
+                        You approved this quote. Your rep has been notified.
+                      </p>
+                    )}
+                    {approveError && !approveConfirming && (
+                      <p className="text-[11px] text-red-600">{approveError}</p>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-xs text-gray-500">Your SirReel rep is finalizing the quote.</span>
                 )}
