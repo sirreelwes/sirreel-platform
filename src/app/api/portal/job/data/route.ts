@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
             negotiatedTermsActiveAsOf: true,
           },
         },
-        job: { select: { id: true, name: true, jobCode: true, productionType: true } },
+        job: { select: { id: true, name: true, jobCode: true, productionType: true, status: true } },
         agent: {
           select: { id: true, name: true, email: true, phone: true, avatarUrl: true, displayTitle: true },
         },
