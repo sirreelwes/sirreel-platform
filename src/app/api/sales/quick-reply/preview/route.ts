@@ -23,6 +23,9 @@ interface QuickReplyPayload {
   return: string | null
   categories: { id: string; name: string; quantity: number }[]
   askForDetails?: boolean
+  /** Window of the soft hold the agent just created (never unit names). */
+  heldFrom?: string | null
+  heldTo?: string | null
   customMessage?: string | null
 }
 
@@ -48,6 +51,8 @@ export async function POST(req: NextRequest) {
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,
+    heldFrom: typeof payload.heldFrom === 'string' ? payload.heldFrom : null,
+    heldTo: typeof payload.heldTo === 'string' ? payload.heldTo : null,
     customMessage: payload.customMessage ?? null,
   })
 

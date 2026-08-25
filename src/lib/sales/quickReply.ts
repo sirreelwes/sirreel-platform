@@ -169,6 +169,24 @@ export function tierMessage(tier: QuickReplyTier): string {
   return tier === 'positive' ? QUICK_REPLY_POSITIVE_MESSAGE : QUICK_REPLY_NONCOMMITTAL_MESSAGE
 }
 
+/**
+ * "Aug 28 – Aug 30, 2026" for the hold acknowledgement, or null when no hold
+ * was placed. A single-day hold reads as one date rather than "X – X".
+ */
+export function holdRangeLabel(from?: string | null, to?: string | null): string | null {
+  const start = toDate(from ?? null)
+  const end = toDate(to ?? null)
+  if (!start || !end) return null
+  const a = fmtDate(from)
+  const b = fmtDate(to)
+  if (!a || !b) return null
+  if (a === b) return a
+  // "Aug 28 – Aug 30, 2026" rather than repeating the year on both sides;
+  // across a year boundary both years are kept.
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear()
+  return sameYear ? `${a.replace(/,\s*\d{4}$/, '')} – ${b}` : `${a} – ${b}`
+}
+
 function fmtDate(iso?: string | null): string | null {
   const d = toDate(iso ?? null)
   if (!d) return null
@@ -187,6 +205,9 @@ export interface ComposeQuickReplyArgs {
   personalNote?: string | null
   /** Fold a request for the production company + project name into the reply. */
   askForDetails?: boolean
+  /** Set only when a soft hold was actually created — window only, no units. */
+  heldFrom?: string | null
+  heldTo?: string | null
   /** Rep's own message — replaces the templated prose; the branded shell, the
    *  tier availability message + supply CTA, and the sign-off stay intact. */
   customMessage?: string | null
@@ -221,6 +242,7 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
       // the opener. Positive keeps the templated opener and adds the message.
       messageReplacesOpener: args.tiering.tier === 'noncommittal',
       suppliesUrl: SUPPLY_ORDER_URL,
+      heldRange: holdRangeLabel(args.heldFrom, args.heldTo),
       askForCompany: !!args.askForDetails && !args.clientName?.trim(),
       askForJob: !!args.askForDetails && !args.jobName?.trim(),
       customBody: args.customMessage ?? null,

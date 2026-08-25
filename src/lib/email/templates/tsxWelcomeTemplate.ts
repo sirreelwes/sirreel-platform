@@ -63,6 +63,15 @@ export interface TsxAvailabilityBlock {
   messageReplacesOpener?: boolean
   /** The production supply-order link (orders.sirreel.com). */
   suppliesUrl: string
+  /**
+   * Set when the agent actually placed a soft hold (Wes 2026-08-25: "if the
+   * agent chooses to hold, the email should reflect that"). Carries the
+   * WINDOW only — deliberately no unit names, counts or categories, which
+   * keeps this consistent with `availabilityMessage` being the only
+   * availability statement in the email. A hold is reassurance, not a
+   * commitment to a named truck that dispatch may later swap.
+   */
+  heldRange?: string | null
   /** Fold a request for ONLY the missing field(s) into the reply. Set per
    *  field so we never ask for something we already have. */
   askForCompany?: boolean
@@ -261,8 +270,22 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // Availability block — the tier message (when not already the opener) + a
   // styled supply-order CTA button (not a raw URL). No per-category counts —
   // that detail is rep-only, in EmailReviewModal.
+  // Hold acknowledgement — sits directly under the opener, before the
+  // ask-for-details prompt, so the reassurance lands before the request.
+  const heldRange = withAvailability ? av!.heldRange?.trim() || null : null
+  const heldBlock = heldRange
+    ? `<tr>
+        <td style="padding: 12px 32px 0;">
+          <p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">
+            We&rsquo;ve set your equipment aside for <strong>${escapeHtml(heldRange)}</strong> while you decide.
+          </p>
+        </td>
+      </tr>`
+    : ''
+
   const availabilityBlock = withAvailability
     ? `
+      ${heldBlock}
       ${showAvailabilityMessage
         ? `<tr>
         <td style="padding: 8px 32px 4px;">
@@ -445,6 +468,10 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     textParts.push('', input.personalNote.trim())
   }
   if (withAvailability) {
+    // Same order as the HTML: hold reassurance, then the ask.
+    if (heldRange) {
+      textParts.push('', `We've set your equipment aside for ${heldRange} while you decide.`)
+    }
     if (showAvailabilityMessage) {
       textParts.push('', av!.availabilityMessage)
     }

@@ -25,8 +25,22 @@ import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResol
 
 interface MatchedProduct { id: string; type: string; name: string; lineType?: string | null }
 interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
-interface Cat { id: string; name: string; quantity: number }
+/**
+ * A line on the hold. Dates live PER LINE (Wes 2026-08-25: "the option to
+ * add assets to hold and dates for each asset") — a van needed from the
+ * 28th and a box truck from the 29th are one hold request with two
+ * different windows, not two separate replies.
+ *
+ * Parser-detected lines seed their dates from the email's date range; the
+ * agent can change them, and can add lines the parser never saw.
+ */
+interface Cat { id: string; name: string; quantity: number; startDate: string; endDate: string }
+/** A category the agent can add by hand — GET /api/scheduling/categories. */
+interface PickCat { id: string; name: string; totalUnits?: number }
 interface Line { id: string; name: string; requested: number; availableToHold: number; serviceableCount: number; status: 'available' | 'tight' | 'short' }
+/** Availability is per (category, window) — the same van over two different
+ *  windows has two different answers, so lines are keyed by both. */
+const lineKey = (categoryId: string, start: string, end: string) => `${categoryId}|${start}|${end}`
 
 interface Props {
   emailText: string;
@@ -72,8 +86,51 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // Default ON when the parse gave us neither — that's the "missing info" case.
   const [askForDetails, setAskForDetails] = useState(false);
   const [holdStatus, setHoldStatus] = useState<string | null>(null);
+  // Categories the agent can add by hand (GET /api/scheduling/categories —
+  // the same list the gantt's "+ New Hold" picker uses, so ids line up with
+  // what POST /api/scheduling/holds expects).
+  const [pickCats, setPickCats] = useState<PickCat[]>([]);
+  const [addingId, setAddingId] = useState('');
   const [working, setWorking] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<EmailReviewTarget | null>(null);
+
+  /**
+   * Availability, one request per distinct window.
+   *
+   * Lines used to share one date range, so this was a single call. With
+   * per-line dates the same category can be asked about twice with two
+   * different answers, so results are keyed by (category, window) and the
+   * windows are grouped to keep the request count at the number of
+   * DISTINCT windows rather than the number of lines.
+   */
+  const refreshAvailability = useCallback(async (rows: Cat[]) => {
+    const dated = rows.filter((c) => c.startDate && c.endDate)
+    if (dated.length === 0) { setLines([]); return }
+    const windows = new Map<string, Cat[]>()
+    for (const c of dated) {
+      const k = `${c.startDate}|${c.endDate}`
+      const list = windows.get(k)
+      if (list) list.push(c)
+      else windows.set(k, [c])
+    }
+    const results = await Promise.all(
+      [...windows.entries()].map(async ([k, group]) => {
+        const [start, end] = k.split('|')
+        try {
+          const ar = await fetch('/api/sales/quick-reply/availability', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categories: group, pickup: start, return: end }),
+          })
+          const aj = await ar.json()
+          if (!ar.ok || !aj.ok) return []
+          return (aj.lines || []).map((l: Line) => ({ ...l, id: lineKey(l.id, start, end) }))
+        } catch {
+          return [] // best-effort: a failed window shows no pill, not a broken modal
+        }
+      }),
+    )
+    setLines(results.flat())
+  }, [])
 
   const run = useCallback(async () => {
     setPhase('parsing');
@@ -94,7 +151,14 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       const assetCats: Cat[] = items
         .filter((i) => i.matchedProduct?.lineType === 'VEHICLE'
           || (i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct))
-        .map((i) => ({ id: i.matchedProduct!.id, name: i.matchedProduct!.name, quantity: Math.max(1, Math.floor(i.quantity || 1)) }));
+        .map((i) => ({
+          id: i.matchedProduct!.id,
+          name: i.matchedProduct!.name,
+          quantity: Math.max(1, Math.floor(i.quantity || 1)),
+          // Seeded from the email's range; per-line editable below.
+          startDate: parsed.startDate ?? '',
+          endDate: parsed.endDate ?? '',
+        }));
 
       setClientName(parsed.clientName ?? null);
       setJobName(parsed.productionName ?? null);
@@ -118,29 +182,78 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           : null;
       const contact = Array.isArray(pj.contacts) ? pj.contacts.find((c: { existing_person_id?: string | null }) => c.existing_person_id) : null;
       const personId: string | null = contact?.existing_person_id ?? null;
-      const canHold = !!companyId && !!personId && assetCats.length > 0 && !!parsed.startDate && !!parsed.endDate;
+      // Only the CRM link is a hard requirement now: a hold has to belong to
+      // a company + person. The parser finding nothing is no longer
+      // disqualifying, because the agent can add lines themselves.
+      const canHold = !!companyId && !!personId;
       setHoldable(canHold ? { companyId: companyId!, personId: personId! } : null);
       if (!canHold) setSoftHold(false);
+      else if (assetCats.length === 0) setSoftHold(false); // nothing to hold YET — agent opts in after adding
 
-      // Real availability per category.
-      if (assetCats.length > 0) {
-        const ar = await fetch('/api/sales/quick-reply/availability', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ categories: assetCats, pickup: parsed.startDate, return: parsed.endDate }),
-        });
-        const aj = await ar.json();
-        if (ar.ok && aj.ok) setLines(aj.lines || []);
-      }
+      if (assetCats.length > 0) await refreshAvailability(assetCats);
       setPhase('ready');
     } catch (e) {
       setErrMsg(e instanceof Error ? e.message : String(e));
       setPhase('error');
     }
-  }, [emailText, defaultRecipientEmail, defaultRecipientName]);
+  }, [emailText, defaultRecipientEmail, defaultRecipientName, refreshAvailability]);
 
   useEffect(() => { run(); }, [run]);
 
-  const buildPayload = () => ({
+  useEffect(() => {
+    let live = true;
+    fetch('/api/scheduling/categories')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d) setPickCats(d.categories || d.rows || (Array.isArray(d) ? d : [])); })
+      .catch(() => { /* picker just stays empty; the parsed lines still work */ });
+    return () => { live = false; };
+  }, []);
+
+  /** Edit one hold line, then re-check availability for the new shape. */
+  const updateCat = useCallback((index: number, patch: Partial<Cat>) => {
+    setCats((prev) => {
+      const next = prev.map((c, i) => (i === index ? { ...c, ...patch } : c));
+      void refreshAvailability(next);
+      return next;
+    });
+  }, [refreshAvailability]);
+
+  const removeCat = useCallback((index: number) => {
+    setCats((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      void refreshAvailability(next);
+      if (next.length === 0) setSoftHold(false);
+      return next;
+    });
+  }, [refreshAvailability]);
+
+  const addCat = useCallback((categoryId: string) => {
+    const pick = pickCats.find((p) => p.id === categoryId);
+    if (!pick) return;
+    setCats((prev) => {
+      // Same category twice is legitimate — two different windows — so this
+      // does not dedupe. It only seeds sensible dates from the email.
+      const next: Cat[] = [...prev, {
+        id: pick.id, name: pick.name, quantity: 1,
+        startDate: pickup ?? '', endDate: ret ?? '',
+      }];
+      void refreshAvailability(next);
+      return next;
+    });
+    setAddingId('');
+  }, [pickCats, pickup, ret, refreshAvailability]);
+
+  /** Outer window across every dated hold line — min start, max end. */
+  const holdWindow = (): { start: string; end: string } | null => {
+    const dated = cats.filter((c) => c.startDate && c.endDate);
+    if (dated.length === 0) return null;
+    return {
+      start: dated.reduce((a, c) => (c.startDate < a ? c.startDate : a), dated[0].startDate),
+      end: dated.reduce((a, c) => (c.endDate > a ? c.endDate : a), dated[0].endDate),
+    };
+  };
+
+  const buildPayload = (heldWindow: { start: string; end: string } | null) => ({
     recipientEmail: recipientEmail!,
     recipientName,
     clientName: clientName?.trim() || null,
@@ -149,6 +262,11 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     return: ret,
     categories: cats,
     askForDetails,
+    // "If the agent chooses to hold, the email should reflect that" (Wes
+    // 2026-08-25). Only the WINDOW travels — the client is told their gear
+    // is set aside, never which units, so nothing commits a named truck.
+    heldFrom: heldWindow?.start ?? null,
+    heldTo: heldWindow?.end ?? null,
     inboundEmailMessageId: inboundEmailMessageId ?? null,
   });
 
@@ -161,10 +279,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     setHoldStatus('Creating soft holds…');
     let created = 0;
     for (const c of cats) {
-      const line = lines.find((l) => l.id === c.id);
+      if (!c.startDate || !c.endDate) continue; // a line with no window cannot be held
+      const line = lines.find((l) => l.id === lineKey(c.id, c.startDate, c.endDate));
       const isBackup = !!line && line.status !== 'available'; // tight/short queue behind as backups
       const body: Record<string, unknown> = {
-        categoryId: c.id, startDate: pickup, endDate: ret, quantity: c.quantity,
+        // Per-line window, not the email's overall range.
+        categoryId: c.id, startDate: c.startDate, endDate: c.endDate, quantity: c.quantity,
         companyId, personId: holdable.personId,
         jobId: resolved.jobId, jobName: resolved.name,
         bufferDays: 1, bufferOverride: true, isBackup,
@@ -176,13 +296,17 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
         if (r.ok && j.ok) created++;
       } catch { /* best-effort; reported in the count */ }
     }
-    setHoldStatus(`Created ${created} of ${cats.length} soft hold${cats.length === 1 ? '' : 's'} — spoken-for on the gantt.`);
+    const attempted = cats.filter((c) => c.startDate && c.endDate).length;
+    setHoldStatus(`Created ${created} of ${attempted} soft hold${attempted === 1 ? '' : 's'} — spoken-for on the gantt.`);
   };
 
   const proceed = async (resolved: { jobId: string; name: string } | null, companyId: string | null) => {
     setWorking(true);
-    if (softHold && holdable && resolved) await createSoftHolds(resolved, companyId ?? holdable.companyId);
-    setReviewTarget({ kind: 'quick-reply', payload: buildPayload() });
+    const willHold = softHold && !!holdable && cats.length > 0 && !!resolved;
+    if (willHold) await createSoftHolds(resolved!, companyId ?? holdable!.companyId);
+    // The email only mentions a hold when one was actually placed — the
+    // claim follows the action rather than the checkbox.
+    setReviewTarget({ kind: 'quick-reply', payload: buildPayload(willHold ? holdWindow() : null) });
     setWorking(false);
   };
 
@@ -190,7 +314,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     if (!recipientEmail) return;
     // Soft holds need a Job (Job-as-root). If the agent hasn't resolved
     // one yet, open the resolver — the send continues from onJobResolved.
-    if (softHold && holdable && !job) {
+    if (softHold && holdable && cats.length > 0 && !job) {
       setResolverOpen(true);
       return;
     }
@@ -317,34 +441,106 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                 </div>
               </div>
 
+              {/* Editable hold lines. The parser seeds these; the agent adds,
+                  removes and re-dates them. Each row carries its own window,
+                  and availability is checked against THAT window. */}
               <div>
-                <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1.5">Availability for these dates</div>
-                {lines.length === 0 ? (
-                  <div className="text-[12px] text-gray-500">No specific trucks/categories detected — the reply will ask for their item list.</div>
-                ) : (
-                  <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100">
-                    {lines.map((l) => (
-                      <li key={l.id} className="px-3 py-2 flex items-center justify-between text-[12px]">
-                        <span className="text-gray-800 font-medium">{l.name} <span className="text-gray-400">×{l.requested}</span></span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-gray-400 text-[11px]">{l.availableToHold} of {l.serviceableCount} open</span>
-                          <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_PILL[l.status]}`}>{STATUS_LABEL[l.status]}</span>
-                        </span>
-                      </li>
-                    ))}
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold">Equipment to hold</div>
+                  {cats.length === 0 && (
+                    <span className="text-[11px] text-gray-400">nothing detected — add below</span>
+                  )}
+                </div>
+
+                {cats.length > 0 && (
+                  <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100 mb-2">
+                    {cats.map((c, i) => {
+                      const l = lines.find((x) => x.id === lineKey(c.id, c.startDate, c.endDate));
+                      const noDates = !c.startDate || !c.endDate;
+                      const badRange = !noDates && c.endDate < c.startDate;
+                      return (
+                        <li key={`${c.id}-${i}`} className="px-3 py-2 text-[12px]">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-gray-800 font-medium flex-1 min-w-[140px]">{c.name}</span>
+                            <label className="flex items-center gap-1 text-gray-400">
+                              <span className="text-[10px] uppercase">Qty</span>
+                              <input
+                                type="number" min={1} max={99} value={c.quantity}
+                                onChange={(e) => updateCat(i, { quantity: Math.max(1, Math.min(99, Number(e.target.value) || 1)) })}
+                                className="w-14 border border-gray-300 rounded px-1.5 py-1 text-gray-800 text-[12px] focus:outline-none focus:border-emerald-500"
+                              />
+                            </label>
+                            <input
+                              type="date" value={c.startDate} aria-label={`${c.name} start date`}
+                              onChange={(e) => updateCat(i, { startDate: e.target.value })}
+                              className="border border-gray-300 rounded px-1.5 py-1 text-gray-800 text-[12px] focus:outline-none focus:border-emerald-500"
+                            />
+                            <span className="text-gray-400">–</span>
+                            <input
+                              type="date" value={c.endDate} min={c.startDate || undefined} aria-label={`${c.name} end date`}
+                              onChange={(e) => updateCat(i, { endDate: e.target.value })}
+                              className="border border-gray-300 rounded px-1.5 py-1 text-gray-800 text-[12px] focus:outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              type="button" onClick={() => removeCat(i)} aria-label={`Remove ${c.name}`}
+                              className="text-gray-300 hover:text-rose-600 px-1 text-[14px] leading-none"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2">
+                            {badRange ? (
+                              <span className="text-[11px] text-rose-600">End date is before the start date.</span>
+                            ) : noDates ? (
+                              <span className="text-[11px] text-amber-700">Set both dates — this line won&rsquo;t be held without them.</span>
+                            ) : l ? (
+                              <>
+                                <span className="text-gray-400 text-[11px]">{l.availableToHold} of {l.serviceableCount} open</span>
+                                <span className={`inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_PILL[l.status]}`}>{STATUS_LABEL[l.status]}</span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">checking availability…</span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
+                )}
+
+                <select
+                  value={addingId}
+                  onChange={(e) => { setAddingId(e.target.value); if (e.target.value) addCat(e.target.value); }}
+                  aria-label="Add equipment to the hold"
+                  className="w-full border border-dashed border-gray-300 rounded-lg px-2.5 py-2 text-[12px] text-gray-600 bg-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">+ Add equipment to hold…</option>
+                  {pickCats.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {cats.length === 0 && (
+                  <div className="text-[11px] text-gray-400 mt-1">
+                    With nothing here the reply just asks the client for their item list.
+                  </div>
                 )}
               </div>
 
-              <label className={`flex items-start gap-2 text-[12px] ${holdable ? 'text-gray-700' : 'text-gray-400'} ${holdable ? 'cursor-pointer' : 'cursor-not-allowed'} select-none`}>
-                <input type="checkbox" checked={softHold} disabled={!holdable} onChange={(e) => setSoftHold(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+              <label className={`flex items-start gap-2 text-[12px] ${holdable && cats.length > 0 ? 'text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'} select-none`}>
+                <input type="checkbox" checked={softHold && cats.length > 0} disabled={!holdable || cats.length === 0} onChange={(e) => setSoftHold(e.target.checked)} className="mt-0.5 accent-emerald-600" />
                 <span>
                   Create soft holds so these show as spoken-for on the gantt until the client confirms.
-                  {!holdable && <span className="block text-[11px] text-gray-400 mt-0.5">Unavailable — add the client &amp; contact to the CRM first (or no dated categories detected).</span>}
+                  {holdable && cats.length > 0 && (
+                    <span className="block text-[11px] text-gray-400 mt-0.5">
+                      The reply will tell them their equipment is set aside for these dates — without naming units.
+                    </span>
+                  )}
+                  {!holdable && <span className="block text-[11px] text-gray-400 mt-0.5">Unavailable — add the client &amp; contact to the CRM first.</span>}
+                  {holdable && cats.length === 0 && <span className="block text-[11px] text-gray-400 mt-0.5">Add equipment above first.</span>}
                 </span>
               </label>
 
-              {softHold && holdable && (
+              {softHold && holdable && cats.length > 0 && (
                 <div className="text-[12px] pl-6 -mt-2">
                   {job ? (
                     <span className="text-gray-700">
