@@ -11,15 +11,25 @@
  * A credit-card authorization row names the document and the signer and
  * stops there — no card type, no last4. Charging a card on file is
  * collections' surface, not this one.
+ *
+ * COI rows carry a Review button. A certificate could previously only be
+ * signed off in the moment an agent uploaded it, so anything that arrived
+ * through the client drop link sat PENDING with nowhere to judge it — and
+ * this list, which is where the team already looks, was the natural place
+ * to put the verdict. Rows also carry their own finding (a named insured
+ * that doesn't match the production company), so the feed reads as a
+ * triage queue rather than a log.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { CoiReviewModal } from '@/components/coi/CoiReviewModal'
 
 type SubmissionKind = 'COI' | 'WC' | 'CC_AUTH' | 'AGREEMENT' | 'REDLINE'
 
 interface Submission {
   key: string
+  sourceId: string
   kind: SubmissionKind
   label: string
   detail: string | null
@@ -30,6 +40,8 @@ interface Submission {
   jobName: string | null
   companyName: string | null
   href: string | null
+  reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
+  flag: { label: string; detail: string } | null
 }
 
 const KIND_BADGE: Record<SubmissionKind, string> = {
@@ -79,33 +91,34 @@ export default function RecentSubmissions() {
   const [error, setError] = useState<string | null>(null)
   const [kind, setKind] = useState<'ALL' | SubmissionKind>('ALL')
   const [q, setQ] = useState('')
+  const [reviewingCoiId, setReviewingCoiId] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/paperwork/submissions?limit=50')
+  const load = useCallback(() => {
+    return fetch('/api/paperwork/submissions?limit=50')
       .then((r) => r.json())
       .then((d) => {
-        if (cancelled) return
         if (d?.ok) setRows(d.submissions || [])
         else setError(d?.error || 'Could not load submissions')
       })
-      .catch(() => {
-        if (!cancelled) setError('Could not load submissions')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+      .catch(() => setError('Could not load submissions'))
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    load().finally(() => {
+      if (!cancelled) setLoading(false)
+    })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [load])
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter((r) => {
       if (kind !== 'ALL' && r.kind !== kind) return false
       if (!needle) return true
-      return [r.jobName, r.jobCode, r.companyName, r.submittedBy, r.label, r.detail]
+      return [r.jobName, r.jobCode, r.companyName, r.submittedBy, r.label, r.detail, r.flag?.label]
         .filter(Boolean)
         .some((v) => (v as string).toLowerCase().includes(needle))
     })
@@ -180,9 +193,7 @@ export default function RecentSubmissions() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium text-gray-900 truncate">
                     {r.label}
-                    {r.detail && (
-                      <span className="ml-2 font-normal text-gray-500">{r.detail}</span>
-                    )}
+                    {r.detail && <span className="ml-2 font-normal text-gray-500">{r.detail}</span>}
                   </div>
                   <div className="text-[11px] text-gray-500 mt-0.5 truncate">
                     {r.jobId ? (
@@ -198,6 +209,14 @@ export default function RecentSubmissions() {
                     )}
                     {r.submittedBy && <span className="text-gray-400"> · {r.submittedBy}</span>}
                   </div>
+                  {/* The finding, stated in the row. A mismatch nobody opens
+                      is a mismatch nobody fixes. */}
+                  {r.flag && (
+                    <div className="mt-1 text-[11px] text-rose-700 bg-rose-50 border border-rose-100 rounded-md px-2 py-1">
+                      <span className="font-semibold">{r.flag.label}</span>
+                      <span className="text-rose-600"> — {r.flag.detail}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-[11px] text-gray-600">{fmtWhen(r.submittedAt)}</div>
@@ -206,18 +225,62 @@ export default function RecentSubmissions() {
               </div>
             )
             return (
-              <li key={r.key}>
-                {r.href ? (
-                  <Link href={r.href} className="block hover:bg-gray-50 transition-colors">
-                    {body}
-                  </Link>
-                ) : (
-                  <div className="opacity-80">{body}</div>
-                )}
+              <li key={r.key} className="flex items-stretch hover:bg-gray-50 transition-colors">
+                <div className="min-w-0 flex-1">
+                  {r.href ? (
+                    <Link href={r.href} className="block">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="opacity-80">{body}</div>
+                  )}
+                </div>
+                {/* Review lives OUTSIDE the link: the row still navigates to
+                    the job, but a COI can be judged without leaving here. */}
+                <div className="shrink-0 flex items-center gap-2 pr-4 pl-1">
+                  {r.reviewState && r.reviewState !== 'PENDING' && (
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                        r.reviewState === 'APPROVED'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      {r.reviewState === 'APPROVED' ? 'Approved' : 'Rejected'}
+                    </span>
+                  )}
+                  {r.kind === 'COI' ? (
+                    <button
+                      onClick={() => setReviewingCoiId(r.sourceId)}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                        r.flag || r.reviewState === 'PENDING'
+                          ? 'bg-gray-900 text-white hover:bg-gray-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Review
+                    </button>
+                  ) : r.href ? (
+                    <Link
+                      href={r.href}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                    >
+                      Review
+                    </Link>
+                  ) : null}
+                </div>
               </li>
             )
           })}
         </ul>
+      )}
+
+      {reviewingCoiId && (
+        <CoiReviewModal
+          coiId={reviewingCoiId}
+          onClose={() => setReviewingCoiId(null)}
+          onChanged={load}
+        />
       )}
     </div>
   )

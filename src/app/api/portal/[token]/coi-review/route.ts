@@ -14,6 +14,12 @@ CERTIFICATE HOLDER REQUIRED:
 - SirReel Production Vehicles Inc. (also: SirReel Production Vehicles, Inc. dba SirReel Studio Rentals)
 - 8500 Lankershim Blvd, Sun Valley, CA 91352
 
+ALSO EXTRACT (does not affect pass/fail):
+- namedInsured: the NAMED INSURED exactly as printed on the certificate — the
+  entity the policy covers. This is the box usually labeled "INSURED", NOT the
+  certificate holder (SirReel) and NOT the insurance carrier or the broker/
+  producer. Copy it verbatim, including any "dba" wording. Null if unreadable.
+
 CRITICAL REQUIREMENTS (must all pass — cannot be waived):
 1. Certificate Holder = SirReel with correct address
 2. Named insured must match the rental agreement company name exactly
@@ -38,6 +44,7 @@ Return ONLY valid JSON, no markdown:
   "criticalPass": true,
   "alertPass": true,
   "overallPass": true,
+  "namedInsured": "Exactly As Printed, Inc." | null,
   "certificateHolder": { "pass": true, "found": "", "note": "" },
   "insuredName": { "pass": true, "found": "", "note": "" },
   "generalLiability": {

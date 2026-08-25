@@ -118,6 +118,32 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - Regression fixture: `npm run test:counter-pdf` snapshots the rendered HTML; bump with `UPDATE_SNAPSHOTS=1`
   - Counter-PDF is a *negotiation document*, not a contract-to-sign — no signature block. Signing happens through the existing portal flow when client agrees
 
+## Client paperwork (2026-08-25)
+- **The rental agreement is signable in the portal.** `/portal/job/[slug]/sign/rental`
+  had existed since the stage flow shipped but NOTHING linked to it — the
+  paperwork row sent clients to the Cognito form, or read "your rep will send
+  the agreement shortly" while the badge said Ready to sign. The row now
+  mirrors the Stage Contract row (read the PDF + sign in-portal). Separately,
+  the job page's "Send for signature" only sent a portal INVITE; it now also
+  POSTs `/agreement/release`, so the button matches its label. Not-yet-released
+  copy names the real blocker (approve the quote).
+- **COI named insured vs production company.** `CoiCheck.namedInsured` stores
+  the raw fact off the certificate; the verdict is COMPUTED on read
+  (`src/lib/coi/insuredMatch.ts`) so fixing a wrong production company clears
+  the flag without re-reviewing. Flagged on the job page, the paperwork feed,
+  the client portal, the COI-drop confirmation, and the team email.
+  `npm run test:insured-match` guards both failure directions.
+- **COI review desk** (`CoiReviewModal` + `/api/coi/review/[id]`) — a COI could
+  previously only be signed off at upload time, so client-drop certificates sat
+  PENDING forever. Approve/reject/re-run AI, plus the fixes: change the
+  production company (`PATCH /api/jobs/[id]/company`, job + orders move
+  together) and re-issue an agreement signed under the wrong one
+  (`POST /api/orders/[id]/agreement/reissue`). The superseded signature is
+  snapshotted to `sr_agreement_reissues` — SignedAgreement is unique on
+  (orderId, contractType), so re-releasing overwrites it.
+- The client COI drop link now runs the AI review on arrival (it used to store
+  the PDF with no analysis at all).
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation

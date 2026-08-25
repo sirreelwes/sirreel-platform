@@ -74,3 +74,31 @@ export async function streamPrivateBlobAsResponse(args: {
     },
   })
 }
+
+/**
+ * Read a private blob into memory. Same credentials path as the streaming
+ * proxy above, but hands back bytes instead of a Response — for the server
+ * side that has to re-analyze a stored document (e.g. re-running the COI AI
+ * review on a certificate that was filed without one).
+ *
+ * Returns null rather than throwing: every caller so far treats "couldn't
+ * fetch it" as a soft failure with its own message.
+ */
+export async function readPrivateBlobBuffer(fileUrl: string): Promise<Buffer | null> {
+  try {
+    const blob = await getBlob(fileUrl, { access: 'private' })
+    if (!blob || blob.statusCode !== 200 || !blob.stream) return null
+    const chunks: Buffer[] = []
+    // @vercel/blob returns a web ReadableStream; iterate it directly.
+    const reader = (blob.stream as unknown as ReadableStream<Uint8Array>).getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(Buffer.from(value))
+    }
+    return Buffer.concat(chunks)
+  } catch (err) {
+    console.error('[readPrivateBlobBuffer] failed:', err instanceof Error ? err.message : err)
+    return null
+  }
+}

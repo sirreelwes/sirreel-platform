@@ -9,6 +9,7 @@ import {
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -197,6 +198,7 @@ export async function GET(req: NextRequest) {
             originalFilename: true,
             humanDecision: true,
             aiRiskLevel: true,
+            namedInsured: true,
             policyExpiryDate: true,
             coverageVerified: true,
             additionalInsured: true,
@@ -392,6 +394,15 @@ export async function GET(req: NextRequest) {
             coverageVerified: latestCoi.coverageVerified,
             additionalInsured: latestCoi.additionalInsured,
             uploadedAt: latestCoi.createdAt,
+            // The client is told about a name mismatch on their OWN
+            // certificate — Wes, 2026-08-25: "flag it for both SirReel and
+            // User side". Only the client-safe sentence crosses the wire;
+            // the staff wording (which reasons about our records) does not.
+            // Empty string means "nothing to say", so the portal never has
+            // to know the verdict vocabulary.
+            insuredNotice:
+              evaluateInsuredMatch(latestCoi.namedInsured, [order.company?.name, order.job?.name])
+                .clientMessage || null,
           }
         : null,
       legacyPaperworkPortalUrl: paperworkPortal

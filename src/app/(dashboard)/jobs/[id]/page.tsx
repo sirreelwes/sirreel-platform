@@ -30,6 +30,8 @@ import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { ProductionTypeProfilePicker } from '@/components/productionTypeProfiles/ProductionTypeProfilePicker';
 import { CopyCoiLinkButton } from '@/components/coi/CopyCoiLinkButton';
 import { UploadCoiModal } from '@/components/coi/UploadCoiModal';
+import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
+import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
@@ -207,7 +209,7 @@ interface JobDetail {
   company: { id: string; name: string; notes: string | null };
   agent: { id: string; name: string; email: string };
   jobContacts: JobContact[];
-  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; createdAt: string }>;
+  coiChecks: Array<{ id: string; coverageVerified: boolean; policyExpiryDate: string | null; humanDecision: string; source: string | null; originalFilename: string; aiRiskLevel: string | null; aiRecommendation: string | null; namedInsured: string | null; createdAt: string }>;
   agreementAddenda: JobAgreementAddendum[];
   orders: JobOrder[];
   bookings: JobBooking[];
@@ -319,6 +321,9 @@ export default function JobDetailPage() {
   const [notesDirty, setNotesDirty] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [coiModalOpen, setCoiModalOpen] = useState(false);
+  // Which filed certificate is open in the review desk (approve/reject, AI
+  // re-run, named-insured mismatch + its fixes).
+  const [reviewCoiId, setReviewCoiId] = useState<string | null>(null);
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
   // "Send for signature" — the paperwork portal invite, surfaced here
   // because this is where both contracts' status already lives. The only
@@ -678,13 +683,36 @@ export default function JobDetailPage() {
         setSignSendMsg(data.error || `Send failed (HTTP ${res.status})`);
         return;
       }
+      // The button says "Send for signature", so send something signable.
+      // The invite alone only opens the portal: the rental agreement stays
+      // PORTAL_GENERATED, and the client's paperwork row reads "your rep
+      // will send the agreement shortly" — which is why an agreement kept
+      // failing to go live on the client side (Wes, 2026-08-25). Releasing
+      // here makes the action match its label.
+      //
+      // Tolerated failures: 409 means it is already released or already
+      // signed, and either way the client can sign. Anything else is worth
+      // saying out loud, but never enough to claim the invite failed.
+      let releaseNote = '';
+      try {
+        const rel = await fetch(`/api/orders/${signTargetOrder.id}/agreement/release`, { method: 'POST' });
+        if (!rel.ok && rel.status !== 409) {
+          const relData = await rel.json().catch(() => ({}));
+          releaseNote = ` — but the agreement could not be released (${relData.error || `HTTP ${rel.status}`}); release it from the order page.`;
+        }
+      } catch {
+        releaseNote = ' — but the agreement release call failed; check it on the order page.';
+      }
       // Resend can report a soft failure while the invite itself is fine —
       // surface the URL either way so the rep is never stuck.
       setSignSendMsg(
         data.emailResult?.ok === false
           ? `Invite created but email failed (${data.emailResult?.reason || 'unknown'}). Copy: ${data.portalUrl}`
-          : `Sent to ${signatory.person.email} · ${data.portalUrl ?? ''}`,
+          : `Sent to ${signatory.person.email} · ${data.portalUrl ?? ''}${releaseNote}`,
       );
+      // Pick up the released status so the section stops reading "Pending"
+      // while the client can already sign.
+      load();
     } catch (err) {
       setSignSendMsg(err instanceof Error ? err.message : 'Send failed');
     } finally {
@@ -1326,38 +1354,73 @@ const driverTone = (d: any): string => {
                 : 'text-rose-300 bg-rose-500/10';
               const src = c.source === 'CLIENT_UPLOAD' ? 'Client upload'
                 : c.source === 'INTERNAL' ? 'Filed by agent' : 'On file';
+              // Does the certificate insure the production we papered? Computed
+              // on every render against the job's CURRENT company + production
+              // name, so correcting a wrong company clears the flag here without
+              // re-reviewing the certificate.
+              const match = evaluateInsuredMatch(c.namedInsured, [job.company?.name, job.name]);
               return (
-                <div key={c.id} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rowTone}`}>{rowStatus}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[15px] text-white truncate">{c.originalFilename}</span>
-                      {c.aiRiskLevel && (
-                        <span
-                          title={`AI review: ${c.aiRecommendation === 'accept' ? 'passes checks' : 'needs review'}`}
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${
-                            c.aiRiskLevel === 'low' ? 'bg-emerald-500/10 text-emerald-300'
-                              : c.aiRiskLevel === 'high' ? 'bg-rose-500/10 text-rose-300'
-                              : 'bg-amber-500/10 text-amber-300'
-                          }`}
-                        >
-                          AI · {c.aiRiskLevel} risk
-                        </span>
-                      )}
+                <div key={c.id} className={`rounded-lg border px-3.5 py-2.5 ${match.needsAttention ? 'border-rose-500/40 bg-rose-500/5' : 'border-zinc-800 bg-zinc-950/60'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${rowTone}`}>{rowStatus}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[15px] text-white truncate">{c.originalFilename}</span>
+                        {c.aiRiskLevel && (
+                          <span
+                            title={`AI review: ${c.aiRecommendation === 'accept' ? 'passes checks' : 'needs review'}`}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${
+                              c.aiRiskLevel === 'low' ? 'bg-emerald-500/10 text-emerald-300'
+                                : c.aiRiskLevel === 'high' ? 'bg-rose-500/10 text-rose-300'
+                                : 'bg-amber-500/10 text-amber-300'
+                            }`}
+                          >
+                            AI · {c.aiRiskLevel} risk
+                          </span>
+                        )}
+                        {match.verdict !== 'UNKNOWN' && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0 ${INSURED_MATCH_TONE[match.verdict]}`}>
+                            {INSURED_MATCH_LABEL[match.verdict]}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[12px] text-zinc-300">
+                        {src} · added {fmtDate(c.createdAt)}
+                        {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}
+                        {c.namedInsured && <> · insures {c.namedInsured}</>}
+                      </div>
                     </div>
-                    <div className="text-[12px] text-zinc-300">
-                      {src} · added {fmtDate(c.createdAt)}
-                      {c.policyExpiryDate && <> · expires {fmtDate(c.policyExpiryDate)}</>}
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => setReviewCoiId(c.id)}
+                        className="text-[13px] font-semibold bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Review
+                      </button>
+                      <a
+                        href={`/api/coi/download/${c.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                      >
+                        View PDF →
+                      </a>
                     </div>
                   </div>
-                  <a
-                    href={`/api/coi/download/${c.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[13px] font-semibold text-amber-400 hover:text-amber-300 flex-shrink-0"
-                  >
-                    View PDF →
-                  </a>
+                  {/* The mismatch is stated in full on the row: a certificate
+                      insuring somebody else covers nothing if a unit is
+                      damaged, and that is not a detail to hide behind a click. */}
+                  {match.needsAttention && (
+                    <div className="mt-2 text-[12px] text-rose-200 leading-relaxed">
+                      {match.message}{' '}
+                      <button
+                        onClick={() => setReviewCoiId(c.id)}
+                        className="font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2"
+                      >
+                        Review &amp; fix
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -2081,6 +2144,13 @@ const driverTone = (d: any): string => {
         </div>
       )}
 
+      {reviewCoiId && (
+        <CoiReviewModal
+          coiId={reviewCoiId}
+          onClose={() => setReviewCoiId(null)}
+          onChanged={load}
+        />
+      )}
       {coiModalOpen && (
         <UploadCoiModal
           jobId={job.id}

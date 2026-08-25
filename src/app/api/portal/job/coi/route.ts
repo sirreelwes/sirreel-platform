@@ -12,39 +12,14 @@ import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
+// One canonical prompt for every COI surface — see src/lib/coi/reviewCoi.ts.
+import { COI_PROMPT } from '@/lib/coi/reviewCoi'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 const ACCEPTED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg'])
-
-const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
-
-CERTIFICATE HOLDER REQUIRED:
-- SirReel Production Vehicles Inc.
-- 8500 Lankershim Blvd, Sun Valley, CA 91352
-
-CRITICAL REQUIREMENTS (must all pass):
-1. Certificate Holder = SirReel with correct address
-2. General Liability — Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
-3. Automobile Liability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-4. Hired Auto Physical Damage — the certificate MUST show physical damage coverage on the hired/rented autos (this is what pays to repair or replace SirReel's vehicles). On SirReel certs this appears as a "Hired Auto Physical Damage" line in the Automobile section and/or the Description of Operations, and is commonly stated as a DEDUCTIBLE structure (e.g. a percentage of the loss subject to a minimum and maximum) rather than a dollar limit — that is acceptable and PASSES. Also accept explicit "Physical Damage", "Comprehensive & Collision", or a stated physical-damage limit. FAIL only if NO physical-damage coverage on rented/hired autos appears anywhere on the cert (auto liability alone is not enough).
-5. Additional Insured — SirReel named
-6. Loss Payee — SirReel named
-7. Coverage dates cover the rental period
-8. Policy not expired
-
-Return ONLY valid JSON (no markdown, no preamble):
-{
-  "overallPass": true,
-  "policyExpiryDate": "YYYY-MM-DD" | null,
-  "coverageVerified": true,
-  "additionalInsured": true,
-  "autoPhysicalDamage": true,
-  "riskLevel": "low" | "medium" | "high",
-  "notes": ""
-}`
 
 /**
  * POST /api/portal/job/coi
@@ -155,6 +130,12 @@ export async function POST(req: NextRequest) {
       aiRiskLevel: typeof aiResponse.riskLevel === 'string' ? aiResponse.riskLevel : null,
       aiRecommendation: aiResponse.overallPass ? 'accept' : 'review',
       policyExpiryDate,
+      // Raw fact off the certificate; the production-company comparison is
+      // computed on read (src/lib/coi/insuredMatch.ts).
+      namedInsured:
+        typeof aiResponse.namedInsured === 'string' && aiResponse.namedInsured.trim()
+          ? aiResponse.namedInsured.trim().slice(0, 300)
+          : null,
       coverageVerified: aiResponse.overallPass === true,
       additionalInsured: aiResponse.additionalInsured === true,
     },

@@ -105,6 +105,10 @@ interface PortalData {
       coverageVerified: boolean;
       additionalInsured: boolean;
       uploadedAt: string;
+      /** Client-safe sentence when the certificate's named insured doesn't
+       *  match the production company on this job. Null when it matches or
+       *  when there is nothing to compare. */
+      insuredNotice: string | null;
     } | null;
     legacyPaperworkPortalUrl: string | null;
     vehicles: {
@@ -664,6 +668,31 @@ export default function JobPortalPage() {
                       Download signed copy
                     </a>
                   ) : null
+                ) : agreementIsReleased(data.paperwork.agreement) &&
+                  data.paperwork.agreement?.documentToSignUrl ? (
+                  // The native in-portal signing flow. This page has had a
+                  // /sign/rental route since the stage flow shipped, but
+                  // nothing ever linked to it — a released agreement with a
+                  // rendered PDF still sent the client out to the Cognito
+                  // form, or (with no legacy portal row) dead-ended on "your
+                  // rep will send the agreement shortly" while the badge said
+                  // Ready to sign. Same shape as the Stage Contract row below.
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                    >
+                      Read the agreement
+                    </a>
+                    <a
+                      href={`/portal/job/${slug}/sign/rental`}
+                      className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Sign agreement →
+                    </a>
+                  </div>
                 ) : data.paperwork.legacyPaperworkPortalUrl ? (
                   <a
                     href={data.paperwork.legacyPaperworkPortalUrl}
@@ -691,8 +720,18 @@ export default function JobPortalPage() {
                       Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
                     </p>
                   </div>
+                ) : quoteIsApproved ? (
+                  <span className="text-xs text-gray-500">
+                    Your SirReel rep is preparing your agreement — it will appear here to sign.
+                  </span>
                 ) : (
-                  <span className="text-xs text-gray-500">Your SirReel rep will send the agreement shortly.</span>
+                  // Says what actually unblocks it. The old copy — "your rep
+                  // will send the agreement shortly" — described a step
+                  // nobody was waiting on: approving the quote above is what
+                  // releases the agreement to this row.
+                  <span className="text-xs text-gray-500">
+                    Approve your quote above and the rental agreement appears here to sign.
+                  </span>
                 )}
               </PaperworkRow>
 
@@ -765,10 +804,22 @@ export default function JobPortalPage() {
                 statusKind={coiStatusKind(data.paperwork.coi)}
               >
                 {data.paperwork.coi ? (
-                  <div className="text-xs text-gray-500">
-                    Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    {data.paperwork.coi.policyExpiryDate && (
-                      <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-gray-500">
+                      Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {data.paperwork.coi.policyExpiryDate && (
+                        <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                      )}
+                    </div>
+                    {/* The certificate is on file but insures a different
+                        entity than the one this job is booked under. Said
+                        here, plainly, because the client is the only one who
+                        can tell us which company is actually renting — and
+                        finding out at pickup is too late. */}
+                    {data.paperwork.coi.insuredNotice && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
+                        {data.paperwork.coi.insuredNotice}
+                      </div>
                     )}
                   </div>
                 ) : (
