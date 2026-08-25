@@ -27,9 +27,10 @@ export const coiMissingProvider: ActionItemProvider = {
     // so this provider does NOT narrow by OWN data-scope. Role scoping
     // (ownerRole) still applies at the registry level.
     const rows = await prisma.$queryRaw<
-      Array<{ id: string; jobName: string | null; companyName: string | null; createdAt: Date }>
+      Array<{ id: string; jobId: string | null; jobName: string | null; companyName: string | null; createdAt: Date }>
     >`
       SELECT b.id,
+             b.job_id AS "jobId",
              b.job_name AS "jobName",
              c.name AS "companyName",
              b.created_at AS "createdAt"
@@ -58,7 +59,14 @@ export const coiMissingProvider: ActionItemProvider = {
       subtitle: `${r.jobName || 'Job'} — no certificate of insurance on file yet`,
       ownerRole: OWNER,
       priority: 'medium' as const,
-      href: `/jobs/${r.id}`,
+      // b.id is a BOOKING id — linking it as /jobs/<id> produced a
+      // dead "Job not found" page for every COI item (Wes, 2026-08-25).
+      // The job is reached through Booking.jobId. Every live booking
+      // carries one (verified: 0 with a null jobId), but a legacy row
+      // without one falls back to the jobs list rather than a dead link.
+      // The item ID deliberately stays keyed on the BOOKING so existing
+      // ActionItemDismissal side-rows keep matching.
+      href: r.jobId ? `/jobs/${r.jobId}` : '/jobs',
       occurredAt: r.createdAt,
       source: 'coi-missing',
       dismissal: { kind: 'sideRow' as const },
