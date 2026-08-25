@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { useSession } from 'next-auth/react';
 import type { UserRole } from '@prisma/client';
 import Link from 'next/link';
+import { Wrench } from 'lucide-react';
 import { NewHoldModal } from '@/components/scheduling/NewHoldModal';
 import { CompleteReservationPanel } from '@/components/scheduling/CompleteReservationPanel'
 import { NewTaskModal } from '@/components/scheduling/NewTaskModal';
@@ -277,7 +278,12 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             greyed the truck. Referral-vs-fleet is still readable off the
             dashed amber border and the N/A? chip in the label column, so
             the symptom gets the scarce horizontal space. Records with
-            nothing beyond boilerplate keep the old wording. */}
+            nothing beyond boilerplate keep the old wording.
+
+            Leading wrench (Wes, 2026-08-25): grey fill alone didn't read as
+            "maintenance" at a glance among the coloured booking bars. It is
+            flex-shrink-0, so on a bar too narrow for any text the wrench
+            still says what the window is — better than a truncated "N/…". */}
         {(entry.unit.naWindows || []).map((w: any, k: number) => {
           const bar = computeBar(w.start, w.end || lastRenderedDate, renderedStartDate, renderedDays, dayWidth)
           if (!bar) return null
@@ -293,6 +299,11 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
               // record title, the untrimmed description, and the window.
               title={[w.title || 'Unit N/A', w.description || null, window].filter(Boolean).join('\n')}
             >
+              <Wrench
+                className={`w-2.5 h-2.5 mr-1 flex-shrink-0 ${UNIT_NA_COLOR.text}`}
+                strokeWidth={2.5}
+                aria-hidden="true"
+              />
               <span className={`text-[9px] font-bold ${UNIT_NA_COLOR.text} truncate whitespace-nowrap`}>
                 N/A · {summary ?? (referral ? 'pending review' : 'out of service')}
               </span>
