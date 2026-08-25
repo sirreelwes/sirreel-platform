@@ -116,6 +116,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // Checking one does NOT hold that stage on its own: the client is asked
   // to confirm the areas in the reply, and the formal hold follows. So
   // this records WHAT was asked for without silently consuming capacity.
+  // Everyone the client CC'd on the inbound email. Pre-fills the reply's
+  // CC so the coordinator/UPM who were looped in stay looped in — replying
+  // to the sender alone quietly drops them (Wes 2026-08-25).
+  const [inboundCc, setInboundCc] = useState<string[]>([]);
   const [stageAreas, setStageAreas] = useState<Array<{ id: string; name: string; kind: string }>>([]);
   const [areasByCat, setAreasByCat] = useState<Record<string, string[]>>({});
 
@@ -288,6 +292,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
   useEffect(() => {
     let live = true;
+    if (inboundEmailMessageId) {
+      const ex = encodeURIComponent(defaultRecipientEmail || '');
+      fetch(`/api/email-messages/${encodeURIComponent(inboundEmailMessageId)}/cc?exclude=${ex}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (live && d?.clients) setInboundCc(d.clients); })
+        .catch(() => {});
+    }
     fetch('/api/scheduling/stage-areas?picker=quickreply')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (live && d) setStageAreas(d.areas || []); })
@@ -472,6 +483,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   if (reviewTarget) {
     return (
       <EmailReviewModal
+        initialCc={inboundCc}
         target={reviewTarget}
         onClose={() => setReviewTarget(null)}
         onSent={() => { onSent?.(); onClose(); }}

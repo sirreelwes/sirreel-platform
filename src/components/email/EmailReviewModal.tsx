@@ -143,6 +143,9 @@ interface Props {
    * "write my own" with an EMPTY body, and the server drops the portal CTA.
    */
   quickRespond?: boolean;
+  /** Addresses to pre-fill the CC box with — normally whoever the client
+   *  CC'd on the inbound email. The rep can still edit or clear them. */
+  initialCc?: string[];
   onClose: () => void;
   /** Called after a successful real send. The caller refreshes its
    *  list / shows a toast / etc. */
@@ -255,7 +258,7 @@ function fmtInsightDate(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Props) {
+export function EmailReviewModal({ target, quickRespond, onClose, onSent, initialCc }: Props) {
   const [preview, setPreview] = useState<CompositionOk | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -295,7 +298,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   const seededRef = useRef(false);
   // CC typed by the rep (Wes 2026-08-25). Applies to every kind this modal
   // sends; the routes re-parse it server-side.
-  const [ccInput, setCcInput] = useState('');
+  // Seeded from whoever the client CC'd on the inbound email so the whole
+  // group stays on the thread (Wes 2026-08-25). Still fully editable — the
+  // rep can strike anyone before sending.
+  const [ccInput, setCcInput] = useState(initialCc?.join(', ') ?? '');
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -484,6 +490,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   // controls (close button, textarea, recipient picker, Send button).
   const sendLocked = sendState !== 'idle';
   const { valid: ccValid, invalid: ccInvalid } = splitCcInput(ccInput);
+  // Matters more now the box is SEEDED from the inbound Cc header: ~0.5%
+  // of real threads carry more than MAX_CC client addresses, and the rep
+  // must choose who to drop rather than have parseCcList silently slice
+  // the tail off server-side.
   const ccOverLimit = ccValid.length > MAX_CC;
   // A typo'd CC blocks the send rather than silently dropping the address —
   // the rep meant to copy someone, and quietly not doing it is the worse
