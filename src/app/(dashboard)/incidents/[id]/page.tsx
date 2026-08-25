@@ -103,6 +103,15 @@ const STATUS_LABEL: Record<IncidentStatus, string> = {
   RESOLVED: 'Resolved', WRITTEN_OFF: 'Written off',
 }
 
+/**
+ * Incident.occurredAt is `@db.Date` despite the -At name — a calendar day,
+ * so UTC. fmtDate below stays local for the real instants on this page
+ * (createdAt, sentAt).
+ */
+function fmtDay(s: string | null): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
 function fmtDate(s: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -208,7 +217,7 @@ export default function IncidentDetailPage() {
             </div>
             <div className="text-xs text-lt-fg3 space-y-0.5 text-right">
               <div>Created {fmtDate(incident.createdAt)}</div>
-              {incident.occurredAt && <div>Occurred {fmtDate(incident.occurredAt)}</div>}
+              {incident.occurredAt && <div>Occurred {fmtDay(incident.occurredAt)}</div>}
             </div>
           </div>
           <p className="text-sm text-lt-fg mt-4 whitespace-pre-wrap">{incident.description}</p>

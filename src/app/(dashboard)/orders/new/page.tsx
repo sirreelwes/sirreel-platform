@@ -2154,8 +2154,8 @@ function NewQuotePageInner() {
                           <div className="text-[11px] text-lt-fg3 mt-0.5">
                             {j.startDate && (
                               <>
-                                {new Date(j.startDate).toLocaleDateString()}
-                                {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString()}` : ''}
+                                {new Date(j.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
+                                {j.endDate ? ` → ${new Date(j.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}` : ''}
                               </>
                             )}
                             {j.startDate && orders > 0 && ' · '}

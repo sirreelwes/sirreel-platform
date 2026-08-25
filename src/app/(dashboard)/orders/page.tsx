@@ -76,7 +76,7 @@ export default function OrdersPage() {
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n));
 
   const fmtDate = (d: string | null) =>
-    d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "--";
+    d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "--";
 
   return (
     // Light-motif page bg — overrides the shell's default so this

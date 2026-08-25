@@ -36,7 +36,7 @@ import type { V2Booking, V2Paperwork } from './types'
  */
 
 const fmtDate = (d?: string) =>
-  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+  d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '—'
 
 export function StudioContractCard({
   token,

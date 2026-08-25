@@ -99,6 +99,21 @@ function fmtDate(d: Date | string | null | undefined): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+/**
+ * Calendar dates (Job start/end) — UTC.
+ *
+ * Kept separate from fmtDate above, which also renders "Generated <date>" —
+ * a real instant that must stay local. Pinning the shared helper made the
+ * rental dates right and pushed the generation date a day forward; the
+ * counter-PDF snapshot caught it.
+ */
+function fmtDay(d: Date | string | null | undefined): string {
+  if (!d) return ''
+  const date = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+}
+
 function indexChanges(
   changes: AiChange[],
   decisions: DecisionForRender[]
@@ -364,8 +379,8 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             <InfoLine label="Name" value={j.name} />
             <InfoLine label="Job #" value={j.jobCode} />
             <InfoLine label="Type" value={j.productionType} />
-            <InfoLine label="Start" value={fmtDate(j.startDate)} />
-            <InfoLine label="End" value={fmtDate(j.endDate)} />
+            <InfoLine label="Start" value={fmtDay(j.startDate)} />
+            <InfoLine label="End" value={fmtDay(j.endDate)} />
           </View>
         </View>
 

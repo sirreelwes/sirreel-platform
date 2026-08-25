@@ -3369,7 +3369,7 @@ export default function OrderDetailPage() {
                     <div className="text-[10px] text-lt-fg3 w-full md:w-auto md:ml-3">
                       Issued {new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       {inv.dueDate && (
-                        <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                        <> · due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</>
                       )}
                     </div>
                     {inv.pdfUrl && (

@@ -40,6 +40,22 @@ const FILTERS = [
 const usd = (v: number) =>
   v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmt() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 const fmt = (d: string | null) => {
   if (!d) return '—';
   const dt = new Date(d);
@@ -284,7 +300,7 @@ function RwInvoicesPageInner() {
                         )}
                       </td>
                       <td className="py-2 px-3 text-lt-fg2">{fmt(i.invoiceDate)}</td>
-                      <td className={`py-2 px-3 ${overdue ? 'text-rose-600 font-semibold' : 'text-lt-fg2'}`}>{fmt(i.dueDate)}</td>
+                      <td className={`py-2 px-3 ${overdue ? 'text-rose-600 font-semibold' : 'text-lt-fg2'}`}>{fmtDay(i.dueDate)}</td>
                       <td className="py-2 px-3 text-right tabular-nums text-lt-fg">{usd(i.invoiceTotal)}</td>
                       <td className="py-2 px-3 text-right tabular-nums text-lt-fg2">{usd(i.receivedTotal)}</td>
                       <td className={`py-2 px-3 text-right tabular-nums font-semibold ${i.remainingTotal > 0.005 ? 'text-lt-fg' : 'text-lt-fg3'}`}>

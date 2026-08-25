@@ -9,7 +9,7 @@ type PortalStep = 'agreement' | 'lcdw' | 'coi' | 'cc';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
-const fmtShort = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+const fmtShort = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—';
 
 function getDaysInRange(start: string, end: string) {
   const days = [];
@@ -25,23 +25,29 @@ function getDaysInRange(start: string, end: string) {
 
 function MiniCalendar({ start, end, scheduleDays }: { start: string; end: string; scheduleDays?: any[] }) {
   if (!start || !end) return null;
+  // Rental dates are @db.Date — UTC midnight. Every getter here is the UTC
+  // one on purpose: the local getters read a rental that STARTS Aug 1 as
+  // July 31 west of UTC, so the client was shown the wrong MONTH, not just
+  // the wrong day, with the highlighted band off by one alongside it.
   const startDate = new Date(start);
   const endDate = new Date(end);
 
   // Build calendar for the month of start date
-  const year = startDate.getFullYear();
-  const month = startDate.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const year = startDate.getUTCFullYear();
+  const month = startDate.getUTCMonth();
+  const firstDay = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
-  const monthName = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthName = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
+  // Compare on the UTC calendar day so the band matches the dates above it.
+  const utcDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   const isInRange = (day: number) => {
-    const d = new Date(year, month, day);
-    return d >= startDate && d <= endDate;
+    const d = Date.UTC(year, month, day);
+    return d >= utcDay(startDate) && d <= utcDay(endDate);
   };
-  const isStart = (day: number) => new Date(year, month, day).toDateString() === startDate.toDateString();
-  const isEnd = (day: number) => new Date(year, month, day).toDateString() === endDate.toDateString();
+  const isStart = (day: number) => Date.UTC(year, month, day) === utcDay(startDate);
+  const isEnd = (day: number) => Date.UTC(year, month, day) === utcDay(endDate);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4">

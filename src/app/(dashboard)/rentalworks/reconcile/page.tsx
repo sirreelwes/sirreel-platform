@@ -79,6 +79,22 @@ type JobDetail = {
 };
 
 const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmt() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 const fmt = (d: string | null) => {
   if (!d) return '—';
   const dt = new Date(d);
@@ -460,7 +476,7 @@ function ReconcilePageInner() {
                   </div>
                   <div className="text-[13px] font-semibold text-lt-fg truncate">{j.name}</div>
                   <div className="text-[11px] text-lt-fg3 truncate">
-                    {j.company?.name || '—'} · {j.startDate ? fmt(j.startDate) : `created ${fmt(j.createdAt)}`}
+                    {j.company?.name || '—'} · {j.startDate ? fmtDay(j.startDate) : `created ${fmt(j.createdAt)}`}
                   </div>
                 </button>
               ))}
@@ -574,7 +590,7 @@ function ReconcilePanel({
           <h2 className="text-lg font-bold text-lt-fg">{job.name}</h2>
           <div className="text-[13px] text-lt-fg2">
             <Link href={`/crm/${job.company.id}`} className="font-semibold hover:underline">{job.company.name}</Link>
-            {' · '}{fmt(job.startDate)} – {fmt(job.endDate)}
+            {' · '}{fmtDay(job.startDate)} – {fmtDay(job.endDate)}
             {job.agent && <> · {job.agent.name}</>}
           </div>
 

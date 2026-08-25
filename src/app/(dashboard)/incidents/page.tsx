@@ -103,6 +103,15 @@ function fmtDate(s: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
+/**
+ * Calendar dates — UTC. Note `occurredAt`: the NAME reads like a timestamp
+ * but Incident.occurredAt is `@db.Date`, so it belongs here, not with
+ * fmtDate above (which still serves real instants like latestActivityAt).
+ */
+function fmtDay(s: string | null): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
 
 export default function IncidentsPage() {
   const router = useRouter()
@@ -384,7 +393,7 @@ function IncidentCard({
       {/* Identity line — driver editable inline. */}
       <div className="text-sm text-lt-fg2 mb-2 flex items-center gap-1 flex-wrap">
         <span className="font-medium text-lt-fg">{r.asset?.unitName ?? 'No vehicle'}</span>
-        <span className="text-lt-fg3">· loss {fmtDate(r.occurredAt)}</span>
+        <span className="text-lt-fg3">· loss {fmtDay(r.occurredAt)}</span>
         <span className="text-lt-fg3">·</span>
         <DriverInline value={r.driverName} busy={busy} onSave={(v) => patch({ driverName: v })} />
         <span className="text-lt-fg3">·</span>
@@ -502,7 +511,7 @@ function ClaimsListLink({ rows }: { rows: ClaimRow[] | null }) {
               <td className="px-4 py-3 text-lt-fg2">{c.filedAgainst}</td>
               <td className="px-4 py-3 text-lt-fg3 font-mono text-xs">{c.carrierClaimNumber ?? '—'}</td>
               <td className="px-4 py-3 text-lt-fg2">{c.company?.name ?? '—'}</td>
-              <td className="px-4 py-3 text-lt-fg3 text-xs">{fmtDate(c.incidentDate)}</td>
+              <td className="px-4 py-3 text-lt-fg3 text-xs">{fmtDay(c.incidentDate)}</td>
             </tr>
           ))}
         </tbody>

@@ -12,8 +12,8 @@ JOB INFORMATION
 Name Pilot Episode — Mockingbird S1
 Job # SR-JOB-9999
 Type TV
-Start May 31, 2026
-End June 20, 2026
+Start June 1, 2026
+End June 21, 2026
 PRIMARY CONTACT
 Name Jane Doe
 Position PM

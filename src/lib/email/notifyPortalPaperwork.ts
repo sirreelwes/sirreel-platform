@@ -85,7 +85,7 @@ async function send(ev: PortalPaperworkEvent): Promise<void> {
   const link = b.jobId ? `${HQ_APP_URL}/jobs/${b.jobId}` : `${HQ_APP_URL}/jobs`
 
   const fmt = (d: Date | null) =>
-    d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+    d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—'
   const rows = [
     { label: 'Job', value: b.jobName },
     { label: 'Company', value: company },

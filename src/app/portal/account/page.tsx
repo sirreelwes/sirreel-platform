@@ -50,6 +50,22 @@ function fmtMoney(n: number | null): string {
     maximumFractionDigits: 0,
   })
 }
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: '2-digit' }, timeZone: 'UTC' })
+}
+
 function fmtDate(d: Date | null | string | undefined): string {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
@@ -252,7 +268,7 @@ export default async function PortalAccountPage() {
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">
                       <div>
-                        {fmtDate(j.startDate)} → {fmtDate(j.endDate)}
+                        {fmtDay(j.startDate)} → {fmtDay(j.endDate)}
                       </div>
                       <div className="font-mono text-zinc-700 mt-0.5">
                         {j._count.orders} order{j._count.orders === 1 ? '' : 's'} · {fmtMoney(j.orderTotal)}
@@ -286,7 +302,7 @@ export default async function PortalAccountPage() {
                         <span className="ml-2 text-xs text-zinc-500 font-mono">({o.job.jobCode})</span>
                       </div>
                       <div className="text-xs text-zinc-500 mt-0.5">
-                        {fmtDate(o.startDate)} → {fmtDate(o.endDate)}
+                        {fmtDay(o.startDate)} → {fmtDay(o.endDate)}
                       </div>
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">
@@ -319,7 +335,7 @@ export default async function PortalAccountPage() {
                     </div>
                     <div className="text-right text-xs text-zinc-500 flex-shrink-0">
                       <div>
-                        {fmtDate(b.startDate)} → {fmtDate(b.endDate)}
+                        {fmtDay(b.startDate)} → {fmtDay(b.endDate)}
                       </div>
                     </div>
                   </div>
@@ -364,7 +380,7 @@ export default async function PortalAccountPage() {
                       </div>
                       <div className="text-right text-xs text-zinc-500 flex-shrink-0">
                         <div>
-                          {fmtDate(r.preferredStartDate)} → {fmtDate(r.preferredEndDate)}
+                          {fmtDay(r.preferredStartDate)} → {fmtDay(r.preferredEndDate)}
                         </div>
                         <div className="mt-0.5">{fmtDate(r.createdAt)}</div>
                       </div>

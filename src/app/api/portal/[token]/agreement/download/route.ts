@@ -25,7 +25,7 @@ const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 function fmtDate(d: Date | null): string {
   if (!d) return ''
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
+    timeZone: 'UTC', // calendar date — LA would render the day before
     month: '2-digit',
     day: '2-digit',
     year: 'numeric',

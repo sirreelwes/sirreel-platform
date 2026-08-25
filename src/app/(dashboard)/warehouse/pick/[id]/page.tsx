@@ -71,6 +71,22 @@ const STATUS_BADGE: Record<ListStatus, string> = {
   CANCELLED:      'bg-red-900/40 text-red-300 border-red-800',
 }
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 function fmtDate(d: string | null) {
   if (!d) return '—'
   const dt = new Date(d)
@@ -236,7 +252,7 @@ export default function WarehousePickDetailPage() {
               {picklist.order.job && <span className="text-zinc-500 font-normal"> · {picklist.order.job.name}</span>}
             </h1>
             <div className="text-[12px] text-zinc-500 mt-1">
-              Pickup {fmtDate(picklist.order.startDate)} → return {fmtDate(picklist.order.endDate)}
+              Pickup {fmtDay(picklist.order.startDate)} → return {fmtDay(picklist.order.endDate)}
             </div>
           </div>
 

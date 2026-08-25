@@ -209,6 +209,22 @@ const styles = StyleSheet.create({
   },
 })
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return ''
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return ''
+  return dt.toLocaleDateString('en-US', { ...{ year: 'numeric', month: 'long', day: 'numeric' }, timeZone: 'UTC' })
+}
+
 function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return ''
   const date = typeof d === 'string' ? new Date(d) : d
@@ -269,7 +285,7 @@ export function SignedAgreementDocument({
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Rental period</Text>
             <Text style={styles.rowValue}>
-              {fmtDate(job?.startDate) || '—'}{' '}{job?.endDate ? `– ${fmtDate(job.endDate)}` : ''}
+              {fmtDay(job?.startDate) || '—'}{' '}{job?.endDate ? `– ${fmtDay(job.endDate)}` : ''}
             </Text>
           </View>
         </View>

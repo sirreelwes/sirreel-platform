@@ -49,7 +49,7 @@ function fmtDate(d: string | null) {
   if (!d) return '—'
   const dt = new Date(d)
   if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
 function WarehousePickQueuePageInner() {

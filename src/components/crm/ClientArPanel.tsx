@@ -38,6 +38,22 @@ type Ar = {
 const usd = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmt() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 function fmt(d: string | null) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -188,7 +204,7 @@ export function ClientArPanel({ companyId }: { companyId: string }) {
                     <td className="py-1.5 pr-3 font-mono text-lt-fg2">{i.orderNumber || '—'}</td>
                     <td className="py-1.5 pr-3 text-lt-fg2">{fmt(i.invoiceDate)}</td>
                     <td className={`py-1.5 pr-3 ${overdue ? 'text-rose-600 font-semibold' : 'text-lt-fg2'}`}>
-                      {fmt(i.dueDate)}
+                      {fmtDay(i.dueDate)}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-lt-fg">{usd(i.invoiceTotal)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-lt-fg2">{usd(i.receivedTotal)}</td>

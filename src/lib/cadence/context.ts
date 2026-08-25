@@ -82,21 +82,28 @@ export async function loadCadenceContextForOrder(orderId: string): Promise<Caden
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return ''
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
+    timeZone: 'UTC', // calendar date — LA would render the day before
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   }).format(d)
 }
 
-function fmtTime(d: Date | null | undefined): string {
-  if (!d) return ''
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(d)
-}
+/**
+ * There is no pickup time on an Order.
+ *
+ * Order.startDate / endDate are `@db.Date` — a calendar day with no time at
+ * all. This used to run those columns through a time formatter, which turned
+ * UTC midnight into "5:00 PM" Pacific and put that invented hour into live
+ * client emails ("You're good to pick up on August 25 at 5:00 PM"). Both
+ * halves were wrong: the day was off by one and the time never existed.
+ *
+ * The REAL value lives on `Booking.pickupTime` / `Booking.deliveryTime`
+ * (String columns). The cadence context has no booking on it today, so
+ * rather than invent an hour we say something true. Wire the booking through
+ * and swap this out when a precise time is worth threading.
+ */
+const UNSPECIFIED_TIME = 'your scheduled time'
 
 /**
  * Maps a CadenceOrderContext to the Handlebars context shape the cadence
@@ -111,9 +118,9 @@ export function buildTemplateContext(ctx: CadenceOrderContext): CadenceTemplateC
     companyName: ctx.company.name,
     jobName: ctx.jobName,
     pickupDate: fmtDate(ctx.order.startDate),
-    pickupTime: fmtTime(ctx.order.startDate),
+    pickupTime: UNSPECIFIED_TIME,
     returnDate: fmtDate(ctx.order.endDate),
-    returnTime: fmtTime(ctx.order.endDate),
+    returnTime: UNSPECIFIED_TIME,
     repName: ctx.agent.name,
     repPhone: ctx.agent.phone || '',
     repEmail: ctx.agent.email,

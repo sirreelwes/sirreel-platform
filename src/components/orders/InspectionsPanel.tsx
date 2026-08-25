@@ -52,7 +52,7 @@ export function InspectionsPanel({ orderId }: { orderId: string }) {
                 {insp.fuelLevel && <span className="text-zinc-500 font-normal"> · fuel {insp.fuelLevel}</span>}
               </div>
               <div className="text-zinc-500 text-xs">
-                {new Date(insp.inspectionDate).toLocaleString()} — {insp.inspectedByUser.name || insp.inspectedByUser.email}
+                {new Date(insp.inspectionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} — {insp.inspectedByUser.name || insp.inspectedByUser.email}
               </div>
             </div>
             {insp.notes && <p className="text-zinc-400 text-sm mb-2">{insp.notes}</p>}

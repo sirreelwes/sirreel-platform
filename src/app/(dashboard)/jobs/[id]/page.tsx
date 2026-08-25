@@ -57,6 +57,22 @@ const ORDER_STATUS_BADGE: Record<string, string> = {
   CANCELLED:  'bg-red-900/40 text-red-300',
 };
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 function fmtDate(d: string | Date | null | undefined) {
   if (!d) return '—';
   const dt = typeof d === 'string' ? new Date(d) : d;
@@ -1251,7 +1267,7 @@ const driverTone = (d: any): string => {
                   </div>
                 </div>
                 <div className="mt-0.5 text-[12px] text-zinc-300 truncate">{a.category}</div>
-                <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDate(a.startDate)} – {fmtDate(a.endDate)}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
                 {/* Who's driving it — the question a rep asks while looking
                     at the unit, so answered here rather than only in the
                     Drivers section below. */}
@@ -1528,7 +1544,7 @@ const driverTone = (d: any): string => {
                   </div>
                   <div className="mt-1 text-[12px] text-zinc-300">
                     added {fmtDate(ad.createdAt)}
-                    {ca.isAnnual && ca.effectiveDate && <> · covers {fmtDate(ca.effectiveDate)}{ca.expiryDate ? ` – ${fmtDate(ca.expiryDate)}` : ''}</>}
+                    {ca.isAnnual && ca.effectiveDate && <> · covers {fmtDay(ca.effectiveDate)}{ca.expiryDate ? ` – ${fmtDay(ca.expiryDate)}` : ''}</>}
                     {ad.note && <> · {ad.note}</>}
                   </div>
                   <div className="mt-1.5 flex items-center gap-3">
@@ -1742,7 +1758,7 @@ const driverTone = (d: any): string => {
                       {order.status}
                     </span>
                     <span className="text-zinc-300">
-                      {fmtDate(order.startDate)} – {fmtDate(order.endDate)}
+                      {fmtDay(order.startDate)} – {fmtDay(order.endDate)}
                     </span>
                   </div>
                   {hasNotes && (
@@ -1781,7 +1797,7 @@ const driverTone = (d: any): string => {
                             <span className="flex-1">
                               <span className="text-zinc-100">{li.description}</span>
                               <span className="ml-2 text-zinc-300">
-                                {li.pickupDate ? fmtDate(li.pickupDate) : '—'} → {li.returnDate ? fmtDate(li.returnDate) : '—'}
+                                {li.pickupDate ? fmtDay(li.pickupDate) : '—'} → {li.returnDate ? fmtDay(li.returnDate) : '—'}
                               </span>
                             </span>
                           </li>
@@ -1840,7 +1856,7 @@ const driverTone = (d: any): string => {
                       </span>
                     )}
                     <span className="text-[13px] text-zinc-300 whitespace-nowrap">
-                      {fmtDate(o.startDate)} – {fmtDate(o.endDate)}
+                      {fmtDay(o.startDate)} – {fmtDay(o.endDate)}
                     </span>
                     <span className="text-[11px] text-zinc-300 ml-2">
                       {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
@@ -1917,7 +1933,7 @@ const driverTone = (d: any): string => {
                                       <span className="text-zinc-100">{bi.category.name}</span>
                                       <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
                                       <span className="ml-2 text-zinc-300">
-                                        {fmtDate(a.startDate)} → {fmtDate(a.endDate)}
+                                        {fmtDay(a.startDate)} → {fmtDay(a.endDate)}
                                       </span>
                                       <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-300">{a.status.replace(/_/g, ' ')}</span>
                                     </span>
@@ -1989,7 +2005,7 @@ const driverTone = (d: any): string => {
                                     )}
                                   </span>
                                   {inv.dueDate && inv.status !== 'PAID' && (
-                                    <span className="ml-2 text-[11px] text-zinc-300">due {fmtDate(inv.dueDate)}</span>
+                                    <span className="ml-2 text-[11px] text-zinc-300">due {fmtDay(inv.dueDate)}</span>
                                   )}
                                 </span>
                               </li>

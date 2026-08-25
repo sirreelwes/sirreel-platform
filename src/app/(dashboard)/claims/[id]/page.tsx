@@ -179,6 +179,22 @@ const fmtMoney = (n: number | null): string => {
   if (n == null) return '—'
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 }
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ month: 'short', day: 'numeric', year: 'numeric' }, timeZone: 'UTC' })
+}
+
 const fmtDate = (iso: string | null): string => {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -436,7 +452,7 @@ export default function ClaimDetailPage() {
                 {claim.policyNumber && <span className="text-lt-fg3"> · policy {claim.policyNumber}</span>}
               </div>
               <div className="text-xs text-lt-fg3 mt-1">
-                Incident {fmtDate(claim.incidentDate)} · opened {fmtDate(claim.createdAt)}
+                Incident {fmtDay(claim.incidentDate)} · opened {fmtDate(claim.createdAt)}
                 {claim.submittedAt && <> · submitted {fmtDate(claim.submittedAt)}</>}
                 {claim.settledAt && <> · settled {fmtDate(claim.settledAt)}</>}
               </div>
@@ -556,7 +572,7 @@ export default function ClaimDetailPage() {
                   <span className="font-mono text-xs">{claim.booking.bookingNumber}</span>
                   <div className="text-xs text-lt-fg3">{claim.booking.jobName}</div>
                   <div className="text-[11px] text-lt-fg3">
-                    {fmtDate(claim.booking.startDate)} → {fmtDate(claim.booking.endDate)}
+                    {fmtDay(claim.booking.startDate)} → {fmtDay(claim.booking.endDate)}
                   </div>
                 </Field>
               )}

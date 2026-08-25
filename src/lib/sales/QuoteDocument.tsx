@@ -166,6 +166,22 @@ const DEPT_ORDER: Department[] = [
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────────────
 
+
+/**
+ * Calendar dates (pickup, return, due) — UTC, never local.
+ *
+ * Separate from fmtDate() on purpose: that one also renders INSTANTS
+ * (createdAt, signedAt, …) where local time is correct. Pinning it to UTC
+ * would fix the rental dates and break the timestamps. See
+ * src/lib/dates/calendarDate.ts.
+ */
+function fmtDay(d: string | Date | null | undefined): string {
+  if (!d) return '—'
+  const dt = typeof d === 'string' ? new Date(d) : d
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('en-US', { ...{ year: 'numeric', month: 'short', day: 'numeric' }, timeZone: 'UTC' })
+}
+
 function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
@@ -173,10 +189,11 @@ function fmtDate(d: Date | string | null | undefined): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+/** Rental usage period — calendar dates, so fmtDay (UTC), not fmtDate. */
 function fmtDateRange(start: Date | string | null, end: Date | string | null): string {
   if (!start && !end) return '—'
-  if (start && end) return `${fmtDate(start)} – ${fmtDate(end)}`
-  return fmtDate(start || end)
+  if (start && end) return `${fmtDay(start)} – ${fmtDay(end)}`
+  return fmtDay(start || end)
 }
 
 function fmtTimestamp(d: Date): string {
@@ -596,8 +613,8 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
               const sameAsHeaderRange =
                 props.startDate &&
                 props.endDate &&
-                fmtDate(item.pickupDate) === fmtDate(props.startDate) &&
-                fmtDate(item.returnDate) === fmtDate(props.endDate)
+                fmtDay(item.pickupDate) === fmtDay(props.startDate) &&
+                fmtDay(item.returnDate) === fmtDay(props.endDate)
               return (
                 <View key={idx} style={[styles.row, idx % 2 === 1 ? styles.rowAlt : {}]}>
                   {/* Wrap the inventory code in a View (mirrors colDesc)
@@ -617,14 +634,14 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                     )}
                     {!sameAsHeaderRange && (
                       <Text style={styles.dateNote}>
-                        {fmtDate(item.pickupDate)} – {fmtDate(item.returnDate)}
+                        {fmtDay(item.pickupDate)} – {fmtDay(item.returnDate)}
                       </Text>
                     )}
                     {item.billableDays != null &&
                       item.computedDays != null &&
                       item.billableDays !== item.computedDays && (
                         <Text style={styles.dateNote}>
-                          Billable days: {item.billableDays} (rental period {fmtDate(item.pickupDate)} – {fmtDate(item.returnDate)}, {item.computedDays} days)
+                          Billable days: {item.billableDays} (rental period {fmtDay(item.pickupDate)} – {fmtDay(item.returnDate)}, {item.computedDays} days)
                         </Text>
                       )}
                   </View>
