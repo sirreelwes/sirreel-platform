@@ -674,6 +674,34 @@ export default function JobDetailPage() {
     }
   }
 
+  // Every SignedAgreement across the job's live orders, newest first. The
+  // agreement section renders these; without them it described the job's
+  // coverage while hiding the actual executed paper.
+  const signedOrderAgreements = liveOrders
+    .flatMap((o) => o.signedAgreements.map((agreement) => ({ order: o, agreement })))
+    .sort((a, b) =>
+      (b.agreement.signedAt ?? b.agreement.updatedAt).localeCompare(
+        a.agreement.signedAt ?? a.agreement.updatedAt,
+      ),
+    );
+
+  const signTargetOrder =
+    liveOrders.find((o) =>
+      // Target an order whose agreement is NOT yet signed — a filed
+      // offline agreement counts as signed, so it stops being chased.
+      o.signedAgreements.some((a) => !isSignedAgreementStatus(a.status)),
+    ) ??
+    liveOrders[0] ??
+    null;
+
+  // Is anything actually waiting on a signature? The Send button used to
+  // shout the same amber CTA at a fully-signed job, right under a header
+  // chip reading On file — the page asking for a signature it already had.
+  // Re-sending stays possible; it just stops being the headline.
+  const signatureOutstanding = signedOrderAgreements.some(
+    ({ agreement }) => !isSignedAgreementStatus(agreement.status),
+  ) || signedOrderAgreements.length === 0;
+
   const signTargetOrder =
     liveOrders.find((o) =>
       // Target an order whose agreement is NOT yet signed — a filed
@@ -1552,15 +1580,23 @@ const driverTone = (d: any): string => {
                   ? 'Add a contact to this job first'
                   : !signTargetOrder
                     ? 'This job has no live order to send paperwork for'
-                    : `Emails the paperwork portal link to ${signatory.person.email}`
+                    : signatureOutstanding
+                      ? `Emails the paperwork portal link to ${signatory.person.email}`
+                      : `Already signed — re-sends the portal link to ${signatory.person.email}`
               }
-              className="text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                signatureOutstanding
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+              }`}
             >
               {signSendBusy
                 ? 'Sending…'
-                : signatory
-                  ? `Send for signature → ${signatory.person.firstName}`
-                  : 'Send for signature'}
+                : !signatureOutstanding
+                  ? 'Re-send for signature'
+                  : signatory
+                    ? `Send for signature → ${signatory.person.firstName}`
+                    : 'Send for signature'}
             </button>
             {/* Already signed on paper or in Cognito? File it here. This is
                 the ONLY action that makes the client's portal stop asking —
@@ -1605,13 +1641,17 @@ const driverTone = (d: any): string => {
             {signSendMsg}
           </div>
         )}
-        {job.agreementAddenda.length === 0 ? (
+        {/* "No signed paperwork on this job yet" was measured against
+            addenda alone, so a job whose client HAD signed in the portal
+            read empty while the header chip two lines up said On file. The
+            empty state now has to be empty on both counts. */}
+        {job.agreementAddenda.length === 0 && signedOrderAgreements.length === 0 ? (
           <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
             {SHOW_AGREEMENT_ON_FILE
               ? 'This job isn\u2019t linked to an agreement yet. Attach it to an on-file rental / stage agreement (or file a new one) so it reads covered.'
               : 'No signed paperwork on this job yet. Use Send for signature to have the client countersign in their portal.'}
           </div>
-        ) : (
+        ) : job.agreementAddenda.length === 0 ? null : (
           <div className="space-y-2">
             {job.agreementAddenda.map((ad) => {
               const ca = ad.companyAgreement;
@@ -1656,6 +1696,67 @@ const driverTone = (d: any): string => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Executed order paperwork. The block above is company-level
+            standing agreements; a contract the client signed in the portal
+            is a different row on a different table, and this section named
+            after both of them showed only the first. The paperwork feed
+            deep-links here — landing on a section that doesn't mention the
+            document you clicked is how "Review" came to mean "you're back
+            in the job folder". */}
+        {signedOrderAgreements.length > 0 && (
+          <div className="mt-3">
+            {/* "Order agreements", not "Signed by the client" — the list
+                includes rows still waiting on a signature, and each one
+                states its own status. */}
+            <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Order agreements</div>
+            <div className="space-y-2">
+              {signedOrderAgreements.map(({ order, agreement: a }) => {
+                const executed = isSignedAgreementStatus(a.status);
+                return (
+                  <div key={a.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${executed ? 'text-emerald-300 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10'}`}>
+                        {a.status.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[15px] text-white font-medium">
+                        {a.contractType === 'STAGE_CONTRACT' ? 'Stage contract' : 'Rental agreement'}
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-300">{order.orderNumber}</span>
+                    </div>
+                    <div className="mt-1 text-[12px] text-zinc-300">
+                      {a.signedAt ? <>signed {fmtDate(a.signedAt)}</> : 'not signed yet'}
+                      {a.signerName && <> · {a.signerName}</>}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      {a.signedDocumentUrl ? (
+                        <>
+                          <a
+                            href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                          >
+                            View signed PDF →
+                          </a>
+                          <a
+                            href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed&download=1`}
+                            download
+                            className="text-[13px] font-semibold text-zinc-300 hover:text-white"
+                          >
+                            Download
+                          </a>
+                        </>
+                      ) : (
+                        <span className="text-[12px] text-zinc-400">No executed PDF filed for this one.</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

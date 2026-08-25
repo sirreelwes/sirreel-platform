@@ -2,6 +2,7 @@
  * GET /api/portal/job/agreement/pdf
  *   ?type=RENTAL_AGREEMENT|STAGE_CONTRACT   (default RENTAL_AGREEMENT)
  *   ?doc=tosign|signed                      (default tosign)
+ *   ?download=1                             (force save-to-disk)
  *
  * Job-session-gated proxy for a SignedAgreement's PDF on the native portal
  * job pages. Cookie-auth'd sibling of /api/portal/[token]/agreement/pdf —
@@ -14,8 +15,12 @@
  * this streams whichever the field points at via the shared
  * `streamPrivateBlobAsResponse` helper.
  *
+ * `download=1` forces attachment disposition. The signed-copy row offers
+ * both View and Download; a link labelled Download that opens a viewer tab
+ * instead of saving the file is a broken promise to the client.
+ *
  * Consumers: the rental + stage sign-page review iframes and the paperwork
- * "View pre-signed PDF" / "Download signed copy" links on the portal job
+ * "View pre-signed PDF" / "View" / "Download" links on the portal job
  * pages.
  */
 import { NextRequest, NextResponse } from 'next/server'
@@ -57,5 +62,6 @@ export async function GET(req: NextRequest) {
   return streamPrivateBlobAsResponse({
     fileUrl,
     filename: `${contractType.toLowerCase()}${wantSigned ? '-signed' : ''}-${resolved.order.orderNumber}.pdf`,
+    forceDownload: req.nextUrl.searchParams.get('download') === '1',
   })
 }

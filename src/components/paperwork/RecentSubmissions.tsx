@@ -19,6 +19,12 @@
  * to put the verdict. Rows also carry their own finding (a named insured
  * that doesn't match the production company), so the feed reads as a
  * triage queue rather than a log.
+ *
+ * Agreement rows open the executed PDF. They used to send you to the job
+ * page's #agreement section, which lists company-level standing agreements
+ * and says nothing about an order-signed contract — so a rental agreement
+ * you clicked in this feed simply could not be read from here. View opens
+ * it, Download saves it.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -40,6 +46,8 @@ interface Submission {
   jobName: string | null
   companyName: string | null
   href: string | null
+  documentHref: string | null
+  downloadHref: string | null
   reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
   flag: { label: string; detail: string } | null
 }
@@ -260,6 +268,30 @@ export default function RecentSubmissions() {
                     >
                       Review
                     </button>
+                  ) : r.documentHref ? (
+                    // The document itself, not a page that mentions it.
+                    // `download` on the second link is belt-and-braces —
+                    // the API sets attachment disposition either way, but
+                    // a same-origin hint keeps the filename honest.
+                    <>
+                      <a
+                        href={r.documentHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors"
+                      >
+                        View
+                      </a>
+                      {r.downloadHref && (
+                        <a
+                          href={r.downloadHref}
+                          download
+                          className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                        >
+                          Download
+                        </a>
+                      )}
+                    </>
                   ) : r.href ? (
                     <Link
                       href={r.href}

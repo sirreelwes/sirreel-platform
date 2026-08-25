@@ -2,6 +2,7 @@
  * GET /api/orders/[id]/agreement/pdf
  *   ?type=RENTAL_AGREEMENT|STAGE_CONTRACT       (default RENTAL_AGREEMENT)
  *   ?doc=tosign|signed|word|redline             (default tosign)
+ *   ?download=1                                 (force save-to-disk)
  *
  * Session-gated proxy for a SignedAgreement's stored document. All four
  * fields are PRIVATE blobs that 403 on a direct fetch:
@@ -13,9 +14,14 @@
  * shared `streamPrivateBlobAsResponse` helper (which sets inline vs.
  * attachment disposition by the blob's own content type).
  *
+ * `download=1` flips the disposition to attachment so a PDF saves rather
+ * than opening a viewer tab — View and Download are separate buttons on
+ * the same document wherever staff meet a signed agreement.
+ *
  * Consumers (dashboard, same-origin → cookie session): the order-detail
  * "Doc to sign" / "Signed PDF" / "Last .docx download" / "Client redline"
- * links and the stage-booking-terms "View pre-signed PDF" link.
+ * links, the job page's Signed paperwork rows, the paperwork feed's
+ * agreement rows, and the stage-booking-terms "View pre-signed PDF" link.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -64,5 +70,6 @@ export async function GET(req: NextRequest, { params }: Params) {
   return streamPrivateBlobAsResponse({
     fileUrl,
     filename: `${contractType.toLowerCase()}-${doc}-${params.id}.${spec.ext}`,
+    forceDownload: req.nextUrl.searchParams.get('download') === '1',
   })
 }
