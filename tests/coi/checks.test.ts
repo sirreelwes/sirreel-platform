@@ -24,6 +24,7 @@ import {
   hasCoiChecklist,
 } from '../../src/lib/coi/checks'
 import { normalizeCoiReview, CRITICAL_CHECK_KEYS, ALERT_CHECK_KEYS } from '../../src/lib/coi/reviewCoi'
+import { evaluateHolderMatch } from '../../src/lib/coi/holderMatch'
 
 const failures: string[] = []
 function check(why: string, got: boolean): void {
@@ -40,6 +41,7 @@ function fullReview(overrides: Record<string, unknown> = {}) {
   for (const k of CRITICAL_CHECK_KEYS) r[k] = { ...pass }
   for (const k of ALERT_CHECK_KEYS) r[k] = { ...pass }
   r.policyExpiry = { pass: true, date: '2027-01-01', expired: false }
+  r.certificateHolder = { pass: true, found: 'SirReel Production Vehicles, Inc., 8500 Lankershim Blvd, Sun Valley, CA 91352', note: '' }
   return { ...r, ...overrides }
 }
 
@@ -137,6 +139,53 @@ check(
 check(
   'a critical gap sends it to review',
   coiCheckWriteFields(fullReview({ lossPayee: { ...fail } }) as never).aiRecommendation === 'review',
+)
+
+// ── Certificate holder: decided in code, not by the model ────────────────
+// SirReel trades under several names. The model's boolean contradicted its
+// own note on these (twice in six runs on a live certificate), so the text is
+// the input and the verdict is computed.
+for (const name of [
+  'SirReel Production Vehicles, Inc., 8500 Lankershim Blvd, Sun Valley, CA 91352',
+  'SirReel Production Vehicles, Inc. dba SirReel Studio Rentals, 8500 Lankershim Blvd, Sun Valley, CA 91352',
+  'SirReel Studio Services, 8500 Lankershim Blvd, Sun Valley, CA 91352',
+  'SirReel Studio Rentals\n8500 Lankershim Blvd\nSun Valley, CA 91352',
+  'Sir Reel Production Vehicles Inc 8500 Lankershim Blvd Sun Valley CA 91352',
+  'SirReel Studio Services',
+]) {
+  check(`holder accepted: ${name.slice(0, 44).replace(/\n/g, ' ')}`, evaluateHolderMatch(name).verdict === 'MATCH')
+}
+check(
+  'a different company at our address is rejected',
+  evaluateHolderMatch('Quixote Studios, 8500 Lankershim Blvd, Sun Valley, CA 91352').verdict === 'WRONG_COMPANY',
+)
+check(
+  'SirReel at someone else\'s address is rejected',
+  evaluateHolderMatch('SirReel Studio Rentals, 1200 Vine St, Hollywood, CA 90038').verdict === 'WRONG_ADDRESS',
+)
+check('an unreadable holder box needs a human', evaluateHolderMatch('').verdict === 'UNKNOWN')
+
+// The model's own boolean must not be able to override the computed verdict —
+// this is the exact shape of the live failure.
+const contradicted = normalizeCoiReview(
+  fullReview({
+    certificateHolder: {
+      pass: false,
+      found: 'SirReel Studio Services, 8500 Lankershim Blvd, Sun Valley, CA 91352',
+      note: 'Certificate Holder name is acceptable and address is correct.',
+    },
+  }) as never,
+)
+check(
+  'a self-contradicting holder verdict is overruled by the computed one',
+  (contradicted.certificateHolder as { pass?: boolean })?.pass === true && contradicted.criticalPass === true,
+)
+const wrongHolder = normalizeCoiReview(
+  fullReview({ certificateHolder: { pass: true, found: 'Quixote Studios, 1000 N Cahuenga Blvd' } }) as never,
+)
+check(
+  'a genuinely wrong holder fails even when the model passed it',
+  (wrongHolder.certificateHolder as { pass?: boolean })?.pass === false && wrongHolder.criticalPass === false,
 )
 
 console.log('')

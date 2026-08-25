@@ -23,6 +23,7 @@
  * Without --write it is a dry run: it lists what it would touch and stops.
  *   --all     re-run every certificate, including ones already on the checklist
  *   --limit N stop after N certificates (useful for a first cautious batch)
+ *   --id ID   re-run exactly this certificate, whatever state it is in
  */
 import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
@@ -33,10 +34,12 @@ const WRITE = process.argv.includes('--write')
 const ALL = process.argv.includes('--all')
 const limitArg = process.argv.indexOf('--limit')
 const LIMIT = limitArg >= 0 ? Number(process.argv[limitArg + 1]) : Infinity
+const idArg = process.argv.indexOf('--id')
+const ONLY_ID = idArg >= 0 ? process.argv[idArg + 1] : null
 
 async function main() {
   const rows = await prisma.coiCheck.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, ...(ONLY_ID ? { id: ONLY_ID } : {}) },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -51,7 +54,7 @@ async function main() {
 
   // Capture the ids of exactly the rows this run may touch.
   const candidates = rows
-    .filter((r) => ALL || !hasCoiChecklist(r.aiResponse as CoiAiResponse | null))
+    .filter((r) => ALL || ONLY_ID !== null || !hasCoiChecklist(r.aiResponse as CoiAiResponse | null))
     .slice(0, Number.isFinite(LIMIT) ? LIMIT : undefined)
 
   const already = rows.length - rows.filter((r) => !hasCoiChecklist(r.aiResponse as CoiAiResponse | null)).length

@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
+import { evaluateHolderMatch } from '@/lib/coi/holderMatch'
 
 /**
  * Shared AI Certificate-of-Insurance review — ONE prompt, every surface.
@@ -80,13 +81,16 @@ export interface CoiAiResponse {
  */
 export const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
 
-CERTIFICATE HOLDER REQUIRED — 8500 Lankershim Blvd, Sun Valley, CA 91352.
-Any of these names at that address is CORRECT (they are the same company):
-- SirReel Production Vehicles, Inc.
-- SirReel Production Vehicles, Inc. dba SirReel Studio Rentals
-- SirReel Studio Rentals
-- SirReel Studio Services
-A different company at that address, or SirReel at a different address, FAILS.
+CERTIFICATE HOLDER — SirReel at 8500 Lankershim Blvd, Sun Valley, CA 91352.
+SirReel trades under several names and ALL of them are correct on a
+certificate. Every one of these PASSES, with no preference between them and
+nothing to note about the choice:
+  "SirReel Production Vehicles, Inc." · "SirReel Production Vehicles, Inc. dba
+  SirReel Studio Rentals" · "SirReel Studio Rentals" · "SirReel Studio
+  Services" · any of the above with or without the comma or "Inc."
+There is no "required format" to match — the holder passes as long as it is
+SirReel under one of those names at that address. Only a DIFFERENT company, or
+SirReel at a different address, fails.
 
 ALSO EXTRACT (does not affect pass/fail):
 - namedInsured: the NAMED INSURED exactly as printed on the certificate — the
@@ -96,7 +100,9 @@ ALSO EXTRACT (does not affect pass/fail):
   Do NOT judge whether it is the right company — only report what it says.
 
 CRITICAL REQUIREMENTS (cannot be waived — all must pass):
-1. certificateHolder — SirReel named as Certificate Holder, correct address
+1. certificateHolder — do NOT judge this one. Copy the CERTIFICATE HOLDER box
+   verbatim into "found" (name and address, as printed) and leave "pass" true.
+   Whether it names us is decided outside this review.
 2. generalLiability — Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
 3. autoLiability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos
 4. autoPhysicalDamage — Hired Auto Physical Damage. The certificate MUST show
@@ -146,12 +152,21 @@ RULES:
 - "found" is what you actually read on the document (a limit, a phrase, a form
   number). Leave it "" if the item is absent.
 - On any FAIL, "note" says what is missing and what the broker must issue.
+- "pass" IS the verdict, and it must agree with everything you write beside it.
+  If your note says the item is acceptable, met, correct or sufficient, then
+  "pass" MUST be true. Never mark pass:false on an item you are describing as
+  acceptable — a human reads the boolean, not the prose, and a certificate can
+  be sent back to a client over it.
+- criticalIssues lists ONLY the CRITICAL items you set pass:false, alertIssues
+  ONLY the ALERT items you set pass:false. Before you answer, check the two
+  lists against the booleans: an empty criticalIssues means every critical
+  check is pass:true.
 
 Return ONLY valid JSON (no markdown, no preamble):
 {
   "namedInsured": "Exactly As Printed, Inc." | null,
   "policyExpiryDate": "YYYY-MM-DD" | null,
-  "certificateHolder": { "pass": true, "found": "", "note": "" },
+  "certificateHolder": { "pass": true, "found": "the CERTIFICATE HOLDER box, verbatim", "note": "" },
   "generalLiability": {
     "pass": true,
     "perOccurrence": { "pass": true, "found": "", "required": "$1,000,000" },
@@ -230,8 +245,22 @@ function itemPass(v: unknown): boolean | undefined {
 export function normalizeCoiReview(raw: CoiAiResponse): CoiAiResponse {
   const out: CoiAiResponse = { ...raw }
 
-  const criticalVerdicts = CRITICAL_CHECK_KEYS.map((k) => itemPass(raw[k]))
-  const alertVerdicts = ALERT_CHECK_KEYS.map((k) => itemPass(raw[k]))
+  // The certificate holder is decided in code, never by the model — see
+  // src/lib/coi/holderMatch.ts. SirReel has several trading names and the
+  // model's boolean contradicted its own note about them.
+  const holderFound = typeof raw.certificateHolder?.found === 'string' ? raw.certificateHolder.found : ''
+  if (holderFound.trim() || raw.certificateHolder) {
+    const holder = evaluateHolderMatch(holderFound)
+    out.certificateHolder = {
+      ...(raw.certificateHolder || {}),
+      pass: !holder.needsAttention,
+      found: holderFound,
+      note: holder.note,
+    }
+  }
+
+  const criticalVerdicts = CRITICAL_CHECK_KEYS.map((k) => itemPass(out[k]))
+  const alertVerdicts = ALERT_CHECK_KEYS.map((k) => itemPass(out[k]))
   // An expired policy fails regardless of what `pass` says.
   const expired = raw.policyExpiry?.expired === true
   const graded = criticalVerdicts.some((v) => v !== undefined)
