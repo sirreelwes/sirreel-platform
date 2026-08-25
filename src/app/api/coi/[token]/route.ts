@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyCoiToken } from '@/lib/coi/coiUploadToken'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { coiCheckWriteFields } from '@/lib/coi/checks'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
@@ -91,10 +92,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const inquiryId = payload.inquiryId && (await prisma.inquiry.findUnique({ where: { id: payload.inquiryId }, select: { id: true } })) ? payload.inquiryId : null
 
   const ai = await runCoiAiReview(buffer, 'application/pdf')
-  const aiExpiry =
-    typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
-      ? new Date(ai.policyExpiryDate)
-      : null
 
   const coi = await prisma.coiCheck.create({
     data: {
@@ -109,17 +106,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       source: 'CLIENT_UPLOAD',
       clientUploaderName: uploaderName,
       clientUploaderEmail: uploaderEmail,
-      aiResponse: ai as object,
-      aiRiskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
-      aiRecommendation: ai.overallPass ? 'accept' : 'review',
-      // Raw fact off the certificate; the production-company comparison is
+      // Raw facts off the certificate; the production-company comparison is
       // computed on read (src/lib/coi/insuredMatch.ts).
-      namedInsured:
-        typeof ai.namedInsured === 'string' && ai.namedInsured.trim()
-          ? ai.namedInsured.trim().slice(0, 300)
-          : null,
-      policyExpiryDate: aiExpiry,
-      additionalInsured: ai.additionalInsured === true,
+      ...coiCheckWriteFields(ai),
       // humanDecision stays PENDING: the AI reads the certificate, a human
       // still signs off on it in the review desk.
     },

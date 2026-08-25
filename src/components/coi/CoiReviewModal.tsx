@@ -29,6 +29,7 @@ import {
   INSURED_MATCH_TONE,
   type InsuredMatchResult,
 } from '@/lib/coi/insuredMatch';
+import type { CoiChecklistRow } from '@/lib/coi/checks';
 
 interface StaleAgreement {
   orderId: string;
@@ -53,6 +54,9 @@ interface CoiReviewData {
   aiRiskLevel: string | null;
   aiNotes: string | null;
   aiOverallPass: boolean;
+  aiAlertOpen: number;
+  aiChecks: CoiChecklistRow[];
+  aiHasChecklist: boolean;
   aiRan: boolean;
   aiHasInsuredName: boolean;
   humanDecision: string;
@@ -67,6 +71,74 @@ interface CoiReviewData {
   contacts: { name: string; email: string; role: string | null }[];
   /** Server-built draft of what the certificate still needs. */
   fixDraft: { issues: string[]; message: string };
+}
+
+const CHECK_MARK: Record<CoiChecklistRow['status'], string> = {
+  PASS: '✓',
+  FAIL: '✗',
+  UNKNOWN: '–',
+};
+
+const CHECK_TONE: Record<CoiChecklistRow['status'], string> = {
+  PASS: 'text-emerald-400',
+  FAIL: 'text-rose-400',
+  // Deliberately not amber: an unasked question is not a warning about the
+  // certificate, it is a gap in OUR review. Amber would read as the client's
+  // problem to fix.
+  UNKNOWN: 'text-zinc-600',
+};
+
+/**
+ * The per-check verdicts. Critical first, then the judgment calls — the
+ * order a reviewer works in. A row the review never judged shows as "–  not
+ * checked" rather than being hidden, because "nobody looked" is the finding.
+ */
+function Checklist({ rows }: { rows: CoiChecklistRow[] }) {
+  const groups: { tier: CoiChecklistRow['tier']; label: string; rows: CoiChecklistRow[] }[] = [
+    { tier: 'CRITICAL', label: 'Required', rows: rows.filter((r) => r.tier === 'CRITICAL') },
+    { tier: 'ALERT', label: 'Judgment call', rows: rows.filter((r) => r.tier === 'ALERT') },
+  ];
+  return (
+    <div className="mt-2.5 space-y-2.5">
+      {groups.map((g) =>
+        g.rows.length === 0 ? null : (
+          <div key={g.tier}>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-semibold mb-1">
+              {g.label}
+            </div>
+            <div className="space-y-0.5">
+              {g.rows.map((r) => (
+                <div key={r.key}>
+                  <div className="flex items-baseline gap-2 text-[12px]">
+                    <span className={`${CHECK_TONE[r.status]} font-bold w-3 flex-shrink-0`}>
+                      {CHECK_MARK[r.status]}
+                    </span>
+                    <span
+                      className={`flex-1 min-w-0 ${
+                        r.status === 'FAIL'
+                          ? 'text-rose-200'
+                          : r.status === 'UNKNOWN'
+                            ? 'text-zinc-500'
+                            : 'text-zinc-300'
+                      }`}
+                    >
+                      {r.label}
+                    </span>
+                    <span className="text-[11px] text-zinc-500 text-right truncate max-w-[45%]">
+                      {r.status === 'UNKNOWN' ? 'not checked' : r.found || ''}
+                    </span>
+                  </div>
+                  {r.status === 'FAIL' && r.note && (
+                    <div className="ml-5 mt-0.5 text-[11px] leading-relaxed text-rose-300/80">{r.note}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
+      )}
+    </div>
+  );
 }
 
 function fmtDate(iso: string | null): string {
@@ -191,7 +263,13 @@ export function CoiReviewModal({
 
   const rerun = async () => {
     const d = await post({ action: 'RERUN_AI' }, 'RERUN');
-    if (d) setFlash('AI review re-run against the stored file.');
+    if (d) {
+      setFlash(
+        d.aiHasChecklist
+          ? `AI review re-run against the stored file — all fifteen requirements judged.`
+          : 'AI review re-run against the stored file.',
+      );
+    }
   };
 
   // Re-read after a company change so the match banner re-evaluates against
@@ -347,13 +425,21 @@ export function CoiReviewModal({
                     CANNOT produce a name match, so "Re-run" reads as an
                     optional redo of work already done. Say what is actually
                     missing instead. */}
-                {data.aiRan && !data.aiHasInsuredName && (
+                {data.aiRan && !data.aiHasChecklist ? (
+                  <div className="mb-2 rounded-lg border border-amber-700/50 bg-amber-950/25 px-2.5 py-2 text-[12px] leading-relaxed text-amber-200/90">
+                    This review predates the full checklist. It never asked about Primary &amp;
+                    Non-Contributory, Waiver of Subrogation, Umbrella, Workers Comp, the
+                    cancellation clause or contractor coverage
+                    {data.aiHasInsuredName ? '' : ', and never read who the policy insures'}. Re-run
+                    it to judge this certificate on all fifteen requirements.
+                  </div>
+                ) : data.aiRan && !data.aiHasInsuredName ? (
                   <div className="mb-2 rounded-lg border border-amber-700/50 bg-amber-950/25 px-2.5 py-2 text-[12px] leading-relaxed text-amber-200/90">
                     This review predates insured-name checking, so the certificate has
                     never been read for who it insures. Run it to compare against the
                     production company.
                   </div>
-                )}
+                ) : null}
                 {data.aiRan ? (
                   <>
                     <div className="flex items-center gap-2 mb-1.5">
@@ -369,7 +455,13 @@ export function CoiReviewModal({
                         {data.aiRiskLevel || 'unknown'} risk
                       </span>
                       <span className="text-[12px] text-zinc-400">
-                        {data.aiOverallPass ? 'Passes the checks' : 'Needs review'}
+                        {data.aiOverallPass ? 'Every required item met' : 'Needs review'}
+                        {data.aiHasChecklist && data.aiAlertOpen > 0 && (
+                          <span className="text-amber-300/80">
+                            {' · '}
+                            {data.aiAlertOpen} judgment call{data.aiAlertOpen === 1 ? '' : 's'} open
+                          </span>
+                        )}
                       </span>
                     </div>
                     {data.aiNotes && (
@@ -377,6 +469,7 @@ export function CoiReviewModal({
                         {data.aiNotes}
                       </p>
                     )}
+                    {data.aiHasChecklist && <Checklist rows={data.aiChecks} />}
                   </>
                 ) : (
                   <p className="text-[12px] text-zinc-400">

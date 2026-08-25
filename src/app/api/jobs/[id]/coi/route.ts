@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { coiCheckWriteFields } from '@/lib/coi/checks'
 
 export const dynamic = 'force-dynamic'
 // AI review can take a beat; give it headroom past the default function cap.
@@ -97,12 +98,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // here gets the identical analysis (risk level, pass/fail, extracted
   // expiry). Best-effort — never blocks the file from being filed.
   const ai = await runCoiAiReview(buffer, 'application/pdf')
-  const aiExpiry =
-    typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
-      ? new Date(ai.policyExpiryDate)
-      : null
+  const aiFields = coiCheckWriteFields(ai)
   // Agent-entered expiry wins; otherwise fall back to what the AI extracted.
-  const effectiveExpiry = policyExpiryDate ?? aiExpiry
+  const effectiveExpiry = policyExpiryDate ?? aiFields.policyExpiryDate
 
   const coi = await prisma.coiCheck.create({
     data: {
@@ -115,15 +113,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       companyId: job.companyId ?? null,
       source: 'INTERNAL',
       uploadedById: uploader?.id ?? null,
-      policyExpiryDate: effectiveExpiry,
-      // Raw fact off the certificate; the production-company comparison is
+      // Raw facts off the certificate; the production-company comparison is
       // computed on read (src/lib/coi/insuredMatch.ts).
-      namedInsured: typeof ai.namedInsured === 'string' && ai.namedInsured.trim() ? ai.namedInsured.trim().slice(0, 300) : null,
-      additionalInsured: additionalInsured || ai.additionalInsured === true,
+      ...aiFields,
+      policyExpiryDate: effectiveExpiry,
+      additionalInsured: additionalInsured || aiFields.additionalInsured,
       coverageVerified,
-      aiResponse: ai as object,
-      aiRiskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
-      aiRecommendation: ai.overallPass ? 'accept' : 'review',
       // If the agent explicitly verified at upload, record the human
       // sign-off so the job reads Verified. Otherwise it stays PENDING with
       // the AI review attached — exactly like the COI review queue.

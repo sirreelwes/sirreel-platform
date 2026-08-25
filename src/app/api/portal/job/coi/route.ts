@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { put } from '@vercel/blob'
-import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 import {
   JOB_SESSION_COOKIE,
@@ -10,10 +9,9 @@ import {
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
-import { REVIEW_MODEL } from '@/lib/ai/models'
-import { parseAiJson } from '@/lib/ai/extractJson'
-// One canonical prompt for every COI surface — see src/lib/coi/reviewCoi.ts.
-import { COI_PROMPT } from '@/lib/coi/reviewCoi'
+// One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
+import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -62,7 +60,6 @@ export async function POST(req: NextRequest) {
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
-  const base64 = buffer.toString('base64')
   const blobKey = `coi-uploads/${order.id}/${Date.now()}-${randomUUID()}-${file.name.replace(/[^A-Za-z0-9._-]+/g, '-')}`
 
   let blobUrl: string
@@ -74,47 +71,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to save uploaded file' }, { status: 500 })
   }
 
-  // AI review — best-effort. If Anthropic call fails, we still persist the
-  // CoiCheck row so the operator has the file; aiResponse just notes the error.
-  let aiResponse: any = { overallPass: false, riskLevel: 'medium', notes: 'AI review not run' }
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-      const isPdf = file.type === 'application/pdf'
-      const res = await client.messages.create({
-        model: REVIEW_MODEL,
-        max_tokens: 1200,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              isPdf
-                ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf' as const, data: base64 } }
-                : {
-                    type: 'image',
-                    source: {
-                      type: 'base64',
-                      media_type: (file.type === 'image/png' ? 'image/png' : 'image/jpeg') as 'image/png' | 'image/jpeg',
-                      data: base64,
-                    },
-                  },
-              { type: 'text', text: COI_PROMPT },
-            ] as any,
-          },
-        ],
-      })
-      const text = res.content[0]?.type === 'text' ? res.content[0].text : ''
-      aiResponse = parseAiJson<any>(text, { tag: 'portal/job/coi', stopReason: res.stop_reason })
-    } catch (err) {
-      console.error('[portal/job/coi] AI review failed:', err)
-      aiResponse = { overallPass: false, riskLevel: 'medium', notes: `AI review failed: ${(err as Error).message}` }
-    }
-  }
-
-  const policyExpiryDate =
-    typeof aiResponse.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(aiResponse.policyExpiryDate)
-      ? new Date(aiResponse.policyExpiryDate)
-      : null
+  // AI review — best-effort. If the Anthropic call fails, runCoiAiReview
+  // returns a medium-risk stub so the CoiCheck row is still persisted and the
+  // operator has the file.
+  const aiResponse = await runCoiAiReview(buffer, file.type)
+  const aiFields = coiCheckWriteFields(aiResponse)
 
   const check = await prisma.coiCheck.create({
     data: {
@@ -126,18 +87,12 @@ export async function POST(req: NextRequest) {
       jobId: order.jobId,
       companyId: order.companyId,
       uploadedById: order.agentId,
-      aiResponse,
-      aiRiskLevel: typeof aiResponse.riskLevel === 'string' ? aiResponse.riskLevel : null,
-      aiRecommendation: aiResponse.overallPass ? 'accept' : 'review',
-      policyExpiryDate,
-      // Raw fact off the certificate; the production-company comparison is
+      // Raw facts off the certificate; the production-company comparison is
       // computed on read (src/lib/coi/insuredMatch.ts).
-      namedInsured:
-        typeof aiResponse.namedInsured === 'string' && aiResponse.namedInsured.trim()
-          ? aiResponse.namedInsured.trim().slice(0, 300)
-          : null,
-      coverageVerified: aiResponse.overallPass === true,
-      additionalInsured: aiResponse.additionalInsured === true,
+      ...aiFields,
+      // The CRITICAL checks are what "coverage verified" means; an alert-only
+      // gap (no umbrella, no waiver) is for a human to judge, not a blocker.
+      coverageVerified: coiFlags(aiResponse).criticalPass,
     },
     select: {
       id: true,

@@ -1,19 +1,13 @@
 'use client';
 import { useState, useCallback } from 'react';
+import { COI_CHECK_LABELS } from '@/lib/coi/checks';
+import { ALERT_CHECK_KEYS, CRITICAL_CHECK_KEYS } from '@/lib/coi/reviewCoi';
 
+// Mirrors the shared checklist (src/lib/coi/checks.ts) — critical first,
+// then the judgment calls. `hard` drives the ✗-vs-⚠ treatment below.
 const CHECKS = [
-  { key: 'certificateHolder', label: 'Certificate Holder', hard: true },
-  { key: 'generalLiability', label: 'General Liability', hard: true },
-  { key: 'autoLiability', label: 'Auto Liability', hard: true },
-  { key: 'autoPhysicalDamage', label: 'Hired Auto Physical Damage', hard: true },
-  { key: 'additionalInsured', label: 'Additional Insured', hard: true },
-  { key: 'lossPayee', label: 'Loss Payee', hard: true },
-  { key: 'primaryNonContributory', label: 'Primary & Non-Contributory', hard: true },
-  { key: 'policyExpiry', label: 'Policy Not Expired', hard: true },
-  { key: 'umbrella', label: 'Umbrella/Excess', hard: false },
-  { key: 'waiverOfSubrogation', label: 'Waiver of Subrogation', hard: false },
-  { key: 'entertainmentPackage', label: 'Entertainment Package', hard: false },
-  { key: 'workersComp', label: 'Workers Compensation', hard: false },
+  ...CRITICAL_CHECK_KEYS.map((key) => ({ key: key as string, label: COI_CHECK_LABELS[key], hard: true })),
+  ...ALERT_CHECK_KEYS.map((key) => ({ key: key as string, label: COI_CHECK_LABELS[key], hard: false })),
 ];
 
 export default function CoiCheckPage() {
