@@ -298,6 +298,7 @@ export async function GET(
             ccCardholderLast: true,
             ccPaymentPreference: true,
             lcdwAccepted: true,
+            lcdwDecision: true,
             // Workers' Comp certificate — metadata + AI verdict only. The
             // file itself is a private blob served by /api/wc/download/[id];
             // the URL never leaves the server.
@@ -326,10 +327,20 @@ export async function GET(
                 : null,
         }
       : { onFile: false, last4: null, cardType: null, cardholderName: null, paymentPreference: null }
-    const lcdwByBooking: Record<string, boolean> = {}
+    // Three states, not two. A vehicle whose client DECLINED the waiver and
+    // one nobody has asked yet both used to send `false`, so the badge read
+    // "LCDW not accepted" for both and the team could not tell a refusal
+    // from an open question — on a $24/day/vehicle line.
+    const lcdwByBooking: Record<string, 'ACCEPTED' | 'DECLINED' | 'UNANSWERED'> = {}
     for (const p of paperwork) {
       // ordered sentAt desc → the first row seen per booking is the latest
-      if (!(p.bookingId in lcdwByBooking)) lcdwByBooking[p.bookingId] = !!p.lcdwAccepted
+      if (p.bookingId in lcdwByBooking) continue
+      lcdwByBooking[p.bookingId] =
+        p.lcdwDecision === 'ACCEPTED' || p.lcdwAccepted
+          ? 'ACCEPTED'
+          : p.lcdwDecision === 'DECLINED'
+            ? 'DECLINED'
+            : 'UNANSWERED'
     }
     // Workers' Comp certificates actually on file for this job's bookings.
     // `wcFileUrl` decides — wcReceived alone can be true on legacy rows

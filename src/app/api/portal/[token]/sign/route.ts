@@ -29,12 +29,41 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     }
 
     if (body.step === 'lcdw') {
-      await prisma.$executeRawUnsafe(`
-        UPDATE paperwork_requests SET lcdw_accepted=true
-        WHERE token=$1`,
-        params.token
-      )
-      notifyPortalPaperwork({ token: params.token, step: 'lcdw' })
+      // RECORD THE CHOICE THE CLIENT MADE. This used to write
+      // `lcdw_accepted=true` unconditionally, ignoring the accept/decline
+      // radio both portals post — so every client who DECLINED the waiver
+      // was filed as having accepted it, at $24/day/vehicle. The signature
+      // and fuel acknowledgement were posted and dropped on the floor too,
+      // though the LCDW addendum requires the decision "be confirmed in
+      // writing per fleet vehicle rental".
+      //
+      // Absent stays absent: a client who never reached this step has a
+      // NULL decision, which is a different fact from declining.
+      const accepted = body.lcdwAccepted === true
+      await prisma.paperworkRequest.update({
+        where: { token: params.token },
+        data: {
+          lcdwDecision: accepted ? 'ACCEPTED' : 'DECLINED',
+          lcdwDecidedAt: now,
+          lcdwSignatureData:
+            typeof body.lcdwSignatureData === 'string' && body.lcdwSignatureData
+              ? body.lcdwSignatureData
+              : null,
+          lcdwFuelAcknowledged: body.fuelAcknowledged === true,
+          // Legacy mirror — true ONLY on acceptance, which is what the old
+          // column was always supposed to mean.
+          lcdwAccepted: accepted,
+        },
+      })
+      notifyPortalPaperwork({
+        token: params.token,
+        step: 'lcdw',
+        // The team's email said a decision had been made but never which
+        // one, which is half the reason nobody could tell.
+        details: [
+          { label: 'Decision', value: accepted ? 'ACCEPTED — $24/day/vehicle' : 'DECLINED — client carries their own coverage' },
+        ],
+      })
     }
 
     if (body.step === 'cc') {

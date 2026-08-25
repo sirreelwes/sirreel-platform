@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     SELECT
       pr.id, pr.token as portal_token, pr.sent_at, pr.completed_at,
       pr.coi_received, pr.wc_received, pr.rental_agreement,
-      pr.lcdw_accepted, pr.credit_card_auth, pr.studio_contract_signed,
+      pr.lcdw_accepted, pr.lcdw_decision, pr.credit_card_auth, pr.studio_contract_signed,
       pr.contract_type, pr.signer_name,
       b.id as booking_id, b.job_name, b.status,
       b.start_date, b.end_date, b.rw_order_id,

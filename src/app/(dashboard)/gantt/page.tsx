@@ -2502,7 +2502,8 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
   const p = ctx.paperwork
   const rentalTone = p.rental === 'signed' ? 'good' : p.rental === 'sent' ? 'warn' : 'bad'
   const coiTone = p.coi === 'verified' ? 'good' : p.coi === 'pending' ? 'warn' : p.coi === 'missing' ? 'bad' : 'bad'
-  const lcdwTone = p.lcdw === 'accepted' ? 'good' : p.lcdw === 'pending' ? 'warn' : 'muted'
+  // Declined is a settled answer — neutral, not a warning to chase.
+  const lcdwTone = p.lcdw === 'accepted' ? 'good' : p.lcdw === 'declined' ? 'muted' : p.lcdw === 'pending' ? 'warn' : 'muted'
   const ccTone = p.ccAuth === 'done' ? 'good' : p.ccAuth === 'pending' ? 'warn' : 'muted'
   const wcTone = p.wc === 'received' ? 'good' : p.wc === 'pending' ? 'warn' : 'muted'
   const coiExp = p.coiExpires ? new Date(p.coiExpires).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
@@ -2530,7 +2531,7 @@ function ReservationPaperwork({ ctx, loading, jobId }: { ctx: any; loading: bool
           }
           tone={coiTone}
         />
-        <PaperChip href={jobSection('#reserved-assets')} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
+        <PaperChip href={jobSection('#reserved-assets')} label="LCDW" value={p.lcdw === 'accepted' ? 'Accepted' : p.lcdw === 'declined' ? 'Declined' : p.lcdw === 'pending' ? 'Pending' : 'No request'} tone={lcdwTone} />
         <PaperChip href={jobSection('#card-auth')} label="CC Auth" value={p.ccAuth === 'done' ? 'On file' : p.ccAuth === 'pending' ? 'Pending' : 'No request'} tone={ccTone} />
         <PaperChip href={jobSection('#wc')} label="WC" value={p.wc === 'received' ? 'Received' : p.wc === 'pending' ? 'Pending' : 'No request'} tone={wcTone} />
         {typeof ctx.balanceDue === 'number' && ctx.balanceDue > 0 && (

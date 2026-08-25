@@ -289,9 +289,10 @@ interface JobDetail {
     cardholderName: string | null;
     paymentPreference: 'CARD' | 'CHECK_WIRE' | null;
   };
-  // bookingId → LCDW accepted, so each reserved asset shows its
-  // vehicle's collision-waiver state.
-  lcdwByBooking: Record<string, boolean>;
+  // bookingId → the client's collision-waiver decision, so each reserved
+  // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
+  // open question to chase, the other is a settled answer.
+  lcdwByBooking: Record<string, 'ACCEPTED' | 'DECLINED' | 'UNANSWERED'>;
   // Workers' Comp certificates on file across the job's bookings. `id` is
   // the PaperworkRequest id — the download proxy key, not the file URL.
   wcCerts?: Array<{
@@ -1366,17 +1367,28 @@ const driverTone = (d: any): string => {
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {(() => {
-                      const lcdw = job.lcdwByBooking?.[a.bookingId];
+                      // The badge NAMES the decision. It used to be a
+                      // two-tone shield that went grey for "declined" and
+                      // "never asked" alike, so the answer to "did they take
+                      // the waiver?" was unreadable off this page.
+                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
+                      const style =
+                        lcdw === 'ACCEPTED'
+                          ? { cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
+                          : lcdw === 'DECLINED'
+                            ? { cls: 'bg-zinc-900 text-zinc-400 border-zinc-700', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
+                            : { cls: 'bg-amber-950/40 text-amber-300 border-amber-900/70', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
                       return (
                         <span
-                          title={lcdw ? 'LCDW accepted — collision damage waiver' : 'LCDW not accepted'}
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${lcdw ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}
+                          title={style.title}
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
-                            {lcdw && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
                           </svg>
-                          LCDW
+                          {style.label}
                         </span>
                       );
                     })()}

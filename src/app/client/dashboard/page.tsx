@@ -137,7 +137,13 @@ function ClientDashboardInner() {
                 <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">Paperwork</div>
                 <div className="grid grid-cols-2 gap-2">
                   <PaperworkBadge done={selected.rental_agreement} label="Rental Agreement" />
-                  <PaperworkBadge done={selected.lcdw_accepted} label="LCDW" />
+                  {/* Declining is an ANSWER. Keyed to lcdw_accepted alone,
+                      this badge stayed red forever for a client who had
+                      already told us they carry their own coverage. */}
+                  <PaperworkBadge
+                    done={!!selected.lcdw_decision || !!selected.lcdw_accepted}
+                    label={selected.lcdw_decision === 'DECLINED' ? 'LCDW declined' : 'LCDW'}
+                  />
                   <PaperworkBadge done={selected.coi_received} label="COI" />
                   <PaperworkBadge done={selected.credit_card_auth} label="CC Auth" />
                   {selected.contract_type === 'stage' || selected.contract_type === 'both' ? (
@@ -174,7 +180,7 @@ function ClientDashboardInner() {
 }
 
 function JobCard({ job, token, onSelect }: { job: any; token: string; onSelect: (j: any) => void }) {
-  const paperworkDone = [job.rental_agreement, job.lcdw_accepted, job.coi_received, job.credit_card_auth].filter(Boolean).length
+  const paperworkDone = [job.rental_agreement, job.lcdw_decision || job.lcdw_accepted, job.coi_received, job.credit_card_auth].filter(Boolean).length
   const paperworkTotal = 4
   const allDone = paperworkDone === paperworkTotal
   const needsCoi = !job.coi_received

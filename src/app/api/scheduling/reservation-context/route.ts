@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
           rentalAgreement: true,
           coiReceived: true,
           lcdwAccepted: true,
+          lcdwDecision: true,
           creditCardAuth: true,
           wcReceived: true,
           completedAt: true,
@@ -107,7 +108,19 @@ export async function GET(req: NextRequest) {
 
   // LCDW / CC auth / WC exist only on PaperworkRequest completion flags.
   const hasPr = booking.paperworkRequests.length > 0
-  const lcdw: 'accepted' | 'pending' | 'unknown' = anyPrDone('lcdwAccepted') ? 'accepted' : hasPr ? 'pending' : 'unknown'
+  // DECLINED is an answer, not an absence. This used to be
+  // `accepted | pending | unknown` off the old Boolean, so a client who
+  // firmly declined the waiver read "Pending" forever and the team had no
+  // way to tell a refusal from an unanswered request.
+  const lcdwDecision = booking.paperworkRequests.find((p) => p.lcdwDecision)?.lcdwDecision ?? null
+  const lcdw: 'accepted' | 'declined' | 'pending' | 'unknown' =
+    lcdwDecision === 'ACCEPTED' || anyPrDone('lcdwAccepted')
+      ? 'accepted'
+      : lcdwDecision === 'DECLINED'
+        ? 'declined'
+        : hasPr
+          ? 'pending'
+          : 'unknown'
   const ccAuth: 'done' | 'pending' | 'unknown' = anyPrDone('creditCardAuth') ? 'done' : hasPr ? 'pending' : 'unknown'
   const wc: 'received' | 'pending' | 'unknown' = anyPrDone('wcReceived') ? 'received' : hasPr ? 'pending' : 'unknown'
 
