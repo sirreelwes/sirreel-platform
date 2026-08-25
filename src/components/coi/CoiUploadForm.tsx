@@ -7,7 +7,7 @@ const MAX_BYTES = 25 * 1024 * 1024
 type State =
   | { kind: 'idle' }
   | { kind: 'uploading' }
-  | { kind: 'done'; attached: string; emailed: boolean }
+  | { kind: 'done'; attached: string; emailed: boolean; insuredNotice: string | null }
   | { kind: 'error'; message: string }
 
 export function CoiUploadForm({ token }: { token: string }) {
@@ -49,7 +49,12 @@ export function CoiUploadForm({ token }: { token: string }) {
         setState({ kind: 'error', message: json.error || `Upload failed (HTTP ${res.status}).` })
         return
       }
-      setState({ kind: 'done', attached: json.attached, emailed: !!json.emailed })
+      setState({
+        kind: 'done',
+        attached: json.attached,
+        emailed: !!json.emailed,
+        insuredNotice: typeof json.insuredNotice === 'string' ? json.insuredNotice : null,
+      })
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : 'Upload failed.' })
     }
@@ -57,13 +62,25 @@ export function CoiUploadForm({ token }: { token: string }) {
 
   if (state.kind === 'done') {
     return (
-      <div className="rounded-xl border border-[#c39a3f] bg-[#fbf6ea]/60 p-5 text-center">
-        <div className="text-[15px] font-bold text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
-          Got it — thank you!
+      <div className="flex flex-col gap-3">
+        <div className="rounded-xl border border-[#c39a3f] bg-[#fbf6ea]/60 p-5 text-center">
+          <div className="text-[15px] font-bold text-[#0c0c0d]" style={{ fontFamily: 'Archivo, sans-serif' }}>
+            Got it — thank you!
+          </div>
+          <p className="mt-1 text-[13px] text-[#5b554b]">
+            Your COI was uploaded and sent to the SirReel team.
+            {state.insuredNotice ? '' : ' You can close this page.'}
+          </p>
         </div>
-        <p className="mt-1 text-[13px] text-[#5b554b]">
-          Your COI was uploaded and sent to the SirReel team. You can close this page.
-        </p>
+        {/* The certificate is filed either way — but if it insures a
+            different company than the one this booking is under, saying so
+            now is the only chance to fix it without a round trip. */}
+        {state.insuredNotice && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 leading-relaxed">
+            <span className="font-bold">One thing to check — </span>
+            {state.insuredNotice}
+          </div>
+        )}
       </div>
     )
   }

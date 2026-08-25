@@ -116,6 +116,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       source: 'INTERNAL',
       uploadedById: uploader?.id ?? null,
       policyExpiryDate: effectiveExpiry,
+      // Raw fact off the certificate; the production-company comparison is
+      // computed on read (src/lib/coi/insuredMatch.ts).
+      namedInsured: typeof ai.namedInsured === 'string' && ai.namedInsured.trim() ? ai.namedInsured.trim().slice(0, 300) : null,
       additionalInsured: additionalInsured || ai.additionalInsured === true,
       coverageVerified,
       aiResponse: ai as object,

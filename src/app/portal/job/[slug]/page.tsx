@@ -49,7 +49,7 @@ interface PortalData {
     blindPickupInstructions: string | null;
     blindReturnInstructions: string | null;
   };
-  job: { id: string; name: string; jobCode: string; productionType: string } | null;
+  job: { id: string; name: string; jobCode: string; productionType: string; status?: string } | null;
   /** Null unless a rep has actually been established for this order — an
    *  automatic assignment is not a relationship. See the data route. */
   agent: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; displayTitle: string | null } | null;
@@ -105,6 +105,10 @@ interface PortalData {
       coverageVerified: boolean;
       additionalInsured: boolean;
       uploadedAt: string;
+      /** Client-safe sentence when the certificate's named insured doesn't
+       *  match the production company on this job. Null when it matches or
+       *  when there is nothing to compare. */
+      insuredNotice: string | null;
     } | null;
     legacyPaperworkPortalUrl: string | null;
     vehicles: {
@@ -143,6 +147,32 @@ const STATUS_STAGE: { key: string; label: string; matches: string[] }[] = [
   { key: 'return', label: 'Return', matches: ['RETURNED', 'INVOICED'] },
   { key: 'wrapped', label: 'Wrapped', matches: ['PAID', 'WRAPPED'] },
 ];
+
+// The tracker used to read ONLY Order.cadenceState — the CRH email-nudge
+// state machine, advanced by the cadence cron. Staff moves that the client
+// can plainly see (a job flipped to ACTIVE, an order actually booked) never
+// reached it: Jose set SR-JOB-0205 ACTIVE and the client portal still said
+// "Quote", because cadenceState sat at QUOTE_DRAFT while Order.status was
+// already QUOTE_SENT and Job.status ACTIVE — three fields, three answers
+// (Wes, 2026-08-25).
+//
+// So the stage is now the FURTHEST-ALONG of the three. Understating a
+// client's progress is the bad direction: it reads as "you people haven't
+// done anything". Whichever field staff actually touch, the bar moves, and
+// it can never move backwards.
+const ORDER_STATUS_STAGE: Record<string, number> = {
+  DRAFT: 0, QUOTE_SENT: 0,
+  APPROVED: 1, BOOKED: 1,
+  LOADED_READY: 2, ON_JOB: 2,
+  RETURNED: 3, LD_CHECK: 3,
+  INVOICED: 4, CLOSED: 4,
+};
+// Job.status is coarse — a FLOOR, never a ceiling. ACTIVE means the
+// production is running, so the client is at least past "Quote".
+const JOB_STATUS_FLOOR: Record<string, number> = {
+  ACTIVE: 1,
+  WRAPPED: 4,
+};
 
 /**
  * Format a DATE-ONLY value (Order.startDate / endDate are @db.Date).
@@ -320,8 +350,12 @@ export default function JobPortalPage() {
 
   const currentStage = useMemo(() => {
     if (!data) return 0;
-    const idx = STATUS_STAGE.findIndex((s) => s.matches.includes(data.order.cadenceState));
-    return idx >= 0 ? idx : 0;
+    const fromCadence = STATUS_STAGE.findIndex((s) => s.matches.includes(data.order.cadenceState));
+    const fromStatus = ORDER_STATUS_STAGE[data.order.status] ?? -1;
+    const fromJob = JOB_STATUS_FLOOR[data.job?.status ?? ''] ?? -1;
+    // CANCELLED/LOST deliberately have no stage in any map — they fall
+    // through to 0 and the banner elsewhere carries that news.
+    return Math.max(0, fromCadence, fromStatus, fromJob);
   }, [data]);
 
   // Approvability keys off Order.status (the full lifecycle field), not
@@ -634,6 +668,31 @@ export default function JobPortalPage() {
                       Download signed copy
                     </a>
                   ) : null
+                ) : agreementIsReleased(data.paperwork.agreement) &&
+                  data.paperwork.agreement?.documentToSignUrl ? (
+                  // The native in-portal signing flow. This page has had a
+                  // /sign/rental route since the stage flow shipped, but
+                  // nothing ever linked to it — a released agreement with a
+                  // rendered PDF still sent the client out to the Cognito
+                  // form, or (with no legacy portal row) dead-ended on "your
+                  // rep will send the agreement shortly" while the badge said
+                  // Ready to sign. Same shape as the Stage Contract row below.
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900 underline"
+                    >
+                      Read the agreement
+                    </a>
+                    <a
+                      href={`/portal/job/${slug}/sign/rental`}
+                      className="inline-block px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Sign agreement →
+                    </a>
+                  </div>
                 ) : data.paperwork.legacyPaperworkPortalUrl ? (
                   <a
                     href={data.paperwork.legacyPaperworkPortalUrl}
@@ -661,8 +720,18 @@ export default function JobPortalPage() {
                       Opens our secure signing form. Your rep is copied when it&rsquo;s submitted.
                     </p>
                   </div>
+                ) : quoteIsApproved ? (
+                  <span className="text-xs text-gray-500">
+                    Your SirReel rep is preparing your agreement — it will appear here to sign.
+                  </span>
                 ) : (
-                  <span className="text-xs text-gray-500">Your SirReel rep will send the agreement shortly.</span>
+                  // Says what actually unblocks it. The old copy — "your rep
+                  // will send the agreement shortly" — described a step
+                  // nobody was waiting on: approving the quote above is what
+                  // releases the agreement to this row.
+                  <span className="text-xs text-gray-500">
+                    Approve your quote above and the rental agreement appears here to sign.
+                  </span>
                 )}
               </PaperworkRow>
 
@@ -735,10 +804,22 @@ export default function JobPortalPage() {
                 statusKind={coiStatusKind(data.paperwork.coi)}
               >
                 {data.paperwork.coi ? (
-                  <div className="text-xs text-gray-500">
-                    Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    {data.paperwork.coi.policyExpiryDate && (
-                      <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-gray-500">
+                      Received {new Date(data.paperwork.coi.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {data.paperwork.coi.policyExpiryDate && (
+                        <> · expires {new Date(data.paperwork.coi.policyExpiryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                      )}
+                    </div>
+                    {/* The certificate is on file but insures a different
+                        entity than the one this job is booked under. Said
+                        here, plainly, because the client is the only one who
+                        can tell us which company is actually renting — and
+                        finding out at pickup is too late. */}
+                    {data.paperwork.coi.insuredNotice && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
+                        {data.paperwork.coi.insuredNotice}
+                      </div>
                     )}
                   </div>
                 ) : (

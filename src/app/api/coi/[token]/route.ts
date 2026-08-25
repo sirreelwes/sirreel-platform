@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyCoiToken } from '@/lib/coi/coiUploadToken'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
+import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
 export const dynamic = 'force-dynamic'
+// The AI review of a multi-page certificate can outrun the default budget;
+// the other COI upload routes carry the same allowance.
+export const maxDuration = 60
 
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
 // Where the COI lands so the team's current manual workflow is preserved.
@@ -18,6 +23,14 @@ const COI_TEAM_INBOX = 'rentals@sirreel.com'
  *       job / company / inquiry — or UNATTACHED if the token carries none.
  * A storage success with an email failure (e.g. unverified send domain) is
  * still a success: the file is captured in HQ and emailResult is surfaced.
+ *
+ * The AI review runs HERE rather than "later, by the team" (Wes, 2026-08-25):
+ * certificates arriving through this link were the ones stored with no
+ * analysis at all, so the named-insured-vs-production-company check had
+ * nothing to compare until somebody remembered to press a button. Running it
+ * on arrival is what makes a wrong-company certificate visible the same day.
+ * Best-effort — runCoiAiReview never throws, and a failed review still files
+ * the document.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -77,6 +90,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const companyId = payload.companyId && (await prisma.company.findUnique({ where: { id: payload.companyId }, select: { id: true } })) ? payload.companyId : null
   const inquiryId = payload.inquiryId && (await prisma.inquiry.findUnique({ where: { id: payload.inquiryId }, select: { id: true } })) ? payload.inquiryId : null
 
+  const ai = await runCoiAiReview(buffer, 'application/pdf')
+  const aiExpiry =
+    typeof ai.policyExpiryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ai.policyExpiryDate)
+      ? new Date(ai.policyExpiryDate)
+      : null
+
   const coi = await prisma.coiCheck.create({
     data: {
       fileKey: stored.blobKey,
@@ -90,7 +109,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       source: 'CLIENT_UPLOAD',
       clientUploaderName: uploaderName,
       clientUploaderEmail: uploaderEmail,
-      aiResponse: undefined, // nullable now — team runs AI review later
+      aiResponse: ai as object,
+      aiRiskLevel: typeof ai.riskLevel === 'string' ? ai.riskLevel : null,
+      aiRecommendation: ai.overallPass ? 'accept' : 'review',
+      // Raw fact off the certificate; the production-company comparison is
+      // computed on read (src/lib/coi/insuredMatch.ts).
+      namedInsured:
+        typeof ai.namedInsured === 'string' && ai.namedInsured.trim()
+          ? ai.namedInsured.trim().slice(0, 300)
+          : null,
+      policyExpiryDate: aiExpiry,
+      additionalInsured: ai.additionalInsured === true,
+      // humanDecision stays PENDING: the AI reads the certificate, a human
+      // still signs off on it in the review desk.
     },
     select: { id: true },
   })
@@ -98,8 +129,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // Resolve friendly context for the email subject/body.
   const [company, job] = await Promise.all([
     companyId ? prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }) : Promise.resolve(null),
-    jobId ? prisma.job.findUnique({ where: { id: jobId }, select: { name: true, jobCode: true } }) : Promise.resolve(null),
+    jobId
+      ? prisma.job.findUnique({
+          where: { id: jobId },
+          select: { name: true, jobCode: true, company: { select: { name: true } } },
+        })
+      : Promise.resolve(null),
   ])
+
+  // Does the certificate insure the production this link was minted for? The
+  // uploader is standing right here, so this is the cheapest possible moment
+  // to catch a client sending the wrong production's certificate — and the
+  // only moment where they can fix it without a round trip.
+  const match = evaluateInsuredMatch(
+    typeof ai.namedInsured === 'string' ? ai.namedInsured : null,
+    [job?.company?.name, company?.name, job?.name],
+  )
   const ctx =
     job ? `${company?.name ? company.name + ' — ' : ''}${job.name} (${job.jobCode})`
       : company ? company.name
@@ -114,9 +159,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     html: `<p>${escapeHtml(who)} uploaded a Certificate of Insurance via the client COI link.</p>
 <p><b>Context:</b> ${escapeHtml(ctx)}<br/>
 <b>File:</b> ${escapeHtml(originalFilename)} (${(file.size / 1024 / 1024).toFixed(2)} MB)<br/>
+${match.needsAttention ? `<b style="color:#b91c1c">Check the name:</b> ${escapeHtml(match.message)}<br/>` : ''}
 ${uploaderEmail ? `<b>From:</b> ${escapeHtml(uploaderEmail)}<br/>` : ''}</p>
 <p>The PDF is attached, and a copy is filed in HQ (COI #${coi.id.slice(0, 8)}).</p>`,
-    text: `${who} uploaded a COI via the client link.\nContext: ${ctx}\nFile: ${originalFilename} (${(file.size / 1024 / 1024).toFixed(2)} MB)\nFiled in HQ as COI ${coi.id}.`,
+    text: `${who} uploaded a COI via the client link.\nContext: ${ctx}\nFile: ${originalFilename} (${(file.size / 1024 / 1024).toFixed(2)} MB)\n${match.needsAttention ? `CHECK THE NAME: ${match.message}\n` : ''}Filed in HQ as COI ${coi.id}.`,
     attachments: [{ filename: originalFilename, content: buffer }],
     label: 'coi-upload',
   })
@@ -132,6 +178,9 @@ ${uploaderEmail ? `<b>From:</b> ${escapeHtml(uploaderEmail)}<br/>` : ''}</p>
     attached: jobId ? 'job' : companyId ? 'company' : inquiryId ? 'inquiry' : 'unattached',
     emailed: emailResult.ok,
     emailReason: emailResult.ok ? undefined : emailResult.reason,
+    // Client-safe sentence, or null. Never blocks the upload: the file is
+    // filed either way and the team still reviews it.
+    insuredNotice: match.clientMessage || null,
   })
 }
 

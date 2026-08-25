@@ -3015,6 +3015,7 @@ model Order {
   // `order.signedAgreement` should switch to filtering on contractType, e.g.
   // `signedAgreements.find(a => a.contractType === 'RENTAL_AGREEMENT')`.
   signedAgreements   SignedAgreement[]
+  agreementReissues  AgreementReissue[]
   stageBookingTerms  StageBookingTerms?
   cadenceEvents      CadenceEvent[]
   portalAccesses     PortalAccess[]
@@ -4574,6 +4575,48 @@ model SignedAgreement {
   @@map("sr_signed_agreements")
 }
 
+/// Audit of a re-issued agreement — the paper was signed under the WRONG
+/// entity (usually a production-company mismatch caught against the COI's
+/// named insured) and had to be re-sent under the correct company/account.
+///
+/// Exists because SignedAgreement is unique on (orderId, contractType):
+/// re-releasing for signature necessarily overwrites the signature fields
+/// on the live row. This table keeps the superseded signature — who signed,
+/// when, and the signed PDF — so a re-send never silently erases the fact
+/// that a client DID sign something. Append-only; never updated.
+model AgreementReissue {
+  id           String       @id @default(uuid())
+  orderId      String       @map("order_id")
+  contractType ContractType @default(RENTAL_AGREEMENT) @map("contract_type")
+
+  /// Free-text why, shown on the order/job agreement history.
+  reason String @db.Text
+
+  priorStatus            String    @map("prior_status")
+  priorSignedAt          DateTime? @map("prior_signed_at")
+  priorSignerName        String?   @map("prior_signer_name")
+  priorSignerEmail       String?   @map("prior_signer_email")
+  priorSignedDocumentUrl String?   @map("prior_signed_document_url")
+  /// Company the superseded paper was papered under, and the company the
+  /// re-issue goes out under. Snapshotted as NAMES (not FKs) — the point of
+  /// the record is what the document said at the time.
+  priorCompanyName String? @map("prior_company_name")
+  newCompanyName   String? @map("new_company_name")
+
+  /// Actor is stored as scalars rather than a User relation: this is an
+  /// append-only snapshot, and a deactivated/deleted staff row must not be
+  /// able to take the audit line with it.
+  createdById   String?  @map("created_by_id")
+  createdByName String?  @map("created_by_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("sr_agreement_reissues")
+}
+
 /// Contract type carried by SignedAgreement. RENTAL_AGREEMENT pre-dates this
 /// enum — all existing rows default to it. STAGE_CONTRACT is the SirReel
 /// stages booking contract (canonical baseline: public/contracts/
@@ -4659,6 +4702,18 @@ model CoiCheck {
   policyExpiryDate  DateTime? @map("policy_expiry_date")
   coverageVerified  Boolean   @default(false) @map("coverage_verified")
   additionalInsured Boolean   @default(false) @map("additional_insured")
+
+  /// The NAMED INSURED as printed on the certificate — the entity the
+  /// policy actually covers, which is NOT necessarily the production
+  /// company we papered the job under. Extracted by the AI review
+  /// (`namedInsured` in the response JSON); null on rows whose AI review
+  /// never ran (client no-login drops) or predates the field.
+  ///
+  /// Stored as the raw FACT off the document, never as a match verdict:
+  /// the comparison against the job's production company is computed live
+  /// (src/lib/coi/insuredMatch.ts) so that fixing a wrong production
+  /// company clears the flag without re-reviewing the certificate.
+  namedInsured String? @map("named_insured")
 
   humanDecision     ReviewDecision @default(PENDING) @map("human_decision")
   humanDecisionNote String?        @map("human_decision_note") @db.Text

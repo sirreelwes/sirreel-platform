@@ -53,6 +53,7 @@ export async function GET(
             originalFilename: true,
             aiRiskLevel: true,
             aiRecommendation: true,
+            namedInsured: true,
             createdAt: true,
           },
         },

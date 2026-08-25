@@ -10,6 +10,8 @@ import { parseAiJson } from '@/lib/ai/extractJson'
  */
 export interface CoiAiResponse {
   overallPass?: boolean
+  /** The insured entity as printed on the cert — see src/lib/coi/insuredMatch.ts. */
+  namedInsured?: string | null
   policyExpiryDate?: string | null
   coverageVerified?: boolean
   additionalInsured?: boolean
@@ -18,11 +20,22 @@ export interface CoiAiResponse {
   [k: string]: unknown
 }
 
-const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
+/**
+ * The canonical COI review prompt. Exported so every surface that reviews a
+ * certificate asks the SAME questions — the portal upload and this helper
+ * had byte-identical copies of it that could silently drift apart.
+ */
+export const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
 
 CERTIFICATE HOLDER REQUIRED:
 - SirReel Production Vehicles Inc.
 - 8500 Lankershim Blvd, Sun Valley, CA 91352
+
+ALSO EXTRACT (does not affect pass/fail):
+- namedInsured: the NAMED INSURED exactly as printed on the certificate — the
+  entity the policy covers. This is the box usually labeled "INSURED", NOT the
+  certificate holder (SirReel) and NOT the insurance carrier or the broker/
+  producer. Copy it verbatim, including any "dba" wording. Null if unreadable.
 
 CRITICAL REQUIREMENTS (must all pass):
 1. Certificate Holder = SirReel with correct address
@@ -37,6 +50,7 @@ CRITICAL REQUIREMENTS (must all pass):
 Return ONLY valid JSON (no markdown, no preamble):
 {
   "overallPass": true,
+  "namedInsured": "Exactly As Printed, Inc." | null,
   "policyExpiryDate": "YYYY-MM-DD" | null,
   "coverageVerified": true,
   "additionalInsured": true,

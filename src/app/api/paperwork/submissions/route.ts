@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { evaluateInsuredMatch, INSURED_MATCH_LABEL } from '@/lib/coi/insuredMatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,8 @@ export type SubmissionKind = 'COI' | 'WC' | 'CC_AUTH' | 'AGREEMENT' | 'REDLINE'
 
 export interface PaperworkSubmission {
   key: string
+  /** Row id within its own table — what the review surface opens. */
+  sourceId: string
   kind: SubmissionKind
   label: string
   detail: string | null
@@ -40,6 +43,14 @@ export interface PaperworkSubmission {
   jobName: string | null
   companyName: string | null
   href: string | null
+  /** Review state, for the kinds that HAVE a review (COI today). */
+  reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
+  /** Set when this submission needs a human to look at it for a reason
+   *  the feed can state in a few words — currently a COI whose named
+   *  insured doesn't match the production company. The feed doubles as a
+   *  triage queue, so the finding belongs in the row, not only behind a
+   *  click. */
+  flag: { label: string; detail: string } | null
 }
 
 // Where on the job page this kind of paperwork is reviewed. Anchors are
@@ -114,7 +125,8 @@ export async function GET(req: NextRequest) {
         source: true,
         clientUploaderName: true,
         humanDecision: true,
-        job: { select: jobSelect },
+        namedInsured: true,
+        job: { select: { ...jobSelect, company: { select: { name: true } } } },
         company: { select: { name: true } },
         uploadedBy: { select: { name: true } },
       },
@@ -163,8 +175,17 @@ export async function GET(req: NextRequest) {
   const submissions: PaperworkSubmission[] = []
 
   for (const c of cois) {
+    // Named-insured vs production company. Computed here rather than read
+    // off a stored verdict so a corrected production company clears the
+    // flag on the next load — see src/lib/coi/insuredMatch.ts.
+    const match = evaluateInsuredMatch(c.namedInsured, [
+      c.job?.company?.name,
+      c.company?.name,
+      c.job?.name,
+    ])
     submissions.push({
       key: `COI:${c.id}`,
+      sourceId: c.id,
       kind: 'COI',
       label: 'Certificate of Insurance',
       detail: c.originalFilename || null,
@@ -176,6 +197,10 @@ export async function GET(req: NextRequest) {
       jobName: c.job?.name ?? null,
       companyName: c.company?.name ?? null,
       href: jobHref('COI', c.job?.id ?? null),
+      reviewState: c.humanDecision as 'PENDING' | 'APPROVED' | 'REJECTED',
+      flag: match.needsAttention
+        ? { label: INSURED_MATCH_LABEL[match.verdict], detail: match.message }
+        : null,
     })
   }
 
@@ -183,6 +208,7 @@ export async function GET(req: NextRequest) {
     const job = paperworkJob(w)
     submissions.push({
       key: `WC:${w.id}`,
+      sourceId: w.id,
       kind: 'WC',
       label: 'Workers’ Comp certificate',
       detail: w.wcOriginalFilename || null,
@@ -195,6 +221,8 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('WC', job?.id ?? null),
+      reviewState: null,
+      flag: null,
     })
   }
 
@@ -202,6 +230,7 @@ export async function GET(req: NextRequest) {
     const job = paperworkJob(a)
     submissions.push({
       key: `CC_AUTH:${a.id}`,
+      sourceId: a.id,
       kind: 'CC_AUTH',
       label: 'Credit card authorization',
       // Deliberately says what it is and nothing about the card.
@@ -213,12 +242,15 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('CC_AUTH', job?.id ?? null),
+      reviewState: null,
+      flag: null,
     })
   }
 
   for (const s of agreements) {
     submissions.push({
       key: `AGREEMENT:${s.id}`,
+      sourceId: s.id,
       kind: 'AGREEMENT',
       label: s.contractType === 'STAGE_CONTRACT' ? 'Stage contract' : 'Rental agreement',
       detail: s.order?.orderNumber ? `Order ${s.order.orderNumber}` : null,
@@ -229,6 +261,8 @@ export async function GET(req: NextRequest) {
       jobName: s.order?.job?.name ?? null,
       companyName: null,
       href: jobHref('AGREEMENT', s.order?.job?.id ?? null),
+      reviewState: null,
+      flag: null,
     })
   }
 
@@ -236,6 +270,7 @@ export async function GET(req: NextRequest) {
     const job = paperworkJob(r)
     submissions.push({
       key: `REDLINE:${r.id}`,
+      sourceId: r.id,
       kind: 'REDLINE',
       label: 'Contract redline',
       detail:
@@ -249,6 +284,8 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('REDLINE', job?.id ?? null),
+      reviewState: null,
+      flag: null,
     })
   }
 
