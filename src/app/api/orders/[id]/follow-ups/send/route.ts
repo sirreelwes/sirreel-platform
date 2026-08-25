@@ -29,6 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { parseCcList } from '@/lib/email/ccList'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { composeFollowUpEmail } from '@/lib/email/preview/composeFollowUpEmail'
 import { CADENCE_STAGES, type CadenceStage } from '@/lib/sales/quoteCadence'
@@ -43,6 +44,8 @@ function bad(status: number, error: string) {
 }
 
 interface SendBody {
+  /** Rep-typed CC from the review modal. */
+  ccAdd?: unknown
   stage?: unknown
   message?: unknown
   resend?: unknown
@@ -56,6 +59,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!session?.user?.email) return bad(401, 'unauthorized')
 
   const body = (await req.json().catch(() => ({}))) as SendBody
+  // Rep-typed CC from the review modal. Re-parsed server-side: the
+  // client-side check is a convenience, not a control.
+  const manualCc = parseCcList(body.ccAdd)
   const explicitStage = body.stage
   if (
     explicitStage != null &&
@@ -114,6 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // ── Phase 3: dispatch ─────────────────────────────────────
   const result = await sendAgreementEmail({
     to: [final.to.email],
+    cc: manualCc.length > 0 ? manualCc : undefined,
     subject: final.subject,
     html: final.html,
     text: final.text,

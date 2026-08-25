@@ -48,9 +48,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const forwardPayload: {
     message?: string
     overrideContactId?: string
+    ccAdd?: unknown
   } = {}
   if (message) forwardPayload.message = message
   if (overrideContactId) forwardPayload.overrideContactId = overrideContactId
+  // This payload is rebuilt field by field rather than passed through, so a
+  // new body field is invisible here until it is named. CC would otherwise
+  // be accepted by the UI and dropped on the way to the order route.
+  if (body?.ccAdd !== undefined) forwardPayload.ccAdd = body.ccAdd
   const forwarded = new NextRequest(
     new URL(`/api/orders/${order.id}/follow-ups/send`, req.url),
     {

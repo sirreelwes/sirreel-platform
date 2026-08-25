@@ -10,6 +10,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { parseCcList } from '@/lib/email/ccList'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
+  // Rep-typed CC from the review modal. Re-parsed server-side: the
+  // client-side check is a convenience, not a control.
+  const manualCc = parseCcList(body.ccAdd)
   const payload = body.payload as QuickReplyPayload | undefined
   if (!payload?.recipientEmail) {
     return NextResponse.json({ ok: false, error: 'recipient email required' }, { status: 400 })
@@ -98,6 +102,7 @@ export async function POST(req: NextRequest) {
 
   const result = await sendAgreementEmail({
     to: [payload.recipientEmail],
+    cc: manualCc.length > 0 ? manualCc : undefined,
     subject,
     html,
     text,

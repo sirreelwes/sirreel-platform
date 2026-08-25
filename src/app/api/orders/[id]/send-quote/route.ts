@@ -28,6 +28,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { mergeCc, parseCcList } from '@/lib/email/ccList'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { snapshotResolvedRates } from '@/lib/pricing/resolveRate'
@@ -45,8 +46,13 @@ interface SendQuoteBody {
   message?: unknown
   /** Optional override of CC recipients. When omitted, all non-primary
    *  JobContacts on the order's job are CC'd. Pass an empty array to
-   *  send to primary only. */
+   *  send to primary only. NOTE: this can only NARROW to known job
+   *  contacts — it filters `ranked`, it cannot introduce an address. */
   cc?: unknown
+  /** Free-text CC typed by the rep in the review modal — ADDED to whoever
+   *  is already being copied, never a replacement. Separate key from `cc`
+   *  precisely because that one is a narrowing override. */
+  ccAdd?: unknown
   /** Person.id picked by the agent in the EmailReviewModal's "Change
    *  recipient" affordance. Must be one of the order's ranked
    *  candidates or composer rejects with 400. */
@@ -66,6 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
       : null
+  const manualCc = parseCcList(body.ccAdd)
   const ccOverride = Array.isArray(body.cc)
     ? (body.cc.filter((v) => typeof v === 'string') as string[])
     : null
@@ -165,7 +172,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const emailResult = await sendAgreementEmail({
     to: [primary.email],
-    cc: others.length > 0 ? others.map((o) => o.email) : undefined,
+    // Auto-CC (the other job contacts) MERGED with the rep's typed CC —
+    // a manual CC adds people, it never silently drops the contacts a
+    // quote already copies.
+    cc: mergeCc(others.map((o) => o.email), manualCc, [primary.email]),
     subject: final.subject,
     html: final.html,
     text: final.text,

@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MAX_CC, splitCcInput } from '@/lib/email/ccList';
 import { isHighRiskEmailDomain } from '@/lib/email/emailDomain';
 
 /**
@@ -195,8 +196,12 @@ function buildPreviewBody(
   customNote: string,
   customMessage = '',
   quickRespond = false,
+  ccAdd: string[] = [],
 ): unknown {
   const base: Record<string, unknown> = {};
+  // `ccAdd`, not `cc` — send-quote already uses `cc` as a NARROWING override
+  // over known job contacts, so reusing it would change who gets a quote.
+  if (ccAdd.length > 0) base.ccAdd = ccAdd;
   if (overrideContactId) base.overrideContactId = overrideContactId;
   // Caller's pre-seeded message + the agent's modal-typed note. Agent's
   // typed value wins when both are present (the modal IS the review
@@ -231,8 +236,9 @@ function buildSendBody(
   customNote: string,
   customMessage = '',
   quickRespond = false,
+  ccAdd: string[] = [],
 ): unknown {
-  return buildPreviewBody(target, overrideContactId, customNote, customMessage, quickRespond);
+  return buildPreviewBody(target, overrideContactId, customNote, customMessage, quickRespond, ccAdd);
 }
 
 function formatSize(bytes: number | undefined): string | null {
@@ -287,6 +293,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   // sections, just have one place to type in").
   const [writeOwn, setWriteOwn] = useState(true);
   const seededRef = useRef(false);
+  // CC typed by the rep (Wes 2026-08-25). Applies to every kind this modal
+  // sends; the routes re-parse it server-side.
+  const [ccInput, setCcInput] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -347,6 +356,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
     // the only place to type.
     setWriteOwn(target.kind === 'welcome' || !!quickRespond);
     setCustomMessage('');
+    setCcInput('');
     seededRef.current = false;
     setAiFlags(null);
     setAiPolished(null);
@@ -395,7 +405,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
     setSendState('in-flight');
     setError(null);
     try {
-      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!quickRespond) as Record<string, unknown>;
+      const sendBody = buildSendBody(target, overrideContactId, customNote, writeOwn ? customMessage : '', !!quickRespond, ccValid) as Record<string, unknown>;
       // Second pass after an already-replied 409: the agent clicked
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
@@ -473,6 +483,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   // Derived: any non-idle send state freezes the modal's interactive
   // controls (close button, textarea, recipient picker, Send button).
   const sendLocked = sendState !== 'idle';
+  const { valid: ccValid, invalid: ccInvalid } = splitCcInput(ccInput);
+  const ccOverLimit = ccValid.length > MAX_CC;
+  // A typo'd CC blocks the send rather than silently dropping the address —
+  // the rep meant to copy someone, and quietly not doing it is the worse
+  // failure. An empty box is fine.
+  const ccBlocked = ccInvalid.length > 0 || ccOverLimit;
   // One composer, no toggle, no second note field.
   const singleBox = target.kind === 'welcome';
 
@@ -609,6 +625,44 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">From</div>
                 <div className="text-white text-sm font-mono">{preview.from}</div>
+              </div>
+
+              {/* CC — rep-typed, applies to every kind this modal sends.
+                  Sits under From so the recipient rows read together. */}
+              <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                <div className="flex items-baseline justify-between mb-0.5">
+                  <label htmlFor="cc-input" className="text-[10px] uppercase tracking-wider text-zinc-500">
+                    CC (optional)
+                  </label>
+                  {ccValid.length > 0 && !ccBlocked && (
+                    <span className="text-[10px] text-emerald-300">
+                      {ccValid.length} copied
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="cc-input"
+                  type="text"
+                  value={ccInput}
+                  onChange={(e) => setCcInput(e.target.value)}
+                  disabled={sendLocked}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={`name@company.com, second@company.com (max ${MAX_CC})`}
+                  className={`w-full bg-zinc-800 border rounded px-2 py-1.5 text-sm text-white font-mono placeholder:text-zinc-500 placeholder:font-sans focus:outline-none disabled:opacity-50 ${
+                    ccBlocked ? 'border-rose-700 focus:border-rose-500' : 'border-zinc-700 focus:border-zinc-500'
+                  }`}
+                />
+                {ccInvalid.length > 0 && (
+                  <div className="mt-1 text-[11px] text-rose-300">
+                    Not a valid address: {ccInvalid.join(', ')} — separate addresses with commas.
+                  </div>
+                )}
+                {ccOverLimit && (
+                  <div className="mt-1 text-[11px] text-rose-300">
+                    {ccValid.length} addresses — {MAX_CC} is the limit for a CC.
+                  </div>
+                )}
               </div>
 
               {/* Subject */}
@@ -883,7 +937,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
           </button>
           <button
             onClick={() => { void handleSend(); }}
-            disabled={!preview || sendLocked || loading}
+            disabled={!preview || sendLocked || loading || ccBlocked}
+            title={ccBlocked ? 'Fix the CC addresses first' : undefined}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
             {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent ✓' : dupWarning ? 'Send anyway' : 'Send'}

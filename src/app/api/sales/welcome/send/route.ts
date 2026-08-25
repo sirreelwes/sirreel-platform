@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { parseCcList } from '@/lib/email/ccList'
 import { attachInquiryThreadToJob } from '@/lib/jobs/attachThreadToJob'
 import {
   loadWelcomeInquiryContext,
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
+  // Rep-typed CC from the review modal. Re-parsed server-side: the
+  // client-side check is a convenience, not a control.
+  const manualCc = parseCcList(body.ccAdd)
   const inquiryId = typeof body.inquiryId === 'string' ? body.inquiryId : ''
   if (!inquiryId) return NextResponse.json({ ok: false, error: 'inquiryId required' }, { status: 400 })
   const jobId = typeof body.jobId === 'string' ? body.jobId : ''
@@ -141,6 +145,7 @@ export async function POST(req: NextRequest) {
     })
     const result = await sendAgreementEmail({
       to: [ctx.person.email],
+      cc: manualCc.length > 0 ? manualCc : undefined,
       subject,
       html,
       text,
