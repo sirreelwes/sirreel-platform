@@ -152,9 +152,11 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const introText = customRaw || defaultIntro
 
   // "Let's get started" is onboarding language — wrong for a reply to an
-  // inquiry that may never become a job.
+  // inquiry that may never become a job. Quick Respond also names NO job:
+  // Wes 2026-08-25, "remove any specifics about the job, pickup etc." The
+  // client's own subject line is already above ours in the thread.
   const subject = quick
-    ? `${input.projectName || 'Your inquiry'} | SirReel Studio Services`
+    ? `Thanks for reaching out | SirReel Studio Services`
     : `Let\u2019s get started \u00b7 ${input.projectName || 'your project'} | SirReel Studio Services`
 
   const text = [
@@ -198,7 +200,7 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
      inversion bug this prevents. -->
 <meta name="color-scheme" content="light" />
 <meta name="supported-color-schemes" content="light" />
-<title>${quick ? projectName : `Let&rsquo;s get started \u00b7 ${projectName}`}</title>
+<title>${quick ? 'Thanks for reaching out' : `Let&rsquo;s get started \u00b7 ${projectName}`}</title>
 <style type="text/css">
   :root { color-scheme: light; supported-color-schemes: light; }
 </style>
@@ -211,7 +213,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
 <body style="margin:0;padding:0;background-color:#f5f5f3;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
   <!-- Preheader (hidden in body, shown in inbox preview) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;color:transparent;height:0;width:0;opacity:0;">
-    ${quick ? `A note from ${repName} at SirReel Studio Services about ${projectName}.` : `Your SirReel job portal for ${projectName} is ready \u2014 paperwork, schedule, equipment, all in one place.`}
+    ${quick ? `A note from ${repName} at SirReel Studio Services.` : `Your SirReel job portal for ${projectName} is ready \u2014 paperwork, schedule, equipment, all in one place.`}
   </div>
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f5f3;">
