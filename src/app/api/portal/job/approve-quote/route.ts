@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { promoteHoldsOnApproval } from '@/lib/orders/holdOnQuoteSend'
 import {
   JOB_SESSION_COOKIE,
   buildJobSessionCookieHeader,
@@ -117,6 +118,16 @@ export async function POST(req: NextRequest) {
     where: { id: order.id },
     data: { status: 'APPROVED', ...sync },
   })
+
+  // The quote's soft holds become firm now the client has said yes
+  // (Wes 2026-08-25). Sending the quote reserves the fleet at backup rank
+  // so a dead quote can't freeze a truck; approval is the moment it
+  // should actually block. Best-effort like the rest of the post-approval
+  // work below — the approval is the durable fact.
+  const promotion = await promoteHoldsOnApproval(order.id)
+  if (promotion.error) {
+    console.error('[approve-quote] hold promotion failed:', promotion.error)
+  }
 
   const approverName =
     [resolved.contact?.firstName, resolved.contact?.lastName].filter(Boolean).join(' ').trim() ||

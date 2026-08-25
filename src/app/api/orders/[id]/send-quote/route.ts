@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { mergeCc, parseCcList } from '@/lib/email/ccList'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
@@ -213,6 +214,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     } catch (err) {
       console.error('[pricing] quote-time rate snapshot failed:', err instanceof Error ? err.message : err)
     }
+    // A sent quote implies a hold (Wes 2026-08-25). Soft/backup rank, so
+    // the fleet reads as spoken-for without a dead quote freezing a truck.
+    // AFTER the email and deliberately non-fatal — the quote is already
+    // delivered, so a hold failure must not report the send as failed.
+    const holdResult = await holdOnQuoteSend(order.id)
+    if (holdResult.error) {
+      console.error('[send-quote] soft hold failed:', holdResult.error)
+    }
+
     await prisma.order.update({
       where: { id: order.id },
       data: {
