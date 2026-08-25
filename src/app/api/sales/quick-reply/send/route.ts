@@ -11,7 +11,6 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
-import { teamInboxEmail, withTeamCc } from '@/lib/email/teamVisibility'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
@@ -122,19 +121,9 @@ export async function POST(req: NextRequest) {
     customMessage: payload.customMessage ?? null,
   })
 
-  // Transition-period team visibility (see lib/email/teamVisibility.ts):
-  //   · CC so the shared inbox sees the reply went out and nobody
-  //     answers the same client twice.
-  //   · Reply-To so the CLIENT'S reply lands somewhere the team works.
-  //     Without it replies go to the From address, notifications@, which
-  //     HQ does not ingest — they were effectively disappearing.
-  const ccList = withTeamCc(manualCc, payload.recipientEmail)
-  const teamInbox = teamInboxEmail()
-
   const result = await sendAgreementEmail({
     to: [payload.recipientEmail],
-    cc: ccList.length > 0 ? ccList : undefined,
-    replyTo: teamInbox ?? undefined,
+    cc: manualCc.length > 0 ? manualCc : undefined,
     subject,
     html,
     text,
