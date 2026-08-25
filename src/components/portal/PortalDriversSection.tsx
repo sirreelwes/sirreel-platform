@@ -22,6 +22,8 @@ interface DriverRow {
   email: string | null
   opened: boolean
   ready: boolean
+  /** Pending only — a driver who has sent a licence is staff-only to change. */
+  removable?: boolean
 }
 interface VehicleRow {
   bookingAssignmentId: string
@@ -76,6 +78,24 @@ export function PortalDriversSection() {
     } finally { setBusy(false) }
   }
 
+  async function remove(driverAssignmentId: string, name: string) {
+    if (!window.confirm(`Remove ${name}? They'll lose access to the pickup details.`)) return
+    setBusy(true); setErr(null); setMsg(null)
+    try {
+      const res = await fetch('/api/portal/job/drivers', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ driverAssignmentId }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Could not remove that driver')
+      setMsg(`${name} removed. Add whoever is collecting instead and we'll email them.`)
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not remove that driver')
+    } finally { setBusy(false) }
+  }
+
   // Nothing to show until vehicles are actually assigned to the job.
   if (!vehicles || vehicles.length === 0) return null
 
@@ -122,10 +142,25 @@ export function PortalDriversSection() {
                     <span className="min-w-0 truncate text-gray-700">
                       {d.name}{d.email ? ` · ${d.email}` : ''}
                     </span>
-                    <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                      d.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {d.ready ? 'License received' : d.opened ? 'Opened — no license yet' : 'Emailed'}
+                    <span className="flex flex-shrink-0 items-center gap-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        d.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {d.ready ? 'License received' : d.opened ? 'Opened — no license yet' : 'Emailed'}
+                      </span>
+                      {/* Only while pending. Once a licence is in we keep the
+                          driver and let the client call — see the route. */}
+                      {d.removable && (
+                        <button
+                          type="button"
+                          onClick={() => remove(d.id, d.name)}
+                          disabled={busy}
+                          title={`Remove ${d.name}`}
+                          className="text-[11px] font-semibold text-gray-400 underline underline-offset-2 hover:text-rose-600 disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </span>
                   </li>
                 ))}

@@ -3,8 +3,20 @@ import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { inviteDriver } from '@/lib/drivers/inviteDriver'
+import type { DriverAssignmentStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * Statuses a CLIENT may cancel.
+ *
+ * Pending only, by Wes's call (2026-08-25). A READY driver has already
+ * uploaded a licence we have checked, and PICKED_UP means they are holding
+ * the keys — letting the client pull either on pickup morning is how a truck
+ * ends up with nobody cleared to take it. Staff can still fix a wrong READY
+ * driver; the client cannot.
+ */
+const CLIENT_CANCELLABLE: DriverAssignmentStatus[] = ['INVITED', 'VIEWED']
 
 /**
  * Client-side driver entry (Wes 2026-08-22: "the production client can
@@ -72,6 +84,10 @@ export async function GET(req: NextRequest) {
         // our licence verdicts — "we're still waiting on them" is enough.
         opened: !!d.firstViewedAt,
         ready: d.status === 'READY' || d.status === 'PICKED_UP',
+        // The server decides removability, not the browser — the DELETE
+        // re-checks it anyway, but this keeps the button off rows that
+        // would only bounce.
+        removable: CLIENT_CANCELLABLE.includes(d.status),
       })),
     })),
   })
@@ -110,4 +126,59 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
+}
+
+
+/**
+ * DELETE — un-name a driver the client added by mistake, or who changed.
+ *
+ * Cancels rather than deletes: the row is the audit trail of who was named
+ * and by whom, and both driver lists already filter `status: not CANCELLED`,
+ * so a cancelled row drops out of the client's view and the staff board
+ * without either query changing.
+ *
+ * Expiring the token is the point, not a detail. DriverAssignment.token is
+ * the driver's no-login credential for the job page AND the gate code, so a
+ * removed driver who keeps a live token is still able to walk up to the yard.
+ */
+export async function DELETE(req: NextRequest) {
+  const ctx = await resolveClientJobVehicles(req)
+  if (!ctx) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+
+  const body = await req.json().catch(() => null)
+  const driverAssignmentId = String(body?.driverAssignmentId ?? '').trim()
+  if (!driverAssignmentId) {
+    return NextResponse.json({ error: 'driverAssignmentId required' }, { status: 400 })
+  }
+
+  // Same scoping rule as POST: re-derive the client's own vehicles from the
+  // session and refuse anything outside that set, so a guessed id cannot
+  // cancel a driver on another production's truck.
+  const row = await prisma.driverAssignment.findUnique({
+    where: { id: driverAssignmentId },
+    select: { id: true, status: true, bookingAssignmentId: true },
+  })
+  if (!row || !ctx.assignmentIds.includes(row.bookingAssignmentId)) {
+    return NextResponse.json({ error: 'That driver is not on your job.' }, { status: 403 })
+  }
+  if (row.status === 'CANCELLED') {
+    return NextResponse.json({ ok: true, alreadyCancelled: true })
+  }
+  if (!CLIENT_CANCELLABLE.includes(row.status)) {
+    return NextResponse.json(
+      {
+        error:
+          row.status === 'PICKED_UP'
+            ? 'That driver already collected the vehicle — call us and we\'ll sort it out.'
+            : 'That driver has already sent us their license. Call us and we\'ll swap them out.',
+      },
+      { status: 409 },
+    )
+  }
+
+  await prisma.driverAssignment.update({
+    where: { id: driverAssignmentId },
+    data: { status: 'CANCELLED', expiresAt: new Date() },
+  })
+  return NextResponse.json({ ok: true })
 }

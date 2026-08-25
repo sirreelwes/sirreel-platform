@@ -99,3 +99,51 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
+/**
+ * DELETE /api/driver-assignments — staff un-name a driver.
+ * Body: { driverAssignmentId }
+ *
+ * Wider than the client's version on purpose. The client may only cancel a
+ * PENDING driver (see api/portal/job/drivers): pulling someone who has
+ * already cleared a licence check on pickup morning is how a truck ends up
+ * with nobody able to take it. But that leaves a wrong READY driver
+ * unfixable by anyone, so staff — who own the handover decision — can
+ * cancel a READY one too.
+ *
+ * PICKED_UP is refused for everybody. Those keys are already gone, and
+ * CheckoutRecord is the authoritative record of who took them; rewriting
+ * the plan after the fact would only make the two disagree.
+ *
+ * Cancels rather than deletes so the audit trail of who was named, by whom,
+ * survives — and expires the token, because that token is the driver's
+ * no-login credential for the job page and the gate code.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  }
+  const body = await req.json().catch(() => null)
+  const id = String(body?.driverAssignmentId ?? '').trim()
+  if (!id) return NextResponse.json({ error: 'driverAssignmentId required' }, { status: 400 })
+
+  const row = await prisma.driverAssignment.findUnique({
+    where: { id },
+    select: { id: true, status: true },
+  })
+  if (!row) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  if (row.status === 'CANCELLED') return NextResponse.json({ ok: true, alreadyCancelled: true })
+  if (row.status === 'PICKED_UP') {
+    return NextResponse.json(
+      { error: 'That driver already collected the vehicle — the checkout record stands.' },
+      { status: 409 },
+    )
+  }
+
+  await prisma.driverAssignment.update({
+    where: { id },
+    data: { status: 'CANCELLED', expiresAt: new Date() },
+  })
+  return NextResponse.json({ ok: true })
+}

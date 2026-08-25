@@ -42,6 +42,23 @@ export function JobDriversSection({ vehicles, onChanged }: { vehicles: Vehicle[]
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
+  async function removeDriver(driverAssignmentId: string, name: string) {
+    if (!window.confirm(`Remove ${name} from this vehicle? Their pickup link stops working.`)) return
+    setBusy(true); setErr(null); setMsg(null)
+    try {
+      const res = await fetch('/api/driver-assignments', {
+        method: 'DELETE', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ driverAssignmentId }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Could not remove that driver')
+      setMsg(`${name} removed.`)
+      onChanged?.()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not remove that driver')
+    } finally { setBusy(false) }
+  }
+
   async function invite(bookingAssignmentId: string) {
     setBusy(true); setErr(null); setMsg(null)
     try {
@@ -121,6 +138,20 @@ export function JobDriversSection({ vehicles, onChanged }: { vehicles: Vehicle[]
                           </a>
                         )}
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{label}</span>
+                        {/* Staff can pull a driver at any point before the
+                            keys leave — including a checked one, which the
+                            client deliberately cannot do. */}
+                        {d.status !== 'PICKED_UP' && (
+                          <button
+                            type="button"
+                            onClick={() => removeDriver(d.id, `${dr.firstName} ${dr.lastName}`.trim() || d.emailSentTo || 'this driver')}
+                            disabled={busy}
+                            title="Remove this driver from the vehicle"
+                            className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400 hover:border-rose-600 hover:text-rose-300 disabled:opacity-40"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
