@@ -702,15 +702,6 @@ export default function JobDetailPage() {
     ({ agreement }) => !isSignedAgreementStatus(agreement.status),
   ) || signedOrderAgreements.length === 0;
 
-  const signTargetOrder =
-    liveOrders.find((o) =>
-      // Target an order whose agreement is NOT yet signed — a filed
-      // offline agreement counts as signed, so it stops being chased.
-      o.signedAgreements.some((a) => !isSignedAgreementStatus(a.status)),
-    ) ??
-    liveOrders[0] ??
-    null;
-
   const sendForSignature = async () => {
     if (!signatory || !signTargetOrder) return;
     setSignSendBusy(true);
