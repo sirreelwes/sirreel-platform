@@ -449,7 +449,9 @@ export async function POST(req: NextRequest) {
     if (!agentId) {
       return NextResponse.json({ error: 'agentId required (no session user)' }, { status: 400 })
     }
-    if (!name || (!companyId && !(typeof body.companyName === 'string' && body.companyName.trim()))) {
+    // companyUnknown is the agent saying "I don't have it yet" — the
+    // draft helper stands up a provisional company in that case.
+    if (!name || (!companyId && !(typeof body.companyName === 'string' && body.companyName.trim()) && body.companyUnknown !== true)) {
       return NextResponse.json(
         { error: 'name and companyId (or companyName) are required' },
         { status: 400 }
@@ -466,6 +468,7 @@ export async function POST(req: NextRequest) {
         name,
         companyId: companyId || null,
         companyName: typeof body.companyName === 'string' ? body.companyName : null,
+        companyUnknown: body.companyUnknown === true,
         contactName: typeof body.contactName === 'string' ? body.contactName : null,
         contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
         contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,

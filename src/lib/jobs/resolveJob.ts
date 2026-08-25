@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { JobStatus, Prisma } from '@prisma/client'
 import { companyNameKey } from '@/lib/companies/normalize'
+import { makeProvisionalCompanyName } from '@/lib/companies/provisional'
 import { resolveCompanyByNameKey } from '@/lib/companies/resolveCompanyByName'
 import { resolvePersonByEmail, normalizeEmail } from '@/lib/people/email'
 import { nextJobCode } from '@/lib/jobs/nextJobCode'
@@ -65,6 +66,9 @@ export interface JobDraft {
   name: string
   companyId?: string | null
   companyName?: string | null
+  /** Agent explicitly has no company yet — create a provisional one and
+   *  let the reply ask the client. See lib/companies/provisional.ts. */
+  companyUnknown?: boolean
   contactName?: string | null
   contactPhone?: string | null
   contactEmail?: string | null
@@ -338,7 +342,17 @@ export async function createJobFromDraft(draft: JobDraft, agentId: string): Prom
   let companyId = draft.companyId || null
   let companyResolution: string | null = null
   let companyCreated = false
-  const companyName = draft.companyName?.trim() || ''
+  let companyName = draft.companyName?.trim() || ''
+  // No company yet, and the agent said so explicitly: stand up a
+  // per-job placeholder so the Job can exist and the reply can go out.
+  // Quick Reply recognises the suffix and offers to ask the client.
+  if (!companyId && !companyName && draft.companyUnknown) {
+    companyName = makeProvisionalCompanyName({
+      contactName: draft.contactName,
+      jobName: draft.name,
+    })
+    companyResolution = `no company supplied — created provisional "${companyName}"`
+  }
   if (!companyId && companyName) {
     const key = companyNameKey(companyName)
     const all = await prisma.company.findMany({ select: { id: true, name: true } })

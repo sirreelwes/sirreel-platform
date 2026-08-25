@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState, useRef} from 'react';
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal';
+import { isProvisionalCompanyName } from '@/lib/companies/provisional';
 
 interface MatchedProduct { id: string; type: string; name: string; lineType?: string | null }
 interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
@@ -551,7 +552,11 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                     when both are filled — there's nothing to ask. The label
                     names exactly what the reply will request. */}
                 {(() => {
-                  const companyMissing = !clientName?.trim();
+                  // A provisional "(company TBC)" placeholder is a company
+                  // in the schema but not in reality — treat it as missing
+                  // so the reply still asks, which is the whole point of
+                  // letting the Job be created without one.
+                  const companyMissing = !clientName?.trim() || isProvisionalCompanyName(clientName);
                   const jobMissing = !jobName?.trim();
                   if (!companyMissing && !jobMissing) return null;
                   const askField =
