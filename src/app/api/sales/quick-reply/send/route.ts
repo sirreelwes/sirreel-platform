@@ -11,6 +11,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
+import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
@@ -121,9 +122,22 @@ export async function POST(req: NextRequest) {
     customMessage: payload.customMessage ?? null,
   })
 
+  // Transition-period team visibility (see lib/email/teamVisibility.ts):
+  //   · CC the shared GROUP (rentals@) — it fans out to Jose, Oliver and
+  //     Dani, so the team sees the reply went out and nobody answers the
+  //     same client twice. A group is exactly why HQ can't watch it.
+  //   · Reply-To the SENDING AGENT, never the group: groups commonly
+  //     reject non-member mail, so pointing a client's reply there risks
+  //     a bounce. Agent mailboxes ARE ingested by HQ, so the reply reaches
+  //     a person and flows back in. Previously there was no Reply-To at
+  //     all and replies went to notifications@, which nobody works.
+  const ccList = withTeamCc(manualCc, payload.recipientEmail)
+  const replyTo = agentReplyTo(session.user.email)
+
   const result = await sendAgreementEmail({
     to: [payload.recipientEmail],
-    cc: manualCc.length > 0 ? manualCc : undefined,
+    cc: ccList.length > 0 ? ccList : undefined,
+    replyTo: replyTo ?? undefined,
     subject,
     html,
     text,
