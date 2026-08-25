@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
+import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 
 export const dynamic = 'force-dynamic'
 
@@ -381,11 +382,24 @@ export async function GET(
         0,
       )
 
+    // Operational cadence — the SAME rollup the /jobs board renders, so
+    // the detail header and the board card can't tell different stories
+    // about the same job. Derived from the orders; Job.status only gets
+    // a say through the HOLD / LOST / WRAPPED off-ramps.
+    const { today, tomorrow } = cadenceDays()
+    const cadence = rollupCadence(
+      job.status,
+      job.orders.filter((o) => o.status !== 'CANCELLED'),
+      today,
+      tomorrow,
+    )
+
     return NextResponse.json({
       job: {
         ...job,
         estimatedValue: job.estimatedValue == null ? null : Number(job.estimatedValue),
         orderTotal,
+        cadence,
         rwInvoicedTotal,
         rwOrderCount: rwLinks.length,
         orders: job.orders.map((o) => ({

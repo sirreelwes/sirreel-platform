@@ -38,16 +38,52 @@ import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementM
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
+import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 
-const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
+/**
+ * Job status, honestly split.
+ *
+ * The header pill is now the DERIVED operational cadence — the same
+ * rollup the /jobs board renders (src/lib/jobs/cadence.ts). It follows
+ * the orders, so it can't drift the way the old hand-set pill did: this
+ * page used to show a green ACTIVE on a job whose only order had no
+ * dates, because nothing in the app has ever written ACTIVE — a human
+ * picked it from a dropdown once and it stuck.
+ *
+ * What's left in the dropdown are the three decisions a human actually
+ * makes, the ones the orders can't tell us. They override the cadence.
+ * "Open" hands the job back to its orders (written as QUOTED, which the
+ * rollup ignores the moment a real order exists).
+ */
+const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
 
-const STATUS_BADGE: Record<JobStatus, string> = {
-  QUOTED:  'bg-purple-900/40 text-purple-300 border-purple-800',
-  ACTIVE:  'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-  WRAPPED: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-  HOLD:    'bg-amber-900/40 text-amber-300 border-amber-800',
-  LOST:    'bg-red-900/40 text-red-300 border-red-800',
+const OFF_RAMPS = [
+  { value: 'OPEN',    label: 'Open',    hint: 'Position follows the orders' },
+  { value: 'HOLD',    label: 'On hold', hint: 'Client paused it — overrides the orders' },
+  { value: 'WRAPPED', label: 'Wrapped', hint: 'Closed by hand — overrides the orders' },
+  { value: 'LOST',    label: 'Lost',    hint: "Didn't win it — overrides the orders" },
+] as const;
+type OffRamp = (typeof OFF_RAMPS)[number]['value'];
+
+function currentOffRamp(status: JobStatus): OffRamp {
+  return status === 'HOLD' || status === 'WRAPPED' || status === 'LOST' ? status : 'OPEN';
+}
+
+const CADENCE_BADGE: Record<CadenceState, string> = {
+  new:              'bg-sky-900/40 text-sky-300 border-sky-800',
+  quoted:           'bg-purple-900/40 text-purple-300 border-purple-800',
+  hold:             'bg-amber-900/40 text-amber-300 border-amber-800',
+  lost:             'bg-red-900/40 text-red-300 border-red-800',
+  booked:           'bg-teal-900/40 text-teal-300 border-teal-800',
+  'picking-tmw':    'bg-teal-900/40 text-teal-300 border-teal-800',
+  'picking-today':  'bg-orange-900/40 text-orange-300 border-orange-800',
+  'on-rental':      'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  'returning-tmw':  'bg-orange-900/40 text-orange-300 border-orange-800',
+  'returning-today':'bg-red-900/40 text-red-300 border-red-800',
+  returned:         'bg-purple-900/40 text-purple-300 border-purple-800',
+  invoiced:         'bg-blue-900/40 text-blue-300 border-blue-800',
+  wrapped:          'bg-zinc-800 text-zinc-300 border-zinc-700',
 };
 
 const ORDER_STATUS_BADGE: Record<string, string> = {
@@ -242,6 +278,8 @@ interface JobDetail {
   returnedAt: string | null;
   returnedBy: { id: string; name: string } | null;
   archivedAt: string | null;
+  /** Derived operational position — same rollup the /jobs board renders. */
+  cadence: CadenceRollup;
   // Job-level card-on-file status (derived from the job's bookings'
   // paperwork). Token never leaves the server — display fields only.
   cardAuth: {
@@ -628,6 +666,12 @@ export default function JobDetailPage() {
   // its ORDERS cover instead of a separately-typed job range that drifts.
   const orderSpan = deriveJobDateRange(job.orders);
 
+  // Operational position. Server-derived (see src/lib/jobs/cadence.ts);
+  // the fallback only covers a stale client that fetched before the API
+  // started returning it.
+  const cadenceState: CadenceState = job.cadence?.state ?? 'quoted';
+  const offRamp = currentOffRamp(job.status);
+
   // Who signs, and therefore who gets the link. PRODUCER first to match
   // buildStageContractProps — the contract names the Producer as the
   // signatory, so the invite has to reach that person and not merely the
@@ -938,9 +982,14 @@ const driverTone = (d: any): string => {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[14px] font-mono font-bold tracking-wide text-white bg-zinc-800 border border-zinc-600 rounded px-2.5 py-1">{job.jobCode}</span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${STATUS_BADGE[job.status]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
+                title={
+                  offRamp === 'OPEN'
+                    ? "Derived from this job's orders — same reading as the Jobs board"
+                    : `Set by hand to ${offRamp} — this overrides what the orders say`
+                }
               >
-                {job.status}
+                {formatCadenceLabel(cadenceState, job.cadence?.partial ?? false)}
               </span>
               {job.returnedAt && (
                 <span
@@ -1057,14 +1106,14 @@ const driverTone = (d: any): string => {
             <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
             <div className="flex items-center gap-2">
               <select
-                value={job.status}
+                value={offRamp}
                 disabled={statusSaving}
-                onChange={(e) => updateStatus(e.target.value as JobStatus)}
+                onChange={(e) => updateStatus(e.target.value === 'OPEN' ? 'QUOTED' : (e.target.value as JobStatus))}
                 className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-                title="Job status"
+                title={OFF_RAMPS.find((o) => o.value === offRamp)?.hint}
               >
-                {JOB_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                {OFF_RAMPS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
               <div className="relative">

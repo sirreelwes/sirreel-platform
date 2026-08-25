@@ -23,13 +23,16 @@
  *   3. Date fallback (jobs with no orders — all Planyo imports today):
  *      Job.startDate/endDate, else the booking envelope from the API.
  *      start ≤ today → OUT (past-end = OUT + OVERDUE) · else PREJOB.
- *   NEW/QUOTED/HOLD/LOST always sit in PREJOB.
+ *   HOLD/LOST always sit in PREJOB (human off-ramps). NEW/QUOTED do
+ *      too, but via the cadence — Job.status is no longer consulted for
+ *      operational placement, because nothing ever set it automatically.
  *
  * Cards link to the existing `/jobs/[id]` detail page.
  */
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence'
 
 const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
 type JobStatus = (typeof JOB_STATUSES)[number]
@@ -40,7 +43,9 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'NEW', label: 'New' },
   { id: 'QUOTED', label: 'Quoted' },
-  { id: 'ACTIVE', label: 'Active' },
+  // No 'Active' chip: nothing ever wrote ACTIVE automatically, so it
+  // filtered to "whoever remembered to flip the dropdown" rather than
+  // to jobs that are actually running. The OUT column answers that.
   { id: 'HOLD', label: 'Hold' },
   { id: 'WRAPPED', label: 'Wrapped' },
   { id: 'LOST', label: 'Lost' },
@@ -51,37 +56,6 @@ const FILTERS: { id: Filter; label: string }[] = [
 // the list. Each cadence state has a label, a tinted pill (bg/fg),
 // and a saturated left-edge bar tint. Static class strings so
 // Tailwind's content scanner sees them.
-type CadenceState =
-  | 'new'
-  | 'quoted'
-  | 'hold'
-  | 'lost'
-  | 'booked'
-  | 'picking-tmw'
-  | 'picking-today'
-  | 'on-rental'
-  | 'returning-tmw'
-  | 'returning-today'
-  | 'returned'
-  | 'invoiced'
-  | 'wrapped'
-
-const CADENCE_LABEL: Record<CadenceState, string> = {
-  new:             'New',
-  quoted:          'Quoted',
-  hold:            'Hold',
-  lost:            'Lost',
-  booked:          'Booked',
-  'picking-tmw':   'Picking up tomorrow',
-  'picking-today': 'Picking up today',
-  'on-rental':     'On rental',
-  'returning-tmw': 'Returning tomorrow',
-  'returning-today':'Returning today',
-  returned:        'Returned',
-  invoiced:        'Invoiced',
-  wrapped:         'Wrapped',
-}
-
 const CADENCE_PILL: Record<CadenceState, string> = {
   new:             'bg-sky-100 text-sky-700',
   quoted:          'bg-pill-quoted-bg text-pill-quoted-fg',
@@ -116,11 +90,6 @@ const CADENCE_BAR: Record<CadenceState, string> = {
   returned:        'border-cadence-returned-bar',
   invoiced:        'border-cadence-invoiced-bar',
   wrapped:         'border-cadence-wrapped-bar',
-}
-
-interface CadenceRollup {
-  state: CadenceState
-  partial: boolean
 }
 
 // Phase 7 — paperwork rollup shape returned by /api/jobs. See
@@ -244,8 +213,13 @@ function deriveColumn(j: JobRow, today: string): BoardColumn {
   // inspections, and the future check-in icons all key off returnedAt —
   // a passed end date proves nothing came back.
   if (j.returnedAt) return 'RETURNED'
-  if (j.status !== 'ACTIVE' && j.status !== 'WRAPPED') return 'PREJOB' // NEW / QUOTED / HOLD / LOST
+  // Only the human off-ramps park a job in PREJOB regardless of its
+  // orders. NEW/QUOTED/ACTIVE all yield to the cadence — a job whose
+  // gear is out belongs in OUT whether or not anyone flipped it to
+  // ACTIVE, which is the drift this board used to inherit.
+  if (j.status === 'HOLD' || j.status === 'LOST') return 'PREJOB'
   const c = j.cadence?.state
+  if (c === 'new' || c === 'quoted') return 'PREJOB'
   if (c === 'on-rental' || c === 'returning-tmw' || c === 'returning-today') return 'OUT'
   // Orders say returned/invoiced (or the job is WRAPPED) but nobody
   // confirmed the physical return — stay in OUT with the OVERDUE
@@ -306,16 +280,16 @@ const OUT_PILL: Record<OutUrgency, string> = {
 // PREJOB sub-state band (spec): yellow=NEW · orange=QUOTED ·
 // teal=booked/ACTIVE-not-yet-out · muted for HOLD/LOST.
 function prejobBand(j: JobRow): { band: string; label: string; pill: string } {
-  switch (j.status) {
-    case 'NEW':    return { band: 'border-yellow-400', label: 'New',    pill: 'bg-yellow-100 text-yellow-800' }
-    case 'QUOTED': return { band: 'border-orange-400', label: 'Quoted', pill: 'bg-orange-100 text-orange-700' }
-    case 'HOLD':   return { band: 'border-zinc-300',   label: 'Hold',   pill: 'bg-zinc-100 text-zinc-600' }
-    case 'LOST':   return { band: 'border-zinc-200',   label: 'Lost',   pill: 'bg-zinc-100 text-zinc-400' }
-    default: {
-      const c = j.cadence?.state
-      const label = c === 'picking-today' ? 'Picking up today' : c === 'picking-tmw' ? 'Picking up tomorrow' : 'Booked'
-      return { band: 'border-teal-400', label, pill: 'bg-teal-100 text-teal-700' }
-    }
+  // Reads the cadence, not the raw status — 'new'/'quoted'/'hold'/'lost'
+  // ARE the commercial states, surfaced through the one derivation.
+  switch (j.cadence?.state) {
+    case 'new':    return { band: 'border-yellow-400', label: 'New',    pill: 'bg-yellow-100 text-yellow-800' }
+    case 'quoted': return { band: 'border-orange-400', label: 'Quoted', pill: 'bg-orange-100 text-orange-700' }
+    case 'hold':   return { band: 'border-zinc-300',   label: 'Hold',   pill: 'bg-zinc-100 text-zinc-600' }
+    case 'lost':   return { band: 'border-zinc-200',   label: 'Lost',   pill: 'bg-zinc-100 text-zinc-400' }
+    case 'picking-today': return { band: 'border-teal-400', label: 'Picking up today',    pill: 'bg-teal-100 text-teal-700' }
+    case 'picking-tmw':   return { band: 'border-teal-400', label: 'Picking up tomorrow', pill: 'bg-teal-100 text-teal-700' }
+    default:       return { band: 'border-teal-400', label: 'Booked', pill: 'bg-teal-100 text-teal-700' }
   }
 }
 
@@ -350,17 +324,6 @@ const BILLING_CHIP: Record<BillingRollupState, { label: string; cls: string }> =
   PARTIALLY_PAID:  { label: 'Partially paid',  cls: 'bg-chip-warn-bg text-chip-warn-fg' },
   PAID:            { label: 'Paid',            cls: 'bg-chip-good-bg text-chip-good-fg' },
   OVERDUE:         { label: 'Overdue',         cls: 'bg-chip-bad-bg text-chip-bad-fg' },
-}
-
-// Map cadence state → label, with the partial-return modifier applied
-// when the rollup flagged it. Partial replaces only the inbound return
-// labels — pickup/on-rental events are never partial.
-function formatCadenceLabel(state: CadenceState, partial: boolean): string {
-  if (!partial) return CADENCE_LABEL[state]
-  if (state === 'returning-today') return 'Partial return · today'
-  if (state === 'returning-tmw')   return 'Partial return · tomorrow'
-  if (state === 'returned')        return 'Partial returned'
-  return CADENCE_LABEL[state]
 }
 
 function fmtDate(d: string | null) {
