@@ -11,14 +11,17 @@
  * not finish SUCCESS. Clean runs are silent. No daily noise. Routes to
  * SLACK_ALERT_CHANNEL via the same helper the health-check cron uses.
  *
- * Auto-release is OFF — `runSync` has no auto-release path. The cron
- * surfaces RELEASE_CANDIDATEs for human action via the alert.
+ * Auto-release: `runSync` still has none. A separate, fenced pass
+ * (autoRelease.ts) releases RELEASE_CANDIDATEs when PLANYO_AUTO_RELEASE=1
+ * — capped, unit-matched only, and never AMBIGUOUS_ABSENT. With the flag
+ * unset the cron behaves exactly as before: flag for human action.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postMessage as slackPost } from '@/lib/slack'
 import { runSync, type RunSyncResult } from '@/lib/sync/planyo/runSync'
+import { autoReleaseCandidates, autoReleaseEnabled, type AutoReleaseResult } from '@/lib/sync/planyo/autoRelease'
 import type { SyncEvent } from '@/lib/sync/planyo/reconcile'
 import {
   importNewCartsRun,
@@ -126,6 +129,12 @@ export async function GET(req: NextRequest) {
 
   const candidates = apply.events.filter((e) => e.op === 'RELEASE_CANDIDATE')
 
+  // PHASE 3: auto-release (Wes 2026-08-25). Off unless
+  // PLANYO_AUTO_RELEASE=1, capped, and unit-matched rows only — see
+  // autoRelease.ts for why each fence is there. Runs after the apply so
+  // it acts on the same events the alert reports.
+  const autoRelease = await autoReleaseCandidates(apply.events)
+
   // Alert posture: silent on clean runs; loud on any of —
   //   - cancellation-of-mirrored-cart flag (RELEASE_CANDIDATE)
   //   - new-cart flag (MULTI_MATCH_CO or no-email WOULD_CREATE)
@@ -134,6 +143,8 @@ export async function GET(req: NextRequest) {
   //   - maintenance apply that didn't finish SUCCESS
   const shouldAlert =
     candidates.length > 0 ||
+    autoRelease.abortedOverCap ||
+    autoRelease.failed.length > 0 ||
     newCarts.flagged.length > 0 ||
     newCarts.jobAmbiguous.length > 0 ||
     newCarts.errors.length > 0 ||
@@ -142,7 +153,7 @@ export async function GET(req: NextRequest) {
 
   let alertResult: { ok: boolean; reason?: string } | null = null
   if (shouldAlert) {
-    alertResult = await sendSyncAlert(apply, candidates, newCarts, newCartsFatalError)
+    alertResult = await sendSyncAlert(apply, candidates, newCarts, newCartsFatalError, autoRelease)
   }
 
   return NextResponse.json({
@@ -152,6 +163,7 @@ export async function GET(req: NextRequest) {
     outcome: apply.outcome,
     counts: apply.counts,
     releaseCandidates: candidates.length,
+    autoRelease,
     newCarts: {
       imported: newCarts.imported,
       flagged: newCarts.flagged.length,
@@ -176,6 +188,7 @@ async function sendSyncAlert(
   candidates: SyncEvent[],
   newCarts: NewCartImportRunResult,
   newCartsFatalError: string | null,
+  autoRelease: AutoReleaseResult,
 ): Promise<{ ok: boolean; reason?: string }> {
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
@@ -233,6 +246,14 @@ async function sendSyncAlert(
 
   lines.push(
     `*Counts:* create=${counts.create}, updateDates=${counts.updateDates}, release=${counts.release}, *releaseCandidate=${counts.releaseCandidate}*, unmapped=${counts.unmapped}, conflict=${counts.conflict}, absent=${counts.absent}, noChange=${counts.noChange}`,
+    autoRelease.abortedOverCap
+      ? `:rotating_light: *AUTO-RELEASE ABORTED* — ${autoRelease.attempted} candidates exceeds the cap of ${autoRelease.cap}. Nothing was released. An unusually large batch usually means Planyo changed something, not that ${autoRelease.attempted} holds were cancelled. Review at /planyo-cancellations.`
+      : autoRelease.enabled
+        ? `*Auto-release:* released=${autoRelease.released}, alreadyReleased=${autoRelease.alreadyReleased}, skipped(unresolved)=${autoRelease.skippedUnresolved}, skipped(weak match)=${autoRelease.skippedWeakMatch}, failed=${autoRelease.failed.length}` +
+          (autoRelease.releasedDetail.length
+            ? '\n  ' + autoRelease.releasedDetail.map((d) => `${d.unitName} (planyo #${d.planyoReservationId})`).join(', ')
+            : '')
+        : `*Auto-release:* off (set PLANYO_AUTO_RELEASE=1 to enable) — ${candidates.length} candidate(s) awaiting human release at /planyo-cancellations`,
   )
 
   if (futureCands.length) {
