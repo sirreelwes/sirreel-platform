@@ -22,6 +22,18 @@ import { SignaturePad } from "@/components/portal/SignaturePad";
  * On submit, POSTs to /api/portal/[token]/stage-agreement/sign and routes
  * back to the Job Page on success. [token] in the path is vestigial here
  * — the API resolves the order via the cookie session.
+ *
+ * REVIEW BEFORE SIGNING (Wes, 2026-08-25). The page put a signature pad
+ * directly under a 600px PDF frame with nothing between them, so a stage
+ * contract could be countersigned without the document ever being opened
+ * — while the acknowledgement the client agrees to says "I have read".
+ * The rental page had already been gated; this one had not.
+ *
+ * The contract is a PDF, so the rental page's scroll-position test does
+ * not apply — we cannot see inside a PDF viewer. Same treatment its
+ * counter-PDF branch uses instead: open it full-screen (the only way a
+ * PDF is readable on a phone), then an explicit "I've read it" before the
+ * form appears. The weakest honest claim, not a timer.
  */
 
 const ACKNOWLEDGEMENT_TEXT =
@@ -42,6 +54,8 @@ export default function StageContractSignPage() {
   // before the pad existed.
   const [signature, setSignature] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  // Has the client confirmed they read it? Never assumed — see the note above.
+  const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -135,11 +149,44 @@ export default function StageContractSignPage() {
         </div>
 
         {pdfUrl && (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <iframe src={pdfUrl} className="w-full" style={{ height: 600 }} title="Stage contract PDF" />
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+              The agreement
+            </div>
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg"
+            >
+              Open the agreement →
+            </a>
+            {/* Wide screens can also read it in place; phones get the
+                full-screen open above, which is the only way a PDF is
+                actually readable there. */}
+            <div className="hidden md:block rounded-lg border border-gray-200 overflow-hidden">
+              <iframe src={pdfUrl} className="w-full" style={{ height: 600 }} title="Stage contract PDF" />
+            </div>
+            {!reviewed && (
+              <button
+                onClick={() => setReviewed(true)}
+                className="block w-full sm:w-auto px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-900 text-sm font-semibold rounded-lg"
+              >
+                I&rsquo;ve read the agreement — continue to sign
+              </button>
+            )}
           </div>
         )}
 
+        {/* No signature pad under a document nobody has opened. */}
+        {!reviewed && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm text-gray-600">
+            <span className="font-semibold text-gray-900">Read the agreement to continue.</span>{' '}
+            Open the agreement above, then confirm you have read it.
+          </div>
+        )}
+
+        {reviewed && (
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Your Name</label>
@@ -196,6 +243,7 @@ export default function StageContractSignPage() {
             <a href={`/portal/job/${slug}`} className="text-sm text-gray-600 hover:text-gray-900">Cancel</a>
           </div>
         </div>
+        )}
       </main>
 
       <footer className="mt-10 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>

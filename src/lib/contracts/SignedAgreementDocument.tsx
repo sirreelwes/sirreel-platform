@@ -290,76 +290,6 @@ export function SignedAgreementDocument({
           </View>
         </View>
 
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Signatory</Text>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Name</Text>
-            <Text style={styles.rowValue}>{signature.signerName}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Title</Text>
-            <Text style={styles.rowValue}>{signature.signerTitle}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValue}>{signature.signerEmail}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Signed at</Text>
-            <Text style={styles.rowValue}>{fmtDateTime(signature.signedAt)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Acknowledgment</Text>
-          <Text style={styles.clauseBody}>{signature.acknowledgmentText}</Text>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>Signature</Text>
-          <View style={styles.signatureFrame}>
-            {signature.signatureImageDataUri ? (
-              <Image src={signature.signatureImageDataUri} style={styles.signatureImage} />
-            ) : (
-              <Text style={styles.typedSignature}>{signature.signerName}</Text>
-            )}
-            <View style={styles.signatureLine} />
-            <Text style={styles.small}>
-              {signature.signerName}
-              {signature.signerTitle ? `, ${signature.signerTitle}` : ''}
-            </Text>
-          </View>
-          <Text style={styles.attestation}>
-            Signed electronically by {signature.signerName} on {fmtDate(signature.signedAt)}.
-          </Text>
-        </View>
-
-        <View style={styles.block}>
-          <Text style={styles.blockTitle}>E-SIGN audit trail</Text>
-          <View style={styles.auditTable}>
-            <View style={styles.auditRow}>
-              <Text style={styles.auditLabel}>Timestamp</Text>
-              <Text style={styles.auditValue}>{fmtDateTime(signature.signedAt)}</Text>
-            </View>
-            <View style={styles.auditRow}>
-              <Text style={styles.auditLabel}>IP address</Text>
-              <Text style={styles.auditValue}>{signature.ipAddress || 'unknown'}</Text>
-            </View>
-            <View style={styles.auditRowLast}>
-              <Text style={styles.auditLabel}>User agent</Text>
-              <Text style={styles.auditValue}>{signature.userAgent || 'unknown'}</Text>
-            </View>
-          </View>
-        </View>
-
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) => `SirReel Rental Agreement · Page ${pageNumber} of ${totalPages}`}
-          fixed
-        />
-      </Page>
-
-      <Page size="LETTER" style={styles.page}>
         <Text style={styles.blockTitle}>Rental Policies</Text>
         {RENTAL_POLICIES.map((policy, i) => (
           <View key={`policy-${i}`} style={styles.policyBlock}>
@@ -392,6 +322,75 @@ export function SignedAgreementDocument({
         <Text style={styles.clauseBody}>{LCDW_ADDENDUM.rate}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.scope}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.note}</Text>
+
+        <View style={styles.divider} />
+
+        {/* Execution LAST. This block used to open the document, so the
+            signature and the E-SIGN audit trail sat on page 1 and the terms
+            they attest to started on page 2 — a contract signed above what
+            was agreed to. Terms now run first and the signature closes the
+            document, which is also where a reader looks for it. */}
+        <View style={styles.block} wrap={false}>
+          <Text style={styles.blockTitle}>Signatory</Text>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Name</Text>
+            <Text style={styles.rowValue}>{signature.signerName}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Title</Text>
+            <Text style={styles.rowValue}>{signature.signerTitle}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Email</Text>
+            <Text style={styles.rowValue}>{signature.signerEmail}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Signed at</Text>
+            <Text style={styles.rowValue}>{fmtDateTime(signature.signedAt)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.block} wrap={false}>
+          <Text style={styles.blockTitle}>Acknowledgment</Text>
+          <Text style={styles.clauseBody}>{signature.acknowledgmentText}</Text>
+        </View>
+
+        <View style={styles.block} wrap={false}>
+          <Text style={styles.blockTitle}>Signature</Text>
+          <View style={styles.signatureFrame}>
+            {signature.signatureImageDataUri ? (
+              <Image src={signature.signatureImageDataUri} style={styles.signatureImage} />
+            ) : (
+              <Text style={styles.typedSignature}>{signature.signerName}</Text>
+            )}
+            <View style={styles.signatureLine} />
+            <Text style={styles.small}>
+              {signature.signerName}
+              {signature.signerTitle ? `, ${signature.signerTitle}` : ''}
+            </Text>
+          </View>
+          <Text style={styles.attestation}>
+            Signed electronically by {signature.signerName} on {fmtDate(signature.signedAt)}.
+          </Text>
+        </View>
+
+        <View style={styles.block} wrap={false}>
+          <Text style={styles.blockTitle}>E-SIGN audit trail</Text>
+          <View style={styles.auditTable}>
+            <View style={styles.auditRow}>
+              <Text style={styles.auditLabel}>Timestamp</Text>
+              <Text style={styles.auditValue}>{fmtDateTime(signature.signedAt)}</Text>
+            </View>
+            <View style={styles.auditRow}>
+              <Text style={styles.auditLabel}>IP address</Text>
+              <Text style={styles.auditValue}>{signature.ipAddress || 'unknown'}</Text>
+            </View>
+            <View style={styles.auditRowLast}>
+              <Text style={styles.auditLabel}>User agent</Text>
+              <Text style={styles.auditValue}>{signature.userAgent || 'unknown'}</Text>
+            </View>
+          </View>
+        </View>
 
         <Text
           style={styles.footer}
