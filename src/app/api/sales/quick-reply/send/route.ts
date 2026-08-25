@@ -11,9 +11,11 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { parseCcList } from '@/lib/email/ccList'
+import { teamInboxEmail, withTeamCc } from '@/lib/email/teamVisibility'
 import { computeQuickReplyTiering, composeQuickReply } from '@/lib/sales/quickReply'
 import { captureOutreachContact } from '@/lib/crm/captureFromEmail'
 import { recordQuickReplyOnThread } from '@/lib/sales/markInquiryResponded'
+import { buildDetailsLink } from '@/lib/intake/detailsLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +92,20 @@ export async function POST(req: NextRequest) {
   }
 
   const tiering = await computeQuickReplyTiering(payload.categories || [], payload.pickup, payload.return)
+
+  // One-tap link for the "what's the production company / project name?"
+  // ask. Minted here, not in the modal, so the token is signed server-side
+  // and bound to the inquiry we can actually resolve. Null when nothing
+  // binds — the ask then keeps its plain "just reply with those" wording.
+  const askForCompany = !!payload.askForDetails && !payload.clientName?.trim()
+  const askForProject = !!payload.askForDetails && !payload.jobName?.trim()
+  const detailsUrl = await buildDetailsLink({
+    askForCompany,
+    askForProject,
+    sentTo: payload.recipientEmail,
+    inboundEmailMessageId: payload.inboundEmailMessageId ?? null,
+  })
+
   const { subject, html, text } = composeQuickReply({
     recipientName: payload.recipientName,
     clientName: payload.clientName,
@@ -100,14 +116,25 @@ export async function POST(req: NextRequest) {
     agentName: session.user.name || 'SirReel',
     personalNote: message,
     askForDetails: !!payload.askForDetails,
+    detailsUrl,
     heldFrom: typeof payload.heldFrom === 'string' ? payload.heldFrom : null,
     heldTo: typeof payload.heldTo === 'string' ? payload.heldTo : null,
     customMessage: payload.customMessage ?? null,
   })
 
+  // Transition-period team visibility (see lib/email/teamVisibility.ts):
+  //   · CC so the shared inbox sees the reply went out and nobody
+  //     answers the same client twice.
+  //   · Reply-To so the CLIENT'S reply lands somewhere the team works.
+  //     Without it replies go to the From address, notifications@, which
+  //     HQ does not ingest — they were effectively disappearing.
+  const ccList = withTeamCc(manualCc, payload.recipientEmail)
+  const teamInbox = teamInboxEmail()
+
   const result = await sendAgreementEmail({
     to: [payload.recipientEmail],
-    cc: manualCc.length > 0 ? manualCc : undefined,
+    cc: ccList.length > 0 ? ccList : undefined,
+    replyTo: teamInbox ?? undefined,
     subject,
     html,
     text,

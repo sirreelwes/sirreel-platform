@@ -205,6 +205,9 @@ export interface ComposeQuickReplyArgs {
   personalNote?: string | null
   /** Fold a request for the production company + project name into the reply. */
   askForDetails?: boolean
+  /** Resolved by the send/preview route via buildDetailsLink — the one-tap
+   *  page carrying the two fields. Null keeps the plain "just reply" ask. */
+  detailsUrl?: string | null
   /** Set only when a soft hold was actually created — window only, no units. */
   heldFrom?: string | null
   heldTo?: string | null
@@ -245,6 +248,7 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
       heldRange: holdRangeLabel(args.heldFrom, args.heldTo),
       askForCompany: !!args.askForDetails && !args.clientName?.trim(),
       askForJob: !!args.askForDetails && !args.jobName?.trim(),
+      detailsUrl: args.detailsUrl ?? null,
       customBody: args.customMessage ?? null,
     },
   })

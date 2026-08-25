@@ -1005,6 +1005,7 @@ model Booking {
   orders            Order[]
   activities        Activity[]
   reservations      Reservation[]
+  detailReplies     ClientDetailReply[] @relation("BookingDetailReplies")
 
   @@index([jobId])
   @@map("bookings")
@@ -2209,6 +2210,7 @@ model User {
   driverAssignmentsInvited DriverAssignment[] @relation("DriverAssignmentInvitedBy")
 
   @@map("users")
+  detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
 }
 
 // ═══════════════════════════════════════
@@ -4124,6 +4126,8 @@ model Inquiry {
   convertedOrder   Order?     @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
   // COIs dropped via the client upload link before a job exists.
   coiChecks        CoiCheck[] @relation("InquiryCoiChecks")
+  // Company / project name the client typed on the no-login details link.
+  detailReplies    ClientDetailReply[] @relation("InquiryDetailReplies")
 
   sourceMetadata Json? @map("source_metadata")
 
@@ -6170,4 +6174,62 @@ model CardpointeGatewayCall {
   @@index([operation, createdAt])
   @@index([createdAt])
   @@map("sr_cardpointe_gateway_calls")
+}
+
+
+enum ClientDetailReplyStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+/// A client's own answer to "what's the production company and project
+/// name?", typed on the no-login /details/<token> page the Quick Reply
+/// email links to.
+///
+/// Email cannot carry working input fields — Gmail strips <form>, Outlook
+/// never supported it — so the ask that used to end in "just reply with
+/// those" now also offers a one-tap page. The answer lands here as
+/// STRUCTURED data instead of prose in an inbox someone has to re-key.
+///
+/// Deliberately NOT applied to anything on arrival (Wes, 2026-08-25): an
+/// unauthenticated reply naming the client on a booking is a SUGGESTION,
+/// not a fact — the person answering may not be the one who books, and a
+/// typo would otherwise become a real Company row. An agent accepts it,
+/// and accepting seeds the normal CompanyPicker / JobResolver flows so
+/// their near-match and find-or-create discipline still applies.
+///
+/// Bound to whichever context existed when the email went out. Usually
+/// the INQUIRY: the ask fires precisely when we have no company, and a
+/// soft hold needs one, so there is normally no Booking yet. bookingId is
+/// set for the narrower case where holds exist but the job is unnamed.
+/// Both null is not allowed in practice — the token always carries one.
+model ClientDetailReply {
+  id String @id @default(uuid())
+
+  inquiryId String?  @map("inquiry_id")
+  inquiry   Inquiry? @relation("InquiryDetailReplies", fields: [inquiryId], references: [id], onDelete: Cascade)
+  bookingId String?  @map("booking_id")
+  booking   Booking? @relation("BookingDetailReplies", fields: [bookingId], references: [id], onDelete: Cascade)
+
+  /// Verbatim as typed. Never matched or normalized on write — matching is
+  /// the agent's accept step, through the pickers that already do it well.
+  companyName String? @map("company_name")
+  projectName String? @map("project_name")
+
+  /// The address the email was SENT to, taken from the signed token, never
+  /// from the form. A submitter cannot claim to be someone else.
+  sentToEmail String? @map("sent_to_email")
+
+  status       ClientDetailReplyStatus @default(PENDING)
+  resolvedById String?                 @map("resolved_by_id")
+  resolvedBy   User?                   @relation("DetailReplyResolver", fields: [resolvedById], references: [id])
+  resolvedAt   DateTime?               @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([inquiryId])
+  @@index([bookingId])
+  @@index([status])
+  @@map("sr_client_detail_replies")
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Company {
   id: string;
@@ -10,10 +10,15 @@ interface Company {
 interface CompanyPickerProps {
   value: string | null;
   selectedName?: string | null;
+  /** Pre-runs the search with this text — used to seed the box with a name
+   *  the CLIENT typed (see ClientDetailSuggestion) so their words go through
+   *  the same near-match search as anything an agent types, rather than a
+   *  separate create path. Changing it re-seeds; clearing it does nothing. */
+  initialQuery?: string;
   onChange: (id: string, name: string) => void;
 }
 
-export function CompanyPicker({ value, selectedName, onChange }: CompanyPickerProps) {
+export function CompanyPicker({ value, selectedName, initialQuery, onChange }: CompanyPickerProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Company[]>([]);
   const [searching, setSearching] = useState(false);
@@ -35,6 +40,15 @@ export function CompanyPicker({ value, selectedName, onChange }: CompanyPickerPr
       setSearching(false);
     }
   };
+
+  // Seed on mount and whenever the seed text changes. Guarded on `value` so
+  // re-seeding can never clobber a company the agent has already picked.
+  useEffect(() => {
+    if (!initialQuery || value) return;
+    void search(initialQuery);
+    // search is stable enough for this purpose — it only closes over setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, value]);
 
   const pick = (c: Company) => {
     onChange(c.id, c.name);

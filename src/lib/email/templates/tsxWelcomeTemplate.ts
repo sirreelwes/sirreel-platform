@@ -75,6 +75,12 @@ export interface TsxAvailabilityBlock {
   /** Fold a request for ONLY the missing field(s) into the reply. Set per
    *  field so we never ask for something we already have. */
   askForCompany?: boolean
+  /** One-tap /details/<token> link for the ask. Email cannot carry working
+   *  input fields (Gmail strips <form>), so the nearest thing is a link to
+   *  a page with the two fields on it — the answer then arrives structured
+   *  instead of as prose someone has to re-key. Null falls back to the
+   *  plain "just reply with those" wording, which still works. */
+  detailsUrl?: string | null
   askForJob?: boolean
   /** Rep's own message — REPLACES the templated opener prose while the
    *  greeting, the tier availability message + supply CTA, and the sign-off
@@ -302,7 +308,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
               : av!.askForCompany
                 ? '<strong>production company</strong>'
                 : '<strong>project name</strong>'
-          } for this booking? Just reply with th${av!.askForCompany && av!.askForJob ? 'ose' : 'at'} and I'll get everything set up.</p>
+          } for this booking? ${
+            av!.detailsUrl
+              ? `<a href="${escapeHtml(av!.detailsUrl)}" style="color: ${CTA_BG}; font-weight: 700; text-decoration: underline;">Add ${av!.askForCompany && av!.askForJob ? 'them' : 'it'} here</a> &mdash; or just reply to this email.`
+              : `Just reply with th${av!.askForCompany && av!.askForJob ? 'ose' : 'at'} and I'll get everything set up.`
+          }</p>
         </td>
       </tr>`
         : ''}
@@ -483,7 +493,15 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
             ? 'production company'
             : 'project name'
       const reply = av!.askForCompany && av!.askForJob ? 'those' : 'that'
-      textParts.push('', `One quick thing for our files — what's the ${askField} for this booking? Just reply with ${reply} and I'll get everything set up.`)
+      textParts.push('', `One quick thing for our files — what's the ${askField} for this booking?`)
+      // Plain-text readers get the URL spelled out, then the reply fallback —
+      // both paths work, so neither is presented as the only one.
+      if (av!.detailsUrl) {
+        textParts.push(`Add ${av!.askForCompany && av!.askForJob ? 'them' : 'it'} here: ${av!.detailsUrl}`)
+        textParts.push(`Or just reply with ${reply} and I'll get everything set up.`)
+      } else {
+        textParts.push(`Just reply with ${reply} and I'll get everything set up.`)
+      }
     }
     textParts.push('', `Gear and vehicle request: ${av!.suppliesUrl}`)
   }
