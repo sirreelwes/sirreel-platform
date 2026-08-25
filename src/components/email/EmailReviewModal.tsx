@@ -282,7 +282,11 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   // Some entry points open with NOTHING pre-written (Wes 2026-08-25:
   // "Quick Respond … not have any prepopulated message in email") — the
   // rep writes the whole body themselves.
-  const [writeOwn, setWriteOwn] = useState(!!quickRespond);
+  // Welcome (and Quick Respond) compose in ONE always-open box — there is no
+  // toggle and no separate "personal note" (Wes 2026-08-25: "no need for two
+  // sections, just have one place to type in").
+  const [writeOwn, setWriteOwn] = useState(true);
+  const seededRef = useRef(false);
   const [customMessage, setCustomMessage] = useState('');
   const debouncedCustom = useDebouncedValue(writeOwn ? customMessage : '', 350);
   const [aiBusy, setAiBusy] = useState(false);
@@ -338,17 +342,28 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
     setOverrideContactId(null);
     setShowPicker(false);
     setCustomNote('');
-    // Quick Respond stays in write-my-own across target changes; resetting to
-    // false here would drop it back into templated prose the moment the modal
-    // re-opened for a different inquiry.
-    setWriteOwn(!!quickRespond);
+    // Welcome/Quick Respond stay in write-my-own across target changes; the
+    // single box IS the composer for them, so resetting to false would hide
+    // the only place to type.
+    setWriteOwn(target.kind === 'welcome' || !!quickRespond);
     setCustomMessage('');
+    seededRef.current = false;
     setAiFlags(null);
     setAiPolished(null);
     setAiError(null);
     sendInFlightRef.current = false;
     setSendState('idle');
   }, [target, quickRespond]);
+
+  // Welcome sends compose in one box. A REAL welcome seeds it once with the
+  // standard wording, so "editable" means editing real copy rather than
+  // retyping it; Quick Respond deliberately seeds nothing.
+  useEffect(() => {
+    if (!target || target.kind !== 'welcome' || quickRespond) return;
+    if (seededRef.current || customMessage.trim() || !preview?.defaultBody) return;
+    seededRef.current = true;
+    setCustomMessage(preview.defaultBody);
+  }, [target, quickRespond, preview?.defaultBody, customMessage]);
 
   // Initial fetch when target changes.
   useEffect(() => {
@@ -457,6 +472,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
   // Derived: any non-idle send state freezes the modal's interactive
   // controls (close button, textarea, recipient picker, Send button).
   const sendLocked = sendState !== 'idle';
+  // One composer, no toggle, no second note field.
+  const singleBox = target.kind === 'welcome';
 
   return (
     <div
@@ -602,7 +619,12 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
               {/* Personal note — flows into the composer's customMessage
                   slot in BOTH the live preview below and the real send.
                   Optional; empty leaves the email purely templated. The
-                  locked brand shell (header, CTAs, footer) is unaffected. */}
+                  locked brand shell (header, CTAs, footer) is unaffected.
+
+                  NOT shown for welcome/Quick Respond: Wes 2026-08-25, "no
+                  need for two sections, just have one place to type in".
+                  Those kinds get the single composer below instead. */}
+              {!singleBox && (
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -624,6 +646,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                 />
               </div>
+              )}
 
               {/* Write my own email — quick-reply + welcome.
                   For QUICK REPLY the rep's message no longer replaces the
@@ -632,6 +655,18 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
                   with their own greeting and produce a doubled "Hi <name>". */}
               {(target.kind === 'quick-reply' || target.kind === 'welcome') && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
+                  {singleBox ? (
+                    /* One box, always open — no checkbox to find, nothing to
+                       toggle. The label says what the shell adds around it. */
+                    <div className="flex items-baseline justify-between">
+                      <label className="text-[10px] uppercase tracking-wider text-zinc-500">
+                        Your message
+                      </label>
+                      {refreshing && (
+                        <span className="text-[10px] text-amber-300 animate-pulse">Updating preview…</span>
+                      )}
+                    </div>
+                  ) : (
                   <label className="flex items-center gap-2 text-[12px] text-zinc-300 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -654,25 +689,27 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent }: Prop
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        {quickRespond
-                          ? '— nothing is written for you, and no portal button goes out. The greeting and sign-off stay.'
-                          : /* Both kinds behave the same: the standard line
-                               leads, this text follows. */
-                            `— the standard wording, yours to edit. The greeting,${
-                              target.kind === 'welcome' ? ' portal button' : ' availability list & supply link'
-                            } and sign-off stay.`}
+                        — the standard wording, yours to edit. The greeting,
+                        availability list &amp; supply link and sign-off stay.
                       </span>
                     </span>
                   </label>
+                  )}
                   {writeOwn && (
                     <div className="mt-2 space-y-2">
                       <textarea
                         value={customMessage}
                         onChange={(e) => setCustomMessage(e.target.value)}
                         disabled={sendLocked}
-                        rows={5}
+                        rows={singleBox ? 7 : 5}
                         maxLength={5000}
-                        placeholder="Write your message to the client. It appears under the greeting, above the real availability block."
+                        placeholder={
+                          quickRespond
+                            ? 'Write your reply. The greeting and sign-off are added around it.'
+                            : singleBox
+                              ? 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'
+                              : 'Write your message to the client. It appears under the greeting, above the real availability block.'
+                        }
                         className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                       />
                       <div className="flex items-center gap-2">

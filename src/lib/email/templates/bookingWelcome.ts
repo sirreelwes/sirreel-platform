@@ -17,8 +17,11 @@ import { defaultEmailBody } from '@/lib/email/standardOpening'
  */
 
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+// The S mark alone, brand black on transparency, for the LIGHT footer. The
+// existing s-logo.jpg is opaque white-backed and would show a box against the
+// #fafaf8 ground, so this is a generated companion to s-logo-white.png.
+const ABSOLUTE_S_MARK_URL = 'https://hq.sirreel.com/s-logo-black.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
-const FOOTER_PHONE = '(888) 477-7335'
 const GOLD = '#D4A547'
 const DARK = '#0a0a0a'
 const LINK_GRAY = '#9a9a9a'
@@ -33,6 +36,13 @@ export interface BookingWelcomeEmailInput {
   /** Rep name as it should appear in the sign-off (e.g., "Jose Pacheco"). */
   repName: string
   /** Optional rep phone — surfaced under the rep name when present. */
+  /**
+   * Accepted but NOT rendered. Wes 2026-08-25: "it seems to have the wrong
+   * phone for Wes. Let's not have a phone number in this email." Kept in the
+   * signature so every caller does not have to change; drop it from the type
+   * only if the wrong-number problem is fixed at the source and Wes wants it
+   * back. The after-hours line is gone from the body and footer too.
+   */
   repPhone?: string | null
   /** Rep email — populates the inline link under the sign-off. Also used
    *  by the caller as the Reply-To header so client replies route to
@@ -86,7 +96,6 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
   const firstName = escapeHtml(input.firstName || 'there')
   const projectName = escapeHtml(input.projectName || 'your project')
   const repName = escapeHtml(input.repName || 'the SirReel team')
-  const repPhone = input.repPhone ? escapeHtml(input.repPhone) : ''
   const repEmail = input.repEmail ? escapeHtml(input.repEmail) : ''
   const portalLink = input.portalLink
   const ctaLabel = escapeHtml(input.ctaLabel || 'Click here for your TSX portal')
@@ -141,15 +150,11 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ...(noteRaw ? ['', noteRaw] : []),
     ``,
     ...(quick
-      ? [
-          `  ✓ Your dedicated rep — me, from estimate to wrap`,
-          `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
-        ]
+      ? [`  ✓ One team on your job — reply any time and whoever is closest picks it up`]
       : [
           `Everything you'll need lives in one place:`,
           `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
-          `  ✓ Your dedicated rep — me, from estimate to wrap`,
-          `  ✓ Direct support — after-hours line ${FOOTER_PHONE} for anything urgent`,
+          `  ✓ One team on your job — reply any time and whoever is closest picks it up`,
           ``,
           `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
           ``,
@@ -158,10 +163,9 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ``,
     quick ? `Looking forward to hearing from you,` : `Looking forward to the project,`,
     `${input.repName || 'the SirReel team'}`,
-    repPhone ? repPhone : '',
     repEmail ? repEmail : '',
     ``,
-    `SirReel Studio Services · ${FOOTER_ADDRESS} · ${FOOTER_PHONE}`,
+    `SirReel Studio Services · ${FOOTER_ADDRESS}`,
   ]
     .filter((l) => l !== null && l !== undefined)
     .join('\n')
@@ -249,26 +253,14 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                   </td>
                 </tr>`}
                 <tr>
-                  <td style="padding:10px 0;border-top:1px solid #ececec;">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                      <tr>
-                        <td valign="top" width="32" style="color:${GOLD};font-size:18px;font-weight:bold;padding-top:1px;">&#10003;</td>
-                        <td style="font-size:14px;line-height:1.55;color:#333333;">
-                          <strong style="color:#1a1a1a;">Your dedicated rep.</strong>
-                          I&rsquo;ll be your point of contact from estimate to wrap. Reply to this email any time.
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
                   <td style="padding:10px 0;border-top:1px solid #ececec;border-bottom:1px solid #ececec;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                       <tr>
                         <td valign="top" width="32" style="color:${GOLD};font-size:18px;font-weight:bold;padding-top:1px;">&#10003;</td>
                         <td style="font-size:14px;line-height:1.55;color:#333333;">
-                          <strong style="color:#1a1a1a;">Direct support, always.</strong>
-                          After-hours line ${FOOTER_PHONE} for anything urgent during the production.
+                          <strong style="color:#1a1a1a;">One team on your job.</strong>
+                          Reply to this email any time &mdash; whoever is closest to your
+                          production picks it up, so nothing waits on one person.
                         </td>
                       </tr>
                     </table>
@@ -310,7 +302,6 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <p style="margin:0 0 6px;">${quick ? 'Looking forward to hearing from you,' : 'Looking forward to the project,'}</p>
               <p style="margin:0;">
                 <strong style="color:#1a1a1a;">${repName}</strong><br />
-                ${repPhone ? `<span style="color:#555555;">${repPhone}</span><br />` : ''}
                 ${repEmail ? `<a href="mailto:${repEmail}" style="color:${LINK_GRAY};text-decoration:none;">${repEmail}</a>` : ''}
               </p>
             </td>
@@ -319,10 +310,10 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
           <!-- ── Footer ───────────────────────────────────────────── -->
           <tr>
             <td style="background-color:#fafaf8;padding:20px 36px;text-align:center;border-top:1px solid #ececec;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1;color:#777777;letter-spacing:0.5px;">SirReel</div>
+              <img src="${ABSOLUTE_S_MARK_URL}" alt="SirReel" width="30" style="display:inline-block;width:30px;max-width:30px;height:auto;border:0;outline:none;text-decoration:none;" />
               <p style="margin:8px 0 0;font-size:10px;line-height:1.6;color:#888888;letter-spacing:0.3px;">
                 SirReel Studio Services<br />
-                ${FOOTER_ADDRESS} &middot; ${FOOTER_PHONE}
+                ${FOOTER_ADDRESS}
               </p>
             </td>
           </tr>
