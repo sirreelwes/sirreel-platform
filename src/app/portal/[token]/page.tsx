@@ -1,4 +1,5 @@
 'use client';
+import { formatCalendarDate } from '@/lib/dates/calendarDate';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
@@ -63,7 +64,9 @@ const ALL_TABS: { id: TabId; label: string; icon: string; contractTypes: string[
   { id: 'coi', label: 'COI', icon: '📄', contractTypes: ['vehicles', 'stage', 'both'] },
   { id: 'cc', label: 'CC Auth', icon: '💳', contractTypes: ['vehicles', 'stage', 'both'] },
 ];
-const fmtShort = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+// Calendar dates (rental windows), so UTC — a client must never be shown
+// their pickup a day early. Instants elsewhere on this page stay local.
+const fmtShort = (d: string) => formatCalendarDate(d, { month: 'short', day: 'numeric' });
 
 function SigCanvas({ canvasRef, drawn, onClear }: { canvasRef: React.RefObject<HTMLCanvasElement>; drawn: boolean; onClear: () => void }) {
   return (
@@ -1314,8 +1317,8 @@ export default function ClientPortal() {
                       <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-gray-50 rounded-xl text-xs">
                         <div><span className="text-gray-400 uppercase font-bold text-[10px]">Production</span><div className="font-semibold mt-0.5">{booking.jobName}</div></div>
                         <div><span className="text-gray-400 uppercase font-bold text-[10px]">Company</span><div className="font-semibold mt-0.5">{booking.company?.name}</div></div>
-                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental Start</span><div className="font-semibold mt-0.5">{booking.startDate ? new Date(booking.startDate).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '—'}</div></div>
-                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental End</span><div className="font-semibold mt-0.5">{booking.endDate ? new Date(booking.endDate).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '—'}</div></div>
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental Start</span><div className="font-semibold mt-0.5">{formatCalendarDate(booking.startDate)}</div></div>
+                        <div><span className="text-gray-400 uppercase font-bold text-[10px]">Rental End</span><div className="font-semibold mt-0.5">{formatCalendarDate(booking.endDate)}</div></div>
                       </div>
                       {sets.length > 0 && (
                         <div className="mb-4">

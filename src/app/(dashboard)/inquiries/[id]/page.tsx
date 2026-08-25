@@ -96,9 +96,20 @@ function fmtMoney(n: number | null | undefined): string {
     maximumFractionDigits: 2,
   })
 }
+/**
+ * Date-ONLY fields (pickup, return) render in UTC.
+ *
+ * These are calendar dates, not instants: the web form posts "2026-08-26"
+ * and it is stored as UTC midnight. Formatting that in Pacific/Mountain
+ * rolls it back to the 25th, so the page was showing every requested
+ * rental window a full day early — Giovanna's Aug 26–28 read as Aug 25–27.
+ *
+ * fmtDateTime below deliberately stays LOCAL: a submission timestamp is a
+ * real instant and should read in the operator's own time.
+ */
 function fmtDate(s: string | null | undefined): string {
   if (!s) return '—'
-  return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+  return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' })
 }
 function fmtDateTime(s: string | null | undefined): string {
   if (!s) return '—'

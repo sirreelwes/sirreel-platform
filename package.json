@@ -18,6 +18,7 @@
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
     "test:cc": "tsx tests/email/cc-list.test.ts",
+    "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts"
   },

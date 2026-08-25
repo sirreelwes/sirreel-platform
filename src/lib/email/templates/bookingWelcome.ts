@@ -168,14 +168,14 @@ export function buildBookingWelcomeEmail(input: BookingWelcomeEmailInput): Booki
     ``,
     ...(quick
       ? [
-          `  ✓ One team on your job — reply any time and whoever is closest picks it up`,
+          `  ✓ The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
           ``,
           `${[input.ctaLabel || 'Start your order', input.secondaryCtaLabel].filter(Boolean).join(' / ')}: ${portalLink}`,
         ]
       : [
           `Everything you'll need lives in one place:`,
           `  ✓ Your TSX portal — paperwork, schedule, equipment, all in one place`,
-          `  ✓ One team on your job — reply any time and whoever is closest picks it up`,
+          `  ✓ The most responsive team in the industry — we take an all hands on deck approach to make sure you get the best service possible`,
           ``,
           `${input.ctaLabel || 'Click here for your TSX portal'}: ${portalLink}`,
           ``,
@@ -279,9 +279,9 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
                       <tr>
                         <td valign="top" width="32" style="color:${GOLD};font-size:18px;font-weight:bold;padding-top:1px;">&#10003;</td>
                         <td style="font-size:14px;line-height:1.55;color:#333333;">
-                          <strong style="color:#1a1a1a;">One team on your job.</strong>
-                          Reply to this email any time &mdash; whoever is closest to your
-                          production picks it up, so nothing waits on one person.
+                          <strong style="color:#1a1a1a;">The most responsive team in the industry.</strong>
+                          We take an all hands on deck approach to make sure you get the
+                          best service possible.
                         </td>
                       </tr>
                     </table>

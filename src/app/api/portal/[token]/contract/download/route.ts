@@ -1,3 +1,4 @@
+import { formatCalendarDate } from '@/lib/dates/calendarDate'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from '@/lib/contracts/fees'
@@ -37,8 +38,11 @@ const TERMS = [
 function buildHtml(booking: any, format: string) {
   const company = booking.company?.name || ''
   const jobName = booking.jobName || ''
-  const startDate = booking.startDate ? new Date(booking.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
-  const endDate = booking.endDate ? new Date(booking.endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
+  // Calendar dates — UTC, never the server's zone. This is a signed rental
+  // agreement; a day-early date here is a contract that states the wrong term.
+  const LONG = { month: 'long', day: 'numeric', year: 'numeric' } as const
+  const startDate = formatCalendarDate(booking.startDate, LONG, '')
+  const endDate = formatCalendarDate(booking.endDate, LONG, '')
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   const termsHtml = TERMS.map(t => `
