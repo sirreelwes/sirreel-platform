@@ -12,7 +12,7 @@
  * header with the white wordmark, gold accent, light-mode lock, table
  * layout.
  *
- * NOTE the security copy is deliberate. Clients are being asked for a
+ * NOTE the security copy is deliberate, and so is the payment-options line. Clients are being asked for a
  * card by email, which is exactly what a phishing attempt looks like, so
  * the body says plainly that we never take card numbers over email or
  * phone and that the details go into the portal itself.
@@ -21,6 +21,9 @@
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
+/** The S mark, for the footer. Absolute + on middleware's `/s-logo` public
+ *  allowlist, because an email client fetches it unauthenticated. */
+const ABSOLUTE_S_MARK_BLACK = 'https://hq.sirreel.com/s-logo-black.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
 const GOLD = '#D4A547'
@@ -83,6 +86,16 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
   const note = (input.personalNote || '').trim()
   const link = input.portalLink
   const repBody = (input.customBody || '').trim()
+  /**
+   * The other ways to pay (Wes 2026-08-26). Two jobs in one line: it tells a
+   * client the button does not charge them — it authorizes — and it names the
+   * alternatives instead of leaving "paying another way" as a hint they have
+   * to ask about. Part of the SHELL, like the security paragraph: a rep who
+   * writes their own ask would rarely retype this, and a client who would
+   * rather send a wire should not have to have drawn the rep who remembered.
+   */
+  const PAYMENT_OPTIONS =
+    "This just secures your order — you aren't charged by adding it. If you'd rather pay another way, we also take ACH, Zelle and wire transfer; just reply and we'll send the details."
   // The standard ask, from the same function that seeds the compose box, so
   // what a rep is handed to edit is what a client receives when they don't.
   const askText = repBody || defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw })
@@ -102,11 +115,15 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
     ``,
     `You can enter it yourself in your SirReel portal — it goes straight to our payment processor, and nobody at SirReel ever sees the full number. We will never ask for card details over email or on the phone.`,
     ``,
+    PAYMENT_OPTIONS,
+    ``,
     link ? `Authorize your card: ${link}` : `(The secure portal link is generated when this email is sent.)`,
     ``,
     // Dropped when the rep wrote the body — their words carry their own
-    // next step, and ours underneath read like a second author.
-    ...(repBody ? [] : [`Questions, or paying another way? Just reply to this email — ${agentRef} will sort it out.`, ``]),
+    // next step, and ours underneath read like a second author. The line
+    // no longer has to hint at "paying another way": PAYMENT_OPTIONS says it
+    // outright, above the button, on every send.
+    ...(repBody ? [] : [`Questions? Just reply to this email — ${agentRef} will sort it out.`, ``]),
     `Thanks,`,
     `The SirReel Team`,
     ``,
@@ -204,6 +221,11 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
               <p style="margin:0 0 16px;">
                 You can enter it yourself in your SirReel portal &mdash; it goes straight to our payment processor, and nobody at SirReel ever sees the full number. We will never ask for card details over email or on the phone.
               </p>
+              ${/* Sits ABOVE the button on purpose — "you aren't charged by
+                     adding it" is reassurance a client needs before they
+                     click, not after. */ ''}<p style="margin:0 0 16px;">
+                ${escapeHtml(PAYMENT_OPTIONS)}
+              </p>
             </td>
           </tr>
 ${ctaBlock}
@@ -211,7 +233,7 @@ ${ctaBlock}
           <!-- ── Sign-off ──────────────────────────────────────────── -->
           <tr>
             <td style="padding:24px 36px 32px;font-size:14px;line-height:1.55;color:#333333;">
-              ${repBody ? '' : `<p style="margin:0 0 6px;">Questions, or paying another way? Just reply to this email &mdash; ${agentRefHtml} will sort it out.</p>`}
+              ${repBody ? '' : `<p style="margin:0 0 6px;">Questions? Just reply to this email &mdash; ${agentRefHtml} will sort it out.</p>`}
               <p style="margin:12px 0 0;">
                 Thanks,<br />
                 <strong style="color:#1a1a1a;">The SirReel Team</strong>
@@ -222,7 +244,20 @@ ${ctaBlock}
           <!-- ── Footer ───────────────────────────────────────────── -->
           <tr>
             <td style="background-color:#fafaf8;padding:20px 36px;text-align:center;border-top:1px solid #ececec;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1;color:#777777;letter-spacing:0.5px;">SirReel</div>
+              ${/* The S mark replaces the Georgia "SirReel" wordmark that
+                     used to sit here (Wes 2026-08-26). alt text still reads
+                     SirReel, so a client with images off is no worse off than
+                     the word it replaced. The width ATTRIBUTE matters as much
+                     as the CSS: Outlook's Word engine ignores the style and
+                     would otherwise render the source at its full 1118px.
+                     A JS comment, not an HTML one — this note is for us, and
+                     an HTML comment would ride along into the client's
+                     inbox. */ ''}<img
+                src="${ABSOLUTE_S_MARK_BLACK}"
+                alt="SirReel"
+                width="26"
+                style="display:inline-block;width:26px;max-width:26px;height:auto;border:0;outline:none;text-decoration:none;opacity:0.6;"
+              />
               <p style="margin:8px 0 0;font-size:10px;line-height:1.6;color:#888888;letter-spacing:0.3px;">
                 SirReel Studio Services<br />
                 ${FOOTER_ADDRESS} &middot; ${FOOTER_PHONE}

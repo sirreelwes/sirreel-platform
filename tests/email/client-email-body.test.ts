@@ -117,6 +117,17 @@ lacks('card: plain text drops the closer too', cardOwn.text, 'Questions, or payi
 has('card: the security paragraph survives', cardOwn.html, 'never ask for card details over email')
 has('card: the security paragraph survives in text', cardOwn.text, 'never ask for card details over email')
 has('card: the secure button survives', cardOwn.html, 'Authorize your card')
+// Named alternatives, not a hint to ask (Wes 2026-08-26). Shell, like the
+// security paragraph — a rep's own ask must not be able to lose it.
+for (const [label, doc] of [['templated', cardTemplated], ['rep-written', cardOwn]] as const) {
+  has(`card (${label}): says the card isn't a charge`, doc.html, "you aren't charged by adding it")
+  has(`card (${label}): names ACH, Zelle and wire`, doc.html, 'ACH, Zelle and wire transfer')
+  has(`card (${label}): plain text carries it too`, doc.text, 'ACH, Zelle and wire transfer')
+}
+// The line lands ABOVE the button — reassurance before the click, not after.
+eq('card: payment options precede the CTA',
+  cardTemplated.html.indexOf('ACH, Zelle and wire transfer') < cardTemplated.html.indexOf('Authorize your card'),
+  true)
 has('card: the greeting survives', cardOwn.html, 'Hi Colin,')
 has('card: the sign-off survives', cardOwn.html, 'The SirReel Team')
 lacks('card: rep prose is escaped', card('<img src=x onerror=1>').html, '<img src=x')
