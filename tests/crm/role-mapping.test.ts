@@ -93,6 +93,8 @@ check('Executive Director', PersonRole.OTHER, 'nonprofit title, not production')
 check('Administrative Assistant', PersonRole.OTHER, 'not a production assistant')
 check('Rental Agent', PersonRole.OTHER, 'works at a competitor, not on a production')
 check('Head Alchemist', PersonRole.OTHER, 'real title in the book; means nothing to us')
+check('AD', PersonRole.OTHER,
+  "Yani Gutierrez signs off as bare \"AD\" — Assistant Director far more often than Art Director, so it must stay unresolved")
 check('Driver', PersonRole.OTHER, 'no bucket, and guessing transpo would be wrong')
 check('', PersonRole.OTHER, 'empty string')
 check('   ', PersonRole.OTHER, 'whitespace only')

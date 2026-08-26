@@ -109,7 +109,9 @@ Rules:
 
 7) A person MENTIONING a department is not a member of it. "Adding accounting to this thread", "James will submit these to accounting", "our producer will confirm", "looping in the art department" all tell you about SOMEONE ELSE. The writer of those sentences is UNKNOWN unless something else identifies them. Likewise a person asking about the "art truck" or the "grip package" is ordering equipment, not declaring a department — that is the request, not their job.
 
-8) Role guidance:
+8) AMBIGUOUS ABBREVIATIONS are UNKNOWN, not a coin flip. "AD" means Assistant Director far more often than Art Director — a bare "AD" in a signature is UNKNOWN. Same for a bare "PM" (production manager vs project manager vs product manager), a bare "PA" with no context, a bare "best boy" with no department, and "DP" where the person may simply be discussing one. Return the string in "title" so a human can settle it; do not pick.
+
+9) Role guidance:
    - GRIP and GAFFER_ELECTRIC are SEPARATE departments. Grip rigs and supports; electric/gaffer lights. A bare "best boy" with no department stated is UNKNOWN.
    - ART_DIRECTOR covers the art department: art director, production designer, set decorator, set designer, prop stylist.
    - ART_COORDINATOR is only for someone explicitly called an art coordinator.
