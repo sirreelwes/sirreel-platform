@@ -67,14 +67,30 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
   if (undo) {
-    await prisma.order.update({
-      where: { id },
-      data: {
-        quoteStatus: order.status === 'DRAFT' ? 'DRAFT' : 'SENT',
-        lostAt: null,
-        lostReason: null,
-        pickupDateAtLoss: null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id },
+        data: {
+          quoteStatus: order.status === 'DRAFT' ? 'DRAFT' : 'SENT',
+          lostAt: null,
+          lostReason: null,
+          pickupDateAtLoss: null,
+        },
+      })
+      // Un-expire the follow-up drafts, or "reopen" doesn't reopen. Marking
+      // lost expires them; the follow-up cron can never replace them because
+      // QuoteFollowUp is unique on (orderId, stage) — the expired row wins the
+      // insert and the P2002 is swallowed as "another pass got there first".
+      // So without this, a reopened quote silently has no follow-up ladder for
+      // the rest of its life.
+      //
+      // Only rows nobody ACTED on come back: a sent or skipped follow-up is a
+      // decision that already happened, and resurrecting it would re-queue an
+      // email the rep already dealt with.
+      await tx.quoteFollowUp.updateMany({
+        where: { orderId: id, status: 'EXPIRED', sentAt: null, skippedAt: null },
+        data: { status: 'PENDING' },
+      })
     })
     // Put the cadence ladder back where the lifecycle says it belongs.
     try {
