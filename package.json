@@ -21,6 +21,7 @@
     "test:cc": "tsx tests/email/cc-list.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",
+    "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",

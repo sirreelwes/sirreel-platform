@@ -34,6 +34,7 @@ import { CoiReviewModal } from '@/components/coi/CoiReviewModal';
 import { ChangeProductionCompany } from '@/components/jobs/ChangeProductionCompany';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
+import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
@@ -1338,6 +1339,29 @@ const driverTone = (d: any): string => {
           </div>
         </div>
       </div>
+
+      {/* Reservations — one row per booking, with where it came from.
+          Above the unit grid on purpose: two cards for two vans look
+          identical whether that is one two-van rental or the same rental
+          held twice, and only the booking-level view separates them. */}
+      <JobBookingsSection
+        bookings={(job.bookings ?? []).map((b: any) => ({
+          id: b.id,
+          bookingNumber: b.bookingNumber,
+          status: b.status,
+          startDate: b.startDate,
+          endDate: b.endDate,
+          planyoCartId: b.planyoCartId ?? null,
+          items: (b.items ?? []).map((i: any) => ({
+            id: i.id,
+            category: i.category ?? null,
+            assignments: (i.assignments ?? []).map((a: any) => ({
+              id: a.id, status: a.status, asset: a.asset ?? null,
+            })),
+          })),
+        }))}
+        onChanged={load}
+      />
 
       {/* Reserved assets → each opens its reservation on the calendar */}
       <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">

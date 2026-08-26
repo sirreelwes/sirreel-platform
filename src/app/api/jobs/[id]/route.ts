@@ -173,6 +173,12 @@ export async function GET(
             startDate: true,
             endDate: true,
             status: true,
+            // Where this booking came from. Native bookings are the ones
+            // the team works in through the cutover; a non-null cart id
+            // means the daily Planyo import created it, and the two can
+            // describe the SAME real rental (the importer keys idempotency
+            // on planyoCartId, so it cannot see a native twin).
+            planyoCartId: true,
             items: {
               select: {
                 id: true,
