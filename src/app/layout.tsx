@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl';
+import { Analytics } from '@vercel/analytics/react';
 
 export const metadata: Metadata = {
   // Without metadataBase, Next cannot resolve relative og:image paths and
@@ -33,6 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <Providers>{children}</Providers>
+        {/* Vercel Web Analytics — page views, referrers, top pages.
+            Mounted at the root so it is instrumented once for the whole
+            app; it previously lived on the (public) shell alone. Note
+            that the staff dashboard and the client portal share this
+            root, so authenticated surfaces are now measured too.
+            Cookieless and does not fingerprint, so no consent banner. */}
+        <Analytics />
       </body>
     </html>
   );

@@ -4,7 +4,6 @@ import { PublicSiteNav } from '@/components/site/PublicSiteNav'
 import { PublicSiteFooter } from '@/components/site/PublicSiteFooter'
 import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
 import { hasPublishedSpaces } from '@/lib/site/spaces'
-import { Analytics } from '@vercel/analytics/next'
 
 /**
  * Shared public-site shell (SirReel marketing surface, orders.sirreel.com).
@@ -87,17 +86,9 @@ export default async function PublicSiteLayout({ children }: { children: React.R
       {/* After-hours AI assistant — floating chat on every public page.
           Handles FAQs + verified access-code release (server-side auth). */}
       <PublicAssistantWidget />
-      {/* Vercel Web Analytics — page views, referrers, top pages.
-          Mounted HERE, on the public shell, not in the root layout: the
-          staff dashboard and the client portal share that root, and there
-          is no reason to measure our own team's clicks or to collect
-          behavioural data on clients inside an authenticated portal where
-          they are handling paperwork and card details.
-
-          Cookieless and does not fingerprint, so it needs no consent
-          banner — which is why it was chosen over GA4 for a site that
-          collects production-company contact details. */}
-      <Analytics />
+      {/* Vercel Web Analytics moved to the ROOT layout — mounting it here
+          too would inject the script twice on every public page and
+          double-count page views. */}
     </div>
   )
 }
