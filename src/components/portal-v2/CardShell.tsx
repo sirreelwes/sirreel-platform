@@ -15,6 +15,7 @@ const STATUS_META: Record<V2CardStatus, { label: string; chip: string; dot: stri
   attention: { label: 'Needs attention', chip: 'bg-red-50 text-red-600 border-red-200', dot: 'bg-red-500' },
   done: { label: 'Complete', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
   locked: { label: 'Read-only', chip: 'bg-gray-100 text-gray-500 border-gray-200', dot: 'bg-gray-400' },
+  info: { label: 'Optional', chip: 'bg-gray-50 text-gray-500 border-gray-200', dot: 'bg-gray-300' },
 }
 
 export function ContextChip({ children }: { children: React.ReactNode }) {

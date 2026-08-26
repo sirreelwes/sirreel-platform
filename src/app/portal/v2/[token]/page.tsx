@@ -9,6 +9,7 @@ import { LcdwCard } from '@/components/portal-v2/LcdwCard'
 import { StudioContractCard } from '@/components/portal-v2/StudioContractCard'
 import { CoiCard } from '@/components/portal-v2/CoiCard'
 import { CcAuthCard } from '@/components/portal-v2/CcAuthCard'
+import { PaymentOptionsCard } from '@/components/portal-v2/PaymentOptionsCard'
 import {
   EMPTY_INTAKE,
   type V2AgreementState,
@@ -33,7 +34,9 @@ import {
 const fmtShort = (d?: string) =>
   d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—'
 
-type OpenKey = 'details' | V2DocKey | null
+// 'payment' is not a V2DocKey: it is reference, not a document with a done
+// state, so it never enters the auto-advance or the all-done rollup.
+type OpenKey = 'details' | V2DocKey | 'payment' | null
 
 export default function ClientPortalV2() {
   const params = useParams()
@@ -383,6 +386,11 @@ export default function ClientPortalV2() {
           onToggle={() => toggle('cc')}
           onAuthorized={() => markDone('cc')}
         />
+
+        {/* Sits directly under the card authorization, because that is the
+            card it is an alternative TO — and because the card-auth email
+            promises a client they will find it here. */}
+        <PaymentOptionsCard token={token} open={openKey === 'payment'} onToggle={() => toggle('payment')} />
 
         {/* Our W-9 — clients need it for their AP/records when they pay us.
             Not a task (no done state); just a download. Points at the shared

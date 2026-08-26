@@ -35,10 +35,9 @@ import {
   buildJobSessionCookieHeader,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
+import { loadClientPaymentDetails } from '@/lib/payments/paymentDetails'
 
 export const dynamic = 'force-dynamic'
-
-const SINGLETON = 'singleton'
 
 export async function GET(req: NextRequest) {
   const session = verifyJobSessionCookieValue(req.cookies.get(JOB_SESSION_COOKIE)?.value)
@@ -51,48 +50,8 @@ export async function GET(req: NextRequest) {
     return res
   }
 
-  const s = await prisma.siteSetting.findUnique({
-    where: { id: SINGLETON },
-    select: {
-      paymentPayeeName: true,
-      paymentBankName: true,
-      paymentAccountType: true,
-      paymentAccountNumber: true,
-      paymentRoutingAch: true,
-      paymentRoutingWire: true,
-      paymentRemittanceEmail: true,
-      paymentBankAddress: true,
-      paymentInstructions: true,
-      paymentZelleHandle: true,
-      paymentZelleName: true,
-    },
-  })
-
-  // Configured = we have a payee, an account number and an ACH routing
-  // number. Rendering a half-filled panel would invite a client to wire money
-  // against incomplete instructions, which is worse than showing nothing.
-  const configured = !!(
-    s?.paymentPayeeName &&
-    s?.paymentAccountNumber &&
-    s?.paymentRoutingAch
-  )
-  if (!configured) return NextResponse.json({ ok: true, configured: false })
-
-  return NextResponse.json({
-    ok: true,
-    configured: true,
-    details: {
-      payeeName: s!.paymentPayeeName,
-      bankName: s!.paymentBankName ?? null,
-      accountType: s!.paymentAccountType ?? null,
-      accountNumber: s!.paymentAccountNumber,
-      routingAch: s!.paymentRoutingAch,
-      routingWire: s!.paymentRoutingWire ?? null,
-      remittanceEmail: s!.paymentRemittanceEmail ?? null,
-      bankAddress: s!.paymentBankAddress ?? null,
-      instructions: s!.paymentInstructions ?? null,
-      zelleHandle: s!.paymentZelleHandle ?? null,
-      zelleName: s!.paymentZelleName ?? null,
-    },
-  })
+  // Shape + the "configured" rule live in the shared loader, so this route
+  // and the v2 paperwork portal's cannot drift apart.
+  const payload = await loadClientPaymentDetails()
+  return NextResponse.json({ ok: true, ...payload })
 }

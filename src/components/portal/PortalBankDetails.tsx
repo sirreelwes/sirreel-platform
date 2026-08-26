@@ -66,12 +66,27 @@ function Row({ label, value }: { label: string; value: string | null }) {
   )
 }
 
-export function PortalBankDetails() {
+/**
+ * Two portals render this, and they authenticate differently — the job portal
+ * by signed session, the v2 paperwork portal by its PaperworkRequest token.
+ * That is the ONLY difference, so it is a prop rather than a second copy of
+ * the panel: the numbers, the copy buttons and the fraud warning have to stay
+ * identical wherever a client reads them.
+ */
+export function PortalBankDetails({
+  endpoint = '/api/portal/job/payment-details',
+  /** The A/P share posts to a job-session route. Off wherever there is no
+   *  job session to post with — see the note on ShareToAp. */
+  showShare = true,
+}: {
+  endpoint?: string
+  showShare?: boolean
+} = {}) {
   const [details, setDetails] = useState<Details | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'none'>('loading')
 
   useEffect(() => {
-    fetch('/api/portal/job/payment-details')
+    fetch(endpoint)
       .then((r) => r.json())
       .then((d) => {
         if (d?.configured && d.details) {
@@ -80,7 +95,7 @@ export function PortalBankDetails() {
         } else setState('none')
       })
       .catch(() => setState('none'))
-  }, [])
+  }, [endpoint])
 
   if (state === 'loading') {
     return <div className="text-xs text-gray-400">Loading payment details…</div>
@@ -124,7 +139,7 @@ export function PortalBankDetails() {
 
       <ZelleDetails handle={details.zelleHandle} name={details.zelleName} tone="compact" />
 
-      <ShareToAp />
+      {showShare && <ShareToAp />}
 
       <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
         <span className="font-semibold">These details never change.</span> SirReel
@@ -144,6 +159,11 @@ export function PortalBankDetails() {
  *
  * SirReel sends the link directly, so the account numbers never pass through
  * the producer's outbox and there is a record of who was sent what.
+ *
+ * Job portal only for now: the share route authenticates by job session and
+ * rate-limits per session, and the v2 paperwork portal has neither. A client
+ * there can still copy the numbers — they just can't have us mail the link
+ * for them.
  */
 function ShareToAp() {
   const [open, setOpen] = useState(false)

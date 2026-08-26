@@ -21,7 +21,54 @@
  * guards the payment routes). Still never on an unauthenticated surface —
  * not for secrecy, but because an anonymous page is one an attacker can
  * clone and point a victim at.
+ *
+ * EXTENDED 2026-08-26 to the v2 paperwork portal
+ * (api/portal/v2/[token]/payment-details), which authenticates by the
+ * PaperworkRequest token in the URL rather than a session cookie. That is the
+ * same credential the portal already takes a CREDIT CARD behind — if the
+ * token is trusted enough to collect a client's card, it is trusted enough to
+ * show numbers that are printed on every check they mail. The reason it had
+ * to move: the card-authorization email now tells clients the other ways to
+ * pay are in their portal, and its button opens the v2 paperwork portal,
+ * which was the one place those details were missing.
  */
+
+import { prisma } from '@/lib/prisma'
+
+const SINGLETON = 'singleton'
+
+/**
+ * The client-facing payload, built ONCE for every portal that shows it.
+ *
+ * Two surfaces render this now (job portal, v2 paperwork portal) and they
+ * authenticate differently. The auth belongs to each route; what "configured"
+ * means and which fields cross the wire does not — a second hand-rolled copy
+ * is how one surface ends up showing a field the other withholds.
+ */
+export async function loadClientPaymentDetails(): Promise<
+  { configured: false } | { configured: true; details: PaymentDetailsRecord }
+> {
+  const s = (await prisma.siteSetting.findUnique({
+    where: { id: SINGLETON },
+    select: Object.fromEntries(PAYMENT_COLUMNS.map((c) => [c, true])),
+  })) as Record<string, string | null> | null
+
+  // Configured = payee + account number + ACH routing. Rendering a
+  // half-filled panel would invite a client to pay against incomplete
+  // instructions, which is worse than showing nothing.
+  if (!(s?.paymentPayeeName && s?.paymentAccountNumber && s?.paymentRoutingAch)) {
+    return { configured: false }
+  }
+
+  const out = {} as Record<string, string | null>
+  for (const col of PAYMENT_COLUMNS) {
+    // paymentPayeeName → payeeName. The column names ARE the field names
+    // with one prefix, so the mapping is derived rather than restated.
+    const field = col.slice('payment'.length)
+    out[field.charAt(0).toLowerCase() + field.slice(1)] = s[col] ?? null
+  }
+  return { configured: true, details: out as unknown as PaymentDetailsRecord }
+}
 
 export interface PaymentDetailsRecord {
   payeeName: string | null
@@ -53,6 +100,15 @@ export const PAYMENT_FIELD_NAMES: readonly string[] = [
   'zelleHandle',
   'zelleName',
 ]
+
+/**
+ * The same list as the SiteSetting columns they live in. Derived, not
+ * restated: a hand-kept second list is how a field gets added to the admin
+ * form and silently never reaches the portals that render it.
+ */
+const PAYMENT_COLUMNS: readonly string[] = PAYMENT_FIELD_NAMES.map(
+  (f) => `payment${f.charAt(0).toUpperCase()}${f.slice(1)}`,
+)
 
 /**
  * ABA routing-number check: exactly 9 digits and the mod-10 checksum

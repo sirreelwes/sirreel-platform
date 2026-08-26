@@ -42,7 +42,11 @@ export interface V2Done {
 export type V2DocKey = keyof V2Done
 
 /** Glanceable card status rendered by CardShell. */
-export type V2CardStatus = 'todo' | 'pending' | 'attention' | 'done' | 'locked'
+// 'info' is a card with nothing to DO — reference the client may want, like
+// the ways to pay. It exists because the alternative was 'todo', which puts
+// an "Action needed" chip on something optional and makes the portal look
+// unfinished to a client who has in fact finished.
+export type V2CardStatus = 'todo' | 'pending' | 'attention' | 'done' | 'locked' | 'info'
 
 /** Dual-path SignedAgreement state (GET /api/portal/[token]/agreement). */
 export interface V2AgreementState {
