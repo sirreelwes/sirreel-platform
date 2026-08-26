@@ -38,16 +38,52 @@ import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementM
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
+import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 
-const JOB_STATUSES = ['QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
+/**
+ * Job status, honestly split.
+ *
+ * The header pill is now the DERIVED operational cadence — the same
+ * rollup the /jobs board renders (src/lib/jobs/cadence.ts). It follows
+ * the orders, so it can't drift the way the old hand-set pill did: this
+ * page used to show a green ACTIVE on a job whose only order had no
+ * dates, because nothing in the app has ever written ACTIVE — a human
+ * picked it from a dropdown once and it stuck.
+ *
+ * What's left in the dropdown are the three decisions a human actually
+ * makes, the ones the orders can't tell us. They override the cadence.
+ * "Open" hands the job back to its orders (written as QUOTED, which the
+ * rollup ignores the moment a real order exists).
+ */
+const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const;
 type JobStatus = (typeof JOB_STATUSES)[number];
 
-const STATUS_BADGE: Record<JobStatus, string> = {
-  QUOTED:  'bg-purple-900/40 text-purple-300 border-purple-800',
-  ACTIVE:  'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-  WRAPPED: 'bg-zinc-800 text-zinc-300 border-zinc-700',
-  HOLD:    'bg-amber-900/40 text-amber-300 border-amber-800',
-  LOST:    'bg-red-900/40 text-red-300 border-red-800',
+const OFF_RAMPS = [
+  { value: 'OPEN',    label: 'Open',    hint: 'Position follows the orders' },
+  { value: 'HOLD',    label: 'On hold', hint: 'Client paused it — overrides the orders' },
+  { value: 'WRAPPED', label: 'Wrapped', hint: 'Closed by hand — overrides the orders' },
+  { value: 'LOST',    label: 'Lost',    hint: "Didn't win it — overrides the orders" },
+] as const;
+type OffRamp = (typeof OFF_RAMPS)[number]['value'];
+
+function currentOffRamp(status: JobStatus): OffRamp {
+  return status === 'HOLD' || status === 'WRAPPED' || status === 'LOST' ? status : 'OPEN';
+}
+
+const CADENCE_BADGE: Record<CadenceState, string> = {
+  new:              'bg-sky-900/40 text-sky-300 border-sky-800',
+  quoted:           'bg-purple-900/40 text-purple-300 border-purple-800',
+  hold:             'bg-amber-900/40 text-amber-300 border-amber-800',
+  lost:             'bg-red-900/40 text-red-300 border-red-800',
+  booked:           'bg-teal-900/40 text-teal-300 border-teal-800',
+  'picking-tmw':    'bg-teal-900/40 text-teal-300 border-teal-800',
+  'picking-today':  'bg-orange-900/40 text-orange-300 border-orange-800',
+  'on-rental':      'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  'returning-tmw':  'bg-orange-900/40 text-orange-300 border-orange-800',
+  'returning-today':'bg-red-900/40 text-red-300 border-red-800',
+  returned:         'bg-purple-900/40 text-purple-300 border-purple-800',
+  invoiced:         'bg-blue-900/40 text-blue-300 border-blue-800',
+  wrapped:          'bg-zinc-800 text-zinc-300 border-zinc-700',
 };
 
 const ORDER_STATUS_BADGE: Record<string, string> = {
@@ -242,6 +278,8 @@ interface JobDetail {
   returnedAt: string | null;
   returnedBy: { id: string; name: string } | null;
   archivedAt: string | null;
+  /** Derived operational position — same rollup the /jobs board renders. */
+  cadence: CadenceRollup;
   // Job-level card-on-file status (derived from the job's bookings'
   // paperwork). Token never leaves the server — display fields only.
   cardAuth: {
@@ -251,9 +289,10 @@ interface JobDetail {
     cardholderName: string | null;
     paymentPreference: 'CARD' | 'CHECK_WIRE' | null;
   };
-  // bookingId → LCDW accepted, so each reserved asset shows its
-  // vehicle's collision-waiver state.
-  lcdwByBooking: Record<string, boolean>;
+  // bookingId → the client's collision-waiver decision, so each reserved
+  // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
+  // open question to chase, the other is a settled answer.
+  lcdwByBooking: Record<string, 'ACCEPTED' | 'DECLINED' | 'UNANSWERED'>;
   // Workers' Comp certificates on file across the job's bookings. `id` is
   // the PaperworkRequest id — the download proxy key, not the file URL.
   wcCerts?: Array<{
@@ -628,6 +667,12 @@ export default function JobDetailPage() {
   // its ORDERS cover instead of a separately-typed job range that drifts.
   const orderSpan = deriveJobDateRange(job.orders);
 
+  // Operational position. Server-derived (see src/lib/jobs/cadence.ts);
+  // the fallback only covers a stale client that fetched before the API
+  // started returning it.
+  const cadenceState: CadenceState = job.cadence?.state ?? 'quoted';
+  const offRamp = currentOffRamp(job.status);
+
   // Who signs, and therefore who gets the link. PRODUCER first to match
   // buildStageContractProps — the contract names the Producer as the
   // signatory, so the invite has to reach that person and not merely the
@@ -674,6 +719,17 @@ export default function JobDetailPage() {
     }
   }
 
+  // Every SignedAgreement across the job's live orders, newest first. The
+  // agreement section renders these; without them it described the job's
+  // coverage while hiding the actual executed paper.
+  const signedOrderAgreements = liveOrders
+    .flatMap((o) => o.signedAgreements.map((agreement) => ({ order: o, agreement })))
+    .sort((a, b) =>
+      (b.agreement.signedAt ?? b.agreement.updatedAt).localeCompare(
+        a.agreement.signedAt ?? a.agreement.updatedAt,
+      ),
+    );
+
   const signTargetOrder =
     liveOrders.find((o) =>
       // Target an order whose agreement is NOT yet signed — a filed
@@ -682,6 +738,14 @@ export default function JobDetailPage() {
     ) ??
     liveOrders[0] ??
     null;
+
+  // Is anything actually waiting on a signature? The Send button used to
+  // shout the same amber CTA at a fully-signed job, right under a header
+  // chip reading On file — the page asking for a signature it already had.
+  // Re-sending stays possible; it just stops being the headline.
+  const signatureOutstanding = signedOrderAgreements.some(
+    ({ agreement }) => !isSignedAgreementStatus(agreement.status),
+  ) || signedOrderAgreements.length === 0;
 
   const sendForSignature = async () => {
     if (!signatory || !signTargetOrder) return;
@@ -919,9 +983,14 @@ const driverTone = (d: any): string => {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[14px] font-mono font-bold tracking-wide text-white bg-zinc-800 border border-zinc-600 rounded px-2.5 py-1">{job.jobCode}</span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${STATUS_BADGE[job.status]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
+                title={
+                  offRamp === 'OPEN'
+                    ? "Derived from this job's orders — same reading as the Jobs board"
+                    : `Set by hand to ${offRamp} — this overrides what the orders say`
+                }
               >
-                {job.status}
+                {formatCadenceLabel(cadenceState, job.cadence?.partial ?? false)}
               </span>
               {job.returnedAt && (
                 <span
@@ -1038,14 +1107,14 @@ const driverTone = (d: any): string => {
             <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
             <div className="flex items-center gap-2">
               <select
-                value={job.status}
+                value={offRamp}
                 disabled={statusSaving}
-                onChange={(e) => updateStatus(e.target.value as JobStatus)}
+                onChange={(e) => updateStatus(e.target.value === 'OPEN' ? 'QUOTED' : (e.target.value as JobStatus))}
                 className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-                title="Job status"
+                title={OFF_RAMPS.find((o) => o.value === offRamp)?.hint}
               >
-                {JOB_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                {OFF_RAMPS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
               <div className="relative">
@@ -1298,17 +1367,28 @@ const driverTone = (d: any): string => {
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {(() => {
-                      const lcdw = job.lcdwByBooking?.[a.bookingId];
+                      // The badge NAMES the decision. It used to be a
+                      // two-tone shield that went grey for "declined" and
+                      // "never asked" alike, so the answer to "did they take
+                      // the waiver?" was unreadable off this page.
+                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
+                      const style =
+                        lcdw === 'ACCEPTED'
+                          ? { cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
+                          : lcdw === 'DECLINED'
+                            ? { cls: 'bg-zinc-900 text-zinc-400 border-zinc-700', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
+                            : { cls: 'bg-amber-950/40 text-amber-300 border-amber-900/70', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
                       return (
                         <span
-                          title={lcdw ? 'LCDW accepted — collision damage waiver' : 'LCDW not accepted'}
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${lcdw ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}
+                          title={style.title}
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
                         >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
-                            {lcdw && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
                           </svg>
-                          LCDW
+                          {style.label}
                         </span>
                       );
                     })()}
@@ -1552,15 +1632,23 @@ const driverTone = (d: any): string => {
                   ? 'Add a contact to this job first'
                   : !signTargetOrder
                     ? 'This job has no live order to send paperwork for'
-                    : `Emails the paperwork portal link to ${signatory.person.email}`
+                    : signatureOutstanding
+                      ? `Emails the paperwork portal link to ${signatory.person.email}`
+                      : `Already signed — re-sends the portal link to ${signatory.person.email}`
               }
-              className="text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                signatureOutstanding
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+              }`}
             >
               {signSendBusy
                 ? 'Sending…'
-                : signatory
-                  ? `Send for signature → ${signatory.person.firstName}`
-                  : 'Send for signature'}
+                : !signatureOutstanding
+                  ? 'Re-send for signature'
+                  : signatory
+                    ? `Send for signature → ${signatory.person.firstName}`
+                    : 'Send for signature'}
             </button>
             {/* Already signed on paper or in Cognito? File it here. This is
                 the ONLY action that makes the client's portal stop asking —
@@ -1605,13 +1693,17 @@ const driverTone = (d: any): string => {
             {signSendMsg}
           </div>
         )}
-        {job.agreementAddenda.length === 0 ? (
+        {/* "No signed paperwork on this job yet" was measured against
+            addenda alone, so a job whose client HAD signed in the portal
+            read empty while the header chip two lines up said On file. The
+            empty state now has to be empty on both counts. */}
+        {job.agreementAddenda.length === 0 && signedOrderAgreements.length === 0 ? (
           <div className="text-[15px] text-zinc-300 border border-dashed border-zinc-800 rounded-xl px-4 py-4 text-center bg-zinc-950/40">
             {SHOW_AGREEMENT_ON_FILE
               ? 'This job isn\u2019t linked to an agreement yet. Attach it to an on-file rental / stage agreement (or file a new one) so it reads covered.'
               : 'No signed paperwork on this job yet. Use Send for signature to have the client countersign in their portal.'}
           </div>
-        ) : (
+        ) : job.agreementAddenda.length === 0 ? null : (
           <div className="space-y-2">
             {job.agreementAddenda.map((ad) => {
               const ca = ad.companyAgreement;
@@ -1656,6 +1748,67 @@ const driverTone = (d: any): string => {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Executed order paperwork. The block above is company-level
+            standing agreements; a contract the client signed in the portal
+            is a different row on a different table, and this section named
+            after both of them showed only the first. The paperwork feed
+            deep-links here — landing on a section that doesn't mention the
+            document you clicked is how "Review" came to mean "you're back
+            in the job folder". */}
+        {signedOrderAgreements.length > 0 && (
+          <div className="mt-3">
+            {/* "Order agreements", not "Signed by the client" — the list
+                includes rows still waiting on a signature, and each one
+                states its own status. */}
+            <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Order agreements</div>
+            <div className="space-y-2">
+              {signedOrderAgreements.map(({ order, agreement: a }) => {
+                const executed = isSignedAgreementStatus(a.status);
+                return (
+                  <div key={a.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${executed ? 'text-emerald-300 bg-emerald-500/10' : 'text-amber-300 bg-amber-500/10'}`}>
+                        {a.status.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[15px] text-white font-medium">
+                        {a.contractType === 'STAGE_CONTRACT' ? 'Stage contract' : 'Rental agreement'}
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-300">{order.orderNumber}</span>
+                    </div>
+                    <div className="mt-1 text-[12px] text-zinc-300">
+                      {a.signedAt ? <>signed {fmtDate(a.signedAt)}</> : 'not signed yet'}
+                      {a.signerName && <> · {a.signerName}</>}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-3">
+                      {a.signedDocumentUrl ? (
+                        <>
+                          <a
+                            href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[13px] font-semibold text-amber-400 hover:text-amber-300"
+                          >
+                            View signed PDF →
+                          </a>
+                          <a
+                            href={`/api/orders/${order.id}/agreement/pdf?type=${a.contractType}&doc=signed&download=1`}
+                            download
+                            className="text-[13px] font-semibold text-zinc-300 hover:text-white"
+                          >
+                            Download
+                          </a>
+                        </>
+                      ) : (
+                        <span className="text-[12px] text-zinc-400">No executed PDF filed for this one.</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

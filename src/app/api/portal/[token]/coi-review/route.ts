@@ -1,80 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/prisma'
-import { REVIEW_MODEL } from '@/lib/ai/models'
-import { parseAiJson } from '@/lib/ai/extractJson'
+// One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
+// This route used to carry its own copy of the prompt; it was the FULLEST of
+// the three copies, and the review desk's copy was the thinnest. Everything
+// reads through the shared one now.
+import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { coiFlags } from '@/lib/coi/checks'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const resend = new Resend(process.env.RESEND_API_KEY)
-
-const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
-
-CERTIFICATE HOLDER REQUIRED:
-- SirReel Production Vehicles Inc. (also: SirReel Production Vehicles, Inc. dba SirReel Studio Rentals)
-- 8500 Lankershim Blvd, Sun Valley, CA 91352
-
-ALSO EXTRACT (does not affect pass/fail):
-- namedInsured: the NAMED INSURED exactly as printed on the certificate — the
-  entity the policy covers. This is the box usually labeled "INSURED", NOT the
-  certificate holder (SirReel) and NOT the insurance carrier or the broker/
-  producer. Copy it verbatim, including any "dba" wording. Null if unreadable.
-
-CRITICAL REQUIREMENTS (must all pass — cannot be waived):
-1. Certificate Holder = SirReel with correct address
-2. Named insured must match the rental agreement company name exactly
-3. General Liability - Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
-4. Automobile Liability - CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-5. Hired Auto Physical Damage - the certificate MUST show physical damage coverage on the hired/rented autos. This is the coverage that pays to repair or replace SirReel's vehicles, so it is REQUIRED. On SirReel certs it appears as a "Hired Auto Physical Damage" line in the Automobile section and/or the Description of Operations, and is commonly stated as a DEDUCTIBLE structure (e.g. a percentage of the loss subject to a minimum and maximum) rather than a dollar limit — that is acceptable and PASSES. Also accept explicit "Physical Damage", "Comprehensive & Collision", or a stated physical-damage limit. FAIL only if NO physical-damage coverage on rented/hired autos appears anywhere on the cert (auto LIABILITY alone is not enough).
-6. Additional Insured - SirReel named as Additional Insured
-7. Loss Payee - SirReel named as Loss Payee
-8. Coverage dates must cover the rental period
-9. Policy not expired
-
-ALERT REQUIREMENTS (admin judgment call):
-A. Primary & Non-Contributory language - the certificate must state the insured's coverage is primary and non-contributory as respects SirReel (their policy pays first and cannot demand SirReel's insurance contribute). This wording rarely gets its own coverage line — look for it in the Description of Operations box (e.g. "coverage is primary and non-contributory", "primary & non-contributory as respects the additional insured") or a referenced endorsement form (commonly CG 20 01). Any of those PASSES. FAIL only if no primary/non-contributory language appears anywhere on the cert. When it FAILS, the note must explain the fix: this is a standard endorsement the client's broker can add same-day at no cost — ask the broker to reissue the COI showing primary and non-contributory wording in favor of SirReel Production Vehicles Inc. If the broker says the policy genuinely lacks it, that is a real coverage gap.
-B. Waiver of Subrogation - if SUBR WVD column shows "Y" on ANY policy row, this passes
-C. Umbrella/Excess Liability $1M
-D. Workers Compensation - may be on separate payroll company certificate
-E. 30-day cancellation notice clause
-F. Independent contractor coverage on workers comp
-
-Return ONLY valid JSON, no markdown:
-{
-  "criticalPass": true,
-  "alertPass": true,
-  "overallPass": true,
-  "namedInsured": "Exactly As Printed, Inc." | null,
-  "certificateHolder": { "pass": true, "found": "", "note": "" },
-  "insuredName": { "pass": true, "found": "", "note": "" },
-  "generalLiability": {
-    "pass": true,
-    "perOccurrence": { "pass": true, "found": "", "required": "$1,000,000" },
-    "aggregate": { "pass": true, "found": "", "required": "$2,000,000" },
-    "note": ""
-  },
-  "autoLiability": {
-    "pass": true,
-    "combinedSingleLimit": { "pass": true, "found": "", "required": "$1,000,000" },
-    "hiredAutos": { "pass": true, "found": "" },
-    "nonOwnedAutos": { "pass": true, "found": "" },
-    "note": ""
-  },
-  "autoPhysicalDamage": { "pass": true, "found": "", "note": "" },
-  "additionalInsured": { "pass": true, "found": "", "note": "" },
-  "lossPayee": { "pass": true, "found": "", "note": "" },
-  "coverageDates": { "pass": true, "found": "", "note": "" },
-  "policyExpiry": { "pass": true, "date": "", "expired": false },
-  "primaryNonContributory": { "pass": true, "found": "", "note": "" },
-  "waiverOfSubrogation": { "pass": true, "found": "", "note": "" },
-  "umbrella": { "pass": true, "found": "", "note": "" },
-  "workersComp": { "pass": true, "found": "", "note": "" },
-  "cancellationNotice": { "pass": true, "found": "", "note": "" },
-  "contractorCoverage": { "pass": true, "found": "", "note": "" },
-  "criticalIssues": [],
-  "alertIssues": [],
-  "notes": ""
-}`
 
 function buildEmailHtml(
   companyName: string,
@@ -202,55 +137,30 @@ export async function POST(
     if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
 
     const bytes = await file.arrayBuffer()
-    const base64 = Buffer.from(bytes).toString('base64')
-    const isPdf = file.type === 'application/pdf'
-    const mediaType = isPdf ? 'application/pdf' : file.type.includes('png') ? 'image/png' : 'image/jpeg'
+    const buffer = Buffer.from(bytes)
     const companyName = request.booking?.company?.name || ''
     const jobName = request.booking?.jobName || ''
 
-    const response = await client.messages.create({
-      model: REVIEW_MODEL,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          isPdf
-            ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf' as const, data: base64 } }
-            : { type: 'image', source: { type: 'base64', media_type: mediaType as 'image/png' | 'image/jpeg', data: base64 } },
-          { type: 'text', text: `${COI_PROMPT}\n\nThe rental agreement company is "${companyName}". Return only JSON.` }
-        ] as any
-      }]
-    })
+    const review: Record<string, any> = await runCoiAiReview(buffer, file.type)
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const review = parseAiJson<any>(text, { tag: 'coi-review', stopReason: response.stop_reason })
+    // Does the certificate insure the company we papered the booking under?
+    // Computed here rather than asked of the model, so correcting a wrong
+    // company name clears the flag without re-reading the PDF — the same
+    // rule the review desk follows (src/lib/coi/insuredMatch.ts).
+    const match = evaluateInsuredMatch(review.namedInsured ?? null, [companyName])
+    review.insuredName = {
+      pass: !match.needsAttention,
+      found: match.namedInsured || '',
+      note: match.needsAttention ? match.message : '',
+    }
 
-    // Enforce critical/alert logic
-    const criticalItems = [
-      review.certificateHolder?.pass,
-      review.insuredName?.pass,
-      review.generalLiability?.pass,
-      review.autoLiability?.pass,
-      review.autoPhysicalDamage?.pass,
-      review.additionalInsured?.pass,
-      review.lossPayee?.pass,
-      review.coverageDates?.pass,
-      !review.policyExpiry?.expired,
-    ]
-    review.criticalPass = criticalItems.every(Boolean)
-
-    const alertItems = [
-      review.primaryNonContributory?.pass,
-      review.waiverOfSubrogation?.pass,
-      review.umbrella?.pass,
-      review.workersComp?.pass,
-      review.cancellationNotice?.pass,
-      review.contractorCoverage?.pass,
-    ]
-    review.alertPass = alertItems.every(v => v !== false)
+    const flags = coiFlags(review)
+    review.criticalPass = flags.criticalPass && !match.needsAttention
+    review.alertPass = flags.alertPass
     review.overallPass = review.criticalPass && review.alertPass
+    review.riskLevel = !review.criticalPass ? 'high' : !review.alertPass ? 'medium' : 'low'
 
-    // Keep legacy fields for compatibility
+    // Legacy keys some older readers still look for.
     review.hardPass = review.criticalPass
     review.requiresAdminApproval = review.criticalPass && !review.alertPass
 
@@ -262,15 +172,20 @@ export async function POST(
 
     await prisma.$executeRawUnsafe(
       `UPDATE paperwork_requests SET coi_ai_review=$1::jsonb, coi_review_at=$2, coi_received=$3 WHERE token=$4`,
-      JSON.stringify(review), new Date(), review.overallPass, params.token
+      JSON.stringify(review), new Date(), review.criticalPass, params.token
     )
 
-    if (review.overallPass) {
+    // Received = every CRITICAL requirement is met. An open ALERT item (no
+    // umbrella, no 30-day notice) is a judgment call for the team, and it
+    // still emails them below — it does not hold the certificate hostage.
+    if (review.criticalPass) {
       await prisma.booking.update({ where: { id: request.bookingId }, data: { coiReceived: true } })
     }
 
     // Send internal alert email if any issues found
     if (!review.overallPass && process.env.RESEND_API_KEY) {
+      // Subject splits on criticalPass: red = we cannot accept this,
+      // yellow = acceptable but someone should look.
       const reviewUrl = `https://hq.sirreel.com/jobs/${request.bookingId}`
       const html = buildEmailHtml(companyName, jobName, review, reviewUrl)
       const subject = review.criticalPass

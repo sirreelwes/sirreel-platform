@@ -85,12 +85,35 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [companyHits, setCompanyHits] = useState<Array<{ id: string; name: string }>>([]);
   const [companyOpen, setCompanyOpen] = useState(false);
   const [matchedCompanyId, setMatchedCompanyId] = useState<string | null>(null);
-  // Suppresses the search that setClientName would otherwise trigger right
-  // after a pick or the initial parse prefill.
-  const skipCompanySearch = useRef(false);
+  // The exact name WE set (parse prefill or a dropdown pick). Compared by
+  // VALUE, not consumed like a boolean flag: React double-invokes effects
+  // in dev, which desynced a boolean guard and swallowed the agent's first
+  // real edit — the match label stayed green while the field said something
+  // else entirely (caught in preview, 2026-08-25).
+  const adoptedName = useRef<string | null>(null);
   // The contact the parser resolved, kept even when the company didn't —
   // a company pick plus this is enough to enable soft holds.
   const [parsedPersonId, setParsedPersonId] = useState<string | null>(null);
+
+  // Job typeahead (Wes, 2026-08-25) — same shape as the company one above.
+  // Beyond convenience: picking an EXISTING job pre-resolves `job`, so the
+  // send path no longer has to stop and open the JobResolverModal, and a
+  // client asking for more gear on a job we already have stops spawning a
+  // duplicate.
+  const [jobHits, setJobHits] = useState<Array<{ id: string; jobCode: string; name: string; companyId: string | null; companyName: string | null; status: string }>>([]);
+  const [jobOpen, setJobOpen] = useState(false);
+  const adoptedJobName = useRef<string | null>(null);
+
+  // Contact typeahead (Wes, 2026-08-26). "Reply to" was display-only text,
+  // so when the parser failed to resolve the sender to a CRM Person there
+  // was no way to say who they are — and soft holds need BOTH a company
+  // and a person, so an unresolved contact kept the checkbox locked even
+  // after the company field was fixed. Picking a contact here supplies the
+  // missing half (and their affiliated company, if we don't have one yet).
+  const [contactHits, setContactHits] = useState<Array<{ id: string; name: string; email: string; phone: string | null; companyId: string | null; companyName: string | null }>>([]);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactQuery, setContactQuery] = useState('');
+  const adoptedContact = useRef<string | null>(null);
   const [jobName, setJobName] = useState<string | null>(null);
   const [pickup, setPickup] = useState<string | null>(null);
   const [ret, setRet] = useState<string | null>(null);
@@ -113,6 +136,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // Checking one does NOT hold that stage on its own: the client is asked
   // to confirm the areas in the reply, and the formal hold follows. So
   // this records WHAT was asked for without silently consuming capacity.
+  // Everyone the client CC'd on the inbound email. Pre-fills the reply's
+  // CC so the coordinator/UPM who were looped in stay looped in — replying
+  // to the sender alone quietly drops them (Wes 2026-08-25).
+  const [inboundCc, setInboundCc] = useState<string[]>([]);
   const [stageAreas, setStageAreas] = useState<Array<{ id: string; name: string; kind: string }>>([]);
   const [areasByCat, setAreasByCat] = useState<Record<string, string[]>>({});
 
@@ -190,14 +217,20 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           endDate: parsed.endDate ?? '',
         }));
 
-      skipCompanySearch.current = true;
+      adoptedName.current = (parsed.clientName ?? '').trim() || null;
       setClientName(parsed.clientName ?? null);
+      adoptedJobName.current = (parsed.productionName ?? '').trim() || null;
       setJobName(parsed.productionName ?? null);
       // Default the "ask the client" toggle ON when we have neither the
       // production company nor a job name — the reply will request them.
       setAskForDetails(!(parsed.clientName || parsed.productionName));
       setPickup(parsed.startDate ?? null);
       setRet(parsed.endDate ?? null);
+      {
+        const seed = parsed.contactEmail ?? defaultRecipientEmail ?? '';
+        adoptedContact.current = seed || null;
+        setContactQuery(seed);
+      }
       setRecipientEmail(parsed.contactEmail ?? defaultRecipientEmail ?? null);
       setRecipientName(parsed.contactName ?? defaultRecipientName ?? null);
       setCats(assetCats);
@@ -236,11 +269,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
 
   // Debounced company lookup against the same endpoint CompanyPicker uses.
   useEffect(() => {
-    if (skipCompanySearch.current) {
-      skipCompanySearch.current = false;
-      return;
-    }
     const q = (clientName ?? '').trim();
+    // A name we adopted ourselves keeps its match and doesn't re-search.
+    if (adoptedName.current !== null && q === adoptedName.current) return;
+    adoptedName.current = null;
     // Typing a NEW name invalidates any previously matched company — the
     // hold must not stay armed against the wrong client.
     setMatchedCompanyId(null);
@@ -258,6 +290,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           // typed the company's real name, no need to make them click.
           const exact = hits.find((c: { name: string }) => c.name.toLowerCase() === q.toLowerCase());
           if (exact) {
+            adoptedName.current = exact.name;
             setMatchedCompanyId(exact.id);
             setCompanyOpen(false);
           } else {
@@ -281,10 +314,100 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     }
   }, [matchedCompanyId, parsedPersonId]);
 
+  // Debounced job lookup. Scoped to the matched company when we have one —
+  // "Neon Nights" for THIS client beats every Neon Nights in the book.
+  useEffect(() => {
+    const q = (jobName ?? '').trim();
+    if (adoptedJobName.current !== null && q === adoptedJobName.current) return;
+    adoptedJobName.current = null;
+    // Editing the name detaches any previously picked job: the holds must
+    // not land on a job the agent has moved away from.
+    setJob(null);
+    if (q.length < 2) {
+      setJobHits([]);
+      return;
+    }
+    const shape = (d: { jobs?: unknown }) =>
+      (Array.isArray(d.jobs) ? d.jobs : []).slice(0, 6).map((j: {
+        id: string; jobCode: string; name: string; status: string;
+        company?: { id: string; name: string } | null;
+      }) => ({
+        id: j.id, jobCode: j.jobCode, name: j.name, status: j.status,
+        companyId: j.company?.id ?? null, companyName: j.company?.name ?? null,
+      }));
+    const search = async (companyId: string | null) => {
+      const params = new URLSearchParams({ search: q, statuses: 'QUOTED,ACTIVE' });
+      if (companyId) params.set('companyId', companyId);
+      const r = await fetch(`/api/jobs?${params.toString()}`);
+      return shape(await r.json());
+    };
+    const t = setTimeout(() => {
+      (async () => {
+        // Scoped first — this client's own jobs are what the agent means
+        // nine times in ten. If the scope finds nothing, fall back to an
+        // org-wide search rather than silently insisting the project is
+        // new: the parser may have matched the wrong company, or this may
+        // be a new contact at a company we already work with. Picking a
+        // cross-company hit moves the company with it (handled at the
+        // click), so the agent can't half-attach.
+        let hits = await search(matchedCompanyId);
+        if (hits.length === 0 && matchedCompanyId) hits = await search(null);
+        setJobHits(hits);
+        setJobOpen(hits.length > 0);
+      })().catch(() => setJobHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [jobName, matchedCompanyId]);
+
+  // Debounced contact lookup over /api/persons (tokenized name/email match).
+  useEffect(() => {
+    const q = contactQuery.trim();
+    if (adoptedContact.current !== null && q === adoptedContact.current) return;
+    adoptedContact.current = null;
+    // Typing detaches the CRM link but KEEPS the typed value as the
+    // send-to address: replying to an address we have no Person for is
+    // completely normal and must keep working.
+    setParsedPersonId(null);
+    setRecipientEmail(q.includes('@') ? q : null);
+    setRecipientName(null);
+    if (q.length < 2) {
+      setContactHits([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/persons?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const hits = (Array.isArray(d.persons) ? d.persons : []).slice(0, 6).map((p: {
+            id: string; firstName: string; lastName: string; email: string; phone: string | null;
+            company?: { id: string; name: string } | null;
+          }) => ({
+            id: p.id,
+            name: [p.firstName, p.lastName].filter(Boolean).join(' ').trim() || p.email,
+            email: p.email,
+            phone: p.phone,
+            companyId: p.company?.id ?? null,
+            companyName: p.company?.name ?? null,
+          }));
+          setContactHits(hits);
+          setContactOpen(hits.length > 0);
+        })
+        .catch(() => setContactHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [contactQuery]);
+
   useEffect(() => { run(); }, [run]);
 
   useEffect(() => {
     let live = true;
+    if (inboundEmailMessageId) {
+      const ex = encodeURIComponent(defaultRecipientEmail || '');
+      fetch(`/api/email-messages/${encodeURIComponent(inboundEmailMessageId)}/cc?exclude=${ex}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (live && d?.clients) setInboundCc(d.clients); })
+        .catch(() => {});
+    }
     fetch('/api/scheduling/stage-areas?picker=quickreply')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (live && d) setStageAreas(d.areas || []); })
@@ -454,6 +577,9 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           companyId: holdable?.companyId ?? null,
           companyName: clientName?.trim() || null,
           contactEmail: recipientEmail || null,
+          // Same list that seeds the reply's CC — the Job gets the people
+          // the client actually looped in, not just the sender.
+          ccContactEmails: inboundCc,
           contactName: recipientName || null,
           jobNameHint: jobName?.trim() || null,
           dates: pickup && ret ? { start: pickup.slice(0, 10), end: ret.slice(0, 10) } : null,
@@ -469,6 +595,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   if (reviewTarget) {
     return (
       <EmailReviewModal
+        initialCc={inboundCc}
         target={reviewTarget}
         onClose={() => setReviewTarget(null)}
         onSent={() => { onSent?.(); onClose(); }}
@@ -518,7 +645,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                             key={c.id}
                             type="button"
                             onClick={() => {
-                              skipCompanySearch.current = true;
+                              adoptedName.current = c.name;
                               setClientName(c.name);
                               setMatchedCompanyId(c.id);
                               setCompanyOpen(false);
@@ -538,14 +665,63 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="block text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Project / job name</label>
                     <input
                       value={jobName ?? ''}
                       onChange={(e) => setJobName(e.target.value)}
+                      onFocus={() => { if (jobHits.length && !job) setJobOpen(true); }}
                       placeholder="e.g. Neon Nights"
                       className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-gray-400"
                     />
+                    {job ? (
+                      <div className="mt-1 text-[10px] text-emerald-700">
+                        ✓ Existing job {job.jobCode} — holds land here
+                      </div>
+                    ) : (jobName ?? '').trim().length >= 2 ? (
+                      <div className="mt-1 text-[10px] text-gray-400">New project — a job gets created</div>
+                    ) : null}
+                    {jobOpen && jobHits.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 top-[52px] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {jobHits.map((j) => (
+                          <button
+                            key={j.id}
+                            type="button"
+                            onClick={() => {
+                              adoptedJobName.current = j.name;
+                              setJobName(j.name);
+                              setJob({ jobId: j.id, jobCode: j.jobCode, name: j.name });
+                              // Attaching to a job under a different company
+                              // moves the company too — the Job is the root,
+                              // and holds follow it (same rule onJobResolved
+                              // applies when the resolver is used instead).
+                              if (j.companyId && j.companyId !== matchedCompanyId) {
+                                setMatchedCompanyId(j.companyId);
+                                if (j.companyName) {
+                                  adoptedName.current = j.companyName;
+                                  setClientName(j.companyName);
+                                }
+                              }
+                              setJobOpen(false);
+                            }}
+                            className="block w-full text-left px-2.5 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="text-[12px] text-gray-800">{j.name}</span>
+                            <span className="block text-[10px] text-gray-400">
+                              <span className="font-mono">{j.jobCode}</span>
+                              {j.companyName ? ` · ${j.companyName}` : ''} · {j.status.toLowerCase()}
+                            </span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setJobOpen(false)}
+                          className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                        >
+                          Keep &ldquo;{jobName}&rdquo; as a new project
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* Ask only for the field(s) we don't have. Hidden entirely
@@ -574,7 +750,69 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                 })()}
                 <div className="text-[12px] text-gray-700 pt-0.5 border-t border-gray-200">
                   <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
-                  <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
+                  <div className="relative flex items-baseline gap-1.5">
+                    <span className="text-gray-400 shrink-0">Reply to</span>
+                    <span className="text-gray-400 shrink-0">·</span>
+                    <span className="flex-1 min-w-0">
+                      <input
+                        value={contactQuery}
+                        onChange={(e) => setContactQuery(e.target.value)}
+                        onFocus={() => { if (contactHits.length && !parsedPersonId) setContactOpen(true); }}
+                        placeholder="name or email"
+                        className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none text-[12px] font-mono text-gray-700 placeholder-gray-300 py-0.5"
+                      />
+                      {parsedPersonId ? (
+                        <span className="block text-[10px] text-emerald-700 mt-0.5">
+                          ✓ {recipientName ? `${recipientName} — ` : ''}linked to their contact record
+                        </span>
+                      ) : contactQuery.trim() && !contactQuery.includes('@') ? (
+                        <span className="block text-[10px] text-amber-700 mt-0.5">
+                          Pick a contact, or type a full email address to reply to
+                        </span>
+                      ) : null}
+                      {contactOpen && contactHits.length > 0 && (
+                        <span className="absolute z-20 left-0 right-0 top-[26px] block bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                          {contactHits.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                adoptedContact.current = c.email;
+                                setContactQuery(c.email);
+                                setRecipientEmail(c.email);
+                                setRecipientName(c.name);
+                                setParsedPersonId(c.id);
+                                // Their affiliated company fills the other
+                                // half of the hold gate when we don't have
+                                // one yet. An already-matched company is
+                                // left alone — the agent chose it.
+                                if (c.companyId && !matchedCompanyId) {
+                                  setMatchedCompanyId(c.companyId);
+                                  if (c.companyName) {
+                                    adoptedName.current = c.companyName;
+                                    setClientName(c.companyName);
+                                  }
+                                }
+                                setContactOpen(false);
+                              }}
+                              className="block w-full text-left px-2.5 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <span className="text-[12px] text-gray-800">{c.name}</span>
+                              <span className="block text-[10px] text-gray-400 font-mono">{c.email}</span>
+                              {c.companyName && <span className="block text-[10px] text-gray-400">{c.companyName}</span>}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setContactOpen(false)}
+                            className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                          >
+                            Keep &ldquo;{contactQuery}&rdquo; as the reply address
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 

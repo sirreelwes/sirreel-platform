@@ -4,7 +4,7 @@
  * update this file too. Keep clause numbering and substance in lockstep.
  */
 
-import { LCDW_DAILY_RATE, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from './fees'
+import { LCDW_DAILY_RATE, LCDW_WAIVED_DAMAGE_LIMIT, FUEL_PER_GALLON, SMOKING_FEE_PER_DAY, usd, usd2 } from './fees'
 
 export interface CanonicalClause {
   ref: string
@@ -191,9 +191,27 @@ export const FLEET_AGREEMENT = {
     `Lessee acknowledges that they will be charged ${usd2(FUEL_PER_GALLON)} for each gallon necessary to return the vehicle to the fuel level it went out with.`,
 }
 
+// The addendum used to be three lines — the rate, which vehicles qualify,
+// and "confirm in writing" — with nothing about what the waiver actually
+// DOES or what it excludes. Clients were accepting a $24/day/vehicle
+// waiver whose terms appeared nowhere in the document they signed, and the
+// exclusion that decides most cube-truck claims (overhead clearance) was
+// missing entirely. Jose found the language on an older agreement.
+//
+// `coverage` and `exclusions` restore that substance. They are NOT a
+// verbatim paste of the old paragraph: it read "all costs above $1,000 as
+// stated in paragraph 4" and "Prohibited Uses in Paragraph 5", and in THIS
+// agreement paragraph 4 is Equipment in Working Order, paragraph 5 is
+// Property Insurance, and no prohibited-uses clause exists. Copying it
+// straight across would have pointed clients at the wrong terms. The
+// cross-references are therefore stated inline instead.
 export const LCDW_ADDENDUM = {
   title: 'Limited Collision Damage Waiver Addendum',
   rate: `Limited Collision Damage Waiver — ${usd(LCDW_DAILY_RATE)}/day/vehicle`,
+  coverage:
+    `By accepting the Limited Collision Damage Waiver (LCDW), Lessee agrees to pay ${usd2(LCDW_DAILY_RATE)}/day/vehicle and to pay all costs above ${usd(LCDW_WAIVED_DAMAGE_LIMIT)}. In exchange, SirReel waives its claim to the first ${usd(LCDW_WAIVED_DAMAGE_LIMIT)} in loss of or damage to the vehicle caused by collision with another vehicle or property, including loss of use, towing, storage, impound, and administrative charges. LCDW IS NOT INSURANCE.`,
+  exclusions:
+    'This waiver does NOT apply to: intentional acts; damage due to insufficient height or clearance (including roof and overhead-clearance damage); improper loading; abusive handling; towing or pushing without SirReel\u2019s written permission; operation by an unlicensed driver or a driver whose license is suspended or revoked; use of the vehicle in any manner prohibited by this Agreement; or theft of the vehicle or any of its components.',
   scope:
     'The Limited Collision Damage Waiver is ONLY available for fleet rental vehicles such as: Vehicles (Cubes, Vans, Stakebeds, Location Trailers, Trucks & Motorhomes).',
   note: 'Acceptance/decline of LCDW must be confirmed in writing per fleet vehicle rental.',

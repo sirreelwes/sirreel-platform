@@ -438,6 +438,8 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
           <Text style={[styles.fleetBody, { fontFamily: 'Helvetica-Bold' }]}>
             {LCDW_ADDENDUM.rate}
           </Text>
+          <Text style={styles.fleetBody}>{LCDW_ADDENDUM.coverage}</Text>
+          <Text style={styles.fleetBody}>{LCDW_ADDENDUM.exclusions}</Text>
           <Text style={styles.fleetBody}>{LCDW_ADDENDUM.scope}</Text>
           <Text style={styles.fleetBody}>{LCDW_ADDENDUM.note}</Text>
         </View>

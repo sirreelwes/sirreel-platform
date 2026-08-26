@@ -97,6 +97,10 @@ export function RentalAgreementBody() {
         </h2>
         <div className="mt-4 bg-white rounded-xl border border-[#e2ddd0] p-4 sm:p-5 space-y-2">
           <p className="text-[13.5px] leading-relaxed font-bold text-[#1b1a17]">{LCDW_ADDENDUM.rate}</p>
+          <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{LCDW_ADDENDUM.coverage}</p>
+          {/* The exclusions decide most cube-truck claims — weighted so a
+              client skimming the addendum still lands on them. */}
+          <p className="text-[13.5px] leading-relaxed font-semibold text-[#1b1a17]">{LCDW_ADDENDUM.exclusions}</p>
           <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{LCDW_ADDENDUM.scope}</p>
           <p className="text-[13.5px] leading-relaxed text-[#3d392f]">{LCDW_ADDENDUM.note}</p>
         </div>

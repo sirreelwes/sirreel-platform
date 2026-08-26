@@ -19,6 +19,7 @@ import { nextJobCode } from '@/lib/jobs/nextJobCode'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
+import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 
 export const dynamic = 'force-dynamic'
 
@@ -218,12 +219,7 @@ export async function GET(req: NextRequest) {
     // Cadence rollup needs today + tomorrow as YYYY-MM-DD strings to
     // compare against Order.startDate/endDate (`@db.Date`, which Prisma
     // returns as JS Date at 00:00:00 UTC). Computed once per request.
-    const todayDate = new Date()
-    todayDate.setUTCHours(0, 0, 0, 0)
-    const tomorrowDate = new Date(todayDate)
-    tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1)
-    const today = todayDate.toISOString().slice(0, 10)
-    const tomorrow = tomorrowDate.toISOString().slice(0, 10)
+    const { today, tomorrow } = cadenceDays()
 
     // RW rollup for the listed jobs — one batch, so board cards don't
     // read "$— / 0 orders" for jobs whose money lives in RentalWorks.
@@ -325,10 +321,10 @@ export async function GET(req: NextRequest) {
       )
       const billing = rollupBillingState(allInvoices)
 
-      // Phase 7 — operational cadence rollup. Pre-booked Jobs (QUOTED /
-      // HOLD / LOST) skip the order-level computation and adopt the
-      // JobStatus directly. ACTIVE/WRAPPED Jobs derive from each order's
-      // status + start/end vs today/tomorrow.
+      // Operational cadence rollup — the derived "where is this job"
+      // answer. HOLD / LOST / WRAPPED (the human off-ramps) win outright;
+      // every other job derives from its orders' status + start/end vs
+      // today/tomorrow. See src/lib/jobs/cadence.ts.
       const cadence = rollupCadence(j.status, liveOrders, today, tomorrow)
 
       // L&D marker — booking-side or invoice-side count > 0 on any order.
@@ -469,6 +465,10 @@ export async function POST(req: NextRequest) {
         companyId: companyId || null,
         companyName: typeof body.companyName === 'string' ? body.companyName : null,
         companyUnknown: body.companyUnknown === true,
+        // Everyone the client CC'd on the inquiry — becomes a JobContact.
+        ccContactEmails: Array.isArray(body.ccContactEmails)
+          ? body.ccContactEmails.filter((e: unknown): e is string => typeof e === 'string')
+          : [],
         contactName: typeof body.contactName === 'string' ? body.contactName : null,
         contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone : null,
         contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail : null,
@@ -636,113 +636,4 @@ function rollupBillingState(
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
-}
-
-// Phase 7 — operational cadence rollup. Replaces the JobStatus pill on
-// the list with a single merged operational state. Pre-booked Jobs
-// (QUOTED / HOLD / LOST) keep their commercial state because there's
-// no operational cadence yet. WRAPPED short-circuits to wrapped. For
-// ACTIVE Jobs, every non-cancelled order is mapped to a cadence event
-// and the most-urgent wins; if that event is a return AND other orders
-// are still out, the rollup is flagged partial.
-export type CadenceState =
-  | 'new'
-  | 'quoted'
-  | 'hold'
-  | 'lost'
-  | 'booked'
-  | 'picking-tmw'
-  | 'picking-today'
-  | 'on-rental'
-  | 'returning-tmw'
-  | 'returning-today'
-  | 'returned'
-  | 'invoiced'
-  | 'wrapped'
-
-// Precedence per spec: most-urgent at the top. Indexes drive the sort.
-const CADENCE_RANK: CadenceState[] = [
-  'returning-today',
-  'picking-today',
-  'returning-tmw',
-  'picking-tmw',
-  'on-rental',
-  'booked',
-  'returned',
-  'invoiced',
-  'wrapped',
-]
-
-// Orders that count as "still out" for partial-return detection: their
-// return hasn't happened yet, so the job isn't fully back.
-const STILL_OUT_EVENTS: CadenceState[] = [
-  'picking-today',
-  'picking-tmw',
-  'on-rental',
-  'booked',
-]
-
-function cadenceForOrder(
-  o: { status: OrderStatus; startDate: Date | null; endDate: Date | null },
-  today: string,
-  tomorrow: string,
-): CadenceState | null {
-  if (o.status === 'CANCELLED' || o.status === 'DRAFT' || o.status === 'QUOTE_SENT') {
-    return null
-  }
-  const start = o.startDate ? o.startDate.toISOString().slice(0, 10) : null
-  const end = o.endDate ? o.endDate.toISOString().slice(0, 10) : null
-
-  if (o.status === 'CLOSED') return 'wrapped'
-  if (o.status === 'INVOICED' || o.status === 'LD_CHECK') return 'invoiced'
-  if (o.status === 'RETURNED') return 'returned'
-
-  // Out / awaiting pickup. ON_JOB clearly out; LOADED_READY is the day
-  // before pickup OR pickup-day-not-yet-checked-out (treated as still
-  // outbound until the dates say otherwise).
-  if (o.status === 'ON_JOB' || o.status === 'LOADED_READY') {
-    if (end && end === today) return 'returning-today'
-    if (end && end === tomorrow) return 'returning-tmw'
-    if (start && end && start <= today && today <= end) return 'on-rental'
-    if (start && start === today) return 'picking-today'
-    if (start && start === tomorrow) return 'picking-tmw'
-    return 'booked'
-  }
-  if (o.status === 'APPROVED' || o.status === 'BOOKED') {
-    if (start && start === today) return 'picking-today'
-    if (start && start === tomorrow) return 'picking-tmw'
-    return 'booked'
-  }
-  return null
-}
-
-function rollupCadence(
-  jobStatus: JobStatus,
-  liveOrders: { status: OrderStatus; startDate: Date | null; endDate: Date | null }[],
-  today: string,
-  tomorrow: string,
-): { state: CadenceState; partial: boolean } {
-  // Pre-booked commercial states bypass operational derivation.
-  if (jobStatus === 'NEW') return { state: 'new', partial: false }
-  if (jobStatus === 'QUOTED') return { state: 'quoted', partial: false }
-  if (jobStatus === 'HOLD') return { state: 'hold', partial: false }
-  if (jobStatus === 'LOST') return { state: 'lost', partial: false }
-  if (jobStatus === 'WRAPPED') return { state: 'wrapped', partial: false }
-
-  const events = liveOrders
-    .map((o) => cadenceForOrder(o, today, tomorrow))
-    .filter((e): e is CadenceState => e !== null)
-  if (events.length === 0) {
-    // ACTIVE Job with only DRAFT / QUOTE_SENT orders — fall back to
-    // booked-shaped state for the rollup; rare but possible mid-cycle.
-    return { state: 'booked', partial: false }
-  }
-
-  events.sort((a, b) => CADENCE_RANK.indexOf(a) - CADENCE_RANK.indexOf(b))
-  const top = events[0]
-
-  const isReturnEvent = top === 'returning-today' || top === 'returning-tmw' || top === 'returned'
-  const partial = isReturnEvent && events.some((e) => STILL_OUT_EVENTS.includes(e))
-
-  return { state: top, partial }
 }

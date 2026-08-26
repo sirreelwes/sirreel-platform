@@ -43,6 +43,13 @@ export interface PaperworkSubmission {
   jobName: string | null
   companyName: string | null
   href: string | null
+  /** Session-gated proxy URL for the document itself, when this kind of
+   *  submission HAS a stored file the feed can serve. Null means there is
+   *  nothing to open — a card authorization is a signing event, not a
+   *  document, and an agreement can be signed with no executed PDF filed. */
+  documentHref: string | null
+  /** Same document, attachment disposition. */
+  downloadHref: string | null
   /** Review state, for the kinds that HAVE a review (COI today). */
   reviewState: 'PENDING' | 'APPROVED' | 'REJECTED' | null
   /** Set when this submission needs a human to look at it for a reason
@@ -161,7 +168,8 @@ export async function GET(req: NextRequest) {
         signedAt: true,
         signerName: true,
         signerEmail: true,
-        order: { select: { orderNumber: true, job: { select: jobSelect } } },
+        signedDocumentUrl: true,
+        order: { select: { id: true, orderNumber: true, job: { select: jobSelect } } },
       },
     }),
     prisma.paperworkRequest.findMany({
@@ -197,6 +205,8 @@ export async function GET(req: NextRequest) {
       jobName: c.job?.name ?? null,
       companyName: c.company?.name ?? null,
       href: jobHref('COI', c.job?.id ?? null),
+      documentHref: null,
+      downloadHref: null,
       reviewState: c.humanDecision as 'PENDING' | 'APPROVED' | 'REJECTED',
       flag: match.needsAttention
         ? { label: INSURED_MATCH_LABEL[match.verdict], detail: match.message }
@@ -221,6 +231,8 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('WC', job?.id ?? null),
+      documentHref: null,
+      downloadHref: null,
       reviewState: null,
       flag: null,
     })
@@ -242,12 +254,23 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('CC_AUTH', job?.id ?? null),
+      documentHref: null,
+      downloadHref: null,
       reviewState: null,
       flag: null,
     })
   }
 
   for (const s of agreements) {
+    // The executed PDF, served through the order's session-gated proxy.
+    // Without this the feed's only offer was "go look at the job", and the
+    // job page's agreement section doesn't even list order-signed
+    // agreements — so a signed contract in this list was unreachable from
+    // the one screen built to find it.
+    const agreementDoc =
+      s.signedDocumentUrl && s.order?.id
+        ? `/api/orders/${s.order.id}/agreement/pdf?type=${s.contractType}&doc=signed`
+        : null
     submissions.push({
       key: `AGREEMENT:${s.id}`,
       sourceId: s.id,
@@ -261,6 +284,8 @@ export async function GET(req: NextRequest) {
       jobName: s.order?.job?.name ?? null,
       companyName: null,
       href: jobHref('AGREEMENT', s.order?.job?.id ?? null),
+      documentHref: agreementDoc,
+      downloadHref: agreementDoc ? `${agreementDoc}&download=1` : null,
       reviewState: null,
       flag: null,
     })
@@ -284,6 +309,8 @@ export async function GET(req: NextRequest) {
       jobName: job?.name ?? null,
       companyName: null,
       href: jobHref('REDLINE', job?.id ?? null),
+      documentHref: null,
+      downloadHref: null,
       reviewState: null,
       flag: null,
     })

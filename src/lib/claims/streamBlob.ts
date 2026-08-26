@@ -11,6 +11,11 @@
  *   - everything else → attachment (force-download)
  * The inline-friendly set is conservative on purpose. Anything we're
  * not sure renders cleanly in-browser becomes an explicit download.
+ *
+ * `forceDownload` overrides the inline case: a "Download" button has to
+ * put a file on disk, not open a viewer tab. The two are separate
+ * affordances on the same document (view it now / keep a copy), so the
+ * caller — not the content type — decides which one it asked for.
  */
 
 import { NextResponse } from 'next/server'
@@ -49,6 +54,8 @@ export async function streamPrivateBlobAsResponse(args: {
   fileUrl: string
   /** Display filename used in Content-Disposition. */
   filename: string
+  /** Force `attachment` even for a type that would otherwise render inline. */
+  forceDownload?: boolean
 }): Promise<Response> {
   let blob
   try {
@@ -60,7 +67,10 @@ export async function streamPrivateBlobAsResponse(args: {
     return NextResponse.json({ error: 'blob not found' }, { status: 404 })
   }
   const contentType = blob.blob.contentType || 'application/octet-stream'
-  const disposition = INLINE_CONTENT_TYPES.has(contentType.toLowerCase()) ? 'inline' : 'attachment'
+  const disposition =
+    !args.forceDownload && INLINE_CONTENT_TYPES.has(contentType.toLowerCase())
+      ? 'inline'
+      : 'attachment'
   const safeName = sanitizeFilename(args.filename)
   return new Response(blob.stream, {
     status: 200,

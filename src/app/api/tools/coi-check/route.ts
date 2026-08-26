@@ -1,57 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { REVIEW_MODEL } from '@/lib/ai/models'
-import { parseAiJson } from '@/lib/ai/extractJson'
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-const COI_PROMPT = `You are reviewing a Certificate of Insurance (COI) for SirReel Production Vehicles Inc.
-
-CERTIFICATE HOLDER REQUIRED:
-- SirReel Production Vehicles Inc. (also: SirReel Production Vehicles, Inc. dba SirReel Studio Rentals)
-- 8500 Lankershim Blvd, Sun Valley, CA 91352
-
-HARD REQUIREMENTS (cannot be waived - must all pass):
-1. Certificate Holder = SirReel with correct address
-2. General Liability - Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
-3. Automobile Liability - CSL min $1,000,000, must cover Hired AND Non-Owned Autos
-4. Hired Auto Physical Damage - the certificate MUST show physical damage coverage on the hired/rented autos. This is the coverage that pays to repair or replace SirReel's vehicles, so it is REQUIRED. On SirReel certs it appears as a "Hired Auto Physical Damage" line in the Automobile section and/or the Description of Operations, and is commonly stated as a DEDUCTIBLE structure (e.g. a percentage of the loss subject to a minimum and maximum) rather than a dollar limit — that is acceptable and PASSES. Also accept explicit "Physical Damage", "Comprehensive & Collision", or a stated physical-damage limit. FAIL only if NO physical-damage coverage on rented/hired autos appears anywhere on the cert (auto LIABILITY alone is not enough).
-5. Additional Insured - SirReel named as Additional Insured
-6. Loss Payee - SirReel named as Loss Payee
-7. Primary & Non-Contributory coverage - the certificate must state the insured's coverage is primary and non-contributory as respects SirReel (their policy pays first and cannot demand SirReel's insurance contribute). This wording rarely gets its own coverage line — look for it in the Description of Operations box (e.g. "coverage is primary and non-contributory", "primary & non-contributory as respects the additional insured") or a referenced endorsement form (commonly CG 20 01). Any of those PASSES. FAIL only if no primary/non-contributory language appears anywhere on the cert. When it FAILS, the note must explain the fix: this is a standard endorsement the client's broker can add same-day at no cost — ask the client to have their broker reissue the COI showing primary and non-contributory wording in favor of SirReel Production Vehicles Inc. If the broker says the policy genuinely lacks it, that is a real coverage gap.
-8. Policy not expired
-
-MANAGEABLE REQUIREMENTS (SirReel management may approve exceptions):
-A. Umbrella/Excess Liability $1M - preferred but not always required for smaller productions
-B. Waiver of Subrogation - if the SUBR WVD column shows "Y" on ANY policy row, this passes. Present on GL only is sufficient.
-C. Entertainment Package or Rented Equipment $1M - production package equivalent is acceptable
-D. Workers Compensation - may be on a separate payroll company certificate
-
-Return ONLY valid JSON, no markdown:
-{
-  "hardPass": true,
-  "manageablePass": true,
-  "overallPass": true,
-  "requiresAdminApproval": false,
-  "insuredName": { "pass": true, "found": "", "note": "" },
-  "certificateHolder": { "hard": true, "pass": true, "found": "", "note": "" },
-  "generalLiability": { "hard": true, "pass": true, "perOccurrence": { "pass": true, "found": "", "required": "$1,000,000" }, "aggregate": { "pass": true, "found": "", "required": "$2,000,000" }, "note": "" },
-  "autoLiability": { "hard": true, "pass": true, "combinedSingleLimit": { "pass": true, "found": "", "required": "$1,000,000" }, "hiredAutos": { "pass": true, "found": "" }, "nonOwnedAutos": { "pass": true, "found": "" }, "note": "" },
-  "autoPhysicalDamage": { "hard": true, "pass": true, "found": "", "note": "" },
-  "additionalInsured": { "hard": true, "pass": true, "found": "", "note": "" },
-  "lossPayee": { "hard": true, "pass": true, "found": "", "note": "" },
-  "primaryNonContributory": { "hard": true, "pass": true, "found": "", "note": "" },
-  "policyExpiry": { "hard": true, "date": "", "expired": false },
-  "umbrella": { "hard": false, "pass": true, "perOccurrence": { "pass": true, "found": "" }, "aggregate": { "pass": true, "found": "" }, "note": "" },
-  "waiverOfSubrogation": { "hard": false, "pass": true, "found": "", "note": "" },
-  "entertainmentPackage": { "hard": false, "pass": true, "found": "", "note": "" },
-  "workersComp": { "hard": false, "pass": true, "found": "", "note": "" },
-  "hardIssues": [],
-  "manageableIssues": [],
-  "notes": ""
-}`
+// One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
+// This route carried its own third copy of the prompt with its own
+// hard/manageable tiering; it now asks the same questions as the review desk
+// and the paperwork portal.
+import { runCoiAiReview } from '@/lib/coi/reviewCoi'
+import { coiFlags } from '@/lib/coi/checks'
+import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -63,43 +19,29 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
     const bytes = await file.arrayBuffer()
-    const base64 = Buffer.from(bytes).toString('base64')
-    const isPdf = file.type === 'application/pdf'
-    const mediaType = isPdf ? 'application/pdf' : file.type.includes('png') ? 'image/png' : 'image/jpeg'
+    const review: Record<string, any> = await runCoiAiReview(Buffer.from(bytes), file.type)
 
-    const response = await client.messages.create({
-      model: REVIEW_MODEL,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          isPdf
-            ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf' as const, data: base64 } }
-            : { type: 'image', source: { type: 'base64', media_type: mediaType as 'image/png' | 'image/jpeg', data: base64 } },
-          { type: 'text', text: `${COI_PROMPT}\n\n${companyName ? `The company/production is "${companyName}".` : 'No specific company provided.'} Return only JSON.` }
-        ] as any
-      }]
-    })
+    // Named-insured match is computed, never asked of the model — same rule
+    // as every other COI surface (src/lib/coi/insuredMatch.ts). With no
+    // company typed in there is nothing to compare against, so the row is
+    // reported as read-only fact rather than a failure.
+    const match = companyName ? evaluateInsuredMatch(review.namedInsured ?? null, [companyName]) : null
+    review.insuredName = {
+      pass: !match?.needsAttention,
+      found: review.namedInsured || '',
+      note: match?.needsAttention ? match.message : '',
+    }
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const review = parseAiJson<any>(text, { tag: 'coi-check', stopReason: response.stop_reason })
-
-    // Enforce logic
-    const hardItems = [
-      review.certificateHolder?.pass,
-      review.generalLiability?.pass,
-      review.autoLiability?.pass,
-      review.autoPhysicalDamage?.pass,
-      review.additionalInsured?.pass,
-      review.lossPayee?.pass,
-      review.primaryNonContributory?.pass,
-      !review.policyExpiry?.expired,
-    ]
-    review.hardPass = hardItems.every(Boolean)
-    const manageableItems = [review.umbrella?.pass, review.waiverOfSubrogation?.pass, review.entertainmentPackage?.pass, review.workersComp?.pass]
-    review.manageablePass = manageableItems.every(Boolean)
-    review.requiresAdminApproval = review.hardPass && !review.manageablePass
-    review.overallPass = review.hardPass && review.manageablePass
+    const flags = coiFlags(review)
+    review.criticalPass = flags.criticalPass && !match?.needsAttention
+    review.alertPass = flags.alertPass
+    review.overallPass = review.criticalPass && review.alertPass
+    review.requiresAdminApproval = review.criticalPass && !review.alertPass
+    // Legacy names this page's older readers still use.
+    review.hardPass = review.criticalPass
+    review.manageablePass = review.alertPass
+    review.hardIssues = review.criticalIssues ?? []
+    review.manageableIssues = review.alertIssues ?? []
 
     return NextResponse.json({ ok: true, review })
   } catch (err: any) {

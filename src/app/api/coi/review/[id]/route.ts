@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
+import { coiChecklist, coiFlags } from '@/lib/coi/checks'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiUploadUrl } from '@/lib/portal/portalUrl'
@@ -115,6 +116,8 @@ function serialize(coi: NonNullable<CoiRow>) {
   const ai = (coi.aiResponse || null) as Record<string, unknown> | null
   const candidates = candidateNames(coi)
   const match = evaluateInsuredMatch(coi.namedInsured, candidates)
+  const flags = coiFlags(ai as never)
+  const checks = coiChecklist(ai as never)
 
   // Agreements already signed under the CURRENT company. Surfaced because a
   // name mismatch that is resolved by changing the production company makes
@@ -188,10 +191,27 @@ function serialize(coi: NonNullable<CoiRow>) {
     policyExpiryDate: coi.policyExpiryDate,
     coverageVerified: coi.coverageVerified,
     additionalInsured: coi.additionalInsured,
-    aiRiskLevel: coi.aiRiskLevel,
+    // Risk + verdict are recomputed from the per-check results rather than
+    // read off the stored summary: a review that says overallPass while half
+    // the requirements were never asked about is an incomplete review, not a
+    // pass. Older reviews have no checks, so their stored level stands.
+    aiRiskLevel: flags.hasChecklist ? flags.riskLevel : coi.aiRiskLevel,
     aiRecommendation: coi.aiRecommendation,
     aiNotes: typeof ai?.notes === 'string' ? ai.notes : null,
-    aiOverallPass: ai?.overallPass === true,
+    /** Every CRITICAL requirement confirmed — what "verified coverage" means. */
+    aiOverallPass: flags.hasChecklist ? flags.criticalPass : ai?.overallPass === true,
+    /** Judgment-call items nobody has confirmed. Never blocks on its own. */
+    aiAlertOpen: flags.alertOpen.length,
+    aiChecks: checks,
+    /**
+     * Whether the STORED review carries per-check verdicts at all. Reviews
+     * filed before the prompts were unified never asked about Primary &
+     * Non-Contributory, Waiver of Subrogation, Umbrella, Workers Comp, the
+     * cancellation clause or contractor coverage — so "passes the checks"
+     * meant eight checks, not fifteen. The modal says so rather than
+     * presenting a thin review as a complete one.
+     */
+    aiHasChecklist: flags.hasChecklist,
     aiRan: !!coi.aiRiskLevel || !!ai,
     // Whether the STORED review was produced by a prompt that asked for the
     // named insured at all. Reviews filed before the field existed have no

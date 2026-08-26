@@ -2279,6 +2279,13 @@ model VerificationToken {
 // 14. PAPERWORK REQUESTS
 // ====================================
 
+/// What the client chose on the Limited Collision Damage Waiver. Absent
+/// means they have not answered — NOT that they declined.
+enum LcdwDecision {
+  ACCEPTED
+  DECLINED
+}
+
 model PaperworkRequest {
   id          String    @id @default(uuid())
   bookingId   String    @map("booking_id")
@@ -2297,7 +2304,27 @@ model PaperworkRequest {
   coiReceived          Boolean @default(false) @map("coi_received")
   wcReceived           Boolean @default(false) @map("wc_received")
   rentalAgreement      Boolean @default(false) @map("rental_agreement")
+  /// LEGACY mirror of lcdwDecision — true only when ACCEPTED. Kept because
+  /// older read paths still select it; `lcdwDecision` is the source of truth.
   lcdwAccepted         Boolean @default(false) @map("lcdw_accepted")
+
+  // LCDW is a per-vehicle, per-day charge ($24/day) AND a liability waiver,
+  // so "declined" and "never asked" are different facts with different money
+  // attached. A single Boolean could not tell them apart: both read false,
+  // the reservation context reported a firm decline as "pending" forever,
+  // and the job page badge said "LCDW not accepted" for a client who was
+  // never asked. Worse, /api/portal/[token]/sign wrote `lcdw_accepted=true`
+  // unconditionally, discarding the radio button the client actually picked
+  // — so a decline was recorded as an acceptance.
+  //
+  // The decision, when it was made, and the written confirmation the LCDW
+  // addendum requires ("Acceptance/decline of LCDW must be confirmed in
+  // writing per fleet vehicle rental") — the signature was posted by both
+  // portals and thrown away.
+  lcdwDecision         LcdwDecision? @map("lcdw_decision")
+  lcdwDecidedAt        DateTime?     @map("lcdw_decided_at")
+  lcdwSignatureData    String?       @map("lcdw_signature_data") @db.Text
+  lcdwFuelAcknowledged Boolean?      @map("lcdw_fuel_acknowledged")
   studioContractSigned Boolean @default(false) @map("studio_contract_signed")
   creditCardAuth       Boolean @default(false) @map("credit_card_auth")
 

@@ -659,14 +659,28 @@ export default function JobPortalPage() {
               >
                 {data.paperwork.agreement?.signedAt ? (
                   data.paperwork.agreement.signedDocumentUrl ? (
-                    <a
-                      href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT&doc=signed"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-                    >
-                      Download signed copy
-                    </a>
+                    // Two affordances, because the client wants both: read
+                    // it now, and keep a copy for their production files.
+                    // The single "Download signed copy" link did neither
+                    // cleanly — it opened a viewer tab under a label that
+                    // promised a file.
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <a
+                        href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT&doc=signed"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                      >
+                        View signed copy
+                      </a>
+                      <a
+                        href="/api/portal/job/agreement/pdf?type=RENTAL_AGREEMENT&doc=signed&download=1"
+                        download
+                        className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                      >
+                        Download PDF
+                      </a>
+                    </div>
                   ) : null
                 ) : agreementIsReleased(data.paperwork.agreement) &&
                   data.paperwork.agreement?.documentToSignUrl ? (
@@ -746,14 +760,28 @@ export default function JobPortalPage() {
                 >
                   {data.paperwork.stageContract.signedAt ? (
                     data.paperwork.stageContract.signedDocumentUrl ? (
-                      <a
-                        href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT&doc=signed"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-                      >
-                        Download signed copy
-                      </a>
+                      // Two affordances, because the client wants both: read
+                      // it now, and keep a copy for their production files.
+                      // The single "Download signed copy" link did neither
+                      // cleanly — it opened a viewer tab under a label that
+                      // promised a file.
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <a
+                          href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT&doc=signed"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                        >
+                          View signed copy
+                        </a>
+                        <a
+                          href="/api/portal/job/agreement/pdf?type=STAGE_CONTRACT&doc=signed&download=1"
+                          download
+                          className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline"
+                        >
+                          Download PDF
+                        </a>
+                      </div>
                     ) : null
                   ) : data.paperwork.stageContract.documentToSignUrl ? (
                     <div className="flex items-center gap-2 flex-wrap">

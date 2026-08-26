@@ -75,7 +75,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 
 ### Key Database Concepts
 - **Order** (`sr_orders`) — invoiceable rental, ties to a Job
-- **Job** (`sr_jobs`) — production/show that owns one or more orders. Status: QUOTED → ACTIVE → WRAPPED, with HOLD/CANCELLED off-ramps
+- **Job** (`sr_jobs`) — production/show that owns one or more orders. `Job.status` is NOT a lifecycle the app advances — nothing ever wrote ACTIVE/WRAPPED/HOLD on its own (only NEW on create, NEW→QUOTED on portal welcome, LOST via mark-lost). As of 2026-08-25 it's demoted to three human OFF-RAMPS (HOLD / WRAPPED / LOST) that override the orders; "where is this job" is DERIVED from the orders by `src/lib/jobs/cadence.ts` and rendered identically on the /jobs board and the job detail header. Legacy ACTIVE rows are harmless — the rollup ignores the value whenever live orders exist
 - **JobContact** (`sr_job_contacts`) — person + role (PRODUCER/PM/PC/TRANSPO/ACCOUNTING/OTHER) on a job. Primary contact computed: PM → PC → first marked primary → first contact
 - **Person** (`people`) — contacts, NOT scoped to a single company (works with multiple via JobContact)
 - **Company** (`companies`) — clients
