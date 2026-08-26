@@ -45,7 +45,21 @@ async function resolveClientJobVehicles(req: NextRequest) {
   if (!order?.jobId) return { resolved, jobId: null, assignmentIds: [] as string[] }
 
   const assignments = await prisma.bookingAssignment.findMany({
-    where: { bookingItem: { booking: { jobId: order.jobId } } },
+    where: {
+      bookingItem: {
+        booking: {
+          jobId: order.jobId,
+          // Match the staff job page, which skips CANCELLED/ARCHIVED
+          // bookings. Without this the two disagreed: a client could see —
+          // and name a driver onto — a vehicle whose booking was cancelled,
+          // and that driver never appeared on the staff page, because the
+          // vehicle itself was filtered out there. An invited driver nobody
+          // at HQ could see. (Wes 2026-08-26: clients shouldn't see
+          // cancelled bookings.)
+          status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+        },
+      },
+    },
     orderBy: [{ startDate: 'asc' }],
     select: {
       id: true, startDate: true, endDate: true,
