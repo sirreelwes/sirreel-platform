@@ -95,7 +95,7 @@ function UsageSection({ usage }: { usage: Usage }) {
   const hourLabel = (h: number) => (h === 0 ? '12a' : h === 12 ? '12p' : h > 12 ? `${h - 12}p` : `${h}a`)
 
   return (
-    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+    <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Assistant usage</h2>
       <p className="mt-1 text-xs text-zinc-500">
         Grouped into visits — repeated tries within {VISIT_GAP_MINUTES} minutes are one person, not
@@ -321,19 +321,19 @@ export default function AssistantAdminPage() {
   })
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-white">
-      <h1 className="text-2xl font-semibold">After-Hours Assistant</h1>
-      <p className="mt-1 text-sm text-zinc-400">
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-semibold text-lt-fg">After-Hours Assistant</h1>
+      <p className="mt-1 text-sm text-lt-fg2">
         Manage the standing lot gate code, the per-job access codes clients use to verify after
         hours, and review the release log.
       </p>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">
+        <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
           {error}
         </div>
       )}
-      {loading && <div className="mt-6 text-sm text-zinc-400">Loading…</div>}
+      {loading && <div className="mt-6 text-sm text-lt-fg2">Loading…</div>}
 
       {data && !loading && (
         <>
@@ -341,9 +341,9 @@ export default function AssistantAdminPage() {
               email to hq@ that no one reads at 1am. The assistant can only
               hand a stranded driver a person if a person is reachable. */}
           {data.emergencyContacts.filter((c) => c.isEmergencyContact && c.emergencyPhone).length === 0 && (
-            <div className="mt-6 rounded-xl border border-red-600 bg-red-950/40 p-4">
-              <div className="text-sm font-semibold text-red-200">No on-call contact is set</div>
-              <p className="mt-1 text-xs text-red-200/80">
+            <div className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4">
+              <div className="text-sm font-semibold text-red-900">No on-call contact is set</div>
+              <p className="mt-1 text-xs text-red-800">
                 A driver stuck at the lot cannot be put through to anyone. Escalations fall back to
                 an email to hq@ instead of a text. Set someone as an emergency contact with a mobile
                 number below.
@@ -355,14 +355,14 @@ export default function AssistantAdminPage() {
               the alert degrades to an email nobody reads at 1am, and the
               assistant still tells the driver the team "has been texted". */}
           {data.smsConfigured === false && (
-            <div className="mt-6 rounded-xl border border-amber-600 bg-amber-950/30 p-4">
-              <div className="text-sm font-semibold text-amber-200">
+            <div className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <div className="text-sm font-semibold text-amber-900">
                 {data.smsProblem ? 'Text messaging is misconfigured' : 'Text messaging is not set up'}
               </div>
-              <p className="mt-1 text-xs text-amber-200/80">
+              <p className="mt-1 text-xs text-amber-800">
                 On-call alerts fall back to email to hq@ — nobody gets a text.{' '}
                 {data.smsProblem ? (
-                  <span className="text-amber-100">{data.smsProblem}</span>
+                  <span className="font-medium text-amber-900">{data.smsProblem}</span>
                 ) : (
                   <>
                     Set TWILIO_ACCOUNT_SID and TWILIO_FROM_NUMBER in Vercel, plus either
@@ -378,7 +378,7 @@ export default function AssistantAdminPage() {
           {data.usage && <UsageSection usage={data.usage} />}
 
           {/* Standing gate code */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
               Standing lot gate code
             </h2>
@@ -409,7 +409,7 @@ export default function AssistantAdminPage() {
           </section>
 
           {/* Per-job codes */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
                 Per-job access codes
@@ -466,7 +466,7 @@ export default function AssistantAdminPage() {
           </section>
 
           {/* Emergency contacts */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">Emergency contacts</h2>
             <p className="mt-1 text-xs text-zinc-500">
               On-call staff the assistant <span className="text-zinc-300">texts</span> when a caller declares a genuine
@@ -524,7 +524,7 @@ export default function AssistantAdminPage() {
           </section>
 
           {/* Release log */}
-          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+          <section className="mt-6 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
               Recent access log
             </h2>
