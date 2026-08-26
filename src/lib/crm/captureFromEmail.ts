@@ -26,10 +26,11 @@
 
 import { prisma } from '@/lib/prisma'
 import { Prisma, CaptureVerdict, CaptureResolution, PersonRole } from '@prisma/client'
-import { SALES_CAPTURE_INBOXES, FREEMAIL_DOMAINS } from './captureConstants'
+import { SALES_CAPTURE_INBOXES } from './captureConstants'
 import { classifyForCapture, type VerdictResult, type ParsedPayload } from './classifyForCapture'
 import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 import { mapTitleToRole } from './roleMapping'
+import { findDomainMatchedCompany } from './domainCompanyMatch'
 import type { ExtractedMessage } from '@/lib/ai/messageExtractor'
 
 export type CaptureStatus = 'auto_captured' | 'needs_review' | 'skipped' | 'duplicate' | 'noop'
@@ -56,25 +57,11 @@ function splitName(full: string | null): { first: string; last: string } {
   return { first: parts[0], last: parts.slice(1).join(' ') }
 }
 
-async function findDomainMatchedCompany(domain: string): Promise<string | null> {
-  if (!domain) return null
-  // Skip the freemail jungle — those are never domain-matched.
-  // (Shared FREEMAIL_DOMAINS constant — same guard as the person-history
-  // company suggestions.)
-  if (FREEMAIL_DOMAINS.has(domain)) return null
-
-  const hits = await prisma.company.findMany({
-    where: {
-      OR: [
-        { website: { contains: domain, mode: 'insensitive' } },
-        { billingEmail: { endsWith: `@${domain}`, mode: 'insensitive' } },
-      ],
-    },
-    select: { id: true },
-    take: 2,
-  })
-  return hits.length === 1 ? hits[0].id : null
-}
+// findDomainMatchedCompany moved to src/lib/crm/domainCompanyMatch.ts
+// (imported above) so the affiliation backfill applies the identical
+// rule. Behaviour is unchanged apart from the vendor/internal-domain
+// guards, which this path already enforced earlier via its own sender
+// checks.
 
 async function findExactNameCompany(name: string | null): Promise<string | null> {
   if (!name) return null

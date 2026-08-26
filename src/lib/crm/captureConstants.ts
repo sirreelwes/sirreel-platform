@@ -23,6 +23,33 @@ export const SALES_CAPTURE_INBOXES: ReadonlySet<string> = new Set([
 
 export const SIRREEL_DOMAIN = 'sirreel.com'
 
+// Every domain that is US. sirreel.us surfaced on 2026-08-26 while
+// measuring the CC-capture rule: box@sirreel.us is Hugo and jp@sirreel.us
+// appeared on 43 production threads. Guarding only sirreel.com would
+// have filed our own GM as a client contact. Any future alias domain
+// belongs here, not in a one-off check at the call site.
+export const INTERNAL_DOMAINS: ReadonlySet<string> = new Set([
+  'sirreel.com',
+  'sirreel.us',
+])
+
+// Shared / role mailboxes. These are real addresses that receive real
+// production mail, but they are not PEOPLE — filing them as a Person
+// mints a contact named "Locations" you can never address by name and
+// would then email as if it were an individual. Matched on the localpart
+// (before @), exact match, case-insensitive.
+//
+// Origin: locations@capequity.com appeared on 61 production threads in
+// the CC-capture measurement — the single most-seen unfiled address.
+export const ROLE_ADDRESS_LOCALPARTS: ReadonlySet<string> = new Set([
+  'info', 'contact', 'hello', 'office', 'admin', 'team', 'mail',
+  'locations', 'location', 'production', 'productions', 'studio', 'studios',
+  'bookings', 'booking', 'reservations', 'scheduling', 'dispatch',
+  'accounting', 'accounts', 'ap', 'ar', 'billing', 'invoices', 'payments',
+  'sales', 'support', 'help', 'hr', 'jobs', 'careers', 'rentals', 'rental',
+  'orders', 'service', 'inquiries', 'press', 'legal', 'insurance',
+])
+
 // Bare-string match against the localpart (before @) of the From: addr.
 // Case-insensitive; tested via `.includes()` so substrings count
 // ("auto-noreply@..." matches "noreply").
@@ -189,6 +216,15 @@ export const FREEMAIL_DOMAINS: ReadonlySet<string> = new Set([
 export const KNOWN_VENDOR_DOMAINS: ReadonlySet<string> = new Set([
   'athosinsurance.com',
   'considine.com',
+  // 2026-08-26, surfaced by the CC-harvest dry run. Production
+  // insurance brokers appear on production threads constantly — they
+  // are on the CC line precisely BECAUSE it is a real shoot — but they
+  // are never the buyer.
+  'hubinternational.com',
+  'intactinsurance.com',
+  // Other rental houses. cfg.rentals rode 8 production threads; a
+  // competitor coordinating a cross-rental is not a sales lead.
+  'cfg.rentals',
 ])
 
 // Pattern matching SirReel's own company name in any reasonable
