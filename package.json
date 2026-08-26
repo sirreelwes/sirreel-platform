@@ -17,6 +17,7 @@
     "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
+    "test:quick-reply-items": "tsx tests/sales/quick-reply-items.test.ts",
     "test:cc": "tsx tests/email/cc-list.test.ts",
     "test:dates": "tsx tests/dates/calendar-date.test.ts",
     "test:driver-cancel": "tsx tests/drivers/cancel-rules.test.ts",

@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
     where: { id: bookingId },
     select: {
       id: true,
+      notes: true,
       rentalAgreement: true,
       coiReceived: true,
       unionStatus: true,
@@ -201,5 +202,9 @@ export async function GET(req: NextRequest) {
     checkout,
     // 5-digit after-hours access code clients read to the assistant to verify.
     accessCode: booking.job?.assistantAuthCode ?? null,
+    // Booking notes. Written since the first hold shipped and shown NOWHERE
+    // until 2026-08-26 — which is where the supplies a client asked to have
+    // on the truck (straps, pads, a small gear order) were quietly going.
+    notes: booking.notes,
   })
 }

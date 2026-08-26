@@ -22,7 +22,11 @@ interface QuickReplyPayload {
   jobName: string | null
   pickup: string | null
   return: string | null
-  categories: { id: string; name: string; quantity: number }[]
+  categories: { id: string; name: string; quantity: number; startDate?: string; endDate?: string }[]
+  /** Supplies / gear the client asked to come on the vehicle. Not holdable
+   *  (no Asset units behind expendables) — they ride on the reply and on the
+   *  hold's notes instead. */
+  supplies?: { name: string; quantity: number }[]
   askForDetails?: boolean
   /** Window of the soft hold the agent just created (never unit names). */
   heldFrom?: string | null
@@ -71,6 +75,9 @@ export async function POST(req: NextRequest) {
     detailsUrl,
     heldFrom: typeof payload.heldFrom === 'string' ? payload.heldFrom : null,
     heldTo: typeof payload.heldTo === 'string' ? payload.heldTo : null,
+    // Named in the email so the client can check we heard the request right.
+    categories: payload.categories || [],
+    supplies: Array.isArray(payload.supplies) ? payload.supplies : [],
     customMessage: payload.customMessage ?? null,
   })
 

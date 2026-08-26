@@ -754,8 +754,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        — the standard wording, yours to edit. The greeting,
-                        availability list &amp; supply link and sign-off stay.
+                        — the standard wording, yours to edit. Your words are
+                        the whole email: only the greeting, the &ldquo;add gear
+                        or vehicles&rdquo; button and the sign-off stay.
                       </span>
                     </span>
                   </label>

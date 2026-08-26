@@ -193,6 +193,60 @@ function fmtDate(iso?: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
+// ── What the client actually asked for ──────────────────────────────────────
+
+/**
+ * One requested line — a holdable category (vehicle / stage) or a supply
+ * that rides along on the truck.
+ *
+ * Supplies are NOT holdable: expendables live in InventoryItem with no Asset
+ * units behind them, so the scheduler has nothing to reserve against them
+ * (see /api/scheduling/categories). They still have to travel with the
+ * request — "10 ratchet straps and a dozen furniture pads on the cargo van"
+ * is the most ordinary inquiry we get, and dropping it silently was how the
+ * straps vanished between the client's email and the reply (Wes 2026-08-26).
+ */
+export interface QuickReplyItemLine {
+  name: string
+  quantity: number
+  /** Per-line window. Only rendered when the request spans more than one. */
+  startDate?: string | null
+  endDate?: string | null
+}
+
+/**
+ * "2 × Cube Truck" / "Cargo Van w/ Liftgate" (a single unit reads as the bare
+ * name).
+ *
+ * The quantity here is the CLIENT'S OWN number echoed back to them, which is
+ * why it doesn't violate the no-counts rule the rest of this file enforces:
+ * that rule is about OUR fleet numbers (how many units exist, how booked they
+ * are), and those stay rep-only.
+ */
+export function itemLabel(item: QuickReplyItemLine, window?: string | null): string {
+  const qty = Math.max(1, Math.floor(item.quantity || 1))
+  const base = qty > 1 ? `${qty} × ${item.name}` : item.name
+  return window ? `${base} · ${window}` : base
+}
+
+/**
+ * Render the requested lines for the client email.
+ *
+ * Dates are appended per line ONLY when the request covers more than one
+ * window — a van from the 27th and a box truck from the 29th need saying;
+ * repeating one shared range on every line is noise, the sentence around the
+ * list already carries it.
+ */
+export function requestedItemLabels(items: QuickReplyItemLine[]): string[] {
+  const windows = new Set(
+    items.filter((i) => i.startDate && i.endDate).map((i) => `${i.startDate}|${i.endDate}`),
+  )
+  const perLineWindows = windows.size > 1
+  return items
+    .filter((i) => i.name?.trim())
+    .map((i) => itemLabel(i, perLineWindows ? holdRangeLabel(i.startDate, i.endDate) : null))
+}
+
 export interface ComposeQuickReplyArgs {
   recipientName?: string | null
   clientName?: string | null
@@ -208,9 +262,16 @@ export interface ComposeQuickReplyArgs {
   /** Resolved by the send/preview route via buildDetailsLink — the one-tap
    *  page carrying the two fields. Null keeps the plain "just reply" ask. */
   detailsUrl?: string | null
-  /** Set only when a soft hold was actually created — window only, no units. */
+  /** Set only when a soft hold was actually created — the window; the units
+   *  themselves come from `categories` below. */
   heldFrom?: string | null
   heldTo?: string | null
+  /** The vehicle/stage categories the reply is about. Named in the email so
+   *  the client can see we read the request right (Wes 2026-08-26 — a hold
+   *  confirmation that says only "your equipment" tells them nothing). */
+  categories?: QuickReplyItemLine[]
+  /** Supplies / gear asked for on the vehicle. Not holdable, still promised. */
+  supplies?: QuickReplyItemLine[]
   /** Rep's own message — replaces the templated prose; the branded shell, the
    *  tier availability message + supply CTA, and the sign-off stay intact. */
   customMessage?: string | null
@@ -246,6 +307,8 @@ export function composeQuickReply(args: ComposeQuickReplyArgs): { subject: strin
       messageReplacesOpener: args.tiering.tier === 'noncommittal',
       suppliesUrl: SUPPLY_ORDER_URL,
       heldRange: holdRangeLabel(args.heldFrom, args.heldTo),
+      requestedItems: requestedItemLabels(args.categories ?? []),
+      supplyItems: requestedItemLabels(args.supplies ?? []),
       askForCompany: !!args.askForDetails && !args.clientName?.trim(),
       askForJob: !!args.askForDetails && !args.jobName?.trim(),
       detailsUrl: args.detailsUrl ?? null,
