@@ -79,6 +79,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // auditable — rows stay for history). Terminal item states are left
   // untouched. Backups on the same window belong to OTHER bookings and
   // are not affected by cancelling this one.
+  let driversReleased = 0;
   const updated = await prisma.$transaction(async (tx) => {
     if (target === "CANCELLED") {
       const items = await tx.bookingItem.findMany({
@@ -99,6 +100,28 @@ export async function POST(req: NextRequest, { params }: Params) {
           data: { status: "UNFULFILLED" },
         });
       }
+
+      // Drivers named for this booking lose their access with it.
+      //
+      // DriverAssignment.token is the driver's no-login credential for the
+      // job page AND the gate code. Releasing the units without expiring
+      // those tokens left people able to walk up to the yard for a booking
+      // that no longer exists — and invisible while doing it, because the
+      // staff job page filters cancelled bookings out entirely, so the
+      // driver appeared on nobody's screen. (Wes 2026-08-26.)
+      //
+      // PICKED_UP is left alone on purpose, the same rule both DELETE
+      // endpoints follow: those keys are already out and CheckoutRecord is
+      // the authoritative record of who took them. Cancelling a booking
+      // after collection is a paperwork correction, not a recall.
+      const releasedDrivers = await tx.driverAssignment.updateMany({
+        where: {
+          bookingAssignment: { bookingItem: { bookingId: id } },
+          status: { notIn: ["CANCELLED", "PICKED_UP"] },
+        },
+        data: { status: "CANCELLED", expiresAt: new Date() },
+      });
+      driversReleased = releasedDrivers.count;
     }
     return tx.booking.update({
       where: { id },
@@ -107,5 +130,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       select: { id: true, status: true },
     });
   });
-  return NextResponse.json({ ok: true, status: updated.status });
+  // Surfaced so the caller can say "3 drivers lost access" rather than the
+  // change happening silently.
+  return NextResponse.json({ ok: true, status: updated.status, driversReleased });
 }

@@ -44,5 +44,28 @@ eq('client ⊆ staff', ALL.every((s) => !clientMay(s) || staffMay(s)), true)
 eq('nobody cancels PICKED_UP', !clientMay('PICKED_UP') && !staffMay('PICKED_UP'), true)
 eq('staff strictly wider', ALL.some((s) => staffMay(s) && !clientMay(s)), true)
 
+/**
+ * Cancelling a BOOKING releases its drivers (Wes 2026-08-26).
+ *
+ * Same PICKED_UP carve-out as the two DELETE endpoints, for the same
+ * reason: those keys are already out. Everything else loses its token,
+ * because that token is the driver's no-login access to the job page and
+ * the gate code — releasing the units without expiring it left people able
+ * to walk up to the yard for a booking that no longer exists, invisible
+ * because the staff page filters cancelled bookings out entirely.
+ */
+const bookingCancelReleases = (s: DriverAssignmentStatus) => !['CANCELLED', 'PICKED_UP'].includes(s)
+
+console.log('\nBOOKING CANCELLED releases:')
+eq('  INVITED   released', bookingCancelReleases('INVITED'), true)
+eq('  VIEWED    released', bookingCancelReleases('VIEWED'), true)
+eq('  READY     released', bookingCancelReleases('READY'), true)
+eq('  PICKED_UP LEFT ALONE', bookingCancelReleases('PICKED_UP'), false)
+eq('  CANCELLED no-op    ', bookingCancelReleases('CANCELLED'), false)
+// The booking sweep is the widest of the three, and still never touches
+// a collected vehicle.
+eq('sweep ⊇ staff', ALL.every((s) => !staffMay(s) || bookingCancelReleases(s) || s === 'CANCELLED'), true)
+eq('sweep spares PICKED_UP', !bookingCancelReleases('PICKED_UP'), true)
+
 console.log(fail === 0 ? '\nall driver-cancel checks passed' : `\n${fail} FAILED`)
 process.exit(fail === 0 ? 0 : 1)
