@@ -71,6 +71,8 @@ export const PERSON_ROLE_VALUES = [
   'LOCATION_MANAGER',
   'PRODUCTION_ACCOUNTANT',
   'PRODUCTION_ASSISTANT',
+  'GRIP',
+  'GAFFER_ELECTRIC',
   'COORDINATOR',
   'OWNER',
   'OTHER',
@@ -116,6 +118,17 @@ const ORDERED_RULES: ReadonlyArray<{ pattern: RegExp; role: PersonRoleValue }> =
   // "PA" only as a standalone token or with an explicit qualifier —
   // never as a substring, which would catch every "Pa" in a word.
   { pattern: /\bproduction assistant\b|\boffice pa\b|\bset pa\b|^pa$/i, role: PersonRole.PRODUCTION_ASSISTANT },
+
+  // ── Grip & electric ───────────────────────────────────────────────
+  // Two departments, not one: grip rigs and supports, electric lights.
+  // Both book their own trucks, which is why they get their own buckets.
+  //
+  // Qualified "best boy" resolves to its department. BARE "best boy" is
+  // deliberately NOT matched: convention usually reads it as best boy
+  // electric, but "usually" is not good enough for a field sales will
+  // segment on — it stays OTHER with the real title on rawTitle.
+  { pattern: /\bbest boy grip\b|\bkey grip\b|\bdolly grip\b|\brigging grip\b|\bgrip\b/i, role: PersonRole.GRIP },
+  { pattern: /\bgaffer\b|\bbest boy electric\b|\bchief lighting technician\b|\belectrician\b|\blighting (technician|tech|director)\b|\bbest boy lamp\b/i, role: PersonRole.GAFFER_ELECTRIC },
 
   // ── Generic fallbacks ─────────────────────────────────────────────
   { pattern: /\bcoordinator\b/i, role: PersonRole.COORDINATOR },

@@ -73,6 +73,17 @@ check('Production Accountant', PersonRole.PRODUCTION_ACCOUNTANT, 'accounting cut
 check('Office PA', PersonRole.PRODUCTION_ASSISTANT, 'often who actually places the order')
 check('Unit Production Manager', PersonRole.UPM, 'UPM wins over the production-manager rule')
 
+console.log('\nGrip and electric are separate departments (Wes, 2026-08-26)')
+check('Key Grip', PersonRole.GRIP, 'the 4 key grips that had no bucket')
+check('Best Boy Grip', PersonRole.GRIP, 'qualified best boy resolves to its department')
+check('Dolly Grip', PersonRole.GRIP, 'dolly grip')
+check('Gaffer', PersonRole.GAFFER_ELECTRIC, 'gaffer')
+check('Best Boy Electric', PersonRole.GAFFER_ELECTRIC, 'the other qualified best boy')
+check('Chief Lighting Technician', PersonRole.GAFFER_ELECTRIC, 'the formal title for gaffer')
+check('Key Grip / Gaffer', PersonRole.GRIP, 'compound across both — grip wins by rule order, not word order')
+check('Best Boy', PersonRole.OTHER,
+  'BARE best boy is deliberately unmatched — convention reads it as electric, but "usually" is not good enough for a field we segment on')
+
 console.log('\nFalse positives — a wrong role is worse than OTHER')
 check('Project Manager', PersonRole.OTHER, 'not a production manager')
 check('Senior Project Manager', PersonRole.OTHER, 'still not')
