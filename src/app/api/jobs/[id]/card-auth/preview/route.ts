@@ -6,7 +6,7 @@
  * the preview body renders the portal CTA as an annotation rather than a
  * live button (portalUrlIsTokenized: false).
  *
- * Body (optional): { message?: string, overrideContactId?: string }
+ * Body (optional): { message?: string, customMessage?: string, overrideContactId?: string }
  * Auth: session-gated.
  */
 
@@ -31,10 +31,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       : null
   const overrideContactId =
     typeof body?.overrideContactId === 'string' ? body.overrideContactId : null
+  // "Write my own email" — replaces the templated ask and its closer.
+  const customMessage =
+    typeof body?.customMessage === 'string' && body.customMessage.trim().length > 0
+      ? body.customMessage.trim().slice(0, 5000)
+      : null
 
   const composition = await composeCardAuthEmail({
     jobId: params.id,
     message,
+    customMessage,
     overrideContactId,
     portalLink: null,
   })

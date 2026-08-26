@@ -13,8 +13,9 @@
  *                                  on phone inboxes.
  *
  * Visual treatment matches the thank-you template (`thankYouTemplate.ts`):
- *   - slate header (#0f172a) with SirReel logo left + a Bradley Hand
- *     "Welcome" badge on a -20° tilt right
+ *   - slate header (#0f172a) with the SirReel logo, full width (the
+ *     hand-script "Welcome!" badge that sat right of it was removed
+ *     2026-08-26 — see the note at the header markup)
  *   - warm body copy
  *   - quote snippet block (when present): gold left-border, big amber
  *     CTA button to the portal job URL
@@ -407,29 +408,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
 
   const signOff = `${safeAgentName}<br/><span style="color: ${MUTED}; font-size: 14px;">&amp; Team SirReel</span>`
 
-  // Header badge ("Welcome!") — shown on welcome/quote emails; suppressed on
-  // the availability (Quick Reply) email, which is a reply, not a welcome. The
-  // logo spans the full header width when the badge is gone.
-  const showHeaderBadge = !withAvailability
-  const headerLogoWidth = showHeaderBadge ? '60%' : '100%'
-  const headerBadgeCell = showHeaderBadge
-    ? `<td valign="middle" align="right" style="width: 40%;">
-                    <span style="
-                      display: inline-block;
-                      font-family: 'Bradley Hand ITC', 'Bradley Hand', 'Segoe Print', 'Marker Felt', 'Comic Sans MS', cursive;
-                      font-size: 22px;
-                      font-weight: 700;
-                      color: ${ACCENT};
-                      transform: rotate(-20deg);
-                      -webkit-transform: rotate(-20deg);
-                      -ms-transform: rotate(-20deg);
-                      text-shadow: 0 1px 0 rgba(0,0,0,0.25);
-                      line-height: 1;
-                      padding: 0 4px;
-                      white-space: nowrap;
-                    ">Welcome!</span>
-                  </td>`
-    : ''
+  // The header carried a hand-script "Welcome!" badge on every welcome/quote
+  // email. Removed 2026-08-26 (Wes) for the same reason the opener changed:
+  // a quote is a bid for the work, not a welcome — nobody has arrived yet.
+  // The logo now spans the full header width on every mode, which is what the
+  // Quick Reply email already did.
 
   // TSX tagline — identical small-caps treatment as the thank-you
   // template; same widths and offsets so the two emails feel like
@@ -462,19 +445,17 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
           <tr>
             <td style="background-color: ${HEADER_BG}; padding: 20px 32px;">
-              <!-- Logo left + optional hand-script badge on the right
-                   (welcome/quote only; suppressed on the Quick Reply /
-                   availability email). -->
+              <!-- Logo, full width. See the note above about the badge that
+                   used to sit to its right. -->
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td valign="middle" align="left" style="width: ${headerLogoWidth};">
+                  <td valign="middle" align="left" style="width: 100%;">
                     <img
                       src="https://hq.sirreel.com/sirreel-logo-white.png"
                       alt="SirReel"
                       style="height: 28px; width: auto; display: block;"
                     />
                   </td>
-                  ${headerBadgeCell}
                 </tr>
               </table>
             </td>

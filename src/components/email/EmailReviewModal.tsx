@@ -233,7 +233,10 @@ function buildPreviewBody(
   }
   // Quote: "Write my own email" replaces the templated opener + closer. The
   // quote snapshot, portal button and sign-off are the shell and stay put.
-  if (target.kind === 'quote') {
+  // Card auth: same, except the shell also keeps the security paragraph —
+  // the rep cannot write away the copy that tells a client this is not
+  // phishing (see cardAuthRequest.ts).
+  if (target.kind === 'quote' || target.kind === 'card-auth') {
     base.customMessage = customMessage.trim() || null;
   }
   // Welcome invite: the server derives recipient/company/agent from the
@@ -517,6 +520,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   const ccBlocked = ccInvalid.length > 0 || ccOverLimit;
   // One composer, no toggle, no second note field.
   const singleBox = target.kind === 'welcome';
+  // Kinds whose "Write my own email" swallows the whole body — the separate
+  // personal-note box is hidden while it's on, since a note above a
+  // hand-written email is the two-authors problem in miniature.
+  const writeOwnKind = target.kind === 'quote' || target.kind === 'card-auth';
 
   return (
     <div
@@ -706,7 +713,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   NOT shown for welcome/Quick Respond: Wes 2026-08-25, "no
                   need for two sections, just have one place to type in".
                   Those kinds get the single composer below instead. */}
-              {!singleBox && !(target.kind === 'quote' && writeOwn) && (
+              {!singleBox && !(writeOwnKind && writeOwn) && (
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -735,7 +742,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   opener: the standard sentence always leads and this text
                   follows it. Copy says "adds below" so a rep does not open
                   with their own greeting and produce a doubled "Hi <name>". */}
-              {(target.kind === 'quick-reply' || target.kind === 'welcome' || target.kind === 'quote') && (
+              {(target.kind === 'quick-reply' ||
+                target.kind === 'welcome' ||
+                target.kind === 'quote' ||
+                target.kind === 'card-auth') && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                   {singleBox ? (
                     /* One box, always open — no checkbox to find, nothing to
@@ -767,7 +777,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         // The personal-note box is hidden while the rep writes
                         // the whole quote email — clear it too, so a note typed
                         // before the toggle can't ride along invisibly.
-                        if (on && target.kind === 'quote') setCustomNote('')
+                        if (on && writeOwnKind) setCustomNote('')
                         if (!on) { setAiFlags(null); setAiPolished(null); setAiError(null); }
                       }}
                       className="accent-amber-600"
@@ -777,7 +787,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                       <span className="text-zinc-500">
                         {target.kind === 'quote'
                           ? '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the quote block with its portal button, and the sign-off stay.'
-                          : '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the “add gear or vehicles” button and the sign-off stay.'}
+                          : target.kind === 'card-auth'
+                            ? '— the standard ask, yours to edit. The greeting, the secure button and the sign-off stay, and so does the paragraph telling the client we never take card numbers by email — that one is not editable, it is what keeps this from reading like phishing.'
+                            : '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the “add gear or vehicles” button and the sign-off stay.'}
                       </span>
                     </span>
                   </label>
@@ -797,7 +809,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                               ? 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'
                               : target.kind === 'quote'
                                 ? 'The standard quote wording, yours to edit. The quote total, dates and portal button are added underneath — no need to retype them.'
-                                : 'Write your message to the client. It appears under the greeting, above the real availability block.'
+                                : target.kind === 'card-auth'
+                                  ? 'The standard ask, yours to edit. The security paragraph and the secure button follow it — don’t retype those, and never ask for the number itself.'
+                                  : 'Write your message to the client. It appears under the greeting, above the real availability block.'
                         }
                         className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                       />

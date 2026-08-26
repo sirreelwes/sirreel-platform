@@ -12,10 +12,15 @@
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildCardAuthRequestEmail } from '@/lib/email/templates/cardAuthRequest'
+import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 
 export interface CardAuthEmailCompositionOk {
   ok: true
+  /** The standard ask, seeded into "Write my own email" so the rep edits
+   *  real copy. Matches what the template renders when nothing is written.
+   *  Excludes the never-editable security paragraph — see cardAuthRequest. */
+  defaultBody: string
   to: RankedRecipient
   alternatives: RankedRecipient[]
   from: string
@@ -59,6 +64,9 @@ export interface ComposeCardAuthEmailArgs {
    *  the ranked candidates on this job — same rule as the other composers,
    *  so a hand-crafted body can't redirect client mail to any address. */
   overrideContactId?: string | null
+  /** "Write my own email" — replaces the templated ask and its closer. The
+   *  security paragraph, the secure button and the sign-off stay. */
+  customMessage?: string | null
 }
 
 /**
@@ -147,12 +155,14 @@ export async function composeCardAuthEmail(
     portalLink: args.portalLink,
     agentFirstName: (job.agent?.name || '').split(' ')[0] || null,
     personalNote: args.message ?? null,
+    customBody: args.customMessage?.trim() || null,
   })
 
   const order = job.orders[0]
 
   return {
     ok: true,
+    defaultBody: defaultEmailBody({ kind: 'card-auth', projectName: job.name }),
     to,
     alternatives: candidates,
     from: SEND_FROM,

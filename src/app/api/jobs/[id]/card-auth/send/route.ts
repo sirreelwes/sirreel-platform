@@ -17,7 +17,7 @@
  * EmailReviewModal renders in its error strip. That is the whole point of
  * this route existing — the agent finds out.
  *
- * Body (optional): { message?, overrideContactId?, ccAdd? }
+ * Body (optional): { message?, customMessage?, overrideContactId?, ccAdd? }
  * Auth: session-gated (no role gate — collections chases cards too).
  */
 
@@ -50,6 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       : null
   const overrideContactId =
     typeof body?.overrideContactId === 'string' ? body.overrideContactId : null
+  // "Write my own email" — replaces the templated ask and its closer.
+  const customMessage =
+    typeof body?.customMessage === 'string' && body.customMessage.trim().length > 0
+      ? body.customMessage.trim().slice(0, 5000)
+      : null
   // Re-parsed server-side; the modal's own check is a convenience.
   const manualCc = parseCcList(body?.ccAdd)
 
@@ -78,6 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const composition = await composeCardAuthEmail({
     jobId: params.id,
     message,
+    customMessage,
     overrideContactId,
     portalLink,
   })

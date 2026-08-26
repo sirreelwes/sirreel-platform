@@ -39,9 +39,18 @@ export const PRE_JOB_OPENING_LINE =
  * Built server-side because only the server knows the project name.
  */
 export function defaultEmailBody(input: {
-  kind: 'quick-reply' | 'welcome' | 'quick-respond' | 'quote'
+  kind: 'quick-reply' | 'welcome' | 'quick-respond' | 'quote' | 'card-auth'
   projectName?: string | null
 }): string {
+  // The card-authorization request. This is the ASK only — the paragraph
+  // explaining that the number goes straight to the processor and that we
+  // never take card details by email or phone is NOT here, because a rep
+  // cannot edit it away: it is what keeps this email from reading like the
+  // phishing attempt it otherwise resembles.
+  if (input.kind === 'card-auth') {
+    const project = input.projectName?.trim() || 'your production'
+    return `Before we can send ${project} out the door, we need a credit card on file to authorize the rental.`
+  }
   // The quote email. Deliberately names no job and no dates — the quote
   // snapshot block sits directly underneath and carries both. Kept free of
   // the project name so the text a rep is handed in the compose box is

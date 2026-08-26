@@ -18,6 +18,8 @@
  * phone and that the details go into the portal itself.
  */
 
+import { defaultEmailBody } from '@/lib/email/standardOpening'
+
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 const FOOTER_ADDRESS = '8500 Lankershim Blvd, Sun Valley, CA 91352'
 const FOOTER_PHONE = '(888) 477-7335'
@@ -40,6 +42,17 @@ export interface CardAuthRequestEmailInput {
   agentFirstName?: string | null
   /** Optional line the rep typed in the review modal. */
   personalNote?: string | null
+  /**
+   * "Write my own email" — the rep's prose REPLACES the templated ask and
+   * the "questions, or paying another way" closer.
+   *
+   * What it does NOT replace: the paragraph about the number going straight
+   * to the processor and us never asking for card details by email or phone.
+   * That copy is the reason a client can tell this email from a phishing
+   * attempt, so it is not the rep's to delete — it stays under whatever they
+   * write, along with the secure button and the sign-off.
+   */
+  customBody?: string | null
 }
 
 export interface CardAuthRequestEmail {
@@ -69,6 +82,15 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
   const agentRefHtml = escapeHtml(agentRef)
   const note = (input.personalNote || '').trim()
   const link = input.portalLink
+  const repBody = (input.customBody || '').trim()
+  // The standard ask, from the same function that seeds the compose box, so
+  // what a rep is handed to edit is what a client receives when they don't.
+  const askText = repBody || defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw })
+  // Only the templated ask names the job in bold — a rep's own words are
+  // rendered exactly as typed.
+  const askHtml = repBody
+    ? noteHtml(repBody)
+    : `<p style="margin:0 0 16px;">Before we can send <strong>${jobName}</strong> out the door, we need a credit card on file to authorize the rental.</p>`
 
   const subject = `Card authorization for ${jobNameRaw}`
 
@@ -76,14 +98,15 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
     `Hi ${firstNameRaw},`,
     ``,
     ...(note ? [note, ``] : []),
-    `Before we can send ${jobNameRaw} out the door, we need a credit card on file to authorize the rental.`,
+    askText,
     ``,
     `You can enter it yourself in your SirReel portal — it goes straight to our payment processor, and nobody at SirReel ever sees the full number. We will never ask for card details over email or on the phone.`,
     ``,
     link ? `Authorize your card: ${link}` : `(The secure portal link is generated when this email is sent.)`,
     ``,
-    `Questions, or paying another way? Just reply to this email — ${agentRef} will sort it out.`,
-    ``,
+    // Dropped when the rep wrote the body — their words carry their own
+    // next step, and ours underneath read like a second author.
+    ...(repBody ? [] : [`Questions, or paying another way? Just reply to this email — ${agentRef} will sort it out.`, ``]),
     `Thanks,`,
     `The SirReel Team`,
     ``,
@@ -177,9 +200,7 @@ table, td, div, h1, h2, h3, p { font-family: Georgia, 'Times New Roman', serif !
             <td style="padding:24px 36px 8px;font-size:15px;line-height:1.6;color:#333333;">
               <p style="margin:0 0 16px;">Hi ${firstName},</p>
               ${note ? noteHtml(note) : ''}
-              <p style="margin:0 0 16px;">
-                Before we can send <strong>${jobName}</strong> out the door, we need a credit card on file to authorize the rental.
-              </p>
+              ${askHtml}
               <p style="margin:0 0 16px;">
                 You can enter it yourself in your SirReel portal &mdash; it goes straight to our payment processor, and nobody at SirReel ever sees the full number. We will never ask for card details over email or on the phone.
               </p>
@@ -190,7 +211,7 @@ ${ctaBlock}
           <!-- ── Sign-off ──────────────────────────────────────────── -->
           <tr>
             <td style="padding:24px 36px 32px;font-size:14px;line-height:1.55;color:#333333;">
-              <p style="margin:0 0 6px;">Questions, or paying another way? Just reply to this email &mdash; ${agentRefHtml} will sort it out.</p>
+              ${repBody ? '' : `<p style="margin:0 0 6px;">Questions, or paying another way? Just reply to this email &mdash; ${agentRefHtml} will sort it out.</p>`}
               <p style="margin:12px 0 0;">
                 Thanks,<br />
                 <strong style="color:#1a1a1a;">The SirReel Team</strong>

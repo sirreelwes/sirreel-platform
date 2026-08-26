@@ -1,8 +1,9 @@
 /**
- * Quote email — the pre-job voice, and the rep's right to write the whole thing.
+ * Quote + card-authorization emails — the pre-job voice, and the rep's right
+ * to write the whole thing.
  *
- *   npx tsx tests/email/quote-email-body.test.ts
- *   npm run test:quote-email-body
+ *   npx tsx tests/email/client-email-body.test.ts
+ *   npm run test:client-email-body
  *
  * Two things a client would catch that nothing else guards (Wes 2026-08-26):
  *   · the quote goes out BEFORE we have the job, so it cannot open with
@@ -20,6 +21,7 @@
  * Pure rendering — no DB.
  */
 import { buildTsxWelcomeEmail } from '../../src/lib/email/templates/tsxWelcomeTemplate'
+import { buildCardAuthRequestEmail } from '../../src/lib/email/templates/cardAuthRequest'
 import { defaultEmailBody } from '../../src/lib/email/standardOpening'
 
 let fail = 0
@@ -83,5 +85,41 @@ const nasty = render('<script>alert(1)</script> & "quotes"')
 lacks('rep prose is escaped', nasty.html, '<script>')
 has('escaped, not dropped', nasty.html, '&lt;script&gt;')
 
-console.log(fail === 0 ? '\nall quote email body checks passed' : `\n${fail} FAILED`)
+// ── the header is not a welcome mat ──
+// A hand-script "Welcome!" badge sat in the header of every quote (Wes
+// 2026-08-26: same problem as the opener — nobody has arrived yet).
+lacks('no Welcome badge in the header', templated.html, 'Welcome!')
+lacks('no Bradley Hand badge left behind', templated.html, 'Bradley Hand')
+
+// ── the card-authorization request ──
+const card = (customBody: string | null) =>
+  buildCardAuthRequestEmail({
+    firstName: 'Colin',
+    jobName: 'The Watch Party',
+    portalLink: 'https://tsx.sirreel.com/portal/v2/tok123',
+    agentFirstName: 'Jose',
+    personalNote: null,
+    customBody,
+  })
+
+const CARD_DEFAULT = defaultEmailBody({ kind: 'card-auth', projectName: 'The Watch Party' })
+const cardTemplated = card(null)
+has('card: plain text renders the seeded ask', cardTemplated.text, CARD_DEFAULT)
+has('card: the ask names the job in bold when templated', cardTemplated.html, '<strong>The Watch Party</strong>')
+
+const cardOwn = card('Ana has the PO — I just need a card behind it so the truck can roll Thursday.')
+has("card: the rep's words are the ask", cardOwn.html, 'so the truck can roll Thursday')
+lacks('card: no templated ask above it', cardOwn.html, 'out the door, we need a credit card')
+lacks('card: no templated closer below it', cardOwn.html, 'Questions, or paying another way')
+lacks('card: plain text drops the closer too', cardOwn.text, 'Questions, or paying another way')
+// The one paragraph a rep CANNOT write away — it is what distinguishes this
+// email from the phishing attempt it structurally resembles.
+has('card: the security paragraph survives', cardOwn.html, 'never ask for card details over email')
+has('card: the security paragraph survives in text', cardOwn.text, 'never ask for card details over email')
+has('card: the secure button survives', cardOwn.html, 'Authorize your card')
+has('card: the greeting survives', cardOwn.html, 'Hi Colin,')
+has('card: the sign-off survives', cardOwn.html, 'The SirReel Team')
+lacks('card: rep prose is escaped', card('<img src=x onerror=1>').html, '<img src=x')
+
+console.log(fail === 0 ? '\nall quote + capture email body checks passed' : `\n${fail} FAILED`)
 process.exit(fail === 0 ? 0 : 1)
