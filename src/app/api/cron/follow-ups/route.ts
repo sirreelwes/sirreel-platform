@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere';
 import { composeDraft, computeDueAt } from '@/lib/sales/followUpDraft';
 
 export const dynamic = 'force-dynamic';
@@ -28,10 +29,14 @@ export async function GET(req: NextRequest) {
     where: {
       quoteStatus: 'SENT',
       sentAt: { not: null, lte: earliestThreshold },
-      // Don't draft follow-ups for orders whose parent Job is
-      // already WRAPPED/LOST — those quotes are residue from a
-      // closed deal; chasing them with cadence emails is noise.
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      // Don't draft follow-ups for a closed deal's residue, or for an
+      // order staff archived. Note this does NOT expire drafts that
+      // already exist on an archived order: nothing auto-sends them (a
+      // human sends from the order page), and expiring them would make
+      // unarchive lossy — QuoteFollowUp is unique on (orderId, stage),
+      // so an expired row permanently blocks its own replacement. They
+      // just stop being listed; see /api/sales/follow-ups.
+      ...ACTIONABLE_ORDER_WHERE,
     },
     take: BATCH_SIZE,
     select: {

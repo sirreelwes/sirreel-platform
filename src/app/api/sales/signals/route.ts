@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere';
 import { resolveDataScope } from '@/lib/auth/scope';
 
 export const dynamic = 'force-dynamic';
@@ -30,11 +31,10 @@ export async function GET(req: NextRequest) {
       where: {
         quoteStatus: 'SENT',
         sentAt: { lt: staleCutoff },
-        // Same WRAPPED/LOST guard as topOpenDeals — a closed Job's
-        // stale quote isn't actionable anymore; the deal's already
-        // resolved on the Job side, the leftover SENT quote is
-        // residue.
-        job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+        // Archived + closed-Job guard. See ACTIONABLE_ORDER_WHERE — a
+        // closed Job's stale quote isn't actionable anymore, and neither
+        // is one staff archived.
+        ...ACTIONABLE_ORDER_WHERE,
         ...(mine ? { agentId: mine } : {}),
       },
       orderBy: { sentAt: 'asc' },

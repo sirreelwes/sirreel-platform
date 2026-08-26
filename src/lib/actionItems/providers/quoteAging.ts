@@ -14,6 +14,7 @@
 
 import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere'
 import { STALE_DEAL_BUSINESS_DAYS } from '@/lib/exec/thresholds'
 import type { ActionItem, ActionItemProvider, ProviderContext } from '@/lib/actionItems/types'
 
@@ -43,7 +44,7 @@ export const quoteAgingProvider: ActionItemProvider = {
       where: {
         quoteStatus: 'SENT',
         quoteSentAt: { not: null, lte: cutoff },
-        job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+        ...ACTIONABLE_ORDER_WHERE,
         ...(ctx.scope === 'OWN' ? { agentId: ctx.userId! } : {}),
       },
       select: {

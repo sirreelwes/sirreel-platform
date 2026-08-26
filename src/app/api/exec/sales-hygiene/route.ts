@@ -24,6 +24,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere';
 import { requireCoverageAccess } from '@/lib/exec/requireCoverageAccess'
 import {
   STALE_DEAL_BUSINESS_DAYS,
@@ -69,7 +70,7 @@ export async function GET() {
   const openSent = await prisma.order.findMany({
     where: {
       quoteStatus: 'SENT',
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      ...ACTIONABLE_ORDER_WHERE,
     },
     select: {
       id: true,
@@ -160,7 +161,7 @@ export async function GET() {
   const staleDeals = await prisma.order.findMany({
     where: {
       quoteStatus: { in: ['DRAFT', 'SENT'] },
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      ...ACTIONABLE_ORDER_WHERE,
       updatedAt: { lt: staleCutoff },
     },
     orderBy: { updatedAt: 'asc' },
@@ -182,7 +183,7 @@ export async function GET() {
   const draftedUnsent = await prisma.order.findMany({
     where: {
       quoteStatus: 'DRAFT',
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      ...ACTIONABLE_ORDER_WHERE,
       createdAt: { lt: unsentCutoff },
       lineItems: { some: {} },
     },
@@ -205,7 +206,7 @@ export async function GET() {
   const nearingExpiry = await prisma.order.findMany({
     where: {
       quoteStatus: 'SENT',
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      ...ACTIONABLE_ORDER_WHERE,
       expiresAt: { not: null, lte: expiryCutoff },
     },
     orderBy: { expiresAt: 'asc' },

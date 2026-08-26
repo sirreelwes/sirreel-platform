@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { resolveDataScope } from '@/lib/auth/scope';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { ACTIONABLE_ORDER_WHERE } from '@/lib/orders/actionableWhere';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
   const orders = await prisma.order.findMany({
     where: {
       quoteStatus: 'SENT',
-      job: { status: { notIn: ['WRAPPED', 'LOST'] } },
+      ...ACTIONABLE_ORDER_WHERE,
       ...(mine ? { agentId: mine } : {}),
     },
     // Stalest first. Nulls (a SENT order with no sentAt — shouldn't happen)

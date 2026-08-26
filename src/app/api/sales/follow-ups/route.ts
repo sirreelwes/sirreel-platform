@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { ACTIONABLE_ORDER_NESTED } from '@/lib/orders/actionableWhere';
 import { resolveDataScope } from '@/lib/auth/scope';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,10 @@ export async function GET(req: NextRequest) {
       // surface for those orders — the agent acted there and shouldn't
       // see a stale DAY_X prompt in the pipeline panel afterward.
       order: {
+        // An archived order stops producing work everywhere, this panel
+        // included. Its existing drafts are left intact (not expired) so
+        // unarchiving brings the ladder back.
+        ...ACTIONABLE_ORDER_NESTED,
         ...(mine ? { agentId: mine } : {}),
         followUps: {
           none: {
