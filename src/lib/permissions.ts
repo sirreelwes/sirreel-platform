@@ -427,28 +427,33 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // Action Items carries her billing queue — the BILLING role
           // exists precisely so those scope to BILLING + admin.
           { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
           // Reservations back 2026-08-24 (Wes). BILLING already has
           // gantt:true — seeing what actually went out, and when it came
           // back, is how a disputed rental window gets settled.
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
-          { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+        ],
+      },
+      {
+        label: 'Ops',
+        items: [
+          // Added back 2026-08-24 (Wes): billing needs to look up what a
+          // line item IS and what it rents for when a client disputes an
+          // invoice, and Paperwork tools covers the COI / contract-review
+          // side of chasing a job's documents.
+          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
           // Deliveries & Pickups added 2026-08-24 (Wes). READ-ONLY for
           // her by construction: /api/dispatch takes any signed-in staff
           // session (widened 2026-08-23 — it is the same movement data
           // the Reservations board already shows everyone), while the
           // fleet paperwork surfaces stay behind requireDispatchAccess
           // and task mutations behind canCreateBooking, which BILLING
-          // does hold. Cross-listed with Fleet, same as Sales & Ops.
+          // does hold. Cross-listed with Fleet, same as the full nav.
           { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
-          // Added back 2026-08-24 (Wes): billing needs to look up what a
-          // line item IS and what it rents for when a client disputes an
-          // invoice, and Paperwork tools covers the COI / contract-review
-          // side of chasing a job's documents.
-          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'paperwork', label: 'Paperwork', icon: 'FileSignature', href: '/admin/paperwork' },
         ],
       },
@@ -460,19 +465,33 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Sales',
         items: [
-          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
           { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
-          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
-          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
-          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
-          ...(canUseCollections(navRole, navEmail)
-            ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
-            : []),
         ],
       },
+      {
+        label: 'Ops',
+        items: [
+          { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
+        ],
+      },
+      // Collections was tacked onto the end of the sales list; with the
+      // group split it gets the same header it carries in the full nav
+      // rather than reading as a sales tab. Still allowlist-gated, so
+      // for most agents this section drops out entirely.
+      ...(canUseCollections(navRole, navEmail)
+        ? [{
+            label: 'Billing & Collections',
+            items: [
+              { id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' },
+            ],
+          }]
+        : []),
     ];
   }
   // Fixed information architecture — identical for every user. This is a
