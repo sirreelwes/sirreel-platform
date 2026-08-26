@@ -1,3 +1,5 @@
+const { LEGACY_REDIRECTS } = require('./src/lib/site/legacyRedirects.data.js')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /**
@@ -14,8 +16,16 @@ const nextConfig = {
    * Path and query are preserved: `:path*` carries the rest of the URL, and
    * Next re-appends the query string to the destination automatically.
    *
-   * The legacy Wix map is deliberately NOT here — see
-   * src/lib/site/legacyRedirects.ts for why it lives in middleware instead.
+   * Then the legacy Wix map: all 113 paths from legacyRedirects.data.js, plus
+   * the two prefix trees. Next evaluates redirects BEFORE middleware
+   * (headers → redirects → middleware → rewrites, in
+   * next/dist/server/lib/router-utils/resolve-routes.js), so these answer
+   * without the marketing host's allow-list ever seeing the request.
+   *
+   * middleware.ts still resolves the same map. Not redundant: `source`
+   * patterns here are case-sensitive and slash-exact, so the config rules
+   * cover the canonical lowercase form and middleware catches the variants
+   * (/SuperCubeTruck, /popvan/).
    */
   async redirects() {
     return [
@@ -23,6 +33,29 @@ const nextConfig = {
         source: '/:path*',
         has: [{ type: 'host', value: 'www.sirreel.com' }],
         destination: 'https://sirreel.com/:path*',
+        permanent: true,
+      },
+
+      // Every legacy Wix path → its mapped destination, 308 permanent.
+      ...Object.entries(LEGACY_REDIRECTS).map(([source, destination]) => ({
+        source,
+        destination,
+        permanent: true,
+      })),
+
+      // Wix's uploaded-document store. The tail is passed straight through to
+      // the CDN origin Wix itself proxied, so all 42 client-facing files keep
+      // resolving. See legacyRedirects.ts for the Wix-account dependency this
+      // still carries.
+      {
+        source: '/_files/:tail*',
+        destination: 'https://static.wixstatic.com/:tail*',
+        permanent: true,
+      },
+      // 63 Wix store product pages → the supply order form that now sells them.
+      {
+        source: '/product-page/:tail*',
+        destination: '/order/supplies',
         permanent: true,
       },
     ]
