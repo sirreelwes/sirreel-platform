@@ -103,6 +103,17 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [jobHits, setJobHits] = useState<Array<{ id: string; jobCode: string; name: string; companyId: string | null; companyName: string | null; status: string }>>([]);
   const [jobOpen, setJobOpen] = useState(false);
   const adoptedJobName = useRef<string | null>(null);
+
+  // Contact typeahead (Wes, 2026-08-26). "Reply to" was display-only text,
+  // so when the parser failed to resolve the sender to a CRM Person there
+  // was no way to say who they are — and soft holds need BOTH a company
+  // and a person, so an unresolved contact kept the checkbox locked even
+  // after the company field was fixed. Picking a contact here supplies the
+  // missing half (and their affiliated company, if we don't have one yet).
+  const [contactHits, setContactHits] = useState<Array<{ id: string; name: string; email: string; phone: string | null; companyId: string | null; companyName: string | null }>>([]);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactQuery, setContactQuery] = useState('');
+  const adoptedContact = useRef<string | null>(null);
   const [jobName, setJobName] = useState<string | null>(null);
   const [pickup, setPickup] = useState<string | null>(null);
   const [ret, setRet] = useState<string | null>(null);
@@ -215,6 +226,11 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       setAskForDetails(!(parsed.clientName || parsed.productionName));
       setPickup(parsed.startDate ?? null);
       setRet(parsed.endDate ?? null);
+      {
+        const seed = parsed.contactEmail ?? defaultRecipientEmail ?? '';
+        adoptedContact.current = seed || null;
+        setContactQuery(seed);
+      }
       setRecipientEmail(parsed.contactEmail ?? defaultRecipientEmail ?? null);
       setRecipientName(parsed.contactName ?? defaultRecipientName ?? null);
       setCats(assetCats);
@@ -342,6 +358,44 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     }, 300);
     return () => clearTimeout(t);
   }, [jobName, matchedCompanyId]);
+
+  // Debounced contact lookup over /api/persons (tokenized name/email match).
+  useEffect(() => {
+    const q = contactQuery.trim();
+    if (adoptedContact.current !== null && q === adoptedContact.current) return;
+    adoptedContact.current = null;
+    // Typing detaches the CRM link but KEEPS the typed value as the
+    // send-to address: replying to an address we have no Person for is
+    // completely normal and must keep working.
+    setParsedPersonId(null);
+    setRecipientEmail(q.includes('@') ? q : null);
+    setRecipientName(null);
+    if (q.length < 2) {
+      setContactHits([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/persons?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const hits = (Array.isArray(d.persons) ? d.persons : []).slice(0, 6).map((p: {
+            id: string; firstName: string; lastName: string; email: string; phone: string | null;
+            company?: { id: string; name: string } | null;
+          }) => ({
+            id: p.id,
+            name: [p.firstName, p.lastName].filter(Boolean).join(' ').trim() || p.email,
+            email: p.email,
+            phone: p.phone,
+            companyId: p.company?.id ?? null,
+            companyName: p.company?.name ?? null,
+          }));
+          setContactHits(hits);
+          setContactOpen(hits.length > 0);
+        })
+        .catch(() => setContactHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [contactQuery]);
 
   useEffect(() => { run(); }, [run]);
 
@@ -696,7 +750,69 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                 })()}
                 <div className="text-[12px] text-gray-700 pt-0.5 border-t border-gray-200">
                   <div><span className="text-gray-400">Dates</span> · {fmt(pickup)} – {fmt(ret)}</div>
-                  <div><span className="text-gray-400">Reply to</span> · {recipientName ? `${recipientName} ` : ''}<span className="font-mono text-gray-600">{recipientEmail || '(no email found)'}</span></div>
+                  <div className="relative flex items-baseline gap-1.5">
+                    <span className="text-gray-400 shrink-0">Reply to</span>
+                    <span className="text-gray-400 shrink-0">·</span>
+                    <span className="flex-1 min-w-0">
+                      <input
+                        value={contactQuery}
+                        onChange={(e) => setContactQuery(e.target.value)}
+                        onFocus={() => { if (contactHits.length && !parsedPersonId) setContactOpen(true); }}
+                        placeholder="name or email"
+                        className="w-full bg-transparent border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none text-[12px] font-mono text-gray-700 placeholder-gray-300 py-0.5"
+                      />
+                      {parsedPersonId ? (
+                        <span className="block text-[10px] text-emerald-700 mt-0.5">
+                          ✓ {recipientName ? `${recipientName} — ` : ''}linked to their contact record
+                        </span>
+                      ) : contactQuery.trim() && !contactQuery.includes('@') ? (
+                        <span className="block text-[10px] text-amber-700 mt-0.5">
+                          Pick a contact, or type a full email address to reply to
+                        </span>
+                      ) : null}
+                      {contactOpen && contactHits.length > 0 && (
+                        <span className="absolute z-20 left-0 right-0 top-[26px] block bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                          {contactHits.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                adoptedContact.current = c.email;
+                                setContactQuery(c.email);
+                                setRecipientEmail(c.email);
+                                setRecipientName(c.name);
+                                setParsedPersonId(c.id);
+                                // Their affiliated company fills the other
+                                // half of the hold gate when we don't have
+                                // one yet. An already-matched company is
+                                // left alone — the agent chose it.
+                                if (c.companyId && !matchedCompanyId) {
+                                  setMatchedCompanyId(c.companyId);
+                                  if (c.companyName) {
+                                    adoptedName.current = c.companyName;
+                                    setClientName(c.companyName);
+                                  }
+                                }
+                                setContactOpen(false);
+                              }}
+                              className="block w-full text-left px-2.5 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <span className="text-[12px] text-gray-800">{c.name}</span>
+                              <span className="block text-[10px] text-gray-400 font-mono">{c.email}</span>
+                              {c.companyName && <span className="block text-[10px] text-gray-400">{c.companyName}</span>}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setContactOpen(false)}
+                            className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                          >
+                            Keep &ldquo;{contactQuery}&rdquo; as the reply address
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
 
