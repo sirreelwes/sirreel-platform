@@ -234,6 +234,21 @@ export function middleware(req: NextRequest): NextResponse {
 
   // ── sirreel.com / www.sirreel.com (public marketing site) ─────
   if (PUBLIC_HOSTS.includes(host)) {
+    // www → apex, permanently. Also declared in next.config.js redirects();
+    // it is duplicated here on purpose because the execution order between
+    // next.config redirects and middleware is the exact subtlety called out
+    // in legacyRedirects.ts, and if middleware ran first the config rule
+    // would never fire and www would keep serving a full second copy of the
+    // site. Both layers send the same 308 to the same place, so whichever
+    // wins the result is identical and no loop is possible — the destination
+    // host is the apex, which matches neither rule.
+    if (host === 'www.sirreel.com') {
+      const url = req.nextUrl.clone()
+      url.host = 'sirreel.com'
+      url.protocol = 'https:'
+      url.port = ''
+      return tagged(NextResponse.redirect(url, 308), host, 'public:www-to-apex')
+    }
     // Root → the Home page. Rewrite (not redirect) so the URL stays
     // a clean bare sirreel.com.
     if (pathname === '/' || pathname === '') {

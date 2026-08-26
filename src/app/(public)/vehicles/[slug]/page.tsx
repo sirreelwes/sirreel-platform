@@ -28,6 +28,7 @@ export async function generateMetadata({
   return {
     title: `SirReel · ${v.name}`,
     description: v.tagline || v.subtitle || `${v.name} — SirReel production fleet.`,
+    alternates: { canonical: `/vehicles/${params.slug}` },
   }
 }
 

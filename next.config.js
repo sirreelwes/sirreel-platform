@@ -1,5 +1,32 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * Host canonicalization: www.sirreel.com → sirreel.com.
+   *
+   * Both hosts are in middleware's PUBLIC_HOSTS and both answered 200 for
+   * every marketing path, so the whole public site existed at two origins —
+   * the largest single source of duplicate content on the site, and one no
+   * per-page canonical fully solves (a canonical is a hint; a 308 is not).
+   *
+   * PUBLIC_SITE_ORIGIN (src/lib/site/publicUrl.ts) already declares the apex
+   * as canonical for metadataBase/sitemap/robots; this makes the server agree.
+   *
+   * Path and query are preserved: `:path*` carries the rest of the URL, and
+   * Next re-appends the query string to the destination automatically.
+   *
+   * The legacy Wix map is deliberately NOT here — see
+   * src/lib/site/legacyRedirects.ts for why it lives in middleware instead.
+   */
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.sirreel.com' }],
+        destination: 'https://sirreel.com/:path*',
+        permanent: true,
+      },
+    ]
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' }, // Google avatars

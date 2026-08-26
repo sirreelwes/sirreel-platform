@@ -15,6 +15,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title: `SirReel · ${s.name}`,
     description: s.blurb.slice(0, 160),
+    alternates: { canonical: `/stages/${params.slug}` },
   }
 }
 

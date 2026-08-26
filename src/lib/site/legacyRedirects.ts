@@ -112,8 +112,12 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   // ── Misc pages with a clear home on the new site ──
   '/chatbot': '/help',
   '/onlineaccount': '/help',
-  '/home2': '/home',
-  '/copy-of-home-1': '/home',
+  // Bare '/' rather than '/home': the apex root is the canonical homepage
+  // (middleware rewrites '/' → '/home' internally, and /home's own metadata
+  // declares canonical '/'). Pointing these at /home sent an indexed Wix URL
+  // to the non-canonical twin and made Google take a second hop to find it.
+  '/home2': '/',
+  '/copy-of-home-1': '/',
 
   // ── Vehicles / studios: best-guess mappings, easy to correct ──
   '/supercargovan': '/vehicles/cargo-van',

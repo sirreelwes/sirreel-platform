@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Production Vehicles',
   description:
     'Cargo vans, supercubes, passenger vans, talent trailers and more — the SirReel production fleet.',
+  alternates: { canonical: '/vehicles' },
 }
 
 function fmtMoney(n: number): string {

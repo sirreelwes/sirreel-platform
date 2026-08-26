@@ -29,6 +29,7 @@ export async function generateMetadata({
   return {
     title: `SirReel · ${guide.title} Setup`,
     description: guide.summary,
+    alternates: { canonical: `/help/${params.slug}` },
   }
 }
 

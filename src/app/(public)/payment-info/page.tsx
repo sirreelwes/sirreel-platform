@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Payments made simple. · SirReel Studio Services',
   description: 'Request SirReel payment and ACH details — sent straight to your email on file.',
+  alternates: { canonical: '/payment-info' },
 }
 
 export default function PaymentInfoPage() {

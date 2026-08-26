@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Help',
   description:
     'Get help from SirReel — chat with our 24/7 after-hours assistant for access codes, directions and more, or watch how-to videos.',
+  alternates: { canonical: '/help' },
 }
 
 export default function HelpPage() {

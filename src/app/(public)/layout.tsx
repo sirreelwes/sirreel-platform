@@ -51,7 +51,14 @@ export const metadata: Metadata = {
   },
   description:
     'SirReel rents production vehicles, sound stages and standing sets to film and television productions in Los Angeles — cube trucks, cargo and passenger vans, camera cubes, and the Lankershim stages.',
-  alternates: { canonical: '/' },
+  // NO `alternates.canonical` here on purpose. Next merges metadata shallowly
+  // from layout → page, so a canonical set at this level is INHERITED by every
+  // public page that doesn't declare its own — which meant /stages, /help,
+  // /vehicles, /rental-agreement and the rest all shipped
+  // <link rel="canonical" href="https://sirreel.com"> and told Google they
+  // were duplicates of the homepage. Each page below now declares its own
+  // self-referencing canonical; metadataBase (root layout) resolves them to
+  // the apex host.
   robots: { index: true, follow: true },
   openGraph: {
     type: 'website',

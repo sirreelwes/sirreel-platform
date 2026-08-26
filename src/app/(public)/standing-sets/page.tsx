@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Standing Sets',
   description:
     'Turnkey standing sets — hospital, police station, jail, morgue and more — ready to shoot at SirReel.',
+  alternates: { canonical: '/standing-sets' },
 }
 
 function SetPlaceholder() {

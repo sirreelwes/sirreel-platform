@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Rental Agreement',
   description:
     'The SirReel Studio Rentals rental agreement — policies, terms & conditions, fleet agreement and LCDW addendum. Review online or download the PDF.',
+  alternates: { canonical: '/rental-agreement' },
 }
 
 const PDF_HREF = '/api/public/rental-agreement/pdf'

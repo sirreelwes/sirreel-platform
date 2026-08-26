@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Stage Contract',
   description:
     'The SirReel Studio Services stage booking contract — grant of use, fees, insurance requirements, products release and terms. Review online or download the PDF.',
+  alternates: { canonical: '/stage-contract' },
 }
 
 const PDF_HREF = '/api/public/stage-contract/pdf'

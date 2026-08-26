@@ -19,6 +19,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return {
     title: `SirReel · ${s.name}`,
     description: s.description?.slice(0, 160) || `${s.name} — a SirReel standing set.`,
+    alternates: { canonical: `/standing-sets/${params.id}` },
   }
 }
 

@@ -15,6 +15,7 @@ export const metadata: Metadata = {
   title: 'SirReel · Stages',
   description:
     'Sound stage, LED/volume stage, turnkey standing sets, and a black box — production stages at SirReel’s Lankershim studios.',
+  alternates: { canonical: '/stages' },
 }
 
 function StagePlaceholder() {
