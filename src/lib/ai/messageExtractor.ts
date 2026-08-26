@@ -101,7 +101,8 @@ E) From: gio@chaman.us  Subject: Stage Availability Inquiry — 2-Day Commercial
 Other rules:
 - If a field isn't mentioned, set to null. Don't guess.
 - For Cognito Forms submissions, the body will have labels glued to values (e.g., "NameBrandt WilleEmailbrandt@..."). Parse these by recognising common field labels: Name, Email, Phone, Company, Project, Dates, Services, Notes, Pickup, Return, Vehicle.
-- pickupDate / returnDate: use ISO YYYY-MM-DD when an explicit date is mentioned; otherwise null. Don't compute relative dates (e.g. "Tuesday morning" → null) — leave that for the rep.
+- pickupDate / returnDate: use ISO YYYY-MM-DD when an explicit calendar date is mentioned; otherwise null. Don't compute relative dates (e.g. "Tuesday morning", "next week" → null) — leave that for the rep.
+- A date written WITHOUT a year takes the year that puts it nearest the send date given above — which is almost always the send date's own year. Never fall back to a year you weren't given: "Thursday, August 27th" in a message sent Aug 26, 2026 is 2026-08-27, NOT 2025-08-27. Roll to the following year only when the bare date would otherwise land well in the past (a January date in a December email).
 - equipment: short array of items mentioned (lights, dolly, generator, etc.). If only a vehicle is mentioned, leave empty.
 - urgency: "asap" if the client expresses urgency; "future" if the request is for a date >30d out; "normal" otherwise.
 - summary: ONE plain-English sentence describing the message.
@@ -152,6 +153,11 @@ export interface ExtractMessageInput {
   bodyText: string | null
   bodyHtml?: string | null
   snippet?: string | null
+  /** When the email was SENT — the anchor for bare dates like "August 27th".
+   *  Without it the model has no year to reach for and picks one at random:
+   *  an Aug 2026 inquiry came back as 2025-08-27 (Wes 2026-08-26). Anchoring
+   *  on sentAt rather than now() keeps a re-run months later stable. */
+  sentAt?: Date | string | null
 }
 
 const FALLBACK: ExtractedMessage = {
@@ -188,12 +194,28 @@ function clampBody(text: string, maxChars = 12_000): string {
   return text.slice(0, maxChars) + '\n[…truncated…]'
 }
 
+/** "Wednesday, August 26, 2026" in Pacific — SirReel's operating timezone,
+ *  so the anchor matches the day the rep and the client both mean. Falls
+ *  back to now() when the caller has no sentAt. */
+function fmtSentAt(sentAt?: Date | string | null): string {
+  const d = sentAt ? new Date(sentAt) : new Date()
+  const when = Number.isNaN(d.getTime()) ? new Date() : d
+  return when.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  })
+}
+
 function buildUserPrompt(input: ExtractMessageInput): string {
   const from = parseFromHeader(input.fromAddress)
   const body = input.bodyText || input.snippet || input.bodyHtml || '(empty)'
   return [
     PROMPT_PREAMBLE,
     '',
+    `Email sent: ${fmtSentAt(input.sentAt)} (America/Los_Angeles)`,
     `Email subject: ${input.subject || '(no subject)'}`,
     `Email from: ${from.name || ''} <${from.email}>`,
     'Email body:',
@@ -352,6 +374,7 @@ export async function runMessageExtractionForId(emailMessageId: string): Promise
       direction: true,
       duplicateOfId: true,
       extractionRunAt: true,
+      sentAt: true,
     },
   })
   if (!email) return false
@@ -365,6 +388,7 @@ export async function runMessageExtractionForId(emailMessageId: string): Promise
     bodyText: email.bodyText,
     bodyHtml: email.bodyHtml,
     snippet: email.snippet,
+    sentAt: email.sentAt,
   })
 
   await prisma.emailMessage.update({

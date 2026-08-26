@@ -34,6 +34,13 @@ interface ParsedItem {
   /** 'AUTO_KIT' rows are server-derived accessories (chargers, spare
    *  batteries), not something the client asked for. */
   matchSource?: string | null
+  /** THIS line's own window. parse-quote resolves it per line and falls back
+   *  to the quote-level range, so a client asking for the same truck over two
+   *  separate stretches comes back as two lines with two windows. Ignoring
+   *  these was how "Aug 27–28 and Sep 2–3" went out as one Aug 27 – Sep 3
+   *  span on both lines (Wes 2026-08-26). */
+  pickupDate?: string | null
+  returnDate?: string | null
 }
 /**
  * A line on the hold. Dates live PER LINE (Wes 2026-08-25: "the option to
@@ -234,6 +241,12 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
       // vehicles were the only thing in that table. Every catalog hit is
       // type INVENTORY now, so the vehicle test reads the matched row's
       // own line type or the availability check would find nothing.
+      // parse-quote fills a dateless line with today/tomorrow rather than
+      // leaving it blank, so adopting per-line dates unconditionally would
+      // invent a hold window on an email that named no dates at all. The
+      // quote-level range is the signal that real dates were found — without
+      // it we keep the existing blank-and-let-the-rep-pick behaviour.
+      const rangeFound = !!(parsed.startDate && parsed.endDate);
       const assetCats: Cat[] = items
         .filter((i) => i.matchedProduct?.lineType === 'VEHICLE'
           || (i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct))
@@ -241,9 +254,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           id: i.matchedProduct!.id,
           name: i.matchedProduct!.name,
           quantity: Math.max(1, Math.floor(i.quantity || 1)),
-          // Seeded from the email's range; per-line editable below.
-          startDate: parsed.startDate ?? '',
-          endDate: parsed.endDate ?? '',
+          // This line's own window, falling back to the email's range;
+          // per-line editable below.
+          startDate: rangeFound ? (i.pickupDate || parsed.startDate) : '',
+          endDate: rangeFound ? (i.returnDate || parsed.endDate) : '',
         }));
 
       // Everything the client asked for that ISN'T a holdable vehicle/stage.
