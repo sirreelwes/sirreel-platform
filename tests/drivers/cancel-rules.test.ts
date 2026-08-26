@@ -64,7 +64,9 @@ eq('  PICKED_UP LEFT ALONE', bookingCancelReleases('PICKED_UP'), false)
 eq('  CANCELLED no-op    ', bookingCancelReleases('CANCELLED'), false)
 // The booking sweep is the widest of the three, and still never touches
 // a collected vehicle.
-eq('sweep ⊇ staff', ALL.every((s) => !staffMay(s) || bookingCancelReleases(s) || s === 'CANCELLED'), true)
+// The `|| s === 'CANCELLED'` guard this once carried was dead: staffMay
+// already excludes CANCELLED, so TS narrowed it to an impossible compare.
+eq('sweep ⊇ staff', ALL.every((s) => !staffMay(s) || bookingCancelReleases(s)), true)
 eq('sweep spares PICKED_UP', !bookingCancelReleases('PICKED_UP'), true)
 
 console.log(fail === 0 ? '\nall driver-cancel checks passed' : `\n${fail} FAILED`)
