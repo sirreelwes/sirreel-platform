@@ -80,6 +80,8 @@ export async function POST(req: NextRequest) {
       lostAt: true,
       quotePdfUrl: true,
       total: true,
+      archivedAt: true,
+      _count: { select: { lineItems: true } },
       agent: { select: { id: true, name: true, email: true } },
       company: { select: { name: true } },
       job: { select: { id: true, name: true, jobCode: true } },
@@ -97,6 +99,23 @@ export async function POST(req: NextRequest) {
   // stale tab reads as "done", not as an error the client has to interpret.
   if (!APPROVABLE_FROM.has(order.status)) {
     return NextResponse.json({ ok: true, alreadyApproved: true, status: order.status })
+  }
+  // An archived or emptied order is not approvable. Archive is how a
+  // superseded quote gets retired — when its lines are merged into
+  // another order, the client keeps a working portal link to a shell
+  // whose PDF still shows the old numbers. On 2026-08-26 a client
+  // approved exactly that: an archived order, zero line items, $0 total,
+  // which released a rental agreement against nothing. The status guards
+  // above don't catch it (the shell is still QUOTE_SENT) and neither
+  // does the PDF guard (the stale PDF is still attached).
+  if (order.archivedAt || order._count.lineItems === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'This quote has been superseded. Your SirReel rep has sent a replacement — please approve that one, or contact them if you cannot find it.',
+      },
+      { status: 409 },
+    )
   }
   // The button is hidden without a quote PDF; enforce it here too so the
   // client can never approve something they were never shown.
