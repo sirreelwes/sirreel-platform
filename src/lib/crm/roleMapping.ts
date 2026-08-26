@@ -80,6 +80,32 @@ export const PERSON_ROLE_VALUES = [
 
 export type PersonRoleValue = (typeof PERSON_ROLE_VALUES)[number]
 
+/**
+ * Display labels, one place. Three surfaces render this enum — the
+ * Clients role-chip strip, the contact edit form, and the capture
+ * review widget — and they had drifted into three different lists,
+ * which is how the edit form ended up offering 6 of the 15 roles.
+ */
+export const PERSON_ROLE_LABELS: Record<PersonRoleValue, string> = {
+  UPM: 'UPM',
+  PRODUCER: 'Producer',
+  LINE_PRODUCER: 'Line Producer',
+  PRODUCTION_MANAGER: 'Production Manager',
+  PRODUCTION_COORDINATOR: 'Production Coordinator',
+  PRODUCTION_SUPERVISOR: 'Production Supervisor',
+  TRANSPORTATION_COORDINATOR: 'Transportation Coordinator',
+  ART_COORDINATOR: 'Art Coordinator',
+  ART_DIRECTOR: 'Art Director',
+  LOCATION_MANAGER: 'Location Manager',
+  PRODUCTION_ACCOUNTANT: 'Production Accountant',
+  PRODUCTION_ASSISTANT: 'Production Assistant',
+  GRIP: 'Grip',
+  GAFFER_ELECTRIC: 'Gaffer / Electric',
+  COORDINATOR: 'Coordinator',
+  OWNER: 'Owner',
+  OTHER: 'Other',
+}
+
 const PersonRole = Object.fromEntries(
   PERSON_ROLE_VALUES.map((v) => [v, v]),
 ) as { [K in PersonRoleValue]: K }

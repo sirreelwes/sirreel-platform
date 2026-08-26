@@ -6,6 +6,8 @@ import { useSession } from "next-auth/react";
 import { isHighRiskEmailDomain } from "@/lib/email/emailDomain";
 import { formatPhoneDashed } from "@/lib/format/phone";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
+import { SourceMailPanel } from "@/components/crm/SourceMailPanel";
+import { PERSON_ROLE_VALUES, PERSON_ROLE_LABELS, type PersonRoleValue } from "@/lib/crm/roleMapping";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -438,14 +440,14 @@ export default function PersonDetailPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-lt-fg3 mb-1">Role</label>
+                    {/* Was a hand-written list of 6 of the 15 roles, so
+                        Art Director / Grip / Locations could not be set even
+                        manually. Driven off the shared enum now. */}
                     <select value={form.role || "OTHER"} onChange={(e) => setForm({ ...form, role: e.target.value })}
                       className="w-full px-3 py-2 bg-lt-inner border border-lt-hairline rounded-lg text-sm text-lt-fg">
-                      <option value="OTHER">Other</option>
-                      <option value="UPM">UPM</option>
-                      <option value="PRODUCER">Producer</option>
-                      <option value="LINE_PRODUCER">Line Producer</option>
-                      <option value="PRODUCTION_COORDINATOR">Production Coordinator</option>
-                      <option value="PRODUCTION_SUPERVISOR">Production Supervisor</option>
+                      {PERSON_ROLE_VALUES.map((r: PersonRoleValue) => (
+                        <option key={r} value={r}>{PERSON_ROLE_LABELS[r]}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -561,6 +563,20 @@ export default function PersonDetailPage() {
             both shows once with a "Linked + From jobs" source
             label. */}
         <div className="col-span-2 space-y-6">
+          {/* Read the mail that produced this contact, and set the role
+              from what it says — Wes, 2026-08-26. Top of the WIDE column:
+              deciding the role is why you opened the page, and an email
+              body is unreadable in the narrow sidebar. */}
+          <SourceMailPanel
+            personId={person.id}
+            personName={`${person.firstName} ${person.lastName}`.trim()}
+            currentRole={person.role}
+            onRoleSaved={(role) => {
+              setPerson((prev) => (prev ? { ...prev, role } : prev));
+              setForm((prev) => ({ ...prev, role }));
+            }}
+          />
+
           <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-lt-fg">Company & Production History</h2>

@@ -41,8 +41,19 @@ import { MESSAGE_EXTRACTION_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { PERSON_ROLE_VALUES, type PersonRoleValue } from '@/lib/crm/roleMapping'
 
-/** Verdicts below this are discarded. */
-export const MIN_CONFIDENCE = 0.75
+/**
+ * Verdicts below this are discarded.
+ *
+ * Raised 0.75 → 0.90 on 2026-08-26 after reading the first full run.
+ * The 0.95+ band was clean — literal titles in signature blocks. The
+ * 0.85 band was roughly half wrong, and wrong in a consistent way: it
+ * mistook someone REFERRING to a department for someone IN it
+ * ("Adding in accounting to advise on payment status" → accountant),
+ * and inferred from the vehicle requested ("Following up on the art
+ * cube truck" → art coordinator) despite a prompt rule against it.
+ * Rule 7 below now names both traps; the threshold is the backstop.
+ */
+export const MIN_CONFIDENCE = 0.90
 
 /** Per-excerpt character cap — signatures live at the end, so we keep
  *  the tail as well as the head of anything longer. */
@@ -96,7 +107,9 @@ Rules:
 
 5) "title" is the verbatim title text if one appears (e.g. "Production Designer | Art Director"). Null if none appears. This is separate from "role" — you may return a title and still be UNKNOWN on role.
 
-6) Role guidance:
+7) A person MENTIONING a department is not a member of it. "Adding accounting to this thread", "James will submit these to accounting", "our producer will confirm", "looping in the art department" all tell you about SOMEONE ELSE. The writer of those sentences is UNKNOWN unless something else identifies them. Likewise a person asking about the "art truck" or the "grip package" is ordering equipment, not declaring a department — that is the request, not their job.
+
+8) Role guidance:
    - GRIP and GAFFER_ELECTRIC are SEPARATE departments. Grip rigs and supports; electric/gaffer lights. A bare "best boy" with no department stated is UNKNOWN.
    - ART_DIRECTOR covers the art department: art director, production designer, set decorator, set designer, prop stylist.
    - ART_COORDINATOR is only for someone explicitly called an art coordinator.
