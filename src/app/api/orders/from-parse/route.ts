@@ -566,7 +566,15 @@ export async function POST(req: NextRequest) {
       }
 
       return { orderId: order.id, companyCreated, companyId, warnings }
-    })
+    // Prisma's interactive-transaction defaults (maxWait 2s / timeout 5s)
+    // are far too tight for this one: every line item costs several
+    // sequential round trips to Neon (rate resolve, catalog normalize,
+    // capacity pre-flight, pick-list + hold sync), so a real 10-15 line
+    // quote blows the 5s budget mid-loop and the next query dies with
+    // "Transaction not found ... refers to an old closed transaction".
+    // The whole point of this route is atomicity, so give it a budget
+    // that fits the work instead of splitting the create.
+    }, { maxWait: 15_000, timeout: 120_000 })
 
     // Post-tx: self-healing totals recompute against canonical
     // line fields. recalcOrderTotals uses the singleton `prisma`
