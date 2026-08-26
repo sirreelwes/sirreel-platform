@@ -583,6 +583,8 @@ export default function CRMPage() {
               LOCATION_MANAGER: 'Locations',
               PRODUCTION_ACCOUNTANT: 'Prod. Accountant',
               PRODUCTION_ASSISTANT: 'PA',
+              GRIP: 'Grip',
+              GAFFER_ELECTRIC: 'Gaffer/Electric',
               COORDINATOR: 'Coordinator',
               OWNER: 'Owner',
               OTHER: 'Other',

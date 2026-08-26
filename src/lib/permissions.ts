@@ -1,6 +1,7 @@
 import { UserRole } from '@prisma/client';
 import { isAllowedClaimsEmail } from '@/lib/claims/allowlist';
 import { canUseCollections } from '@/lib/collections/allowlist';
+import { isExportApprover } from '@/lib/exports/approver';
 import { SCHEDULE_LABEL } from '@/lib/app-labels';
 
 // ═══════════════════════════════════════
@@ -591,6 +592,13 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', href: '/dashboard' },
         { id: 'coverage', label: 'Coverage', icon: 'Radar', href: '/exec/coverage' },
         { id: 'reporting', label: 'Reporting', icon: 'BarChart3', href: '/reporting' },
+        // Approver-only (Wes). Everyone else reaches their own request
+        // history from the Clients page; a queue tab they can't act on
+        // would just be noise. Email-gated, NOT role-gated — ADMIN is
+        // Wes AND Dani. See src/lib/exports/approver.ts.
+        ...(isExportApprover(navEmail)
+          ? [{ id: 'data-exports', label: 'Data Exports', icon: 'FileDown', href: '/exec/exports' }]
+          : []),
       ],
     },
     {

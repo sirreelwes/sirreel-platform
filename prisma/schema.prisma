@@ -544,6 +544,13 @@ enum PersonRole {
   PRODUCTION_ACCOUNTANT
   PRODUCTION_ASSISTANT
 
+  // Added 2026-08-26 (Wes). Grip and electric are SEPARATE departments
+  // — grip rigs and supports, electric lights — and they book their own
+  // trucks. An earlier draft proposed one combined GRIP_ELECTRIC bucket;
+  // Wes corrected it. Keep them apart.
+  GRIP
+  GAFFER_ELECTRIC
+
   OTHER
 }
 
