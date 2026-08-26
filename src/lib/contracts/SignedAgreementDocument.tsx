@@ -320,6 +320,8 @@ export function SignedAgreementDocument({
 
         <Text style={styles.blockTitle}>{LCDW_ADDENDUM.title}</Text>
         <Text style={styles.clauseBody}>{LCDW_ADDENDUM.rate}</Text>
+        <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.coverage}</Text>
+        <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.exclusions}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.scope}</Text>
         <Text style={[styles.clauseBody, { marginTop: 4 }]}>{LCDW_ADDENDUM.note}</Text>
 

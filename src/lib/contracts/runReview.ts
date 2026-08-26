@@ -62,7 +62,7 @@ function baselineClauseText(): string {
   return (
     CANONICAL_CLAUSES.map((c) => `[${c.ref}] ${c.title}\n${c.body}`).join('\n\n') +
     `\n\n[Fleet Agreement] ${FLEET_AGREEMENT.title}\n${FLEET_AGREEMENT.intro}\n${FLEET_AGREEMENT.fuelPolicy}` +
-    `\n\n[LCDW] ${LCDW_ADDENDUM.title}\n${LCDW_ADDENDUM.rate}\n${LCDW_ADDENDUM.scope}\n${LCDW_ADDENDUM.note}`
+    `\n\n[LCDW] ${LCDW_ADDENDUM.title}\n${LCDW_ADDENDUM.rate}\n${LCDW_ADDENDUM.coverage}\n${LCDW_ADDENDUM.exclusions}\n${LCDW_ADDENDUM.scope}\n${LCDW_ADDENDUM.note}`
   )
 }
 
