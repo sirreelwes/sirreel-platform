@@ -109,6 +109,18 @@ export function coiUploadUrl(token: string): string {
 }
 
 /**
+ * The v2 paperwork portal — `/portal/v2/[token]`, keyed by a
+ * PaperworkRequest token. This is where the client authorizes a card,
+ * signs, and drops their COI. Routed through the portal base like every
+ * other client-facing link: the card-authorization email used to build
+ * this URL from the request origin, which put `hq.sirreel.com` in front
+ * of a client link.
+ */
+export function portalV2Url(token: string): string {
+  return `${portalBaseUrl()}/portal/v2/${encodeURIComponent(token)}`
+}
+
+/**
  * Legacy `/client/[token]` route — sibling to `/portal/[token]`,
  * sent in some older booking emails. Kept here so that prefix is
  * also routed through the centralized base URL.

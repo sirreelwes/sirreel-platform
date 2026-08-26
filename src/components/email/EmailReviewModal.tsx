@@ -134,7 +134,12 @@ export type EmailReviewTarget =
   // 4, picked in the JobResolverModal before this modal opens); the send
   // stores it on the invite, and the client's click mints the Order
   // inside that Job.
-  | { kind: 'welcome'; inquiryId: string; jobId: string; message?: string | null };
+  | { kind: 'welcome'; inquiryId: string; jobId: string; message?: string | null }
+  // Card-authorization request — the job page's Card Authorization tile.
+  // Server derives recipient + booking from the job; the PaperworkRequest
+  // token is minted at SEND time, so the preview's portal CTA is an
+  // annotation rather than a live button.
+  | { kind: 'card-auth'; jobId: string; message?: string | null };
 
 interface Props {
   target: EmailReviewTarget | null;
@@ -189,6 +194,12 @@ function endpointsFor(target: EmailReviewTarget): { preview: string; send: strin
         preview: `/api/sales/welcome/preview`,
         send: `/api/sales/welcome/send`,
         titleKind: 'Welcome email',
+      };
+    case 'card-auth':
+      return {
+        preview: `/api/jobs/${target.jobId}/card-auth/preview`,
+        send: `/api/jobs/${target.jobId}/card-auth/send`,
+        titleKind: 'Card authorization request',
       };
   }
 }
@@ -593,7 +604,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                 {showPicker && preview.alternatives.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-zinc-800 space-y-1">
                     <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-                      Other contacts on this {target.kind === 'followup-job' ? 'job' : 'order'}
+                      Other contacts on this{' '}
+                      {target.kind === 'followup-job' || target.kind === 'card-auth' ? 'job' : 'order'}
                     </div>
                     {preview.alternatives.map((alt) => (
                       <button

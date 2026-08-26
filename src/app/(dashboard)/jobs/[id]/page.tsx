@@ -37,6 +37,7 @@ import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE } from '@
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
+import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal';
 import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
@@ -396,6 +397,8 @@ export default function JobDetailPage() {
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [ccBusy, setCcBusy] = useState(false);
+  // Card-authorization request — reviewed before it goes out.
+  const [emailTarget, setEmailTarget] = useState<EmailReviewTarget | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   // Inline "Edit job details" panel (name / dates / deal value).
   const [editing, setEditing] = useState(false);
@@ -582,19 +585,25 @@ export default function JobDetailPage() {
     }
   };
 
-  // "Send CC request" — mint/copy the client's portal card-authorization
-  // link. Copy (not auto-send) so staff paste it wherever they contact
-  // the client, mirroring Copy COI link.
-  const sendCcRequest = async () => {
+  // "Send CC request" — opens the review modal, which previews the real
+  // email and only then sends it. It used to mint a portal link, copy it
+  // to the clipboard and say "copied", which meant a button labelled Send
+  // sent nothing and left no record of whether the client was ever asked
+  // (Wes 2026-08-26).
+  const sendCcRequest = () => setEmailTarget({ kind: 'card-auth', jobId: id });
+
+  // The link on its own, for staff who'd rather paste it into a text or
+  // an existing thread than send our email. Kept from the old button.
+  const copyCcLink = async () => {
     setCcBusy(true);
     try {
       const res = await fetch(`/api/jobs/${id}/cc-request-link`, { method: 'POST' });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.url) throw new Error(d.error || 'Failed');
-      await navigator.clipboard.writeText(d.url).catch(() => {});
-      flashToast('Card-authorization link copied — send it to the client');
+      await navigator.clipboard.writeText(d.url);
+      flashToast('Card-authorization link copied');
     } catch (e) {
-      flashToast(e instanceof Error ? e.message : 'Could not create link');
+      flashToast(e instanceof Error ? e.message : 'Could not copy link');
     } finally {
       setCcBusy(false);
     }
@@ -1404,12 +1413,20 @@ const driverTone = (d: any): string => {
               <>
                 <button
                   onClick={sendCcRequest}
-                  disabled={ccBusy}
-                  className="mt-2.5 text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  className="mt-2.5 text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  {ccBusy ? 'Preparing…' : '↗ Send CC request'}
+                  ↗ Send CC request
                 </button>
-                <div className="mt-2 text-[12px] text-zinc-300">Client enters it in their portal</div>
+                <div className="mt-2 text-[12px] text-zinc-300">
+                  Review the email, then send &middot;{' '}
+                  <button
+                    onClick={copyCcLink}
+                    disabled={ccBusy}
+                    className="underline underline-offset-2 hover:text-zinc-100 disabled:opacity-50"
+                  >
+                    {ccBusy ? 'copying…' : 'copy link instead'}
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -2456,6 +2473,16 @@ const driverTone = (d: any): string => {
           }}
         />
       )}
+
+      <EmailReviewModal
+        target={emailTarget}
+        onClose={() => setEmailTarget(null)}
+        onSent={(info) => {
+          setEmailTarget(null);
+          flashToast(`Card request sent to ${info.recipient}`);
+          load();
+        }}
+      />
 
       {agreementModalOpen && (
         <LinkJobAgreementModal

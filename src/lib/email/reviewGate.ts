@@ -30,6 +30,7 @@ const REVIEW_REQUIRED: Record<EmailReviewKind, boolean> = {
   'followup-job': true,
   'quick-reply': true,
   welcome: true, // Welcome / Job Begin invite — always agent-reviewed
+  'card-auth': true, // Card-authorization request from the job page
 }
 
 export function shouldReview(kind: EmailReviewKind): boolean {
