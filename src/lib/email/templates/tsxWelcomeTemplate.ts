@@ -27,6 +27,8 @@
  *     that carries placeholder language.
  */
 
+import { defaultEmailBody, PRE_JOB_OPENING_LINE } from '@/lib/email/standardOpening'
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -133,6 +135,20 @@ export interface TsxWelcomeTemplateInput {
   quote: TsxWelcomeQuoteBlock | null
   /** Required when mode='availability'. Ignored otherwise. */
   availability?: TsxAvailabilityBlock | null
+  /**
+   * "Write my own email" for the welcome / quote modes — the rep's prose
+   * REPLACES the templated opener AND the templated closer. What survives is
+   * the shell: greeting, quote snapshot + portal CTA, sign-off.
+   *
+   * Same rule the availability mode already follows (Wes 2026-08-26: a
+   * hand-written note with our templated paragraphs stapled underneath "read
+   * like two people wrote it"). Empty/absent → the standard wording renders,
+   * which is the same text the compose box is seeded with, so the box and the
+   * sent email always agree.
+   *
+   * Availability mode keeps using `availability.customBody`.
+   */
+  customBody?: string | null
 }
 
 export interface RenderedEmail {
@@ -208,8 +224,22 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
 
   // [[PLACEHOLDER]] body copy — Wes review.
   const greeting = `Hi ${safeFirst},`
-  const welcomeOpener = `Thanks for reaching out — really glad we get to work on this one with you. <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
-  const quoteOpener = `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
+  // Plain text (one or more paragraphs) → the template's body-paragraph HTML.
+  const toParas = (t: string) =>
+    t
+      .split(/\n{2,}/)
+      .map((para) => escapeHtml(para.trim()).replace(/\n/g, '<br/>'))
+      .filter(Boolean)
+      .join(`</p><p style="font-size: 16px; color: ${TEXT}; margin: 12px 0 0; line-height: 1.6;">`)
+  // The rep's own email, when they wrote one. Welcome + quote modes only —
+  // availability has its own customBody on the availability block.
+  const repBody = !withAvailability ? input.customBody?.trim() || null : null
+  // Standard quote wording lives in standardOpening.ts, NOT here: the compose
+  // box is seeded from the same function, so what a rep is handed to edit and
+  // what a client receives cannot drift.
+  const quoteDefault = defaultEmailBody({ kind: 'quote' })
+  const welcomeOpener = `${escapeHtml(PRE_JOB_OPENING_LINE)} <strong>TSX (The SirReel Experience)</strong> is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`
+  const quoteOpener = toParas(quoteDefault)
   const availabilityOpener = `Thanks for reaching out about <strong>${escapeHtml(av?.jobName ?? '')}</strong> — happy to help get this on the calendar.`
   // Custom-message mode: the rep's own prose REPLACES the templated opener —
   // but the greeting, tier availability message + supply CTA, and sign-off
@@ -228,7 +258,9 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // written, the standard line renders, so the box and the sent email match.
   const opener = withAvailability
     ? (customBodyHtml ?? escapeHtml(av!.availabilityMessage))
-    : withQuote ? quoteOpener : welcomeOpener
+    : repBody
+      ? toParas(repBody)
+      : withQuote ? quoteOpener : welcomeOpener
 
   // No longer a separate paragraph — customBody IS the opener above.
   const repBodyHtml: string | null = null
@@ -238,7 +270,9 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
 
   const closer = withAvailability
     ? '' // the tier message carries its own next step
-    : withQuote
+    : repBody
+      ? '' // the rep's words are the whole email — see `customBody`
+      : withQuote
       ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
       : `When you're ready to book something, just send me the details and I'll spin up a quote.`
 
@@ -518,9 +552,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
     '',
     withAvailability
       ? (customBody ?? av!.availabilityMessage)
-      : withQuote
-        ? `Thanks for reaching out — really glad we get to work on this with you. I put together a first pass on your quote; it's waiting for you on your client portal along with everything else we'll need for the job.`
-        : `Thanks for reaching out — really glad we get to work on this one with you. TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
+      : repBody
+        ? repBody
+        : withQuote
+          ? quoteDefault
+          : `${PRE_JOB_OPENING_LINE} TSX (The SirReel Experience) is how we describe everything beyond just the rental: the warehouse crew that preps your gear, the fleet that shows up clean and on time, the team you can text at 11pm when something on set changes.`,
   ]
   if (safeNote && input.personalNote) {
     textParts.push('', input.personalNote.trim())
@@ -580,13 +616,17 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         : `Portal link will be added at send time.`,
     )
   }
-  textParts.push(
-    '',
-    withAvailability
-      ? '' // the tier message carries its own next step
+  // No closer for availability (the tier message carries its own next step) or
+  // when the rep wrote the body — and in those cases the blank line that would
+  // have separated it goes too, rather than leaving a gap in the plain text.
+  const closerText =
+    withAvailability || repBody
+      ? ''
       : withQuote
         ? `Take a look when you have a minute. If anything's off — vehicle count, dates, supplies, anything — just hit reply and I'll get it sorted.`
-        : `When you're ready to book something, just send me the details and I'll spin up a quote.`,
+        : `When you're ready to book something, just send me the details and I'll spin up a quote.`
+  if (closerText) textParts.push('', closerText)
+  textParts.push(
     '',
     `— ${input.agentName}`,
     `& Team SirReel`,

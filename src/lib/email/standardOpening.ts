@@ -16,6 +16,18 @@ export const STANDARD_OPENING_LINE =
   "It's great to hear from you and we are looking forward to the opportunity to partner with you on this project."
 
 /**
+ * The PRE-JOB variant — for the two emails that go out before anyone has
+ * agreed to anything: the quote, and the first-touch welcome.
+ *
+ * Wes, 2026-08-26. The quote email opened with "really glad we get to work on
+ * this with you", which claims the job is already ours. At quote time we do
+ * not have the job — we are asking for it. This line wants the work without
+ * assuming it.
+ */
+export const PRE_JOB_OPENING_LINE =
+  "It's great to hear from you — we'd love to work with you on this one."
+
+/**
  * The editable DEFAULT body a rep starts from.
  *
  * Wes, 2026-08-12: the standard paragraph is a starting point, not a fixed
@@ -27,9 +39,20 @@ export const STANDARD_OPENING_LINE =
  * Built server-side because only the server knows the project name.
  */
 export function defaultEmailBody(input: {
-  kind: 'quick-reply' | 'welcome' | 'quick-respond'
+  kind: 'quick-reply' | 'welcome' | 'quick-respond' | 'quote'
   projectName?: string | null
 }): string {
+  // The quote email. Deliberately names no job and no dates — the quote
+  // snapshot block sits directly underneath and carries both. Kept free of
+  // the project name so the text a rep is handed in the compose box is
+  // character-for-character the text the client receives.
+  if (input.kind === 'quote') {
+    return [
+      PRE_JOB_OPENING_LINE,
+      '',
+      "I've put together a first pass at your quote; it's waiting for you on your client portal, along with everything else we'll need for the job.",
+    ].join('\n')
+  }
   // Quick Respond gets the bare standard line and NOTHING else. Wes
   // 2026-08-25: "Do NOT tell client anything about availability etc. …
   // Generic language would be acceptable: Great to hear from you etc,

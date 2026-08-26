@@ -231,6 +231,11 @@ function buildPreviewBody(
   if (target.kind === 'quick-reply') {
     base.payload = { ...target.payload, customMessage: customMessage.trim() || null };
   }
+  // Quote: "Write my own email" replaces the templated opener + closer. The
+  // quote snapshot, portal button and sign-off are the shell and stay put.
+  if (target.kind === 'quote') {
+    base.customMessage = customMessage.trim() || null;
+  }
   // Welcome invite: the server derives recipient/company/agent from the
   // inquiry; only the id + the agent's words travel in the body.
   if (target.kind === 'welcome') {
@@ -701,7 +706,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   NOT shown for welcome/Quick Respond: Wes 2026-08-25, "no
                   need for two sections, just have one place to type in".
                   Those kinds get the single composer below instead. */}
-              {!singleBox && (
+              {!singleBox && !(target.kind === 'quote' && writeOwn) && (
               <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex items-baseline justify-between mb-1">
                   <label className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -730,7 +735,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                   opener: the standard sentence always leads and this text
                   follows it. Copy says "adds below" so a rep does not open
                   with their own greeting and produce a doubled "Hi <name>". */}
-              {(target.kind === 'quick-reply' || target.kind === 'welcome') && (
+              {(target.kind === 'quick-reply' || target.kind === 'welcome' || target.kind === 'quote') && (
                 <div className="bg-zinc-950/50 border border-zinc-800 rounded-lg px-3 py-2">
                   {singleBox ? (
                     /* One box, always open — no checkbox to find, nothing to
@@ -759,6 +764,10 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         if (on && !customMessage.trim() && preview?.defaultBody) {
                           setCustomMessage(preview.defaultBody)
                         }
+                        // The personal-note box is hidden while the rep writes
+                        // the whole quote email — clear it too, so a note typed
+                        // before the toggle can't ride along invisibly.
+                        if (on && target.kind === 'quote') setCustomNote('')
                         if (!on) { setAiFlags(null); setAiPolished(null); setAiError(null); }
                       }}
                       className="accent-amber-600"
@@ -766,9 +775,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                     <span>
                       Write my own email{' '}
                       <span className="text-zinc-500">
-                        — the standard wording, yours to edit. Your words are
-                        the whole email: only the greeting, the &ldquo;add gear
-                        or vehicles&rdquo; button and the sign-off stay.
+                        {target.kind === 'quote'
+                          ? '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the quote block with its portal button, and the sign-off stay.'
+                          : '— the standard wording, yours to edit. Your words are the whole email: only the greeting, the “add gear or vehicles” button and the sign-off stay.'}
                       </span>
                     </span>
                   </label>
@@ -786,10 +795,15 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                             ? 'A generic opener is prefilled — replace or extend it. Nothing specific about availability, units or dates goes out unless you write it.'
                             : singleBox
                               ? 'The standard wording, yours to edit. The greeting, portal button and sign-off are added around it.'
-                              : 'Write your message to the client. It appears under the greeting, above the real availability block.'
+                              : target.kind === 'quote'
+                                ? 'The standard quote wording, yours to edit. The quote total, dates and portal button are added underneath — no need to retype them.'
+                                : 'Write your message to the client. It appears under the greeting, above the real availability block.'
                         }
                         className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-y disabled:opacity-50"
                       />
+                      {/* AI pass is Quick Reply's — it checks the draft against
+                          real fleet availability, which no other kind has. */}
+                      {target.kind === 'quick-reply' && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={runAiReview}
@@ -800,6 +814,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
                         </button>
                         <span className="text-[10px] text-zinc-500">Flags risks + offers a polished version. Optional — nothing auto-applies.</span>
                       </div>
+                      )}
                       {aiError && <div className="text-[11px] text-rose-300 bg-rose-950/40 border border-rose-900 rounded px-2 py-1">{aiError}</div>}
                       {aiFlags && (
                         aiFlags.length > 0 ? (

@@ -22,6 +22,7 @@
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
+import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
 
 export interface AttachmentMeta {
@@ -34,6 +35,10 @@ export interface AttachmentMeta {
 
 export interface QuoteEmailCompositionOk {
   ok: true
+  /** The standard quote wording, handed to the review modal so
+   *  "Write my own email" opens on real copy instead of an empty box.
+   *  Identical to what the template renders when nothing is written. */
+  defaultBody: string
   to: RankedRecipient
   /** Other ranked recipients on this order — surfaces in the modal's
    *  "Change recipient" affordance. Excludes `to`. */
@@ -75,6 +80,10 @@ export interface ComposeQuoteEmailArgs {
    *  order — rejected if not present (no arbitrary email injection
    *  through the send endpoint). */
   overrideContactId?: string | null
+  /** "Write my own email": REPLACES the templated opener and closer.
+   *  The greeting, the quote snapshot + portal CTA and the sign-off stay.
+   *  Empty/null → the standard wording (see `defaultBody`). */
+  customMessage?: string | null
 }
 
 export async function composeQuoteEmail(
@@ -158,6 +167,7 @@ export async function composeQuoteEmail(
 
   const { subject, html, text } = buildTsxWelcomeEmail({
     mode: 'welcome-with-quote',
+    customBody: args.customMessage?.trim() || null,
     clientFirstName: to.name.split(' ')[0] || null,
     clientFullName: to.name || null,
     agentName: order.agent.name || 'SirReel',
@@ -177,6 +187,7 @@ export async function composeQuoteEmail(
 
   return {
     ok: true,
+    defaultBody: defaultEmailBody({ kind: 'quote' }),
     to,
     alternatives,
     from: SEND_FROM,

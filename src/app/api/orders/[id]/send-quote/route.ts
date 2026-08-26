@@ -58,6 +58,9 @@ interface SendQuoteBody {
    *  recipient" affordance. Must be one of the order's ranked
    *  candidates or composer rejects with 400. */
   overrideContactId?: unknown
+  /** "Write my own email" — the rep's prose REPLACES the templated opener
+   *  and closer. Greeting, quote snapshot + portal CTA and sign-off stay. */
+  customMessage?: unknown
 }
 
 function bad(status: number, error: string) {
@@ -79,6 +82,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     : null
   const overrideContactId =
     typeof body.overrideContactId === 'string' ? body.overrideContactId : null
+  const customMessage =
+    typeof body.customMessage === 'string' && body.customMessage.trim().length > 0
+      ? body.customMessage.trim().slice(0, 5000)
+      : null
 
   // ── Mint/refresh portal token, then compose with tokenized URL ─
   // Two phases: (1) preview-compose with portalUrl=null to learn the
@@ -90,6 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const preliminary = await composeQuoteEmail({
     orderId: params.id,
     message,
+    customMessage,
     overrideContactId,
     portalUrl: null,
     // Send route fetches the buffer separately; preview metadata not needed.
@@ -165,6 +173,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const final = await composeQuoteEmail({
     orderId: params.id,
     message,
+    customMessage,
     overrideContactId,
     portalUrl,
     includeAttachmentMeta: false,

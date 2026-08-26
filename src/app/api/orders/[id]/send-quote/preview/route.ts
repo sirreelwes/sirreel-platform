@@ -6,7 +6,8 @@
  * magic-link mint is a write, kept out of preview). NO Resend dispatch,
  * NO state writes, NO PortalAccess mutation, NO PDF buffer fetch.
  *
- * Body (optional): { message?: string } — same shape as the send route.
+ * Body (optional): { message?: string, customMessage?: string } — same
+ * shape as the send route.
  * Response: { ok: true, to, alternatives, from, subject, html, text,
  *             attachments[], order, portalUrlIsTokenized: false }
  *
@@ -35,10 +36,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       : null
   const overrideContactId =
     typeof body?.overrideContactId === 'string' ? body.overrideContactId : null
+  // "Write my own email" — replaces the templated opener + closer.
+  const customMessage =
+    typeof body?.customMessage === 'string' && body.customMessage.trim().length > 0
+      ? body.customMessage.trim().slice(0, 5000)
+      : null
 
   const composition = await composeQuoteEmail({
     orderId: params.id,
     message,
+    customMessage,
     overrideContactId,
     portalUrl: null, // preview ⇒ tokenless CTA href; modal annotates
     includeAttachmentMeta: true,
