@@ -74,7 +74,45 @@ async function resolveClientJobVehicles(req: NextRequest) {
       },
     },
   })
-  return { resolved, jobId: order.jobId, assignments, assignmentIds: assignments.map((a) => a.id) }
+  // Held categories with no unit picked yet. A driver attaches to a UNIT,
+  // so these have nothing to name a driver onto — but hiding them made the
+  // whole section vanish on a job that is genuinely booked. Surfaced as a
+  // waiting row instead, with no invite control.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const pendingItems = await prisma.bookingItem.findMany({
+    where: {
+      booking: {
+        jobId: order.jobId,
+        status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+        // Live dates only. A finished job with an UNFULFILLED line would
+        // otherwise tell the client we are "still assigning" a vehicle
+        // they never got and no longer need.
+        endDate: { gte: today },
+      },
+      assignments: { none: { status: { not: 'SWAPPED' } } },
+    },
+    select: {
+      id: true, quantity: true,
+      category: { select: { name: true } },
+      booking: { select: { startDate: true, endDate: true } },
+    },
+  })
+  const pendingHolds = pendingItems.map((it) => ({
+    bookingItemId: it.id,
+    description: it.category.name,
+    quantity: it.quantity,
+    startDate: it.booking.startDate.toISOString().slice(0, 10),
+    endDate: it.booking.endDate.toISOString().slice(0, 10),
+  }))
+
+  return {
+    resolved,
+    jobId: order.jobId,
+    assignments,
+    pendingHolds,
+    assignmentIds: assignments.map((a) => a.id),
+  }
 }
 
 /** GET — the client's own vehicles and who they've named so far. */
@@ -84,6 +122,7 @@ export async function GET(req: NextRequest) {
   const assignments = ('assignments' in ctx ? ctx.assignments : []) ?? []
   return NextResponse.json({
     ok: true,
+    pendingHolds: ('pendingHolds' in ctx ? ctx.pendingHolds : []) ?? [],
     vehicles: assignments.map((a) => ({
       bookingAssignmentId: a.id,
       unitName: a.asset.unitName,
@@ -98,6 +137,7 @@ export async function GET(req: NextRequest) {
         // our licence verdicts — "we're still waiting on them" is enough.
         opened: !!d.firstViewedAt,
         ready: d.status === 'READY' || d.status === 'PICKED_UP',
+        pickedUp: d.status === 'PICKED_UP',
         // The server decides removability, not the browser — the DELETE
         // re-checks it anyway, but this keeps the button off rows that
         // would only bounce.
