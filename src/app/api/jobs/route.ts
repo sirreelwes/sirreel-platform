@@ -208,7 +208,7 @@ export async function GET(req: NextRequest) {
         // Board placement inputs — booking envelope dates (fallback when
         // the Job itself is date-less) and the delivery signal.
         bookings: {
-          select: { startDate: true, endDate: true, deliveryAddress: true },
+          select: { startDate: true, endDate: true, deliveryAddress: true, status: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -366,10 +366,20 @@ export async function GET(req: NextRequest) {
       })
 
       // Booking envelope: min start / max end across the job's bookings
-      // — the placement fallback for jobs with no live orders (all the
+      // — the date fallback for jobs with no live orders (all the
       // Planyo imports today). Delivery = any booking with an address.
-      const bStarts = j.bookings.map((b) => b.startDate).filter((d): d is Date => !!d)
-      const bEnds = j.bookings.map((b) => b.endDate).filter((d): d is Date => !!d)
+      //
+      // CANCELLED bookings are excluded, and that exclusion is the
+      // whole point: the envelope used to span every booking whatever
+      // its status, so a job whose only booking was cancelled still
+      // got a window, still looked like it had gear out, and — once
+      // the end date passed — read "Not returned" forever. 24 jobs sat
+      // in that state on 2026-08-26, most of them the Planyo
+      // cancellations swept on 8/25. A cancelled hold never went out
+      // and has nothing to bring back.
+      const liveBookings = j.bookings.filter((b) => b.status !== 'CANCELLED')
+      const bStarts = liveBookings.map((b) => b.startDate).filter((d): d is Date => !!d)
+      const bEnds = liveBookings.map((b) => b.endDate).filter((d): d is Date => !!d)
       const bookingWindow =
         bStarts.length || bEnds.length
           ? {
@@ -377,7 +387,9 @@ export async function GET(req: NextRequest) {
               end: bEnds.length ? new Date(Math.max(...bEnds.map((d) => d.getTime()))).toISOString().slice(0, 10) : null,
             }
           : null
-      const hasDelivery = j.bookings.some((b) => !!b.deliveryAddress?.trim())
+      // Same reasoning: a cancelled booking's delivery address is not a
+      // delivery anybody has to make.
+      const hasDelivery = liveBookings.some((b) => !!b.deliveryAddress?.trim())
 
       const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, ...rest } = j
       void _ignoreCoi
