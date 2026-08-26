@@ -114,12 +114,12 @@ export default function CardpointeCallsPage() {
     .reduce((sum, [, n]) => sum + n, 0)
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto text-white">
+    <div className="p-6 max-w-[1400px] mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">CardPointe gateway calls</h1>
-        <p className="text-sm text-zinc-400 mt-1">
+        <h1 className="text-2xl font-semibold text-lt-fg">CardPointe gateway calls</h1>
+        <p className="text-sm text-lt-fg2 mt-1">
           Every request SirReel makes to the payment gateway, with the response. Tokens are
-          masked to last 4 and CVV/track data is never stored — <code className="text-zinc-300">cvvresp</code>{' '}
+          masked to last 4 and CVV/track data is never stored — <code className="text-lt-fg">cvvresp</code>{' '}
           is the network&apos;s verdict, not a card number.
         </p>
       </div>
@@ -127,8 +127,8 @@ export default function CardpointeCallsPage() {
       {/* Compliance first: the reason this page exists. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div
-          className={`rounded-lg border p-4 ${
-            criticalCount > 0 ? 'border-red-600 bg-red-950/40' : 'border-zinc-700 bg-zinc-900'
+          className={`rounded-lg border p-4 text-white ${
+            criticalCount > 0 ? 'border-red-600 bg-red-950' : 'border-zinc-700 bg-zinc-900'
           }`}
         >
           <div className="text-[11px] uppercase tracking-wider text-zinc-400">PCI violations</div>
@@ -138,8 +138,8 @@ export default function CardpointeCallsPage() {
           <div className="text-[11px] text-zinc-500 mt-1">CVV sent on a merchant-initiated charge</div>
         </div>
         <div
-          className={`rounded-lg border p-4 ${
-            warningCount > 0 ? 'border-amber-600 bg-amber-950/30' : 'border-zinc-700 bg-zinc-900'
+          className={`rounded-lg border p-4 text-white ${
+            warningCount > 0 ? 'border-amber-600 bg-amber-950' : 'border-zinc-700 bg-zinc-900'
           }`}
         >
           <div className="text-[11px] uppercase tracking-wider text-zinc-400">Warnings</div>
@@ -148,7 +148,7 @@ export default function CardpointeCallsPage() {
           </div>
           <div className="text-[11px] text-zinc-500 mt-1">Missing COF fields or postal code</div>
         </div>
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4 text-white">
           <div className="text-[11px] uppercase tracking-wider text-zinc-400">Calls recorded</div>
           <div className="text-2xl font-semibold mt-1">{summary?.total ?? '—'}</div>
           <div className="text-[11px] text-zinc-500 mt-1">
@@ -159,7 +159,7 @@ export default function CardpointeCallsPage() {
               : ''}
           </div>
         </div>
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4 text-white">
           <div className="text-[11px] uppercase tracking-wider text-zinc-400">Last call</div>
           <div className="text-lg font-semibold mt-1">
             {summary?.lastCallAt ? timeLabel(summary.lastCallAt) : '—'}
@@ -184,7 +184,7 @@ export default function CardpointeCallsPage() {
         <select
           value={operation}
           onChange={(e) => setOperation(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white"
         >
           <option value="">All operations</option>
           <option value="auth">auth</option>
@@ -196,7 +196,7 @@ export default function CardpointeCallsPage() {
           value={retref}
           onChange={(e) => setRetref(e.target.value)}
           placeholder="Search retref…"
-          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm w-52"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm w-52 text-white placeholder:text-zinc-500"
         />
         <button
           onClick={() => setFlagged((v) => !v)}
@@ -223,10 +223,10 @@ export default function CardpointeCallsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-700 bg-red-950/40 p-4 text-sm text-red-200 mb-4">{error}</div>
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 mb-4">{error}</div>
       )}
 
-      <div className="rounded-lg border border-zinc-700 overflow-hidden">
+      <div className="rounded-lg border border-zinc-700 bg-zinc-900 text-white overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-zinc-800 text-zinc-400">
@@ -347,12 +347,12 @@ export default function CardpointeCallsPage() {
           <button
             onClick={() => load(true, cursor)}
             disabled={loading}
-            className="px-4 py-2 rounded text-sm bg-amber-600 hover:bg-amber-500 disabled:opacity-50"
+            className="px-4 py-2 rounded text-sm font-semibold text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50"
           >
             Load more
           </button>
         )}
-        {loading && <span className="text-sm text-zinc-500">Loading…</span>}
+        {loading && <span className="text-sm text-lt-fg2">Loading…</span>}
       </div>
     </div>
   )

@@ -131,18 +131,18 @@ export default function WhoWeAreAdminPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto text-white">
-      <h1 className="text-2xl font-semibold">Who We Are</h1>
-      <p className="mt-1 text-sm text-zinc-400">
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-semibold text-lt-fg">Who We Are</h1>
+      <p className="mt-1 text-sm text-lt-fg2">
         Manage the team roster shown in the &ldquo;Who we are&rdquo; section on the public contact page.
       </p>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">{error}</div>
+        <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div>
       )}
 
       {/* Master toggle */}
-      <section className="mt-6 flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+      <section className="mt-6 flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
         <div>
           <div className="text-sm font-semibold">Show on the contact page</div>
           <div className="text-xs text-zinc-500 mt-0.5">
@@ -160,7 +160,7 @@ export default function WhoWeAreAdminPage() {
       </section>
 
       {/* Add member */}
-      <section className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+      <section className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
         <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">Add a team member</div>
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[160px]">
@@ -181,7 +181,7 @@ export default function WhoWeAreAdminPage() {
       </section>
 
       {/* Roster */}
-      <section className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-5">
+      <section className="mt-4 rounded-xl border border-zinc-700 bg-zinc-900 p-5 text-white">
         <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 mb-3">
           Roster {members.length > 0 && <span className="text-zinc-600">· {members.length}</span>}
         </div>
