@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
   // committed; it stays untouched.
   let newCarts: NewCartImportRunResult = {
     imported: 0,
+    adopted: [],
     flagged: [],
     jobsAttached: 0,
     jobsCreated: 0,

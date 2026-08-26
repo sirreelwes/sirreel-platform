@@ -44,6 +44,11 @@ import {
   type CartImportPlan,
 } from './importNewCart'
 import {
+  findAdoptableNativeBooking,
+  adoptCartIntoNativeBooking,
+  type AdoptionCandidate,
+} from './adoptNativeBooking'
+import {
   resolveJobForImportedBooking,
   type CartJobResolution,
 } from './resolveJobForBooking'
@@ -68,6 +73,8 @@ export interface FlaggedNewCart {
 
 export interface NewCartImportRunResult {
   imported: number
+  /** Carts linked to an existing native booking instead of imported. */
+  adopted: Array<{ cart: string; bookingNumber: string; reason: string; reservations: number }>
   flagged: FlaggedNewCart[]
   /** Job-as-root step 5 — per-cart Job resolution outcomes. */
   jobsAttached: number
@@ -106,6 +113,7 @@ export interface ImportNewCartsRunOpts {
 
 const FLAGGED_DETAIL_PREFIX = '[NEW_CART_FLAGGED]'
 const IMPORT_DETAIL_PREFIX = '[NEW_CART_IMPORT cron]'
+const ADOPT_DETAIL_PREFIX = '[NEW_CART_ADOPT cron]'
 
 export async function importNewCartsRun(
   opts: ImportNewCartsRunOpts,
@@ -125,6 +133,7 @@ export async function importNewCartsRun(
     jobAmbiguous: [],
     skippedCancelled: 0,
     skippedPastOnly: 0,
+    adopted: [],
     skippedNoiseOnly: 0,
     candidatesConsidered: 0,
     errors: [],
@@ -140,8 +149,14 @@ export async function importNewCartsRun(
   }
 
   // 2. Out-of-scope candidate set
+  // Any booking carrying the cart puts it in scope — NOT just
+  // PLANYO_BACKFILL ones. An ADOPTED cart lives on a native booking whose
+  // source stays native (see adoptNativeBooking.ts); with the old source
+  // filter the importer could not see its own adoption and would re-import
+  // the cart the very next run, recreating the duplicate it just avoided.
+  // Widening this can only ever cause MORE skipping, never a new import.
   const hqBookings = await prisma.booking.findMany({
-    where: { source: 'PLANYO_BACKFILL', planyoCartId: { not: null } },
+    where: { planyoCartId: { not: null } },
     select: { planyoCartId: true },
   })
   const inScopeCarts = new Set(hqBookings.map((b) => b.planyoCartId!))
@@ -238,6 +253,23 @@ export async function importNewCartsRun(
       )
 
       if (plan.status === 'AUTO') {
+        // Is this rental already in HQ, entered natively? If so, link the
+        // cart to it instead of minting a second Booking for the same real
+        // rental — the duplicate this importer could not previously see.
+        const adoptable = await findAdoptableNativeBooking(prisma, plan)
+        if (adoptable) {
+          if (!opts.dryRun) {
+            const a = await adoptCartIntoNativeBooking(prisma, adoptable.bookingId, plan)
+            await writeAdoptEvent(opts.runId, cart, adoptable, a.reservationsLinked)
+          }
+          result.adopted.push({
+            cart,
+            bookingNumber: adoptable.bookingNumber,
+            reason: adoptable.reason,
+            reservations: plan.reservationDrafts.length,
+          })
+          continue
+        }
         if (!opts.dryRun) {
           const r = await applyCartImport(plan, prisma, makeBookingNumberGenerator())
           await writeImportEvent(opts.runId, cart, plan, r.bookingId)
@@ -307,6 +339,39 @@ export async function importNewCartsRun(
 
   result.durationMs = Date.now() - start
   return result
+}
+
+/**
+ * An adoption is a real decision about a real rental, so it lands in the
+ * same event journal as an import — with the booking it linked to and the
+ * evidence that justified it, so a wrong adoption can be found later.
+ */
+async function writeAdoptEvent(
+  runId: string,
+  cart: string,
+  adoptable: AdoptionCandidate,
+  reservationsLinked: number,
+): Promise<void> {
+  await prisma.planyoSyncEvent.create({
+    data: {
+      runId,
+      // Not CREATE: nothing was created. The cart was attached to a
+      // booking that already existed, which is a status change on that
+      // cart's relationship to HQ.
+      op: 'UPDATE_STATUS',
+      planyoCartId: cart,
+      bookingId: adoptable.bookingId,
+      after: {
+        cronAdopt: true,
+        cart,
+        adoptedBookingId: adoptable.bookingId,
+        adoptedBookingNumber: adoptable.bookingNumber,
+        matchReason: adoptable.reason,
+        reservationsLinked,
+      } as unknown as Prisma.InputJsonValue,
+      detail: `${ADOPT_DETAIL_PREFIX} cart=${cart} adopted=${adoptable.bookingNumber} reservations=${reservationsLinked}`,
+    },
+  })
 }
 
 async function writeImportEvent(

@@ -53,6 +53,22 @@ export async function applyCreate(
       select: { id: true, startDate: true, endDate: true },
     })
     if (!parent) {
+      // An ADOPTED cart lives on a NATIVE booking (adoptNativeBooking.ts):
+      // the cart id is stamped on it, but source stays native so scopeGuard
+      // keeps the sync out of a booking a human owns. That is a deliberate
+      // state, not a fault — report it as skipped rather than throwing and
+      // failing the whole run.
+      const adopted = await tx.booking.findFirst({
+        where: { planyoCartId: cart },
+        select: { id: true, bookingNumber: true, source: true },
+      })
+      if (adopted) {
+        return {
+          bookingId: adopted.id,
+          bookingItemId: null,
+          detail: `SKIPPED_ADOPTED_NATIVE cart=${cart} booking=${adopted.bookingNumber} — HQ owns this rental; Planyo edits are not applied to it`,
+        }
+      }
       throw new Error(`applyCreate: no PLANYO_BACKFILL Booking for cart ${cart}`)
     }
     await planyoOriginBookingOrThrow(tx, parent.id)
