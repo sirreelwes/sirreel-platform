@@ -939,6 +939,34 @@ const driverTone = (d: any): string => {
     return [...seen.values()].sort((x, y) => x.unitName.localeCompare(y.unitName, undefined, { numeric: true }))
   })()
 
+  // Held categories with no unit picked yet. A driver attaches to a UNIT
+  // (BookingAssignment), so these have nothing to name a driver onto — the
+  // Drivers card names them rather than silently having no row, which read
+  // as "there's no button for this" to whoever was looking.
+  const pendingHolds = (() => {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const out: { bookingItemId: string; category: string; quantity: number; startDate: string | null }[] = []
+    for (const b of job.bookings) {
+      if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
+      // Live dates only — a wrapped job's UNFULFILLED line is history,
+      // not something anyone is going to name a driver onto.
+      if (b.endDate && new Date(b.endDate) < todayStart) continue
+      for (const it of b.items) {
+        const live = it.assignments.filter((a) => a.status !== 'SWAPPED')
+        if (live.length === 0) {
+          out.push({
+            bookingItemId: it.id,
+            category: it.category.name,
+            quantity: it.quantity,
+            startDate: b.startDate ?? null,
+          })
+        }
+      }
+    }
+    return out
+  })()
+
   // Workers' Comp certificates on file (payload is optional — an older
   // cached response or a job with no bookings simply has none).
   const wcCerts = job.wcCerts ?? [];
@@ -1431,8 +1459,11 @@ const driverTone = (d: any): string => {
           bookingAssignmentId: a.bookingAssignmentId,
           unitName: a.unitName,
           category: a.category,
+          startDate: a.startDate,
+          endDate: a.endDate,
           drivers: a.drivers,
         }))}
+        pendingHolds={pendingHolds}
         onChanged={load}
       />
 
