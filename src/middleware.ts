@@ -31,8 +31,14 @@ import { resolveLegacyRedirect } from '@/lib/site/legacyRedirects'
 const STAFF_HOST = 'hq.sirreel.com'
 const PORTAL_HOST = 'tsx.sirreel.com'
 const ORDERS_HOST = 'orders.sirreel.com'
-// Marketing site (apex + www). Inert until DNS points these at Vercel;
-// pre-wired so cutover is a DNS change, not a deploy.
+// Marketing site (apex + www). LIVE — DNS points both at Vercel (confirmed
+// 2026-08-26: each answers `server: Vercel` and takes the root-rewrite
+// branch below). This comment used to read "inert until DNS points these at
+// Vercel", which cost real time diagnosing a client-facing 404: the cutover
+// had happened, so the allow-list below was already the thing deciding what
+// clients could reach, and every Wix /_files/ document URL was 404ing.
+// Anything missing from PUBLIC_SITE_ALLOWED_PREFIXES is dead in production
+// right now, not hypothetically after some future DNS change.
 const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 
 // Public marketing surface allow-list — Home + the public catalog +
