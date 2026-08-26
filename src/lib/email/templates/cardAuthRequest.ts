@@ -93,9 +93,20 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
    * to ask about. Part of the SHELL, like the security paragraph: a rep who
    * writes their own ask would rarely retype this, and a client who would
    * rather send a wire should not have to have drawn the rep who remembered.
+   *
+   * It points at the job portal rather than asking for a reply (Wes
+   * 2026-08-26) — the client should be able to finish this themselves.
+   * /portal/job/[slug] carries the "Pay by bank transfer" row with the ACH +
+   * wire details and the Zelle handle, live from SiteSetting.
+   *
+   * ⚠ THIS EMAIL DOES NOT LINK THERE. Its button mints a /portal/v2/<token>
+   * paperwork portal, which shows none of that and offers no way across. A
+   * client who has had a quote already holds a job-portal link; one who has
+   * not is being pointed somewhere they cannot reach from here. Wiring a
+   * job-portal magic-link into this send is the fix, and is not done yet.
    */
   const PAYMENT_OPTIONS =
-    "This just secures your order — you aren't charged by adding it. If you'd rather pay another way, we also take ACH, Zelle and wire transfer; just reply and we'll send the details."
+    "This just secures your order — you aren't charged by adding it. If you'd rather pay another way, we also take ACH, Zelle and wire transfer; the details are in your job portal."
   // The standard ask, from the same function that seeds the compose box, so
   // what a rep is handed to edit is what a client receives when they don't.
   const askText = repBody || defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw })

@@ -123,6 +123,10 @@ for (const [label, doc] of [['templated', cardTemplated], ['rep-written', cardOw
   has(`card (${label}): says the card isn't a charge`, doc.html, "you aren't charged by adding it")
   has(`card (${label}): names ACH, Zelle and wire`, doc.html, 'ACH, Zelle and wire transfer')
   has(`card (${label}): plain text carries it too`, doc.text, 'ACH, Zelle and wire transfer')
+  // Points at the portal, never at a reply (Wes 2026-08-26) — the client
+  // should be able to finish this without waiting on a rep.
+  has(`card (${label}): sends them to the portal`, doc.html, 'the details are in your job portal')
+  lacks(`card (${label}): no ask for a reply about payment`, doc.html, "reply and we&#39;ll send the details")
 }
 // The line lands ABOVE the button — reassurance before the click, not after.
 eq('card: payment options precede the CTA',
