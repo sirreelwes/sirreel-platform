@@ -75,12 +75,12 @@ function Row({ label, value }: { label: string; value: string | null }) {
  */
 export function PortalBankDetails({
   endpoint = '/api/portal/job/payment-details',
-  /** The A/P share posts to a job-session route. Off wherever there is no
-   *  job session to post with — see the note on ShareToAp. */
-  showShare = true,
+  /** Where the A/P share posts. Each portal has its own — they authenticate
+   *  differently and rate-limit on different keys. Null hides the button. */
+  shareEndpoint = '/api/portal/job/payment-details/share',
 }: {
   endpoint?: string
-  showShare?: boolean
+  shareEndpoint?: string | null
 } = {}) {
   const [details, setDetails] = useState<Details | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'none'>('loading')
@@ -139,7 +139,7 @@ export function PortalBankDetails({
 
       <ZelleDetails handle={details.zelleHandle} name={details.zelleName} tone="compact" />
 
-      {showShare && <ShareToAp />}
+      {shareEndpoint && <ShareToAp endpoint={shareEndpoint} />}
 
       <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
         <span className="font-semibold">These details never change.</span> SirReel
@@ -160,12 +160,12 @@ export function PortalBankDetails({
  * SirReel sends the link directly, so the account numbers never pass through
  * the producer's outbox and there is a record of who was sent what.
  *
- * Job portal only for now: the share route authenticates by job session and
- * rate-limits per session, and the v2 paperwork portal has neither. A client
- * there can still copy the numbers — they just can't have us mail the link
- * for them.
+ * Both portals offer it, through their own routes: the job portal's
+ * authenticates by session and rate-limits per session, the v2 paperwork
+ * portal's by token, rate-limited per the booking's person. Hence `endpoint`
+ * rather than a hardcoded path.
  */
-function ShareToAp() {
+function ShareToAp({ endpoint }: { endpoint: string }) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -175,7 +175,7 @@ function ShareToAp() {
     setBusy(true)
     setMsg(null)
     try {
-      const r = await fetch('/api/portal/job/payment-details/share', {
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

@@ -421,9 +421,19 @@ export default function ClientPortalV2() {
 
       <footer className="mt-8 border-t border-gray-200" style={{ backgroundColor: '#fafaf8' }}>
         <div className="max-w-xl mx-auto px-5 py-6 text-center">
-          <div className="text-[18px]" style={{ fontFamily: TSX_SERIF, color: '#777', letterSpacing: '0.5px' }}>
-            SirReel
-          </div>
+          {/* The S mark, not the word (Wes 2026-08-26) — same swap the
+              card-authorization email's footer got, so the page a client
+              lands on from that email closes the way the email did.
+              eslint-disable: next/image would optimise a 26px mark through a
+              server route for nothing. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/s-logo-black.png"
+            alt="SirReel"
+            width={26}
+            className="inline-block h-auto opacity-60"
+            style={{ width: 26 }}
+          />
           <p className="mt-2 text-[10px] tracking-wide leading-relaxed" style={{ color: '#888' }}>
             SirReel Studio Services
             <br />

@@ -16,10 +16,10 @@ import { PortalBankDetails } from '@/components/portal/PortalBankDetails'
  * chip on an optional card makes a finished portal look unfinished.
  *
  * The panel itself is the job portal's, reused rather than reskinned: these
- * numbers, the copy buttons and the invoice-redirect warning must read the
- * same wherever a client meets them. Only the endpoint differs (this portal
- * authenticates by token, not session), and the A/P share is off because its
- * route needs a job session this portal doesn't have.
+ * numbers, the copy buttons, the A/P share and the invoice-redirect warning
+ * must read the same wherever a client meets them. Only the endpoints differ:
+ * this portal authenticates by token rather than session, on both reading the
+ * details and sending them to A/P.
  */
 export function PaymentOptionsCard({
   token,
@@ -42,7 +42,7 @@ export function PaymentOptionsCard({
     >
       <PortalBankDetails
         endpoint={`/api/portal/v2/${token}/payment-details`}
-        showShare={false}
+        shareEndpoint={`/api/portal/v2/${token}/payment-details/share`}
       />
     </CardShell>
   )
