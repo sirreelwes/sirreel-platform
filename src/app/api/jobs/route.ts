@@ -26,6 +26,7 @@ export const dynamic = 'force-dynamic'
 // GET /api/jobs?companyId=xxx&status=ACTIVE&statuses=QUOTED,ACTIVE&agentId=xxx&mine=1&search=foo
 //                &include=quoteStatus,departments  (Phase 1 sales pipeline)
 //                &orphans=1  (only QUOTED jobs with no sent/durable order)
+//                &archived=1 (only archived jobs; default excludes them)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const companyId = searchParams.get('companyId')
@@ -35,6 +36,13 @@ export async function GET(req: NextRequest) {
   const mine = searchParams.get('mine') === '1'
   const search = searchParams.get('search')
   const orphans = searchParams.get('orphans') === '1'
+  // Archive is a hide, not a delete: the default list excludes
+  // archived jobs (which is what the archive confirmation has always
+  // promised and this endpoint never did), and `archived=1` is how you
+  // go looking for them. Every caller wants the default — the job
+  // pickers shouldn't offer an archived job to hang a new order on
+  // either.
+  const archivedOnly = searchParams.get('archived') === '1'
   const includeParam = searchParams.get('include') || ''
   const includes = new Set(includeParam.split(',').map((s) => s.trim()).filter(Boolean))
   const includeQuoteStatus = includes.has('quoteStatus')
@@ -64,6 +72,7 @@ export async function GET(req: NextRequest) {
     const jobs = await prisma.job.findMany({
       where: {
         ...scopeWhere,
+        ...(archivedOnly ? { archivedAt: { not: null } } : { archivedAt: null }),
         ...(companyId && { companyId }),
         // agentId client-opted filter only honored for TEAM. OWN
         // already constrained by scopeWhere; a divergent agentId

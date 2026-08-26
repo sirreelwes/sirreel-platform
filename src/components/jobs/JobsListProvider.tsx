@@ -22,7 +22,7 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 
-export type StatusFilter = 'all' | JobStatus | 'orphans'
+export type StatusFilter = 'all' | JobStatus | 'orphans' | 'archived'
 export type Sort = 'urgency' | 'dates' | 'value' | 'newest'
 
 export interface ListedRow {
@@ -82,7 +82,11 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [mine, setMine] = useState(false)
-  const [sort, setSort] = useState<Sort>('urgency')
+  // Newest first by default. Urgency-first sounded right and reads
+  // wrong on the real book: ~90 Planyo-era rentals nobody ever marked
+  // back pin themselves to the top as 'Not returned', burying the work
+  // of the week. Recency is the honest default until those are closed.
+  const [sort, setSort] = useState<Sort>('newest')
   const [stateFilter, setStateFilter] = useState<RowState | null>(null)
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,6 +102,7 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const params = new URLSearchParams()
     if (status === 'orphans') params.set('orphans', '1')
+    else if (status === 'archived') params.set('archived', '1')
     else if (status !== 'all') params.set('status', status)
     if (mine) params.set('mine', '1')
     if (debouncedSearch) params.set('search', debouncedSearch)

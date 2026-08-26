@@ -45,6 +45,7 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'WRAPPED', label: 'Wrapped' },
   { id: 'LOST', label: 'Lost' },
   { id: 'orphans', label: 'Orphaned quotes' },
+  { id: 'archived', label: 'Archived' },
 ]
 
 const SORT_OPTIONS: { id: Sort; label: string }[] = [
@@ -204,7 +205,11 @@ export function JobsSidebar() {
           <div className="px-3 py-6 text-center text-[11px] text-red-600">{error}</div>
         ) : rows.length === 0 ? (
           <div className="px-3 py-6 text-center text-[11px] text-zinc-400">
-            {status === 'orphans' ? 'No abandoned quotes. Good housekeeping.' : 'No jobs match.'}
+            {status === 'orphans'
+              ? 'No abandoned quotes. Good housekeeping.'
+              : status === 'archived'
+                ? 'Nothing archived.'
+                : 'No jobs match.'}
           </div>
         ) : (
           rows.map(({ job, state }) => (
@@ -258,6 +263,16 @@ function JobsSidebarItem({
           >
             {j.jobCode.replace(/^SR-JOB-/, '')}
           </span>
+          {j.archivedAt && (
+            <span
+              className={`text-[8px] font-bold uppercase tracking-wider px-1 rounded ${
+                selected ? 'bg-zinc-900 text-zinc-300' : 'bg-zinc-200 text-zinc-600'
+              }`}
+              title="Archived — hidden from the default list"
+            >
+              Arch
+            </span>
+          )}
           {j.hasLD && (
             <span className={selected ? 'text-red-800 text-[10px]' : 'text-red-500 text-[10px]'} title="Loss & Damage claim open">
               ▲

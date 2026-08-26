@@ -93,6 +93,9 @@ export interface JobRow {
   // Still honored — it decides which side of the cadence a row reads
   // from — and resettable from the row.
   boardPhaseOverride?: 'PREJOB' | 'OUT' | null
+  // Archive — a hide, not a delete. The list excludes these unless
+  // you ask for them (`archived=1`).
+  archivedAt?: string | null
   // Physical return — semantic, set via mark-returned.
   returnedAt?: string | null
   returnedBy?: { id: string; name: string } | null

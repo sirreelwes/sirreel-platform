@@ -393,6 +393,7 @@ export default function JobDetailPage() {
   const [signSendMsg, setSignSendMsg] = useState<string>("");
   // Header "More" overflow menu + its actions.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [ccBusy, setCcBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -558,12 +559,17 @@ export default function JobDetailPage() {
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3000);
   };
 
+  // Confirmation is INLINE (see the More menu), not window.confirm.
+  // The native dialog was taking two or three clicks on OK to take —
+  // and a browser dialog on a page that re-renders underneath it is
+  // not something we can make reliable from here. A second click on a
+  // second control always fires once, and it reads better besides.
   const archiveJob = async () => {
     if (!job) return;
     const undo = !!job.archivedAt;
-    if (!undo && !window.confirm('Archive this job? It stays reachable but is hidden from the active Jobs list.')) return;
     setArchiving(true);
     setMenuOpen(false);
+    setConfirmArchive(false);
     try {
       const res = await fetch(`/api/jobs/${id}/archive${undo ? '?undo=1' : ''}`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed');
@@ -1160,14 +1166,14 @@ const driverTone = (d: any): string => {
               </select>
               <div className="relative">
                 <button
-                  onClick={() => setMenuOpen((o) => !o)}
+                  onClick={() => { setConfirmArchive(false); setMenuOpen((o) => !o); }}
                   className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white hover:border-zinc-500 transition-colors"
                 >
                   More ▾
                 </button>
                 {menuOpen && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="fixed inset-0 z-10" onClick={() => { setConfirmArchive(false); setMenuOpen(false); }} />
                     <div className="absolute right-0 top-full mt-1.5 w-52 z-20 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl p-1.5">
                       <button
                         onClick={() => { setMenuOpen(false); setReturned(!job.returnedAt); }}
@@ -1183,13 +1189,43 @@ const driverTone = (d: any): string => {
                         Copy job link
                       </button>
                       <div className="h-px bg-zinc-800 my-1" />
-                      <button
-                        onClick={archiveJob}
-                        disabled={archiving}
-                        className="w-full text-left text-[14px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
-                      >
-                        {job.archivedAt ? 'Unarchive job' : 'Archive job'}
-                      </button>
+                      {job.archivedAt ? (
+                        <button
+                          onClick={archiveJob}
+                          disabled={archiving}
+                          className="w-full text-left text-[14px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                        >
+                          Unarchive job
+                        </button>
+                      ) : confirmArchive ? (
+                        <>
+                          <button
+                            onClick={archiveJob}
+                            disabled={archiving}
+                            className="w-full text-left text-[14px] font-semibold text-white bg-rose-700 hover:bg-rose-600 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                          >
+                            {archiving ? 'Archiving…' : 'Yes, archive this job'}
+                          </button>
+                          <p className="px-2.5 py-1.5 text-[11px] leading-snug text-zinc-500">
+                            It drops out of the Jobs list. Still reachable under the list&rsquo;s
+                            Archived filter, and you can unarchive it from here.
+                          </p>
+                          <button
+                            onClick={() => setConfirmArchive(false)}
+                            className="w-full text-left text-[13px] text-zinc-400 hover:bg-zinc-800 rounded-lg px-2.5 py-1.5"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmArchive(true)}
+                          disabled={archiving}
+                          className="w-full text-left text-[14px] text-rose-400 hover:bg-zinc-800 rounded-lg px-2.5 py-2 disabled:opacity-50"
+                        >
+                          Archive job
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
