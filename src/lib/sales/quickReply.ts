@@ -21,6 +21,7 @@
  * availability pills and the soft-hold backup logic.
  */
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
+import { schedulingCategoryId } from '@/lib/catalog/resolve'
 import { STANDARD_OPENING_LINE } from '@/lib/email/standardOpening'
 import { getCategoryUtilization } from '@/lib/fleet/utilization'
 import { buildTsxWelcomeEmail } from '@/lib/email/templates/tsxWelcomeTemplate'
@@ -66,7 +67,12 @@ export async function computeQuickReplyAvailability(
     let availableToHold = 0
     let serviceableCount = 0
     if (start && end) {
-      const a = await getCategoryAvailability(c.id, start, end, 1)
+      // The modal's lines come off parse-quote's `matchedProduct.id`, which is
+      // a MERGED catalog (InventoryItem) id; the availability engine is keyed
+      // on the legacy AssetCategory id. Unnormalized, every AI-parsed vehicle
+      // line matched zero Assets and read "0 of 0 open · Spoken for" with the
+      // whole fleet sitting free.
+      const a = await getCategoryAvailability(await schedulingCategoryId(c.id), start, end, 1)
       availableToHold = Math.max(0, a.availableToHold)
       serviceableCount = a.serviceableCount
     }

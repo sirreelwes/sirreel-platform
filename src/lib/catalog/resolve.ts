@@ -69,3 +69,32 @@ export async function catalogIdsForAssetCategories(
   })
   return new Map(rows.map((r) => [r.legacyAssetCategoryId as string, r.id]))
 }
+
+/**
+ * INVERSE of `catalogIdForAssetCategory` — normalize any catalog reference to
+ * the id the SCHEDULER speaks.
+ *
+ * Availability, holds and `BookingItem.categoryId` are all keyed on the legacy
+ * AssetCategory id (that FK is NOT NULL and still points at the frozen table).
+ * But every post-merge catalog surface — `parse-quote`'s `matchedProduct.id`,
+ * the catalog matcher, anything reading InventoryItem — hands out the MERGED
+ * row's id. Handing one of those straight to the scheduler silently matches
+ * zero Assets: `getCategoryAvailability` reports `0 of 0` and the hold POST
+ * 404s "category not found".
+ *
+ * Idempotent by construction: an id that isn't an InventoryItem is passed
+ * through untouched, so callers already in the AssetCategory id space (the
+ * gantt picker, `/api/scheduling/categories`) are unaffected. An InventoryItem
+ * with no legacy counterpart (QUANTITY-tracked — never unit-scheduled) also
+ * passes through, and fails downstream exactly as it did before.
+ */
+export async function schedulingCategoryId(
+  catalogId: string,
+  db: Db = prisma,
+): Promise<string> {
+  const row = await db.inventoryItem.findUnique({
+    where: { id: catalogId },
+    select: { legacyAssetCategoryId: true },
+  })
+  return row?.legacyAssetCategoryId ?? catalogId
+}

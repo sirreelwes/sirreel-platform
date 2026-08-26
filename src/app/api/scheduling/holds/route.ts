@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCategoryAvailability } from '@/lib/scheduling/availability'
+import { schedulingCategoryId } from '@/lib/catalog/resolve'
 import { getServerSession } from 'next-auth'
 import { can } from '@/lib/permissions'
 import { bookingInfoGaps } from '@/lib/scheduling/infoGaps'
@@ -137,24 +138,30 @@ export async function POST(req: NextRequest) {
   const agentId = body.agentId || actor.id
   if (!agentId) return NextResponse.json({ error: 'agentId required (none in body or session)' }, { status: 400 })
 
+  // categoryId stays an AssetCategory id: it is the scheduling key and the
+  // target of BookingItem.categoryId's NOT NULL FK. Callers coming from a
+  // post-merge catalog surface (Quick Reply, whose lines carry parse-quote's
+  // `matchedProduct.id`) hand us the MERGED InventoryItem id instead, which
+  // matched nothing here and 404'd "category not found". Normalize once, then
+  // use `categoryId` — not `body.categoryId` — for the rest of the route.
+  const categoryId = await schedulingCategoryId(body.categoryId)
+
   // Look up the category for the dailyRate default; also confirms it
   // exists. Read the MERGED catalog row — the AssetCategory copy is
   // frozen, so a hold created from it would snapshot a stale rate.
-  // categoryId stays an AssetCategory id: it is the scheduling key and
-  // the target of BookingItem.categoryId's NOT NULL FK.
   const merged = await prisma.inventoryItem.findUnique({
-    where: { legacyAssetCategoryId: body.categoryId },
+    where: { legacyAssetCategoryId: categoryId },
     select: { description: true, code: true, dailyRate: true, department: true },
   })
   const category = merged
     ? {
-        id: body.categoryId,
+        id: categoryId,
         name: merged.description || merged.code,
         dailyRate: merged.dailyRate,
         department: merged.department,
       }
     : await prisma.assetCategory.findUnique({
-        where: { id: body.categoryId },
+        where: { id: categoryId },
         select: { id: true, name: true, dailyRate: true, department: true },
       })
   if (!category) return NextResponse.json({ error: 'category not found' }, { status: 404 })
@@ -168,7 +175,7 @@ export async function POST(req: NextRequest) {
   if (wantsBackup && !explicitRank) {
     const maxRankAgg = await prisma.bookingItem.aggregate({
       where: {
-        categoryId: body.categoryId,
+        categoryId: categoryId,
         status: { in: ['REQUESTED', 'ASSIGNED'] },
         booking: { startDate: { lte: end }, endDate: { gte: start } },
       },
@@ -181,7 +188,7 @@ export async function POST(req: NextRequest) {
   // Re-check availability server-side — this is the capacity gate
   // for PRIMARY holds. Backups (rank ≥ 2) skip it entirely: they're
   // explicitly allowed to overlap at-capacity categories and queue.
-  const availability = await getCategoryAvailability(body.categoryId, start, end, bufferDays)
+  const availability = await getCategoryAvailability(categoryId, start, end, bufferDays)
 
   if (isPrimary && qty > availability.availableToHold) {
     return NextResponse.json(
@@ -280,7 +287,7 @@ export async function POST(req: NextRequest) {
         const bookingItem = await tx.bookingItem.create({
           data: {
             bookingId: booking.id,
-            categoryId: body.categoryId!,
+            categoryId,
             quantity: qty,
             dailyRate: category.dailyRate,
             status: 'REQUESTED',
