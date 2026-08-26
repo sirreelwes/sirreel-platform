@@ -4,6 +4,19 @@ import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { getServerSession } from "next-auth";
 import { resolveDataScope, orderScopeWhere } from "@/lib/auth/scope";
 
+/**
+ * Sort options for the /orders list. `startDate` uses Prisma's explicit
+ * nulls-last ordering — an order with no pickup date is not "the earliest
+ * pickup", and the default null-first ordering put every undated row at the
+ * top of the exact view a rep opens to see what's shipping next.
+ */
+const SORTS: Record<string, Record<string, unknown>[]> = {
+  recent:  [{ createdAt: 'desc' }],
+  pickup:  [{ startDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+  value:   [{ total: 'desc' }],
+  company: [{ company: { name: 'asc' } }, { createdAt: 'desc' }],
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -12,6 +25,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search");
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "25");
+  const sort = searchParams.get("sort") || "recent";
 
   // Phase 6.5 — data scope enforcement. OWN users see only their own
   // orders regardless of any client-supplied agentId filter. ADMIN /
@@ -19,16 +33,35 @@ export async function GET(req: NextRequest) {
   const scope = await resolveDataScope();
   const where: Record<string, unknown> = { ...orderScopeWhere(scope) };
 
+  // Soft-archive filter, mirroring /api/jobs. Archived orders are hidden
+  // everywhere by default — the whole point of the action is that the row
+  // stops appearing — and `archived=1` is the only way to see them, which
+  // is what the "Archived" option in the list filter asks for.
+  const archivedOnly = searchParams.get("archived") === "1";
+  where.archivedAt = archivedOnly ? { not: null } : null;
+
   // Draft-hygiene filter (Phase A of order consolidation): the list
   // hides DRAFT rows by default so abandoned parses from the wizard
   // don't clutter the operational view. Explicit `status=DRAFT`
   // still works (the explicit filter wins), as does
   // `?includeDrafts=1` for the "Show drafts" toggle.
   const includeDrafts = searchParams.get("includeDrafts") === "1";
-  if (status) {
+
+  // LOST is not an OrderStatus — the cadence runner and the mark-lost
+  // action both express it as quoteStatus + lostAt while `status` stays
+  // put (a lost quote is still a quote that was sent). So the filter has
+  // to translate: `status=LOST` is a quoteStatus query, and every other
+  // value is a lifecycle query that must EXCLUDE the lost rows, or a
+  // dead quote keeps answering to "Quote sent" here the way it always has.
+  const lostWhere = { quoteStatus: 'LOST' as const, status: { not: 'CANCELLED' as const } };
+  if (status === 'LOST') {
+    Object.assign(where, lostWhere);
+  } else if (status) {
     where.status = status;
-  } else if (!includeDrafts) {
-    where.status = { not: "DRAFT" };
+    where.NOT = lostWhere;
+  } else {
+    where.NOT = lostWhere;
+    if (!includeDrafts) where.status = { not: "DRAFT" };
   }
   // Client-opted agentId filter — only honored when it matches the
   // user's scope. For OWN users we already constrained to their id;
@@ -41,26 +74,42 @@ export async function GET(req: NextRequest) {
       { orderNumber: { contains: search, mode: "insensitive" } },
       { description: { contains: search, mode: "insensitive" } },
       { company: { name: { contains: search, mode: "insensitive" } } },
+      // Reps search by production, and the production name lives on the
+      // Job — half the rows on this list have a null description and read
+      // as "--", so company-or-order-number was the only way to find them.
+      { job: { name: { contains: search, mode: "insensitive" } } },
+      { job: { jobCode: { contains: search, mode: "insensitive" } } },
     ];
   }
 
-  const [orders, total] = await Promise.all([
+  const [orders, total, valueAgg] = await Promise.all([
     prisma.order.findMany({
       where,
       include: {
         company: { select: { id: true, name: true } },
         agent: { select: { id: true, name: true } },
+        job: { select: { id: true, jobCode: true, name: true } },
         booking: { select: { id: true, bookingNumber: true, jobName: true } },
         _count: { select: { lineItems: true, invoices: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: SORTS[sort] || SORTS.recent,
       skip: (page - 1) * limit,
       take: limit,
     }),
     prisma.order.count({ where }),
+    // Value of the WHOLE filtered set, not just the visible page — "what is
+    // on this list worth" is the question the header was silently failing to
+    // answer, and page-1-only would have answered it wrong.
+    prisma.order.aggregate({ where, _sum: { total: true } }),
   ]);
 
-  return NextResponse.json({ orders, total, page, limit });
+  return NextResponse.json({
+    orders,
+    total,
+    page,
+    limit,
+    valueTotal: valueAgg._sum.total ?? 0,
+  });
 }
 
 export async function POST(req: NextRequest) {

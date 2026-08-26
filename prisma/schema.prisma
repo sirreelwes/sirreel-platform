@@ -2956,6 +2956,16 @@ model Order {
   // Useful for re-engagement reporting (how close to pickup did we lose them).
   pickupDateAtLoss DateTime? @map("pickup_date_at_loss")
 
+  // Soft-archive marker (staff "Archive order" action on /orders).
+  // Visibility-only, mirroring Job.archivedAt: the /orders list filters
+  // archivedAt IS NULL by default, `archived=1` goes looking for them,
+  // and the detail page stays reachable either way. Additive; NULL =
+  // active. Cleared on unarchive. This is the answer for a dead row that
+  // ISN'T a lost quote or a cancellation — a duplicate, a test order, a
+  // parse nobody finished — where CANCELLED would state something untrue.
+  archivedAt   DateTime? @map("archived_at")
+  archivedById String?   @map("archived_by_id")
+
   // Re-engagement (post-LOST) touchpoint tracking. Set by the
   // LOST_REENGAGEMENT_2W cadence event when it fires; flipped to true when
   // the client responds (any inbound reply detected by Gmail integration).
@@ -4879,10 +4889,22 @@ enum CadenceState {
 }
 
 enum LostReason {
+  // System-derived (written by the cadence runner / reply classifier).
   NO_RESPONSE
   ACKNOWLEDGED_NO_BOOK
   EXPLICIT_REJECTION
   MANUAL_CLOSE
+  // Human-chosen, from the "Mark lost" picker on /orders and the order
+  // detail page. Added because the only reasons the enum carried were the
+  // ones the ROBOT could infer — a rep closing a quote by hand had nothing
+  // truthful to pick, and /api/jobs/[id]/mark-lost was writing free text
+  // ("Other vendor", "Budget") straight into this enum column, which
+  // Postgres rejects at runtime.
+  LOST_TO_COMPETITOR
+  BUDGET
+  TIMING
+  SCOPE_CHANGED
+  OTHER
 }
 
 enum ReplyClassification {

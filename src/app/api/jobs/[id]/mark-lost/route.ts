@@ -2,17 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import type { LostReason } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
 type Params = { params: Promise<{ id: string }> };
 
-const ALLOWED_REASONS = new Set([
-  'Other vendor',
-  'Budget',
-  'No response',
-  'Timing',
-  'Other',
+// LostReason ENUM values, not display strings. This set previously held
+// free text ('Other vendor', 'Budget', ...) and wrote it straight into
+// sr_orders.lost_reason, which Postgres types as the LostReason enum —
+// every call would have thrown at the update. TypeScript never caught it
+// because `body` is `any`, so `reason` inferred as `any`. The route had no
+// caller in the UI, which is the only reason nobody hit it.
+const ALLOWED_REASONS = new Set<LostReason>([
+  'LOST_TO_COMPETITOR',
+  'BUDGET',
+  'TIMING',
+  'SCOPE_CHANGED',
+  'OTHER',
 ]);
 
 // POST — reclassify a job as LOST. Sets Job.status = LOST and marks every
@@ -24,9 +31,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!userId) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-  if (!ALLOWED_REASONS.has(reason)) {
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const reason = body.reason as LostReason | undefined;
+  if (!reason || !ALLOWED_REASONS.has(reason)) {
     return NextResponse.json(
       { error: 'reason must be one of: ' + Array.from(ALLOWED_REASONS).join(', ') },
       { status: 400 },
