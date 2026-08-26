@@ -85,8 +85,12 @@ export interface JobRow {
   blindPickup?: boolean
   blindReturn?: boolean
   _count?: { orders: number }
-  // bookingWindow = min/max across the job's bookings; hasDelivery =
-  // any booking with a delivery address.
+  // Every booking on the job is CANCELLED. Sent as a fact because it
+  // can't be derived here: the Planyo import copies booking dates onto
+  // the Job row, and Job.startDate/endDate outrank the envelope.
+  allBookingsCancelled?: boolean
+  // bookingWindow = min/max across the job's LIVE bookings; hasDelivery
+  // = any live booking with a delivery address.
   bookingWindow?: { start: string | null; end: string | null } | null
   hasDelivery?: boolean
   // Legacy PREJOB/OUT presentation override from the retired board.
@@ -115,6 +119,7 @@ export type RowState =
   | 'quoted'
   | 'hold'
   | 'back'
+  | 'cancelled'
   | 'lost'
 
 export interface StateMeta {
@@ -150,6 +155,7 @@ export const STATE: Record<RowState, StateMeta> = {
   quoted:            { label: 'Quoted',              short: 'Quoted',     rail: 'bg-violet-500',  fg: 'text-violet-800',   tint: 'bg-violet-100'   },
   hold:              { label: 'Hold',                short: 'Hold',       rail: 'bg-stone-500',   fg: 'text-stone-700',    tint: 'bg-stone-200'    },
   back:              { label: 'Returned',            short: 'Returned',   rail: 'bg-purple-500',  fg: 'text-purple-800',   tint: 'bg-purple-100'   },
+  cancelled:         { label: 'Cancelled',           short: 'Cancelled',  rail: 'bg-slate-500',   fg: 'text-slate-600',    tint: 'bg-slate-200'    },
   lost:              { label: 'Lost',                short: 'Lost',       rail: 'bg-zinc-400',    fg: 'text-zinc-500',     tint: 'bg-zinc-100'     },
 }
 
@@ -167,6 +173,7 @@ export const URGENCY: RowState[] = [
   'quoted',
   'hold',
   'back',
+  'cancelled',
   'lost',
 ]
 
@@ -202,6 +209,13 @@ function isOut(j: JobRow, today: string): boolean {
 /** The one display state per row — this is what drives the color. */
 export function rowState(j: JobRow, today: string, tomorrow: string): RowState {
   if (j.returnedAt) return 'back'
+  // Every booking cancelled and no orders of its own: the reservation
+  // went away. Nothing shipped, so nothing is out and nothing is late
+  // — these used to read "Not returned" forever, because the dates on
+  // the Job row said the window had passed and only a human can write
+  // returnedAt. A job with real orders is NOT short-circuited here;
+  // the order grain is the record in that case.
+  if (j.allBookingsCancelled && (j._count?.orders ?? 0) === 0) return 'cancelled'
   const out = j.boardPhaseOverride ? j.boardPhaseOverride === 'OUT' : isOut(j, today)
 
   if (out) {

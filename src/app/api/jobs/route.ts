@@ -390,6 +390,12 @@ export async function GET(req: NextRequest) {
       // Same reasoning: a cancelled booking's delivery address is not a
       // delivery anybody has to make.
       const hasDelivery = liveBookings.some((b) => !!b.deliveryAddress?.trim())
+      // Dropping cancelled bookings from the envelope is not enough on
+      // its own: Planyo imports copy the booking's dates onto the Job
+      // row too, and those OUTRANK the envelope. So the fact has to
+      // travel as a fact — the list can't infer it from dates.
+      const allBookingsCancelled =
+        j.bookings.length > 0 && liveBookings.length === 0
 
       const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, ...rest } = j
       void _ignoreCoi
@@ -398,6 +404,7 @@ export async function GET(req: NextRequest) {
         ...rest,
         bookingWindow,
         hasDelivery,
+        allBookingsCancelled,
         boardPhaseOverride: overrideByJob.get(j.id) ?? null,
         estimatedValue: j.estimatedValue == null ? null : Number(j.estimatedValue),
         orderTotal,
