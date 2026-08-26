@@ -1,0 +1,161 @@
+'use client'
+
+/**
+ * One fetch of /api/jobs for the whole /jobs surface.
+ *
+ * The list lives in the jobs LAYOUT (so it survives navigating from
+ * one job to the next) while the overview panel lives in the page.
+ * Both need the same rows, the same derived states, and the same
+ * filter — so the fetch and the filter state sit in a context the
+ * layout provides, and neither tree re-fetches when you click a job.
+ */
+
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  URGENCY,
+  keyDate,
+  listDays,
+  rowState,
+  rowValue,
+  type JobRow,
+  type JobStatus,
+  type RowState,
+} from '@/lib/jobs/listRow'
+
+export type StatusFilter = 'all' | JobStatus | 'orphans'
+export type Sort = 'urgency' | 'dates' | 'value' | 'newest'
+
+export interface ListedRow {
+  job: JobRow
+  state: RowState
+  date: string | null
+}
+
+interface JobsListValue {
+  rows: ListedRow[]          // filtered + sorted, what the list renders
+  allRows: ListedRow[]       // before the color-key filter
+  counts: Map<RowState, number>
+  loading: boolean
+  error: string | null
+  today: string
+  tomorrow: string
+  // controls
+  search: string; setSearch: (v: string) => void
+  status: StatusFilter; setStatus: (v: StatusFilter) => void
+  mine: boolean; setMine: (v: boolean) => void
+  sort: Sort; setSort: (v: Sort) => void
+  stateFilter: RowState | null; setStateFilter: (v: RowState | null) => void
+  /** Local patch after a row action, so the list doesn't re-fetch. */
+  patchJob: (id: string, patch: Partial<JobRow>) => void
+}
+
+const Ctx = createContext<JobsListValue | null>(null)
+
+export function useJobsList(): JobsListValue {
+  const v = useContext(Ctx)
+  if (!v) throw new Error('useJobsList must be used inside <JobsListProvider>')
+  return v
+}
+
+export function JobsListProvider({ children }: { children: React.ReactNode }) {
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [status, setStatus] = useState<StatusFilter>('all')
+  const [mine, setMine] = useState(false)
+  const [sort, setSort] = useState<Sort>('urgency')
+  const [stateFilter, setStateFilter] = useState<RowState | null>(null)
+  const [jobs, setJobs] = useState<JobRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (status === 'orphans') params.set('orphans', '1')
+    else if (status !== 'all') params.set('status', status)
+    if (mine) params.set('mine', '1')
+    if (debouncedSearch) params.set('search', debouncedSearch)
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch(`/api/jobs?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        if (d.error) throw new Error(d.error)
+        setJobs(d.jobs || [])
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [status, mine, debouncedSearch])
+
+  const { today, tomorrow } = useMemo(() => listDays(), [])
+
+  const allRows = useMemo(() => {
+    const withState: ListedRow[] = jobs.map((job) => {
+      const state = rowState(job, today, tomorrow)
+      return { job, state, date: keyDate(job, state) }
+    })
+    const byDate = (a: string | null, b: string | null) => {
+      if (a === b) return 0
+      if (!a) return 1
+      if (!b) return -1
+      return a < b ? -1 : 1
+    }
+    const sorted = [...withState]
+    if (sort === 'urgency') {
+      sorted.sort((a, b) => URGENCY.indexOf(a.state) - URGENCY.indexOf(b.state) || byDate(a.date, b.date))
+    } else if (sort === 'dates') {
+      sorted.sort((a, b) => byDate(a.date, b.date))
+    } else if (sort === 'value') {
+      sorted.sort((a, b) => (rowValue(b.job) ?? 0) - (rowValue(a.job) ?? 0))
+    } else {
+      sorted.sort((a, b) => (a.job.createdAt < b.job.createdAt ? 1 : -1))
+    }
+    return sorted
+  }, [jobs, today, tomorrow, sort])
+
+  // Counts come from the unfiltered set so the key's numbers don't
+  // collapse to "1" the moment you click one of them.
+  const counts = useMemo(() => {
+    const m = new Map<RowState, number>()
+    for (const r of allRows) m.set(r.state, (m.get(r.state) ?? 0) + 1)
+    return m
+  }, [allRows])
+
+  const rows = useMemo(
+    () => (stateFilter ? allRows.filter((r) => r.state === stateFilter) : allRows),
+    [allRows, stateFilter],
+  )
+
+  const value: JobsListValue = {
+    rows,
+    allRows,
+    counts,
+    loading,
+    error,
+    today,
+    tomorrow,
+    search, setSearch,
+    status, setStatus,
+    mine, setMine,
+    sort, setSort,
+    stateFilter, setStateFilter,
+    patchJob: (id, patch) =>
+      setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j))),
+  }
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}
