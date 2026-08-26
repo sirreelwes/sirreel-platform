@@ -10,7 +10,7 @@
  * layout provides, and neither tree re-fetches when you click a job.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
   URGENCY,
   keyDate,
@@ -47,6 +47,26 @@ interface JobsListValue {
   stateFilter: RowState | null; setStateFilter: (v: RowState | null) => void
   /** Local patch after a row action, so the list doesn't re-fetch. */
   patchJob: (id: string, patch: Partial<JobRow>) => void
+  /** Re-fetch the list — same thing `notifyJobsChanged()` triggers. */
+  refresh: () => void
+}
+
+/**
+ * Fired by anything that changes a job — the detail panel's mutations,
+ * a new job created from the top bar. The list re-fetches when it
+ * hears this, so archiving a job (or flipping its status, or moving
+ * its dates) updates the index without a page refresh.
+ *
+ * It's a window event rather than a context call so that components
+ * nested deep in the detail panel — order modals, the bookings
+ * section — can signal without threading a callback down to them, and
+ * so that callers OUTSIDE the provider (the global "+ New Job") work
+ * too. Nothing listens when the list isn't mounted; that's fine.
+ */
+export const JOBS_CHANGED_EVENT = 'sirreel:jobs-changed'
+
+export function notifyJobsChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(JOBS_CHANGED_EVENT))
 }
 
 const Ctx = createContext<JobsListValue | null>(null)
@@ -67,6 +87,8 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const refresh = useCallback(() => setReloadKey((k) => k + 1), [])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 250)
@@ -99,7 +121,12 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [status, mine, debouncedSearch])
+  }, [status, mine, debouncedSearch, reloadKey])
+
+  useEffect(() => {
+    window.addEventListener(JOBS_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(JOBS_CHANGED_EVENT, refresh)
+  }, [refresh])
 
   const { today, tomorrow } = useMemo(() => listDays(), [])
 
@@ -155,6 +182,7 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
     stateFilter, setStateFilter,
     patchJob: (id, patch) =>
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j))),
+    refresh,
   }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

@@ -4,11 +4,13 @@
  * The /jobs list — a dark, always-present index on the left, with the
  * selected job's detail in the panel to its right.
  *
- * It deliberately echoes the app's own nav: same `#1a1a1a` chrome,
- * same brand-gold selected row (black on gold), so "which job am I
- * in" reads exactly like "which page am I on". Cycle position is
- * carried by the saturated color rail on each item — no columns, no
- * pre/on/post grouping.
+ * It is a LIGHT panel on purpose. The first cut wore the nav's own
+ * dark chrome and brand gold, which put two near-identical dark
+ * columns side by side and made the eye work to tell "which page am
+ * I on" from "which job am I in". White plate, amber selection: the
+ * nav stays the nav, this is the index. Cycle position is carried by
+ * the saturated color rail on each item — no columns, no pre/on/post
+ * grouping.
  *
  * Selection is the URL (`/jobs/[id]`), not local state: the layout
  * that owns this component persists across those navigations, so the
@@ -88,7 +90,7 @@ export function JobsSidebar() {
       <button
         onClick={() => setCollapsed(false)}
         title="Show the job list"
-        className="hidden md:flex w-8 flex-shrink-0 bg-[#0B0B0B] border-l border-r border-white/[0.06] flex-col items-center gap-2 pt-3 text-slate-400 hover:text-[#c9a24b]"
+        className="hidden md:flex w-8 flex-shrink-0 bg-white border-r border-zinc-200 flex-col items-center gap-2 pt-3 text-zinc-400 hover:text-zinc-900"
       >
         <span className="text-[13px] leading-none">›</span>
         <span className="text-[10px] font-bold uppercase tracking-[0.18em] [writing-mode:vertical-rl]">
@@ -102,20 +104,20 @@ export function JobsSidebar() {
     <aside
       className={`${
         selected ? 'hidden md:flex' : 'flex'
-      } w-full md:w-[17rem] xl:w-[19rem] 2xl:w-[21rem] flex-shrink-0 bg-[#0B0B0B] text-slate-200 flex-col border-l border-white/[0.06] border-r border-white/[0.06]`}
+      } w-full md:w-[17rem] xl:w-[19rem] 2xl:w-[21rem] flex-shrink-0 bg-white text-zinc-700 flex-col border-r border-zinc-200`}
     >
-      <div className="px-3 pt-3 pb-2 space-y-2 border-b border-white/10">
+      <div className="px-3 pt-3 pb-2 space-y-2 border-b border-zinc-200 bg-zinc-50">
         <div className="flex items-baseline gap-2">
-          <h1 className="text-[13px] font-bold uppercase tracking-[0.18em] text-[#c9a24b]">Jobs</h1>
-          <span className="text-[11px] text-slate-500">
+          <h1 className="text-[13px] font-bold uppercase tracking-[0.18em] text-zinc-900">Jobs</h1>
+          <span className="text-[11px] text-zinc-400">
             {loading ? 'loading…' : error ? 'error' : `${rows.length}${stateFilter ? ` of ${[...counts.values()].reduce((a, b) => a + b, 0)}` : ''}`}
           </span>
-          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer">
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500 cursor-pointer">
             <input
               type="checkbox"
               checked={mine}
               onChange={(e) => setMine(e.target.checked)}
-              className="accent-[#c9a24b]"
+              className="accent-amber-500"
             />
             Mine
           </label>
@@ -123,7 +125,7 @@ export function JobsSidebar() {
             <button
               onClick={() => setCollapsed(true)}
               title="Collapse the list — give the job detail the width"
-              className="hidden md:block text-[13px] leading-none text-slate-500 hover:text-[#c9a24b] px-1"
+              className="hidden md:block text-[13px] leading-none text-zinc-400 hover:text-zinc-900 px-1"
             >
               ‹
             </button>
@@ -134,17 +136,17 @@ export function JobsSidebar() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search job, code, company, contact…"
-          className="w-full px-2.5 py-1.5 bg-white/[0.06] border border-white/10 rounded-lg text-[12px] text-white placeholder:text-slate-500 focus:outline-none focus:border-[#c9a24b]/60"
+          className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500"
         />
 
         <div className="flex items-center gap-1.5">
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
-            className="flex-1 min-w-0 px-2 py-1 bg-white/[0.06] border border-white/10 rounded-md text-[11px] text-slate-200 focus:outline-none focus:border-[#c9a24b]/60"
+            className="flex-1 min-w-0 px-2 py-1 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
           >
             {STATUS_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id} className="bg-[#1a1a1a]">
+              <option key={o.id} value={o.id} className="bg-white">
                 {o.label}
               </option>
             ))}
@@ -153,10 +155,10 @@ export function JobsSidebar() {
             value={sort}
             onChange={(e) => setSort(e.target.value as Sort)}
             title="Sort order"
-            className="px-2 py-1 bg-white/[0.06] border border-white/10 rounded-md text-[11px] text-slate-200 focus:outline-none focus:border-[#c9a24b]/60"
+            className="px-2 py-1 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
           >
             {SORT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id} className="bg-[#1a1a1a]">
+              <option key={o.id} value={o.id} className="bg-white">
                 {o.label}
               </option>
             ))}
@@ -174,19 +176,19 @@ export function JobsSidebar() {
                   onClick={() => setStateFilter(on ? null : s)}
                   title={`${STATE[s].label} — click to show only these`}
                   className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
-                    on ? 'bg-[#c9a24b] text-[#1a1a1a] font-bold' : 'text-slate-400 hover:bg-white/[0.07]'
+                    on ? 'bg-zinc-900 text-white font-bold' : 'text-zinc-500 hover:bg-zinc-200'
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-sm ${STATE[s].rail}`} />
                   {STATE[s].short}
-                  <span className={on ? 'font-bold' : 'text-slate-500'}>{counts.get(s)}</span>
+                  <span className={on ? 'font-bold' : 'text-zinc-400'}>{counts.get(s)}</span>
                 </button>
               )
             })}
             {stateFilter && (
               <button
                 onClick={() => setStateFilter(null)}
-                className="text-[10px] text-slate-500 underline underline-offset-2 hover:text-slate-300"
+                className="text-[10px] text-zinc-400 underline underline-offset-2 hover:text-zinc-900"
               >
                 clear
               </button>
@@ -197,11 +199,11 @@ export function JobsSidebar() {
 
       <div ref={listRef} className="flex-1 overflow-y-auto py-1">
         {loading && rows.length === 0 ? (
-          <div className="px-3 py-6 text-center text-[11px] text-slate-500">Loading…</div>
+          <div className="px-3 py-6 text-center text-[11px] text-zinc-400">Loading…</div>
         ) : error ? (
-          <div className="px-3 py-6 text-center text-[11px] text-red-300">{error}</div>
+          <div className="px-3 py-6 text-center text-[11px] text-red-600">{error}</div>
         ) : rows.length === 0 ? (
-          <div className="px-3 py-6 text-center text-[11px] text-slate-500">
+          <div className="px-3 py-6 text-center text-[11px] text-zinc-400">
             {status === 'orphans' ? 'No abandoned quotes. Good housekeeping.' : 'No jobs match.'}
           </div>
         ) : (
@@ -228,15 +230,13 @@ function JobsSidebarItem({
   const value = rowValue(j)
 
   // The pill keeps its hue in both selection states; only the plate
-  // behind it changes, so a selected row stays readable on gold
-  // without losing what state it's in. `overdue` gets the loud
-  // treatment either way.
+  // behind it changes, so a selected row stays readable on amber
+  // without losing what state it's in. `overdue` is solid red either
+  // way — it's the one state that should shout.
   const pillCls =
     state === 'overdue'
       ? 'bg-red-600 text-white'
-      : selected
-        ? `bg-[#1a1a1a] ${meta.fg}`
-        : `bg-white/[0.07] ${meta.fg}`
+      : `${selected ? 'bg-white' : meta.tint} ${meta.fg}`
 
   return (
     <Link
@@ -245,28 +245,28 @@ function JobsSidebarItem({
       className="group flex items-stretch gap-0 px-2 py-[3px]"
     >
       {/* Rail sits OUTSIDE the selection fill so the state color
-          survives the gold highlight. */}
+          survives the amber highlight. */}
       <span className={`w-1 rounded-l flex-shrink-0 ${meta.rail}`} aria-hidden="true" />
       <span
         className={`flex-1 min-w-0 rounded-r px-2 py-1.5 transition-colors ${
-          selected ? 'bg-[#c9a24b] text-[#1a1a1a]' : 'bg-white/[0.05] group-hover:bg-white/[0.11]'
+          selected ? 'bg-amber-300 text-zinc-900' : 'bg-zinc-50 group-hover:bg-zinc-100'
         }`}
       >
         <span className="flex items-center gap-1.5">
           <span
-            className={`text-[10.5px] font-mono font-bold ${selected ? 'text-[#1a1a1a]/70' : 'text-slate-500'}`}
+            className={`text-[10.5px] font-mono font-bold ${selected ? 'text-zinc-900/60' : 'text-zinc-400'}`}
           >
             {j.jobCode.replace(/^SR-JOB-/, '')}
           </span>
           {j.hasLD && (
-            <span className={selected ? 'text-red-800 text-[10px]' : 'text-red-400 text-[10px]'} title="Loss & Damage claim open">
+            <span className={selected ? 'text-red-800 text-[10px]' : 'text-red-500 text-[10px]'} title="Loss & Damage claim open">
               ▲
             </span>
           )}
           {j.hasDelivery && state !== 'back' && (
             <span
               className={`text-[8px] font-bold uppercase tracking-wider px-1 rounded ${
-                selected ? 'bg-[#1a1a1a] text-amber-300' : 'bg-amber-500/90 text-[#1a1a1a]'
+                selected ? 'bg-zinc-900 text-amber-300' : 'bg-amber-500 text-white'
               }`}
               title="Delivery — a booking on this job has a delivery address"
             >
@@ -280,17 +280,13 @@ function JobsSidebarItem({
           </span>
         </span>
 
-        <span
-          className={`block text-[12.5px] font-semibold leading-tight truncate ${
-            selected ? 'text-[#1a1a1a]' : 'text-slate-100'
-          }`}
-        >
+        <span className="block text-[12.5px] font-semibold leading-tight truncate text-zinc-900">
           {j.name}
         </span>
 
         <span
           className={`flex items-baseline gap-1.5 text-[10.5px] leading-tight ${
-            selected ? 'text-[#1a1a1a]/70' : 'text-slate-500'
+            selected ? 'text-zinc-900/70' : 'text-zinc-500'
           }`}
         >
           <span className="truncate">{j.company?.name || 'no company'}</span>
@@ -302,7 +298,7 @@ function JobsSidebarItem({
         {value != null && value > 0 && (
           <span
             className={`block text-[10px] font-mono tabular-nums ${
-              selected ? 'text-[#1a1a1a]/60' : 'text-slate-500'
+              selected ? 'text-zinc-900/60' : 'text-zinc-400'
             }`}
           >
             {fmtMoney(value)}

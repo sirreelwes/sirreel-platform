@@ -16,6 +16,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
+import { notifyJobsChanged } from '@/components/jobs/JobsListProvider'
 
 interface CompanyHit {
   id: string
@@ -78,6 +79,10 @@ export function NewJobLauncher({ buttonClassName }: { buttonClassName?: string }
     // the thing you just made. Created or matched, the destination is
     // the same — the Job page is home base.
     reset()
+    // A brand-new job isn't in the /jobs index yet — tell it to re-read
+    // before we land on the job, or the row you just created is missing
+    // from the list beside it.
+    notifyJobsChanged()
     router.push(`/jobs/${job.id}`)
   }
 

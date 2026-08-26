@@ -117,32 +117,37 @@ export type RowState =
 export interface StateMeta {
   label: string
   short: string
-  /** Saturated left rail — tuned for the dark list, and legible on light. */
+  /** Saturated left rail — reads on any surface; this is the color code. */
   rail: string
-  /** Text hue for the pill; the background is composed per surface. */
+  /** Pill text hue. */
   fg: string
+  /** Pill background tint, for a pill sitting on a plain surface. A
+   *  pill on the selected (amber) row drops the tint for white instead,
+   *  keeping the hue in the text where it stays legible. */
+  tint: string
 }
 
 // Temperature scheme, same idea as the `cadence.*` tokens: blue =
 // future/outbound → green = out with the client → amber/orange =
 // coming back → purple = back. The states nobody works today (Hold /
 // Lost) go grey so a parked job never competes with a truck that's
-// due. `overdue` is deliberately the loudest thing in the list.
+// due. `overdue` is deliberately the loudest thing in the list — it
+// is the one state that carries a solid fill rather than a tint.
 //
 // Static class strings so Tailwind's content scanner sees them.
 export const STATE: Record<RowState, StateMeta> = {
-  overdue:           { label: 'Not returned',        short: 'Not back',   rail: 'bg-red-500',      fg: 'text-red-200'     },
-  'returning-today': { label: 'Returning today',     short: 'Back today', rail: 'bg-orange-500',   fg: 'text-orange-300'  },
-  'picking-today':   { label: 'Picking up today',    short: 'Out today',  rail: 'bg-indigo-400',   fg: 'text-indigo-300'  },
-  'returning-tmw':   { label: 'Returning tomorrow',  short: 'Back tmw',   rail: 'bg-amber-500',    fg: 'text-amber-300'   },
-  'picking-tmw':     { label: 'Picking up tomorrow', short: 'Out tmw',    rail: 'bg-blue-500',     fg: 'text-blue-300'    },
-  'on-rental':       { label: 'On rental',           short: 'On rental',  rail: 'bg-emerald-500',  fg: 'text-emerald-300' },
-  booked:            { label: 'Booked',              short: 'Booked',     rail: 'bg-sky-600',      fg: 'text-sky-300'     },
-  new:               { label: 'New',                 short: 'New',        rail: 'bg-yellow-400',   fg: 'text-yellow-300'  },
-  quoted:            { label: 'Quoted',              short: 'Quoted',     rail: 'bg-violet-500',   fg: 'text-violet-300'  },
-  hold:              { label: 'Hold',                short: 'Hold',       rail: 'bg-stone-500',    fg: 'text-stone-300'   },
-  back:              { label: 'Returned',            short: 'Returned',   rail: 'bg-purple-500',   fg: 'text-purple-300'  },
-  lost:              { label: 'Lost',                short: 'Lost',       rail: 'bg-zinc-700',     fg: 'text-zinc-400'    },
+  overdue:           { label: 'Not returned',        short: 'Not back',   rail: 'bg-red-500',     fg: 'text-white',        tint: 'bg-red-600'      },
+  'returning-today': { label: 'Returning today',     short: 'Back today', rail: 'bg-orange-500',  fg: 'text-orange-800',   tint: 'bg-orange-100'   },
+  'picking-today':   { label: 'Picking up today',    short: 'Out today',  rail: 'bg-indigo-500',  fg: 'text-indigo-800',   tint: 'bg-indigo-100'   },
+  'returning-tmw':   { label: 'Returning tomorrow',  short: 'Back tmw',   rail: 'bg-amber-500',   fg: 'text-amber-800',    tint: 'bg-amber-100'    },
+  'picking-tmw':     { label: 'Picking up tomorrow', short: 'Out tmw',    rail: 'bg-blue-500',    fg: 'text-blue-800',     tint: 'bg-blue-100'     },
+  'on-rental':       { label: 'On rental',           short: 'On rental',  rail: 'bg-emerald-500', fg: 'text-emerald-800',  tint: 'bg-emerald-100'  },
+  booked:            { label: 'Booked',              short: 'Booked',     rail: 'bg-sky-600',     fg: 'text-sky-800',      tint: 'bg-sky-100'      },
+  new:               { label: 'New',                 short: 'New',        rail: 'bg-yellow-400',  fg: 'text-yellow-800',   tint: 'bg-yellow-100'   },
+  quoted:            { label: 'Quoted',              short: 'Quoted',     rail: 'bg-violet-500',  fg: 'text-violet-800',   tint: 'bg-violet-100'   },
+  hold:              { label: 'Hold',                short: 'Hold',       rail: 'bg-stone-500',   fg: 'text-stone-700',    tint: 'bg-stone-200'    },
+  back:              { label: 'Returned',            short: 'Returned',   rail: 'bg-purple-500',  fg: 'text-purple-800',   tint: 'bg-purple-100'   },
+  lost:              { label: 'Lost',                short: 'Lost',       rail: 'bg-zinc-400',    fg: 'text-zinc-500',     tint: 'bg-zinc-100'     },
 }
 
 // Default sort: the list reads top-down as "what needs a human today"

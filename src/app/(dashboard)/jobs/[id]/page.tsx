@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, isoDate } from '@/lib/jobs/dateRange';
 import { isStageLineItem } from '@/lib/orders/stageLines';
+import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
 
 /**
  * "Agreement on file" — upload a client's own signed PDF (often an annual
@@ -442,6 +443,14 @@ export default function JobDetailPage() {
     }
   };
 
+  // Every mutation on this page ends in load() — status changes, mark
+  // returned, archive, the company swap, the bookings section. So this
+  // is the ONE place that tells the jobs list to catch up: re-reading
+  // the job after a change means the row beside it is now stale.
+  // Skipped on the first read of a job (opening one changed nothing),
+  // which is why the ref resets whenever the id does.
+  const openedRef = useRef(false);
+
   const load = () => {
     setLoading(true);
     setError(null);
@@ -452,6 +461,8 @@ export default function JobDetailPage() {
           setJob(d.job);
           setNotes(d.job.notes || '');
           setNotesDirty(false);
+          if (openedRef.current) notifyJobsChanged();
+          else openedRef.current = true;
         } else {
           setError(d.error || 'Job not found');
         }
@@ -461,6 +472,7 @@ export default function JobDetailPage() {
   };
 
   useEffect(() => {
+    openedRef.current = false;
     if (id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
