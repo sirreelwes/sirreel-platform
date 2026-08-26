@@ -484,29 +484,39 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
   // static section headers, no collapse). `icon` carries a lucide-react
   // component name resolved in the layout.
   //
-  // Deliveries & Pickups (/dispatch) is CROSS-LISTED in both Sales & Ops
-  // and Fleet on purpose — one shared tool (Sales enters what/where/when,
+  // Deliveries & Pickups (/dispatch) is CROSS-LISTED in both Ops and
+  // Fleet on purpose — one shared tool (Ops enters what/where/when,
   // Fleet assigns driver + vehicle). Same href, highlighted in both when
   // active. Not a duplicate route.
+  //
+  // Split into Sales + Ops (Wes, 2026-08-26): the old "Sales & Ops"
+  // group ran ten tabs deep and mixed the deal path with the tools that
+  // execute it. Sales is now the funnel in the order the work happens
+  // (what needs doing → the show → the inbound → the hold → the
+  // invoiceable order → who it's for); Ops holds everything downstream.
   return [
     {
-      label: 'Sales & Ops',
+      label: 'Sales',
       items: [
         // Top-level Action Items surface — the id 'action-items' is
         // special-cased in the layout to render an unhandled-count badge
         // fed by the same engine (/api/action-items?count=1).
         { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+        { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         // The web-form triage queue (/inquiries) had NO nav entry — the
         // public order/contact/space/intake forms all write Inquiry rows
         // and every notification email says "work the queue", but the
         // queue itself was reachable only by typed URL (found 2026-08-20
-        // when Wes couldn't locate it). Sits above Pipeline because it is
-        // the top of that funnel.
+        // when Wes couldn't locate it).
         { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
-        { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
-        { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
+        { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+      ],
+    },
+    {
+      label: 'Ops',
+      items: [
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
@@ -543,7 +553,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         ...(isFleetYardRole(navRole)
           ? [{ id: 'fleet-today', label: 'Today', icon: 'Sun', href: '/fleet/today' }]
           : []),
-        // Cross-listed — SAME route as Sales & Ops above.
+        // Cross-listed — SAME route as Ops above.
         { id: 'dispatch-fleet', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
         { id: 'fleet', label: 'Fleet', icon: 'Car', href: '/fleet' },
         { id: 'maintenance', label: 'Maintenance', icon: 'Wrench', href: '/maintenance' },
