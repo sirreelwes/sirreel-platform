@@ -65,13 +65,24 @@ export interface TsxAvailabilityBlock {
   suppliesUrl: string
   /**
    * Set when the agent actually placed a soft hold (Wes 2026-08-25: "if the
-   * agent chooses to hold, the email should reflect that"). Carries the
-   * WINDOW only — deliberately no unit names, counts or categories, which
-   * keeps this consistent with `availabilityMessage` being the only
-   * availability statement in the email. A hold is reassurance, not a
-   * commitment to a named truck that dispatch may later swap.
+   * agent chooses to hold, the email should reflect that"). The WINDOW; what
+   * is being held is named by `requestedItems` below.
    */
   heldRange?: string | null
+  /**
+   * The vehicle/stage CATEGORIES the reply covers, pre-labelled ("2 × Cube
+   * Truck"). Named to the client since 2026-08-26: "We've set your equipment
+   * aside" told them nothing, and a client who asked for a liftgate has no
+   * way to catch it if we heard something else.
+   *
+   * Still a category, never a unit — dispatch swaps trucks within a category
+   * all the time, so naming one would be a promise we don't make. The
+   * quantities are the client's own, echoed back; OUR fleet numbers stay
+   * rep-only, as does which categories are tight.
+   */
+  requestedItems?: string[]
+  /** Supplies / gear riding along on the vehicle ("10 × Ratchet Strap"). */
+  supplyItems?: string[]
   /** Fold a request for ONLY the missing field(s) into the reply. Set per
    *  field so we never ask for something we already have. */
   askForCompany?: boolean
@@ -278,13 +289,46 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   // that detail is rep-only, in EmailReviewModal.
   // Hold acknowledgement — sits directly under the opener, before the
   // ask-for-details prompt, so the reassurance lands before the request.
-  const heldRange = withAvailability ? av!.heldRange?.trim() || null : null
-  const heldBlock = heldRange
+  //
+  // "Write my own email" is the rep's WHOLE email (Wes 2026-08-26): their
+  // words, then the gear/vehicle button, and nothing else. The templated
+  // hold read-back and the production-company ask are ours, not theirs —
+  // leaving them stapled underneath a hand-written note made the email read
+  // like two people wrote it.
+  const repWroteIt = withAvailability && !!customBody
+  const heldRange = withAvailability && !repWroteIt ? av!.heldRange?.trim() || null : null
+  const requestedItems = withAvailability && !repWroteIt ? (av!.requestedItems ?? []).filter((s) => s.trim()) : []
+  const supplyItems = withAvailability && !repWroteIt ? (av!.supplyItems ?? []).filter((s) => s.trim()) : []
+  // One line reads as a sentence; several read as a list. Either way the
+  // categories are spelled out — see `requestedItems` above.
+  const itemsInline = requestedItems.map((i) => `<strong>${escapeHtml(i)}</strong>`).join(', ')
+  const itemsList = `<ul style="margin: 8px 0 0; padding-left: 20px; font-size: 16px; color: ${TEXT}; line-height: 1.6;">${requestedItems
+    .map((i) => `<li style="margin: 0 0 2px;">${escapeHtml(i)}</li>`)
+    .join('')}</ul>`
+  const suppliesLine = supplyItems.length
+    ? `<p style="font-size: 15px; color: ${TEXT}; margin: 8px 0 0; line-height: 1.6;">Coming on the vehicle: <strong>${escapeHtml(
+        supplyItems.join(', '),
+      )}</strong>.</p>`
+    : ''
+  const heldSentence = heldRange
+    ? requestedItems.length === 0
+      ? `We&rsquo;ve set your equipment aside for <strong>${escapeHtml(heldRange)}</strong> while you decide.`
+      : requestedItems.length === 1
+        ? `We&rsquo;ve set aside your ${itemsInline} for <strong>${escapeHtml(heldRange)}</strong> while you decide.`
+        : `We&rsquo;ve set the following aside for <strong>${escapeHtml(heldRange)}</strong> while you decide:${itemsList}`
+    : // No hold placed — still read the request back, so a client who asked
+      // for something we didn't hear can correct it in one reply instead of
+      // discovering it on the quote.
+      requestedItems.length === 0
+      ? ''
+      : requestedItems.length === 1
+        ? `Here&rsquo;s what I have from your note: ${itemsInline}.`
+        : `Here&rsquo;s what I have from your note:${itemsList}`
+  const heldBlock = heldSentence || suppliesLine
     ? `<tr>
         <td style="padding: 12px 32px 0;">
-          <p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">
-            We&rsquo;ve set your equipment aside for <strong>${escapeHtml(heldRange)}</strong> while you decide.
-          </p>
+          ${heldSentence ? `<p style="font-size: 16px; color: ${TEXT}; margin: 0; line-height: 1.6;">${heldSentence}</p>` : ''}
+          ${suppliesLine}
         </td>
       </tr>`
     : ''
@@ -299,7 +343,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         </td>
       </tr>`
         : ''}
-      ${(av!.askForCompany || av!.askForJob)
+      ${(av!.askForCompany || av!.askForJob) && !repWroteIt
         ? `<tr>
         <td style="padding: 14px 32px 0;">
           <p style="font-size: 15px; color: ${TEXT}; margin: 0; line-height: 1.6; border-left: 3px solid ${ACCENT}; padding-left: 12px;">One quick thing for our files — what's the ${
@@ -318,7 +362,11 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         : ''}
       <tr>
         <td align="center" style="padding: 16px 32px 4px;">
-          <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Gear and Vehicle Request &rarr;</a>
+          <!-- The button used to read "Gear and Vehicle Request", which
+               confused clients who had JUST made one (Wes 2026-08-26). The
+               lead-in says what it is actually for: adding MORE. -->
+          <p style="font-size: 15px; color: ${TEXT}; margin: 0 0 10px; line-height: 1.6;">Need more gear or vehicles lined up?</p>
+          <a href="${escapeHtml(av!.suppliesUrl)}" style="display: inline-block; background-color: ${CTA_BG}; color: #ffffff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px;">Add gear or vehicles &rarr;</a>
         </td>
       </tr>`
     : ''
@@ -480,12 +528,25 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
   if (withAvailability) {
     // Same order as the HTML: hold reassurance, then the ask.
     if (heldRange) {
-      textParts.push('', `We've set your equipment aside for ${heldRange} while you decide.`)
+      textParts.push(
+        '',
+        requestedItems.length === 0
+          ? `We've set your equipment aside for ${heldRange} while you decide.`
+          : requestedItems.length === 1
+            ? `We've set aside your ${requestedItems[0]} for ${heldRange} while you decide.`
+            : `We've set the following aside for ${heldRange} while you decide:`,
+      )
+      if (requestedItems.length > 1) textParts.push(...requestedItems.map((i) => `  - ${i}`))
+    } else if (requestedItems.length > 0) {
+      textParts.push('', `Here's what I have from your note:`, ...requestedItems.map((i) => `  - ${i}`))
+    }
+    if (supplyItems.length > 0) {
+      textParts.push('', `Coming on the vehicle: ${supplyItems.join(', ')}.`)
     }
     if (showAvailabilityMessage) {
       textParts.push('', av!.availabilityMessage)
     }
-    if (av!.askForCompany || av!.askForJob) {
+    if ((av!.askForCompany || av!.askForJob) && !repWroteIt) {
       const askField =
         av!.askForCompany && av!.askForJob
           ? 'production company and project name'
@@ -503,7 +564,7 @@ export function buildTsxWelcomeEmail(input: TsxWelcomeTemplateInput): RenderedEm
         textParts.push(`Just reply with ${reply} and I'll get everything set up.`)
       }
     }
-    textParts.push('', `Gear and vehicle request: ${av!.suppliesUrl}`)
+    textParts.push('', `Need more gear or vehicles lined up?`, `Add gear or vehicles: ${av!.suppliesUrl}`)
   }
   if (withQuote) {
     textParts.push(

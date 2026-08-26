@@ -25,7 +25,16 @@ import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResol
 import { isProvisionalCompanyName } from '@/lib/companies/provisional';
 
 interface MatchedProduct { id: string; type: string; name: string; lineType?: string | null }
-interface ParsedItem { catalogType: string | null; quantity: number; matchedProduct: MatchedProduct | null }
+interface ParsedItem {
+  catalogType: string | null
+  quantity: number
+  matchedProduct: MatchedProduct | null
+  /** The client's own words for the line — the label when nothing matched. */
+  description?: string | null
+  /** 'AUTO_KIT' rows are server-derived accessories (chargers, spare
+   *  batteries), not something the client asked for. */
+  matchSource?: string | null
+}
 /**
  * A line on the hold. Dates live PER LINE (Wes 2026-08-25: "the option to
  * add assets to hold and dates for each asset") — a van needed from the
@@ -38,6 +47,19 @@ interface ParsedItem { catalogType: string | null; quantity: number; matchedProd
 interface Cat { id: string; name: string; quantity: number; startDate: string; endDate: string }
 /** A category the agent can add by hand — GET /api/scheduling/categories. */
 interface PickCat { id: string; name: string; totalUnits?: number }
+/**
+ * Something that rides along on the vehicle — ratchet straps, furniture
+ * pads, a small gear order (Wes 2026-08-26: the most common baseline request
+ * there is).
+ *
+ * These are NOT hold lines and never will be: expendables and gear live in
+ * InventoryItem with no Asset units behind them, so the scheduler has nothing
+ * to reserve. Until this list existed the parser's non-vehicle rows were
+ * filtered out and thrown away — a client asked for ten ratchet straps on the
+ * cargo van and the reply never mentioned them, on the hold or in the email.
+ * Now they ride on the reply and on the hold's notes.
+ */
+interface Supply { key: string; name: string; quantity: number; inventoryItemId: string | null }
 interface Line { id: string; name: string; requested: number; availableToHold: number; serviceableCount: number; status: 'available' | 'tight' | 'short' }
 /** Availability is per (category, window) — the same van over two different
  *  windows has two different answers, so lines are keyed by both. */
@@ -120,6 +142,13 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   const [recipientEmail, setRecipientEmail] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState<string | null>(null);
   const [cats, setCats] = useState<Cat[]>([]);
+  const [supplies, setSupplies] = useState<Supply[]>([]);
+  // Supply typeahead over the real catalog (GET /api/inventory/search) with a
+  // free-text fallback — a client can ask for something we don't stock a code
+  // for, and a note the warehouse can read beats a dropped line.
+  const [supplyQuery, setSupplyQuery] = useState('');
+  const [supplyHits, setSupplyHits] = useState<Array<{ id: string; code: string; description: string }>>([]);
+  const [supplyOpen, setSupplyOpen] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);
   const [holdable, setHoldable] = useState<{ companyId: string; personId: string } | null>(null);
 
@@ -216,6 +245,22 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
           startDate: parsed.startDate ?? '',
           endDate: parsed.endDate ?? '',
         }));
+
+      // Everything the client asked for that ISN'T a holdable vehicle/stage.
+      // Kit accessories the SERVER derived are excluded — this list is what
+      // the client asked for, and it gets read back to them.
+      const supplyLines: Supply[] = items
+        .filter((i) => !(i.matchedProduct?.lineType === 'VEHICLE'
+          || (i.catalogType === 'ASSET_CATEGORY' && i.matchedProduct)))
+        .filter((i) => i.matchSource !== 'AUTO_KIT')
+        .map((i, idx) => ({
+          key: `p${idx}`,
+          name: (i.matchedProduct?.name || i.description || '').trim(),
+          quantity: Math.max(1, Math.floor(i.quantity || 1)),
+          inventoryItemId: i.matchedProduct?.id ?? null,
+        }))
+        .filter((sup) => !!sup.name);
+      setSupplies(supplyLines);
 
       adoptedName.current = (parsed.clientName ?? '').trim() || null;
       setClientName(parsed.clientName ?? null);
@@ -397,6 +442,25 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     return () => clearTimeout(t);
   }, [contactQuery]);
 
+  // Debounced supply lookup over the inventory catalog.
+  useEffect(() => {
+    const q = supplyQuery.trim();
+    if (q.length < 2) { setSupplyHits([]); setSupplyOpen(false); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/inventory/search?q=${encodeURIComponent(q)}&limit=6`)
+        .then((r) => (r.ok ? r.json() : { items: [] }))
+        .then((d) => {
+          const hits = (Array.isArray(d.items) ? d.items : []).map((i: { id: string; code: string; description: string | null }) => ({
+            id: i.id, code: i.code, description: i.description || i.code,
+          }));
+          setSupplyHits(hits);
+          setSupplyOpen(hits.length > 0);
+        })
+        .catch(() => setSupplyHits([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [supplyQuery]);
+
   useEffect(() => { run(); }, [run]);
 
   useEffect(() => {
@@ -453,6 +517,15 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     setAddingId('');
   }, [pickCats, pickup, ret, refreshAvailability]);
 
+  const addSupply = useCallback((name: string, inventoryItemId: string | null) => {
+    const clean = name.trim();
+    if (!clean) return;
+    setSupplies((prev) => [...prev, { key: `m${prev.length}-${clean}`, name: clean, quantity: 1, inventoryItemId }]);
+    setSupplyQuery('');
+    setSupplyHits([]);
+    setSupplyOpen(false);
+  }, []);
+
   /** Outer window across every dated hold line — min start, max end. */
   const holdWindow = (): { start: string; end: string } | null => {
     const dated = cats.filter((c) => c.startDate && c.endDate);
@@ -471,6 +544,10 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
     pickup,
     return: ret,
     categories: cats,
+    // Read back to the client in the reply, and written onto the hold's
+    // notes below — a supply line that only lives in the agent's head is how
+    // a truck leaves the yard without the straps.
+    supplies: supplies.map((sup) => ({ name: sup.name, quantity: sup.quantity })),
     askForDetails,
     // "If the agent chooses to hold, the email should reflect that" (Wes
     // 2026-08-25). Only the WINDOW travels — the client is told their gear
@@ -484,6 +561,19 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
   // newJobName creation is gone; jobId is always real by this point.
   // companyId is passed explicitly (not read from state) so a resolve
   // that just re-pointed the company isn't lost to a stale closure.
+  /**
+   * Booking notes. The supplies list is written onto EVERY hold in the
+   * request rather than one of them: it belongs to the booking, not to a
+   * particular truck, and the person reading the hold on the gantt is the
+   * person who has to put the straps on whichever truck they're loading.
+   */
+  const holdNotes = () => {
+    const base = 'Soft hold from Quick Reply — pending client confirmation.';
+    if (supplies.length === 0) return base;
+    const list = supplies.map((sup) => `${sup.quantity} × ${sup.name}`).join(', ');
+    return `${base}\nOn the vehicle: ${list}.`;
+  };
+
   const createSoftHolds = async (resolved: { jobId: string; name: string }, companyId: string) => {
     if (!holdable) return;
     setHoldStatus('Creating soft holds…');
@@ -498,7 +588,7 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
         companyId, personId: holdable.personId,
         jobId: resolved.jobId, jobName: resolved.name,
         bufferDays: 1, bufferOverride: true, isBackup,
-        notes: 'Soft hold from Quick Reply — pending client confirmation.',
+        notes: holdNotes(),
       };
       try {
         const r = await fetch('/api/scheduling/holds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -922,6 +1012,103 @@ export function QuickReplyModal({ emailText, defaultRecipientEmail, defaultRecip
                 {cats.length === 0 && (
                   <div className="text-[11px] text-gray-400 mt-1">
                     With nothing here the reply just asks the client for their item list.
+                  </div>
+                )}
+              </div>
+
+              {/* Riding along — supplies / small gear orders that travel on
+                  the vehicle. Not held (nothing to reserve against), but
+                  named in the reply and written onto the hold's notes. */}
+              <div>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold">On the vehicle</div>
+                  <span className="text-[11px] text-gray-400">straps, pads, a small gear order</span>
+                </div>
+
+                {supplies.length > 0 && (
+                  <ul className="border border-gray-200 rounded-lg divide-y divide-gray-100 mb-2">
+                    {supplies.map((sup, i) => (
+                      <li key={sup.key} className="px-3 py-2 text-[12px] flex items-center gap-2">
+                        <span className="text-gray-800 font-medium flex-1 min-w-[140px]">{sup.name}</span>
+                        <label className="flex items-center gap-1 text-gray-400">
+                          <span className="text-[10px] uppercase">Qty</span>
+                          <input
+                            type="number" min={1} max={999} value={sup.quantity}
+                            aria-label={`${sup.name} quantity`}
+                            onChange={(e) => {
+                              const q = Math.max(1, Math.min(999, Number(e.target.value) || 1));
+                              setSupplies((prev) => prev.map((x, xi) => (xi === i ? { ...x, quantity: q } : x)));
+                            }}
+                            className="w-16 border border-gray-300 rounded px-1.5 py-1 text-gray-800 text-[12px] focus:outline-none focus:border-emerald-500"
+                          />
+                        </label>
+                        <button
+                          type="button" aria-label={`Remove ${sup.name}`}
+                          onClick={() => setSupplies((prev) => prev.filter((_, xi) => xi !== i))}
+                          className="text-gray-300 hover:text-rose-600 px-1 text-[14px] leading-none"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="relative">
+                  <input
+                    value={supplyQuery}
+                    onChange={(e) => setSupplyQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Free text is a legitimate answer — the client's own
+                        // words on the hold beat waiting for a catalog code.
+                        addSupply(supplyQuery, null);
+                      }
+                    }}
+                    placeholder="+ Add supplies or gear on the vehicle…"
+                    aria-label="Add supplies or gear that ride on the vehicle"
+                    className="w-full border border-dashed border-gray-300 rounded-lg px-2.5 py-2 text-[12px] text-gray-700 placeholder-gray-400 bg-white focus:outline-none focus:border-emerald-500"
+                  />
+                  {supplyOpen && supplyHits.length > 0 && (
+                    <div className="absolute z-20 left-0 right-0 top-[38px] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      {supplyHits.map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => addSupply(h.description, h.id)}
+                          className="block w-full text-left px-2.5 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        >
+                          <span className="text-[12px] text-gray-800">{h.description}</span>
+                          <span className="block text-[10px] text-gray-400 font-mono">{h.code}</span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addSupply(supplyQuery, null)}
+                        className="block w-full text-left px-2.5 py-1 text-[10px] text-gray-500 hover:bg-gray-50"
+                      >
+                        Add &ldquo;{supplyQuery}&rdquo; as typed
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="text-[10px] text-gray-400">Common:</span>
+                  {['ratchet strap', 'furniture pad'].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setSupplyQuery(q)}
+                      className="text-[10px] text-gray-600 border border-gray-200 rounded-full px-2 py-0.5 hover:border-emerald-400 hover:text-emerald-700"
+                    >
+                      {q}s
+                    </button>
+                  ))}
+                </div>
+                {supplies.length > 0 && (
+                  <div className="text-[11px] text-gray-400 mt-1">
+                    Named in the reply and noted on the hold — these aren&rsquo;t reserved units, so nothing is held against them.
                   </div>
                 )}
               </div>

@@ -76,7 +76,7 @@ INTERNAL per-category picture (for your contradiction check ONLY — never to be
 ${tierFacts}
 
 HARD RULES for anything client-facing (the draft and your rewrite):
-- Never state numbers, counts, percentages, or utilization figures.
+- Never state OUR fleet numbers — unit counts, percentages, or utilization figures. (Repeating the quantities the CLIENT asked for is fine.)
 - Never guarantee availability or promise specific units.
 - Never name or imply WHICH categories are tight, short, or heavily booked.
 
@@ -86,7 +86,7 @@ ${message}
 """
 
 Do two things and return ONLY JSON:
-1. "flags": an array of short, specific issues with the draft. Include tone problems, typos/grammar, anything unprofessional, and — MOST IMPORTANTLY — any TIER CONTRADICTION or HARD-RULE violation: on a NON-COMMITTAL reply, any claim or implication that availability looks good (e.g. "plenty", "lots", "no problem", "we've got you covered"); on ANY reply, stated numbers/percentages, guarantees, or naming which categories are tight. Quote the offending phrase. If there are no issues, return an empty array.
+1. "flags": an array of short, specific issues with the draft. Include tone problems, typos/grammar, anything unprofessional, and — MOST IMPORTANTLY — any TIER CONTRADICTION or HARD-RULE violation: on a NON-COMMITTAL reply, any claim or implication that availability looks good (e.g. "plenty", "lots", "no problem", "we've got you covered"); on ANY reply, stated fleet numbers/percentages, guarantees, or naming which categories are tight. Quote the offending phrase. If there are no issues, return an empty array.
 2. "polished": a cleaned-up rewrite of the rep's message — same intent and voice, fixed grammar/tone, matching the required tier and obeying every hard rule above. Keep it concise and warm. Do NOT add a sign-off (the email template adds one). Plain text.
 
 Return exactly: {"flags": ["..."], "polished": "..."}`

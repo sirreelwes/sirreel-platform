@@ -1854,6 +1854,15 @@ export default function GanttPage() {
               />
             )}
 
+            {/* Booking notes — what the agent wrote when the hold was
+                created, including supplies asked for on the vehicle. */}
+            {resContext?.notes && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <div className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mb-0.5">Reservation notes</div>
+                <div className="text-[12px] text-gray-800 whitespace-pre-wrap">{resContext.notes}</div>
+              </div>
+            )}
+
             {/* Stage paperwork entry — shown ONLY for STAGES-department
                 holds (department-gated, not name-matched). Additive:
                 touches nothing else in this modal. */}
