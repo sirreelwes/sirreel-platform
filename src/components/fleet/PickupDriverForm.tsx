@@ -54,10 +54,13 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
   const [link, setLink] = useState<string | null>(null)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [reason, setReason] = useState('')
-  const [done, setDone] = useState<{ name: string; overridden: boolean } | null>(null)
+  const [done, setDone] = useState<{ name: string; overridden: boolean; jobRecorded: boolean } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [matched, setMatched] = useState<string | null>(null)
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
+  const [addEmail, setAddEmail] = useState('')
+  const [addPhone, setAddPhone] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/drivers/list')
@@ -89,13 +92,23 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
     try {
       const res = await fetch('/api/drivers', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ firstName: first, lastName: last }),
+        body: JSON.stringify({
+          firstName: first, lastName: last,
+          email: addEmail.trim() || undefined,
+          phone: addPhone.trim() || undefined,
+        }),
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || 'Could not add driver')
       await load()
       setSelectedId(j.driver.id)
-      setAddOpen(false); setFirst(''); setLast(''); setQ('')
+      // An email that matched an existing file is the good outcome, not a
+      // silent one — it usually means a licence is already on record.
+      if (j.matchedExisting) {
+        setError(null)
+        setMatched(`${j.driver.firstName} ${j.driver.lastName}`.trim())
+      }
+      setAddOpen(false); setFirst(''); setLast(''); setAddEmail(''); setAddPhone(''); setQ('')
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not add driver') }
     finally { setBusy(null) }
   }
@@ -134,7 +147,7 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
       })
       const j = await res.json()
       if (!res.ok) { setError(j.error || 'Handover blocked.'); return }
-      setDone({ name: j.driverName, overridden: !!j.overridden })
+      setDone({ name: j.driverName, overridden: !!j.overridden, jobRecorded: j.jobRecorded !== false })
     } catch { setError('Something went wrong. Try again.') }
     finally { setBusy(null) }
   }
@@ -148,6 +161,11 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
           {done.overridden
             ? 'Recorded as a licence-gate override — the reason is on the checkout.'
             : 'Licence on file and checked at handover.'}
+        </p>
+        <p className="mt-1 text-xs text-zinc-400">
+          {done.jobRecorded
+            ? 'Added to the job\u2019s driver list — the office and the client can see who took it.'
+            : 'Handover recorded. The job\u2019s driver list did not update — mention it to the office.'}
         </p>
       </div>
     )
@@ -170,6 +188,12 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
 
       {error && (
         <div className="rounded-xl border border-rose-800 bg-rose-950/50 px-4 py-3 text-sm text-rose-200">{error}</div>
+      )}
+
+      {matched && (
+        <div className="rounded-xl border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+          {matched} already has a file here — selected it, licence and all.
+        </div>
       )}
 
       {/* Driver picker */}
@@ -225,15 +249,29 @@ export function PickupDriverForm({ checkoutId, assignedDriver }: Props) {
             + Driver isn&rsquo;t listed
           </button>
         ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
-            <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+          <div className="mt-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+              <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input value={addEmail} onChange={(e) => setAddEmail(e.target.value)} type="email" placeholder="Email"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+              <input value={addPhone} onChange={(e) => setAddPhone(e.target.value)} placeholder="Phone"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white placeholder:text-zinc-500" />
+            </div>
             <button type="button" onClick={addDriver} disabled={busy === 'add' || !first.trim() || !last.trim()}
-              className="rounded-lg bg-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40">
+              className="w-full rounded-lg bg-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-40">
               {busy === 'add' ? 'Adding…' : 'Add'}
             </button>
+            {/* Email is how a returning driver lands back on their own file
+                instead of becoming a second, licence-less copy. */}
+            <p className="text-[11px] leading-snug text-zinc-500">
+              Ask for their email — if they&rsquo;ve driven for us before, it finds their
+              licence instead of starting a blank file.
+            </p>
           </div>
         )}
       </div>

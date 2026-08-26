@@ -252,11 +252,15 @@ export function JobDriversSection({
                 {v.drivers.map((d) => {
                   const dr = d.driver
                   const hasImages = !!(dr.licenseFrontUrl || dr.licenseBackUrl)
-                  const tone = dr.licenseExpired ? 'bg-rose-500/15 text-rose-300'
+                  const tone = d.status === 'PICKED_UP' ? 'bg-violet-500/15 text-violet-300'
+                    : dr.licenseExpired ? 'bg-rose-500/15 text-rose-300'
                     : dr.licenseVerified ? 'bg-emerald-500/15 text-emerald-300'
                     : hasImages ? 'bg-amber-500/15 text-amber-300'
                     : 'bg-zinc-700/40 text-zinc-300'
-                  const label = dr.licenseExpired ? 'Licence expired'
+                  // PICKED_UP outranks every licence verdict: the truck is
+                  // gone, and "Checked" reads like it's still in the yard.
+                  const label = d.status === 'PICKED_UP' ? 'Picked up'
+                    : dr.licenseExpired ? 'Licence expired'
                     : dr.licenseVerified ? 'Checked'
                     : hasImages ? 'Needs check'
                     : d.firstViewedAt ? 'Opened, no licence' : 'Invited'

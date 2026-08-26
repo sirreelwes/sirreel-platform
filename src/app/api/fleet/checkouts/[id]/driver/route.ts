@@ -16,6 +16,7 @@
  * checkout, and the gate failure is recorded rather than erased.
  */
 
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireVehicleHandoverAccess } from '@/lib/fleet/requireVehicleHandoverAccess'
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const rec = await prisma.checkoutRecord.findUnique({
     where: { id },
-    select: { id: true, returnTime: true, notes: true },
+    select: { id: true, returnTime: true, notes: true, bookingAssignmentId: true },
   })
   if (!rec) return NextResponse.json({ error: 'checkout not found' }, { status: 404 })
   if (rec.returnTime) {
@@ -127,11 +128,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     select: { id: true, driverId: true, licenseVerified: true },
   })
 
+  // Record the handover on the JOB's driver list too, so the plan and what
+  // actually happened stop disagreeing. Before this, a driver added at the
+  // counter existed only on the CheckoutRecord: the job page, the client's
+  // portal and the board all still read "no driver named" for a vehicle
+  // that had already left the yard.
+  //
+  // This is also the only writer of PICKED_UP. Both DELETE endpoints carve
+  // that status out — "those keys are already gone" — and until now the
+  // carve-out was dead code, so a client could cancel a driver who was
+  // holding the truck. Upsert, because the usual case is the driver the
+  // client named weeks ago finally turning up: same row, advanced, not a
+  // duplicate.
+  let jobRecorded = false
+  try {
+    await prisma.driverAssignment.upsert({
+      where: {
+        driverId_bookingAssignmentId: {
+          driverId,
+          bookingAssignmentId: rec.bookingAssignmentId,
+        },
+      },
+      update: { status: 'PICKED_UP' },
+      create: {
+        driverId,
+        bookingAssignmentId: rec.bookingAssignmentId,
+        status: 'PICKED_UP',
+        // A walk-up driver gets a live token like any other: they still
+        // need the gate code to get out and the drop-off instructions to
+        // come back. Not emailed — they're standing here.
+        token: randomUUID(),
+        expiresAt: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
+        invitedBySource: 'STAFF',
+        invitedByUserId: auth.userId ?? null,
+        emailSentTo: null,
+      },
+    })
+    jobRecorded = true
+  } catch (e) {
+    // Never fail a handover over the bookkeeping — the keys have moved and
+    // the CheckoutRecord above is the authoritative record of that.
+    console.error('[fleet/checkout/driver] driverAssignment upsert failed', e)
+  }
+
   return NextResponse.json({
     ok: true,
     checkout: updated,
     gate,
     overridden,
+    jobRecorded,
     driverName: `${driver.firstName} ${driver.lastName}`.trim(),
   })
 }

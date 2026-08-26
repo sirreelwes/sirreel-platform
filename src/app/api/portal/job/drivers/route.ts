@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
         // our licence verdicts — "we're still waiting on them" is enough.
         opened: !!d.firstViewedAt,
         ready: d.status === 'READY' || d.status === 'PICKED_UP',
+        pickedUp: d.status === 'PICKED_UP',
         // The server decides removability, not the browser — the DELETE
         // re-checks it anyway, but this keeps the button off rows that
         // would only bounce.

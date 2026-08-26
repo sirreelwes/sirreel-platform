@@ -29,6 +29,8 @@ interface DriverRow {
   email: string | null
   opened: boolean
   ready: boolean
+  /** They have the keys. */
+  pickedUp?: boolean
   /** Pending only — a driver who has sent a licence is staff-only to change. */
   removable?: boolean
 }
@@ -261,9 +263,13 @@ export function PortalDriversSection() {
                     </span>
                     <span className="flex flex-shrink-0 items-center gap-1.5">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        d.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        d.pickedUp ? 'bg-violet-100 text-violet-700'
+                          : d.ready ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
                       }`}>
-                        {d.ready ? 'License received' : d.opened ? 'Opened — no license yet' : 'Emailed'}
+                        {d.pickedUp ? 'Collected the vehicle'
+                          : d.ready ? 'License received'
+                          : d.opened ? 'Opened — no license yet' : 'Emailed'}
                       </span>
                       {/* Only while pending. Once a licence is in we keep the
                           driver and let the client call — see the route. */}

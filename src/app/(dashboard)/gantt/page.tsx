@@ -2655,26 +2655,64 @@ function DriverCard({ checkout, loading, unitName, assignmentId }: { checkout: a
   if (loading && checkout === undefined) return null
   const fmt = (d: string | Date | null | undefined) =>
     d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
+  // No CheckoutRecord at all = the pre-rental walkaround hasn't run. The
+  // handover screen REFUSES in that state and sends you to the inspection,
+  // so pointing at it here was a door into a "do this other thing first"
+  // page. Point at the other thing.
   if (!checkout) {
     return (
       <>
         <div className="mt-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-[11px] text-gray-400">
-        🚚 Not checked out yet — no driver on record for {unitName || 'this unit'}.
-        {/* The way in to the handover screen. Warehouse runs pickup (Wes
-            2026-08-22) and their nav is the board, not the fleet pages —
-            without this they'd have no route to it at all. */}
+        📋 No pre-rental walkaround yet for {unitName || 'this unit'} — that comes before the keys.
         {assignmentId && (
           <a
-            href={`/fleet/pickup/${assignmentId}`}
+            href={`/fleet/inspection/${assignmentId}`}
             className="ml-1.5 font-semibold text-amber-600 hover:text-amber-500 hover:underline"
           >
-            Hand over to driver →
+            Start inspection →
           </a>
         )}
         </div>
         {/* Name the driver ahead of the day — the Reservations-side entry
             Wes asked for. Sales, warehouse and fleet all use this one box;
             the production client does the same from their portal job page. */}
+        {assignmentId && <NameDriverBox assignmentId={assignmentId} />}
+      </>
+    )
+  }
+
+  // Inspected, nobody has taken it yet. THE moment the driver walks up —
+  // and until 2026-08-26 the board showed it as a violet "Out now" card
+  // with no driver name and no way through to the handover screen, because
+  // the only link lived in the branch above. This is that way through.
+  if (!checkout.driver && !checkout.returnTime) {
+    return (
+      <>
+        <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[12px] font-bold text-amber-900">Waiting on the driver</div>
+              <div className="text-[11px] text-amber-800">
+                {unitName || 'This unit'} is inspected and ready to go out
+                {fmt(checkout.checkoutTime) ? ` · walkaround ${fmt(checkout.checkoutTime)}` : ''}
+              </div>
+            </div>
+          </div>
+          {assignmentId && (
+            <a
+              href={`/fleet/pickup/${assignmentId}`}
+              className="mt-2 block rounded-lg bg-amber-600 px-3 py-2 text-center text-[12px] font-bold text-white hover:bg-amber-500"
+            >
+              Driver has arrived → start pickup
+            </a>
+          )}
+          <p className="mt-1.5 text-[10px] leading-snug text-amber-700">
+            Licence gets checked on that screen. A driver nobody named ahead of time can be
+            added there too.
+          </p>
+        </div>
+        {/* Still nameable from here — most pickups are arranged before
+            anyone walks up. */}
         {assignmentId && <NameDriverBox assignmentId={assignmentId} />}
       </>
     )
