@@ -1,908 +1,150 @@
 'use client'
 
 /**
- * Jobs — three-column kanban board (PREJOB / OUT / RETURNED).
+ * /jobs with nothing selected — the right panel's landing.
  *
- * UI on the existing `GET /api/jobs`. Status chips drive the `statuses`
- * param; the `Orphans` chip uses the server-side `orphans=1` filter;
- * Search hits jobName + jobCode; `Mine` flips `mine=1`. All filters
- * apply over the board — cards render in whichever column they place.
- *
- * COLUMN PLACEMENT (real data, no fabrication):
- *   0. RETURNED = Job.returnedAt != null. ONLY that — physical return
- *      is semantic state set via mark-returned (the manual v1 of the
- *      future warehouse check-in flow). A passed end date proves
- *      nothing returned, so nothing else auto-derives into RETURNED.
- *   1. Manual override (sr_job_board_overrides side table, PREJOB↔OUT
- *      only) wins next — the interim stand-in until checkout events
- *      exist. Those triggers will later replace the override writes.
- *   2. Order-driven cadence (server rollup) when the job has live
- *      orders: picking-* → PREJOB, on-rental/returning-* → OUT.
- *      returned/invoiced/wrapped WITHOUT returnedAt stay in OUT with
- *      the OVERDUE treatment until someone confirms the physical return.
- *   3. Date fallback (jobs with no orders — all Planyo imports today):
- *      Job.startDate/endDate, else the booking envelope from the API.
- *      start ≤ today → OUT (past-end = OUT + OVERDUE) · else PREJOB.
- *   HOLD/LOST always sit in PREJOB (human off-ramps). NEW/QUOTED do
- *      too, but via the cadence — Job.status is no longer consulted for
- *      operational placement, because nothing ever set it automatically.
- *
- * Cards link to the existing `/jobs/[id]` detail page.
+ * The list itself is the sidebar (see the layout), so this panel does
+ * NOT repeat it. It answers the two questions you have before you've
+ * picked a job: what's the shape of the book right now, and what
+ * needs a human today. Everything here narrows or opens the list on
+ * the left rather than duplicating it.
  */
 
-import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence'
+import { useJobsList } from '@/components/jobs/JobsListProvider'
+import {
+  STATE,
+  URGENCY,
+  fmtDate,
+  fmtMoney,
+  jobWindow,
+  rowValue,
+  stateLabel,
+  type RowState,
+} from '@/lib/jobs/listRow'
 
-const JOB_STATUSES = ['NEW', 'QUOTED', 'ACTIVE', 'WRAPPED', 'HOLD', 'LOST'] as const
-type JobStatus = (typeof JOB_STATUSES)[number]
+// The states that mean "somebody has to do something today". Anything
+// else can wait for the scan.
+const TODAY_STATES: RowState[] = ['overdue', 'returning-today', 'picking-today']
 
-type Filter = 'all' | JobStatus | 'orphans'
+export default function JobsLandingPage() {
+  const { allRows, counts, loading, error, setStateFilter, stateFilter } = useJobsList()
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'NEW', label: 'New' },
-  { id: 'QUOTED', label: 'Quoted' },
-  // No 'Active' chip: nothing ever wrote ACTIVE automatically, so it
-  // filtered to "whoever remembered to flip the dropdown" rather than
-  // to jobs that are actually running. The OUT column answers that.
-  { id: 'HOLD', label: 'Hold' },
-  { id: 'WRAPPED', label: 'Wrapped' },
-  { id: 'LOST', label: 'Lost' },
-  { id: 'orphans', label: 'Orphans' },
-]
-
-// Phase 7 — operational cadence replaces the raw JobStatus pill on
-// the list. Each cadence state has a label, a tinted pill (bg/fg),
-// and a saturated left-edge bar tint. Static class strings so
-// Tailwind's content scanner sees them.
-const CADENCE_PILL: Record<CadenceState, string> = {
-  new:             'bg-sky-100 text-sky-700',
-  quoted:          'bg-pill-quoted-bg text-pill-quoted-fg',
-  hold:            'bg-pill-hold-bg text-pill-hold-fg',
-  lost:            'bg-pill-lost-bg text-pill-lost-fg',
-  booked:          'bg-cadence-booked-bg text-cadence-booked-fg',
-  'picking-tmw':   'bg-cadence-picking-tmw-bg text-cadence-picking-tmw-fg',
-  'picking-today': 'bg-cadence-picking-today-bg text-cadence-picking-today-fg',
-  'on-rental':     'bg-cadence-on-rental-bg text-cadence-on-rental-fg',
-  'returning-tmw': 'bg-cadence-returning-tmw-bg text-cadence-returning-tmw-fg',
-  'returning-today':'bg-cadence-returning-today-bg text-cadence-returning-today-fg',
-  returned:        'bg-cadence-returned-bg text-cadence-returned-fg',
-  invoiced:        'bg-cadence-invoiced-bg text-cadence-invoiced-fg',
-  wrapped:         'bg-cadence-wrapped-bg text-cadence-wrapped-fg',
-}
-
-// Edge bar uses the saturated `-bar` variant as a border-color. Each
-// class is a static literal so Tailwind's content scanner picks them
-// up. Pre-booked rows share one muted bar (`cadence-pre-bar`) since
-// their pill already carries the commercial color in `pill.*`.
-const CADENCE_BAR: Record<CadenceState, string> = {
-  new:             'border-sky-400',
-  quoted:          'border-cadence-pre-bar',
-  hold:            'border-cadence-pre-bar',
-  lost:            'border-cadence-pre-bar',
-  booked:          'border-cadence-booked-bar',
-  'picking-tmw':   'border-cadence-picking-tmw-bar',
-  'picking-today': 'border-cadence-picking-today-bar',
-  'on-rental':     'border-cadence-on-rental-bar',
-  'returning-tmw': 'border-cadence-returning-tmw-bar',
-  'returning-today':'border-cadence-returning-today-bar',
-  returned:        'border-cadence-returned-bar',
-  invoiced:        'border-cadence-invoiced-bar',
-  wrapped:         'border-cadence-wrapped-bar',
-}
-
-// Phase 7 — paperwork rollup shape returned by /api/jobs. See
-// rollupAgreementState / rollupCoiState in the route for state derivation.
-type AgreementRollupState = 'NONE' | 'DRAFT' | 'SENT' | 'PARTIAL' | 'SIGNED'
-type CoiRollupState = 'NONE' | 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'ISSUE'
-// Phase 7 — billing rollup. Derived from the reconciled Invoice columns
-// only (status / balanceDue / total / dueDate). PENDING/SETTLED ACH
-// never bleeds into "paid" because reconcileInvoiceTotals counts
-// CLEARED-only when it writes amountPaid + balanceDue.
-type BillingRollupState =
-  | 'NOT_INVOICED'
-  | 'DRAFT'
-  | 'SENT'
-  | 'PARTIALLY_PAID'
-  | 'PAID'
-  | 'OVERDUE'
-
-interface PaperworkRollup {
-  rental: { state: AgreementRollupState; count: number }
-  stage: { state: AgreementRollupState; count: number } | null
-  coi: { state: CoiRollupState; expiresAt?: string | null }
-}
-
-interface BillingRollup {
-  state: BillingRollupState
-  balanceDue: number
-}
-
-// Semantic chip variants — the three paperwork buttons share this
-// vocabulary so the agent eye reads "good / pending / problem /
-// missing" at a glance regardless of which doc slot they're scanning.
-type ChipTone = 'good' | 'warn' | 'bad' | 'missing'
-
-const TONE_CLS: Record<ChipTone, string> = {
-  good:    'bg-chip-good-bg text-chip-good-fg',
-  warn:    'bg-chip-warn-bg text-chip-warn-fg',
-  bad:     'bg-chip-bad-bg text-chip-bad-fg',
-  missing: 'border border-dashed border-chip-muted-border text-chip-muted-fg',
-}
-
-// Unicode icons by tone. Stays cross-platform and a11y-readable
-// (the chip's title attr describes the state in words).
-const TONE_ICON: Record<ChipTone, string> = {
-  good:    '✓',
-  warn:    '⏱',
-  bad:     '⚠',
-  missing: '−',
-}
-
-interface JobRow {
-  id: string
-  jobCode: string
-  assistantAuthCode: string | null
-  name: string
-  status: JobStatus
-  startDate: string | null
-  createdAt: string
-  endDate: string | null
-  orderTotal: number
-  rwInvoicedTotal: number
-  rwOrderCount: number
-  estimatedValue: number | null
-  company: { id: string; name: string } | null
-  agent: { id: string; name: string } | null
-  primaryContact: {
-    firstName: string
-    lastName: string
-    email: string
-    phone?: string | null
-    role: string
-    isPrimary: boolean
-  } | null
-  paperwork?: PaperworkRollup
-  billing?: BillingRollup
-  cadence?: CadenceRollup
-  hasLD?: boolean
-  // Stage-scope marker — when true the Stage Contract paperwork
-  // button renders alongside Rental + COI; otherwise it's hidden.
-  // Set server-side from stageBookingTerms presence OR an existing
-  // STAGE_CONTRACT agreement.
-  hasStageScope?: boolean
-  blindPickup?: boolean
-  blindReturn?: boolean
-  _count?: { orders: number }
-  // Board inputs (see docblock). bookingWindow = min/max across the
-  // job's bookings; hasDelivery = any booking with a delivery address.
-  bookingWindow?: { start: string | null; end: string | null } | null
-  hasDelivery?: boolean
-  // PREJOB/OUT presentation override only — the API filters out legacy
-  // RETURNED rows.
-  boardPhaseOverride?: 'PREJOB' | 'OUT' | null
-  // Physical return — semantic, set via mark-returned. Sole gate into
-  // the RETURNED column.
-  returnedAt?: string | null
-  returnedBy?: { id: string; name: string } | null
-}
-
-// ─── Kanban board ────────────────────────────────────────────────
-
-type BoardColumn = 'PREJOB' | 'OUT' | 'RETURNED'
-const BOARD_COLUMNS: BoardColumn[] = ['PREJOB', 'OUT', 'RETURNED']
-
-const COLUMN_META: Record<BoardColumn, { title: string; hint: string }> = {
-  PREJOB:   { title: 'Prejob',   hint: 'quotes, leads & booked — nothing out yet' },
-  OUT:      { title: 'Out',      hint: 'items with the client' },
-  RETURNED: { title: 'Returned', hint: 'items back — closeout' },
-}
-
-// Effective window for date-derived placement: the Job's own dates,
-// falling back to the booking envelope.
-function jobWindow(j: JobRow): { start: string | null; end: string | null } {
-  return {
-    start: j.startDate?.slice(0, 10) ?? j.bookingWindow?.start ?? null,
-    end: j.endDate?.slice(0, 10) ?? j.bookingWindow?.end ?? null,
-  }
-}
-
-function deriveColumn(j: JobRow, today: string): BoardColumn {
-  // Physical return is the ONLY path into RETURNED. Billing head-start,
-  // inspections, and the future check-in icons all key off returnedAt —
-  // a passed end date proves nothing came back.
-  if (j.returnedAt) return 'RETURNED'
-  // Only the human off-ramps park a job in PREJOB regardless of its
-  // orders. NEW/QUOTED/ACTIVE all yield to the cadence — a job whose
-  // gear is out belongs in OUT whether or not anyone flipped it to
-  // ACTIVE, which is the drift this board used to inherit.
-  if (j.status === 'HOLD' || j.status === 'LOST') return 'PREJOB'
-  const c = j.cadence?.state
-  if (c === 'new' || c === 'quoted') return 'PREJOB'
-  if (c === 'on-rental' || c === 'returning-tmw' || c === 'returning-today') return 'OUT'
-  // Orders say returned/invoiced (or the job is WRAPPED) but nobody
-  // confirmed the physical return — stay in OUT with the OVERDUE
-  // treatment until someone marks it back.
-  if (c === 'returned' || c === 'invoiced' || c === 'wrapped') return 'OUT'
-  if (c === 'picking-tmw' || c === 'picking-today') return 'PREJOB'
-  // cadence 'booked' with real orders = genuinely future → PREJOB.
-  if ((j._count?.orders ?? 0) > 0) return 'PREJOB'
-  // No orders (Planyo imports) → place by dates. No dates → PREJOB
-  // ("needs dates"), never OUT.
-  const w = jobWindow(j)
-  if (!w.start || !w.end) return 'PREJOB'
-  if (w.start <= today) return 'OUT' // past-end included → OUT + OVERDUE
-  return 'PREJOB'
-}
-
-// OUT-column return urgency, from the order cadence when present,
-// else the effective end date. green=active · orange=tomorrow · red=today.
-type OutUrgency = 'active' | 'tomorrow' | 'today' | 'overdue'
-function outUrgency(j: JobRow, today: string, tomorrow: string): OutUrgency {
-  const c = j.cadence?.state
-  if (c === 'returning-today') return 'today'
-  if (c === 'returning-tmw') return 'tomorrow'
-  if (c === 'on-rental') return 'active'
-  // Orders closed out (or job WRAPPED) without a physical-return mark —
-  // the whole reason this card is still in OUT. Always OVERDUE.
-  if (c === 'returned' || c === 'invoiced' || c === 'wrapped') return 'overdue'
-  const end = jobWindow(j).end
-  if (!end) return 'active'
-  if (end < today) return 'overdue'
-  if (end === today) return 'today'
-  if (end === tomorrow) return 'tomorrow'
-  return 'active'
-}
-
-// OVERDUE = past-end and NOT marked returned. Deliberately darker and
-// heavier than the red "returning today" band — this card needs a
-// human to confirm the gear is back (or chase it).
-const OUT_BAND: Record<OutUrgency, string> = {
-  active:   'border-emerald-400',
-  tomorrow: 'border-orange-400',
-  today:    'border-red-500',
-  overdue:  'border-red-900',
-}
-const OUT_LABEL: Record<OutUrgency, string> = {
-  active:   'On rental',
-  tomorrow: 'Returning tomorrow',
-  today:    'Returning today',
-  overdue:  'Overdue · not returned',
-}
-const OUT_PILL: Record<OutUrgency, string> = {
-  active:   'bg-emerald-100 text-emerald-700',
-  tomorrow: 'bg-orange-100 text-orange-700',
-  today:    'bg-red-100 text-red-700',
-  overdue:  'bg-red-900 text-white',
-}
-
-// PREJOB sub-state band (spec): yellow=NEW · orange=QUOTED ·
-// teal=booked/ACTIVE-not-yet-out · muted for HOLD/LOST.
-function prejobBand(j: JobRow): { band: string; label: string; pill: string } {
-  // Reads the cadence, not the raw status — 'new'/'quoted'/'hold'/'lost'
-  // ARE the commercial states, surfaced through the one derivation.
-  switch (j.cadence?.state) {
-    case 'new':    return { band: 'border-yellow-400', label: 'New',    pill: 'bg-yellow-100 text-yellow-800' }
-    case 'quoted': return { band: 'border-orange-400', label: 'Quoted', pill: 'bg-orange-100 text-orange-700' }
-    case 'hold':   return { band: 'border-zinc-300',   label: 'Hold',   pill: 'bg-zinc-100 text-zinc-600' }
-    case 'lost':   return { band: 'border-zinc-200',   label: 'Lost',   pill: 'bg-zinc-100 text-zinc-400' }
-    case 'picking-today': return { band: 'border-teal-400', label: 'Picking up today',    pill: 'bg-teal-100 text-teal-700' }
-    case 'picking-tmw':   return { band: 'border-teal-400', label: 'Picking up tomorrow', pill: 'bg-teal-100 text-teal-700' }
-    default:       return { band: 'border-teal-400', label: 'Booked', pill: 'bg-teal-100 text-teal-700' }
-  }
-}
-
-// Color-coded paperwork buttons (replaces the prior all-neutral
-// flatten). Each enum state maps to a label + a semantic tone:
-//   SIGNED → good (green + ✓), pre-signed in-progress states → warn
-//   (amber + ⏱), NONE → missing (grey dashed + −). COI adds a `bad`
-//   branch for EXPIRED / rejected — the others can't fail-out.
-const AGREEMENT_CHIP: Record<AgreementRollupState, { label: string; tone: ChipTone }> = {
-  NONE:    { label: 'None',              tone: 'missing' },
-  DRAFT:   { label: 'Draft',             tone: 'warn'    },
-  SENT:    { label: 'Sent',              tone: 'warn'    },
-  PARTIAL: { label: 'Partially Signed',  tone: 'warn'    },
-  SIGNED:  { label: 'Signed',            tone: 'good'    },
-}
-
-const COI_CHIP: Record<CoiRollupState, { label: string; tone: ChipTone }> = {
-  NONE:     { label: 'None',     tone: 'missing' },
-  PENDING:  { label: 'Pending',  tone: 'warn'    },
-  VERIFIED: { label: 'Verified', tone: 'good'    },
-  EXPIRED:  { label: 'Expired',  tone: 'bad'     },
-  ISSUE:    { label: 'Issue',    tone: 'bad'     },
-}
-
-// Billing carries the urgency in this design. NOT_INVOICED renders
-// as a dashed muted tag (different shape, not a tint) so a fresh-quote
-// row still reads in the scan without competing for color attention.
-const BILLING_CHIP: Record<BillingRollupState, { label: string; cls: string }> = {
-  NOT_INVOICED:    { label: 'Not invoiced',    cls: 'border border-dashed border-chip-muted-border text-chip-muted-fg' },
-  DRAFT:           { label: 'Draft',           cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  SENT:            { label: 'Sent',            cls: 'bg-chip-neutral-bg text-chip-neutral-fg' },
-  PARTIALLY_PAID:  { label: 'Partially paid',  cls: 'bg-chip-warn-bg text-chip-warn-fg' },
-  PAID:            { label: 'Paid',            cls: 'bg-chip-good-bg text-chip-good-fg' },
-  OVERDUE:         { label: 'Overdue',         cls: 'bg-chip-bad-bg text-chip-bad-fg' },
-}
-
-function fmtDate(d: string | null) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
-}
-
-// Returned receipt — a real timestamp (mark-returned), so show the time.
-function fmtDateTime(d: string | null) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return '—'
-  return dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
-function fmtMoney(n: number | null | undefined) {
-  if (n == null || n === 0) return '—'
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
-}
-
-export default function JobsListPage() {
-  const [filter, setFilter] = useState<Filter>('all')
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [mine, setMine] = useState(false)
-  const [jobs, setJobs] = useState<JobRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250)
-    return () => clearTimeout(t)
-  }, [search])
-
-  useEffect(() => {
-    const params = new URLSearchParams()
-    if (filter === 'orphans') params.set('orphans', '1')
-    else if (filter !== 'all') params.set('status', filter)
-    if (mine) params.set('mine', '1')
-    if (debouncedSearch) params.set('search', debouncedSearch)
-
-    setLoading(true)
-    setError(null)
-    fetch(`/api/jobs?${params.toString()}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) throw new Error(d.error)
-        setJobs(d.jobs || [])
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
-  }, [filter, mine, debouncedSearch])
-
-  const countLabel = useMemo(() => {
-    if (loading) return 'Loading…'
-    if (error) return error
-    return `${jobs.length} job${jobs.length === 1 ? '' : 's'}`
-  }, [loading, error, jobs.length])
-
-  // Board placement — today/tomorrow computed the same way the API's
-  // cadence rollup does (UTC date strings compared against @db.Date).
-  const { today, tomorrow } = useMemo(() => {
-    const t = new Date()
-    t.setUTCHours(0, 0, 0, 0)
-    const tm = new Date(t)
-    tm.setUTCDate(tm.getUTCDate() + 1)
-    return { today: t.toISOString().slice(0, 10), tomorrow: tm.toISOString().slice(0, 10) }
-  }, [])
-
-  const placed = useMemo(
-    () =>
-      jobs.map((job) => {
-        const derived = deriveColumn(job, today)
-        // returnedAt trumps everything (deriveColumn already returns
-        // RETURNED for it); the PREJOB/OUT override only applies to
-        // not-yet-returned cards.
-        const column: BoardColumn = job.returnedAt ? 'RETURNED' : (job.boardPhaseOverride ?? derived)
-        return { job, derived, column }
-      }),
-    [jobs, today],
-  )
-
-  // Card moves. INTO RETURNED = semantic mark-returned (the gear is
-  // physically back); OUT of RETURNED = unmark (undo). PREJOB↔OUT moves
-  // write the presentation-only override (null clears it) — that's
-  // where the future checkout event triggers plug in instead.
-  const [movingId, setMovingId] = useState<string | null>(null)
-  const moveJob = async (job: JobRow, target: BoardColumn | null) => {
-    setMovingId(job.id)
-    try {
-      if (target === 'RETURNED') {
-        const res = await fetch(`/api/jobs/${job.id}/mark-returned`, { method: 'POST' })
-        if (res.ok) {
-          const d = await res.json()
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === job.id ? { ...j, returnedAt: d.returnedAt, returnedBy: d.returnedBy ?? null } : j,
-            ),
-          )
-        }
-        return
-      }
-      if (job.returnedAt) {
-        // Any move off a returned card (including undo, target=null)
-        // clears the physical-return mark; the card reverts to its
-        // derived/override column — usually OUT with OVERDUE.
-        const res = await fetch(`/api/jobs/${job.id}/unmark-returned`, { method: 'POST' })
-        if (res.ok) {
-          setJobs((prev) =>
-            prev.map((j) => (j.id === job.id ? { ...j, returnedAt: null, returnedBy: null } : j)),
-          )
-        }
-        return
-      }
-      const res = await fetch(`/api/jobs/${job.id}/board-phase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: target }),
-      })
-      if (res.ok) {
-        setJobs((prev) =>
-          prev.map((j) => (j.id === job.id ? { ...j, boardPhaseOverride: target as 'PREJOB' | 'OUT' | null } : j)),
-        )
-      }
-    } finally {
-      setMovingId(null)
-    }
-  }
+  const present = URGENCY.filter((s) => (counts.get(s) ?? 0) > 0)
+  const todayRows = allRows.filter((r) => TODAY_STATES.includes(r.state))
+  const totalValue = allRows.reduce((sum, r) => sum + (rowValue(r.job) ?? 0), 0)
 
   return (
-    // Phase 7 — light-motif pilot. Page bg overrides the shell's
-    // default until the rollout converts the rest of the app. Token
-    // names are additive (`lt-*`, `pill-*`, `chip-*`) so unconverted
-    // pages stay untouched.
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Creation lives in ONE place: the global "+ New Job" in the
-            top bar (canonical-Job consolidation). Quotes/reservations
-            are created from inside a Job on /jobs/[id]. */}
-        <header>
-          <h1 className="text-2xl font-semibold text-lt-fg">Jobs</h1>
-          <p className="text-sm text-lt-fg2 mt-0.5">
-            Productions and quotes that own one or more Orders. Click a row for detail. Create with
-            the &ldquo;+ New Job&rdquo; button above; quotes and reservations are added inside the Job.
-          </p>
-        </header>
+    <div className="max-w-5xl mx-auto space-y-4">
+      <header>
+        <h1 className="text-2xl font-semibold text-zinc-900">Jobs</h1>
+        <p className="text-sm text-zinc-500 mt-0.5">
+          Pick a job on the left to open it. Color is where the job sits in the cycle — the list is
+          sorted most-urgent first. Create with the &ldquo;+ New Job&rdquo; button above.
+        </p>
+      </header>
 
-        <div className="bg-lt-card border border-lt-hairline rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by job, code, company, or contact…"
-              className="flex-1 min-w-[240px] px-3 py-1.5 bg-lt-card border border-lt-hairline rounded-lg text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2"
-            />
-            <label className="flex items-center gap-1.5 text-xs text-lt-fg2 px-2 py-1">
-              <input
-                type="checkbox"
-                checked={mine}
-                onChange={(e) => setMine(e.target.checked)}
-                className="accent-lt-fg"
-              />
-              Mine only
-            </label>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {FILTERS.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  filter === f.id
-                    ? 'bg-lt-fg text-white border-lt-fg'
-                    : 'bg-lt-card text-lt-fg2 border-lt-hairline hover:border-lt-fg2 hover:text-lt-fg'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-            <span className="ml-auto text-xs text-lt-fg3">{countLabel}</span>
-          </div>
+      {loading && allRows.length === 0 ? (
+        <div className="bg-white border border-zinc-200 rounded-xl px-4 py-10 text-center text-zinc-400 text-sm">
+          Loading…
         </div>
-
-        {/* Kanban board — three columns, cards = Jobs. Placement rules
-            live in deriveColumn(); manual moves write the side-table
-            override via POST /api/jobs/[id]/board-phase. */}
-        {loading && jobs.length === 0 ? (
-          <div className="bg-lt-card border border-lt-hairline rounded-xl px-4 py-8 text-center text-lt-fg3 text-sm">
-            Loading…
-          </div>
-        ) : jobs.length === 0 ? (
-          <div className="bg-lt-card border border-lt-hairline rounded-xl px-4 py-8 text-center text-lt-fg3 text-sm">
-            {filter === 'orphans' ? 'No abandoned QUOTED jobs. Good housekeeping.' : 'No jobs match.'}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
-            {BOARD_COLUMNS.map((col) => {
-              const colJobs = placed.filter((pj) => pj.column === col)
-              return (
-                <div key={col} className="bg-lt-inner/50 border border-lt-hairline rounded-xl">
-                  <div className="px-3 pt-3 pb-2 flex items-baseline gap-2">
-                    <h2 className="text-sm font-bold text-lt-fg uppercase tracking-wider">{COLUMN_META[col].title}</h2>
-                    <span className="text-xs text-lt-fg3">{colJobs.length}</span>
-                    <span className="ml-auto text-[10px] text-lt-fg3">{COLUMN_META[col].hint}</span>
-                  </div>
-                  <div className="px-2 pb-2 space-y-2">
-                    {colJobs.length === 0 && (
-                      <div className="px-2 py-6 text-center text-[11px] text-lt-fg3 border border-dashed border-lt-hairline rounded-lg">
-                        Nothing here.
-                      </div>
-                    )}
-                    {colJobs.map(({ job: j, derived }) => (
-                      <JobCard
-                        key={j.id}
-                        job={j}
-                        column={col}
-                        derived={derived}
-                        today={today}
-                        tomorrow={tomorrow}
-                        moving={movingId === j.id}
-                        onMove={(target) => moveJob(j, target)}
-                      />
-                    ))}
-                    {/* FUTURE: the rich fleet/warehouse check-in icon
-                        language lands here once check-in data exists —
-                        deliberately not fabricated from today's data. */}
-                    {col === 'RETURNED' && colJobs.length > 0 && (
-                      <div className="px-2 py-1.5 text-[10px] text-lt-fg3 text-center">
-                        Fleet check-in status icons arrive with warehouse check-in tracking.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Card ────────────────────────────────────────────────────────
-
-function JobCard({
-  job: j,
-  column,
-  derived,
-  today,
-  tomorrow,
-  moving,
-  onMove,
-}: {
-  job: JobRow
-  column: BoardColumn
-  derived: BoardColumn
-  today: string
-  tomorrow: string
-  moving: boolean
-  onMove: (target: BoardColumn | null) => void
-}) {
-  const value = j.orderTotal > 0 ? j.orderTotal : j.rwInvoicedTotal > 0 ? j.rwInvoicedTotal : j.estimatedValue
-
-  // Band + status pill are column-specific.
-  let band: string
-  let pillLabel: string
-  let pillCls: string
-  if (column === 'OUT') {
-    const u = outUrgency(j, today, tomorrow)
-    band = OUT_BAND[u]
-    pillLabel = OUT_LABEL[u]
-    pillCls = OUT_PILL[u]
-  } else if (column === 'RETURNED') {
-    band = 'border-emerald-500'
-    pillLabel = 'Returned'
-    pillCls = 'bg-emerald-100 text-emerald-700'
-  } else {
-    const pb = prejobBand(j)
-    band = pb.band
-    pillLabel = pb.label
-    pillCls = pb.pill
-  }
-
-  const w = jobWindow(j)
-  const overridden = j.boardPhaseOverride != null
-  const idx = BOARD_COLUMNS.indexOf(column)
-  const leftTarget = idx > 0 ? BOARD_COLUMNS[idx - 1] : null
-  const rightTarget = idx < BOARD_COLUMNS.length - 1 ? BOARD_COLUMNS[idx + 1] : null
-
-  const moveBtn = (target: BoardColumn, arrow: string, title: string) => (
-    <button
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        // Moving TO the derived column just clears the override.
-        onMove(target === derived ? null : target)
-      }}
-      disabled={moving}
-      title={title}
-      className="px-1.5 py-0.5 rounded border border-lt-hairline text-lt-fg3 hover:text-lt-fg hover:border-lt-fg2 disabled:opacity-40 text-[11px] leading-none"
-    >
-      {arrow}
-    </button>
-  )
-
-  return (
-    <Link
-      href={`/jobs/${j.id}`}
-      className={`block bg-lt-card border border-lt-hairline border-l-4 ${band} rounded-lg px-3 py-2.5 hover:bg-lt-inner transition-colors`}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-[12.5px] font-mono font-bold tracking-wide text-lt-fg bg-lt-inner border border-lt-hairline rounded px-2 py-0.5 leading-none">{j.jobCode}</span>
-        {j.assistantAuthCode && (
-          <span className="text-[11px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 leading-none" title="Client access code — read to the after-hours assistant to verify">
-            {j.assistantAuthCode}
-          </span>
-        )}
-        {j.hasDelivery && column !== 'RETURNED' && (
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500 text-white" title="Delivery — a booking on this job has a delivery address">
-            Delivery
-          </span>
-        )}
-        {j.hasLD && (
-          <span className="text-chip-bad-fg text-[10px] leading-none" title="Loss & Damage claim open">▲</span>
-        )}
-        <span className={`ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${pillCls}`}>
-          {pillLabel}
-        </span>
-      </div>
-
-      <div className="mt-1 text-[13px] font-medium text-lt-fg leading-tight">
-        {j.name}
-        {j.company?.name && (
-          <>
-            <span className="text-lt-fg3 font-normal"> · </span>
-            <span className="text-lt-fg2 font-normal">{j.company.name}</span>
-          </>
-        )}
-      </div>
-
-      <div className="mt-0.5 text-[10.5px] text-lt-fg2 flex items-center gap-1 flex-wrap leading-snug">
-        {j.primaryContact ? (
-          <span>{j.primaryContact.firstName} {j.primaryContact.lastName}</span>
-        ) : (
-          <span className="text-lt-fg3">no contact</span>
-        )}
-        <span className="text-lt-fg3">·</span>
-        <span>{j.agent?.name || '—'}</span>
-        {(w.start || w.end) && (
-          <>
-            <span className="text-lt-fg3">·</span>
-            <span className="text-lt-fg3">{fmtDate(w.start)} → {fmtDate(w.end)}</span>
-          </>
-        )}
-      </div>
-
-      {/* Lead-queue hint carried over from the flat list. */}
-      {j.status === 'NEW' && (
-        <div className="mt-1 text-[10.5px] flex items-center gap-1 flex-wrap leading-snug">
-          {j.primaryContact?.email && <span className="text-lt-fg2">{j.primaryContact.email}</span>}
-          <span className="text-lt-fg3">·</span>
-          <span className="font-semibold text-yellow-700">
-            {!j.startDate && !j.bookingWindow?.start ? 'needs dates' : (j._count?.orders ?? 0) === 0 ? (j.rwOrderCount > 0 ? 'billed in RW' : 'needs quote') : 'ready to quote'}
-          </span>
-        </div>
-      )}
-
-      {/* RETURNED shows the physical-return receipt (when + who, with
-          undo) and closeout pips; the other columns keep the full
-          paperwork/billing chip strip. */}
-      {column === 'RETURNED' ? (
-        <div className="mt-1.5 space-y-1">
-          {j.returnedAt && (
-            <div className="flex items-center gap-1 flex-wrap text-[10.5px] leading-snug">
-              <span className="text-emerald-700 font-semibold">✓ Returned</span>
-              <span className="text-lt-fg2">{fmtDateTime(j.returnedAt)}</span>
-              {j.returnedBy && (
-                <>
-                  <span className="text-lt-fg3">·</span>
-                  <span className="text-lt-fg2">{j.returnedBy.name}</span>
-                </>
-              )}
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(null) }}
-                disabled={moving}
-                title="Undo — clear the physical-return mark"
-                className="ml-auto text-[9px] text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-40"
-              >
-                undo
-              </button>
-            </div>
-          )}
-          <CloseoutPips billing={j.billing} />
+      ) : error ? (
+        <div className="bg-white border border-red-200 rounded-xl px-4 py-10 text-center text-red-600 text-sm">
+          {error}
         </div>
       ) : (
-        <div className="mt-1.5">
-          <SubRowChips paperwork={j.paperwork} billing={j.billing} hasStageScope={!!j.hasStageScope} />
-        </div>
-      )}
+        <>
+          {/* Needs a human today. Empty is a real answer here, and a
+              good one — say so rather than rendering an empty box. */}
+          <section className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-zinc-100 flex items-baseline gap-2">
+              <h2 className="text-[13px] font-bold uppercase tracking-wider text-zinc-800">Today</h2>
+              <span className="text-[11px] text-zinc-400">
+                overdue, back today, out today
+              </span>
+              <span className="ml-auto text-[11px] text-zinc-400">{todayRows.length}</span>
+            </div>
+            {todayRows.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[12px] text-zinc-400">
+                Nothing due back or going out today, and nothing overdue.
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-100">
+                {todayRows.map(({ job, state }) => {
+                  const w = jobWindow(job)
+                  return (
+                    <Link
+                      key={job.id}
+                      href={`/jobs/${job.id}`}
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-zinc-50 transition-colors"
+                    >
+                      <span className={`w-1.5 h-8 rounded-sm flex-shrink-0 ${STATE[state].rail}`} />
+                      <span className="text-[11px] font-mono font-bold text-zinc-500 w-12 flex-shrink-0">
+                        {job.jobCode.replace(/^SR-JOB-/, '')}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium text-zinc-900 truncate">{job.name}</span>
+                        <span className="block text-[11px] text-zinc-500 truncate">
+                          {job.company?.name || 'no company'}
+                          {' · '}
+                          {fmtDate(w.start)} → {fmtDate(w.end)}
+                        </span>
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 whitespace-nowrap">
+                        {stateLabel(job, state)}
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </section>
 
-      <div className="mt-1.5 flex items-center gap-1.5">
-        <span className="text-[12.5px] font-mono font-medium text-lt-fg">
-          {fmtMoney(value)}
-          {j.orderTotal === 0 && j.rwInvoicedTotal > 0 && (
-            <span className="ml-1 text-[8px] text-lt-fg3 uppercase">rw</span>
-          )}
-          {j.orderTotal === 0 && j.rwInvoicedTotal === 0 && j.estimatedValue != null && (
-            <span className="ml-1 text-[8px] text-lt-fg3 uppercase">est</span>
-          )}
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1">
-          {/* Override reset is a PREJOB/OUT affair — a returned card's
-              placement comes from returnedAt, undone via its own
-              `undo` control above. */}
-          {overridden && column !== 'RETURNED' && (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMove(null) }}
-              disabled={moving}
-              title="Clear manual placement — card returns to its computed column"
-              className="text-[9px] text-lt-fg3 hover:text-lt-fg underline underline-offset-2 disabled:opacity-40"
-            >
-              manual · reset
-            </button>
-          )}
-          {leftTarget && moveBtn(leftTarget, '‹', `Move to ${COLUMN_META[leftTarget].title}`)}
-          {rightTarget && moveBtn(rightTarget, '›', `Move to ${COLUMN_META[rightTarget].title}`)}
-        </span>
-      </div>
-    </Link>
-  )
-}
-
-// RETURNED closeout pips — invoiced? paid? straight off the billing
-// rollup (reconciled Invoice columns only; no payment math here).
-function CloseoutPips({ billing }: { billing: BillingRollup | undefined }) {
-  const state = billing?.state ?? 'NOT_INVOICED'
-  const invoiced = state !== 'NOT_INVOICED' && state !== 'DRAFT'
-  const paid = state === 'PAID'
-  const pip = (label: string, on: boolean, badWhenOff: boolean) => (
-    <span
-      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-        on ? 'bg-chip-good-bg text-chip-good-fg' : badWhenOff ? 'bg-chip-warn-bg text-chip-warn-fg' : 'border border-dashed border-chip-muted-border text-chip-muted-fg'
-      }`}
-    >
-      {on ? '✓' : '−'} {label}
-    </span>
-  )
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {pip('Invoiced', invoiced, true)}
-      {pip('Paid', paid, invoiced)}
-      {billing && billing.balanceDue > 0 && (
-        <span className="text-[10px] text-chip-bad-fg font-semibold">{fmtMoney(billing.balanceDue)} due</span>
-      )}
-    </div>
-  )
-}
-
-// Phase 7 — sub-row chip strip. Compact, muted; reads as a second
-// line on each job row. Paperwork chips drop out when their slot is
-// empty; the billing chip always renders since NOT_INVOICED is itself
-// useful information for a triage scan.
-function SubRowChips({
-  paperwork,
-  billing,
-  hasStageScope,
-}: {
-  paperwork: PaperworkRollup | undefined
-  billing: BillingRollup | undefined
-  hasStageScope: boolean
-}) {
-  const expiryLabel = paperwork?.coi.expiresAt
-    ? new Date(paperwork.coi.expiresAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: '2-digit',
-      })
-    : null
-
-  // Billing chip tail. Show "$X due" when there's a positive balance,
-  // and omit the "Billing:" label entirely for NOT_INVOICED — the chip
-  // reads as a standalone "Not invoiced" tag.
-  const billingTail =
-    billing && billing.balanceDue > 0
-      ? `${fmtMoney(billing.balanceDue)} due`
-      : null
-  const billingLabel = billing && billing.state === 'NOT_INVOICED' ? null : 'Billing'
-
-  // Rental + COI render unconditionally — a missing one is meaningful
-  // information for triage and reads as the dashed-grey "missing" tone.
-  // Stage hides entirely on jobs with no stage component so non-stage
-  // rows stay clean.
-  const rentalState = paperwork?.rental.state ?? 'NONE'
-  const coiState = paperwork?.coi.state ?? 'NONE'
-  const stageState = paperwork?.stage?.state ?? 'NONE'
-
-  const rentalChip = AGREEMENT_CHIP[rentalState]
-  const stageChip = AGREEMENT_CHIP[stageState]
-  const coiChip = COI_CHIP[coiState]
-
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-      <Chip
-        label="Rental"
-        valueLabel={rentalChip.label}
-        tone={rentalChip.tone}
-        title={`Rental agreement: ${rentalChip.label}`}
-      />
-      {hasStageScope && (
-        <Chip
-          label="Stage"
-          valueLabel={stageChip.label}
-          tone={stageChip.tone}
-          title={`Stage contract: ${stageChip.label}`}
-        />
-      )}
-      <Chip
-        label="COI"
-        valueLabel={coiChip.label}
-        tone={coiChip.tone}
-        tail={
-          expiryLabel && coiState !== 'EXPIRED' && coiState !== 'ISSUE'
-            ? `exp ${expiryLabel}`
-            : null
-        }
-        title={`Certificate of insurance: ${coiChip.label}${expiryLabel ? ` · exp ${expiryLabel}` : ''}`}
-      />
-      {billing && (
-        <Chip
-          label={billingLabel}
-          valueLabel={BILLING_CHIP[billing.state].label}
-          // Billing uses its own classed map (predates the tone
-          // refactor) — pass `customCls` to skip the tone-class lookup
-          // and stay visually distinct (no icon, "Billing ·" prefix).
-          customCls={BILLING_CHIP[billing.state].cls}
-          tail={billingTail}
-        />
+          {/* The book, by state. Each tile narrows the list on the
+              left — that's the whole point of putting them here. */}
+          <section className="bg-white border border-zinc-200 rounded-xl p-4">
+            <div className="flex items-baseline gap-2 mb-3">
+              <h2 className="text-[13px] font-bold uppercase tracking-wider text-zinc-800">The book</h2>
+              <span className="text-[11px] text-zinc-400">click a state to narrow the list</span>
+              <span className="ml-auto text-[11px] text-zinc-500">
+                {allRows.length} jobs · {fmtMoney(totalValue)}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {present.map((s) => {
+                const on = stateFilter === s
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStateFilter(on ? null : s)}
+                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left transition-colors ${
+                      on ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 hover:border-zinc-400'
+                    }`}
+                  >
+                    <span className={`w-1.5 h-7 rounded-sm flex-shrink-0 ${STATE[s].rail}`} />
+                    <span className="min-w-0">
+                      <span className="block text-[11px] text-zinc-500 leading-tight truncate">
+                        {STATE[s].label}
+                      </span>
+                      <span className="block text-[16px] font-semibold text-zinc-900 leading-tight tabular-nums">
+                        {counts.get(s)}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            {stateFilter && (
+              <button
+                onClick={() => setStateFilter(null)}
+                className="mt-3 text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
+              >
+                Clear filter — show all {allRows.length} jobs
+              </button>
+            )}
+          </section>
+        </>
       )}
     </div>
-  )
-}
-
-function Chip({
-  label,
-  valueLabel,
-  tone,
-  customCls,
-  tail,
-  title,
-}: {
-  label: string | null
-  valueLabel: string
-  tone?: ChipTone
-  customCls?: string
-  tail?: string | null
-  title?: string
-}) {
-  // Paperwork buttons go through `tone` → TONE_CLS + TONE_ICON. The
-  // billing chip predates the tone refactor and stays on its own
-  // classed map via `customCls`. Exactly one path runs; the other is
-  // a noop. Title attribute spells the state for hover + a11y.
-  const cls = customCls ?? (tone ? TONE_CLS[tone] : '')
-  const icon = tone ? TONE_ICON[tone] : null
-  return (
-    <span
-      title={title}
-      className={`inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded ${cls}`}
-    >
-      {icon && (
-        <span className="font-bold leading-none" aria-hidden="true">{icon}</span>
-      )}
-      {label && (
-        <span className="font-semibold uppercase tracking-wider opacity-70">{label}</span>
-      )}
-      <span className="font-semibold">{valueLabel}</span>
-      {tail && <span className="opacity-70">· {tail}</span>}
-    </span>
   )
 }
