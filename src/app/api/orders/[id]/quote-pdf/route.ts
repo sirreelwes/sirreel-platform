@@ -6,6 +6,7 @@ import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import { QuoteDocument, type Department, type QuoteLineItem } from '@/lib/sales/QuoteDocument'
+import { catalogClientCode } from '@/lib/catalog/display'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -32,7 +33,7 @@ export async function POST(
       jobContact: true,
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true } },
+          inventoryItem: { select: { code: true, trackingMode: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
@@ -56,7 +57,7 @@ export async function POST(
     department: li.department as Department,
     description: li.description,
     qualifier: li.qualifier,
-    inventoryCode: li.inventoryItem?.code ?? null,
+    inventoryCode: catalogClientCode(li),
     quantity: li.quantity,
     rate: Number(li.rate),
     rateType: li.rateType as 'DAILY' | 'WEEKLY' | 'FLAT',

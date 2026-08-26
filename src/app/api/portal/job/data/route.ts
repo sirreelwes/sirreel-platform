@@ -1,4 +1,4 @@
-import { categoryNameForLine } from '@/lib/catalog/display'
+import { categoryNameForLine, catalogClientCode } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
@@ -371,7 +371,7 @@ export async function GET(req: NextRequest) {
       days: li.billableDays,
       startDate: li.startDate,
       endDate: li.endDate,
-      inventoryCode: li.inventoryItem?.code || null,
+      inventoryCode: catalogClientCode(li),
       categoryName: categoryNameForLine(li),
     })),
     paperwork: {

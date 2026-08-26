@@ -55,3 +55,29 @@ export function catalogInvoiceLabel(li: {
   if (inv.trackingMode === 'UNIT_TRACKED') return inv.description ?? inv.code ?? null
   return inv.code ?? inv.description ?? null
 }
+
+/**
+ * The item code a CLIENT may see, or null when there isn't a real one.
+ *
+ * Same rule as `catalogInvoiceLabel`, for the surfaces that print a bare
+ * code in its own column rather than a label: a UNIT_TRACKED row's
+ * `code` is the synthetic CAT_* slug minted during the merge, so a quote
+ * line reading "Cargo w/Lift Gate — CAT_CARGO_VAN_LIFTGATE" is the merge
+ * leaking into a client document. Blank is right there: the description
+ * column already names the thing, and the label variant would only
+ * repeat it.
+ *
+ * Warehouse gear keeps its stock code — clients have always seen those
+ * and match them against their own paperwork.
+ */
+export function catalogClientCode(li: {
+  inventoryItem?: {
+    code?: string | null
+    trackingMode?: string | null
+  } | null
+}): string | null {
+  const inv = li.inventoryItem
+  if (!inv) return null
+  if (inv.trackingMode === 'UNIT_TRACKED') return null
+  return inv.code ?? null
+}
