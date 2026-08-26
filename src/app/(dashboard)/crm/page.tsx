@@ -9,6 +9,7 @@ import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { FollowUpsDueModal } from "@/components/crm/FollowUpsDueModal";
+import { RequestExportModal } from "@/components/crm/RequestExportModal";
 
 type Company = {
   id: string; name: string; tier: string; totalSpend: string; totalBookings: number;
@@ -247,6 +248,7 @@ export default function CRMPage() {
   const [showAddContact, setShowAddContact] = useState(false);
   // Quick-log outreach modal (Oliver's outside-sales flow).
   const [showLogOutreach, setShowLogOutreach] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   // Follow-ups due drill-down (FOLLOW-UPS DUE card click).
   const [showFollowUpsDue, setShowFollowUpsDue] = useState(false);
   const [cFirst, setCFirst] = useState("");
@@ -446,6 +448,12 @@ export default function CRMPage() {
             className="min-h-[2.5rem] px-4 py-2 bg-lt-fg hover:bg-black text-white text-sm font-medium rounded-lg transition-colors">
             + Add Company
           </button>
+          {/* Exporting the client book requires Wes's approval (2026-08-26).
+              This opens a request, not a download — see RequestExportModal. */}
+          <button onClick={() => setShowExport(true)}
+            className="min-h-[2.5rem] px-4 py-2 bg-lt-inner hover:bg-lt-hairline text-lt-fg text-sm font-medium rounded-lg transition-colors">
+            Export CSV
+          </button>
         </div>
       </div>
 
@@ -566,10 +574,15 @@ export default function CRMPage() {
               UPM: 'UPM',
               PRODUCER: 'Producer',
               LINE_PRODUCER: 'Line Producer',
+              PRODUCTION_MANAGER: 'Prod. Manager',
               PRODUCTION_COORDINATOR: 'Prod. Coordinator',
               PRODUCTION_SUPERVISOR: 'Prod. Supervisor',
               TRANSPORTATION_COORDINATOR: 'Transpo',
               ART_COORDINATOR: 'Art Coord.',
+              ART_DIRECTOR: 'Art Director',
+              LOCATION_MANAGER: 'Locations',
+              PRODUCTION_ACCOUNTANT: 'Prod. Accountant',
+              PRODUCTION_ASSISTANT: 'PA',
               COORDINATOR: 'Coordinator',
               OWNER: 'Owner',
               OTHER: 'Other',
@@ -902,6 +915,20 @@ export default function CRMPage() {
         <FollowUpsDueModal
           onClose={() => setShowFollowUpsDue(false)}
           onChanged={() => { fetchStats(); }}
+        />
+      )}
+      {showExport && (
+        <RequestExportModal
+          onClose={() => setShowExport(false)}
+          // Send the live list filters so Wes approves the same scope the
+          // requester is looking at. `topClients` is omitted server-side —
+          // its cutoff moves with spend, so approved-set and delivered-set
+          // could differ (see normalizeFilters).
+          filters={{
+            search: search || null,
+            tier: tierFilter || null,
+            segment: segmentFilter,
+          }}
         />
       )}
       </div>

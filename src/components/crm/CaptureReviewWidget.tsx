@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { mapTitleToRole, PERSON_ROLE_VALUES, type PersonRoleValue } from '@/lib/crm/roleMapping'
 import Link from 'next/link'
 
 type Verdict = 'AUTO_CAPTURED' | 'NEEDS_REVIEW' | 'SKIPPED'
@@ -29,19 +30,13 @@ type Resolution =
   | 'ADDED'
   | 'DISMISSED'
 
-const PERSON_ROLES = [
-  'UPM',
-  'PRODUCER',
-  'LINE_PRODUCER',
-  'PRODUCTION_COORDINATOR',
-  'PRODUCTION_SUPERVISOR',
-  'TRANSPORTATION_COORDINATOR',
-  'ART_COORDINATOR',
-  'COORDINATOR',
-  'OWNER',
-  'OTHER',
-] as const
-type PersonRole = (typeof PERSON_ROLES)[number]
+// Roles + the title→role mapper come from the SHARED module so the
+// role this widget pre-fills is exactly the role the capture pipeline
+// would have assigned. This file used to carry its own copy of both,
+// and it had already drifted — no PRODUCTION_MANAGER, and no art
+// department bucket at all.
+const PERSON_ROLES = PERSON_ROLE_VALUES
+type PersonRole = PersonRoleValue
 
 interface CaptureRow {
   id: string
@@ -119,20 +114,7 @@ function splitName(full: string | null): { first: string; last: string } {
   return { first: parts[0], last: parts.slice(1).join(' ') }
 }
 
-function titleToRole(title: string | null): PersonRole {
-  if (!title) return 'OTHER'
-  const t = title.toLowerCase()
-  if (/unit production manager|\bupm\b/.test(t)) return 'UPM'
-  if (/line producer/.test(t)) return 'LINE_PRODUCER'
-  if (/production coordinator|prod\.? coord/.test(t)) return 'PRODUCTION_COORDINATOR'
-  if (/production supervisor/.test(t)) return 'PRODUCTION_SUPERVISOR'
-  if (/transp(o(rt(ation)?)?)? coordinator|transp(o)? captain/.test(t)) return 'TRANSPORTATION_COORDINATOR'
-  if (/art coordinator/.test(t)) return 'ART_COORDINATOR'
-  if (/coordinator/.test(t)) return 'COORDINATOR'
-  if (/executive producer|\bep\b|producer/.test(t)) return 'PRODUCER'
-  if (/owner|founder|ceo|president/.test(t)) return 'OWNER'
-  return 'OTHER'
-}
+const titleToRole = mapTitleToRole
 
 type Mode = 'NEEDS_REVIEW' | 'AUTO_CAPTURED' | 'SKIPPED'
 

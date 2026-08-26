@@ -49,7 +49,9 @@ export interface MergeFieldOverrides {
   role?:
     | 'UPM' | 'PRODUCER' | 'LINE_PRODUCER' | 'PRODUCTION_COORDINATOR'
     | 'PRODUCTION_SUPERVISOR' | 'TRANSPORTATION_COORDINATOR'
-    | 'ART_COORDINATOR' | 'COORDINATOR' | 'OWNER' | 'OTHER'
+    | 'ART_COORDINATOR' | 'COORDINATOR' | 'OWNER'
+    | 'PRODUCTION_MANAGER' | 'ART_DIRECTOR' | 'LOCATION_MANAGER'
+    | 'PRODUCTION_ACCOUNTANT' | 'PRODUCTION_ASSISTANT' | 'OTHER'
   tier?: 'VIP' | 'PREFERRED' | 'STANDARD' | 'NEW'
   rawTitle?: string | null
   lastKnownProject?: string | null

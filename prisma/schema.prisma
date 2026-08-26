@@ -526,6 +526,24 @@ enum PersonRole {
   ART_COORDINATOR
   COORDINATOR
   OWNER
+
+  // Added 2026-08-26. The capture pipeline was recognising these
+  // titles as production-legitimate (PRODUCTION_TITLE_TOKENS covers
+  // art dept, locations, grip, wardrobe) and then had nowhere to put
+  // them, so every one landed in OTHER. Emmett Tekstra is the case
+  // that surfaced it: his signature reads "Production Designer | Art
+  // Director", the capture logged "production_title:art director" as
+  // its legitimacy signal, and his role is OTHER because no bucket
+  // existed. 250 contacts had a correctly-parsed title and OTHER.
+  //
+  // These four are the ones that actually rent vehicles from us —
+  // art department builds and strikes sets, locations moves the unit,
+  // accounting cuts the PO, and the PA is often who places the order.
+  ART_DIRECTOR
+  LOCATION_MANAGER
+  PRODUCTION_ACCOUNTANT
+  PRODUCTION_ASSISTANT
+
   OTHER
 }
 
@@ -2209,8 +2227,91 @@ model User {
 
   driverAssignmentsInvited DriverAssignment[] @relation("DriverAssignmentInvitedBy")
 
+  // Proprietary-data exports. Every export is a request Wes approves —
+  // see src/lib/exports/approver.ts and the DataExportRequest model.
+  dataExportsRequested DataExportRequest[] @relation("DataExportRequester")
+  dataExportsDecided   DataExportRequest[] @relation("DataExportApprover")
+
   @@map("users")
   detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
+}
+
+// ═══════════════════════════════════════
+// PROPRIETARY DATA EXPORTS
+// ═══════════════════════════════════════
+
+// Wes's standing rule (2026-08-26): exporting SirReel's proprietary
+// information — the client book, job data — requires HIS approval
+// specifically. Not a role check: ADMIN is held by Wes AND Dani, so the
+// approver is identified by email in src/lib/exports/approver.ts.
+//
+// The request snapshots the FILTERS and the ROW COUNT at request time, so
+// what Wes approves is a known scope rather than an open-ended "export the
+// clients" that could widen between ask and download.
+//
+// There is deliberately no download token. The approved CSV is served only
+// to an authenticated session belonging to the requester (or the approver);
+// a bearer token in a URL is forwardable, which is the exact failure mode
+// this whole flow exists to prevent.
+enum DataExportKind {
+  CLIENT_LIST
+}
+
+enum DataExportStatus {
+  PENDING
+  APPROVED
+  DENIED
+  // First successful download. Terminal for reporting purposes; re-download
+  // stays legal until expiresAt so a failed transfer isn't a new approval.
+  FULFILLED
+  // Approved but the window closed before it was downloaded. Derived on read
+  // (approvedAt + EXPORT_APPROVAL_TTL_HOURS), never a stored transition.
+  EXPIRED
+}
+
+model DataExportRequest {
+  id     String           @id @default(uuid())
+  kind   DataExportKind   @default(CLIENT_LIST)
+  status DataExportStatus @default(PENDING)
+
+  // Why the requester needs the book of business as a file. Required —
+  // an unexplained export request should be easy for Wes to deny.
+  reason String @db.Text
+
+  // Scope snapshot. `filters` is the literal query the CSV will re-run
+  // (search / tier / segment); `rowCountAtRequest` is what it matched when
+  // asked. If the delivered count drifts from this, the download records
+  // both — see rowCountDelivered.
+  filters           Json?
+  rowCountAtRequest Int?  @map("row_count_at_request")
+
+  requestedById String   @map("requested_by_id")
+  requestedBy   User     @relation("DataExportRequester", fields: [requestedById], references: [id])
+  requestedAt   DateTime @default(now()) @map("requested_at")
+
+  // Null until decided. decidedById is ALWAYS the approver (Wes) — the API
+  // refuses any other identity, so this column doubles as the audit record
+  // of who released the data.
+  decidedById String?   @map("decided_by_id")
+  decidedBy   User?     @relation("DataExportApprover", fields: [decidedById], references: [id])
+  decidedAt   DateTime? @map("decided_at")
+  decisionNote String?  @map("decision_note") @db.Text
+
+  // Set on approval. After this instant the approval is spent.
+  expiresAt DateTime? @map("expires_at")
+
+  // Delivery audit. downloadCount increments on every served CSV.
+  downloadCount     Int       @default(0) @map("download_count")
+  firstDownloadedAt DateTime? @map("first_downloaded_at")
+  lastDownloadedAt  DateTime? @map("last_downloaded_at")
+  rowCountDelivered Int?      @map("row_count_delivered")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, requestedAt])
+  @@index([requestedById, requestedAt])
+  @@map("sr_data_export_requests")
 }
 
 // ═══════════════════════════════════════
