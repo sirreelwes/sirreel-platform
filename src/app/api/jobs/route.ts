@@ -20,6 +20,7 @@ import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomp
 import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
+import { computeReadiness } from '@/lib/jobs/readiness'
 
 export const dynamic = 'force-dynamic'
 
@@ -206,9 +207,34 @@ export async function GET(req: NextRequest) {
         },
         _count: { select: { orders: true } },
         // Board placement inputs — booking envelope dates (fallback when
-        // the Job itself is date-less) and the delivery signal.
+        // the Job itself is date-less) and the delivery signal. Items /
+        // assignments / driver counts + the card flag feed the readiness
+        // rollup (src/lib/jobs/readiness.ts).
         bookings: {
-          select: { startDate: true, endDate: true, deliveryAddress: true, status: true },
+          select: {
+            startDate: true,
+            endDate: true,
+            deliveryAddress: true,
+            status: true,
+            items: {
+              select: {
+                status: true,
+                assignments: {
+                  select: {
+                    status: true,
+                    _count: { select: { driverAssignments: true } },
+                  },
+                },
+              },
+            },
+            // Card on file — same test the job detail route runs
+            // (ccCardNumberEncrypted set), collapsed to existence.
+            paperworkRequests: {
+              where: { ccCardNumberEncrypted: { not: null } },
+              take: 1,
+              select: { id: true },
+            },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -390,6 +416,40 @@ export async function GET(req: NextRequest) {
       // Same reasoning: a cancelled booking's delivery address is not a
       // delivery anybody has to make.
       const hasDelivery = liveBookings.some((b) => !!b.deliveryAddress?.trim())
+
+      // Readiness rollup — the five-check "can this job go out" answer
+      // (gear · COI · agreement · card · driver), derived here and ONLY
+      // here so the sidebar chip and the detail strip agree. The chip
+      // renders only on outbound rows (readinessApplies); it ships on
+      // every row because rowState is a client-side derivation.
+      type ItemRow = {
+        status: string
+        assignments: { status: string; _count: { driverAssignments: number } }[]
+      }
+      const liveItems = liveBookings.flatMap(
+        (b) => ((b as { items?: ItemRow[] }).items || []).filter(
+          (it) => it.status === 'REQUESTED' || it.status === 'ASSIGNED',
+        ),
+      )
+      const activeAssignments = liveItems.flatMap((it) =>
+        it.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
+      )
+      const readiness = computeReadiness({
+        coi: paperwork.coi.state,
+        rental: paperwork.rental.state,
+        stage: paperwork.stage?.state ?? null,
+        cardOnFile: liveBookings.some(
+          (b) => ((b as { paperworkRequests?: { id: string }[] }).paperworkRequests || []).length > 0,
+        ),
+        gear: {
+          total: liveItems.length,
+          assigned: liveItems.filter((it) => it.status === 'ASSIGNED').length,
+        },
+        drivers: {
+          units: activeAssignments.length,
+          named: activeAssignments.filter((a) => a._count.driverAssignments > 0).length,
+        },
+      })
       // Dropping cancelled bookings from the envelope is not enough on
       // its own: Planyo imports copy the booking's dates onto the Job
       // row too, and those OUTRANK the envelope. So the fact has to
@@ -423,6 +483,7 @@ export async function GET(req: NextRequest) {
           : null,
         paperwork,
         billing,
+        readiness,
         cadence,
         hasLD,
         hasStageScope,

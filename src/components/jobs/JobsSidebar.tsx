@@ -21,7 +21,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
+import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import {
   STATE,
   URGENCY,
@@ -33,6 +33,7 @@ import {
   type JobRow,
   type RowState,
 } from '@/lib/jobs/listRow'
+import { readinessApplies, readinessChipText } from '@/lib/jobs/readiness'
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'All jobs' },
@@ -57,7 +58,7 @@ const SORT_OPTIONS: { id: Sort; label: string }[] = [
 
 export function JobsSidebar() {
   const {
-    rows, counts, loading, error,
+    rows, allRows, counts, loading, error,
     search, setSearch,
     status, setStatus,
     mine, setMine,
@@ -85,6 +86,10 @@ export function JobsSidebar() {
   // Only states actually present get a key entry — a legend full of
   // zeroes is noise.
   const keyStates = URGENCY.filter((s) => (counts.get(s) ?? 0) > 0)
+  // The second axis — outbound rows the five-check rollup says can't go
+  // out yet. Same chip pattern as the states; counts only the rows the
+  // chip itself would show (readiness is omitted everywhere else).
+  const notReadyCount = allRows.filter((r) => rowNotReady(r.job, r.state)).length
 
   if (collapsed && selected) {
     return (
@@ -186,6 +191,23 @@ export function JobsSidebar() {
                 </button>
               )
             })}
+            {notReadyCount > 0 && (
+              <button
+                onClick={() => setStateFilter(stateFilter === 'not-ready' ? null : 'not-ready')}
+                title="Outbound jobs still missing paperwork, a card, a driver, or a unit — click to show only these"
+                className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
+                  stateFilter === 'not-ready'
+                    ? 'bg-zinc-900 text-white font-bold'
+                    : 'text-rose-700 hover:bg-zinc-200'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-sm border border-rose-500" />
+                Not ready
+                <span className={stateFilter === 'not-ready' ? 'font-bold' : 'text-rose-500'}>
+                  {notReadyCount}
+                </span>
+              </button>
+            )}
             {stateFilter && (
               <button
                 onClick={() => setStateFilter(null)}
@@ -310,15 +332,50 @@ function JobsSidebarItem({
           </span>
         </span>
 
-        {value != null && value > 0 && (
-          <span
-            className={`block text-[10px] font-mono tabular-nums ${
-              selected ? 'text-zinc-900/60' : 'text-zinc-400'
-            }`}
-          >
-            {fmtMoney(value)}
-          </span>
-        )}
+        {/* Line 4 — readiness (outbound rows only) + value. The chip is
+            the second axis: the pill says WHEN, this says WHAT'S MISSING,
+            and the pill stays the louder of the two. Rose is OUTLINED,
+            never solid — solid red is the overdue pill's monopoly. On a
+            quoted/cancelled/returned row the chip is omitted entirely: an
+            unpapered quote is a normal quote, and an indicator that
+            scolds normal rows is wallpaper by Friday. */}
+        {(() => {
+          const r = readinessApplies(state) && j.readiness ? j.readiness : null
+          if (!r && (value == null || value <= 0)) return null
+          return (
+            <span className="flex items-baseline gap-1.5">
+              {r && (
+                <span
+                  title={
+                    r.ready
+                      ? 'All five checks clear — COI, agreement, card, driver, gear'
+                      : `Missing: ${r.blockers.map((b) => b.label).join(', ')} (${r.done} of ${r.total} done)`
+                  }
+                  className={`text-[9px] font-bold uppercase tracking-wider px-1 py-px rounded border whitespace-nowrap ${
+                    r.ready
+                      ? selected
+                        ? 'border-emerald-700/50 text-emerald-900'
+                        : 'border-emerald-200 text-emerald-600'
+                      : selected
+                        ? 'border-rose-700/60 text-rose-900'
+                        : 'border-rose-300 text-rose-600'
+                  }`}
+                >
+                  {readinessChipText(r)}
+                </span>
+              )}
+              {value != null && value > 0 && (
+                <span
+                  className={`ml-auto text-[10px] font-mono tabular-nums ${
+                    selected ? 'text-zinc-900/60' : 'text-zinc-400'
+                  }`}
+                >
+                  {fmtMoney(value)}
+                </span>
+              )}
+            </span>
+          )
+        })()}
       </span>
     </Link>
   )

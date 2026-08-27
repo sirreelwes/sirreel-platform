@@ -42,6 +42,7 @@ import { JobDocumentsPanel } from '@/components/jobs/JobDocumentsPanel';
 import { JobRwBillingPanel } from '@/components/jobs/JobRwBillingPanel';
 import { JobFinalInvoicePanel } from '@/components/jobs/JobFinalInvoicePanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
+import { computeReadiness } from '@/lib/jobs/readiness';
 
 /**
  * Job status, honestly split.
@@ -1013,10 +1014,36 @@ const driverTone = (d: any): string => {
   const extraContacts = Math.max(0, job.jobContacts.length - 1);
   const cardOnFile = job.cardAuth?.onFile;
   const cardSecurityOnly = job.cardAuth?.paymentPreference === 'CHECK_WIRE';
-  const pwComplete =
-    (coiStatus === 'Verified' ? 1 : 0) +
-    (agreementStatus === 'signed' ? 1 : 0) +
-    (cardOnFile ? 1 : 0);
+  // Five-check readiness — SAME helper the /jobs sidebar chip uses
+  // (src/lib/jobs/readiness.ts), so the strip and the list agree. The
+  // page's own richer statuses are mapped down to the helper's pass/fail
+  // inputs: agreementStatus already folds stage into 'signed', so stage
+  // travels as null here.
+  const readiness = (() => {
+    const liveB = (job.bookings ?? []).filter((b: any) => b.status !== 'CANCELLED');
+    const liveItems = liveB.flatMap((b: any) =>
+      (b.items ?? []).filter((i: any) => i.status === 'REQUESTED' || i.status === 'ASSIGNED'),
+    );
+    const activeAssignments = liveItems.flatMap((i: any) =>
+      (i.assignments ?? []).filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
+    );
+    return computeReadiness({
+      coi: coiStatus === 'Verified' ? 'VERIFIED' : coiStatus === 'Expired' ? 'EXPIRED' : coiStatus === 'Pending' ? 'PENDING' : 'NONE',
+      rental: agreementStatus === 'signed' ? 'SIGNED' : agreementStatus === 'pending' ? 'SENT' : 'NONE',
+      stage: null,
+      cardOnFile: !!cardOnFile,
+      gear: {
+        total: liveItems.length,
+        assigned: liveItems.filter((i: any) => i.status === 'ASSIGNED').length,
+      },
+      drivers: {
+        units: activeAssignments.length,
+        named: activeAssignments.filter((a: any) => (a.driverAssignments ?? []).length > 0).length,
+      },
+    });
+  })();
+  const gearBlocked = readiness.blockers.some((b) => b.key === 'gear');
+  const driverBlocked = readiness.blockers.some((b) => b.key === 'driver');
 
   return (
     <div className="max-w-5xl mx-auto space-y-3 text-[15px]">
@@ -1366,9 +1393,12 @@ const driverTone = (d: any): string => {
       <div>
         <div className="flex items-center gap-2.5 mb-2 px-0.5">
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500">Paperwork</span>
-          <span className="text-[12px] text-zinc-300">{pwComplete} of 3 complete</span>
+          <span className="text-[12px] text-zinc-300">{readiness.done} of {readiness.total} complete</span>
+          {readiness.ready && (
+            <span className="text-[11px] font-bold text-emerald-300">✓ Ready to go out</span>
+          )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* COI */}
           <a href="#coi" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
             <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Certificate of Insurance</div>
@@ -1430,6 +1460,29 @@ const driverTone = (d: any): string => {
               </>
             )}
           </div>
+          {/* Gear — units picked for every live hold. Internal (Julian),
+              so it jumps to the reservations rather than chasing a client. */}
+          <a href="#reserved-assets" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
+            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Gear Assigned</div>
+            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
+              <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              {gearBlocked ? 'Units to pick' : 'All assigned'}
+            </div>
+            <div className="mt-1.5 text-[12px] text-zinc-300">
+              {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
+            </div>
+          </a>
+          {/* Driver — a name on every assigned unit. */}
+          <a href="#drivers" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
+            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Drivers Named</div>
+            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
+              <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              {driverBlocked ? 'Missing drivers' : 'All named'}
+            </div>
+            <div className="mt-1.5 text-[12px] text-zinc-300">
+              {driverBlocked ? 'A unit has no driver yet' : 'Every unit has a driver'}
+            </div>
+          </a>
         </div>
       </div>
 

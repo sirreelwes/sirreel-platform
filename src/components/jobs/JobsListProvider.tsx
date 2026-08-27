@@ -21,6 +21,14 @@ import {
   type JobStatus,
   type RowState,
 } from '@/lib/jobs/listRow'
+import { readinessApplies } from '@/lib/jobs/readiness'
+
+export type ListFilter = RowState | 'not-ready'
+
+/** Outbound row with open blockers — what the "Not ready" chip shows. */
+export function rowNotReady(j: JobRow, state: RowState): boolean {
+  return readinessApplies(state) && j.readiness != null && !j.readiness.ready
+}
 
 export type StatusFilter = 'all' | JobStatus | 'orphans' | 'archived'
 export type Sort = 'urgency' | 'dates' | 'value' | 'newest'
@@ -44,7 +52,9 @@ interface JobsListValue {
   status: StatusFilter; setStatus: (v: StatusFilter) => void
   mine: boolean; setMine: (v: boolean) => void
   sort: Sort; setSort: (v: Sort) => void
-  stateFilter: RowState | null; setStateFilter: (v: RowState | null) => void
+  /** A rail state, or 'not-ready' — the readiness chip's filter: outbound
+   *  rows (booked/picking) whose five-check rollup has open blockers. */
+  stateFilter: ListFilter | null; setStateFilter: (v: ListFilter | null) => void
   /** Local patch after a row action, so the list doesn't re-fetch. */
   patchJob: (id: string, patch: Partial<JobRow>) => void
   /** Re-fetch the list — same thing `notifyJobsChanged()` triggers. */
@@ -87,7 +97,7 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   // back pin themselves to the top as 'Not returned', burying the work
   // of the week. Recency is the honest default until those are closed.
   const [sort, setSort] = useState<Sort>('newest')
-  const [stateFilter, setStateFilter] = useState<RowState | null>(null)
+  const [stateFilter, setStateFilter] = useState<ListFilter | null>(null)
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -168,7 +178,12 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   }, [allRows])
 
   const rows = useMemo(
-    () => (stateFilter ? allRows.filter((r) => r.state === stateFilter) : allRows),
+    () =>
+      stateFilter === 'not-ready'
+        ? allRows.filter((r) => rowNotReady(r.job, r.state))
+        : stateFilter
+          ? allRows.filter((r) => r.state === stateFilter)
+          : allRows,
     [allRows, stateFilter],
   )
 

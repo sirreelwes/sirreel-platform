@@ -183,6 +183,9 @@ export async function GET(
               select: {
                 id: true,
                 quantity: true,
+                // Feeds the five-check readiness strip (REQUESTED = gear
+                // not picked yet) — src/lib/jobs/readiness.ts.
+                status: true,
                 holdRank: true,
                 category: { select: { id: true, name: true, slug: true } },
                 catalogItem: { select: { id: true, slug: true } },

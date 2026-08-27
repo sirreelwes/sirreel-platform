@@ -79,6 +79,9 @@ export interface JobRow {
   } | null
   paperwork?: PaperworkRollup
   billing?: BillingRollup
+  /** Five-check "can this job go out" rollup — src/lib/jobs/readiness.ts.
+   *  Rendered ONLY on outbound rows (readinessApplies); shipped on all. */
+  readiness?: import('./readiness').JobReadiness
   cadence?: { state: string; partial: boolean }
   hasLD?: boolean
   hasStageScope?: boolean

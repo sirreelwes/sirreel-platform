@@ -25,7 +25,12 @@ import { isStageLineItem } from './stageLines'
  *
  * NO existing caller invokes this helper yet — Order.status →
  * PICKUP_CONFIRMED transitions today are done manually outside the
- * platform. This function exists so the first caller that wires
+ * platform. NOTE: the job-level "ready to go out" answer now lives in
+ * src/lib/jobs/readiness.ts (five checks, shared by the /jobs sidebar
+ * and the job page strip). This helper is narrower — contracts only,
+ * order-grain — and must not grow into a second readiness truth; if
+ * PICKUP_CONFIRMED automation lands, gate it on computeReadiness plus
+ * whatever order-grain checks it needs. This function exists so the first caller that wires
  * automated PICKUP_CONFIRMED has a ready-built guard rail. Derivation
  * is line-item based (Order has no contractType column — PaperworkRequest
  * is the only model that does, and it's keyed by booking not order).
