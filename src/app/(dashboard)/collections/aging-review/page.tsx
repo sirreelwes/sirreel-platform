@@ -163,6 +163,10 @@ export default function AgingReviewPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {/* The only route back used to be the nav sidebar. */}
+      <a href="/collections" className="text-[13px] text-zinc-500 hover:text-zinc-900 transition-colors inline-block mb-2">
+        ← Collections
+      </a>
       <h1 className="text-2xl font-semibold text-zinc-900">Aging Review</h1>
       <p className="text-sm text-zinc-600 mt-1 mb-3">
         Every open invoice past 60 days, oldest first. Rule on each one — the goal is zero

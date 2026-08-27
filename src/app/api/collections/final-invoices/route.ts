@@ -226,6 +226,27 @@ export async function GET() {
     await prisma.rwInvoice.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } })
   )?.syncedAt
 
+  // Aging review's workload, so its link can say whether there is anything
+  // to decide. Same definition as the review itself: open rows past 60 days
+  // (due date, falling back to invoice date) with no triage ruling yet.
+  // rwOpenRows is already in memory and already excludes paid-marks,
+  // write-offs and VOID; the triage table is one extra small read.
+  const agedIds = rwOpenRows
+    .filter((r) => {
+      const basis = r.dueDate ?? r.invoiceDate
+      return basis ? (Date.now() - basis.getTime()) / 86_400_000 > 60 : false
+    })
+    .map((r) => r.rwInvoiceId)
+  const decidedIds = new Set(
+    (
+      await prisma.rwInvoiceTriage.findMany({
+        where: { rwInvoiceId: { in: agedIds } },
+        select: { rwInvoiceId: true },
+      })
+    ).map((t) => t.rwInvoiceId),
+  )
+  const agingUndecided = agedIds.filter((id) => !decidedIds.has(id)).length
+
   const [chargesWeek, collectedMonthAgg, collectedWeek] = await Promise.all([
     prisma.rwCollectionCharge.findMany({
       where: { chargedAt: { gte: weekAgo } },
@@ -291,6 +312,7 @@ export async function GET() {
         ? Math.max(...ready.map((r) => Math.floor((Date.now() - r.uploadedAt.getTime()) / 86_400_000)))
         : 0,
       queueEmailed: ready.filter((r) => r.emailedAt).length,
+      agingUndecided,
       collectedMonthCount: collectedMonthAgg._count,
       collectedMonthTotal: Number(collectedMonthAgg._sum.amount ?? 0),
       avgDaysToCollect: daysToCollect.length
