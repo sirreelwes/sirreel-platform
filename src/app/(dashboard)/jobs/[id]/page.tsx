@@ -660,14 +660,14 @@ export default function JobDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-zinc-300 text-[15px]">Loading…</div>
+      <div className="min-h-[60vh] flex items-center justify-center text-zinc-500 text-[15px]">Loading…</div>
     );
   }
 
   if (error || !job) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <div className="text-zinc-300 text-[15px]">{error || 'Job not found'}</div>
+        <div className="text-zinc-600 text-[15px]">{error || 'Job not found'}</div>
         <button
           onClick={() => router.back()}
           className="text-[13px] text-amber-500 hover:text-amber-400"
@@ -873,21 +873,6 @@ export default function JobDetailPage() {
     return { state: 'none', source: null };
   };
 
-  // "On file" and "Signed" both mean covered, but a rep chasing paperwork
-  // needs to know which — one is a master already in the drawer, the
-  // other was countersigned for this job.
-  const coverageLabel = (
-    c: { state: CoverageState; source: 'onFile' | 'portal' | null },
-    rawStatus?: string,
-  ): string => {
-    if (c.state === 'expired') return 'Expired';
-    if (c.state === 'signed') return c.source === 'onFile' ? 'On file' : 'Signed';
-    if (c.state === 'pending') return rawStatus?.replace(/_/g, ' ') || 'Pending';
-    return 'None';
-  };
-  const coverageTone = (state: CoverageState): 'good' | 'warn' | 'idle' =>
-    state === 'signed' ? 'good' : state === 'expired' || state === 'pending' ? 'warn' : 'idle';
-
   const rentalCoverage = resolveCoverage(rentalAddendum, rentalAgreement);
   const stageCoverage = resolveCoverage(stageAddendum, stageAgreement);
 
@@ -1054,7 +1039,7 @@ const driverTone = (d: any): string => {
       )}
       <button
         onClick={() => router.back()}
-        className="text-[13px] text-zinc-300 hover:text-zinc-300"
+        className="text-[13px] text-zinc-500 hover:text-zinc-900 transition-colors"
       >
         ← Back
       </button>
@@ -1144,7 +1129,9 @@ const driverTone = (d: any): string => {
                   </a>
                 )}
                 {extraContacts > 0 && (
-                  <span className="text-[12px] text-zinc-300">+{extraContacts} more</span>
+                  <a href="#contacts" className="text-[12px] text-zinc-500 hover:text-amber-400">
+                    +{extraContacts} more
+                  </a>
                 )}
               </div>
             )}
@@ -1299,9 +1286,10 @@ const driverTone = (d: any): string => {
           </div>
         )}
 
-        {/* Metadata */}
+        {/* Metadata — the four numbers an agent scans, one row. The
+            production enum lives with its picker in the hero footer;
+            created/updated are housekeeping, demoted there too. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-          <Meta label="Production Type" value={job.productionType.replace('_', ' ')} />
           <Meta
             label="Order span"
             value={
@@ -1311,8 +1299,8 @@ const driverTone = (d: any): string => {
             }
             sub="from this job's orders"
           />
-          <Meta label="Agent" value={job.agent?.name || '—'} />
           <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
+          <Meta label="Agent" value={job.agent?.name || '—'} />
           <Meta
             label="Orders"
             value={String(job.orders.length > 0 ? job.orders.length : job.rwOrderCount)}
@@ -1322,31 +1310,17 @@ const driverTone = (d: any): string => {
                 : job.rwOrderCount > 0 ? 'RentalWorks' : undefined
             }
           />
-          <Meta label="Created" value={fmtDate(job.createdAt)} />
-          <Meta label="Updated" value={fmtDate(job.updatedAt)} />
         </div>
 
         {/* Phase 7 Pass A — at-a-glance engagement rollup. Each chip
             is computed from the expanded payload (no extra fetches).
             Hidden when the job has zero non-cancelled orders — the
             chips read as garbage during the QUOTED-no-order phase. */}
+        {/* Agreement chips used to render here too — deleted: they said
+            what the Paperwork tiles 100px below already say. Balance due
+            and Loaded ready stay; no other surface rolls those up. */}
         {liveOrders.length > 0 && (
-          <div id="documents" className="scroll-mt-4 mt-4 flex flex-wrap items-center gap-2 text-[12px]">
-            <RollupChip
-              label="Rental agreement"
-              value={coverageLabel(rentalCoverage, rentalAgreement?.status)}
-              tone={coverageTone(rentalCoverage.state)}
-            />
-            {/* Shows whenever the job books a stage OR a stage agreement
-                exists — an on-file stage contract used to be stored and
-                then rendered nowhere. */}
-            {stageRelevant && (
-              <RollupChip
-                label="Stage agreement"
-                value={coverageLabel(stageCoverage, stageAgreement?.status)}
-                tone={coverageTone(stageCoverage.state)}
-              />
-            )}
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
             {liveInvoices.length > 0 && (
               <RollupChip
                 label="Balance due"
@@ -1366,14 +1340,13 @@ const driverTone = (d: any): string => {
           </div>
         )}
 
-        {/* Production type profile — drives the fleet-assignment
-            optimizer. Editable in place; saving triggers the Company
-            most-common-profile cache refresh on the server. The legacy
-            productionType enum stays in the Meta grid above as static
-            display until the writers cut over. */}
-        <div className="mt-5 flex items-center gap-3 flex-wrap">
-          <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">
-            Production type profile
+        {/* Hero footer — housekeeping row. Production enum + its profile
+            picker (drives the fleet-assignment optimizer; saving refreshes
+            the Company most-common-profile cache) on the left, timestamps
+            on the right. One quiet line instead of two hero rows. */}
+        <div className="mt-5 pt-3 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+            Production · {job.productionType.replace('_', ' ')}
           </div>
           <div className="w-64">
             <ProductionTypeProfilePicker
@@ -1383,25 +1356,28 @@ const driverTone = (d: any): string => {
               size="compact"
             />
           </div>
-          {profileSaving && <span className="text-[11px] text-zinc-300">Saving…</span>}
+          {profileSaving && <span className="text-[11px] text-zinc-500">Saving…</span>}
+          <div className="ml-auto text-[11px] text-zinc-500">
+            Created {fmtDate(job.createdAt)} · Updated {relativeAge(job.updatedAt)}
+          </div>
         </div>
       </div>
 
       {/* Paperwork status strip — glanceable client-paperwork state.
           COI + Rental Agreement jump to their sections; Card Auth carries
           the "Send CC request" action (client authorizes in their portal). */}
-      <div>
-        <div className="flex items-center gap-2.5 mb-2 px-0.5">
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-500">Paperwork</span>
-          <span className="text-[12px] text-zinc-300">{readiness.done} of {readiness.total} complete</span>
-          {readiness.ready && (
-            <span className="text-[11px] font-bold text-emerald-300">✓ Ready to go out</span>
-          )}
+      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="flex items-center justify-between mb-2.5">
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
+          <span className="text-[12px] text-zinc-500">
+            {readiness.done} of {readiness.total} complete
+            {readiness.ready && <span className="text-emerald-300 font-semibold"> · ✓ Ready to go out</span>}
+          </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* COI */}
-          <a href="#coi" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Certificate of Insurance</div>
+          <a href="#coi" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Certificate of Insurance</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
               coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
             }`}>
@@ -1411,8 +1387,8 @@ const driverTone = (d: any): string => {
             <div className="mt-1.5 text-[12px] text-zinc-300">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
           </a>
           {/* Rental Agreement */}
-          <a href="#agreement" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Rental Agreement</div>
+          <a href="#agreement" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Rental Agreement</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
               agreementStatus === 'signed' ? 'text-emerald-300' : agreementStatus === 'expired' ? 'text-rose-300' : agreementStatus === 'pending' ? 'text-amber-300' : 'text-zinc-300'
             }`}>
@@ -1427,8 +1403,8 @@ const driverTone = (d: any): string => {
           </a>
           {/* Card Authorization — `id` is the deep-link target for the
               CC Auth chip in the reservation pop-up on /gantt. */}
-          <div id="card-auth" className="scroll-mt-4 rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-4">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Card Authorization</div>
+          <div id="card-auth" className="scroll-mt-4 rounded-lg border border-zinc-800 bg-zinc-800/40 p-3.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Card Authorization</div>
             {cardOnFile ? (
               <>
                 <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-emerald-300">
@@ -1441,40 +1417,34 @@ const driverTone = (d: any): string => {
               </>
             ) : (
               <>
-                <button
-                  onClick={sendCcRequest}
-                  className="mt-2.5 text-[13px] font-semibold bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  ↗ Send CC request
-                </button>
-                <div className="mt-2 text-[12px] text-zinc-300">
-                  Review the email, then send &middot;{' '}
+                {/* Status first — same grammar as the other four tiles;
+                    the rose dot is the "act here", the action sits below. */}
+                <div className="mt-2.5 flex items-center gap-2 text-[15px] font-bold text-rose-300">
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  Missing
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-500">
+                  <button
+                    onClick={sendCcRequest}
+                    className="font-semibold text-amber-400 hover:text-amber-300"
+                  >
+                    ↗ Send CC request
+                  </button>
+                  {' '}&middot;{' '}
                   <button
                     onClick={copyCcLink}
                     disabled={ccBusy}
-                    className="underline underline-offset-2 hover:text-zinc-100 disabled:opacity-50"
+                    className="underline underline-offset-2 hover:text-zinc-200 disabled:opacity-50"
                   >
-                    {ccBusy ? 'copying…' : 'copy link instead'}
+                    {ccBusy ? 'copying…' : 'copy link'}
                   </button>
                 </div>
               </>
             )}
           </div>
-          {/* Gear — units picked for every live hold. Internal (Julian),
-              so it jumps to the reservations rather than chasing a client. */}
-          <a href="#reserved-assets" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Gear Assigned</div>
-            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
-              <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-              {gearBlocked ? 'Units to pick' : 'All assigned'}
-            </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">
-              {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
-            </div>
-          </a>
           {/* Driver — a name on every assigned unit. */}
-          <a href="#drivers" className="group rounded-xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 hover:border-amber-600/60 p-4 transition-colors">
-            <div className="text-[11px] uppercase tracking-widest text-zinc-300 font-semibold">Drivers Named</div>
+          <a href="#drivers" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Drivers Named</div>
             <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
               <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
               {driverBlocked ? 'Missing drivers' : 'All named'}
@@ -1483,132 +1453,25 @@ const driverTone = (d: any): string => {
               {driverBlocked ? 'A unit has no driver yet' : 'Every unit has a driver'}
             </div>
           </a>
+          {/* Gear — units picked for every live hold. Internal (Julian),
+              so it jumps to the reservations rather than chasing a client. */}
+          <a href="#reserved-assets" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Gear Assigned</div>
+            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
+              <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              {gearBlocked ? 'Units to pick' : 'All assigned'}
+            </div>
+            <div className="mt-1.5 text-[12px] text-zinc-300">
+              {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
+            </div>
+          </a>
         </div>
-      </div>
-
-      {/* Reservations — one row per booking, with where it came from.
-          Above the unit grid on purpose: two cards for two vans look
-          identical whether that is one two-van rental or the same rental
-          held twice, and only the booking-level view separates them. */}
-      <JobBookingsSection
-        bookings={(job.bookings ?? []).map((b: any) => ({
-          id: b.id,
-          bookingNumber: b.bookingNumber,
-          status: b.status,
-          startDate: b.startDate,
-          endDate: b.endDate,
-          planyoCartId: b.planyoCartId ?? null,
-          items: (b.items ?? []).map((i: any) => ({
-            id: i.id,
-            category: i.category ?? null,
-            assignments: (i.assignments ?? []).map((a: any) => ({
-              id: a.id, status: a.status, asset: a.asset ?? null,
-            })),
-          })),
-        }))}
-        onChanged={load}
-      />
-
-      {/* Reserved assets → each opens its reservation on the calendar */}
-      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
-          <span className="text-[12px] text-zinc-300">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
-        </div>
-        {reservedAssets.length === 0 ? (
-          <div className="mt-3 text-[15px] text-zinc-300">No units reserved on this job yet.</div>
-        ) : (
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {reservedAssets.map((a) => (
-              <Link
-                key={a.assetId}
-                href={`/gantt?date=${a.startDate.slice(0, 10)}`}
-                title="Open this reservation on the calendar"
-                className="group rounded-xl border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3 transition-all duration-200 hover:-translate-y-0.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <svg className="w-4 h-4 shrink-0 text-amber-500/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
-                      <path d="M3.5 7 12 11.6 20.5 7" />
-                      <path d="M12 11.6v9.8" />
-                    </svg>
-                    <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {(() => {
-                      // The badge NAMES the decision. It used to be a
-                      // two-tone shield that went grey for "declined" and
-                      // "never asked" alike, so the answer to "did they take
-                      // the waiver?" was unreadable off this page.
-                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
-                      const style =
-                        lcdw === 'ACCEPTED'
-                          ? { cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
-                          : lcdw === 'DECLINED'
-                            ? { cls: 'bg-zinc-900 text-zinc-400 border-zinc-700', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
-                            : { cls: 'bg-amber-950/40 text-amber-300 border-amber-900/70', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
-                      return (
-                        <span
-                          title={style.title}
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
-                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
-                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
-                          </svg>
-                          {style.label}
-                        </span>
-                      );
-                    })()}
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
-                      {a.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-0.5 text-[12px] text-zinc-300 truncate">{a.category}</div>
-                <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
-                {/* Who's driving it — the question a rep asks while looking
-                    at the unit, so answered here rather than only in the
-                    Drivers section below. */}
-                <div className="mt-1.5 text-[11px] truncate">
-                  {a.drivers.length === 0 ? (
-                    <span className="text-zinc-500">No driver named</span>
-                  ) : (
-                    <span className={driverTone(a.drivers[0])}>
-                      🧑‍✈️ {driverName(a.drivers[0])}
-                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
-                      {' · '}{driverStateLabel(a.drivers[0])}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
-              </Link>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Certificate of Insurance — the compliance record. Client-drop
           uploads land here via the portal link; offline COIs (email,
           broker, RentalWorks) are attached with "Upload COI" so HQ stays
           the source of truth without a re-sign. */}
-      {/* Drivers — who's taking each unit out. Sits directly under the
-          reserved assets it describes. */}
-      <JobDriversSection
-        vehicles={reservedAssets.map((a) => ({
-          bookingAssignmentId: a.bookingAssignmentId,
-          unitName: a.unitName,
-          category: a.category,
-          startDate: a.startDate,
-          endDate: a.endDate,
-          drivers: a.drivers,
-        }))}
-        pendingHolds={pendingHolds}
-        onChanged={load}
-      />
-
       <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
@@ -1936,7 +1799,7 @@ const driverTone = (d: any): string => {
             {/* "Order agreements", not "Signed by the client" — the list
                 includes rows still waiting on a signature, and each one
                 states its own status. */}
-            <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Order agreements</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Order agreements</div>
             <div className="space-y-2">
               {signedOrderAgreements.map(({ order, agreement: a }) => {
                 const executed = isSignedAgreementStatus(a.status);
@@ -1986,11 +1849,440 @@ const driverTone = (d: any): string => {
         )}
       </div>
 
+      {/* Reservations — one row per booking, with where it came from.
+          Above the unit grid on purpose: two cards for two vans look
+          identical whether that is one two-van rental or the same rental
+          held twice, and only the booking-level view separates them. */}
+      <JobBookingsSection
+        bookings={(job.bookings ?? []).map((b: any) => ({
+          id: b.id,
+          bookingNumber: b.bookingNumber,
+          status: b.status,
+          startDate: b.startDate,
+          endDate: b.endDate,
+          planyoCartId: b.planyoCartId ?? null,
+          items: (b.items ?? []).map((i: any) => ({
+            id: i.id,
+            category: i.category ?? null,
+            assignments: (i.assignments ?? []).map((a: any) => ({
+              id: a.id, status: a.status, asset: a.asset ?? null,
+            })),
+          })),
+        }))}
+        onChanged={load}
+      />
+
+      {/* Reserved assets → each opens its reservation on the calendar */}
+      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
+          <span className="text-[12px] text-zinc-500">{reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}</span>
+        </div>
+        {reservedAssets.length === 0 ? (
+          <div className="mt-3 text-[15px] text-zinc-300">No units reserved on this job yet.</div>
+        ) : (
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {reservedAssets.map((a) => (
+              <Link
+                key={a.assetId}
+                href={`/gantt?date=${a.startDate.slice(0, 10)}`}
+                title="Open this reservation on the calendar"
+                className="group rounded-xl border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 hover:bg-zinc-800 p-3 transition-all duration-200 hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <svg className="w-4 h-4 shrink-0 text-amber-500/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
+                      <path d="M3.5 7 12 11.6 20.5 7" />
+                      <path d="M12 11.6v9.8" />
+                    </svg>
+                    <span className="font-semibold text-white group-hover:text-amber-300 transition-colors truncate">{a.unitName}</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(() => {
+                      // The badge NAMES the decision. It used to be a
+                      // two-tone shield that went grey for "declined" and
+                      // "never asked" alike, so the answer to "did they take
+                      // the waiver?" was unreadable off this page.
+                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
+                      const style =
+                        lcdw === 'ACCEPTED'
+                          ? { cls: 'bg-emerald-950/40 text-emerald-300 border-emerald-900', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
+                          : lcdw === 'DECLINED'
+                            ? { cls: 'bg-zinc-900 text-zinc-400 border-zinc-700', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
+                            : { cls: 'bg-amber-950/40 text-amber-300 border-amber-900/70', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
+                      return (
+                        <span
+                          title={style.title}
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
+                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
+                          </svg>
+                          {style.label}
+                        </span>
+                      );
+                    })()}
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                      {a.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-0.5 text-[12px] text-zinc-300 truncate">{a.category}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-300 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
+                {/* Who's driving it — the question a rep asks while looking
+                    at the unit, so answered here rather than only in the
+                    Drivers section below. */}
+                <div className="mt-1.5 text-[11px] truncate">
+                  {a.drivers.length === 0 ? (
+                    <span className="text-zinc-500">No driver named</span>
+                  ) : (
+                    <span className={driverTone(a.drivers[0])}>
+                      🧑‍✈️ {driverName(a.drivers[0])}
+                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
+                      {' · '}{driverStateLabel(a.drivers[0])}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 text-[11px] text-amber-500/70 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Drivers — who's taking each unit out. Sits directly under the
+          reserved assets it describes. */}
+      <JobDriversSection
+        vehicles={reservedAssets.map((a) => ({
+          bookingAssignmentId: a.bookingAssignmentId,
+          unitName: a.unitName,
+          category: a.category,
+          startDate: a.startDate,
+          endDate: a.endDate,
+          drivers: a.drivers,
+        }))}
+        pendingHolds={pendingHolds}
+        onChanged={load}
+      />
+
+      {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
+          per-order delivery/pickup arrangements an agent needs at a
+          glance: order.notes (free-text — where after-hours dropoff
+          instructions live today), stageBookingTerms.salesNotes, and
+          any line items whose pickupDate/returnDate diverges from the
+          order window. Hidden when no order has logistics data. */}
+      {(() => {
+        const rows = liveOrders
+          .map((o) => {
+            const dateOverrides = o.lineItems.filter(
+              (li) =>
+                (li.pickupDate && li.pickupDate !== o.startDate) ||
+                (li.returnDate && li.returnDate !== o.endDate),
+            );
+            const hasNotes = !!(o.notes && o.notes.trim());
+            const hasStageNotes = !!(o.stageBookingTerms?.salesNotes && o.stageBookingTerms.salesNotes.trim());
+            const hasStageDetail = !!o.stageBookingTerms;
+            if (!hasNotes && !hasStageNotes && !hasStageDetail && dateOverrides.length === 0) return null;
+            return { order: o, dateOverrides, hasNotes, hasStageNotes, hasStageDetail };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
+        if (rows.length === 0) return null;
+
+        return (
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
+              <span className="text-[11px] text-zinc-300 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
+            </div>
+            <div className="space-y-4">
+              {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
+                <div key={order.id} className="border-l-2 border-amber-900/40 pl-3">
+                  <div className="flex items-center gap-2 mb-1.5 text-[12px]">
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="font-mono text-zinc-300 hover:text-amber-400"
+                    >
+                      {order.orderNumber}
+                    </Link>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[order.status] || 'bg-zinc-800 text-zinc-300'}`}
+                    >
+                      {order.status}
+                    </span>
+                    <span className="text-zinc-300">
+                      {fmtDay(order.startDate)} – {fmtDay(order.endDate)}
+                    </span>
+                  </div>
+                  {hasNotes && (
+                    <div className="mb-2">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Order notes</div>
+                      <div className="text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
+                    </div>
+                  )}
+                  {hasStageDetail && order.stageBookingTerms && (
+                    <div className="mb-2">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Stage terms</div>
+                      <div className="text-[13px] text-zinc-300 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {order.stageBookingTerms.specificSpaces?.length > 0 && (
+                          <span>Spaces: <span className="text-zinc-100">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
+                        )}
+                        {order.stageBookingTerms.productionOfficeRental && (
+                          <span className="text-amber-300">+ Production office</span>
+                        )}
+                        {order.stageBookingTerms.securityGuardRequired && (
+                          <span className="text-amber-300">+ Security guard</span>
+                        )}
+                        <span>Daily: <span className="font-mono text-zinc-100">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
+                      </div>
+                      {hasStageNotes && order.stageBookingTerms.salesNotes && (
+                        <div className="mt-1 text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
+                      )}
+                    </div>
+                  )}
+                  {dateOverrides.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-0.5">Off-window pickup / return</div>
+                      <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                        {dateOverrides.map((li) => (
+                          <li key={li.id} className="flex gap-2">
+                            <span className="text-zinc-300 min-w-[1rem]">·</span>
+                            <span className="flex-1">
+                              <span className="text-zinc-100">{li.description}</span>
+                              <span className="ml-2 text-zinc-300">
+                                {li.pickupDate ? fmtDay(li.pickupDate) : '—'} → {li.returnDate ? fmtDay(li.returnDate) : '—'}
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Orders — Phase 7 Pass B: collapsible cards. Click the row to
+          expand the booked scope, signed agreements, invoices, and any
+          per-vehicle BookingAssignments. Affordances (edit, send, sign,
+          invoice, payment) live on /orders/[id] — this is read-only
+          rollup for the live engagement. */}
+      <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+        <div className="flex items-center justify-between mb-2.5">
+          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
+          <span className="text-[12px] text-zinc-500">{job.orders.length} total</span>
+        </div>
+        {job.orders.length === 0 ? (
+          <div className="text-[15px] text-zinc-300">No orders on this job yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {job.orders.map((o) => {
+              const expanded = expandedOrders.has(o.id);
+              const orderBookings = job.bookings.filter(
+                // Post catalog merge both sides carry the merged row's
+                // slug; bi.category is the frozen AssetCategory join.
+                (b) => b.items.some((bi) => o.lineItems.some((li) =>
+                  !!li.inventoryItem?.slug && li.inventoryItem.slug === (bi.catalogItem?.slug ?? bi.category.slug))),
+              );
+              return (
+                <div key={o.id} className="bg-zinc-950/40 border border-zinc-800 rounded-lg">
+                  <button
+                    onClick={() => toggleOrder(o.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
+                  >
+                    <span className="text-zinc-300 text-[13px] w-3">{expanded ? '▾' : '▸'}</span>
+                    <span className="font-mono text-[15px] font-semibold text-white">{o.orderNumber}</span>
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-300'}`}
+                    >
+                      {o.status}
+                    </span>
+                    {o.addedToJobAt && (
+                      <span
+                        title="Added later via inquiry triage"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700"
+                      >
+                        Add-on
+                      </span>
+                    )}
+                    <span className="text-[13px] text-zinc-300 whitespace-nowrap">
+                      {fmtDay(o.startDate)} – {fmtDay(o.endDate)}
+                    </span>
+                    <span className="text-[11px] text-zinc-300 ml-2">
+                      {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
+                    </span>
+                    <span className="ml-auto font-mono text-[13px] text-zinc-200">{fmtMoney(o.total)}</span>
+                    <Link
+                      href={`/orders/${o.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-2 shrink-0 rounded-md border border-amber-700/50 bg-amber-950/30 px-2.5 py-1 text-[12px] font-bold text-amber-300 hover:bg-amber-900/40 hover:border-amber-600 transition-colors"
+                    >
+                      Open order →
+                    </Link>
+                  </button>
+
+                  {expanded && (
+                    <div className="border-t border-zinc-800 px-4 py-3 space-y-4">
+                      {/* Booked scope */}
+                      {o.lineItems.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Booked scope</div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[13px]">
+                              <thead className="text-[10px] uppercase tracking-wider text-zinc-400">
+                                <tr className="border-b border-zinc-800">
+                                  <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Days</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Rate</th>
+                                  <th className="text-right pb-1.5 pr-2 font-semibold">Total</th>
+                                  <th className="text-left pb-1.5 pl-2 font-semibold">Lane / Pick</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-900">
+                                {o.lineItems.map((li) => (
+                                  <tr key={li.id} className="text-zinc-300">
+                                    <td className="py-1.5 pr-2">
+                                      <div className="text-zinc-100">{li.description}</div>
+                                      {li.qualifier && (
+                                        <div className="text-[11px] text-zinc-300">{li.qualifier}</div>
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{li.billableDays}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.rate)}</td>
+                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>
+                                    <td className="py-1.5 pl-2 text-[11px]">
+                                      {li.fulfillmentLane && (
+                                        <span className="text-zinc-300 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
+                                      )}
+                                      {li.pickStatus && (
+                                        <span className="text-amber-300 uppercase tracking-wider">{li.pickStatus.replace(/_/g, ' ')}</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Per-vehicle assignments — only if a Booking
+                          for this order's categories has assignments. */}
+                      {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Per-vehicle assignments</div>
+                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                            {orderBookings.flatMap((b) =>
+                              b.items.flatMap((bi) =>
+                                bi.assignments.map((a) => (
+                                  <li key={a.id} className="flex gap-2">
+                                    <span className="text-zinc-300 min-w-[1rem]">·</span>
+                                    <span>
+                                      <span className="text-zinc-100">{bi.category.name}</span>
+                                      <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
+                                      <span className="ml-2 text-zinc-300">
+                                        {fmtDay(a.startDate)} → {fmtDay(a.endDate)}
+                                      </span>
+                                      <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-400">{a.status.replace(/_/g, ' ')}</span>
+                                    </span>
+                                  </li>
+                                )),
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Order-native agreements (portal-sign flow). The
+                          job's coverage lives in the job-level Agreement
+                          section; this is just per-order signing state. */}
+                      {o.signedAgreements.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Order agreements</div>
+                          {/* One status line per contract — the full record
+                              (dates, signer, PDFs) lives in the job-level
+                              Agreement section this links to. */}
+                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                            {o.signedAgreements.map((a) => {
+                              const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
+                              return (
+                                <li key={a.id} className="flex items-baseline gap-2">
+                                  <span className="text-zinc-500 min-w-[1rem]">·</span>
+                                  <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
+                                  <span className={`text-[11px] uppercase tracking-wider ${signed ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                    {a.status.replace(/_/g, ' ')}
+                                  </span>
+                                  <a href="#agreement" className="text-[12px] text-zinc-500 hover:text-amber-400">
+                                    View in Agreement section ↑
+                                  </a>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Invoices */}
+                      {o.invoices.length > 0 && (
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-1.5">Invoices</div>
+                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
+                            {o.invoices.map((inv) => (
+                              <li key={inv.id} className="flex gap-2">
+                                <span className="text-zinc-300 min-w-[1rem]">·</span>
+                                <span className="flex-1">
+                                  <span className="font-mono text-zinc-100">{inv.invoiceNumber}</span>
+                                  <span className="ml-1.5 text-[10px] text-zinc-300 uppercase tracking-wider">{inv.type}</span>
+                                  <span className="ml-2 text-[11px] uppercase tracking-wider text-amber-300">{inv.status}</span>
+                                  <span className="ml-2 text-zinc-300">
+                                    {fmtMoney(inv.amountPaid)} paid of {fmtMoney(inv.total)}
+                                    {inv.balanceDue > 0 && (
+                                      <span className="ml-1 text-amber-300"> · {fmtMoney(inv.balanceDue)} due</span>
+                                    )}
+                                  </span>
+                                  {inv.dueDate && inv.status !== 'PAID' && (
+                                    <span className="ml-2 text-[11px] text-zinc-300">due {fmtDay(inv.dueDate)}</span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* RW billing: linked RW order → its invoices + balance. Anchored —
+          the gantt's order badge / modal deep-link here for RW-linked jobs. */}
+      <div id="rw-billing" className="scroll-mt-4">
+        <JobRwBillingPanel jobId={job.id} />
+      </div>
+      {/* Sales -> collections handoff. Sits under RW billing because the
+          agent is already looking at the job's RW invoices here. */}
+      <JobFinalInvoicePanel jobId={job.id} />
+
+      {/* RW quotes/invoices attached to this job (transitional). */}
+      <JobDocumentsPanel jobId={job.id} />
+
       {/* Contacts — Phase 7 Pass A: surface phone (already fetched,
           previously not rendered) so the agent can reach the client
           after-hours via a single tap. tel: link triggers native
           dialer on mobile / Mac Continuity Calling on desktop. */}
-      <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div id="contacts" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
           <button
@@ -2103,7 +2395,7 @@ const driverTone = (d: any): string => {
           the client file (Company.notes); this is just the at-a-glance. */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-start gap-3 flex-wrap">
-          <h2 className="text-[13px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-3.5 before:rounded-full before:bg-amber-500/80">
+          <h2 className="text-[15px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
             Client notes
           </h2>
           {job.company.notes?.trim() ? (
@@ -2123,332 +2415,6 @@ const driverTone = (d: any): string => {
           </Link>
         </div>
       </div>
-
-      {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
-          per-order delivery/pickup arrangements an agent needs at a
-          glance: order.notes (free-text — where after-hours dropoff
-          instructions live today), stageBookingTerms.salesNotes, and
-          any line items whose pickupDate/returnDate diverges from the
-          order window. Hidden when no order has logistics data. */}
-      {(() => {
-        const rows = liveOrders
-          .map((o) => {
-            const dateOverrides = o.lineItems.filter(
-              (li) =>
-                (li.pickupDate && li.pickupDate !== o.startDate) ||
-                (li.returnDate && li.returnDate !== o.endDate),
-            );
-            const hasNotes = !!(o.notes && o.notes.trim());
-            const hasStageNotes = !!(o.stageBookingTerms?.salesNotes && o.stageBookingTerms.salesNotes.trim());
-            const hasStageDetail = !!o.stageBookingTerms;
-            if (!hasNotes && !hasStageNotes && !hasStageDetail && dateOverrides.length === 0) return null;
-            return { order: o, dateOverrides, hasNotes, hasStageNotes, hasStageDetail };
-          })
-          .filter((r): r is NonNullable<typeof r> => r !== null);
-
-        if (rows.length === 0) return null;
-
-        return (
-          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-            <div className="flex items-center justify-between mb-2.5">
-              <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Logistics & after-hours</h2>
-              <span className="text-[11px] text-zinc-300 uppercase tracking-wider">Free-text from agent notes + stage terms</span>
-            </div>
-            <div className="space-y-4">
-              {rows.map(({ order, dateOverrides, hasNotes, hasStageNotes, hasStageDetail }) => (
-                <div key={order.id} className="border-l-2 border-amber-900/40 pl-3">
-                  <div className="flex items-center gap-2 mb-1.5 text-[12px]">
-                    <Link
-                      href={`/orders/${order.id}`}
-                      className="font-mono text-zinc-300 hover:text-amber-400"
-                    >
-                      {order.orderNumber}
-                    </Link>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[order.status] || 'bg-zinc-800 text-zinc-300'}`}
-                    >
-                      {order.status}
-                    </span>
-                    <span className="text-zinc-300">
-                      {fmtDay(order.startDate)} – {fmtDay(order.endDate)}
-                    </span>
-                  </div>
-                  {hasNotes && (
-                    <div className="mb-2">
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-0.5">Order notes</div>
-                      <div className="text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.notes}</div>
-                    </div>
-                  )}
-                  {hasStageDetail && order.stageBookingTerms && (
-                    <div className="mb-2">
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-0.5">Stage terms</div>
-                      <div className="text-[13px] text-zinc-300 flex flex-wrap gap-x-3 gap-y-0.5">
-                        {order.stageBookingTerms.specificSpaces?.length > 0 && (
-                          <span>Spaces: <span className="text-zinc-100">{order.stageBookingTerms.specificSpaces.join(', ')}</span></span>
-                        )}
-                        {order.stageBookingTerms.productionOfficeRental && (
-                          <span className="text-amber-300">+ Production office</span>
-                        )}
-                        {order.stageBookingTerms.securityGuardRequired && (
-                          <span className="text-amber-300">+ Security guard</span>
-                        )}
-                        <span>Daily: <span className="font-mono text-zinc-100">{fmtMoney(order.stageBookingTerms.dailyRate)}</span></span>
-                      </div>
-                      {hasStageNotes && order.stageBookingTerms.salesNotes && (
-                        <div className="mt-1 text-[13px] text-zinc-200 whitespace-pre-wrap leading-relaxed">{order.stageBookingTerms.salesNotes}</div>
-                      )}
-                    </div>
-                  )}
-                  {dateOverrides.length > 0 && (
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-0.5">Off-window pickup / return</div>
-                      <ul className="text-[13px] text-zinc-300 space-y-0.5">
-                        {dateOverrides.map((li) => (
-                          <li key={li.id} className="flex gap-2">
-                            <span className="text-zinc-300 min-w-[1rem]">·</span>
-                            <span className="flex-1">
-                              <span className="text-zinc-100">{li.description}</span>
-                              <span className="ml-2 text-zinc-300">
-                                {li.pickupDate ? fmtDay(li.pickupDate) : '—'} → {li.returnDate ? fmtDay(li.returnDate) : '—'}
-                              </span>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Orders — Phase 7 Pass B: collapsible cards. Click the row to
-          expand the booked scope, signed agreements, invoices, and any
-          per-vehicle BookingAssignments. Affordances (edit, send, sign,
-          invoice, payment) live on /orders/[id] — this is read-only
-          rollup for the live engagement. */}
-      <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
-        <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
-          <span className="text-[13px] text-zinc-300">{job.orders.length} total · row expands · open for full order</span>
-        </div>
-        {job.orders.length === 0 ? (
-          <div className="text-[15px] text-zinc-300">No orders on this job yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {job.orders.map((o) => {
-              const expanded = expandedOrders.has(o.id);
-              const orderBookings = job.bookings.filter(
-                // Post catalog merge both sides carry the merged row's
-                // slug; bi.category is the frozen AssetCategory join.
-                (b) => b.items.some((bi) => o.lineItems.some((li) =>
-                  !!li.inventoryItem?.slug && li.inventoryItem.slug === (bi.catalogItem?.slug ?? bi.category.slug))),
-              );
-              return (
-                <div key={o.id} className="bg-zinc-950/40 border border-zinc-800 rounded-lg">
-                  <button
-                    onClick={() => toggleOrder(o.id)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-900/50 transition-colors"
-                  >
-                    <span className="text-zinc-300 text-[13px] w-3">{expanded ? '▾' : '▸'}</span>
-                    <span className="font-mono text-[15px] font-semibold text-white">{o.orderNumber}</span>
-                    <span
-                      className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${ORDER_STATUS_BADGE[o.status] || 'bg-zinc-800 text-zinc-300'}`}
-                    >
-                      {o.status}
-                    </span>
-                    {o.addedToJobAt && (
-                      <span
-                        title="Added later via inquiry triage"
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700"
-                      >
-                        Add-on
-                      </span>
-                    )}
-                    <span className="text-[13px] text-zinc-300 whitespace-nowrap">
-                      {fmtDay(o.startDate)} – {fmtDay(o.endDate)}
-                    </span>
-                    <span className="text-[11px] text-zinc-300 ml-2">
-                      {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'}
-                    </span>
-                    <span className="ml-auto font-mono text-[13px] text-zinc-200">{fmtMoney(o.total)}</span>
-                    <Link
-                      href={`/orders/${o.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="ml-2 shrink-0 rounded-md border border-amber-700/50 bg-amber-950/30 px-2.5 py-1 text-[12px] font-bold text-amber-300 hover:bg-amber-900/40 hover:border-amber-600 transition-colors"
-                    >
-                      Open order →
-                    </Link>
-                  </button>
-
-                  {expanded && (
-                    <div className="border-t border-zinc-800 px-4 py-3 space-y-4">
-                      {/* Booked scope */}
-                      {o.lineItems.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Booked scope</div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-[13px]">
-                              <thead className="text-[10px] uppercase tracking-wider text-zinc-300">
-                                <tr className="border-b border-zinc-800">
-                                  <th className="text-left pb-1.5 pr-2 font-semibold">Item</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Qty</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Days</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Rate</th>
-                                  <th className="text-right pb-1.5 pr-2 font-semibold">Total</th>
-                                  <th className="text-left pb-1.5 pl-2 font-semibold">Lane / Pick</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-zinc-900">
-                                {o.lineItems.map((li) => (
-                                  <tr key={li.id} className="text-zinc-300">
-                                    <td className="py-1.5 pr-2">
-                                      <div className="text-zinc-100">{li.description}</div>
-                                      {li.qualifier && (
-                                        <div className="text-[11px] text-zinc-300">{li.qualifier}</div>
-                                      )}
-                                    </td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{li.quantity}</td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{li.billableDays}</td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.rate)}</td>
-                                    <td className="py-1.5 pr-2 text-right font-mono">{fmtMoney(li.lineTotal)}</td>
-                                    <td className="py-1.5 pl-2 text-[11px]">
-                                      {li.fulfillmentLane && (
-                                        <span className="text-zinc-300 uppercase tracking-wider mr-2">{li.fulfillmentLane}</span>
-                                      )}
-                                      {li.pickStatus && (
-                                        <span className="text-amber-300 uppercase tracking-wider">{li.pickStatus.replace(/_/g, ' ')}</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Per-vehicle assignments — only if a Booking
-                          for this order's categories has assignments. */}
-                      {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Per-vehicle assignments</div>
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
-                            {orderBookings.flatMap((b) =>
-                              b.items.flatMap((bi) =>
-                                bi.assignments.map((a) => (
-                                  <li key={a.id} className="flex gap-2">
-                                    <span className="text-zinc-300 min-w-[1rem]">·</span>
-                                    <span>
-                                      <span className="text-zinc-100">{bi.category.name}</span>
-                                      <span className="ml-2 font-mono text-amber-300">{a.asset.unitName}</span>
-                                      <span className="ml-2 text-zinc-300">
-                                        {fmtDay(a.startDate)} → {fmtDay(a.endDate)}
-                                      </span>
-                                      <span className="ml-2 text-[10px] uppercase tracking-wider text-zinc-300">{a.status.replace(/_/g, ' ')}</span>
-                                    </span>
-                                  </li>
-                                )),
-                              ),
-                            )}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Order-native agreements (portal-sign flow). The
-                          job's coverage lives in the job-level Agreement
-                          section; this is just per-order signing state. */}
-                      {o.signedAgreements.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Order agreements</div>
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
-                            {o.signedAgreements.map((a) => {
-                              const signed = a.status === 'SIGNED_BASELINE' || a.status === 'SIGNED_NEGOTIATED';
-                              return (
-                                <li key={a.id} className="flex gap-2">
-                                  <span className="text-zinc-300 min-w-[1rem]">·</span>
-                                  <span className="flex-1">
-                                    <span className="text-zinc-100">{a.contractType.replace(/_/g, ' ')}</span>
-                                    <span className={`ml-2 text-[11px] uppercase tracking-wider ${signed ? 'text-emerald-300' : 'text-amber-300'}`}>
-                                      {a.status.replace(/_/g, ' ')}
-                                    </span>
-                                    {a.signedAt && (
-                                      <span className="ml-2 text-zinc-300">
-                                        signed {fmtDate(a.signedAt)}
-                                        {a.signerName ? ` · ${a.signerName}` : ''}
-                                      </span>
-                                    )}
-                                    {a.signedDocumentUrl && (
-                                      <a
-                                        href={`/api/orders/${o.id}/agreement/pdf?type=${a.contractType}&doc=signed`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="ml-2 text-[12px] font-semibold text-amber-400 hover:text-amber-300"
-                                      >
-                                        View signed PDF →
-                                      </a>
-                                    )}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Invoices */}
-                      {o.invoices.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-zinc-300 font-semibold mb-1.5">Invoices</div>
-                          <ul className="text-[13px] text-zinc-300 space-y-0.5">
-                            {o.invoices.map((inv) => (
-                              <li key={inv.id} className="flex gap-2">
-                                <span className="text-zinc-300 min-w-[1rem]">·</span>
-                                <span className="flex-1">
-                                  <span className="font-mono text-zinc-100">{inv.invoiceNumber}</span>
-                                  <span className="ml-1.5 text-[10px] text-zinc-300 uppercase tracking-wider">{inv.type}</span>
-                                  <span className="ml-2 text-[11px] uppercase tracking-wider text-amber-300">{inv.status}</span>
-                                  <span className="ml-2 text-zinc-300">
-                                    {fmtMoney(inv.amountPaid)} paid of {fmtMoney(inv.total)}
-                                    {inv.balanceDue > 0 && (
-                                      <span className="ml-1 text-amber-300"> · {fmtMoney(inv.balanceDue)} due</span>
-                                    )}
-                                  </span>
-                                  {inv.dueDate && inv.status !== 'PAID' && (
-                                    <span className="ml-2 text-[11px] text-zinc-300">due {fmtDay(inv.dueDate)}</span>
-                                  )}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Email threads filed in this Job (email-in-Job, step 6). */}
-      {/* RW billing: linked RW order → its invoices + balance. Anchored —
-          the gantt's order badge / modal deep-link here for RW-linked jobs. */}
-      <div id="rw-billing" className="scroll-mt-4">
-        <JobRwBillingPanel jobId={job.id} />
-      </div>
-      {/* Sales -> collections handoff. Sits under RW billing because the
-          agent is already looking at the job's RW invoices here. */}
-      <JobFinalInvoicePanel jobId={job.id} />
-
-      {/* RW quotes/invoices attached to this job (transitional). */}
-      <JobDocumentsPanel jobId={job.id} />
-
-      <JobEmailThreads jobId={job.id} />
-
 
       {/* Job notes — THIS job only */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
@@ -2473,6 +2439,10 @@ const driverTone = (d: any): string => {
           className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-[15px] text-white focus:outline-none focus:border-zinc-500 resize-y"
         />
       </div>
+
+      {/* Email threads filed in this Job (email-in-Job, step 6). */}
+      <JobEmailThreads jobId={job.id} />
+
 
       {/* Activity — Phase 7 Pass B. AuditLog feed scoped to this job
           and everything rooted on its orders (invoices, picklists,
@@ -2595,9 +2565,9 @@ function formatActivity(a: ActivityRow): { verb: string; what: string; details?:
 function Meta({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-300">{label}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{label}</div>
       <div className="text-[15px] text-white mt-0.5 truncate">{value}</div>
-      {sub && <div className="text-[11px] text-zinc-300">{sub}</div>}
+      {sub && <div className="text-[11px] text-zinc-500">{sub}</div>}
     </div>
   );
 }

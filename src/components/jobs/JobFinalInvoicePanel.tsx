@@ -87,9 +87,9 @@ export function JobFinalInvoicePanel({ jobId }: { jobId: string }) {
     'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-amber-600'
 
   return (
-    <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-white">Final invoice</h3>
+    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="flex items-center justify-between mb-2.5">
+        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Final invoice</h2>
         <button
           onClick={() => setOpen((v) => !v)}
           className="rounded-lg bg-amber-600 hover:bg-amber-500 text-zinc-900 font-bold px-3 py-1.5 text-xs transition-colors"

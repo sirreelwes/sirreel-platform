@@ -65,9 +65,9 @@ export function JobEmailThreads({ jobId }: { jobId: string }) {
     })
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <div className="flex items-baseline gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-white">Email threads</h2>
+    <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
+      <div className="flex items-baseline gap-2 mb-2.5">
+        <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Email threads</h2>
         <span className="text-[11px] text-zinc-500">
           {threads.length} filed — replies follow their thread into this job
         </span>
