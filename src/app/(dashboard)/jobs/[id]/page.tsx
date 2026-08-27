@@ -400,6 +400,47 @@ export default function JobDetailPage() {
   const [ccBusy, setCcBusy] = useState(false);
   // Card-authorization request — reviewed before it goes out.
   const [emailTarget, setEmailTarget] = useState<EmailReviewTarget | null>(null);
+  // Progressive disclosure: empty sections fold into the "Not started"
+  // strip; this holds the ones the user expanded by hand this visit.
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const openSection = (k: string, anchor?: string | null) => {
+    setOpenSections((prev) => {
+      if (prev.has(k)) return prev;
+      const next = new Set(prev);
+      next.add(k);
+      return next;
+    });
+    if (anchor) {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' })),
+      );
+    }
+  };
+  // Deep links (#coi, the strip tiles, gantt chips…) must land on a folded
+  // section — expand it, then scroll.
+  useEffect(() => {
+    const HASH_TO_SECTION: Record<string, string> = {
+      coi: 'coi', wc: 'wc', agreement: 'agreement', 'reserved-assets': 'assets',
+      drivers: 'drivers', orders: 'orders', 'rw-billing': 'money', contacts: 'contacts',
+    };
+    const apply = () => {
+      const h = window.location.hash.replace('#', '');
+      const k = HASH_TO_SECTION[h];
+      if (!k) return;
+      setOpenSections((prev) => {
+        if (prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.add(k);
+        return next;
+      });
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => document.getElementById(h)?.scrollIntoView({ block: 'start' })),
+      );
+    };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
   const [toast, setToast] = useState<string | null>(null);
   // Inline "Edit job details" panel (name / dates / deal value).
   const [editing, setEditing] = useState(false);
@@ -1004,31 +1045,72 @@ const driverTone = (d: any): string => {
   // page's own richer statuses are mapped down to the helper's pass/fail
   // inputs: agreementStatus already folds stage into 'signed', so stage
   // travels as null here.
-  const readiness = (() => {
-    const liveB = (job.bookings ?? []).filter((b: any) => b.status !== 'CANCELLED');
-    const liveItems = liveB.flatMap((b: any) =>
-      (b.items ?? []).filter((i: any) => i.status === 'REQUESTED' || i.status === 'ASSIGNED'),
-    );
-    const activeAssignments = liveItems.flatMap((i: any) =>
-      (i.assignments ?? []).filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
-    );
-    return computeReadiness({
-      coi: coiStatus === 'Verified' ? 'VERIFIED' : coiStatus === 'Expired' ? 'EXPIRED' : coiStatus === 'Pending' ? 'PENDING' : 'NONE',
-      rental: agreementStatus === 'signed' ? 'SIGNED' : agreementStatus === 'pending' ? 'SENT' : 'NONE',
-      stage: null,
-      cardOnFile: !!cardOnFile,
-      gear: {
-        total: liveItems.length,
-        assigned: liveItems.filter((i: any) => i.status === 'ASSIGNED').length,
-      },
-      drivers: {
-        units: activeAssignments.length,
-        named: activeAssignments.filter((a: any) => (a.driverAssignments ?? []).length > 0).length,
-      },
-    });
-  })();
+  const liveB = (job.bookings ?? []).filter((b: any) => b.status !== 'CANCELLED');
+  const liveHoldItems = liveB.flatMap((b: any) =>
+    (b.items ?? []).filter((i: any) => i.status === 'REQUESTED' || i.status === 'ASSIGNED'),
+  );
+  const activeAssignments = liveHoldItems.flatMap((i: any) =>
+    (i.assignments ?? []).filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT'),
+  );
+  const readiness = computeReadiness({
+    coi: coiStatus === 'Verified' ? 'VERIFIED' : coiStatus === 'Expired' ? 'EXPIRED' : coiStatus === 'Pending' ? 'PENDING' : 'NONE',
+    rental: agreementStatus === 'signed' ? 'SIGNED' : agreementStatus === 'pending' ? 'SENT' : 'NONE',
+    stage: null,
+    cardOnFile: !!cardOnFile,
+    gear: {
+      total: liveHoldItems.length,
+      assigned: liveHoldItems.filter((i: any) => i.status === 'ASSIGNED').length,
+    },
+    drivers: {
+      units: activeAssignments.length,
+      named: activeAssignments.filter((a: any) => (a.driverAssignments ?? []).length > 0).length,
+    },
+  });
   const gearBlocked = readiness.blockers.some((b) => b.key === 'gear');
   const driverBlocked = readiness.blockers.some((b) => b.key === 'driver');
+
+  // ── The page grows with the job (Wes 2026-08-27, from the approved
+  // mockup). Scoring on the Paperwork strip starts when the job has
+  // commercial substance — a live reservation or a non-cancelled order.
+  // Before that, "no COI" is a normal new job, not a deficiency, and the
+  // strip reads a neutral "Not yet" with next-step hints instead of a
+  // score. Same outbound-band idea the sidebar chip uses.
+  const stripScored = liveB.length > 0 || liveOrders.length > 0;
+
+  // Which sections have anything to show. An empty section folds into the
+  // "Not started" strip near the bottom and expands in place on click (or
+  // renders automatically the moment it gains content — these predicates
+  // re-run on every load()). Logistics is absent on purpose: it derives
+  // from orders and already hides itself when it has nothing to say.
+  const sectionEmpty: Record<string, boolean> = {
+    coi: (job.coiChecks ?? []).length === 0,
+    wc: wcCerts.length === 0,
+    agreement: agreementStatus === 'none',
+    reservations: (job.bookings ?? []).length === 0,
+    assets: reservedAssets.length === 0,
+    drivers: reservedAssets.length === 0 && pendingHolds.length === 0,
+    orders: job.orders.length === 0,
+    money: job.orders.length === 0 && job.rwOrderCount === 0,
+    contacts: job.jobContacts.length === 0,
+    clientNotes: !job.company?.notes?.trim(),
+  };
+  const showSec = (k: keyof typeof sectionEmpty) => !sectionEmpty[k] || openSections.has(k);
+  // Chips only for sections that OFFER something when opened empty —
+  // an upload, a send, a link, an explanation. Reservations / assets /
+  // drivers / orders are absent on purpose: their empty states are inert
+  // (JobBookingsSection renders null outright) and their create actions
+  // are the hero's "+ New quote" / "+ New reservation"; they appear here
+  // automatically the moment they have content. Email threads likewise
+  // self-hides and has no in-section way to start one.
+  const FOLD_META: Array<{ key: string; label: string; anchor: string | null }> = [
+    { key: 'coi', label: 'Certificate of Insurance', anchor: 'coi' },
+    { key: 'wc', label: "Workers' Comp", anchor: 'wc' },
+    { key: 'agreement', label: 'Agreement', anchor: 'agreement' },
+    { key: 'money', label: 'Billing & documents', anchor: 'rw-billing' },
+    { key: 'contacts', label: 'Contacts', anchor: 'contacts' },
+    { key: 'clientNotes', label: 'Client notes', anchor: null },
+  ];
+  const foldedChips = FOLD_META.filter((m) => sectionEmpty[m.key] && !openSections.has(m.key));
 
   return (
     <div className="max-w-5xl mx-auto space-y-3 text-[15px]">
@@ -1289,27 +1371,34 @@ const driverTone = (d: any): string => {
         {/* Metadata — the four numbers an agent scans, one row. The
             production enum lives with its picker in the hero footer;
             created/updated are housekeeping, demoted there too. */}
+        {/* The dash parade is gone: a cell renders its number when it has
+            one, a quiet stage hint when the number simply hasn't happened
+            yet, and not at all when it would only say zero. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-          <Meta
-            label="Order span"
-            value={
-              orderSpan.start || orderSpan.end
-                ? `${fmtDate(isoDate(orderSpan.start))} – ${fmtDate(isoDate(orderSpan.end))}`
-                : '—'
-            }
-            sub="from this job's orders"
-          />
-          <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
           <Meta label="Agent" value={job.agent?.name || '—'} />
-          <Meta
-            label="Orders"
-            value={String(job.orders.length > 0 ? job.orders.length : job.rwOrderCount)}
-            sub={
-              job.orders.length > 0
-                ? job.rwOrderCount > 0 ? `+${job.rwOrderCount} RW` : undefined
-                : job.rwOrderCount > 0 ? 'RentalWorks' : undefined
-            }
-          />
+          {orderSpan.start || orderSpan.end ? (
+            <Meta
+              label="Order span"
+              value={`${fmtDate(isoDate(orderSpan.start))} – ${fmtDate(isoDate(orderSpan.end))}`}
+              sub="from this job's orders"
+            />
+          ) : (
+            <Meta label="Order span" value="starts with the first quote" dim />
+          )}
+          {dealValue != null && dealValue > 0 && (
+            <Meta label="Deal Value" value={fmtMoney(dealValue)} sub={dealValueLabel} />
+          )}
+          {(job.orders.length > 0 || job.rwOrderCount > 0) && (
+            <Meta
+              label="Orders"
+              value={String(job.orders.length > 0 ? job.orders.length : job.rwOrderCount)}
+              sub={
+                job.orders.length > 0
+                  ? job.rwOrderCount > 0 ? `+${job.rwOrderCount} RW` : undefined
+                  : job.rwOrderCount > 0 ? 'RentalWorks' : undefined
+              }
+            />
+          )}
         </div>
 
         {/* Phase 7 Pass A — at-a-glance engagement rollup. Each chip
@@ -1369,22 +1458,40 @@ const driverTone = (d: any): string => {
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
-          <span className="text-[12px] text-zinc-500">
-            {readiness.done} of {readiness.total} complete
-            {readiness.ready && <span className="text-emerald-300 font-semibold"> · ✓ Ready to go out</span>}
-          </span>
+          {stripScored ? (
+            <span className="text-[12px] text-zinc-500">
+              {readiness.done} of {readiness.total} complete
+              {readiness.ready && <span className="text-emerald-300 font-semibold"> · ✓ Ready to go out</span>}
+            </span>
+          ) : (
+            <span className="text-[12px] text-zinc-500">scoring starts when a reservation or order lands</span>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* COI */}
           <a href="#coi" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Certificate of Insurance</div>
-            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
-              coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
-            }`}>
-              <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-400' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-400' : 'bg-amber-400'}`} />
-              {coiStatus}
-            </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+            {!stripScored && coiStatus === 'Missing' ? (
+              <>
+                {/* A new job without a COI is a normal new job — neutral,
+                    with the next step, not a rose scolding. */}
+                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-400">
+                  <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                  Not yet
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-500">Open to copy the client drop link</div>
+              </>
+            ) : (
+              <>
+                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${
+                  coiStatus === 'Verified' ? 'text-emerald-300' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'text-rose-300' : 'text-amber-300'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${coiStatus === 'Verified' ? 'bg-emerald-400' : coiStatus === 'Missing' || coiStatus === 'Expired' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+                  {coiStatus}
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-300">{coiStatus === 'Missing' ? 'Action needed' : coiStatus === 'Verified' ? 'On file & verified' : 'Awaiting review'}</div>
+              </>
+            )}
           </a>
           {/* Rental Agreement */}
           <a href="#agreement" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
@@ -1393,13 +1500,15 @@ const driverTone = (d: any): string => {
               agreementStatus === 'signed' ? 'text-emerald-300' : agreementStatus === 'expired' ? 'text-rose-300' : agreementStatus === 'pending' ? 'text-amber-300' : 'text-zinc-300'
             }`}>
               <span className={`w-2 h-2 rounded-full ${agreementStatus === 'signed' ? 'bg-emerald-400' : agreementStatus === 'expired' ? 'bg-rose-400' : agreementStatus === 'pending' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
-              {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : 'Not linked'}
+              {agreementStatus === 'signed' ? 'On file' : agreementStatus === 'pending' ? 'Pending' : agreementStatus === 'expired' ? 'Expired' : stripScored ? 'Not linked' : 'Not yet'}
             </div>
             <div className="mt-1.5 text-[12px] text-zinc-300">{agreementStatus === 'signed'
                 ? 'Coverage on file'
-                : SHOW_AGREEMENT_ON_FILE
-                  ? 'Attach to cover'
-                  : 'Send for signature'}</div>
+                : !stripScored && agreementStatus === 'none'
+                  ? 'Sends with the quote'
+                  : SHOW_AGREEMENT_ON_FILE
+                    ? 'Attach to cover'
+                    : 'Send for signature'}</div>
           </a>
           {/* Card Authorization — `id` is the deep-link target for the
               CC Auth chip in the reservation pop-up on /gantt. */}
@@ -1414,6 +1523,16 @@ const driverTone = (d: any): string => {
                 <div className="mt-1.5 text-[12px] text-zinc-300">
                   {cardSecurityOnly ? 'Security only — client pays another way' : job.cardAuth.cardholderName || 'Authorized'}
                 </div>
+              </>
+            ) : !stripScored ? (
+              <>
+                {/* Pre-score: no reservation exists, so the send route
+                    would 409 anyway — say what unlocks it instead. */}
+                <div className="mt-2.5 flex items-center gap-2 text-[14px] font-semibold text-zinc-400">
+                  <span className="w-2 h-2 rounded-full bg-zinc-600" />
+                  Not yet
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-500">Needs a reservation first</div>
               </>
             ) : (
               <>
@@ -1445,25 +1564,45 @@ const driverTone = (d: any): string => {
           {/* Driver — a name on every assigned unit. */}
           <a href="#drivers" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Drivers Named</div>
-            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
-              <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-              {driverBlocked ? 'Missing drivers' : 'All named'}
-            </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">
-              {driverBlocked ? 'A unit has no driver yet' : 'Every unit has a driver'}
-            </div>
+            {activeAssignments.length === 0 ? (
+              <>
+                {/* Vacuously true is not "All named" — with zero units the
+                    honest reading is that the question hasn't started. */}
+                <div className="mt-2.5 text-[15px] font-semibold text-zinc-500">—</div>
+                <div className="mt-1.5 text-[12px] text-zinc-500">No units yet</div>
+              </>
+            ) : (
+              <>
+                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${driverBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  <span className={`w-2 h-2 rounded-full ${driverBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                  {driverBlocked ? 'Missing drivers' : 'All named'}
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-300">
+                  {driverBlocked ? 'A unit has no driver yet' : 'Every unit has a driver'}
+                </div>
+              </>
+            )}
           </a>
           {/* Gear — units picked for every live hold. Internal (Julian),
               so it jumps to the reservations rather than chasing a client. */}
           <a href="#reserved-assets" className="group rounded-lg border border-zinc-800 bg-zinc-800/40 hover:border-amber-600/60 p-3.5 transition-colors">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Gear Assigned</div>
-            <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
-              <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-              {gearBlocked ? 'Units to pick' : 'All assigned'}
-            </div>
-            <div className="mt-1.5 text-[12px] text-zinc-300">
-              {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
-            </div>
+            {liveHoldItems.length === 0 ? (
+              <>
+                <div className="mt-2.5 text-[15px] font-semibold text-zinc-500">—</div>
+                <div className="mt-1.5 text-[12px] text-zinc-500">No holds yet</div>
+              </>
+            ) : (
+              <>
+                <div className={`mt-2.5 flex items-center gap-2 text-[15px] font-bold ${gearBlocked ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  <span className={`w-2 h-2 rounded-full ${gearBlocked ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                  {gearBlocked ? 'Units to pick' : 'All assigned'}
+                </div>
+                <div className="mt-1.5 text-[12px] text-zinc-300">
+                  {gearBlocked ? 'A hold has no unit yet' : 'Every hold has a unit'}
+                </div>
+              </>
+            )}
           </a>
         </div>
       </div>
@@ -1472,6 +1611,7 @@ const driverTone = (d: any): string => {
           uploads land here via the portal link; offline COIs (email,
           broker, RentalWorks) are attached with "Upload COI" so HQ stays
           the source of truth without a re-sign. */}
+      {showSec('coi') && (
       <div id="coi" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
@@ -1582,6 +1722,7 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* Workers' Comp — the client's separate WC proof when it isn't
           carried on the main COI (payroll companies issue their own).
@@ -1589,6 +1730,7 @@ const driverTone = (d: any): string => {
           chasing coverage reads them together. Empty state is explanatory
           rather than alarming — WC on the main COI is the common case and
           needs no separate upload. */}
+      {showSec('wc') && (
       <div id="wc" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center gap-2.5 mb-2.5">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Workers&rsquo; Compensation</h2>
@@ -1641,9 +1783,11 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* Rental / stage agreement — job-level coverage. A job is attached
           as an addendum to an on-file (often annual) master agreement. */}
+      {showSec('agreement') && (
       <div id="agreement" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
@@ -1848,11 +1992,13 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* Reservations — one row per booking, with where it came from.
           Above the unit grid on purpose: two cards for two vans look
           identical whether that is one two-van rental or the same rental
           held twice, and only the booking-level view separates them. */}
+      {showSec('reservations') && (
       <JobBookingsSection
         bookings={(job.bookings ?? []).map((b: any) => ({
           id: b.id,
@@ -1871,8 +2017,10 @@ const driverTone = (d: any): string => {
         }))}
         onChanged={load}
       />
+      )}
 
       {/* Reserved assets → each opens its reservation on the calendar */}
+      {showSec('assets') && (
       <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
@@ -1952,9 +2100,11 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* Drivers — who's taking each unit out. Sits directly under the
           reserved assets it describes. */}
+      {showSec('drivers') && (
       <JobDriversSection
         vehicles={reservedAssets.map((a) => ({
           bookingAssignmentId: a.bookingAssignmentId,
@@ -1967,6 +2117,7 @@ const driverTone = (d: any): string => {
         pendingHolds={pendingHolds}
         onChanged={load}
       />
+      )}
 
       {/* Logistics & after-hours — Phase 7 Pass B. Aggregates the
           per-order delivery/pickup arrangements an agent needs at a
@@ -2073,6 +2224,7 @@ const driverTone = (d: any): string => {
           per-vehicle BookingAssignments. Affordances (edit, send, sign,
           invoice, payment) live on /orders/[id] — this is read-only
           rollup for the live engagement. */}
+      {showSec('orders') && (
       <div id="orders" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Orders</h2>
@@ -2265,9 +2417,11 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* RW billing: linked RW order → its invoices + balance. Anchored —
           the gantt's order badge / modal deep-link here for RW-linked jobs. */}
+      {showSec('money') && (<>
       <div id="rw-billing" className="scroll-mt-4">
         <JobRwBillingPanel jobId={job.id} />
       </div>
@@ -2277,11 +2431,13 @@ const driverTone = (d: any): string => {
 
       {/* RW quotes/invoices attached to this job (transitional). */}
       <JobDocumentsPanel jobId={job.id} />
+      </>)}
 
       {/* Contacts — Phase 7 Pass A: surface phone (already fetched,
           previously not rendered) so the agent can reach the client
           after-hours via a single tap. tel: link triggers native
           dialer on mobile / Mac Continuity Calling on desktop. */}
+      {showSec('contacts') && (
       <div id="contacts" className="scroll-mt-4 bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-[15px] font-semibold text-white flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Contacts</h2>
@@ -2389,10 +2545,12 @@ const driverTone = (d: any): string => {
           </div>
         )}
       </div>
+      )}
 
       {/* Client notes — READ-ONLY here. Idiosyncrasies & preferences for
           this client, so staff know how they like to work. Authored on
           the client file (Company.notes); this is just the at-a-glance. */}
+      {showSec('clientNotes') && (
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 transition-colors duration-200 hover:border-zinc-700/70">
         <div className="flex items-start gap-3 flex-wrap">
           <h2 className="text-[15px] font-semibold text-white shrink-0 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
@@ -2415,6 +2573,7 @@ const driverTone = (d: any): string => {
           </Link>
         </div>
       </div>
+      )}
 
       {/* Job notes — THIS job only */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-700/70">
@@ -2440,8 +2599,31 @@ const driverTone = (d: any): string => {
         />
       </div>
 
-      {/* Email threads filed in this Job (email-in-Job, step 6). */}
+      {/* Email threads filed in this Job (email-in-Job, step 6). The
+          component hides itself until a thread is filed. */}
       <JobEmailThreads jobId={job.id} />
+
+      {/* Not started — every empty section, reachable in one click.
+          A chip expands its section in place; a section that gains
+          content leaves this strip on the next load automatically. */}
+      {foldedChips.length > 0 && (
+        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-dashed border-zinc-700 rounded-2xl px-4 py-3.5">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-500 mb-2">
+            Not started — opens in place, appears automatically once it has content
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {foldedChips.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => openSection(m.key, m.anchor)}
+                className="text-[11.5px] text-zinc-400 bg-zinc-800/50 border border-zinc-700 rounded-md px-2.5 py-1 hover:border-amber-600 hover:text-amber-400 transition-colors"
+              >
+                {m.label} <span className="text-zinc-600">+</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
 
       {/* Activity — Phase 7 Pass B. AuditLog feed scoped to this job
@@ -2562,11 +2744,11 @@ function formatActivity(a: ActivityRow): { verb: string; what: string; details?:
   return { verb, what };
 }
 
-function Meta({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Meta({ label, value, sub, dim }: { label: string; value: string; sub?: string; dim?: boolean }) {
   return (
     <div>
       <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{label}</div>
-      <div className="text-[15px] text-white mt-0.5 truncate">{value}</div>
+      <div className={`mt-0.5 truncate ${dim ? 'text-[13px] text-zinc-500' : 'text-[15px] text-white'}`}>{value}</div>
       {sub && <div className="text-[11px] text-zinc-500">{sub}</div>}
     </div>
   );
