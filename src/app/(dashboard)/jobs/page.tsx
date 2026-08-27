@@ -29,6 +29,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useJobsList } from '@/components/jobs/JobsListProvider'
+import { ActionItemsPanel } from '@/components/actionItems/ActionItemsPanel'
 import { NewInboundColumn } from '@/components/sales/NewInboundColumn'
 import { QuotesOutPanel } from '@/components/sales/QuotesOutPanel'
 import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget'
@@ -148,6 +149,10 @@ export default function JobsLandingPage() {
           </div>
         )}
       </section>
+
+      {/* Action items — the cross-role "needs a human" registry, folded in
+          from /action-items (Wes 2026-08-27). Omits itself when empty. */}
+      <ActionItemsPanel />
 
       {/* Two-column workspace (Wes, 2026-08-22 — layout ruling carried
           over from /inquiries): NEW INBOUND lives in the RIGHT column;

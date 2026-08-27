@@ -163,7 +163,10 @@ fallback was replaced by Job-as-root + JobResolverModal.)
   SalesReservationsWidget + SalesSignalsStrip + the Today strip. The
   sidebar carries active/wrapped (cadence colors + readiness chips)
   plus a pinned "Incoming · N" strip; `/jobs?panel=incoming` is the
-  mobile route into the landing panel.
+  mobile route into the landing panel. Action Items folded in too
+  (2026-08-27): ActionItemsPanel renders the registry on the landing
+  (omitted when empty) and /action-items redirects to /jobs — no
+  separate nav entry.
 - `/inquiries` and `/sales/pipeline` both redirect to /jobs;
   `/inquiries/[id]` stays a real page (email deep links). The old
   kanbans/Prospects/FunnelMetricsStrip/InquiriesSection/OpenQuotesPanel/

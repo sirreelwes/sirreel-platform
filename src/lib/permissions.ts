@@ -425,9 +425,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Sales',
         items: [
-          // Action Items carries her billing queue — the BILLING role
-          // exists precisely so those scope to BILLING + admin.
-          { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           // Reservations back 2026-08-24 (Wes). BILLING already has
           // gantt:true — seeing what actually went out, and when it came
@@ -465,7 +462,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Sales',
         items: [
-          { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
@@ -519,7 +515,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // Top-level Action Items surface — the id 'action-items' is
         // special-cased in the layout to render an unhandled-count badge
         // fed by the same engine (/api/action-items?count=1).
-        { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+        // Action Items folded into /jobs (2026-08-27) — the landing panel
+        // renders the same registry; /action-items redirects there.
         // Inquiries merged into /jobs (2026-08-27) — the landing panel
         // IS the inbound queue; /inquiries redirects there.
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
