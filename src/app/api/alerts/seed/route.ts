@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { BookingStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,19 +86,31 @@ export async function GET() {
   // BookingAssignment in the native engine.
   const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1)
   const tomorrowStr = tomorrow.toISOString().slice(0, 10)
-  const jobsStartingTomorrow = await prisma.$queryRaw<any[]>`
-    SELECT b.job_name, c.name as company
-    FROM bookings b
-    LEFT JOIN companies c ON b.company_id = c.id
-    WHERE DATE(b.start_date) = ${tomorrowStr}::date
-      AND b.status NOT IN ('CANCELLED', 'CLOSED')
-    LIMIT 5
-  `
+
+  // Was a raw query filtering `status NOT IN ('CANCELLED', 'CLOSED')`.
+  // BookingStatus has no CLOSED — Postgres cannot cast the literal to
+  // the enum, so this threw 22P02 on EVERY dashboard load and the whole
+  // route 500'd. Every alert below this line silently stopped being
+  // generated: COI expirations and payroll ran first and survived, but
+  // this one killed the response before it returned.
+  //
+  // Rewritten on the typed client rather than fixing the string, so an
+  // invalid status is a build error instead of a runtime 500. The
+  // terminal states a "starts tomorrow" nudge should skip are CANCELLED
+  // (dead), RETURNED and ARCHIVED (already done).
+  const jobsStartingTomorrow = await prisma.booking.findMany({
+    where: {
+      startDate: new Date(`${tomorrowStr}T00:00:00.000Z`),
+      status: { notIn: [BookingStatus.CANCELLED, BookingStatus.RETURNED, BookingStatus.ARCHIVED] },
+    },
+    select: { jobName: true, company: { select: { name: true } } },
+    take: 5,
+  })
   for (const job of jobsStartingTomorrow) {
     await upsertAlert(
-      'job_starting_' + job.job_name,
+      'job_starting_' + job.jobName,
       'Job Starts Tomorrow',
-      (job.company || 'Job') + ' — ' + (job.job_name || '') + ' starts tomorrow. Confirm vehicles and driver.',
+      (job.company?.name || 'Job') + ' — ' + (job.jobName || '') + ' starts tomorrow. Confirm vehicles and driver.',
       'high',
       '/jobs',
       new Date(tomorrow.getTime() + 86400000)
