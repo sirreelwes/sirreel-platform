@@ -14,5 +14,5 @@ import { redirect } from 'next/navigation';
  * The route stays as a redirect for muscle memory and old links.
  */
 export default function PipelineRedirect() {
-  redirect('/inquiries');
+  redirect('/jobs');  // /inquiries itself now redirects to /jobs — skip the hop
 }

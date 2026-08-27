@@ -350,7 +350,7 @@ export function isFleetYardRole(role: UserRole): boolean {
 
 export function defaultLandingPath(input: UserRole | PermissionsUser): string {
   const role = typeof input === 'string' ? input : input.role;
-  if (isSalesRole(role)) return '/inquiries';
+  if (isSalesRole(role)) return '/jobs';
   if (isFleetYardRole(role)) return '/fleet/today';
   if (role === 'WAREHOUSE') return '/warehouse/pick';
   return '/dashboard';
@@ -429,7 +429,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // exists precisely so those scope to BILLING + admin.
           { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
-          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
           // Reservations back 2026-08-24 (Wes). BILLING already has
           // gantt:true — seeing what actually went out, and when it came
           // back, is how a disputed rental window gets settled.
@@ -468,7 +467,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         items: [
           { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
-          { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
@@ -522,13 +520,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // special-cased in the layout to render an unhandled-count badge
         // fed by the same engine (/api/action-items?count=1).
         { id: 'action-items', label: 'Action Items', icon: 'ListChecks', href: '/action-items' },
+        // Inquiries merged into /jobs (2026-08-27) — the landing panel
+        // IS the inbound queue; /inquiries redirects there.
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
-        // The web-form triage queue (/inquiries) had NO nav entry — the
-        // public order/contact/space/intake forms all write Inquiry rows
-        // and every notification email says "work the queue", but the
-        // queue itself was reachable only by typed URL (found 2026-08-20
-        // when Wes couldn't locate it).
-        { id: 'inquiries', label: 'Inquiries', icon: 'Inbox', href: '/inquiries' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },

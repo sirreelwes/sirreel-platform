@@ -137,7 +137,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // them to the pipeline on any visit to /dashboard. Respects the
   // admin view-as toggle so previewing as AGENT routes correctly.
   if (typeof window !== 'undefined' && isSalesRole(role) && pathname === '/dashboard') {
-    router.replace('/inquiries');
+    router.replace('/jobs');
   }
 
   // Yard roles (FLEET_TECH / DISPATCHER) live on the mobile Fleet Today

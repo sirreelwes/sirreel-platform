@@ -221,8 +221,8 @@ export default function InquiryDetailPage() {
   if (error || !inquiry) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <Link href="/inquiries" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← Back to inquiries
+        <Link href="/jobs?panel=incoming" className="text-xs text-zinc-500 hover:text-zinc-300">
+          ← Back to the queue
         </Link>
         <div className="mt-4 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
           {error || 'Inquiry not found'}
@@ -249,8 +249,8 @@ export default function InquiryDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-4">
-      <Link href="/inquiries" className="text-xs text-zinc-500 hover:text-zinc-300">
-        ← Back to inquiries
+      <Link href="/jobs?panel=incoming" className="text-xs text-zinc-500 hover:text-zinc-300">
+        ← Back to the queue
       </Link>
 
       {/* Header */}

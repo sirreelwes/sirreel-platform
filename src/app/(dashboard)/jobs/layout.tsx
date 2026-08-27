@@ -13,15 +13,20 @@
  * bleed, so it cancels the p-4 and grows back the height it took.
  */
 
-import { usePathname } from 'next/navigation'
+import { Suspense } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { JobsListProvider } from '@/components/jobs/JobsListProvider'
 import { JobsSidebar } from '@/components/jobs/JobsSidebar'
 
-export default function JobsLayout({ children }: { children: React.ReactNode }) {
+function JobsSplit({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   // Below `md` there isn't room for both panes, so the URL picks one:
-  // /jobs is the list, /jobs/[id] is the detail. Above `md` both show.
-  const selected = !!pathname && pathname.startsWith('/jobs/')
+  // /jobs is the list, /jobs/[id] is the detail — and /jobs?panel=incoming
+  // is the landing workspace (the sidebar's Incoming strip links there),
+  // which claims the viewport the same way a detail does.
+  const selected =
+    (!!pathname && pathname.startsWith('/jobs/')) || searchParams?.get('panel') === 'incoming'
 
   return (
     <JobsListProvider>
@@ -32,5 +37,14 @@ export default function JobsLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
     </JobsListProvider>
+  )
+}
+
+export default function JobsLayout({ children }: { children: React.ReactNode }) {
+  // useSearchParams needs a Suspense boundary for static prerendering.
+  return (
+    <Suspense>
+      <JobsSplit>{children}</JobsSplit>
+    </Suspense>
   )
 }

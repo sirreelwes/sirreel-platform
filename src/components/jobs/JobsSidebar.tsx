@@ -20,7 +20,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
 import {
   STATE,
@@ -67,10 +67,36 @@ export function JobsSidebar() {
   } = useJobsList()
 
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const selectedId = pathname?.startsWith('/jobs/') ? pathname.slice('/jobs/'.length).split('/')[0] : null
   // Below `md` the split can't hold both, so the list IS /jobs and
   // the detail IS /jobs/[id] — same URLs, one pane at a time.
-  const selected = !!selectedId
+  // ?panel=incoming counts as a selection: it's the mobile route INTO
+  // the landing workspace (the Incoming strip below links there), so
+  // the list yields the viewport the same way a job detail does.
+  const incomingPanel = searchParams?.get('panel') === 'incoming'
+  const selected = !!selectedId || incomingPanel
+
+  // Pending-incoming count for the strip — the same two streams
+  // NewInboundColumn merges (persistent NEW inquiries + Gmail
+  // suggestions), counted the same way, on the same 60s cadence.
+  const [incomingCount, setIncomingCount] = useState<number | null>(null)
+  useEffect(() => {
+    let active = true
+    const load = () => {
+      Promise.all([
+        fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
+      ]).then(([inq, sug]) => {
+        if (!active) return
+        const pending = ((inq?.inquiries ?? []) as { respondedAt?: string | null }[]).filter((i) => !i.respondedAt).length
+        setIncomingCount(pending + ((sug?.suggestions ?? []) as unknown[]).length)
+      })
+    }
+    load()
+    const t = setInterval(load, 60_000)
+    return () => { active = false; clearInterval(t) }
+  }, [])
 
   // Keep the selected job in view when it's reached from elsewhere
   // (a link, a reload) rather than by clicking it in this list.
@@ -137,6 +163,31 @@ export function JobsSidebar() {
             </button>
           )}
         </div>
+
+        {/* Incoming — the lifecycle's front door. Inquiries are
+            pre-jobs (no Job row yet), so they are NOT rows in this
+            list; the strip hands you to the landing workspace where
+            the queue lives. Count = pending inbound, both streams. */}
+        <Link
+          href="/jobs?panel=incoming"
+          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
+            !selectedId && incomingCount !== null && incomingCount > 0
+              ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+              : 'border-zinc-200 bg-white hover:bg-zinc-100'
+          }`}
+        >
+          <span className="text-[13px]">📥</span>
+          <span className="text-[12px] font-semibold text-zinc-800">Incoming</span>
+          {incomingCount !== null && (
+            <span
+              className={`ml-auto text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded ${
+                incomingCount > 0 ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-500'
+              }`}
+            >
+              {incomingCount}
+            </span>
+          )}
+        </Link>
 
         <input
           value={search}

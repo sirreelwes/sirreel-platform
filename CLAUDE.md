@@ -155,15 +155,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 Pickups"; standalone /jobs list + detail; the new-quote auto-create-job
 fallback was replaced by Job-as-root + JobResolverModal.)
 
-## Sales workspace (2026-08-21)
-- `/inquiries` IS the sales home: New inbound (NewInboundColumn) +
-  QuotesOutPanel (the ONE sent-quotes list, follow-up Nudge attached) +
-  SalesReservationsWidget + SalesSignalsStrip. `/sales/pipeline`
-  redirects there; the old kanbans/Prospects/FunnelMetricsStrip/
-  InquiriesSection/OpenQuotesPanel/FollowUpsDuePanel and
-  /api/sales/metrics were DELETED (kanban WON/LOST columns were
-  structurally broken — do not resurrect).
-- AGENT role gets a trimmed 8-tab nav branch in getNavSections;
-  sales lands on /inquiries (defaultLandingPath).
+## Sales workspace (2026-08-27: merged into /jobs)
+- `/jobs` IS the one-stop shop (Wes: "incoming, active and wrapped").
+  The landing panel (nothing selected) is the former /inquiries
+  workspace intact: New inbound (NewInboundColumn) + QuotesOutPanel
+  (the ONE sent-quotes list, follow-up Nudge attached) +
+  SalesReservationsWidget + SalesSignalsStrip + the Today strip. The
+  sidebar carries active/wrapped (cadence colors + readiness chips)
+  plus a pinned "Incoming · N" strip; `/jobs?panel=incoming` is the
+  mobile route into the landing panel.
+- `/inquiries` and `/sales/pipeline` both redirect to /jobs;
+  `/inquiries/[id]` stays a real page (email deep links). The old
+  kanbans/Prospects/FunnelMetricsStrip/InquiriesSection/OpenQuotesPanel/
+  FollowUpsDuePanel and /api/sales/metrics were DELETED (kanban
+  WON/LOST columns were structurally broken — do not resurrect).
+- AGENT role gets a trimmed nav branch in getNavSections; sales lands
+  on /jobs (defaultLandingPath). There is no separate Inquiries nav
+  entry anywhere.
 - Inquiry conversion now always closes the inquiry: new Job →
   convertedJobId; attach-to-existing-Job → convertedOrderId.
