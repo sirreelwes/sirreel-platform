@@ -2781,7 +2781,17 @@ export default function OrderDetailPage() {
         return (
           <div className="bg-lt-card border border-lt-hairline rounded-xl px-6 py-4 mb-6">
             <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-sm font-semibold text-lt-fg">Fulfillment lanes</h2>
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-sm font-semibold text-lt-fg">Fulfillment lanes</h2>
+                <a
+                  href={`/api/orders/${orderId}/pick-list-pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-lt-fg3 hover:text-lt-fg underline-offset-2 hover:underline"
+                >
+                  Print pick list ↗
+                </a>
+              </div>
               {bothDone ? (
                 <span className="text-[11px] font-semibold text-chip-good-fg">Both lanes ready ✓</span>
               ) : (

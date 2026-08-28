@@ -256,8 +256,16 @@ export default function WarehousePickDetailPage() {
             </div>
           </div>
 
-          {/* Status-driven primary CTA */}
-          <div className="flex-none">
+          {/* Status-driven primary CTA + printable pick list */}
+          <div className="flex-none flex flex-col items-end gap-2">
+            <a
+              href={`/api/orders/${picklist.order.id}/pick-list-pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-zinc-400 hover:text-amber-500"
+            >
+              Print pick list ↗
+            </a>
             {picklist.status === 'DRAFT' && (
               <button
                 onClick={() => runTransition('start', 'start')}
