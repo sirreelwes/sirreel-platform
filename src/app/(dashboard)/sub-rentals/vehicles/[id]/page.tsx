@@ -17,6 +17,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { fmtMoney, netCost } from '@/lib/sub-rentals/vehicles'
+import VehicleFeesCard from '@/components/sub-rentals/VehicleFeesCard'
+import VehiclePhotosCard from '@/components/sub-rentals/VehiclePhotosCard'
 
 interface Vehicle {
   id: string
@@ -332,6 +334,22 @@ export default function SubcontractedVehiclePage() {
             Vendor record is shared with sub-rental sourcing — edit it on the vendors admin.
           </div>
         </div>
+      </div>
+
+      {/* Fees sit directly under the rate card: together they are the
+          whole cost of a day, and quoting off the rate alone is the
+          mistake this page exists to prevent. */}
+      <div className="mt-4">
+        <VehicleFeesCard
+          vehicleId={vehicle.id}
+          vendorId={vehicle.vendor.id}
+          vendorName={vehicle.vendor.name}
+          discountPercent={vehicle.discountPercent}
+        />
+      </div>
+
+      <div className="mt-4">
+        <VehiclePhotosCard vehicleId={vehicle.id} />
       </div>
 
       {/* ── Identity / specs ── */}

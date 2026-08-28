@@ -3868,6 +3868,9 @@ model Vendor {
   // Partner-owned production vehicles this vendor sub-contracts to
   // SirReel (King Kong PV etc.) — see SubcontractedVehicle.
   subcontractedVehicles SubcontractedVehicle[]
+  // This vendor's standing ancillary-fee schedule (driver, mileage,
+  // generator, supplies) — rows with vehicleId NULL apply fleet-wide.
+  subcontractedFees     SubcontractedFee[]
 
   @@map("vendors")
 }
@@ -3979,10 +3982,94 @@ model SubcontractedVehicle {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  vendor Vendor @relation(fields: [vendorId], references: [id])
+  vendor Vendor                      @relation(fields: [vendorId], references: [id])
+  fees   SubcontractedFee[]
+  photos SubcontractedVehiclePhoto[]
 
   @@index([vendorId])
   @@map("sub_contracted_vehicles")
+}
+
+/// Which labor bracket a fee applies to. Most fees (mileage, fuel,
+/// supplies) are ALL — the union question doesn't arise. Driver labor
+/// splits, and as of 2026-08-28 only the NON_UNION side is known
+/// (Wes: "I'll get you Union Rates later"), so a UNION job quoted off
+/// this roster shows a deliberate gap rather than a wrong number.
+enum SubFeeUnionScope {
+  ALL
+  NON_UNION
+  UNION
+}
+
+// Ancillary fees on a subcontracted rental — what the partner charges
+// ON TOP of the vehicle's day/week rate (driver, mileage, generator
+// hours, supplies). Sales needs these at quote time; without them a
+// King Kong quote is short by the majority of a real day's cost.
+//
+// SCOPE: vehicleId NULL = the vendor's standing schedule, applying to
+// every one of their units (mileage and supplies work this way).
+// vehicleId SET = an override/addition for that unit alone (a
+// generator fee is meaningless on a unit with no generator). Readers
+// union the two, vehicle-specific winning on a same-label collision.
+//
+// Reuses the FeeUnit enum from the order-side fee catalog rather than
+// forking a near-identical one — PER_DAY/PER_HOUR/PER_MILE mean the
+// same thing on both sides of the ledger. `coversHours` carries the
+// qualifier a bare unit can't: the driver is $550 PER_DAY *covering
+// 10 hours*, not $550 for an open-ended day.
+model SubcontractedFee {
+  id        String  @id @default(uuid())
+  vendorId  String  @map("vendor_id")
+  vehicleId String? @map("vehicle_id")
+
+  label  String // "Driver", "Mileage", "Generator usage", "Supplies"
+  amount Decimal @db.Decimal(10, 2)
+  unit   FeeUnit
+
+  /// Hours the amount covers, for shift-priced labor ($550 / 10 hrs).
+  /// NULL for everything metered continuously (per-mile, per-hour).
+  coversHours Decimal?         @map("covers_hours") @db.Decimal(5, 2)
+  unionScope  SubFeeUnionScope @default(ALL) @map("union_scope")
+
+  /// Whether our negotiated discount comes off this fee too. Defaults
+  /// FALSE: ancillaries are normally pass-through and the discount is
+  /// off the vehicle rate. Per-fee rather than global because that
+  /// varies by vendor and is a term worth recording explicitly.
+  discountApplies Boolean @default(false) @map("discount_applies")
+
+  notes     String?  @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendor  Vendor                @relation(fields: [vendorId], references: [id])
+  vehicle SubcontractedVehicle? @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([vehicleId])
+  @@map("sub_contracted_fees")
+}
+
+// Gallery photos for a subcontracted vehicle — the point is quoting:
+// Wes sends clients a unit they can SEE without waiting on the
+// partner to email pictures. Same storage contract as
+// VehicleCategoryPhoto: `url` is a PRIVATE blob written by
+// uploadPrivateImage and is served ONLY through the gated proxy at
+// /api/sub-rentals/vehicles/[id]/photos/[photoId], never raw.
+// Exactly one photo per vehicle is primary (enforced in the API).
+model SubcontractedVehiclePhoto {
+  id        String               @id @default(uuid())
+  vehicleId String               @map("vehicle_id")
+  vehicle   SubcontractedVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  sortOrder Int                  @default(0) @map("sort_order")
+  isPrimary Boolean              @default(false) @map("is_primary")
+  createdAt DateTime             @default(now()) @map("created_at")
+
+  @@index([vehicleId])
+  @@map("sub_contracted_vehicle_photos")
 }
 
 enum ActivityType {
