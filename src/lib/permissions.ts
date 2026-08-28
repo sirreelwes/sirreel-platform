@@ -431,6 +431,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // back, is how a disputed rental window gets settled.
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+          // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
+          // exists to quote from — it is gated on seePricing, and its main
+          // action is sending a client an estimate.
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         ],
       },
@@ -450,7 +454,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           // and task mutations behind canCreateBooking, which BILLING
           // does hold. Cross-listed with Fleet, same as the full nav.
           { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
-          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'paperwork', label: 'Paperwork', icon: 'FileSignature', href: '/admin/paperwork' },
         ],
       },
@@ -465,6 +468,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+          // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
+          // exists to quote from — it is gated on seePricing, and its main
+          // action is sending a client an estimate.
+          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
           { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
         ],
       },
@@ -472,7 +479,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         label: 'Ops',
         items: [
           { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
-          { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         ],
       },
       // Collections was tacked onto the end of the sales list; with the
@@ -522,6 +528,10 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
+        // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
+        // exists to quote from — it is gated on seePricing, and its main
+        // action is sending a client an estimate.
+        { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
       ],
     },
@@ -530,7 +540,6 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       items: [
         { id: 'inventory', label: 'Inventory', icon: 'Boxes', href: '/inventory' },
         { id: 'dispatch', label: 'Deliveries & Pickups', icon: 'Truck', href: '/dispatch' },
-        { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'paperwork', label: 'Paperwork', icon: 'FileSignature', href: '/admin/paperwork' },
       ],
     },

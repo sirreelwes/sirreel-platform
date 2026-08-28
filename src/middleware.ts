@@ -67,6 +67,9 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   // an allow-list entry, not a listing: nothing here advertises the path, and
   // without a valid 32-byte token the route 404s.
   '/unit/',
+  // Vendor's view of a sub-rental (/vendor/[token]) — same unlisted,
+  // token-is-the-credential contract as /unit/, for the other side of the deal.
+  '/vendor/',
   '/order/supplies',
   '/api/public/',
   '/_next/',
@@ -135,6 +138,7 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/api/client/',      // legacy client API
   '/pay-details/',     // A/P payment-details share link (/pay-details/[token])
   '/unit/',            // unlisted subcontracted-unit page (/unit/[token])
+  '/vendor/',          // partner's view of a sub-rental (/vendor/[token])
   '/coi/',             // no-login client COI upload (/coi/[token])
   '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
   '/driver/',          // no-login driver licence upload (/driver/[token])

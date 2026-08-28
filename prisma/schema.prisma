@@ -443,6 +443,17 @@ model Company {
   // Integration
   rentalworksCustomerId String? @map("rentalworks_customer_id")
 
+  /// Last day this client actually had gear out, from the RentalWorks
+  /// invoice mirror (billingEndDate, falling back to invoiceDate).
+  /// Drives the "gone quiet" signals. Null until the rollup has run, or
+  /// when the client has no RW invoices at all.
+  lastRentalAt   DateTime? @map("last_rental_at")
+  /// When totalSpend / totalBookings / lastRentalAt were last recomputed.
+  /// These are a CACHE of RwInvoice, which is itself deleted and rebuilt
+  /// on every RW sync — so a stale stamp means the numbers are stale, and
+  /// the UI can say "as of" instead of implying they are live.
+  spendRolledUpAt DateTime? @map("spend_rolled_up_at")
+
   billingEmail   String? @map("billing_email")
   billingAddress String? @map("billing_address") @db.Text
   notes          String? @db.Text
@@ -3876,6 +3887,11 @@ model Vendor {
 }
 
 enum SubRentalStatus {
+  /// "Potential" — we have quoted this unit to a client for these dates but
+  /// nobody has committed. The vendor is TOLD (so they know their calendar is
+  /// being pitched) without it holding anything. Becomes REQUESTED when the
+  /// client accepts, which is what prompts the vendor for driver details.
+  ESTIMATED
   REQUESTED
   CONFIRMED
   PICKED_UP
@@ -3923,10 +3939,33 @@ model SubRental {
   poNumber String? @map("po_number")
   notes    String? @db.Text
 
+  /// The job this sub-rental belongs to. SubRental historically reached a job
+  /// only THROUGH an order, but a quote exists before any order does — so an
+  /// estimated sub-rental hangs off the job directly and picks up an order
+  /// later, when there's something to invoice.
+  jobId String? @map("job_id")
+
+  /// The roster unit being sub-rented, when it is one of ours to quote from.
+  /// `itemDescription` stays the human label (and the only thing set for
+  /// ad-hoc gear sub-rentals, which have no roster row).
+  subcontractedVehicleId String? @map("subcontracted_vehicle_id")
+
+  /// Unlisted VENDOR page (/vendor/[token]) — the partner's own view of this
+  /// booking: which unit, which dates, where it stands. It is the conduit:
+  /// the vendor never sees who the client is, and the client never sees whose
+  /// unit it is. Later this is where location, call time and driver details
+  /// get exchanged, still without the two sides talking directly.
+  vendorToken         String?   @unique @map("vendor_token")
+  vendorTokenMintedAt DateTime? @map("vendor_token_minted_at")
+  /// When the vendor was told we had quoted these dates.
+  vendorNotifiedAt    DateTime? @map("vendor_notified_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   order         Order?         @relation(fields: [orderId], references: [id])
+  job           Job?           @relation(fields: [jobId], references: [id])
+  subcontractedVehicle SubcontractedVehicle? @relation(fields: [subcontractedVehicleId], references: [id])
   orderLineItem OrderLineItem? @relation(fields: [orderLineItemId], references: [id])
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   vendor        Vendor         @relation(fields: [vendorId], references: [id])
@@ -3937,6 +3976,8 @@ model SubRental {
   /// Per-line lookup for the order-detail UI's "sub-rentals on this
   /// line" surface.
   @@index([orderLineItemId])
+  @@index([jobId])
+  @@index([subcontractedVehicleId])
   @@map("sub_rentals")
 }
 
@@ -4007,6 +4048,7 @@ model SubcontractedVehicle {
   vendor Vendor                      @relation(fields: [vendorId], references: [id])
   fees   SubcontractedFee[]
   photos SubcontractedVehiclePhoto[]
+  subRentals SubRental[]
 
   @@index([vendorId])
   @@map("sub_contracted_vehicles")
@@ -4415,6 +4457,8 @@ model Job {
   @@index([productionTypeProfileId])
   @@map("sr_jobs")
   finalInvoices JobFinalInvoice[]
+  /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
+  subRentals SubRental[]
 }
 
 // ============================================================
