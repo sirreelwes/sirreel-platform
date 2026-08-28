@@ -3982,6 +3982,28 @@ model SubcontractedVehicle {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// UNLISTED client-facing page. NULL = no page exists. Non-null mints
+  /// /unit/[token] — reachable by anyone holding the link, linked from
+  /// nowhere on the public site, noindex, and absent from the sitemap.
+  /// The token IS the credential (32 bytes hex), so clearing it revokes
+  /// the page instantly. Deliberately NOT a readable slug: a guessable
+  /// URL is a listed URL.
+  ///
+  /// The page it serves NEVER renders money. Rates on this model are the
+  /// vendor's list price and OUR negotiated discount; the public loader
+  /// (publicUnit.ts) selects an explicit non-rate field set so a future
+  /// `include` can't quietly leak cost or margin to a client.
+  publicToken         String?   @unique @map("public_token")
+  publicTokenMintedAt DateTime? @map("public_token_minted_at")
+
+  /// Client-facing blurb for the unlisted page. SEPARATE from `description`
+  /// on purpose: that field is written for staff and carries operational
+  /// caveats ("confirm the hold before committing dates to a client"), which
+  /// is exactly the sentence a client must never read. Rendering description
+  /// on the public page failed OPEN — every future unit would leak whatever
+  /// note someone happened to type. NULL renders no blurb at all.
+  publicDescription   String?   @map("public_description") @db.Text
+
   vendor Vendor                      @relation(fields: [vendorId], references: [id])
   fees   SubcontractedFee[]
   photos SubcontractedVehiclePhoto[]

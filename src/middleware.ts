@@ -61,6 +61,12 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
   '/pay-details/',
   '/rental-agreement', // public agreement review page (FORMS → Rental Agreement)
   '/stage-contract',   // public stage-contract review page (FORMS → Studio Contract)
+  // UNLISTED unit page (/unit/[token]) — a client-facing page for a vehicle we
+  // do not publish in the catalog. Linked from nowhere and noindex, but it must
+  // resolve on the host the estimate email points at, which is this one. It is
+  // an allow-list entry, not a listing: nothing here advertises the path, and
+  // without a valid 32-byte token the route 404s.
+  '/unit/',
   '/order/supplies',
   '/api/public/',
   '/_next/',
@@ -128,6 +134,7 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/client-login',     // client magic-link login page (posts to /api/client/auth)
   '/api/client/',      // legacy client API
   '/pay-details/',     // A/P payment-details share link (/pay-details/[token])
+  '/unit/',            // unlisted subcontracted-unit page (/unit/[token])
   '/coi/',             // no-login client COI upload (/coi/[token])
   '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
   '/driver/',          // no-login driver licence upload (/driver/[token])

@@ -53,6 +53,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if ('vehicleType' in body) data.vehicleType = typeof body.vehicleType === 'string' && body.vehicleType.trim() ? body.vehicleType.trim() : null
   if ('description' in body) data.description = typeof body.description === 'string' && body.description.trim() ? body.description.trim() : null
   if ('specs' in body) data.specs = typeof body.specs === 'string' && body.specs.trim() ? body.specs.trim() : null
+  // Separate from `description` on purpose — that one is staff-facing and
+  // carries operational caveats. This is the only prose the client page renders.
+  if ('publicDescription' in body) data.publicDescription = typeof body.publicDescription === 'string' && body.publicDescription.trim() ? body.publicDescription.trim() : null
   if ('rateNotes' in body) data.rateNotes = typeof body.rateNotes === 'string' && body.rateNotes.trim() ? body.rateNotes.trim() : null
   if ('listDailyRate' in body) data.listDailyRate = parseMoney(body.listDailyRate)
   if ('listWeeklyRate' in body) data.listWeeklyRate = parseMoney(body.listWeeklyRate)

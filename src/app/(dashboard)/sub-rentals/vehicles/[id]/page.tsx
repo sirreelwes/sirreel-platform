@@ -19,12 +19,15 @@ import { useParams } from 'next/navigation'
 import { fmtMoney, netCost } from '@/lib/sub-rentals/vehicles'
 import VehicleFeesCard from '@/components/sub-rentals/VehicleFeesCard'
 import VehiclePhotosCard from '@/components/sub-rentals/VehiclePhotosCard'
+import ClientPageCard from '@/components/sub-rentals/ClientPageCard'
 
 interface Vehicle {
   id: string
   name: string
   vehicleType: string | null
   description: string | null
+  /** Client-facing blurb for the unlisted page. Never `description`. */
+  publicDescription: string | null
   specs: string | null
   listDailyRate: string | null
   listWeeklyRate: string | null
@@ -32,6 +35,8 @@ interface Vehicle {
   rateNotes: string | null
   discountPercent: string | null
   isActive: boolean
+  /** Non-null when an unlisted client page has been minted. */
+  publicToken: string | null
   updatedAt: string
   vendor: {
     id: string
@@ -49,6 +54,7 @@ interface Draft {
   name: string
   vehicleType: string
   description: string
+  publicDescription: string
   specs: string
   listDailyRate: string
   listWeeklyRate: string
@@ -62,6 +68,7 @@ function toDraft(v: Vehicle): Draft {
     name: v.name,
     vehicleType: v.vehicleType ?? '',
     description: v.description ?? '',
+    publicDescription: v.publicDescription ?? '',
     specs: v.specs ?? '',
     listDailyRate: v.listDailyRate ?? '',
     listWeeklyRate: v.listWeeklyRate ?? '',
@@ -135,6 +142,7 @@ export default function SubcontractedVehiclePage() {
       name: draft.name,
       vehicleType: draft.vehicleType,
       description: draft.description,
+      publicDescription: draft.publicDescription,
       specs: draft.specs,
       listDailyRate: draft.listDailyRate.trim() || null,
       listWeeklyRate: draft.listWeeklyRate.trim() || null,
@@ -352,6 +360,18 @@ export default function SubcontractedVehiclePage() {
         <VehiclePhotosCard vehicleId={vehicle.id} />
       </div>
 
+      {/* The client-facing half of this page: an unlisted photo/spec page
+          that shows no money, and the estimate that does. Sits after the
+          photos because publishing depends on having them. */}
+      <div className="mt-4">
+        <ClientPageCard
+          vehicleId={vehicle.id}
+          vehicleName={vehicle.name}
+          publicToken={vehicle.publicToken}
+          onChanged={load}
+        />
+      </div>
+
       {/* ── Identity / specs ── */}
       <div className="mt-4 bg-white border border-gray-200 rounded-xl p-4 space-y-4">
         {editing && d ? (
@@ -371,6 +391,18 @@ export default function SubcontractedVehiclePage() {
               <textarea value={d.description} onChange={(e) => setDraft({ ...d, description: e.target.value })} rows={2} className={field} />
             </div>
             <div>
+              <label className={label}>
+                Client description <span className="font-normal normal-case text-gray-400">— shown on the client page</span>
+              </label>
+              <textarea
+                value={d.publicDescription}
+                onChange={(e) => setDraft({ ...d, publicDescription: e.target.value })}
+                rows={3}
+                placeholder="Client-safe copy. The internal Description above is never shown to clients."
+                className={field}
+              />
+            </div>
+            <div>
               <label className={label}>Specs (one per line)</label>
               <textarea value={d.specs} onChange={(e) => setDraft({ ...d, specs: e.target.value })} rows={4} className={field} />
             </div>
@@ -378,9 +410,15 @@ export default function SubcontractedVehiclePage() {
         ) : (
           <>
             <div>
-              <div className={label}>Description</div>
+              <div className={label}>Description <span className="font-normal normal-case text-gray-400">— internal</span></div>
               <p className="text-sm text-gray-700 whitespace-pre-wrap">
                 {vehicle.description ?? <span className="text-gray-400">None yet.</span>}
+              </p>
+            </div>
+            <div>
+              <div className={label}>Client description <span className="font-normal normal-case text-gray-400">— shown on the client page</span></div>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                {vehicle.publicDescription ?? <span className="text-gray-400">None yet — the client page shows no blurb.</span>}
               </p>
             </div>
             <div>
