@@ -21,6 +21,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
+import { NewJobLauncher } from './NewJobLauncher'
 import { STATE, URGENCY } from '@/lib/jobs/listRow'
 import { inquiryPastResponseSla } from '@/lib/sales/inquirySla'
 
@@ -190,6 +191,11 @@ export function JobsToolbar() {
           />
           Mine
         </label>
+
+        {/* The ONE create entry point — moved here from the (deleted)
+            global shell header (Wes 2026-08-28: "just have new job on
+            the jobs page"). */}
+        <NewJobLauncher buttonClassName="ml-auto bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
       </div>
 
       {/* Row 2 — color key: legend for the rails, and a one-click narrow. */}

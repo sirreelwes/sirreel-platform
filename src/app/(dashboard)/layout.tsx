@@ -9,7 +9,6 @@ import { getPermissions, getNavSections, isSalesRole, isFleetYardRole, isBilling
 import { readViewAsCookie, writeViewAsCookie, previewSalesOnly } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
-import { NewJobLauncher } from '@/components/jobs/NewJobLauncher';
 import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
 import {
   TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
@@ -300,19 +299,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar — global chrome across all (dashboard) surfaces.
-            Carries the ONE global create entry point: "+ New Job"
-            (canonical-Job consolidation, 2026-07-15). Quotes and
-            reservations are created from INSIDE a Job (see
-            JobQuickActions on /jobs/[id]); the old "+ New" menu's
-            New Reservation / New Task entries moved to job detail and
-            the gantt respectively. The left side previously held
-            placeholder KPI badges — pulled because the numbers were
-            lies; StatBadge (below) is kept for that future use.
-            Height stays h-12 so main content doesn't reflow. */}
-        <header className="h-12 px-4 border-b border-gray-100 flex items-center justify-end flex-shrink-0 bg-white">
-          <NewJobLauncher buttonClassName="bg-zinc-900 hover:bg-zinc-800 text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg" />
-        </header>
+        {/* No global top bar (Wes 2026-08-28: "remove the new job row
+            from all pages") — the h-12 header's only content was
+            "+ New Job", which now lives in the JobsToolbar on /jobs,
+            still the ONE create entry point (canonical-Job
+            consolidation, 2026-07-15: quotes and reservations are
+            created from INSIDE a Job — see JobQuickActions). StatBadge
+            (below) stays for the someday-KPI use it was kept for. */}
 
         {/* Content + AI */}
         <div className="flex flex-1 overflow-hidden">
