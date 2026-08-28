@@ -26,6 +26,10 @@ interface Card {
   jobName: string | null
   jobId?: string | null
   orderId: string | null
+  // Reservation cards: the booking's attached HQ Order — the vehicle
+  // is moving with billable equipment on it (see /api/dispatch).
+  attachedOrderId?: string | null
+  attachedOrderNumber?: string | null
   effectivePickupDate: string
   effectiveReturnDate: string
 }
@@ -47,11 +51,15 @@ const HORIZON_DAYS = 3
 
 function cardHref(c: Card): string {
   if (c.orderId) return `/orders/${c.orderId}`
+  // Order-attached reservation → the order is where the equipment
+  // check-in lives (same convention as the scheduler's red state).
+  if (c.attachedOrderId) return `/orders/${c.attachedOrderId}`
   if (c.jobId) return `/jobs/${c.jobId}`
   return '/dispatch'
 }
 
 function Row({ c, edge }: { c: Card; edge: 'out' | 'back' }) {
+  const sameDay = c.effectivePickupDate === c.effectiveReturnDate
   return (
     <Link
       href={cardHref(c)}
@@ -65,6 +73,27 @@ function Row({ c, edge }: { c: Card; edge: 'out' | 'back' }) {
         {c.companyName}
         {c.jobName ? ` · ${c.jobName}` : ''}
       </span>
+      {/* Order attached to a reservation movement: the vehicle carries
+          billable equipment, so the return is a check-in, not just
+          parking a truck. Click opens the order. Order-sourced cards
+          skip the chip — being an order is their whole identity. */}
+      {c.source === 'reservation' && c.attachedOrderId && (
+        <span
+          className="flex-none text-[9px] font-bold uppercase tracking-wide px-1 py-px rounded bg-violet-50 text-violet-700 border border-violet-200"
+          title={`Order ${c.attachedOrderNumber ?? ''} attached — equipment on board`}
+        >
+          order
+        </span>
+      )}
+      {/* One-day rental: it leaves AND comes home on this date. Shown
+          once (Going out) with this chip instead of echoing the same
+          job into Coming back (Wes 2026-08-28 — the two columns read
+          as duplicates). */}
+      {edge === 'out' && sameDay && (
+        <span className="flex-none text-[9px] font-bold uppercase tracking-wide px-1 py-px rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+          back same day
+        </span>
+      )}
       <span className="ml-auto flex-none text-[10px] text-gray-400 tabular-nums">
         {(edge === 'out' ? c.effectivePickupDate : c.effectiveReturnDate).slice(5)}
       </span>
@@ -97,7 +126,15 @@ export default function OutBackStrip() {
   if (!data) return null
 
   const going = data.days.flatMap((d) => [...d.outboundFleet, ...d.outboundWarehouse])
-  const coming = data.days.flatMap((d) => d.inbound)
+  // One-day rentals appear in BOTH dispatch buckets (they truthfully go
+  // out and come back inside the window), which made the two columns
+  // read as duplicates. They render once, under Going out, with a
+  // "back same day" chip — Coming back keeps only units actually out
+  // on the road or returning from earlier trips.
+  const sameDayIds = new Set(
+    going.filter((c) => c.effectivePickupDate === c.effectiveReturnDate).map((c) => c.cardId),
+  )
+  const coming = data.days.flatMap((d) => d.inbound).filter((c) => !sameDayIds.has(c.cardId))
   const lateBack = data.overdue?.lateToReturn?.length ?? 0
   const lateOut = data.overdue?.lateToShip?.length ?? 0
 

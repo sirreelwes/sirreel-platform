@@ -98,6 +98,13 @@ export interface FleetCard {
   // board (BOOKED/LOADED_READY/ON_JOB → RETURNED/etc).
   blindPickup: boolean
   blindReturn: boolean
+  /** Reservation cards only: the booking has an HQ Order attached —
+   *  the vehicle is moving with billable equipment on it, so a return
+   *  is a check-in, not just parking a truck (Wes 2026-08-28). Cards
+   *  built FROM order lines don't set this; their orderId already says
+   *  it. */
+  attachedOrderId?: string | null
+  attachedOrderNumber?: string | null
 }
 
 export interface WarehouseCard {
@@ -405,7 +412,27 @@ export async function GET(req: NextRequest) {
               priority: true,
               status: true,
               company: { select: { name: true } },
-              job: { select: { id: true, jobCode: true } },
+              // "Order attached": union of the JOB's orders (the real
+              // linkage — same source the scheduler timeline uses) and
+              // any directly booking-linked orders. The vehicle is
+              // moving with billables on it, so the strip/board can
+              // say a return is a check-in. Newest order wins.
+              job: {
+                select: {
+                  id: true,
+                  jobCode: true,
+                  orders: {
+                    select: { id: true, orderNumber: true },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                  },
+                },
+              },
+              orders: {
+                select: { id: true, orderNumber: true },
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+              },
             },
           },
         },
@@ -440,6 +467,8 @@ export async function GET(req: NextRequest) {
       // has none to read.
       blindPickup: false,
       blindReturn: false,
+      attachedOrderId: b.orders[0]?.id ?? b.job?.orders[0]?.id ?? null,
+      attachedOrderNumber: b.orders[0]?.orderNumber ?? b.job?.orders[0]?.orderNumber ?? null,
     }
   })
 
