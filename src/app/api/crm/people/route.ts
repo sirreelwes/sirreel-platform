@@ -104,6 +104,13 @@ export async function GET(req: NextRequest) {
         AND: [
           listClause,
           { NOT: { email: { contains: '@sirreel.com', mode: 'insensitive' } } },
+          // Phase 2 consent spine: a selection is what Phase 3 will send
+          // to, so suppressed contacts must never enter it in the first
+          // place. Excluding here rather than at send time means the
+          // count the bulk bar shows is already the honest one — a rep
+          // should not be told "1,284 selected" and later "we mailed
+          // 1,190", with no explanation of the difference.
+          { suppressions: { none: { releasedAt: null } } },
         ],
       },
       select: { id: true },

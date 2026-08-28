@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Webhook } from 'svix'
 import { prisma } from '@/lib/prisma'
 import type { EmailDeliveryStatus } from '@prisma/client'
+import { suppressEmail } from '@/lib/outreach/suppression'
 
 export const dynamic = 'force-dynamic'
 // Resend sometimes batches; keep a generous body limit.
@@ -132,11 +133,47 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  // ── Auto-suppression (Phase 2) ────────────────────────────────────
+  // A hard bounce means the address does not exist; a complaint means
+  // they told their provider we are spam. Continuing to mail either is
+  // the fastest way to wreck a sending domain's reputation — and until
+  // now these arrived, updated a status column, and were never acted on.
+  //
+  // Suppression is keyed on the ADDRESS, so it works even when we have
+  // no EmailDelivery row and no Person for the recipient. Best-effort:
+  // the webhook must still ack, or Resend retries forever and we lose
+  // the status update we already made.
+  let suppressedEmail: string | null = null
+  if (status === 'BOUNCED' || status === 'COMPLAINED') {
+    try {
+      const to = event.data?.to
+      const address = Array.isArray(to) ? to[0] : to
+      if (address && typeof address === 'string') {
+        const person = await prisma.person.findUnique({
+          where: { email: address.trim().toLowerCase() },
+          select: { id: true },
+        })
+        await suppressEmail({
+          email: address,
+          reason: status === 'BOUNCED' ? 'BOUNCED' : 'COMPLAINED',
+          detail: statusDetail ?? eventType,
+          source: 'resend-webhook',
+          personId: person?.id ?? null,
+        })
+        suppressedEmail = address.trim().toLowerCase()
+        console.log(`[webhooks/resend] suppressed ${suppressedEmail} (${status})`)
+      }
+    } catch (err) {
+      console.error('[webhooks/resend] suppression failed (status update unaffected):', err)
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     eventType,
     emailId,
     matched: result.count,
     status,
+    suppressed: suppressedEmail,
   })
 }

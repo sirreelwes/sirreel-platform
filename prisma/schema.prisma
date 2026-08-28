@@ -639,6 +639,7 @@ model Person {
   personSessions     PersonSession[]
   inquiryCaptures    InquiryCapture[]   @relation("CaptureContact")
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
+  suppressions       EmailSuppression[] @relation("PersonSuppressions")
   emailAliases       PersonEmailAlias[] @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
@@ -2205,6 +2206,7 @@ model User {
   resolvedInquiryCaptures  InquiryCapture[]    @relation("CaptureResolver")
   outreachActivitiesLogged OutreachActivity[]  @relation("OutreachCreator")
   contactSegments          ContactSegment[]    @relation("ContactSegmentCreator")
+  suppressionsReleased     EmailSuppression[]  @relation("SuppressionReleaser")
   orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
   personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
@@ -4205,6 +4207,76 @@ model OutreachActivity {
 /// server, and a blob would make that a parse-and-hope. Adding a filter
 /// dimension is a migration, which is the correct amount of friction for
 /// something that decides who gets emailed.
+/// Why an address may no longer be sent marketing mail.
+///
+/// Ordered from "they told us" to "the mail system told us". All are
+/// permanent by default — see EmailSuppression.
+enum SuppressionReason {
+  /// Clicked the unsubscribe link, or asked a rep and we recorded it.
+  UNSUBSCRIBED
+  /// Hard bounce: the address does not exist. Continuing to send to it
+  /// is the single fastest way to wreck a sending domain's reputation.
+  BOUNCED
+  /// Marked us as spam. The most expensive signal a mailbox provider
+  /// can give us, and the one we must never ignore.
+  COMPLAINED
+  /// A human added it deliberately (a competitor, a journalist, a
+  /// client who asked verbally).
+  MANUAL
+}
+
+/// The suppression list — the single gate every outreach send must pass.
+///
+/// Keyed on EMAIL, not on Person, for two reasons that both matter:
+///
+///   1. Bounces and complaints arrive from Resend for addresses that may
+///      have no Person row at all. A person-keyed list would silently
+///      drop exactly the signals that protect the domain.
+///   2. Suppression must outlive the contact. Deleting or merging a
+///      Person must never un-suppress an address someone unsubscribed.
+///
+/// Nothing here expires on its own. Releasing a suppression is a
+/// deliberate, attributed human act (releasedAt + releasedById), and a
+/// released row is KEPT rather than deleted so the history of "we
+/// suppressed this, then let it back in, and who decided that" survives.
+///
+/// Phase 2 of the outreach build. Phase 3 cannot send without consulting
+/// this — see src/lib/outreach/sendGuard.ts.
+model EmailSuppression {
+  id     String            @id @default(uuid())
+  /// Lowercased + trimmed at every write. Postgres unique indexes are
+  /// case-sensitive, so an un-normalized "Wes@" would slip past a
+  /// suppression on "wes@" — the same bug that once produced duplicate
+  /// Person rows (see src/lib/people/email.ts).
+  email  String            @unique
+  reason SuppressionReason
+  /// Free text: the bounce string from the provider, or what the client
+  /// said. Shown to staff, never to the client.
+  detail String?           @db.Text
+  /// Where it came from: 'resend-webhook', 'portal', 'staff:<email>',
+  /// 'import'. Free-form so a new origin doesn't need a migration.
+  source String?
+
+  /// Set when the address maps to a known contact. Nullable and
+  /// SetNull-on-delete: the suppression stands even if the Person goes.
+  personId String? @map("person_id")
+  person   Person? @relation("PersonSuppressions", fields: [personId], references: [id], onDelete: SetNull)
+
+  suppressedAt DateTime  @default(now()) @map("suppressed_at")
+  /// Non-null means a human deliberately let this address back in.
+  releasedAt   DateTime? @map("released_at")
+  releasedById String?   @map("released_by_id")
+  releasedBy   User?     @relation("SuppressionReleaser", fields: [releasedById], references: [id])
+  releaseNote  String?   @map("release_note") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([releasedAt])
+  @@index([reason])
+  @@map("sr_email_suppressions")
+}
+
 model ContactSegment {
   id   String @id @default(uuid())
   name String

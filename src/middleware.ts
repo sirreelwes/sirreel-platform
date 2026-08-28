@@ -86,6 +86,10 @@ const PUBLIC_SITE_ALLOWED_PREFIXES = [
                        // ever re-entered middleware can't bounce forever
   '/public/',
   '/api/health',
+  // Outreach unsubscribe landing. MUST be reachable with no session and
+  // no cookie — the person clicking is a stranger holding a signed link,
+  // and an unsubscribe that asks anyone to log in is not an unsubscribe.
+  '/unsubscribe',
   // SEO surface. Without these the crawler gets a 404 for the very
   // sitemap robots.txt advertises.
   '/robots.txt',
@@ -131,6 +135,8 @@ const ORDERS_ALLOWED_PREFIXES = [
 // Paths that are allowed on the portal host. Everything else 404s.
 // Order matters: most-specific prefixes first.
 const PORTAL_ALLOWED_PREFIXES = [
+  '/unsubscribe',      // outreach unsubscribe — allowed on the client host too,
+                       // since that is where client-facing links point
   '/portal/',          // every client-facing portal page
   '/api/portal/',      // every portal API route
   '/client/',          // legacy /client/[token] route (sibling to /portal/[token])

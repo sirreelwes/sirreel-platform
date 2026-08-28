@@ -78,6 +78,23 @@ export function portalAuthorizeUrl(token: string, action?: 'approve' | 'decline'
  * /api/portal/auth/request and shown to the user when they request
  * a magic link.
  */
+/**
+ * Unsubscribe link for an outreach email footer.
+ *
+ * Built on the CLIENT host, not hq.sirreel.com: the recipient is a
+ * stranger, the page takes no session, and pointing marketing mail at
+ * the staff hostname invites both confusion and a login wall.
+ *
+ * The token is a stateless HMAC (src/lib/outreach/unsubscribeToken.ts),
+ * so the link keeps working indefinitely — people unsubscribe from mail
+ * they find much later, and a link that has quietly expired is a
+ * compliance failure, not a tidy-up.
+ */
+export function outreachUnsubscribeUrl(parts: { e: string; t: string }): string {
+  const q = new URLSearchParams({ e: parts.e, t: parts.t })
+  return `${portalBaseUrl()}/unsubscribe?${q.toString()}`
+}
+
 export function portalSignInUrl(): string {
   return `${portalBaseUrl()}/portal/auth/sign-in`
 }
