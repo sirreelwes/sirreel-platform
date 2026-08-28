@@ -35,12 +35,16 @@ import { QuotesOutPanel } from '@/components/sales/QuotesOutPanel'
 import { SalesReservationsWidget } from '@/components/sales/SalesReservationsWidget'
 import { SalesSignalsStrip } from '@/components/sales/SalesSignalsStrip'
 import { CopyIntakeLinkButton } from '@/components/intake/CopyIntakeLinkButton'
-import { STATE, fmtDate, jobWindow, stateLabel, type RowState } from '@/lib/jobs/listRow'
+import { STATE, fmtDate, jobWindow, stateLabel, type JobRow, type RowState } from '@/lib/jobs/listRow'
 
-// What physically MOVES today. Overdue is deliberately not listed row
-// by row here — the Planyo-era backlog is 60+ jobs and buried the
-// inbound queue under it; it collapses to one summary line instead.
-const TODAY_STATES: RowState[] = ['returning-today', 'picking-today']
+// What physically MOVES today, split by direction (Wes 2026-08-28:
+// "break it up into Coming back and Going out sections" — mirrors the
+// Reservations Out/Back strip's vocabulary). Overdue is deliberately
+// not listed row by row — the Planyo-era backlog is 60+ jobs and
+// buried the inbound queue under it; it collapses to one summary line
+// inside Coming back (that's the direction it belongs to).
+const GOING_OUT_STATE: RowState = 'picking-today'
+const COMING_BACK_STATE: RowState = 'returning-today'
 
 export default function JobsLandingPage() {
   const { data: session, status: authStatus } = useSession()
@@ -59,7 +63,8 @@ export default function JobsLandingPage() {
   const refreshAll = () => setRefreshKey((k) => k + 1)
 
   const { allRows, counts, setStateFilter, refresh: refreshJobs } = useJobsList()
-  const todayRows = allRows.filter((r) => TODAY_STATES.includes(r.state))
+  const goingOutRows = allRows.filter((r) => r.state === GOING_OUT_STATE)
+  const comingBackRows = allRows.filter((r) => r.state === COMING_BACK_STATE)
   const overdueCount = counts.get('overdue') ?? 0
 
   return (
@@ -85,64 +90,65 @@ export default function JobsLandingPage() {
         </div>
       </header>
 
-      {/* Today — the bridge between incoming and active: what physically
-          moves. Empty is a real answer here, and a good one. */}
-      <section className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-zinc-100 flex items-baseline gap-2">
-          <h2 className="text-[13px] font-bold uppercase tracking-wider text-zinc-800">Today</h2>
-          <span className="text-[11px] text-zinc-400">back today, out today</span>
-          <span className="ml-auto text-[11px] text-zinc-400">{todayRows.length}</span>
-        </div>
-        {/* The not-returned backlog as ONE line, not 60 rows — it must
-            not bury the inbound queue below it. Click filters the rail. */}
-        {overdueCount > 0 && (
-          <button
-            onClick={() => setStateFilter('overdue')}
-            className="w-full flex items-center gap-3 px-4 py-2 border-b border-zinc-100 hover:bg-red-50 transition-colors text-left"
-          >
-            <span className="w-1.5 h-8 rounded-sm flex-shrink-0 bg-red-500" />
-            <span className="text-[13px] font-medium text-zinc-900">
-              {overdueCount} not returned
-            </span>
-            <span className="text-[11px] text-zinc-500">nobody confirmed the gear came back</span>
-            <span className="ml-auto text-[11px] font-semibold text-red-600">show in the rail →</span>
-          </button>
-        )}
-        {todayRows.length === 0 ? (
-          <div className="px-4 py-4 text-center text-[12px] text-zinc-400">
-            Nothing due back or going out today.
+      {/* What physically moves today, split by direction — the bridge
+          between incoming and active. Same vocabulary as the
+          Reservations Out/Back strip. Empty is a real answer here,
+          and a good one. */}
+      <div className="grid gap-4 lg:grid-cols-2 items-start">
+        <section className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-zinc-100 flex items-baseline gap-2">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-amber-700">Going out</h2>
+            <span className="text-[11px] text-zinc-400">today</span>
+            <span className="ml-auto text-[11px] text-zinc-400">{goingOutRows.length}</span>
           </div>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {todayRows.map(({ job, state }) => {
-              const w = jobWindow(job)
-              return (
-                <Link
-                  key={job.id}
-                  href={`/jobs/${job.id}`}
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-zinc-50 transition-colors"
-                >
-                  <span className={`w-1.5 h-8 rounded-sm flex-shrink-0 ${STATE[state].rail}`} />
-                  <span className="text-[11px] font-mono font-bold text-zinc-500 w-12 flex-shrink-0">
-                    {job.jobCode.replace(/^SR-JOB-/, '')}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium text-zinc-900 truncate">{job.name}</span>
-                    <span className="block text-[11px] text-zinc-500 truncate">
-                      {job.company?.name || 'no company'}
-                      {' · '}
-                      {fmtDate(w.start)} → {fmtDate(w.end)}
-                    </span>
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 whitespace-nowrap">
-                    {stateLabel(job, state)}
-                  </span>
-                </Link>
-              )
-            })}
+          {goingOutRows.length === 0 ? (
+            <div className="px-4 py-4 text-center text-[12px] text-zinc-400">
+              Nothing going out today.
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {goingOutRows.map(({ job, state }) => (
+                <TodayRow key={job.id} job={job} state={state} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-zinc-100 flex items-baseline gap-2">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-emerald-700">Coming back</h2>
+            <span className="text-[11px] text-zinc-400">today</span>
+            <span className="ml-auto text-[11px] text-zinc-400">{comingBackRows.length}</span>
           </div>
-        )}
-      </section>
+          {/* The not-returned backlog as ONE line, not 60 rows — it must
+              not bury the inbound queue below it. Click filters the rail.
+              Lives here because a missed return IS a coming-back problem. */}
+          {overdueCount > 0 && (
+            <button
+              onClick={() => setStateFilter('overdue')}
+              className="w-full flex items-center gap-3 px-4 py-2 border-b border-zinc-100 hover:bg-red-50 transition-colors text-left"
+            >
+              <span className="w-1.5 h-8 rounded-sm flex-shrink-0 bg-red-500" />
+              <span className="text-[13px] font-medium text-zinc-900">
+                {overdueCount} not returned
+              </span>
+              <span className="text-[11px] text-zinc-500">nobody confirmed the gear came back</span>
+              <span className="ml-auto text-[11px] font-semibold text-red-600">show in the rail →</span>
+            </button>
+          )}
+          {comingBackRows.length === 0 ? (
+            <div className="px-4 py-4 text-center text-[12px] text-zinc-400">
+              Nothing due back today.
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {comingBackRows.map(({ job, state }) => (
+                <TodayRow key={job.id} job={job} state={state} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
       {/* Action items — the cross-role "needs a human" registry, folded in
           from /action-items (Wes 2026-08-27). Omits itself when empty. */}
@@ -170,5 +176,32 @@ export default function JobsLandingPage() {
       {/* Signals — stale quotes / pending COIs / dormant clients */}
       <SalesSignalsStrip scope={scope} onChange={refreshAll} />
     </div>
+  )
+}
+
+// One movement row — shared by the Going out and Coming back sections.
+function TodayRow({ job, state }: { job: JobRow; state: RowState }) {
+  const w = jobWindow(job)
+  return (
+    <Link
+      href={`/jobs/${job.id}`}
+      className="flex items-center gap-3 px-4 py-2 hover:bg-zinc-50 transition-colors"
+    >
+      <span className={`w-1.5 h-8 rounded-sm flex-shrink-0 ${STATE[state].rail}`} />
+      <span className="text-[11px] font-mono font-bold text-zinc-500 w-12 flex-shrink-0">
+        {job.jobCode.replace(/^SR-JOB-/, '')}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium text-zinc-900 truncate">{job.name}</span>
+        <span className="block text-[11px] text-zinc-500 truncate">
+          {job.company?.name || 'no company'}
+          {' · '}
+          {fmtDate(w.start)} → {fmtDate(w.end)}
+        </span>
+      </span>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 whitespace-nowrap">
+        {stateLabel(job, state)}
+      </span>
+    </Link>
   )
 }
