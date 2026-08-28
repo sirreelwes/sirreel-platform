@@ -98,6 +98,15 @@ export default function SubRentalsPage() {
             Never surfaced on client-facing docs.
           </p>
         </div>
+        {/* Roster of partner-owned units (King Kong PV etc.) — the API
+            behind it 403s roles without pricing access, so the link is
+            harmless even where the board itself is visible (Hugo). */}
+        <Link
+          href="/sub-rentals/vehicles"
+          className="text-sm text-blue-700 hover:underline shrink-0"
+        >
+          Subcontracted vehicles →
+        </Link>
       </div>
 
       {error && (

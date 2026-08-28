@@ -38,3 +38,32 @@ export async function requireSubRentalAccess() {
   }
   return { user }
 }
+
+/**
+ * Subcontracted-vehicle roster gate — tighter than requireSubRentalAccess.
+ * The roster's whole point is money (vendor list rates + our negotiated
+ * discount), so it additionally requires seePricing:
+ *
+ *   ADMIN (Wes / Dani) + AGENT (Jose / Oliver) + BILLING (Ana) — yes
+ *   MANAGER (Hugo) — has subRentals but NOT seePricing — no
+ *   FLEET_TECH / DISPATCHER / WAREHOUSE — no (per Wes 2026-08-28:
+ *   these vehicles are not managed by the fleet dept at all)
+ */
+export async function requireSubVehicleAccess() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  }
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true, role: true, email: true, name: true, salesOnly: true },
+  })
+  if (!user) {
+    return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  }
+  const perms = getPermissions({ role: user.role, salesOnly: user.salesOnly, email: user.email })
+  if (!perms.subRentals || !perms.seePricing) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+  return { user }
+}
