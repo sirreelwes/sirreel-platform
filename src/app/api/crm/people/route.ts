@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { computeCompanyBadgeFacts, fetchPopulationTopClientCutoff, type ClientBadge } from "@/lib/crm/clientBadges";
 import { normalizeEmail } from "@/lib/people/email";
+import { isPeopleSegmentKey, type PeopleSegmentKey } from "@/lib/crm/peopleSegments";
+import { segmentWhere, fetchSegmentCounts } from "@/lib/crm/peopleSegmentQuery";
 
 // PersonRole enum mirrored locally for runtime validation of the
 // ?role= query param. Postgres rejects unknown enum values but we
@@ -24,6 +26,15 @@ export async function GET(req: NextRequest) {
   const roleFilter = roleFilterRaw && PERSON_ROLES_SET.has(roleFilterRaw)
     ? (roleFilterRaw as PersonRoleKey)
     : null;
+  // Sales-segment chip. Like the Companies tab, filtering happens
+  // SERVER-side so the chip operates on the whole population and not on
+  // whichever 100 rows the page had already loaded.
+  const segmentRaw = searchParams.get("segment");
+  const segment: PeopleSegmentKey | null = isPeopleSegmentKey(segmentRaw) ? segmentRaw : null;
+  // Select-all-in-segment. Returns ONLY ids for the full filtered set,
+  // no page cap — the bulk bar needs the real set, not the visible one,
+  // or "select all" quietly means "select the first hundred".
+  const idsOnly = searchParams.get("idsOnly") === "1";
 
   // ── Search clause — shared between the list query and the stats
   // groupBy so the chip counts reflect the SEARCHED subset (matches the
@@ -60,6 +71,46 @@ export async function GET(req: NextRequest) {
   const listClause: Record<string, unknown> = { ...searchClause };
   if (roleFilter) listClause.role = roleFilter;
 
+  // `mine` needs the viewer's User.id. Resolved once; null for an
+  // unauthenticated caller, which makes `mine` match nothing.
+  const session = await getServerSession();
+  const viewer = session?.user?.email
+    ? await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
+    : null;
+  const segCtx = { viewerUserId: viewer?.id ?? null };
+  const segmentClause = await segmentWhere(segment, segCtx);
+  if (Object.keys(segmentClause).length > 0) {
+    // AND rather than spread — a segment fragment can carry the same
+    // keys as the search clause (e.g. `id`), and a spread would drop one.
+    Object.assign(listClause, { AND: [...(listClause.AND as unknown[] ?? []), segmentClause] });
+  }
+
+  // ── Select-all-in-segment: ids for the WHOLE filtered set.
+  //
+  // Uses the STATS exclusion, not the list one. The two differ by the
+  // internal-staff filter: the visible table deliberately still shows
+  // @sirreel.com contacts, while every chip count excludes them.
+  //
+  // For a count that asymmetry is harmless. For a SELECTION it is not —
+  // the bar promises "Select all 4,434 in this segment" off the chip
+  // count, and without this the selection came back 4,443, quietly
+  // adding the nine of us. Bulk-logging outreach against Dani and Wes is
+  // both wrong and invisible after the fact. The button must deliver
+  // exactly the number it named, and it must never target ourselves.
+  // Individual rows stay tickable if someone genuinely wants one.
+  if (idsOnly) {
+    const rows = await prisma.person.findMany({
+      where: {
+        AND: [
+          listClause,
+          { NOT: { email: { contains: '@sirreel.com', mode: 'insensitive' } } },
+        ],
+      },
+      select: { id: true },
+    });
+    return NextResponse.json({ ids: rows.map((r) => r.id), total: rows.length });
+  }
+
   // ── Single groupBy for the role chip strip. One query, not N.
   const statsRaw = await prisma.person.groupBy({
     by: ['role'],
@@ -81,6 +132,11 @@ export async function GET(req: NextRequest) {
     }
   }
   const roleStats = { total: statsTotal, byRole };
+
+  // Segment chip counts — population-wide, narrowed by the active
+  // SEARCH but never by the active segment (that would zero every other
+  // chip the moment you clicked one).
+  const segmentCounts = await fetchSegmentCounts(statsClause, segCtx);
 
   const people = await prisma.person.findMany({
     where: listClause,
@@ -230,10 +286,10 @@ export async function GET(req: NextRequest) {
       if (spend !== 0) return spend;
       return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
     });
-    return NextResponse.json({ people: enriched.slice(0, 100), roleStats });
+    return NextResponse.json({ people: enriched.slice(0, 100), roleStats, segmentCounts });
   }
 
-  return NextResponse.json({ people: enriched, roleStats });
+  return NextResponse.json({ people: enriched, roleStats, segmentCounts });
 }
 
 export async function POST(req: NextRequest) {

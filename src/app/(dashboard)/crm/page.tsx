@@ -9,6 +9,15 @@ import { CaptureReviewWidget } from "@/components/crm/CaptureReviewWidget";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { FollowUpsDueModal } from "@/components/crm/FollowUpsDueModal";
+import { BulkOutreachModal } from "@/components/crm/BulkOutreachModal";
+import { BulkSelectionBar } from "@/components/crm/BulkSelectionBar";
+import { PeopleSegmentChips, type SavedSegment } from "@/components/crm/PeopleSegmentChips";
+import {
+  isPeopleSegmentKey,
+  PEOPLE_SEGMENTS,
+  type PeopleSegmentCounts,
+  type PeopleSegmentKey,
+} from "@/lib/crm/peopleSegments";
 import { RequestExportModal } from "@/components/crm/RequestExportModal";
 
 type Company = {
@@ -219,6 +228,24 @@ export default function CRMPage() {
   const [roleStats, setRoleStats] = useState<{ total: number; byRole: Record<string, number> } | null>(null);
   const roleFromUrl = searchParams?.get('role') ?? null;
   const [roleFilter, setRoleFilter] = useState<string | null>(roleFromUrl);
+  // ── Phase 1 targeting: people segment + multi-select ────────────
+  const peopleSegFromUrl = searchParams?.get('peopleSegment') ?? null;
+  const [peopleSegment, setPeopleSegment] = useState<PeopleSegmentKey | null>(
+    isPeopleSegmentKey(peopleSegFromUrl) ? peopleSegFromUrl : null,
+  );
+  const [segmentCounts, setSegmentCounts] = useState<PeopleSegmentCounts | null>(null);
+  const [savedSegments, setSavedSegments] = useState<SavedSegment[]>([]);
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  // Selection is a Set of Person ids, NOT row indexes — the list
+  // re-sorts and re-fetches under it constantly.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // True once "select all in segment" has run, so the bar can say so
+  // rather than showing a number the user has to trust.
+  const [allInSegment, setAllInSegment] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [showBulkOutreach, setShowBulkOutreach] = useState(false);
+  const [bulkToast, setBulkToast] = useState<string | null>(null);
+
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState("");
@@ -290,11 +317,51 @@ export default function CRMPage() {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (roleFilter) params.set("role", roleFilter);
+    if (peopleSegment) params.set("segment", peopleSegment);
     const res = await fetch(`/api/crm/people?${params}`);
     const data = await res.json();
     setPeople(data.people || []);
     if (data.roleStats) setRoleStats(data.roleStats);
-  }, [search, roleFilter]);
+    if (data.segmentCounts) setSegmentCounts(data.segmentCounts);
+  }, [search, roleFilter, peopleSegment]);
+
+  const fetchSavedSegments = useCallback(async () => {
+    const res = await fetch("/api/crm/segments");
+    if (!res.ok) return;
+    const data = await res.json();
+    setSavedSegments(data.segments || []);
+  }, []);
+
+  // Query params for the CURRENT people filters — shared by the list
+  // fetch and the select-all-in-segment id fetch so the two can never
+  // disagree about what "this segment" means.
+  const peopleParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (roleFilter) params.set("role", roleFilter);
+    if (peopleSegment) params.set("segment", peopleSegment);
+    return params;
+  }, [search, roleFilter, peopleSegment]);
+
+  const selectAllInSegment = useCallback(async () => {
+    setSelectingAll(true);
+    try {
+      const params = peopleParams();
+      params.set("idsOnly", "1");
+      const res = await fetch(`/api/crm/people?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSelected(new Set<string>(data.ids || []));
+      setAllInSegment(true);
+    } finally {
+      setSelectingAll(false);
+    }
+  }, [peopleParams]);
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set());
+    setAllInSegment(false);
+  }, []);
 
   const fetchFollowUps = useCallback(async () => {
     const res = await fetch("/api/crm/activities?pending=true");
@@ -338,7 +405,29 @@ export default function CRMPage() {
   useEffect(() => {
     fetchFollowUps();
     fetchStats();
-  }, [fetchFollowUps, fetchStats]);
+    fetchSavedSegments();
+  }, [fetchFollowUps, fetchStats, fetchSavedSegments]);
+
+  // Any change to the people filters invalidates the selection — the
+  // rows it referred to may not be in the list any more, and silently
+  // carrying it forward is how someone logs outreach against contacts
+  // they can no longer see.
+  useEffect(() => {
+    clearSelection();
+  }, [search, roleFilter, peopleSegment, tab, clearSelection]);
+
+  // Mirror the people segment into the URL, same as roleFilter.
+  useEffect(() => {
+    if (tab !== 'people') return;
+    const params = new URLSearchParams(window.location.search);
+    if (peopleSegment) params.set('peopleSegment', peopleSegment);
+    else params.delete('peopleSegment');
+    const query = params.toString();
+    const next = `/crm${query ? `?${query}` : ''}`;
+    if (next !== window.location.pathname + window.location.search) {
+      router.replace(next, { scroll: false });
+    }
+  }, [peopleSegment, tab, router]);
 
   const addContact = async () => {
     if (!cFirst || !cLast || !cEmail) return;
@@ -722,12 +811,101 @@ export default function CRMPage() {
         </div>
       )}
 
+      {/* People-side sales segments (Phase 1 targeting). Server-driven
+          like the Companies chips, so each one filters the whole
+          population rather than the loaded page. */}
+      {tab === "people" && (
+        <PeopleSegmentChips
+          active={peopleSegment}
+          counts={segmentCounts}
+          onPick={(next) => {
+            setActiveSavedId(null);
+            setPeopleSegment(next === peopleSegment ? null : next);
+          }}
+          saved={savedSegments}
+          activeSavedId={activeSavedId}
+          viewerEmail={session?.user?.email ?? null}
+          onPickSaved={(seg) => {
+            if (activeSavedId === seg.id) {
+              setActiveSavedId(null);
+              setPeopleSegment(null);
+              setRoleFilter(null);
+              setSearch("");
+              return;
+            }
+            setActiveSavedId(seg.id);
+            setPeopleSegment(isPeopleSegmentKey(seg.segmentKey) ? seg.segmentKey : null);
+            setRoleFilter(seg.roleKey);
+            setSearch(seg.search ?? "");
+          }}
+          onDeleteSaved={async (seg) => {
+            if (!confirm(`Delete the saved segment “${seg.name}”? This cannot be undone.`)) return;
+            const res = await fetch(`/api/crm/segments/${seg.id}`, { method: "DELETE" });
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}));
+              alert(d.error || "Could not delete that segment.");
+              return;
+            }
+            if (activeSavedId === seg.id) setActiveSavedId(null);
+            fetchSavedSegments();
+          }}
+          canSave={!!(peopleSegment || roleFilter || search)}
+          onSave={async () => {
+            const name = prompt("Name this segment — you'll click it instead of rebuilding the filters.");
+            if (!name || !name.trim()) return;
+            const res = await fetch("/api/crm/segments", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: name.trim(),
+                segmentKey: peopleSegment,
+                roleKey: roleFilter,
+                search: search || null,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              alert(data.error || "Could not save that segment.");
+              return;
+            }
+            setActiveSavedId(data.segment?.id ?? null);
+            fetchSavedSegments();
+          }}
+        />
+      )}
+
       {/* People Tab */}
       {tab === "people" && (
         <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lt-hairline text-lt-fg2 text-left text-xs uppercase tracking-wide">
+                <th className="pl-4 pr-1 py-3 w-8">
+                  {/* Selects the RENDERED rows only. Whole-segment
+                      selection is a separate, explicitly-numbered action
+                      in the bulk bar. */}
+                  <input
+                    type="checkbox"
+                    aria-label={`Select all ${filteredPeople.length} loaded contacts`}
+                    title={`Select the ${filteredPeople.length} contacts shown`}
+                    className="align-middle cursor-pointer"
+                    checked={filteredPeople.length > 0 && filteredPeople.every((p) => selected.has(p.id))}
+                    ref={(el) => {
+                      if (el) {
+                        const some = filteredPeople.some((p) => selected.has(p.id));
+                        const all = filteredPeople.length > 0 && filteredPeople.every((p) => selected.has(p.id));
+                        el.indeterminate = some && !all;
+                      }
+                    }}
+                    onChange={(e) => {
+                      const next = new Set(selected);
+                      if (e.target.checked) filteredPeople.forEach((p) => next.add(p.id));
+                      else filteredPeople.forEach((p) => next.delete(p.id));
+                      setSelected(next);
+                      setAllInSegment(false);
+                    }}
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Role</th>
                 <th className="px-4 py-3 font-medium">Company</th>
@@ -740,12 +918,16 @@ export default function CRMPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-lt-fg3">Loading...</td></tr>
               ) : filteredPeople.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-lt-fg3">
-                  {segmentFilter === 'followups'
-                    ? 'No follow-ups due — inbox zero.'
-                    : 'No contacts found'}
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-lt-fg3">
+                  {/* A named segment's own empty copy, so a zero reads as
+                      a fact about the book rather than a broken filter. */}
+                  {peopleSegment
+                    ? PEOPLE_SEGMENTS[peopleSegment].emptyMessage
+                    : segmentFilter === 'followups'
+                      ? 'No follow-ups due — inbox zero.'
+                      : 'No contacts found'}
                 </td></tr>
               ) : filteredPeople.map((p) => (
                 // ?edit=1 hands the person-detail page a hint to open
@@ -755,9 +937,27 @@ export default function CRMPage() {
                 <tr
                   key={p.id}
                   onClick={() => router.push(`/crm/people/${p.id}?edit=1`)}
-                  className="group border-b border-lt-hairline/50 hover:bg-lt-inner cursor-pointer transition-colors"
+                  className={`group border-b border-lt-hairline/50 cursor-pointer transition-colors ${
+                    selected.has(p.id) ? 'bg-chip-warn-bg/40' : 'hover:bg-lt-inner'
+                  }`}
                   title={`Click to edit ${p.firstName} ${p.lastName}`}
                 >
+                  {/* stopPropagation so ticking a box doesn't also
+                      navigate to the contact. */}
+                  <td className="pl-4 pr-1 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="align-middle cursor-pointer"
+                      aria-label={`Select ${p.firstName} ${p.lastName}`}
+                      checked={selected.has(p.id)}
+                      onChange={(e) => {
+                        const next = new Set(selected);
+                        if (e.target.checked) next.add(p.id);
+                        else { next.delete(p.id); setAllInSegment(false); }
+                        setSelected(next);
+                      }}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="text-lt-fg font-medium group-hover:text-black">{p.firstName} {p.lastName}</div>
                     <ClientBadgeChips
@@ -803,6 +1003,49 @@ export default function CRMPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Bulk bar — only renders with a selection. Sticky so it stays
+          reachable while scrolling a long segment. */}
+      {tab === "people" && (
+        <BulkSelectionBar
+          selectedCount={selected.size}
+          pageCount={filteredPeople.length}
+          segmentTotal={
+            // Total matching the CURRENT filters. With a segment active
+            // that is the segment's own count; otherwise the population
+            // total from the role strip.
+            peopleSegment
+              ? segmentCounts?.[peopleSegment] ?? null
+              : roleStats?.total ?? null
+          }
+          allInSegmentSelected={allInSegment}
+          selectingAll={selectingAll}
+          onSelectAllInSegment={selectAllInSegment}
+          onClear={clearSelection}
+          onLogOutreach={() => setShowBulkOutreach(true)}
+        />
+      )}
+
+      {bulkToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-lt-fg text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+          {bulkToast}
+        </div>
+      )}
+
+      {showBulkOutreach && (
+        <BulkOutreachModal
+          personIds={Array.from(selected)}
+          onClose={() => setShowBulkOutreach(false)}
+          onSaved={(logged) => {
+            setBulkToast(`Logged outreach on ${logged} contact${logged === 1 ? '' : 's'}.`);
+            setTimeout(() => setBulkToast(null), 4000);
+            clearSelection();
+            // Follow-ups may now be due, and the strip shows that count.
+            fetchFollowUps();
+            fetchStats();
+          }}
+        />
       )}
 
       {/* Follow-Ups tab content moved to the NeedsAttentionStrip

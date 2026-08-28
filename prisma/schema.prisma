@@ -2193,6 +2193,7 @@ model User {
   reviewedHrMail           HrMail[]            @relation("HrMailReviewer")
   resolvedInquiryCaptures  InquiryCapture[]    @relation("CaptureResolver")
   outreachActivitiesLogged OutreachActivity[]  @relation("OutreachCreator")
+  contactSegments          ContactSegment[]    @relation("ContactSegmentCreator")
   orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
   personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
@@ -3864,6 +3865,9 @@ model Vendor {
   // preferred reorder source. Same Vendor table feeds both
   // sub-rentals (Hugo's flow) and the inventory reorder picker.
   inventoryItems InventoryItem[]
+  // Partner-owned production vehicles this vendor sub-contracts to
+  // SirReel (King Kong PV etc.) — see SubcontractedVehicle.
+  subcontractedVehicles SubcontractedVehicle[]
 
   @@map("vendors")
 }
@@ -3933,6 +3937,54 @@ model SubRental {
   @@map("sub_rentals")
 }
 
+// ── Subcontracted vehicles ─────────────────────────────────────────
+// Standing roster of production vehicles SirReel does NOT own — a
+// partner vendor's unit (first: King Kong Production Vehicles) that
+// sales can quote out on demand. Tracks the vendor's list-rate
+// structure and SirReel's negotiated discount off it. Deliberately
+// NOT part of the fleet: no Asset row, no maintenance, no dispatch —
+// fleet roles never manage these. Sales/billing/admin surface only
+// (subRentals + seePricing gate — see requireSubVehicleAccess).
+// Distinct from SubRental, which is a per-order sourcing TRANSACTION;
+// this is the persistent catalog a transaction may start from.
+model SubcontractedVehicle {
+  id       String @id @default(uuid())
+  vendorId String @map("vendor_id")
+
+  name        String // e.g. "2-Room Star Wagon"
+  // Free-text category (e.g. "Star Trailer", "Honeywagon", "Fuel
+  // Truck"). Deliberately NOT the AssetCategory/InventoryItem taxonomy
+  // — these units live outside the owned-fleet catalogs.
+  vehicleType String? @map("vehicle_type")
+  description String? @db.Text
+  // Free-form spec sheet, one spec per line (length, slide-outs,
+  // generator, tow requirements...).
+  specs       String? @db.Text
+
+  // The vendor's LIST price structure — what they charge retail.
+  listDailyRate   Decimal? @map("list_daily_rate") @db.Decimal(10, 2)
+  listWeeklyRate  Decimal? @map("list_weekly_rate") @db.Decimal(10, 2)
+  listMonthlyRate Decimal? @map("list_monthly_rate") @db.Decimal(10, 2)
+  // Structure nuances three numbers can't hold: 3-day rental weeks,
+  // delivery/driver fees, fuel, damage waiver, minimums.
+  rateNotes       String?  @map("rate_notes") @db.Text
+
+  // SirReel's negotiated discount off list, in percent (25.00 = 25%).
+  // Net cost is DERIVED at read time (list × (1 − discount/100)) and
+  // never stored, so a renegotiated discount can't strand stale
+  // numbers.
+  discountPercent Decimal? @map("discount_percent") @db.Decimal(5, 2)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId])
+  @@map("sub_contracted_vehicles")
+}
+
 enum ActivityType {
   NOTE
   CALL
@@ -3988,6 +4040,46 @@ model OutreachActivity {
   @@index([personId, occurredAt(sort: Desc)])
   @@index([companyId, occurredAt(sort: Desc)])
   @@map("sr_outreach_activities")
+}
+
+/// ContactSegment — a NAMED, reusable targeting filter on /crm People.
+///
+/// "LA line producers we haven't quoted since January" should be a thing
+/// you click, not a search you rebuild from memory every Monday. Phase 1
+/// of the outreach build (see the plan artifact); Phase 3 composes a send
+/// against one of these.
+///
+/// The filter is stored as typed COLUMNS rather than a JSON blob on
+/// purpose: Phase 3 has to resolve a segment to a recipient list on the
+/// server, and a blob would make that a parse-and-hope. Adding a filter
+/// dimension is a migration, which is the correct amount of friction for
+/// something that decides who gets emailed.
+model ContactSegment {
+  id   String @id @default(uuid())
+  name String
+
+  /// PeopleSegmentKey (src/lib/crm/peopleSegments.ts) or null.
+  segmentKey String? @map("segment_key")
+  /// PersonRole value or null.
+  roleKey    String? @map("role_key")
+  /// Free-text search term or null.
+  search     String?
+
+  /// Visible to the whole team. Private segments are a later concern;
+  /// today the sales book is shared and hiding a list helps nobody.
+  isShared Boolean @default(true) @map("is_shared")
+
+  createdById String @map("created_by_id")
+  createdBy   User   @relation("ContactSegmentCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One segment per name per creator — re-saving the same name updates
+  /// rather than quietly creating a second identical chip.
+  @@unique([createdById, name])
+  @@index([isShared, name])
+  @@map("sr_contact_segments")
 }
 
 model Activity {
