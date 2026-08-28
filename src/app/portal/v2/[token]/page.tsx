@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { isPortalPaperworkLocked } from '@/lib/bookings/status'
 import { useParams } from 'next/navigation'
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens'
 import { DetailsCard, intakeComplete } from '@/components/portal-v2/DetailsCard'
@@ -78,16 +79,13 @@ export default function ClientPortalV2() {
           coi: !!(req?.coiReceived && req?.wcReceived),
           cc: !!req?.creditCardAuth,
         })
-        // Lock the portal read-only ONLY for genuinely terminal bookings.
-        // A CONFIRMED/ACTIVE booking must stay signable — stage holds
-        // (Planyo imports and gantt 'Booked' alike) routinely carry
-        // CONFIRMED before any paperwork exists, and the whole point of
-        // the portal is collecting signatures on those jobs. Signed docs
-        // already lock themselves via their per-doc done states. (The
-        // legacy portal's copied condition also listed 'COMPLETE'/'CLOSED',
-        // which aren't BookingStatus values, while missing the real
-        // terminal states below.)
-        setLocked(['CANCELLED', 'ARCHIVED', 'RETURNED'].includes(bk.status))
+        // Lock read-only ONLY for genuinely terminal bookings. The
+        // reasoning that used to live here — a CONFIRMED/ACTIVE booking
+        // must stay signable because stage holds carry CONFIRMED before
+        // any paperwork exists — is now the documented contract in
+        // src/lib/bookings/status.ts, shared with the legacy portal so
+        // the two can no longer disagree about who may sign.
+        setLocked(isPortalPaperworkLocked(bk.status))
 
         // Collect-once seed: persisted intake wins; otherwise pre-fill from
         // the booking's contact + company so the client starts pre-populated.

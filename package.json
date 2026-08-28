@@ -27,6 +27,7 @@
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:role-mapping": "tsx tests/crm/role-mapping.test.ts",
+    "test:booking-status": "tsx tests/bookings/status.test.ts",
     "test:export-gate": "tsx tests/exports/export-gate.test.ts",
     "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts",

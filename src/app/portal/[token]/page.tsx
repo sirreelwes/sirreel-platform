@@ -1,5 +1,6 @@
 'use client';
 import { formatCalendarDate } from '@/lib/dates/calendarDate';
+import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { formatPhone } from '@/lib/format/phone';
@@ -90,7 +91,10 @@ export default function ClientPortal() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [submitting, setSubmitting] = useState(false);
-  const [locked, setLocked] = useState(false);
+  // Null while the client can still edit; otherwise WHY they can't —
+  // the copy differs for a settled rental vs a cancelled one.
+  const [lockReason, setLockReason] = useState<PortalLockReason | null>(null);
+  const locked = lockReason !== null;
   const [done, setDone] = useState({ agreement: false, lcdw: false, coi: false, cc: false, studio: false });
 
   // Agreement
@@ -233,7 +237,15 @@ export default function ClientPortal() {
           cc: req?.creditCardAuth || false,
           studio: req?.studioContractSigned || false,
         });
-        setLocked(['CONFIRMED', 'ACTIVE', 'COMPLETE', 'CLOSED'].includes(data.booking.status));
+        // Was ['CONFIRMED','ACTIVE','COMPLETE','CLOSED']. COMPLETE and
+        // CLOSED have never been BookingStatus values; a string
+        // .includes() made them inert rather than throwing, so nothing
+        // ever complained — but the list was wrong in BOTH directions.
+        // It left RETURNED / ARCHIVED / CANCELLED bookings editable, and
+        // it locked CONFIRMED / ACTIVE ones out of signing they still
+        // needed to do. Now shared with the v2 portal, whose ruling this
+        // adopts. See src/lib/bookings/status.ts.
+        setLockReason(portalLockReason(data.booking.status));
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false));
@@ -364,7 +376,11 @@ export default function ClientPortal() {
     <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 text-center">
       <div className="text-4xl mb-3">🔒</div>
       <div className="font-bold text-base text-gray-800">{title} — Locked</div>
-      <div className="text-sm mt-1 text-gray-500">This rental has been confirmed. Documents are read-only.</div>
+      <div className="text-sm mt-1 text-gray-500">
+        {lockReason === 'cancelled'
+          ? 'This rental was cancelled. Documents are read-only — reach out if that looks wrong.'
+          : 'This rental has been confirmed. Documents are read-only.'}
+      </div>
     </div>
   );
 
