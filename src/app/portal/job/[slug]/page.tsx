@@ -209,9 +209,9 @@ function fmtRelative(iso: string): string {
 function fmtCountdown(ms: number): string {
   if (ms <= 0) return 'In progress';
   const days = Math.floor(ms / 86_400_000);
-  if (days >= 2) return `${days} days to job`;
+  if (days >= 2) return `${days} days to Job`;
   const hours = Math.floor(ms / 3_600_000);
-  return hours > 0 ? `${hours}h to job` : 'Starting soon';
+  return hours > 0 ? `${hours}h to Job` : 'Starting soon';
 }
 
 function fmtCurrency(n: string): string {
