@@ -32,6 +32,22 @@ interface PreviewRow {
   missing: string[]
 }
 
+interface FunnelStage {
+  key: string
+  label: string
+  value: number
+  influenced?: boolean
+  note?: string
+}
+
+interface Scoreboard {
+  firstSendAt: string | null
+  windowDays: number
+  funnel: FunnelStage[]
+  deliverability: { delivered: number; bounced: number; complained: number; bounceRate: number | null }
+  influencedRevenue: number
+}
+
 interface PreviewResponse {
   audience: {
     total: number
@@ -62,6 +78,14 @@ export default function OutreachComposerPage() {
   const [creating, setCreating] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [board, setBoard] = useState<Scoreboard | null>(null)
+
+  useEffect(() => {
+    fetch('/api/outreach/scoreboard')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setBoard(d))
+      .catch(() => undefined)
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -239,6 +263,54 @@ export default function OutreachComposerPage() {
             <span className="text-xs text-lt-fg3">{loading ? 'Refreshing preview…' : 'Saving a draft sends nothing.'}</span>
           </div>
         </div>
+
+        {/* Scoreboard. Deliberately shows the empty state in words rather
+            than rendering a funnel of zeros, which reads as failure
+            rather than as "nothing has been sent yet". */}
+        {board && (
+          <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-3">
+              <h2 className="text-sm font-semibold text-lt-fg">Results</h2>
+              <span className="text-xs text-lt-fg3">
+                Influence measured over {board.windowDays} days
+              </span>
+            </div>
+
+            {board.firstSendAt === null ? (
+              <p className="text-sm text-lt-fg3">
+                No outreach has been sent yet, so there is nothing to measure. This fills in from the
+                first campaign onward.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  {board.funnel.map((f) => (
+                    <div key={f.key} className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2"
+                         title={f.note}>
+                      <div className="text-[10px] uppercase tracking-wide text-lt-fg3">
+                        {f.label}{f.influenced && <span className="ml-1 text-chip-warn-fg">~</span>}
+                      </div>
+                      <div className="text-xl font-semibold tabular-nums text-lt-fg">
+                        {f.value.toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-lt-fg3 mt-2">
+                  <span className="text-chip-warn-fg">~</span> These are <strong>influenced</strong>, not
+                  caused. The contact was mailed and then the thing happened — they may equally have
+                  called us, or been coming back anyway.
+                </p>
+                {board.deliverability.bounceRate !== null && board.deliverability.bounceRate > 0.02 && (
+                  <p className="text-xs text-chip-bad-fg mt-2">
+                    Bounce rate is {(board.deliverability.bounceRate * 100).toFixed(1)}% — above 2% puts the
+                    sending domain at risk. Clean the list before sending more.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-5">
           <h2 className="text-sm font-semibold text-lt-fg mb-1">What real people will get</h2>

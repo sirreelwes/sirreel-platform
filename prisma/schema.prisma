@@ -336,6 +336,16 @@ model VehicleCategory {
   @@index([assetCategoryId])
   @@index([catalogItemId])
   @@map("vehicle_categories")
+  /// UNLISTED client page for a vehicle we do NOT publish in the catalog —
+  /// same /unit/[token] surface the subcontracted units use, and deliberately
+  /// indistinguishable from them: a client should not be able to tell which
+  /// units we own and which we bring in. NULL = no page. Clearing revokes.
+  ///
+  /// Separate from `published`, which governs the LISTED catalog at
+  /// /vehicles/[slug]. A vehicle can have an unlisted page without ever
+  /// appearing in the public catalog — that is the whole point of it.
+  publicToken         String?   @unique @map("public_token")
+  publicTokenMintedAt DateTime? @map("public_token_minted_at")
 }
 
 // Gallery photos for a public vehicle page. url points at a PRIVATE blob
@@ -641,6 +651,7 @@ model Person {
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
   suppressions       EmailSuppression[] @relation("PersonSuppressions")
   campaignRecipients OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
+  touchPlanEnrollments TouchPlanEnrollment[] @relation("TouchPlanEnrollee")
   emailAliases       PersonEmailAlias[] @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
@@ -2209,6 +2220,8 @@ model User {
   contactSegments          ContactSegment[]    @relation("ContactSegmentCreator")
   suppressionsReleased     EmailSuppression[]  @relation("SuppressionReleaser")
   outreachCampaigns        OutreachCampaign[]  @relation("OutreachCampaignCreator")
+  touchPlansCreated        TouchPlan[]         @relation("TouchPlanCreator")
+  touchPlanEnrollments     TouchPlanEnrollment[] @relation("TouchPlanOwner")
   orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
   personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
@@ -4059,6 +4072,17 @@ model SubcontractedVehicle {
   publicToken         String?   @unique @map("public_token")
   publicTokenMintedAt DateTime? @map("public_token_minted_at")
 
+  /// LISTED in the public catalog at /vehicles/{publicSlug} — the other half
+  /// of the unlisted token above, and a separate decision from it. Unlisted =
+  /// only people we send the link to; listed = anyone browsing the site.
+  ///
+  /// A listed subcontracted unit still never names its vendor: the catalog
+  /// serializer selects no vendor field, exactly as the unlisted page doesn't.
+  /// Clients are quoted LIST, so the catalog price is the list rate — showing
+  /// it discloses nothing about what we pay.
+  publiclyListed Boolean @default(false) @map("publicly_listed")
+  publicSlug     String? @unique @map("public_slug")
+
   /// Client-facing blurb for the unlisted page. SEPARATE from `description`
   /// on purpose: that field is written for staff and carries operational
   /// caveats ("confirm the hold before committing dates to a client"), which
@@ -4227,6 +4251,140 @@ model OutreachActivity {
 /// server, and a blob would make that a parse-and-hope. Adding a filter
 /// dimension is a migration, which is the correct amount of friction for
 /// something that decides who gets emailed.
+/// A named, reusable multi-step sequence.
+///
+/// Phase 4. A campaign is one send to a list; a touch plan is a
+/// relationship over weeks — day 0 intro, day 4 case study, day 12
+/// check-in — that stops the moment the person engages.
+model TouchPlan {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String? @db.Text
+  /// Off by default. A plan that can enrol people the moment it is saved
+  /// is a plan that mails someone because a rep was still drafting it.
+  isActive    Boolean @default(false) @map("is_active")
+
+  createdById String @map("created_by_id")
+  createdBy   User   @relation("TouchPlanCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  steps       TouchPlanStep[]
+  enrollments TouchPlanEnrollment[]
+
+  @@map("sr_touch_plans")
+}
+
+/// One step of a plan.
+///
+/// `dayOffset` is days from ENROLMENT, not from the previous step, so
+/// reordering or editing one step cannot silently shift everything after
+/// it into a different week.
+model TouchPlanStep {
+  id     String @id @default(uuid())
+  planId String @map("plan_id")
+  plan   TouchPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  /// Days after enrolment this step becomes due. Step one is normally 0.
+  dayOffset Int    @map("day_offset")
+  subject   String
+  /// Same merge syntax as a campaign — see src/lib/outreach/mergeFields.ts.
+  bodyTemplate String @map("body_template") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sends TouchPlanSend[]
+
+  @@unique([planId, dayOffset])
+  @@index([planId])
+  @@map("sr_touch_plan_steps")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  /// Every step sent, nobody engaged. The plan ran its course.
+  COMPLETED
+  /// Stopped early — see exitReason. This is the GOOD outcome for a
+  /// sequence: it means the person responded.
+  EXITED
+}
+
+/// Why an enrolment stopped.
+///
+/// Every one of these except PLAN_FINISHED means "stop mailing this
+/// person NOW" — the whole point of a sequence is that it notices when
+/// it has worked and gets out of the way.
+enum EnrollmentExitReason {
+  /// They wrote back. The sequence did its job.
+  REPLIED
+  /// An Inquiry was created for them after enrolment.
+  INQUIRY
+  /// An order was raised against their company after enrolment.
+  ORDER
+  /// They unsubscribed, bounced, or complained.
+  SUPPRESSED
+  /// A human stopped it.
+  MANUAL
+  /// Ran out of steps without engagement.
+  PLAN_FINISHED
+}
+
+/// One person's run through one plan.
+model TouchPlanEnrollment {
+  id     String @id @default(uuid())
+  planId String @map("plan_id")
+  plan   TouchPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  personId String @map("person_id")
+  person   Person @relation("TouchPlanEnrollee", fields: [personId], references: [id], onDelete: Cascade)
+
+  status     EnrollmentStatus      @default(ACTIVE)
+  exitReason EnrollmentExitReason? @map("exit_reason")
+  exitDetail String?               @map("exit_detail")
+
+  /// The rep the sequence sends AS, and whose daily cap it spends.
+  ownerId String @map("owner_id")
+  owner   User   @relation("TouchPlanOwner", fields: [ownerId], references: [id])
+
+  enrolledAt DateTime  @default(now()) @map("enrolled_at")
+  exitedAt   DateTime? @map("exited_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sends TouchPlanSend[]
+
+  /// One live run per person per plan. A person may be re-enrolled after
+  /// exiting, so this is NOT unique on (plan, person) — the runner and
+  /// the enrol API both refuse a second ACTIVE row instead.
+  @@index([status, planId])
+  @@index([personId, status])
+  @@map("sr_touch_plan_enrollments")
+}
+
+/// One step actually sent to one enrolee.
+///
+/// Exists so a step can never be sent twice: the unique key is the
+/// idempotency guarantee, the same way campaign recipients work.
+model TouchPlanSend {
+  id           String @id @default(uuid())
+  enrollmentId String @map("enrollment_id")
+  enrollment   TouchPlanEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  stepId       String @map("step_id")
+  step         TouchPlanStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  sentAt          DateTime  @default(now()) @map("sent_at")
+  resendMessageId String?   @map("resend_message_id")
+  /// Null on success; the failure reason otherwise.
+  error           String?
+
+  @@unique([enrollmentId, stepId])
+  @@index([sentAt])
+  @@map("sr_touch_plan_sends")
+}
+
 enum OutreachCampaignStatus {
   /// Being written. Nothing has left the building.
   DRAFT
