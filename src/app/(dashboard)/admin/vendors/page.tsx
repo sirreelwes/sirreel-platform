@@ -48,6 +48,67 @@ const inputCls =
 const labelCls =
   'block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1'
 
+/**
+ * Shared field grid used by both the add form and the inline editor.
+ *
+ * MODULE SCOPE, deliberately. Defined inside AdminVendorsPage this was a new
+ * component *type* on every render, so React unmounted and remounted the whole
+ * subtree each keystroke — the focused input was destroyed and recreated, and
+ * you could type exactly one character before the cursor vanished. It closes
+ * over nothing but module constants, so there is no reason for it to live
+ * inside the component and every reason for it not to.
+ */
+const FieldGrid = ({
+  values, onChange,
+}: {
+  values: Record<EditableField, string>
+  onChange: (f: EditableField, v: string) => void
+}) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div>
+      <label className={labelCls}>Name <span className="text-amber-500">*</span></label>
+      <input type="text" value={values.name} onChange={(e) => onChange('name', e.target.value)} placeholder="e.g. AbelCine" className={inputCls} />
+    </div>
+    <div>
+      <label className={labelCls}>Supplies / categories</label>
+      <input type="text" value={values.supplies} onChange={(e) => onChange('supplies', e.target.value)} placeholder="e.g. grip, dolly, lighting" className={inputCls} />
+    </div>
+    <div>
+      <label className={labelCls}>Website</label>
+      <input type="url" value={values.website} onChange={(e) => onChange('website', e.target.value)} placeholder="https://…" className={`${inputCls} font-mono`} />
+    </div>
+    <div>
+      <label className={labelCls}>Contact name</label>
+      <input type="text" value={values.contactName} onChange={(e) => onChange('contactName', e.target.value)} placeholder="Rep / desk" className={inputCls} />
+    </div>
+    <div>
+      <label className={labelCls}>Contact email</label>
+      <input type="email" value={values.email} onChange={(e) => onChange('email', e.target.value)} placeholder="rep@vendor.com" className={inputCls} />
+    </div>
+    <div>
+      <label className={labelCls}>Phone</label>
+      <input type="tel" value={values.phone} onChange={(e) => onChange('phone', e.target.value)} placeholder="(555) 123-4567" className={inputCls} />
+    </div>
+    <div>
+      <label className={labelCls}>PO email <span className="text-zinc-600 normal-case tracking-normal">(falls back to contact email)</span></label>
+      <input type="email" value={values.poEmail} onChange={(e) => onChange('poEmail', e.target.value)} placeholder="orders@vendor.com" className={inputCls} />
+    </div>
+    <div className="lg:col-span-2">
+      <label className={labelCls}>Address</label>
+      <input type="text" value={values.address} onChange={(e) => onChange('address', e.target.value)} placeholder="Street, city, state" className={inputCls} />
+    </div>
+    <div className="md:col-span-2 lg:col-span-3">
+      <label className={labelCls}>Delivery terms</label>
+      <input type="text" value={values.deliveryTerms} onChange={(e) => onChange('deliveryTerms', e.target.value)} placeholder="Lead time, cutoffs, dock hours…" className={inputCls} />
+    </div>
+    <div className="md:col-span-2 lg:col-span-3">
+      <label className={labelCls}>Notes</label>
+      <input type="text" value={values.notes} onChange={(e) => onChange('notes', e.target.value)} placeholder="Account #, misc." className={inputCls} />
+    </div>
+  </div>
+)
+
+
 export default function AdminVendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
@@ -148,56 +209,6 @@ export default function AdminVendorsPage() {
     load()
   }
 
-  // Shared field grid used by both the add form and the inline editor.
-  const FieldGrid = ({
-    values, onChange,
-  }: {
-    values: Record<EditableField, string>
-    onChange: (f: EditableField, v: string) => void
-  }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-      <div>
-        <label className={labelCls}>Name <span className="text-amber-500">*</span></label>
-        <input type="text" value={values.name} onChange={(e) => onChange('name', e.target.value)} placeholder="e.g. AbelCine" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>Supplies / categories</label>
-        <input type="text" value={values.supplies} onChange={(e) => onChange('supplies', e.target.value)} placeholder="e.g. grip, dolly, lighting" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>Website</label>
-        <input type="url" value={values.website} onChange={(e) => onChange('website', e.target.value)} placeholder="https://…" className={`${inputCls} font-mono`} />
-      </div>
-      <div>
-        <label className={labelCls}>Contact name</label>
-        <input type="text" value={values.contactName} onChange={(e) => onChange('contactName', e.target.value)} placeholder="Rep / desk" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>Contact email</label>
-        <input type="email" value={values.email} onChange={(e) => onChange('email', e.target.value)} placeholder="rep@vendor.com" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>Phone</label>
-        <input type="tel" value={values.phone} onChange={(e) => onChange('phone', e.target.value)} placeholder="(555) 123-4567" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>PO email <span className="text-zinc-600 normal-case tracking-normal">(falls back to contact email)</span></label>
-        <input type="email" value={values.poEmail} onChange={(e) => onChange('poEmail', e.target.value)} placeholder="orders@vendor.com" className={inputCls} />
-      </div>
-      <div className="lg:col-span-2">
-        <label className={labelCls}>Address</label>
-        <input type="text" value={values.address} onChange={(e) => onChange('address', e.target.value)} placeholder="Street, city, state" className={inputCls} />
-      </div>
-      <div className="md:col-span-2 lg:col-span-3">
-        <label className={labelCls}>Delivery terms</label>
-        <input type="text" value={values.deliveryTerms} onChange={(e) => onChange('deliveryTerms', e.target.value)} placeholder="Lead time, cutoffs, dock hours…" className={inputCls} />
-      </div>
-      <div className="md:col-span-2 lg:col-span-3">
-        <label className={labelCls}>Notes</label>
-        <input type="text" value={values.notes} onChange={(e) => onChange('notes', e.target.value)} placeholder="Account #, misc." className={inputCls} />
-      </div>
-    </div>
-  )
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
