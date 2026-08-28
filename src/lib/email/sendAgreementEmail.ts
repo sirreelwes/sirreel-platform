@@ -6,8 +6,41 @@ import { Resend } from 'resend'
  * route will use — single source of truth.
  */
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
+import { isWatchedInbox } from '@/lib/email/watchedInboxes'
 
 export const SEND_FROM = 'SirReel HQ <notifications@sirreel.com>'
+
+/**
+ * The watched inbox that rides along on Reply-To when the primary
+ * Reply-To is an on-domain address HQ does NOT ingest (wes@, hq@).
+ * Client replies then land in BOTH places: the human's own mailbox to
+ * be answered from, and this one so the ingest pipeline threads the
+ * conversation, marks the lead responded, and keeps it out of "new
+ * inbound". hello@ specifically: already watched, already the
+ * first-touch inbox, and deliberately OUTSIDE CRM capture mining
+ * (Wes 2026-08-26 — capture stays scoped to info@/jose@/oliver@).
+ *
+ * Wes's ruling 2026-08-28: prefer this over ingesting wes@'s inbox —
+ * even a "replies only" watch on wes@ can't work, because replies to
+ * Resend-sent mail carry an In-Reply-To HQ never stored, so an ingest
+ * filter has no way to prove they belong to an HQ conversation.
+ */
+const REPLY_CAPTURE_INBOX = 'hello@sirreel.com'
+
+/**
+ * Effective Reply-To list: pass the caller's value through, appending
+ * REPLY_CAPTURE_INBOX when the primary is an on-domain mailbox the
+ * ingest doesn't watch. Off-domain Reply-To (client-as-Reply-To on
+ * internal notifies) and watched inboxes (jose@, billing@, …) go
+ * through untouched.
+ */
+function effectiveReplyTo(replyTo: string | undefined): string | string[] | undefined {
+  if (!replyTo) return undefined
+  const primary = replyTo.trim().toLowerCase()
+  const onDomain = /^[^\s@]+@sirreel\.com$/.test(primary)
+  if (!onDomain || isWatchedInbox(primary) || primary === REPLY_CAPTURE_INBOX) return replyTo
+  return [replyTo, REPLY_CAPTURE_INBOX]
+}
 
 export type EmailResult =
   | { ok: true; id: string | null }
@@ -68,7 +101,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       from: SEND_FROM,
       to: payload.to,
       cc: payload.cc,
-      replyTo: payload.replyTo,
+      replyTo: effectiveReplyTo(payload.replyTo),
       subject: payload.subject,
       html: payload.html,
       text: payload.text,
