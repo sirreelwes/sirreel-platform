@@ -34,6 +34,7 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 import { readinessApplies, readinessChipText } from '@/lib/jobs/readiness'
+import { inquiryPastResponseSla } from '@/lib/sales/inquirySla'
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'All jobs' },
@@ -81,6 +82,9 @@ export function JobsSidebar() {
   // NewInboundColumn merges (persistent NEW inquiries + Gmail
   // suggestions), counted the same way, on the same 60s cadence.
   const [incomingCount, setIncomingCount] = useState<number | null>(null)
+  // Web-form submissions past the first-response SLA — turns the strip
+  // red so the breach is visible even from a job detail page.
+  const [incomingOverdue, setIncomingOverdue] = useState(0)
   useEffect(() => {
     let active = true
     const load = () => {
@@ -89,8 +93,14 @@ export function JobsSidebar() {
         fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
       ]).then(([inq, sug]) => {
         if (!active) return
-        const pending = ((inq?.inquiries ?? []) as { respondedAt?: string | null }[]).filter((i) => !i.respondedAt).length
-        setIncomingCount(pending + ((sug?.suggestions ?? []) as unknown[]).length)
+        const rows = (inq?.inquiries ?? []) as {
+          source: string; respondedAt?: string | null; createdAt: string
+        }[]
+        const pending = rows.filter((i) => !i.respondedAt)
+        setIncomingCount(pending.length + ((sug?.suggestions ?? []) as unknown[]).length)
+        setIncomingOverdue(
+          pending.filter((i) => inquiryPastResponseSla({ ...i, respondedAt: i.respondedAt ?? null })).length,
+        )
       })
     }
     load()
@@ -171,17 +181,28 @@ export function JobsSidebar() {
         <Link
           href="/jobs?panel=incoming"
           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
-            !selectedId && incomingCount !== null && incomingCount > 0
-              ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-              : 'border-zinc-200 bg-white hover:bg-zinc-100'
+            incomingOverdue > 0
+              ? 'border-red-300 bg-red-50 hover:bg-red-100'
+              : !selectedId && incomingCount !== null && incomingCount > 0
+                ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                : 'border-zinc-200 bg-white hover:bg-zinc-100'
           }`}
         >
           <span className="text-[13px]">📥</span>
           <span className="text-[12px] font-semibold text-zinc-800">Incoming</span>
+          {incomingOverdue > 0 && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">
+              {incomingOverdue} waiting
+            </span>
+          )}
           {incomingCount !== null && (
             <span
               className={`ml-auto text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded ${
-                incomingCount > 0 ? 'bg-amber-500 text-white' : 'bg-zinc-100 text-zinc-500'
+                incomingOverdue > 0
+                  ? 'bg-red-500 text-white'
+                  : incomingCount > 0
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-zinc-100 text-zinc-500'
               }`}
             >
               {incomingCount}

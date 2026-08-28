@@ -38,12 +38,20 @@ const SOURCE_LABEL: Record<string, string> = {
   'payment-info': 'Payment',
   'coi-missing': 'COI',
   'quote-aging': 'Quote',
+  'inquiry-untouched': 'Inquiry',
 };
 
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days < 1) return 'today';
+  const ms = Date.now() - d.getTime();
+  const days = Math.floor(ms / 86_400_000);
+  // Sub-day precision matters here: "today" hid how long an untouched
+  // web inquiry had actually been waiting (12h read the same as 12min).
+  if (days < 1) {
+    const hours = Math.floor(ms / 3_600_000);
+    if (hours < 1) return `${Math.max(1, Math.floor(ms / 60_000))}m ago`;
+    return `${hours}h ago`;
+  }
   if (days < 30) return `${days}d ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }

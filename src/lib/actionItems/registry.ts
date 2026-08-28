@@ -9,6 +9,8 @@
  *   - payment-info (EVENT)  — payment_info_request Alerts, split by path
  *   - coi-missing  (DERIVED)— bookings still missing a COI
  *   - quote-aging  (DERIVED)— open quotes gone quiet
+ *   - inquiry-untouched (DERIVED) — web-form inquiries past the
+ *     first-response SLA (in-app twin of the safety-net email)
  *
  * ESCALATE-ONLY-THE-EXCEPTION (ruling B, load-bearing principle for
  * every provider): a billing/ops item is something the system COULD
@@ -51,11 +53,13 @@ import { PRIORITY_RANK } from '@/lib/actionItems/types'
 import { paymentInfoProvider } from '@/lib/actionItems/providers/paymentInfo'
 import { coiMissingProvider } from '@/lib/actionItems/providers/coiMissing'
 import { quoteAgingProvider } from '@/lib/actionItems/providers/quoteAging'
+import { inquiryUntouchedProvider } from '@/lib/actionItems/providers/inquiryUntouched'
 
 const PROVIDERS: ActionItemProvider[] = [
   paymentInfoProvider,
   coiMissingProvider,
   quoteAgingProvider,
+  inquiryUntouchedProvider,
 ]
 
 /** Privileged roles see the whole org (mirrors resolveDataScope). */

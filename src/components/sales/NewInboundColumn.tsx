@@ -47,6 +47,7 @@ import { FormTypeBadge, type FormType } from './FormTypeBadge'
 import { JobPicker, EMPTY_JOB_PICKER_VALUE, type JobPickerValue } from '@/components/shared/JobPicker'
 import { JobResolverModal } from '@/components/shared/JobResolverModal'
 import { EmailReviewModal, type EmailReviewTarget } from '@/components/email/EmailReviewModal'
+import { inquiryPastResponseSla, inquiryWaitHours } from '@/lib/sales/inquirySla'
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -126,7 +127,13 @@ function relativeAge(iso: string): string {
   if (!Number.isFinite(then)) return ''
   const ms = Date.now() - then
   const days = Math.floor(ms / 86_400_000)
-  if (days < 1) return 'today'
+  // Hours, not "today": in a queue with a 3-hour response SLA, a card
+  // that has waited 12h must not read the same as one from 12min ago.
+  if (days < 1) {
+    const hours = Math.floor(ms / 3_600_000)
+    if (hours < 1) return `${Math.max(1, Math.floor(ms / 60_000))}m ago`
+    return `${hours}h ago`
+  }
   if (days < 30) return `${days}d ago`
   if (days < 90) return `${Math.floor(days / 7)}w ago`
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -400,6 +407,10 @@ export function NewInboundColumn({
   const respondedCount = respondedInquiries.length + respondedSuggestions.length
   const pendingCount = pendingInquiries.length + (suggestions?.length ?? 0)
   const totalCount = pendingCount + respondedCount
+  // Web-form submissions past the first-response SLA — a client is
+  // actively waiting on these; they pin above everything else and the
+  // header calls them out in red.
+  const overdueCount = pendingInquiries.filter((i) => inquiryPastResponseSla(i)).length
   const isLoading = inquiries === null || suggestions === null
 
   return (
@@ -413,9 +424,18 @@ export function NewInboundColumn({
         </div>
         <div className="text-right">
           <span className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-            {isLoading
-              ? '…'
-              : `${pendingCount} pending${respondedCount > 0 ? ` · ${respondedCount} responded` : ''}`}
+            {isLoading ? (
+              '…'
+            ) : (
+              <>
+                {overdueCount > 0 && (
+                  <span className="text-red-600">
+                    {overdueCount} awaiting response ·{' '}
+                  </span>
+                )}
+                {`${pendingCount} pending${respondedCount > 0 ? ` · ${respondedCount} responded` : ''}`}
+              </>
+            )}
           </span>
           {lastUpdatedAt && (
             <span className="block text-[10px] text-gray-400 mt-0.5 normal-case tracking-normal font-normal">
@@ -446,6 +466,12 @@ export function NewInboundColumn({
               type MergedItem =
                 | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
                 | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
+              // Overdue web forms pin ABOVE the reverse-chronological
+              // stream — longest-waiting first, since that client has
+              // been waiting past the SLA. Everything else stays
+              // newest-first (see the block comment above).
+              const isOverdue = (m: MergedItem) =>
+                m.kind === 'persistent' && inquiryPastResponseSla(m.row)
               const merged: MergedItem[] = [
                 ...pendingInquiries.map(
                   (row) => ({ kind: 'persistent' as const, row, sortKey: row.createdAt }),
@@ -453,7 +479,13 @@ export function NewInboundColumn({
                 ...(suggestions ?? []).map(
                   (row) => ({ kind: 'suggestion' as const, row, sortKey: row.sentAt }),
                 ),
-              ].sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
+              ].sort((a, b) => {
+                const ao = isOverdue(a) ? 1 : 0
+                const bo = isOverdue(b) ? 1 : 0
+                if (ao !== bo) return bo - ao
+                if (ao && bo) return a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0
+                return a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0
+              });
               return merged.map((item) =>
                 item.kind === 'persistent' ? (
                   <PersistentCard
@@ -787,9 +819,19 @@ function PersistentCard({
   const portalAddOn = isPortalAddOnMeta(inquiry.sourceMetadata)
     ? inquiry.sourceMetadata
     : null
+  // A public form submission past the first-response SLA — the client
+  // was told an agent would follow up shortly. Red ring + wait badge.
+  const overdue = inquiryPastResponseSla(inquiry)
+  const waitHours = inquiryWaitHours(inquiry)
 
   return (
-    <div className="border border-gray-200 rounded-xl px-3.5 py-3 bg-white hover:border-gray-300 transition-colors">
+    <div
+      className={`border rounded-xl px-3.5 py-3 bg-white transition-colors ${
+        overdue
+          ? 'border-red-300 ring-1 ring-red-200 hover:border-red-400'
+          : 'border-gray-200 hover:border-gray-300'
+      }`}
+    >
       <div className="flex items-center gap-2 flex-wrap">
         <span
           className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
@@ -798,6 +840,11 @@ function PersistentCard({
         >
           {SOURCE_LABEL[inquiry.source]}
         </span>
+        {overdue && (
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-200">
+            No response · {waitHours >= 48 ? `${Math.floor(waitHours / 24)}d` : `${waitHours}h`}
+          </span>
+        )}
         {portalAddOn && (
           <span
             className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200"
