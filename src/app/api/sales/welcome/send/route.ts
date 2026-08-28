@@ -146,6 +146,13 @@ export async function POST(req: NextRequest) {
     const result = await sendAgreementEmail({
       to: [ctx.person.email],
       cc: manualCc.length > 0 ? manualCc : undefined,
+      // Same routing the thank-you flow uses: the mail goes out from
+      // notifications@ (Resend), so without a Reply-To the client's
+      // reply lands in that unmonitored sender mailbox — outside every
+      // Gmail ingest and notification path. That's how Alexey's answer
+      // (FIGUROV LLC, 2026-08-27) vanished. Route replies to the agent's
+      // watched inbox, where the CRM capture pipeline processes them.
+      replyTo: ctx.agent.email ?? session.user.email,
       subject,
       html,
       text,
