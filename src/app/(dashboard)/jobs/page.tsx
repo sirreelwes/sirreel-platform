@@ -64,30 +64,24 @@ export default function JobsLandingPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-900">Jobs</h1>
-          <p className="text-[13px] text-zinc-500 mt-0.5">
-            Incoming, active and wrapped — answer it, quote it, and watch it move up the rail on the
-            left. Create with &ldquo;+ New Job&rdquo; above.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <CopyIntakeLinkButton />
-          <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-[12px] font-semibold">
-            <button
-              onClick={() => setScope('my')}
-              className={scope === 'my' ? 'px-3 py-1.5 bg-zinc-900 text-white' : 'px-3 py-1.5 bg-white text-zinc-500 hover:bg-zinc-50'}
-            >
-              My Deals
-            </button>
-            <button
-              onClick={() => setScope('team')}
-              className={scope === 'team' ? 'px-3 py-1.5 bg-zinc-900 text-white' : 'px-3 py-1.5 bg-white text-zinc-500 hover:bg-zinc-50'}
-            >
-              Team View
-            </button>
-          </div>
+      {/* The page title lives in the JobsToolbar (the full-width bar the
+          layout renders above the split — Wes 2026-08-28); this header is
+          just the landing-panel-specific controls. */}
+      <header className="flex items-center justify-end gap-2 flex-wrap">
+        <CopyIntakeLinkButton />
+        <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-[12px] font-semibold">
+          <button
+            onClick={() => setScope('my')}
+            className={scope === 'my' ? 'px-3 py-1.5 bg-zinc-900 text-white' : 'px-3 py-1.5 bg-white text-zinc-500 hover:bg-zinc-50'}
+          >
+            My Deals
+          </button>
+          <button
+            onClick={() => setScope('team')}
+            className={scope === 'team' ? 'px-3 py-1.5 bg-zinc-900 text-white' : 'px-3 py-1.5 bg-white text-zinc-500 hover:bg-zinc-50'}
+          >
+            Team View
+          </button>
         </div>
       </header>
 

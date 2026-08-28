@@ -1,8 +1,14 @@
 'use client'
 
 /**
- * The /jobs list — a dark, always-present index on the left, with the
+ * The /jobs list — an always-present index on the left, with the
  * selected job's detail in the panel to its right.
+ *
+ * As of 2026-08-28 (Wes: "turn this section into a bar at the top")
+ * this component is JUST the list. Search, status/sort, the Mine
+ * toggle, the Incoming strip and the color legend all live in
+ * JobsToolbar, the full-width command bar the layout renders above
+ * the split — the controls stopped burying the rows they filtered.
  *
  * It is a LIGHT panel on purpose. The first cut wore the nav's own
  * dark chrome and brand gold, which put two near-identical dark
@@ -21,10 +27,9 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { rowNotReady, useJobsList, type Sort, type StatusFilter } from './JobsListProvider'
+import { useJobsList } from './JobsListProvider'
 import {
   STATE,
-  URGENCY,
   fmtDate,
   fmtMoney,
   jobWindow,
@@ -34,38 +39,9 @@ import {
   type RowState,
 } from '@/lib/jobs/listRow'
 import { readinessApplies, readinessChipText } from '@/lib/jobs/readiness'
-import { inquiryPastResponseSla } from '@/lib/sales/inquirySla'
-
-const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
-  { id: 'all', label: 'All jobs' },
-  { id: 'NEW', label: 'New' },
-  { id: 'QUOTED', label: 'Quoted' },
-  // No 'Active' option: nothing ever wrote ACTIVE automatically, so it
-  // filtered to "whoever remembered to flip the dropdown" rather than
-  // to jobs that are actually running. The rail color answers that.
-  { id: 'HOLD', label: 'Hold' },
-  { id: 'WRAPPED', label: 'Wrapped' },
-  { id: 'LOST', label: 'Lost' },
-  { id: 'orphans', label: 'Orphaned quotes' },
-  { id: 'archived', label: 'Archived' },
-]
-
-const SORT_OPTIONS: { id: Sort; label: string }[] = [
-  { id: 'urgency', label: 'Urgency' },
-  { id: 'dates', label: 'Dates' },
-  { id: 'value', label: 'Value' },
-  { id: 'newest', label: 'Newest' },
-]
 
 export function JobsSidebar() {
-  const {
-    rows, allRows, counts, loading, error,
-    search, setSearch,
-    status, setStatus,
-    mine, setMine,
-    sort, setSort,
-    stateFilter, setStateFilter,
-  } = useJobsList()
+  const { rows, loading, error, status } = useJobsList()
 
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -73,40 +49,10 @@ export function JobsSidebar() {
   // Below `md` the split can't hold both, so the list IS /jobs and
   // the detail IS /jobs/[id] — same URLs, one pane at a time.
   // ?panel=incoming counts as a selection: it's the mobile route INTO
-  // the landing workspace (the Incoming strip below links there), so
-  // the list yields the viewport the same way a job detail does.
+  // the landing workspace (the toolbar's Incoming strip links there),
+  // so the list yields the viewport the same way a job detail does.
   const incomingPanel = searchParams?.get('panel') === 'incoming'
   const selected = !!selectedId || incomingPanel
-
-  // Pending-incoming count for the strip — the same two streams
-  // NewInboundColumn merges (persistent NEW inquiries + Gmail
-  // suggestions), counted the same way, on the same 60s cadence.
-  const [incomingCount, setIncomingCount] = useState<number | null>(null)
-  // Inquiries past the first-response SLA — turns the strip red so
-  // the breach is visible even from a job detail page.
-  const [incomingOverdue, setIncomingOverdue] = useState(0)
-  useEffect(() => {
-    let active = true
-    const load = () => {
-      Promise.all([
-        fetch('/api/inquiries?status=NEW').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/sales/suggested-inquiries').then((r) => r.json()).catch(() => ({})),
-      ]).then(([inq, sug]) => {
-        if (!active) return
-        const rows = (inq?.inquiries ?? []) as {
-          source: string; respondedAt?: string | null; createdAt: string
-        }[]
-        const pending = rows.filter((i) => !i.respondedAt)
-        setIncomingCount(pending.length + ((sug?.suggestions ?? []) as unknown[]).length)
-        setIncomingOverdue(
-          pending.filter((i) => inquiryPastResponseSla({ ...i, respondedAt: i.respondedAt ?? null })).length,
-        )
-      })
-    }
-    load()
-    const t = setInterval(load, 60_000)
-    return () => { active = false; clearInterval(t) }
-  }, [])
 
   // Keep the selected job in view when it's reached from elsewhere
   // (a link, a reload) rather than by clicking it in this list.
@@ -118,14 +64,6 @@ export function JobsSidebar() {
     const el = listRef.current?.querySelector(`[data-job-id="${selectedId}"]`)
     el?.scrollIntoView({ block: 'nearest' })
   }, [selectedId, rows.length])
-
-  // Only states actually present get a key entry — a legend full of
-  // zeroes is noise.
-  const keyStates = URGENCY.filter((s) => (counts.get(s) ?? 0) > 0)
-  // The second axis — outbound rows the five-check rollup says can't go
-  // out yet. Same chip pattern as the states; counts only the rows the
-  // chip itself would show (readiness is omitted everywhere else).
-  const notReadyCount = allRows.filter((r) => rowNotReady(r.job, r.state)).length
 
   if (collapsed && selected) {
     return (
@@ -148,147 +86,20 @@ export function JobsSidebar() {
         selected ? 'hidden md:flex' : 'flex'
       } w-full md:w-[17rem] xl:w-[19rem] 2xl:w-[21rem] flex-shrink-0 bg-white text-zinc-700 flex-col border-r border-zinc-200`}
     >
-      <div className="px-3 pt-3 pb-2 space-y-2 border-b border-zinc-200 bg-zinc-50">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-[13px] font-bold uppercase tracking-[0.18em] text-zinc-900">Jobs</h1>
-          <span className="text-[11px] text-zinc-400">
-            {loading ? 'loading…' : error ? 'error' : `${rows.length}${stateFilter ? ` of ${[...counts.values()].reduce((a, b) => a + b, 0)}` : ''}`}
-          </span>
-          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-500 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={mine}
-              onChange={(e) => setMine(e.target.checked)}
-              className="accent-amber-500"
-            />
-            Mine
-          </label>
-          {selected && (
-            <button
-              onClick={() => setCollapsed(true)}
-              title="Collapse the list — give the job detail the width"
-              className="hidden md:block text-[13px] leading-none text-zinc-400 hover:text-zinc-900 px-1"
-            >
-              ‹
-            </button>
-          )}
-        </div>
-
-        {/* Incoming — the lifecycle's front door. Inquiries are
-            pre-jobs (no Job row yet), so they are NOT rows in this
-            list; the strip hands you to the landing workspace where
-            the queue lives. Count = pending inbound, both streams. */}
-        <Link
-          href="/jobs?panel=incoming"
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-colors ${
-            incomingOverdue > 0
-              ? 'border-red-300 bg-red-50 hover:bg-red-100'
-              : !selectedId && incomingCount !== null && incomingCount > 0
-                ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-                : 'border-zinc-200 bg-white hover:bg-zinc-100'
-          }`}
-        >
-          <span className="text-[13px]">📥</span>
-          <span className="text-[12px] font-semibold text-zinc-800">Incoming</span>
-          {incomingOverdue > 0 && (
-            <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">
-              {incomingOverdue} waiting
-            </span>
-          )}
-          {incomingCount !== null && (
-            <span
-              className={`ml-auto text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded ${
-                incomingOverdue > 0
-                  ? 'bg-red-500 text-white'
-                  : incomingCount > 0
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-zinc-100 text-zinc-500'
-              }`}
-            >
-              {incomingCount}
-            </span>
-          )}
-        </Link>
-
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search job, code, company, contact…"
-          className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-amber-500"
-        />
-
-        <div className="flex items-center gap-1.5">
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as StatusFilter)}
-            className="flex-1 min-w-0 px-2 py-1 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
+      {/* Slim strip: just the count and the collapse affordance — every
+          control moved up into JobsToolbar. */}
+      <div className="px-3 py-1.5 border-b border-zinc-200 bg-zinc-50 flex items-baseline gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+          {loading ? 'Loading…' : error ? 'Error' : `${rows.length} ${rows.length === 1 ? 'job' : 'jobs'}`}
+        </span>
+        {selected && (
+          <button
+            onClick={() => setCollapsed(true)}
+            title="Collapse the list — give the job detail the width"
+            className="hidden md:block ml-auto text-[13px] leading-none text-zinc-400 hover:text-zinc-900 px-1"
           >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id} className="bg-white">
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as Sort)}
-            title="Sort order"
-            className="px-2 py-1 bg-white border border-zinc-300 rounded-md text-[11px] text-zinc-700 focus:outline-none focus:border-amber-500"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id} className="bg-white">
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Color key — the legend for the rails, and a one-click narrow. */}
-        {keyStates.length > 0 && (
-          <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
-            {keyStates.map((s) => {
-              const on = stateFilter === s
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStateFilter(on ? null : s)}
-                  title={`${STATE[s].label} — click to show only these`}
-                  className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
-                    on ? 'bg-zinc-900 text-white font-bold' : 'text-zinc-500 hover:bg-zinc-200'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-sm ${STATE[s].rail}`} />
-                  {STATE[s].short}
-                  <span className={on ? 'font-bold' : 'text-zinc-400'}>{counts.get(s)}</span>
-                </button>
-              )
-            })}
-            {notReadyCount > 0 && (
-              <button
-                onClick={() => setStateFilter(stateFilter === 'not-ready' ? null : 'not-ready')}
-                title="Outbound jobs still missing paperwork, a card, a driver, or a unit — click to show only these"
-                className={`flex items-center gap-1 text-[10px] rounded px-1 py-0.5 ${
-                  stateFilter === 'not-ready'
-                    ? 'bg-zinc-900 text-white font-bold'
-                    : 'text-rose-700 hover:bg-zinc-200'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-sm border border-rose-500" />
-                Not ready
-                <span className={stateFilter === 'not-ready' ? 'font-bold' : 'text-rose-500'}>
-                  {notReadyCount}
-                </span>
-              </button>
-            )}
-            {stateFilter && (
-              <button
-                onClick={() => setStateFilter(null)}
-                className="text-[10px] text-zinc-400 underline underline-offset-2 hover:text-zinc-900"
-              >
-                clear
-              </button>
-            )}
-          </div>
+            ‹
+          </button>
         )}
       </div>
 
