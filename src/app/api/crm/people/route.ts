@@ -150,6 +150,10 @@ export async function GET(req: NextRequest) {
               name: true,
               tier: true,
               totalSpend: true,
+              // Rolled-up rental count — the People table renders the
+              // CLIENT's figures, since Person.totalSpend/totalBookings
+              // are structurally always 0 (RW invoices carry no person).
+              totalBookings: true,
               discountTendency: true,
               _count: { select: { orders: true } },
             },
@@ -157,7 +161,10 @@ export async function GET(req: NextRequest) {
         },
       },
     },
-    orderBy: { totalSpend: "desc" },
+    // Person.totalSpend is 0 for everyone by construction, so ordering by
+    // it was ordering by nothing — the "top" of the list was whatever
+    // Postgres returned. Name order is at least stable and scannable.
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     // While searching, over-fetch and rank below: token matching widens
     // the net ("ian m" matches anything with "ian" AND an "m"), and a
     // spend-ordered cap of 100 would bury or drop the exact person typed.

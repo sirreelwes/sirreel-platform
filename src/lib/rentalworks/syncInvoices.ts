@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { runSpendRollup } from '@/lib/crm/spendRollup'
 
 /**
  * Bulk-pull RentalWorks invoices into the HQ mirror (sr_rw_invoices).
@@ -25,6 +26,12 @@ export interface RwInvoiceSyncResult {
   pulled: number
   pages: number
   error?: string
+  /**
+   * Outcome of the company spend rollup that runs off the freshly-swapped
+   * mirror. Null when it failed — the sync itself still succeeded, and
+   * the previous (stale but honest) totals remain.
+   */
+  rollup?: { updated: number; zeroed: number } | null
 }
 
 type BrowseResponse = {
@@ -209,10 +216,31 @@ export async function syncRwInvoices(): Promise<RwInvoiceSyncResult> {
     console.error('[rw-sync] paid-observation capture failed (sync unaffected):', err)
   }
 
+  // Recompute the company spend rollup from the mirror we just swapped.
+  //
+  // This MUST run here rather than on a separate schedule: the mirror is
+  // deleted and recreated above, so Company.totalSpend is a cache of a
+  // table that just changed underneath it. A rollup that lags the sync
+  // shows yesterday's top clients with today's confidence.
+  //
+  // Best-effort, exactly like the paid-observation block: the mirror is
+  // the product. If the rollup throws, the sync still succeeded and the
+  // stale-but-honest previous numbers stay put — applyRollup's own
+  // safety floor already refuses to zero the book off a short pull.
+  let rollup: { updated: number; zeroed: number } | null = null
+  try {
+    const result = await runSpendRollup()
+    rollup = { updated: result.updated, zeroed: result.zeroed }
+    console.log(`[rw-sync] spend rollup: ${result.updated} companies updated, ${result.zeroed} reset`)
+  } catch (err) {
+    console.error('[rw-sync] spend rollup failed (sync unaffected):', err)
+  }
+
   return {
     ok: true,
     pulled: rows.length,
     pages: page,
+    rollup,
   }
 }
 

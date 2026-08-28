@@ -34,7 +34,14 @@ type Company = {
 type PersonResult = {
   id: string; firstName: string; lastName: string; email: string; phone: string | null;
   role: string; tier: string; totalSpend: string; totalBookings: number;
-  affiliations: { company: { id: string; name: string }; isCurrent: boolean }[];
+  // company.totalSpend / totalBookings are the ROLLED-UP client figures
+  // (src/lib/crm/spendRollup.ts). Person.totalSpend stays 0 — the RW
+  // invoice mirror carries no person, so there is no honest per-contact
+  // number to put there.
+  affiliations: {
+    company: { id: string; name: string; totalSpend?: string; totalBookings?: number };
+    isCurrent: boolean;
+  }[];
   // Server-derived (21d149c). Combines primary-company inheritance
   // (value badges + NEGOTIATES + QUIET) with the person's own
   // FOLLOW_UP_DUE flag.
@@ -911,8 +918,8 @@ export default function CRMPage() {
                 <th className="px-4 py-3 font-medium">Company</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium text-right">Spend</th>
-                <th className="px-4 py-3 font-medium text-center">Bookings</th>
+                <th className="px-4 py-3 font-medium text-right" title="Total invoiced to this contact's company since July 2025, from RentalWorks">Client spend</th>
+                <th className="px-4 py-3 font-medium text-center" title="Rentals by this contact's company">Rentals</th>
                 <th className="px-2 py-3 font-medium text-right w-10" aria-label="Edit" />
               </tr>
             </thead>
@@ -989,8 +996,26 @@ export default function CRMPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-lt-fg2 text-xs">{p.phone || "--"}</td>
-                  <td className="px-4 py-3 text-right text-lt-fg font-mono">{fmt(p.totalSpend)}</td>
-                  <td className="px-4 py-3 text-center text-lt-fg2">{p.totalBookings}</td>
+                  {/* The CLIENT's numbers, not the contact's. Person.totalSpend
+                      is 0 for everyone and always will be — RW invoices carry
+                      no person — so showing it rendered "$0" down the whole
+                      column and made a working book look empty. */}
+                  {(() => {
+                    const co = p.affiliations?.[0]?.company;
+                    const spend = co?.totalSpend;
+                    const rentals = co?.totalBookings;
+                    return (
+                      <>
+                        <td className="px-4 py-3 text-right text-lt-fg font-mono tabular-nums"
+                            title={co ? `${co.name} — invoiced since July 2025` : 'No company on this contact'}>
+                          {spend === undefined ? <span className="text-lt-fg3">--</span> : fmt(spend)}
+                        </td>
+                        <td className="px-4 py-3 text-center text-lt-fg2 tabular-nums">
+                          {rentals === undefined ? <span className="text-lt-fg3">--</span> : rentals}
+                        </td>
+                      </>
+                    );
+                  })()}
                   {/* Trailing chevron with a hover-revealed "Edit"
                       label so the affordance reads as "this row is
                       tappable to edit" at a glance. */}

@@ -57,13 +57,21 @@ export async function segmentWhere(
       return { outreachActivities: { none: {} }, activities: { none: {} } }
 
     case 'quiet':
-      // Booked BEFORE — a contact who has never booked is not "gone
-      // quiet", they are simply new. Same distinction the company-side
-      // QUIET badge makes.
-      return { lastBookingAt: { not: null, lt: quietBefore } }
+      // COMPANY grain. Rental history exists only per company — the RW
+      // invoice mirror carries no person — so this asks "does this
+      // contact work somewhere that has gone quiet", which is what the
+      // label promises. Requires prior rental history: a client who has
+      // never rented is not quiet, they are new.
+      return {
+        affiliations: {
+          some: { company: { lastRentalAt: { not: null, lt: quietBefore } } },
+        },
+      }
 
     case 'repeat':
-      return { totalBookings: { gte: PEOPLE_REPEAT_MIN } }
+      return {
+        affiliations: { some: { company: { totalBookings: { gte: PEOPLE_REPEAT_MIN } } } },
+      }
 
     case 'newContacts':
       return { createdAt: { gte: newAfter } }

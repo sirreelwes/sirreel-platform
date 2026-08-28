@@ -78,31 +78,25 @@ export function PeopleSegmentChips({
           const meta = PEOPLE_SEGMENTS[key]
           const count = counts?.[key] ?? 0
           const isActive = active === key
-          // A segment whose source columns are never populated is
-          // UNAVAILABLE, not empty. Showing it as "0" would say nobody
-          // qualifies, when the truth is that we do not compute it.
-          const unavailable = meta.needsSpendRollup === true
-          const empty = !unavailable && counts !== null && count === 0
+          const empty = counts !== null && count === 0
           return (
             <button
               key={key}
               type="button"
-              disabled={unavailable || (empty && !isActive)}
+              disabled={empty && !isActive}
               onClick={() => onPick(key)}
-              title={unavailable || empty ? meta.emptyMessage : meta.description}
+              title={empty ? meta.emptyMessage : meta.description}
               className={`${chipBase} ${
                 isActive
                   ? 'bg-lt-fg border-lt-fg text-white'
-                  : unavailable
-                    ? 'bg-lt-card border-dashed border-lt-hairline text-lt-fg3 opacity-60 cursor-not-allowed'
-                    : empty
-                      ? 'bg-lt-card border-lt-hairline text-lt-fg3 opacity-50 cursor-default'
-                      : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
+                  : empty
+                    ? 'bg-lt-card border-lt-hairline text-lt-fg3 opacity-50 cursor-default'
+                    : 'bg-lt-card border-lt-hairline text-lt-fg2 hover:border-lt-fg2'
               }`}
             >
               <span>{meta.label}</span>
               <span className={`font-mono ${isActive ? 'text-white' : 'text-lt-fg3'}`}>
-                {unavailable ? '—' : counts === null ? '·' : count}
+                {counts === null ? '·' : count}
               </span>
             </button>
           )

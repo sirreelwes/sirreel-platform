@@ -31,6 +31,7 @@ scripts/*
 !scripts/backfillCcContacts.ts
 !scripts/backfillContactRoles.ts
 !scripts/backfillContactRolesAi.ts
+!scripts/rollupCompanySpend.ts
 !scripts/backfill-message-extraction.ts
 !scripts/backfill-inferred-form-type.ts
 !scripts/reextract-pipeline-window.ts

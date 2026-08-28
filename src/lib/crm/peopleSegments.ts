@@ -23,9 +23,18 @@
  * and the answer must be one sentence.
  */
 
-/** Days without a booking before a contact reads as gone quiet. */
+/**
+ * Days without a rental before a CLIENT reads as gone quiet.
+ *
+ * These three segments are company-grain, and the labels say so ("At a
+ * quiet client", not "Gone quiet"). Spend and rental history exist only
+ * per company — the RentalWorks invoice mirror has no person on it — so
+ * attributing a company's $123K to each of its five contacts would put a
+ * number on the contact record that no invoice supports. Naming the
+ * segment for the company keeps the claim true.
+ */
 export const PEOPLE_QUIET_DAYS = 90
-/** Bookings needed to count as a repeat customer. */
+/** Rentals needed before a client counts as repeat. */
 export const PEOPLE_REPEAT_MIN = 3
 /** How recently a contact must have been added to count as new. */
 export const PEOPLE_NEW_DAYS = 90
@@ -49,26 +58,6 @@ export interface PeopleSegmentMeta {
   description: string
   /** Copy for an empty result, so a zero never looks like a bug. */
   emptyMessage: string
-  /**
-   * True when this segment reads a per-contact spend/booking rollup that
-   * NOTHING CURRENTLY POPULATES.
-   *
-   * Measured 2026-08-28: Company.totalSpend is 0 across all 4,207
-   * companies, and Person.totalSpend / totalBookings / lastBookingAt are
-   * zero or null for every one of the 5,182 contacts. Only 22 orders
-   * exist in HQ at all — billing is still RentalWorks' job — so there is
-   * nothing to roll up from yet.
-   *
-   * These segments would therefore return 0 forever, and a plain "0"
-   * reads as "nobody qualifies" when the truth is "we do not compute
-   * this". The chip renders in an explicitly unavailable state instead,
-   * and starts working on its own the day the rollup lands.
-   *
-   * The same gap disables the company-side TOP_CLIENT / REPEAT / LOYAL /
-   * QUIET badges and the Companies tab's Top-clients chip — they are all
-   * reading the same empty columns.
-   */
-  needsSpendRollup?: true
 }
 
 export const PEOPLE_SEGMENTS: Record<PeopleSegmentKey, PeopleSegmentMeta> = {
@@ -88,28 +77,22 @@ export const PEOPLE_SEGMENTS: Record<PeopleSegmentKey, PeopleSegmentMeta> = {
   },
   quiet: {
     key: 'quiet',
-    label: 'Gone quiet',
-    description: `Booked with us before, but nothing in the last ${PEOPLE_QUIET_DAYS} days.`,
-    emptyMessage:
-      'Not available yet — nothing writes a last-booking date onto a contact, so this cannot be computed.',
-    needsSpendRollup: true,
+    label: 'At a quiet client',
+    description: `Works at a company that has rented from us before but not in the last ${PEOPLE_QUIET_DAYS} days.`,
+    emptyMessage: `No client with rental history has gone ${PEOPLE_QUIET_DAYS} days without one.`,
   },
   repeat: {
     key: 'repeat',
-    label: 'Repeat bookers',
-    description: `${PEOPLE_REPEAT_MIN} or more bookings. The people most likely to book again.`,
-    emptyMessage:
-      'Not available yet — per-contact booking counts are never populated, so this cannot be computed.',
-    needsSpendRollup: true,
+    label: 'At a repeat client',
+    description: `Works at a company with ${PEOPLE_REPEAT_MIN} or more rentals. The relationships most likely to produce another.`,
+    emptyMessage: `No client has reached ${PEOPLE_REPEAT_MIN} rentals yet.`,
   },
   topClientStaff: {
     key: 'topClientStaff',
-    label: 'Top-client staff',
+    label: 'At a top client',
     description:
-      'Works at a company in the top 10% by spend — the same cutoff the Top clients chip uses.',
-    emptyMessage:
-      'Not available yet — Company.totalSpend is zero for every company, so there is no top decile to be in.',
-    needsSpendRollup: true,
+      'Works at a company in the top 10% by spend — the same cutoff the Companies tab uses.',
+    emptyMessage: 'No company has crossed the top-decile spend cutoff.',
   },
   newContacts: {
     key: 'newContacts',
