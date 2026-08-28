@@ -156,6 +156,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: result.reason || 'send failed' }, { status: 502 })
     }
 
+    // This send IS the staff response — stamp it directly. The thread-based
+    // reply-detection (markInquiryResponded) can never catch this path for a
+    // WEB_FORM inquiry (no originating email thread), which is how a web
+    // inquiry Wes answered through HQ stayed "unresponded" and kept its
+    // untouched-SLA action item (2026-08-28). Same semantics as the hook:
+    // first reply wins, status untouched — a responded inquiry is still an
+    // open lead.
+    await prisma.inquiry.updateMany({
+      where: { id: inquiryId, respondedAt: null },
+      data: { respondedAt: new Date(), respondedBy: session.user.email },
+    })
+
     return NextResponse.json({
       ok: true,
       recipient: ctx.person.email,

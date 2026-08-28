@@ -4289,10 +4289,14 @@ model Inquiry {
   // NEW until converted/dismissed) — these drive the Pipeline's
   // "Responded" separation + "Replied by …" attribution. Set by the
   // Gmail ingest reply-detection hook and by the Quick Reply send route
-  // (both via src/lib/sales/markInquiryResponded.ts); first reply wins,
-  // later staff messages don't overwrite. respondedBy is the staff
-  // mailbox address (e.g. jose@sirreel.com), not a User FK — outbound
-  // mail can come from shared inboxes (hello@, info@) with no User row.
+  // (both via src/lib/sales/markInquiryResponded.ts), and stamped
+  // directly by /api/sales/welcome/send (Quick Respond + welcome invite)
+  // — that path had to write it itself because thread-matching can never
+  // cover a WEB_FORM inquiry, which has no originating email thread.
+  // First reply wins, later staff messages don't overwrite. respondedBy
+  // is the staff mailbox address (e.g. jose@sirreel.com), not a User FK
+  // — outbound mail can come from shared inboxes (hello@, info@) with
+  // no User row.
   respondedAt DateTime? @map("responded_at")
   respondedBy String?   @map("responded_by")
 
