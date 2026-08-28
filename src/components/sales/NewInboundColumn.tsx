@@ -108,6 +108,9 @@ interface SuggestionRecord {
   // Drives the emerald "Replied by … · when" marker.
   repliedBy?: string | null
   repliedAt?: string | null
+  // Responded stream: the client wrote back AFTER our latest reply —
+  // the thread is theirs-last. Amber "client replied since" marker.
+  clientRepliedSince?: boolean
 }
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -997,6 +1000,9 @@ function SuggestionCard({
         <div className="mt-1 text-[11px] font-medium text-emerald-700">
           Replied by {suggestion.repliedBy ? staffFirstName(suggestion.repliedBy) : 'team'} ·{' '}
           {repliedAtLabel(suggestion.repliedAt)}
+          {suggestion.clientRepliedSince && (
+            <span className="text-amber-700"> · client replied since</span>
+          )}
         </div>
       )}
       {suggestion.snippet && (

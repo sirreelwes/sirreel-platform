@@ -11,7 +11,9 @@ export const dynamic = 'force-dynamic';
 const LOOKBACK_DAYS = 14;
 const PAGE_SIZE = 12;
 const HIDDEN_LIST_LIMIT = 60;
-const RESPONDED_LIMIT = 8;
+// Raised 8 → 12 when the any-outbound rule moved every active chain into
+// this stream — at 8 the cap was already full and silently truncating.
+const RESPONDED_LIMIT = 12;
 
 // Inbound emails that look like inquiries and haven't been considered yet.
 // "Considered" = either captured (Inquiry created from this email) or
@@ -111,12 +113,18 @@ export async function GET() {
     }
   }
 
-  // Drop emails whose thread has been responded to (lastDirection='OUTBOUND').
-  // Threads with no direction state yet (lastDirection=null) are kept — they
-  // pre-date the May 2026 backfill or are brand new. Messages without a
-  // thread are also kept (defensive — historical edge case).
+  // Drop emails whose thread has been responded to — ANY staff outbound on
+  // the thread counts (lastOutboundAt set), not just outbound-last. The old
+  // lastDirection==='OUTBOUND' test flipped a thread back to full "new
+  // inbound" weight the moment the client replied to our reply, so active
+  // 10-message conversations sat in the untriaged queue looking untouched
+  // (Wes 2026-08-28: "someone has responded and there is an email chain
+  // already — not accurate to leave them in new inbound"). Threads with no
+  // outbound at all are kept pending even when the client has sent several
+  // messages — those are genuinely unanswered. Messages without a thread
+  // are also kept (defensive — historical edge case).
   const respondedTo = (e: typeof emails[number]) =>
-    e.thread?.lastDirection === 'OUTBOUND';
+    e.thread?.lastDirection === 'OUTBOUND' || !!e.thread?.lastOutboundAt;
 
   // First in thread = no In-Reply-To header OR the thread has only one message.
   const isFirstInThread = (e: typeof emails[number]) => {
@@ -247,6 +255,11 @@ export async function GET() {
         ...toRecord(c.email),
         repliedBy: latest?.fromAddress ?? null,
         repliedAt: latest?.sentAt ?? c.email.thread?.lastOutboundAt ?? null,
+        // With any-outbound threads now living here, INBOUND-last means
+        // the client wrote back after our reply — the conversation has
+        // the client holding the last word. The card flags it so moving
+        // these out of "new inbound" doesn't hide the follow-up need.
+        clientRepliedSince: c.email.thread?.lastDirection === 'INBOUND',
       };
     }),
     hidden: {
