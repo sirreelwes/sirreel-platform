@@ -94,6 +94,47 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+/**
+ * Does this production name look like an internal CODE rather than a
+ * title someone would recognise as their own show?
+ *
+ * Measured 2026-08-28: 177 of 1,103 contacts with a `lastKnownProject`
+ * (16%) carry something like `P_EACC`, `TGOP`, `SB`, `2606_Hercules
+ * Wave 1` or `26007 Sony NFLP26`. Those are call-sheet and accounting
+ * references that leaked into the signature parse. Merged into copy they
+ * produce "Hope DSQ_MDM wrapped well." — which reads like a leaked
+ * internal reference and undoes the exact credibility the merge was for.
+ *
+ * Treating them as ABSENT means a `{{#last_project}}` conditional simply
+ * omits the sentence, and those recipients get clean unpersonalised copy
+ * instead of odd personalised copy. The alternative — sending the code —
+ * is worse in a way the recipient notices and we never see.
+ *
+ * Deliberately conservative in the omit direction. A genuine one-word
+ * all-caps title (a show actually called DINER) is dropped too, and that
+ * is the right trade: the cost is one missing sentence, and the cost of
+ * being wrong the other way lands in a client's inbox.
+ *
+ * The rules, each from a real value in the book:
+ *   - no lowercase letters at all      CHANNEL, TGOP, DBD, P_EACC
+ *   - contains an underscore           P_EACC, 2606_Hercules Wave 1
+ *   - starts with digits               26007 Sony NFLP26, 161 - Recovery United
+ *   - three characters or fewer        SB, KP
+ *
+ * Readable titles pass untouched: "Game Changer S10", "Lobo - Taco Bell
+ * LMC", "Accidentally Married to My Billionaire Boss".
+ */
+export function looksLikeProductionCode(value: string): boolean {
+  const v = value.trim()
+  if (!v) return true
+  if (v.length <= 3) return true
+  if (v.includes('_')) return true
+  if (/^\d/.test(v)) return true
+  // No lowercase anywhere — an acronym or a slug, not a title.
+  if (!/[a-z]/.test(v)) return true
+  return false
+}
+
 /** Resolve every token for one recipient. Null means "no value". */
 export function resolveTokens(ctx: RecipientContext): Record<MergeToken, string | null> {
   const first = ctx.firstName?.trim() || null
@@ -107,7 +148,13 @@ export function resolveTokens(ctx: RecipientContext): Record<MergeToken, string 
     last_name: last,
     full_name: full,
     company: ctx.companyName?.trim() || null,
-    last_project: ctx.lastKnownProject?.trim() || null,
+    // A production CODE is treated as no value at all — see
+    // looksLikeProductionCode. The conditional then omits the sentence
+    // rather than mailing someone a reference to "P_EACC".
+    last_project:
+      ctx.lastKnownProject?.trim() && !looksLikeProductionCode(ctx.lastKnownProject)
+        ? ctx.lastKnownProject.trim()
+        : null,
     last_rental_month: ctx.companyLastRentalAt ? MONTHS[ctx.companyLastRentalAt.getMonth()] : null,
     sender_name: senderFull,
     sender_first_name: senderFull ? senderFull.split(/\s+/)[0] : null,

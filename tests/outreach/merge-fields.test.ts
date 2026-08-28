@@ -18,6 +18,7 @@ import {
   renderForRecipient,
   resolveTokens,
   tokensUsed,
+  looksLikeProductionCode,
   type RecipientContext,
 } from '../../src/lib/outreach/mergeFields'
 
@@ -91,6 +92,35 @@ console.log('\nDates and senders')
   check(v.sender_first_name === 'Jose', 'sender first name is derived from the full name')
   const noRental = resolveTokens({ ...full, companyLastRentalAt: null })
   check(noRental.last_rental_month === null, 'a client that never rented has no month')
+}
+
+console.log('\nProduction CODES are treated as no value, not merged into copy')
+// Every string below is a real lastKnownProject from the book.
+const CODES = ['P_EACC', 'TGOP', 'SB', 'KP', 'DBD', 'SLX', 'CHANNEL', 'LIETS',
+  'DINER', 'VRBO', 'TOMS', '2606_Hercules Wave 1', '26007 Sony NFLP26',
+  '161 - Recovery United', 'DSQ_MDM']
+for (const c of CODES) {
+  check(looksLikeProductionCode(c), `"${c}" is recognised as a code`)
+}
+
+console.log('\nReal titles are NOT mistaken for codes')
+const TITLES = ['Game Changer S10', 'Magnopus', 'Team Win - Toyota Shoot',
+  'Hungry Man - Kalshi', 'Lobo - Taco Bell LMC', "Audrey's School Camping Trip",
+  'Meta Holiday', 'Accidentally Married to My Billionaire Boss', 'Happy Place']
+for (const t of TITLES) {
+  check(!looksLikeProductionCode(t), `"${t}" survives as a real title`)
+}
+
+console.log('\nThe code never reaches the copy')
+{
+  const withCode: RecipientContext = { ...full, lastKnownProject: 'DSQ_MDM' }
+  const v = resolveTokens(withCode)
+  check(v.last_project === null, 'a coded project resolves to no value')
+  const tmpl = 'Hi {{first_name}},{{#last_project}} Hope {{last_project}} wrapped well.{{/last_project}} Got a moment?'
+  const r = renderForRecipient('Hello', tmpl, withCode)
+  check(r.ok, 'and the campaign still sends to them')
+  check(!r.body.includes('DSQ_MDM'), 'with the code nowhere in the body')
+  check(r.body === 'Hi Emmett, Got a moment?', 'the sentence is omitted whole, leaving clean copy')
 }
 
 console.log('\nAuthoring mistakes surface, they do not ship')
