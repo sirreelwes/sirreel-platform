@@ -29,11 +29,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { OutreachType } from '@prisma/client'
+import { BULK_OUTREACH_MAX_TARGETS } from '@/lib/crm/bulkOutreach'
 
 export const dynamic = 'force-dynamic'
 
 const TYPE_VALUES = new Set<string>(Object.values(OutreachType))
-export const MAX_TARGETS = 500
+// Imported, not declared: a route file may only export handlers and
+// Next's own config keys. See src/lib/crm/bulkOutreach.ts.
+const MAX_TARGETS = BULK_OUTREACH_MAX_TARGETS
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
