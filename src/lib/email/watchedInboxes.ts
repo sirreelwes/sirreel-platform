@@ -67,6 +67,18 @@ export const WATCHED_INBOXES: readonly string[] = [
   // (the watch is what makes hr@ deliver pub/sub events in the first
   // place). DWD impersonability confirmed by Wes.
   'hr@sirreel.com',
+  // Added 2026-08-28 — LINKED mode (see ingestFilter.ts), Wes's
+  // explicit ruling: watched "in this private way". DEFAULT-DROP:
+  // a wes@ message is stored ONLY when its Message-ID chain proves it
+  // belongs to a conversation HQ already knows; everything else (CPA,
+  // banker, personal) is never written. Probe confirmed 2026-08-28
+  // (320k messages — none of which backfill; only live linked mail
+  // flows in). Also deliberately OUTSIDE SALES_CAPTURE_INBOXES, so
+  // no CRM contact mining ever runs on it. Because wes@ is not fully
+  // ingested, sendAgreementEmail still appends its capture inbox to
+  // Reply-To for wes@-routed sends — that hello@ copy is what anchors
+  // the first reply of a Resend thread so later wes@ copies can link.
+  'wes@sirreel.com',
 ]
 
 export function isWatchedInbox(email: string): boolean {

@@ -8,7 +8,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
-import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
           userId: "me",
           id: msgId,
           format: "metadata",
-          metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", ...ROUTING_HEADER_NAMES],
+          metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES],
         })
 
         const headers = full.data.payload?.headers || []
@@ -112,6 +112,17 @@ export async function POST(req: NextRequest) {
           bodyText: null,
           bodyHtml: null,
           routingHeaders,
+          // LINKED mode (wes@): default-drop unless the Message-ID
+          // chain touches a stored conversation. Same contract as
+          // pubsub.
+          conversationLink:
+            inboxMode(email) === 'LINKED'
+              ? await hasKnownConversationLink({
+                  rfc822MessageId,
+                  inReplyTo,
+                  references: get('References'),
+                })
+              : undefined,
         })
         void recordIngestDecision(email, filterDecision)
         if (!filterDecision.keep) { skipped.push(msgId); continue }

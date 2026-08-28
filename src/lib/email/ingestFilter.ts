@@ -32,6 +32,21 @@
  *               would break the cross-inbox dedup contract we just
  *               wired up.
  *
+ *   LINKED    — wes@. PRIVACY-FIRST default-drop (Wes 2026-08-28: "a
+ *               degree of privacy for me as the owner — I'd hate to
+ *               have a conversation with a CPA or banker show up on
+ *               the hq incoming"). A message is kept ONLY when it
+ *               provably belongs to a conversation HQ already knows:
+ *               its own Message-ID is already stored (cross-inbox
+ *               copy), or its In-Reply-To / References chain names a
+ *               stored Message-ID. The caller computes that proof
+ *               (hasKnownConversationLink) and passes it as
+ *               `conversationLink`; absent proof — including a caller
+ *               that forgot to compute it — the message is dropped and
+ *               never written. Applies to BOTH directions: internal
+ *               staff→Wes mail must not slip in via the outbound
+ *               keep-all. Dropped mail stays in Gmail, invisible to HQ.
+ *
  * Future inbox additions should pick a mode here BEFORE landing in
  * WATCHED_INBOXES, so nothing silently goes to "store everything" by
  * default. Inboxes not listed default to PRESERVE — same as today.
@@ -44,9 +59,10 @@
 import { prisma } from '@/lib/prisma'
 import type { RoutingHeaders } from '@/lib/email/routingHeaders'
 
-export type InboxMode = 'SALES' | 'MONEY' | 'CLAIMS' | 'HR' | 'PRESERVE'
+export type InboxMode = 'SALES' | 'MONEY' | 'CLAIMS' | 'HR' | 'PRESERVE' | 'LINKED'
 
 export const INBOX_MODES: Record<string, InboxMode> = {
+  'wes@sirreel.com':      'LINKED',
   'claims@sirreel.com':   'CLAIMS',
   // HR mode is a routing mode, not a keep-all signal. The pubsub
   // handler short-circuits hr@ to the HR ingest branch BEFORE the
@@ -80,6 +96,10 @@ export interface FilterInput {
   bodyText: string | null
   bodyHtml: string | null
   routingHeaders: RoutingHeaders | null
+  /** LINKED mode only — precomputed by hasKnownConversationLink().
+   *  true = this message's Message-ID chain touches a stored
+   *  EmailMessage. Undefined counts as false: default-drop. */
+  conversationLink?: boolean
 }
 
 export interface FilterDecision {
@@ -236,17 +256,69 @@ export function shouldIngest(input: FilterInput): FilterDecision {
   if (mode === 'HR') {
     return { keep: false, reason: 'hr-redirect', mode }
   }
+  // LINKED gates BEFORE the outbound keep-all: in wes@'s inbox,
+  // "outbound" means internal staff→Wes mail, which is exactly the
+  // private correspondence this mode exists to keep out of HQ unless
+  // it belongs to a known conversation.
+  if (mode === 'LINKED') {
+    return input.conversationLink === true
+      ? { keep: true, reason: 'linked-thread', mode }
+      : { keep: false, reason: 'private-not-linked', mode }
+  }
   if (input.direction === 'OUTBOUND') {
     return { keep: true, reason: 'outbound', mode }
   }
-  // HR is already returned above; the narrowed switch is exhaustive
-  // over the remaining union members.
+  // HR and LINKED are already returned above; the narrowed switch is
+  // exhaustive over the remaining union members.
   switch (mode) {
     case 'CLAIMS':   return { keep: true, reason: 'claims-all', mode }
     case 'PRESERVE': return { keep: true, reason: 'preserve', mode }
     case 'MONEY':    return evaluateMoney(input)
     case 'SALES':    return evaluateSales(input)
   }
+}
+
+// ── LINKED-mode conversation proof ──────────────────────────────
+
+/** Angle-bracket Message-ID tokens from a header value ("<a@x> <b@y>"). */
+function parseMessageIds(header: string | null | undefined): string[] {
+  if (!header) return []
+  return header.match(/<[^<>\s]+>/g) ?? []
+}
+
+/**
+ * LINKED-mode proof: does this message belong to a conversation HQ
+ * already stores? True when its own Message-ID is already in
+ * EmailMessage (a cross-inbox copy of a kept message — e.g. a client
+ * reply that also landed in hello@ via the Reply-To capture fallback,
+ * sendAgreementEmail's REPLY_CAPTURE_INBOX), or when any id in its
+ * In-Reply-To / References chain names a stored message. References
+ * carries the whole ancestor chain, so a reply-to-Wes several hops
+ * after a watched inbox last saw the thread still matches.
+ *
+ * A first reply to a Resend-sent email references only Resend's
+ * Message-ID, which HQ never stores — that copy is dropped here, and
+ * that's fine: the same message reaches hello@ via Reply-To and is
+ * kept there in full. Later messages on the chain then reference
+ * hello@'s stored ids and pass. Call this ONLY for LINKED-mode
+ * inboxes — it's one DB roundtrip per message.
+ */
+export async function hasKnownConversationLink(headers: {
+  rfc822MessageId?: string | null
+  inReplyTo?: string | null
+  references?: string | null
+}): Promise<boolean> {
+  const ids = Array.from(new Set([
+    ...(headers.rfc822MessageId ? [headers.rfc822MessageId] : []),
+    ...parseMessageIds(headers.inReplyTo),
+    ...parseMessageIds(headers.references),
+  ]))
+  if (ids.length === 0) return false
+  const hit = await prisma.emailMessage.findFirst({
+    where: { rfc822MessageId: { in: ids } },
+    select: { id: true },
+  })
+  return !!hit
 }
 
 /**

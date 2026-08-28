@@ -11,7 +11,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
-import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { ingestHrEmail, HR_INBOX } from "@/lib/hr/ingestHrEmail"
 import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
 
@@ -216,6 +216,17 @@ async function syncInbox(email: string) {
     // inclusive). MONEY mode is positive triggers (invoice/payment
     // keywords or known billing sender). Outbound always kept (drives
     // thread state). Stats land in IngestFilterStat for tuning.
+    // LINKED-mode proof (wes@): one DB roundtrip, only for inboxes in
+    // that mode — does this message's Message-ID chain touch a stored
+    // conversation? Unlinked mail is dropped below and never written.
+    const conversationLink =
+      inboxMode(email) === 'LINKED'
+        ? await hasKnownConversationLink({
+            rfc822MessageId,
+            inReplyTo,
+            references: get('References'),
+          })
+        : undefined
     const decision = shouldIngest({
       inbox: email,
       direction,
@@ -224,6 +235,7 @@ async function syncInbox(email: string) {
       bodyText: body.bodyText,
       bodyHtml: body.bodyHtml,
       routingHeaders,
+      conversationLink,
     })
     void recordIngestDecision(email, decision)
     if (!decision.keep) continue

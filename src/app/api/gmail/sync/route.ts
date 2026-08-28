@@ -8,7 +8,7 @@ import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
 import { inferFormTypeFromSubject } from "@/lib/email/inferFormType"
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractRoutingHeaders, ROUTING_HEADER_NAMES } from "@/lib/email/routingHeaders"
-import { shouldIngest, recordIngestDecision } from "@/lib/email/ingestFilter"
+import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { onboardFromEmail } from "@/lib/claims/onboardFromEmail"
 import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { SUMMARY_MODEL } from "@/lib/ai/models"
@@ -119,7 +119,7 @@ export async function POST() {
             const existing = await prisma.emailMessage.findUnique({ where: { gmailMessageId: msg.id! } })
             if (existing) { skipped++; continue }
 
-            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", ...ROUTING_HEADER_NAMES] })
+            const full = await gmail.users.messages.get({ userId: "me", id: msg.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date", "Message-ID", "In-Reply-To", "References", ...ROUTING_HEADER_NAMES] })
             const get = (h: string) => full.data.payload?.headers?.find(x => x.name?.toLowerCase() === h.toLowerCase())?.value || ""
 
             const fromAddress = get("From")
@@ -163,6 +163,17 @@ export async function POST() {
               bodyText: null,
               bodyHtml: null,
               routingHeaders,
+              // LINKED mode (wes@): default-drop unless the Message-ID
+              // chain touches a stored conversation. Same contract as
+              // pubsub.
+              conversationLink:
+                inboxMode(email) === 'LINKED'
+                  ? await hasKnownConversationLink({
+                      rfc822MessageId,
+                      inReplyTo,
+                      references: get('References'),
+                    })
+                  : undefined,
             })
             void recordIngestDecision(email, decision)
             if (!decision.keep) { skipped++; continue }

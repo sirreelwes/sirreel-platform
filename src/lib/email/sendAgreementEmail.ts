@@ -7,6 +7,7 @@ import { Resend } from 'resend'
  */
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { isWatchedInbox } from '@/lib/email/watchedInboxes'
+import { inboxMode } from '@/lib/email/ingestFilter'
 
 export const SEND_FROM = 'SirReel HQ <notifications@sirreel.com>'
 
@@ -30,15 +31,21 @@ const REPLY_CAPTURE_INBOX = 'hello@sirreel.com'
 /**
  * Effective Reply-To list: pass the caller's value through, appending
  * REPLY_CAPTURE_INBOX when the primary is an on-domain mailbox the
- * ingest doesn't watch. Off-domain Reply-To (client-as-Reply-To on
- * internal notifies) and watched inboxes (jose@, billing@, …) go
- * through untouched.
+ * ingest doesn't FULLY watch. Off-domain Reply-To (client-as-Reply-To
+ * on internal notifies) and fully-ingested inboxes (jose@, billing@, …)
+ * go through untouched. A LINKED-mode inbox (wes@) still gets the
+ * capture inbox appended even though it's technically watched: its
+ * default-drop filter can only keep mail whose Message-ID chain touches
+ * a STORED message, and a first reply to a Resend send references only
+ * Resend's unstored Message-ID — the hello@ copy is the anchor that
+ * makes the rest of the chain linkable.
  */
 function effectiveReplyTo(replyTo: string | undefined): string | string[] | undefined {
   if (!replyTo) return undefined
   const primary = replyTo.trim().toLowerCase()
   const onDomain = /^[^\s@]+@sirreel\.com$/.test(primary)
-  if (!onDomain || isWatchedInbox(primary) || primary === REPLY_CAPTURE_INBOX) return replyTo
+  const fullyIngested = isWatchedInbox(primary) && inboxMode(primary) !== 'LINKED'
+  if (!onDomain || fullyIngested || primary === REPLY_CAPTURE_INBOX) return replyTo
   return [replyTo, REPLY_CAPTURE_INBOX]
 }
 
