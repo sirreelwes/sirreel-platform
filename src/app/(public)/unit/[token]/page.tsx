@@ -68,6 +68,9 @@ export default async function PublicUnitPage({ params }: { params: { token: stri
           >
             {unit.name}
           </h1>
+          {unit.tagline && (
+            <p className="mt-3 text-[17px] text-[#5a554c] leading-relaxed max-w-[46ch]">{unit.tagline}</p>
+          )}
 
           <div className="mt-5">
             <Link

@@ -56,6 +56,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // Separate from `description` on purpose — that one is staff-facing and
   // carries operational caveats. This is the only prose the client page renders.
   if ('publicDescription' in body) data.publicDescription = typeof body.publicDescription === 'string' && body.publicDescription.trim() ? body.publicDescription.trim() : null
+  // Public-catalog listing. Separate decision from the unlisted token: a unit
+  // can have a private link, a catalog entry, both, or neither. A slug is
+  // derived on first listing if one hasn't been set.
+  if (typeof body.publiclyListed === 'boolean') data.publiclyListed = body.publiclyListed
+  if ('publicSlug' in body) {
+    const raw = typeof body.publicSlug === 'string' ? body.publicSlug : ''
+    const slug = raw.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    data.publicSlug = slug || null
+  }
   if ('rateNotes' in body) data.rateNotes = typeof body.rateNotes === 'string' && body.rateNotes.trim() ? body.rateNotes.trim() : null
   if ('listDailyRate' in body) data.listDailyRate = parseMoney(body.listDailyRate)
   if ('listWeeklyRate' in body) data.listWeeklyRate = parseMoney(body.listWeeklyRate)
@@ -67,6 +76,32 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   try {
+    // /vehicles/[slug] is ONE slug space shared with the owned catalog, and
+    // getPublicVehicleBySlug checks owned first — so a colliding slug wouldn't
+    // error, it would silently render the other vehicle. The unique index on
+    // this table can't see that, so check across catalogs explicitly.
+    if (typeof data.publicSlug === 'string' && data.publicSlug) {
+      const clash = await prisma.vehicleCategory.findFirst({
+        where: { slug: data.publicSlug }, select: { name: true },
+      })
+      if (clash) {
+        return NextResponse.json(
+          { error: `That catalog URL is already used by "${clash.name}" in the owned fleet — pick another.` },
+          { status: 409 },
+        )
+      }
+    }
+    if (data.publiclyListed === true && data.publicSlug === undefined) {
+      const cur = await prisma.subcontractedVehicle.findUnique({
+        where: { id: params.id }, select: { publicSlug: true, name: true },
+      })
+      if (cur && !cur.publicSlug) {
+        const derived = cur.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        const clash = await prisma.vehicleCategory.findFirst({ where: { slug: derived }, select: { id: true } })
+        // Suffix rather than fail: the rep asked to list it, not to name it.
+        data.publicSlug = clash ? `${derived}-partner` : derived
+      }
+    }
     const vehicle = await prisma.subcontractedVehicle.update({
       where: { id: params.id },
       data,
@@ -76,6 +111,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
       return NextResponse.json({ error: 'not found' }, { status: 404 })
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return NextResponse.json({ error: 'That catalog URL is already taken — pick another.' }, { status: 409 })
     }
     throw e
   }

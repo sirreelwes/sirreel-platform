@@ -37,6 +37,10 @@ interface Vehicle {
   isActive: boolean
   /** Non-null when an unlisted client page has been minted. */
   publicToken: string | null
+  /** Listed in the PUBLIC vehicle catalog — a separate decision from the
+   *  unlisted link above. */
+  publiclyListed: boolean
+  publicSlug: string | null
   updatedAt: string
   vendor: {
     id: string
@@ -368,6 +372,8 @@ export default function SubcontractedVehiclePage() {
           vehicleId={vehicle.id}
           vehicleName={vehicle.name}
           publicToken={vehicle.publicToken}
+          publiclyListed={vehicle.publiclyListed}
+          publicSlug={vehicle.publicSlug}
           onChanged={load}
         />
       </div>

@@ -21,11 +21,15 @@ export default function ClientPageCard({
   vehicleId,
   vehicleName,
   publicToken,
+  publiclyListed,
+  publicSlug,
   onChanged,
 }: {
   vehicleId: string
   vehicleName: string
   publicToken: string | null
+  publiclyListed: boolean
+  publicSlug: string | null
   onChanged: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -66,6 +70,23 @@ export default function ClientPageCard({
     try {
       const r = await fetch(`/api/sub-rentals/vehicles/${vehicleId}/public-link`, { method: 'DELETE' })
       if (!r.ok) { const j = await r.json(); setError(j.error ?? 'Could not revoke.'); return }
+      onChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'request failed')
+    } finally { setBusy(false) }
+  }
+
+  async function toggleListed(next: boolean) {
+    if (next && !confirm(`List ${vehicleName} in the PUBLIC vehicle catalog? Anyone browsing sirreel.com will see it, and it goes in the sitemap. The partner is never named and the price shown is the list rate.`)) return
+    setBusy(true); setError(null)
+    try {
+      const r = await fetch(`/api/sub-rentals/vehicles/${vehicleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publiclyListed: next }),
+      })
+      const j = await r.json()
+      if (!r.ok) { setError(j.error ?? 'Could not change the listing.'); return }
       onChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'request failed')
@@ -164,6 +185,50 @@ export default function ClientPageCard({
               Re-mint to kill a link that has spread; revoke to take the page down entirely.
             </p>
           </>
+        )}
+      </div>
+
+      <div className="px-4 py-3.5 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">Public catalog</div>
+            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed max-w-[46ch]">
+              {publiclyListed
+                ? 'Listed — anyone browsing sirreel.com can find it.'
+                : 'Not listed. Only people you send the link above to can see it.'}
+              {' '}The partner is never named either way.
+            </p>
+            {publiclyListed && publicSlug && (
+              <a
+                href={`https://sirreel.com/vehicles/${publicSlug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block mt-1.5 text-xs font-mono text-amber-700 hover:text-amber-600"
+              >
+                sirreel.com/vehicles/{publicSlug} →
+              </a>
+            )}
+          </div>
+          <button
+            role="switch"
+            aria-checked={publiclyListed}
+            onClick={() => toggleListed(!publiclyListed)}
+            disabled={busy}
+            className={`relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${
+              publiclyListed ? 'bg-amber-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                publiclyListed ? 'translate-x-[22px]' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+        {publiclyListed && !publicSlug && (
+          <p className="mt-2 text-xs text-amber-700">
+            Listed but no catalog URL yet — save the vehicle to generate one.
+          </p>
         )}
       </div>
 

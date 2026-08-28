@@ -16,6 +16,10 @@
  *                        published + has an image source). Source preference:
  *                        primary gallery photo → VehicleCategory.photoUrl → the
  *                        LINKED AssetCategory.imageUrl (assetCategoryId).
+ *   kind=sub-vehicle-photo → one SubcontractedVehiclePhoto, served ONLY when
+ *                        its parent partner unit is publicly LISTED. An
+ *                        unlisted unit's gallery is denied here; it is
+ *                        reachable only via /api/public/unit/[token]/photo.
  *   kind=vehicle-photo → one VehicleCategoryPhoto gallery row by id, served
  *                        ONLY if its PARENT vehicle passes the same public
  *                        visibility gate. A hidden vehicle's gallery is denied.
@@ -103,6 +107,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // One gallery photo by id — only when its PARENT space is client-visible.
     const photo = await prisma.spacePhoto.findFirst({
       where: { id, space: PUBLIC_SPACE_VISIBLE_WHERE },
+      select: { url: true },
+    })
+    if (!photo) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    return streamPrivateBlobAsResponse({ fileUrl: photo.url, filename: `${id}.jpg` })
+  }
+
+  if (kind === 'sub-vehicle-photo') {
+    // One gallery photo on a PUBLICLY LISTED subcontracted unit. Gated on the
+    // parent's listing flags, so an unlisted partner unit's gallery is denied
+    // here and remains reachable only through its own /unit/[token] proxy.
+    const photo = await prisma.subcontractedVehiclePhoto.findFirst({
+      where: {
+        id,
+        vehicle: { isActive: true, publiclyListed: true, publicSlug: { not: null } },
+      },
       select: { url: true },
     })
     if (!photo) return NextResponse.json({ error: 'not found' }, { status: 404 })
