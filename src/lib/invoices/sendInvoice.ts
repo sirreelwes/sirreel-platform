@@ -201,6 +201,10 @@ export async function sendInvoice(args: {
   const filename = `Invoice-${invoice.invoiceNumber}.pdf`
   const result = await sendAgreementEmail({
     to: [primary.email],
+    // The email is signed by billing (Ana) — a plain Reply ("run my
+    // card", "wiring Friday") must reach the billing inbox, not the
+    // unmonitored notifications@ sender. Same as sendFinalInvoiceEmail.
+    replyTo: 'billing@sirreel.com',
     cc: others.length > 0 ? others.map((o) => o.email) : undefined,
     subject: rendered.subject,
     html: rendered.html,

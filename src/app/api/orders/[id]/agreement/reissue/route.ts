@@ -216,6 +216,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const res = await sendAgreementEmail({
           label: `agreement/reissue:${order.orderNumber}`,
           to: [picked.email],
+          // "Reach out to <rep>" — so a plain Reply must actually reach
+          // them, not the unmonitored notifications@ sender.
+          replyTo: order.agent?.email ?? undefined,
           subject: `Please re-sign: rental agreement for ${projectName}`,
           html: `<p>Hi ${escapeHtml(firstName)},</p>
 <p>We've re-issued the rental agreement for <b>${escapeHtml(projectName)}</b>${companyLine}. ${escapeHtml(reason)}</p>

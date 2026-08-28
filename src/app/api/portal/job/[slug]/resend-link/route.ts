@@ -156,6 +156,9 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
     void sendAgreementEmail({
       label: `portal/resend-link:${order.orderNumber}`,
       to: [recipientEmail],
+      // The invite names the rep; a reply should reach their watched
+      // inbox, not the unmonitored notifications@ sender.
+      replyTo: order.agent?.email ?? undefined,
       subject: tpl.subject,
       html: tpl.html,
       text: tpl.text,

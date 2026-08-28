@@ -175,6 +175,10 @@ async function notifyRepPreparing(jobs: StageJob[], contactEmail: string, contac
 
   const sent = await sendAgreementEmail({
     to: recipients,
+    // Same convention as notifyPublicSubmission: Reply-To is the client
+    // so the agent's Reply answers them directly instead of landing in
+    // the unmonitored notifications@ sender.
+    replyTo: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) ? contactEmail : undefined,
     subject: `Stage contract requested — ${contactName || contactEmail}`,
     html: emailShell('Stage contract requested', body, 'A client asked to sign; terms are not set yet.'),
     text:

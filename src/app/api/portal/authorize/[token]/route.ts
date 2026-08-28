@@ -112,6 +112,9 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   await sendAgreementEmail({
     label: 'portal/authorize-approved-invite',
     to: [newPerson.email],
+    // The invite names the rep; a reply should reach their watched
+    // inbox, not the unmonitored notifications@ sender.
+    replyTo: order.agent?.email ?? undefined,
     subject: tpl.subject,
     html: tpl.html,
     text: tpl.text,

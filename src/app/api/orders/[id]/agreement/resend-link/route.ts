@@ -43,6 +43,7 @@ export async function POST(
       company: { select: { name: true } },
       job: { select: { name: true, jobCode: true } },
       jobContact: { select: { email: true, firstName: true } },
+      agent: { select: { email: true } },
     },
   })
   if (!order) {
@@ -101,6 +102,9 @@ export async function POST(
   const emailResult = await sendAgreementEmail({
     label: 'orders/agreement/resend-link',
     to: [recipient],
+    // Replies route to the agent's watched inbox, not the unmonitored
+    // notifications@ sender.
+    replyTo: order.agent?.email ?? undefined,
     subject: `Paperwork portal link · ${order.company?.name || order.orderNumber}`,
     html,
   })

@@ -164,6 +164,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       emailResult = await sendAgreementEmail({
         label: 'orders/contacts/invite',
         to: [person.email],
+        // The invite names the rep; a reply should reach their watched
+        // inbox, not the unmonitored notifications@ sender.
+        replyTo: order.agent?.email ?? undefined,
         subject: tpl.subject,
         html: tpl.html,
         text: tpl.text,

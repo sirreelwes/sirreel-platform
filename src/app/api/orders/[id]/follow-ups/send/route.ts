@@ -93,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Load only the slug here — composer already validated the order.
   const orderSlug = await prisma.order.findUnique({
     where: { id: params.id },
-    select: { portalSlug: true },
+    select: { portalSlug: true, agent: { select: { email: true } } },
   })
   let portalUrl: string | null = null
   if (orderSlug?.portalSlug) {
@@ -120,6 +120,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // ── Phase 3: dispatch ─────────────────────────────────────
   const result = await sendAgreementEmail({
     to: [final.to.email],
+    // Replies route to the agent's watched inbox (the Gmail ingest
+    // pipeline), not the unmonitored notifications@ sender — same as
+    // thank-you and welcome sends.
+    replyTo: orderSlug?.agent?.email ?? undefined,
     cc: manualCc.length > 0 ? manualCc : undefined,
     subject: final.subject,
     html: final.html,

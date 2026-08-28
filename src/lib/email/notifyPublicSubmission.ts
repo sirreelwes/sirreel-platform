@@ -253,6 +253,10 @@ async function sendClientAck(sub: PublicSubmission): Promise<void> {
 
   const res = await sendAgreementEmail({
     to: [sub.contact.email.trim()],
+    // No agent exists yet on a public submission, so replies route to
+    // the watched HQ inbox instead of the unmonitored notifications@
+    // sender — "change my dates" replies were previously lost.
+    replyTo: HQ_INBOX,
     subject: copy.clientSubject,
     html,
     text,

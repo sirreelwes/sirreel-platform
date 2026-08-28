@@ -109,7 +109,7 @@ export async function sendPaymentShareEmail(args: {
   portalAccessId?: string | null
   personId?: string | null
   /** Injected so this module stays free of the email transport. */
-  send: (msg: { to: string[]; subject: string; html: string; text: string }) => Promise<{
+  send: (msg: { to: string[]; replyTo?: string; subject: string; html: string; text: string }) => Promise<{
     ok: boolean
     reason?: string
   }>
@@ -166,7 +166,9 @@ export async function sendPaymentShareEmail(args: {
       <p style="font-size:13px;color:#555">SirReel Studio Services</p>
     </div>`
 
-  const sent = await args.send({ to: [args.to], subject, html, text })
+  // The body says "Questions: billing@sirreel.com" — a plain Reply must
+  // land there too, not in the unmonitored notifications@ sender.
+  const sent = await args.send({ to: [args.to], replyTo: 'billing@sirreel.com', subject, html, text })
   if (!sent.ok) {
     console.error('[payment-share] send failed to %s: %s', args.to, sent.reason)
     return {

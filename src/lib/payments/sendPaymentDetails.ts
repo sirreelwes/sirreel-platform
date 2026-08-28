@@ -103,6 +103,9 @@ export async function sendPaymentDetailsEmail(opts: {
 
   const sent = await sendAgreementEmail({
     to: [opts.to],
+    // The template says "Questions: billing@sirreel.com" — a plain Reply
+    // must land there too, not in the unmonitored notifications@ sender.
+    replyTo: 'billing@sirreel.com',
     subject: email.subject,
     html: email.html,
     text: email.text,

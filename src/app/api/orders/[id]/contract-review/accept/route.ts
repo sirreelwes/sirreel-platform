@@ -48,6 +48,7 @@ export async function POST(
       company: { select: { name: true } },
       job: { select: { name: true, jobCode: true } },
       jobContact: { select: { email: true, firstName: true, lastName: true } },
+      agent: { select: { email: true } },
       signedAgreements: {
         where: { contractType: 'RENTAL_AGREEMENT' },
         take: 1,
@@ -158,6 +159,9 @@ export async function POST(
     emailResult = await sendAgreementEmail({
       label: 'orders/contract-review/accept',
       to: [recipientEmail],
+      // The body says "reply to this email" — so a reply must reach the
+      // agent's watched inbox, not the unmonitored notifications@ sender.
+      replyTo: order.agent?.email ?? undefined,
       subject: `Your negotiated agreement is ready to sign · ${order.company?.name || order.orderNumber}`,
       html,
     })

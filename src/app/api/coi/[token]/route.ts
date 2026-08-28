@@ -144,6 +144,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const emailResult = await sendAgreementEmail({
     to: [COI_TEAM_INBOX],
+    // Same convention as notifyPublicSubmission: Reply-To is the client
+    // so a staff Reply answers the uploader directly instead of landing
+    // in the unmonitored notifications@ sender. Guarded — the field is
+    // free text off a public form.
+    replyTo:
+      uploaderEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(uploaderEmail) ? uploaderEmail : undefined,
     subject,
     html: `<p>${escapeHtml(who)} uploaded a Certificate of Insurance via the client COI link.</p>
 <p><b>Context:</b> ${escapeHtml(ctx)}<br/>

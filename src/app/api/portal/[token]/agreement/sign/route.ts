@@ -86,6 +86,10 @@ async function sendSignedCopies(args: {
   jobName: string
   signerName: string
   signerEmail: string
+  /** Agent on the order — replies to the signed-copy email route to
+   *  their watched inbox instead of the unmonitored notifications@
+   *  sender. Sales is only CC'd, so without this a client reply is lost. */
+  agentEmail: string | null
   documentType: 'BASELINE' | 'NEGOTIATED'
   pdfBuffer: Buffer
   attachmentName: string
@@ -114,6 +118,7 @@ async function sendSignedCopies(args: {
   return sendAgreementEmail({
     label: 'portal/agreement/sign',
     to: [args.signerEmail],
+    replyTo: args.agentEmail ?? undefined,
     cc: [...COPY_RECIPIENTS.sales, ...COPY_RECIPIENTS.billing],
     subject: `Signed: ${args.companyName} · ${subjectLabel}`,
     html,
@@ -172,6 +177,7 @@ export async function POST(
       startDate: true,
       endDate: true,
       job: { select: { jobCode: true, name: true } },
+      agent: { select: { email: true } },
       bookingId: true,
     },
   })
@@ -307,6 +313,7 @@ export async function POST(
     jobName: orderRow.job?.name || '',
     signerName: body.signerName,
     signerEmail: body.signerEmail,
+    agentEmail: orderRow.agent?.email ?? null,
     documentType: agreement.documentType === 'NEGOTIATED' ? 'NEGOTIATED' : 'BASELINE',
     pdfBuffer,
     attachmentName: `sirreel-rental-agreement-${orderRow.job?.jobCode || orderRow.orderNumber}.pdf`,

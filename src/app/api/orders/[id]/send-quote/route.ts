@@ -121,6 +121,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       quotePdfKey: true,
       quotePdfUrl: true,
       portalSlug: true,
+      agent: { select: { email: true } },
       job: {
         select: {
           jobContacts: {
@@ -182,6 +183,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const emailResult = await sendAgreementEmail({
     to: [primary.email],
+    // Replies route to the agent's watched inbox (the Gmail ingest
+    // pipeline), not the unmonitored notifications@ sender — same as
+    // thank-you and welcome sends.
+    replyTo: order.agent?.email ?? undefined,
     // Auto-CC (the other job contacts) MERGED with the rep's typed CC —
     // a manual CC adds people, it never silently drops the contacts a
     // quote already copies.
