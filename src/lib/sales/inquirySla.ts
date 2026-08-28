@@ -33,12 +33,18 @@ export function inquiryWaitHours(row: Pick<SlaInput, 'createdAt'>, now = Date.no
 }
 
 /**
- * True when a client submitted the public form and nobody has replied
- * within the SLA. Only WEB_FORM: Gmail/manual inquiries arrive through
- * channels where a reply may already exist outside HQ.
+ * True when a client wrote in and nobody has replied within the SLA.
+ *
+ * WEB_FORM and GMAIL count: both have reliable reply detection —
+ * markInquiryResponded stamps respondedAt from the Gmail ingest paths
+ * (pubsub + fetch) AND the Quick Reply send route, so respondedAt:null
+ * genuinely means no staff reply on any tracked channel (Wes
+ * 2026-08-28: extend past web forms). MANUAL stays excluded — those
+ * are staff-entered notes with no client waiting on a promise and no
+ * originating thread to detect replies on.
  */
 export function inquiryPastResponseSla(row: SlaInput, slaHours = INQUIRY_RESPONSE_SLA_HOURS, now = Date.now()): boolean {
-  if (row.source !== 'WEB_FORM') return false
+  if (row.source !== 'WEB_FORM' && row.source !== 'GMAIL') return false
   if (row.status && row.status !== 'NEW') return false
   if (row.respondedAt) return false
   return inquiryWaitHours(row, now) >= slaHours

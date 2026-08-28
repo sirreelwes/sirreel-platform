@@ -407,9 +407,9 @@ export function NewInboundColumn({
   const respondedCount = respondedInquiries.length + respondedSuggestions.length
   const pendingCount = pendingInquiries.length + (suggestions?.length ?? 0)
   const totalCount = pendingCount + respondedCount
-  // Web-form submissions past the first-response SLA — a client is
-  // actively waiting on these; they pin above everything else and the
-  // header calls them out in red.
+  // Inquiries (web form or email) past the first-response SLA — a
+  // client is actively waiting on these; they pin above everything
+  // else and the header calls them out in red.
   const overdueCount = pendingInquiries.filter((i) => inquiryPastResponseSla(i)).length
   const isLoading = inquiries === null || suggestions === null
 
@@ -466,7 +466,7 @@ export function NewInboundColumn({
               type MergedItem =
                 | { kind: 'persistent'; row: PersistentInquiry; sortKey: string }
                 | { kind: 'suggestion'; row: SuggestionRecord; sortKey: string };
-              // Overdue web forms pin ABOVE the reverse-chronological
+              // Overdue inquiries pin ABOVE the reverse-chronological
               // stream — longest-waiting first, since that client has
               // been waiting past the SLA. Everything else stays
               // newest-first (see the block comment above).
@@ -819,8 +819,8 @@ function PersistentCard({
   const portalAddOn = isPortalAddOnMeta(inquiry.sourceMetadata)
     ? inquiry.sourceMetadata
     : null
-  // A public form submission past the first-response SLA — the client
-  // was told an agent would follow up shortly. Red ring + wait badge.
+  // An inquiry past the first-response SLA — a client wrote in and
+  // nobody has replied on any tracked channel. Red ring + wait badge.
   const overdue = inquiryPastResponseSla(inquiry)
   const waitHours = inquiryWaitHours(inquiry)
 

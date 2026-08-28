@@ -1,6 +1,7 @@
 /**
- * Untouched web-inquiry provider (DERIVED) — the in-app twin of the
- * hourly safety-net email (api/cron/stale-inquiries).
+ * Untouched-inquiry provider (DERIVED) — the in-app twin of the
+ * hourly safety-net email (api/cron/stale-inquiries), widened to
+ * GMAIL-sourced inquiries too (the cron email stays web-form-only).
  *
  * Before this existed, an unanswered public form submission escalated
  * by EMAIL only: the cron created an Alert row and mailed hq@, while
@@ -37,9 +38,11 @@ export const inquiryUntouchedProvider: ActionItemProvider = {
   kind: 'DERIVED',
   async fetch(): Promise<ActionItem[]> {
     const cutoff = new Date(Date.now() - SLA_HOURS * 3_600_000)
+    // GMAIL included since 2026-08-28 (Wes) — reply detection stamps
+    // respondedAt from every tracked channel, so null is a real miss.
     const rows = await prisma.inquiry.findMany({
       where: {
-        source: 'WEB_FORM',
+        source: { in: ['WEB_FORM', 'GMAIL'] },
         status: 'NEW',
         respondedAt: null,
         createdAt: { lt: cutoff },
@@ -49,6 +52,7 @@ export const inquiryUntouchedProvider: ActionItemProvider = {
       select: {
         id: true,
         title: true,
+        source: true,
         createdAt: true,
         assignedTo: { select: { name: true, email: true } },
       },
@@ -58,13 +62,20 @@ export const inquiryUntouchedProvider: ActionItemProvider = {
       const hours = inquiryWaitHours(r)
       const wait = hours >= 48 ? `${Math.floor(hours / 24)}d` : `${hours}h`
       const who = r.assignedTo?.name || r.assignedTo?.email
+      const kind = r.source === 'WEB_FORM' ? 'Web inquiry' : 'Email inquiry'
+      // The "agent will follow up shortly" promise is web-form copy;
+      // email senders got no such auto-reply.
+      const tail =
+        r.source === 'WEB_FORM'
+          ? ' The client was told an agent would follow up shortly.'
+          : ''
       return {
         id: `inquiry-untouched:${r.id}`,
         type: 'inquiry_untouched',
-        title: `Web inquiry waiting ${wait} with no response — ${r.title}`,
+        title: `${kind} waiting ${wait} with no response — ${r.title}`,
         subtitle: who
-          ? `Assigned to ${who}, still unanswered. The client was told an agent would follow up shortly.`
-          : `Unassigned and unanswered. The client was told an agent would follow up shortly.`,
+          ? `Assigned to ${who}, still unanswered.${tail}`
+          : `Unassigned and unanswered.${tail}`,
         ownerRole: OWNER,
         priority: 'high' as const,
         href: `/inquiries/${r.id}`,

@@ -82,8 +82,8 @@ export function JobsSidebar() {
   // NewInboundColumn merges (persistent NEW inquiries + Gmail
   // suggestions), counted the same way, on the same 60s cadence.
   const [incomingCount, setIncomingCount] = useState<number | null>(null)
-  // Web-form submissions past the first-response SLA — turns the strip
-  // red so the breach is visible even from a job detail page.
+  // Inquiries past the first-response SLA — turns the strip red so
+  // the breach is visible even from a job detail page.
   const [incomingOverdue, setIncomingOverdue] = useState(0)
   useEffect(() => {
     let active = true

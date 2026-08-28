@@ -157,7 +157,10 @@ async function sendDigest(rows: StaleRow[]): Promise<void> {
         ? `<p style="margin:0 0 14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#8a8272;">…and ${overflow} more. Open the queue to see everything.</p>`
         : '',
     ].join(''),
-    cta: { label: 'Open the inquiry queue', href: `${HQ_APP_URL}/inquiries` },
+    // Deep-link to the live queue on /jobs — /inquiries is only a
+    // legacy redirect since the 2026-08-27 merge, and ?panel=incoming
+    // is the direct (and mobile-correct) route into the landing panel.
+    cta: { label: 'Open the inquiry queue', href: `${HQ_APP_URL}/jobs?panel=incoming` },
     footNote: `You get this once per inquiry, not every hour — each one is escalated a single time until it's worked or the alert is dismissed.`,
   })
 
