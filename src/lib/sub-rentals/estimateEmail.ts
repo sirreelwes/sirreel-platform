@@ -94,6 +94,11 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
       isActive: true,
       publicToken: true,
       vendorId: true,
+      photos: {
+        select: { id: true },
+        orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+        take: 1,
+      },
     },
   })
   if (!v) return { ok: false, status: 404, error: 'vehicle not found' }
@@ -135,6 +140,17 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
   }
 
   const unitUrl = v.publicToken ? `${PUBLIC_SITE_ORIGIN}${publicUnitPath(v.publicToken)}` : null
+  // Lead photo beside the name. Served by the SAME token-scoped proxy the
+  // page uses — a private blob URL would 403 in a mail client, and a data:
+  // URI gets stripped by most of them. So the thumbnail exists only once a
+  // client page has been minted, which is also when it's safe to be public.
+  // Remote images are blocked-by-default in some clients, so this is a
+  // garnish: every fact in the estimate is still in the text beside it.
+  const photoId = v.photos[0]?.id ?? null
+  const thumbUrl =
+    v.publicToken && photoId
+      ? `${PUBLIC_SITE_ORIGIN}/api/public/unit/${v.publicToken}/photo/${photoId}`
+      : null
   const typeLabel = v.vehicleType ?? 'Production vehicle'
   const greetName = args.clientFirstName?.trim() || 'there'
   const subject = `SirReel estimate — ${v.name}`
@@ -250,11 +266,32 @@ export async function composeEstimateEmail(args: EstimateEmailArgs): Promise<Est
 
           <tr>
             <td style="padding: 14px 32px 0;">
-              <div style="border-left: 3px solid ${ACCENT}; padding-left: 14px;">
-                <p style="font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${ACCENT}; margin: 0 0 2px;">SirReel Estimate</p>
-                <p style="font-size: 20px; font-weight: 800; color: ${TEXT}; margin: 0;">${escapeHtml(v.name)}</p>
-                <p style="font-size: 13px; color: ${MUTED}; margin: 2px 0 0;">${escapeHtml(typeLabel)}</p>
-              </div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td valign="top">
+                    <div style="border-left: 3px solid ${ACCENT}; padding-left: 14px;">
+                      <p style="font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: ${ACCENT}; margin: 0 0 2px;">SirReel Estimate</p>
+                      <p style="font-size: 20px; font-weight: 800; color: ${TEXT}; margin: 0;">${escapeHtml(v.name)}</p>
+                      <p style="font-size: 13px; color: ${MUTED}; margin: 2px 0 0;">${escapeHtml(typeLabel)}</p>
+                    </div>
+                  </td>
+                  ${
+                    thumbUrl
+                      ? `<td valign="top" align="right" width="150" style="width: 150px; padding-left: 12px;">
+                    <!-- No border/radius: the exterior shots are transparent
+                         cut-outs, so a frame would trace an empty box around
+                         the vehicle rather than hug it. -->
+                    <a href="${unitUrl}" style="text-decoration: none;"><img
+                      src="${thumbUrl}"
+                      alt="${escapeHtml(v.name)}"
+                      width="150"
+                      style="width: 150px; height: auto; display: block;"
+                    /></a>
+                  </td>`
+                      : ''
+                  }
+                </tr>
+              </table>
             </td>
           </tr>
 
