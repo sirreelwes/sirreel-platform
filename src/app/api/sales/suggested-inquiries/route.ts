@@ -95,6 +95,28 @@ export async function GET() {
             messageCount: true,
           },
         },
+        // Cross-inbox sibling threads. Gmail thread ids are PER MAILBOX,
+        // so when the same message lands in four watched inboxes, each
+        // inbox grows its own EmailThread — and a staff reply only lands
+        // on the threads of the inboxes it was addressed/CC'd to. The
+        // canonical copy (duplicateOfId: null, the one this query keeps)
+        // can therefore sit on a thread that never saw the reply: Jose
+        // answered Orlando's Steel Deck email on jose@'s thread while
+        // info@'s canonical copy stayed 1-message/no-outbound, so HQ
+        // showed the lead as untouched (Wes 2026-08-28). Judge responded
+        // state across the canonical thread AND every duplicate's thread.
+        duplicates: {
+          select: {
+            thread: {
+              select: {
+                id: true,
+                lastDirection: true,
+                lastOutboundAt: true,
+                messageCount: true,
+              },
+            },
+          },
+        },
       },
     }),
     // Small dataset; just fetch all and filter in JS to dodge Prisma JSON-null
@@ -123,13 +145,28 @@ export async function GET() {
   // outbound at all are kept pending even when the client has sent several
   // messages — those are genuinely unanswered. Messages without a thread
   // are also kept (defensive — historical edge case).
-  const respondedTo = (e: typeof emails[number]) =>
-    e.thread?.lastDirection === 'OUTBOUND' || !!e.thread?.lastOutboundAt;
+  //
+  // Sibling threads (see the `duplicates` select above): the conversation's
+  // true state is the union of every inbox's thread, so all of these read
+  // across canonical + duplicates.
+  type EmailRow = typeof emails[number]
+  type ThreadState = NonNullable<EmailRow['thread']>
+  const threadsOf = (e: EmailRow): ThreadState[] =>
+    [e.thread, ...e.duplicates.map((d) => d.thread)].filter((t): t is ThreadState => !!t);
+  // The most-informed sibling — the inbox that saw the deepest slice of the
+  // conversation. Drives the msgs count and the client-replied-since flag.
+  const bestThread = (e: EmailRow): ThreadState | null =>
+    threadsOf(e).reduce<ThreadState | null>(
+      (best, t) => (!best || t.messageCount > best.messageCount ? t : best),
+      null,
+    );
+  const respondedTo = (e: EmailRow) =>
+    threadsOf(e).some((t) => t.lastDirection === 'OUTBOUND' || !!t.lastOutboundAt);
 
   // First in thread = no In-Reply-To header OR the thread has only one message.
-  const isFirstInThread = (e: typeof emails[number]) => {
+  const isFirstInThread = (e: EmailRow) => {
     const noInReplyTo = !e.inReplyTo || e.inReplyTo.trim() === '';
-    const singletonThread = (e.thread?.messageCount ?? 0) <= 1;
+    const singletonThread = (bestThread(e)?.messageCount ?? 0) <= 1;
     return noInReplyTo || singletonThread;
   };
 
@@ -137,7 +174,7 @@ export async function GET() {
   // already ordered DESC by sentAt, so first-seen-per-thread wins. Messages
   // without a thread bypass dedup (one row per email).
   const seenThreads = new Set<string>();
-  const dedupByThread = (e: typeof emails[number]) => {
+  const dedupByThread = (e: EmailRow) => {
     if (!e.threadId) return true;
     if (seenThreads.has(e.threadId)) return false;
     seenThreads.add(e.threadId);
@@ -191,8 +228,10 @@ export async function GET() {
     }))
     .filter((c) => c.result.include)
     .slice(0, RESPONDED_LIMIT);
+  // All sibling thread ids — the outbound that answered this lead may live
+  // on any inbox's copy of the conversation, not the canonical one.
   const respondedThreadIds = respondedIncluded
-    .map((c) => c.email.threadId)
+    .flatMap((c) => threadsOf(c.email).map((t) => t.id))
     .filter((v): v is string => !!v);
   const latestOutboundByThread = new Map<string, { fromAddress: string; sentAt: Date }>();
   if (respondedThreadIds.length > 0) {
@@ -208,7 +247,7 @@ export async function GET() {
     }
   }
 
-  const toRecord = (e: typeof emails[number]) => ({
+  const toRecord = (e: EmailRow) => ({
     emailId: e.id,
     fromAddress: e.fromAddress,
     subject: e.subject,
@@ -218,7 +257,7 @@ export async function GET() {
     inferredFormType: e.inferredFormType,
     company: e.company,
     person: e.person,
-    threadMessageCount: e.thread?.messageCount ?? 1,
+    threadMessageCount: bestThread(e)?.messageCount ?? 1,
   });
 
   const newInquiries = included.filter((c) => isFirstInThread(c.email)).slice(0, PAGE_SIZE).map((c) => toRecord(c.email));
@@ -250,16 +289,23 @@ export async function GET() {
     newInquiries,
     followUps,
     responded: respondedIncluded.map((c) => {
-      const latest = c.email.threadId ? latestOutboundByThread.get(c.email.threadId) : undefined;
+      // Latest outbound across every sibling thread of this conversation.
+      const latest = threadsOf(c.email)
+        .map((t) => latestOutboundByThread.get(t.id))
+        .filter((v): v is { fromAddress: string; sentAt: Date } => !!v)
+        .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())[0];
+      const best = bestThread(c.email);
       return {
         ...toRecord(c.email),
         repliedBy: latest?.fromAddress ?? null,
-        repliedAt: latest?.sentAt ?? c.email.thread?.lastOutboundAt ?? null,
+        repliedAt: latest?.sentAt ?? best?.lastOutboundAt ?? null,
         // With any-outbound threads now living here, INBOUND-last means
         // the client wrote back after our reply — the conversation has
         // the client holding the last word. The card flags it so moving
         // these out of "new inbound" doesn't hide the follow-up need.
-        clientRepliedSince: c.email.thread?.lastDirection === 'INBOUND',
+        // Judged on the deepest sibling thread — the inbox that saw the
+        // most of the conversation.
+        clientRepliedSince: best?.lastDirection === 'INBOUND',
       };
     }),
     hidden: {
