@@ -177,3 +177,27 @@ fallback was replaced by Job-as-root + JobResolverModal.)
   entry anywhere.
 - Inquiry conversion now always closes the inquiry: new Job →
   convertedJobId; attach-to-existing-Job → convertedOrderId.
+
+## /jobs redesign (2026-08-28 — Wes's design session)
+- **JobsToolbar** (rendered by the jobs LAYOUT above the list|detail
+  split) carries the page title + Incoming pill + search + status/sort
+  + Mine + the color-legend chips + "+ New Job" (the global shell
+  header row was DELETED — the launcher lives only here). The rail
+  (JobsSidebar) is JUST the list + a slim count strip.
+- Landing "Today" strip split into **Going out / Coming back** cards
+  (Out/Back-strip vocabulary); the not-returned one-liner lives in
+  Coming back.
+- **rowState's date fallback is start-aware**: zero-order (Planyo-era)
+  jobs starting today read 'picking-today' (one-day windows too),
+  starting tomorrow 'picking-tmw' — before this, Going out was always
+  empty because picking states only derived from HQ order cadence.
+- **Job.returnedAt is the not-returned kill switch**: rail rows in
+  'overdue' carry a one-click "✓ returned" (POST
+  /api/jobs/[id]/mark-returned). 2026-08-28 purge stamped all 54
+  phantom overdues (returns weren't handled in HQ; journal in
+  tmp/purge-not-returned-*.json, AuditLog action
+  job.backfill_returned).
+- Reservations Out/Back strip: one-day rentals render ONCE (Going out,
+  "back same day" chip); reservation cards carry
+  attachedOrderId/Number (job-orders ∪ booking-orders union) → violet
+  "order" chip, click opens the order.
