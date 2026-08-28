@@ -22,6 +22,7 @@
  */
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { relayAddress } from '@/lib/sub-rentals/driverRelay'
 
 const TOKEN_BYTES = 32
 
@@ -135,6 +136,11 @@ export interface VendorView {
    *  the production. It is what both sides can quote at each other safely. */
   reference: string | null
   photos: { id: string }[]
+  driverName: string | null
+  driverEmail: string | null
+  driverPhone: string | null
+  /** jobs+{tag}@sirreel.com once a driver is assigned. */
+  relayAddress: string | null
 }
 
 /**
@@ -155,6 +161,10 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
       endDate: true,
       quantity: true,
       itemDescription: true,
+      driverName: true,
+      driverEmail: true,
+      driverPhone: true,
+      relayTag: true,
       job: { select: { jobCode: true } },
       subcontractedVehicle: {
         select: {
@@ -185,6 +195,10 @@ export async function getVendorViewByToken(token: string): Promise<VendorView | 
     quantity: s.quantity,
     reference: s.job?.jobCode ?? null,
     photos: s.subcontractedVehicle?.photos ?? [],
+    driverName: s.driverName,
+    driverEmail: s.driverEmail,
+    driverPhone: s.driverPhone,
+    relayAddress: s.relayTag ? relayAddress(s.relayTag) : null,
   }
 }
 

@@ -3962,6 +3962,24 @@ model SubRental {
   /// When the vendor was told we had quoted these dates.
   vendorNotifiedAt    DateTime? @map("vendor_notified_at")
 
+  // ── Driver relay ─────────────────────────────────────────────────────────
+  // The vendor names a driver on their page; HQ then mints a relay address so
+  // production and that driver can exchange directions, call sheets and call
+  // times WITHOUT either learning the other's address. Mail to the relay lands
+  // in jobs@ (a watched mailbox), is ingested like any other message — which is
+  // what makes it visible to us — and is forwarded on to driverEmail.
+  driverName       String?   @map("driver_name")
+  driverEmail      String?   @map("driver_email")
+  driverPhone      String?   @map("driver_phone") @db.VarChar(30)
+  driverAssignedAt DateTime? @map("driver_assigned_at")
+
+  /// The plus-tag half of the relay address: jobs+{relayTag}@sirreel.com.
+  /// Gmail routes ONLY `+suffix` back to the base mailbox, so the tag lives
+  /// after the plus rather than in a prettier dotted local part — a different
+  /// local part would need its own Workspace alias (which breaks the DWD
+  /// ingest path) or a catch-all routing rule.
+  relayTag String? @unique @map("relay_tag")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

@@ -5,6 +5,7 @@ import { getMessageDirection, parseRecipientHeader } from "@/lib/email/direction
 import { WATCHED_INBOXES } from "@/lib/email/watchedInboxes"
 import { extractBodyFromGmailPayload, type GmailMessagePart } from "@/lib/email/body"
 import { extractRoutingHeaders } from "@/lib/email/routingHeaders"
+import { parseRelayTag, relayInboundMessage } from "@/lib/sub-rentals/driverRelay"
 import { classifyReply } from "@/lib/email/replyClassifier"
 import { applyReplyClassificationToCadence } from "@/lib/cadence/applyReplyClassification"
 import { runMessageExtractionForId } from "@/lib/ai/messageExtractor"
@@ -157,6 +158,44 @@ async function syncInbox(email: string) {
           continue
         }
       }
+    }
+
+    // ── Driver relay ───────────────────────────────────────────
+    // Mail addressed to jobs+{tag}@ is production talking to a
+    // sub-rental's driver (or that driver replying). Forward it on and
+    // let it fall through to normal ingest — being able to SEE the
+    // thread is the whole point, so this never `continue`s.
+    //
+    // The branch is deliberately narrow: parseRelayTag only matches
+    // tags we minted, so ordinary jobs@ mail is untouched. It runs
+    // after the already-ingested check above, which is what stops a
+    // message being forwarded twice. Fire-and-forget + caught: a relay
+    // failure must not break ingest for the rest of the mailbox.
+    const relayTag =
+      parseRelayTag(get("To")) ||
+      parseRelayTag(get("Cc")) ||
+      parseRelayTag(routingHeaders?.deliveredTo) ||
+      parseRelayTag(routingHeaders?.xOriginalTo)
+    if (relayTag) {
+      void relayInboundMessage({
+        tag: relayTag,
+        fromAddress,
+        subject: get("Subject"),
+        // Prefer the sender's HTML; fall back to their plain text wrapped so
+        // line breaks survive. Never the other way round — a call sheet's
+        // formatting is the message.
+        bodyHtml:
+          body.bodyHtml ||
+          (body.bodyText ? `<pre style="white-space:pre-wrap;font-family:inherit;">${body.bodyText}</pre>` : ""),
+      })
+        .then((r) => {
+          if (!r.relayed) {
+            console.warn('[pubsub] driver relay not sent:', relayTag, r.reason)
+          }
+        })
+        .catch((err) =>
+          console.warn('[pubsub] driver relay failed:', relayTag, err instanceof Error ? err.message : err),
+        )
     }
 
     // Cross-inbox dedup. Look up any older copy with this Message-ID; if one

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getVendorViewByToken } from '@/lib/sub-rentals/potentialSubRental'
 import VehicleGallery from '@/components/site/VehicleGallery'
+import VendorDriverCard from '@/components/site/VendorDriverCard'
 
 /**
  * VENDOR page — /vendor/[token]. The partner's own view of a sub-rental of
@@ -108,11 +109,19 @@ export default async function VendorPage({ params }: { params: { token: string }
             </div>
           </dl>
 
+          <VendorDriverCard
+            token={params.token}
+            initialDriverName={v.driverName}
+            initialDriverEmail={v.driverEmail}
+            initialDriverPhone={v.driverPhone}
+            initialRelayAddress={v.relayAddress}
+          />
+
           <div className="mt-6 rounded-[14px] border border-[#e4dfd4] bg-[#faf7f0] px-4 py-3.5">
             <p className="text-[13px] text-[#5a554c] leading-relaxed">
-              Location, call time and driver details will appear here once the booking is
-              confirmed. Questions about this booking go to SirReel — please reply to the
-              email that brought you here rather than contacting the production directly.
+              Location and call time will appear here as the production confirms them.
+              Questions about this booking go to SirReel — please reply to the email that
+              brought you here rather than contacting the production directly.
             </p>
           </div>
         </div>

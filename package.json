@@ -34,6 +34,7 @@
     "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts",
     "test:coi-checks": "tsx tests/coi/checks.test.ts",
+    "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
     "coi:rerun": "tsx scripts/rerun-coi-reviews.ts"
   },
   "prisma": {
