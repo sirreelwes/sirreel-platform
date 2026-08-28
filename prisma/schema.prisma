@@ -640,6 +640,7 @@ model Person {
   inquiryCaptures    InquiryCapture[]   @relation("CaptureContact")
   outreachActivities OutreachActivity[] @relation("PersonOutreach")
   suppressions       EmailSuppression[] @relation("PersonSuppressions")
+  campaignRecipients OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
   emailAliases       PersonEmailAlias[] @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
@@ -2207,6 +2208,7 @@ model User {
   outreachActivitiesLogged OutreachActivity[]  @relation("OutreachCreator")
   contactSegments          ContactSegment[]    @relation("ContactSegmentCreator")
   suppressionsReleased     EmailSuppression[]  @relation("SuppressionReleaser")
+  outreachCampaigns        OutreachCampaign[]  @relation("OutreachCampaignCreator")
   orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
   personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
@@ -4225,6 +4227,118 @@ model OutreachActivity {
 /// server, and a blob would make that a parse-and-hope. Adding a filter
 /// dimension is a migration, which is the correct amount of friction for
 /// something that decides who gets emailed.
+enum OutreachCampaignStatus {
+  /// Being written. Nothing has left the building.
+  DRAFT
+  /// Sampled and released; the runner is working through recipients.
+  SENDING
+  /// Every recipient reached a terminal state.
+  SENT
+  /// A human stopped it mid-flight. Recipients already sent stay sent.
+  CANCELLED
+}
+
+enum OutreachRecipientStatus {
+  PENDING
+  SENT
+  /// Held back before sending — suppressed, or trimmed by a daily cap.
+  /// Distinct from FAILED: nothing went wrong, we chose not to send.
+  SKIPPED
+  /// The provider refused it. `error` carries why.
+  FAILED
+}
+
+/// One outreach send to a segment.
+///
+/// Phase 3. The campaign row is a SNAPSHOT, not a live query: it stores
+/// the resolved recipient list at release time rather than re-running the
+/// segment when the runner gets there. A segment is a moving target —
+/// contacts get captured every hour — and "who did we actually mail" must
+/// be answerable months later, when the segment would return a different
+/// set entirely.
+model OutreachCampaign {
+  id     String                  @id @default(uuid())
+  name   String
+  status OutreachCampaignStatus  @default(DRAFT)
+
+  /// What the rep picked, kept for provenance. The recipient rows are
+  /// the truth about who was mailed; these say where they came from.
+  segmentKey   String? @map("segment_key")
+  roleKey      String? @map("role_key")
+  search       String?
+  savedSegmentId String? @map("saved_segment_id")
+
+  subject String
+  /// Body with merge tokens still in it, exactly as written. Rendering
+  /// happens per recipient at send time so a template edit before
+  /// release changes every unsent copy and nothing already sent.
+  bodyTemplate String @map("body_template") @db.Text
+
+  /// Sender identity at release. Stored because the outreach subdomain
+  /// may change and "what did this go out as" must stay answerable.
+  fromName    String? @map("from_name")
+  fromAddress String? @map("from_address")
+  replyTo     String? @map("reply_to")
+
+  createdById String @map("created_by_id")
+  createdBy   User   @relation("OutreachCampaignCreator", fields: [createdById], references: [id])
+
+  releasedAt   DateTime? @map("released_at")
+  completedAt  DateTime? @map("completed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recipients OutreachCampaignRecipient[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("sr_outreach_campaigns")
+}
+
+/// One intended recipient of one campaign.
+///
+/// This table is what makes a send IDEMPOTENT. The unique key on
+/// (campaignId, personId) means a retried or double-clicked release can
+/// never mail the same person twice, and a runner that dies halfway can
+/// resume by looking for PENDING rows rather than starting over.
+///
+/// `renderedSubject` / `renderedBody` are stored per recipient. That is
+/// deliberate duplication: when a client asks "what exactly did you send
+/// me", the answer has to be the bytes they received, not a template we
+/// would re-render today against data that has since changed.
+model OutreachCampaignRecipient {
+  id         String                  @id @default(uuid())
+  campaignId String                  @map("campaign_id")
+  campaign   OutreachCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  personId String @map("person_id")
+  person   Person @relation("OutreachCampaignRecipient", fields: [personId], references: [id], onDelete: Cascade)
+  /// Address at send time. Kept separately from Person.email because a
+  /// contact may change address later and the audit must not move.
+  email    String
+
+  status OutreachRecipientStatus @default(PENDING)
+  /// Why a SKIPPED row was skipped, or why a FAILED row failed.
+  reason String?
+
+  renderedSubject String? @map("rendered_subject")
+  renderedBody    String? @map("rendered_body") @db.Text
+
+  /// Links to the delivery audit + the Resend message, so bounce and
+  /// complaint webhooks can be traced back to the campaign that caused
+  /// them. This is how a campaign's real deliverability becomes visible.
+  resendMessageId String?   @map("resend_message_id")
+  sentAt          DateTime? @map("sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([campaignId, personId])
+  @@index([campaignId, status])
+  @@index([resendMessageId])
+  @@map("sr_outreach_campaign_recipients")
+}
+
 /// Why an address may no longer be sent marketing mail.
 ///
 /// Ordered from "they told us" to "the mail system told us". All are

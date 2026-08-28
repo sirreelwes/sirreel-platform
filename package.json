@@ -30,6 +30,7 @@
     "test:booking-status": "tsx tests/bookings/status.test.ts",
     "test:unsubscribe-token": "tsx tests/outreach/unsubscribe-token.test.ts",
     "test:send-guard": "tsx tests/outreach/send-guard.test.ts",
+    "test:merge-fields": "tsx tests/outreach/merge-fields.test.ts",
     "test:export-gate": "tsx tests/exports/export-gate.test.ts",
     "test:coi-fix-request": "tsx tests/coi/fix-request.test.ts",
     "check:template-drift": "tsx scripts/check-template-drift.ts",

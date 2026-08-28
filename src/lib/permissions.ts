@@ -533,6 +533,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // action is sending a client an estimate.
         { id: 'sub-rentals', label: 'Sub-Rentals', icon: 'PackageOpen', href: '/sub-rentals' },
         { id: 'crm', label: 'Clients', icon: 'Users', href: '/crm' },
+        // Phase 3 composer. Safe to expose before the sending domain
+        // exists — the guard closes every send and the page says so.
+        { id: 'outreach', label: 'Outreach', icon: 'Send', href: '/outreach' },
       ],
     },
     {
