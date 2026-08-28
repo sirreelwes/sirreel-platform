@@ -227,7 +227,15 @@ export function rowState(j: JobRow, today: string, tomorrow: string): RowState {
     if (c === 'returning-tmw') return 'returning-tmw'
     if (c === 'on-rental') return 'on-rental'
     if (c === 'returned' || c === 'invoiced' || c === 'wrapped') return 'overdue'
-    const end = jobWindow(j).end
+    const w = jobWindow(j)
+    // Date-decided (zero-order Planyo-era) jobs: the START matters too.
+    // Without this, a hold beginning today read "on rental" from 12:01am
+    // and 'picking-today' only ever derived from HQ order cadence — so
+    // the landing's Going out column sat empty while the timeline showed
+    // several jobs starting (Wes 2026-08-28). A one-day window is also
+    // 'picking-today': getting it out the door is the morning's task.
+    if (w.start === today && (!w.end || w.end >= today)) return 'picking-today'
+    const end = w.end
     if (!end) return 'on-rental'
     if (end < today) return 'overdue'
     if (end === today) return 'returning-today'
@@ -242,7 +250,12 @@ export function rowState(j: JobRow, today: string, tomorrow: string): RowState {
     case 'lost':   return 'lost'
     case 'picking-today': return 'picking-today'
     case 'picking-tmw':   return 'picking-tmw'
-    default:       return 'booked'
+    default: {
+      // Same date fallback for tomorrow's departures — a zero-order job
+      // starting tomorrow is 'picking-tmw', not a flat 'booked'.
+      if ((j._count?.orders ?? 0) === 0 && jobWindow(j).start === tomorrow) return 'picking-tmw'
+      return 'booked'
+    }
   }
 }
 

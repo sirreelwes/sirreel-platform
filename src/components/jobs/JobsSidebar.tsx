@@ -25,7 +25,7 @@
  */
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useJobsList } from './JobsListProvider'
 import {
@@ -138,6 +138,28 @@ function JobsSidebarItem({
   const meta = STATE[state]
   const w = jobWindow(j)
   const value = rowValue(j)
+  const { refresh } = useJobsList()
+  // One-click physical-return confirmation on Not-returned rows (Wes
+  // 2026-08-28) — same POST the job detail header uses; returnedAt is
+  // what rowState() clears 'overdue' with. Until returns are worked in
+  // HQ day-to-day, this keeps the red band from re-accreting one row
+  // at a time.
+  const [marking, setMarking] = useState(false)
+  const markReturned = async (e: MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (marking) return
+    setMarking(true)
+    try {
+      const r = await fetch(`/api/jobs/${j.id}/mark-returned`, { method: 'POST' })
+      if (r.ok) refresh()
+      else alert('Failed to mark returned')
+    } catch {
+      alert('Failed to mark returned')
+    } finally {
+      setMarking(false)
+    }
+  }
 
   // The pill keeps its hue in both selection states; only the plate
   // behind it changes, so a selected row stays readable on amber
@@ -198,6 +220,16 @@ function JobsSidebarItem({
           >
             {stateLabel(j, state, true)}
           </span>
+          {state === 'overdue' && (
+            <button
+              onClick={markReturned}
+              disabled={marking}
+              title="The gear is back — confirm the return and clear Not returned"
+              className="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap bg-white border border-red-300 text-red-700 hover:bg-red-600 hover:border-red-600 hover:text-white disabled:opacity-50"
+            >
+              {marking ? '…' : '✓ returned'}
+            </button>
+          )}
         </span>
 
         <span className="block text-[12.5px] font-semibold leading-tight truncate text-zinc-900">
