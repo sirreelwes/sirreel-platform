@@ -218,21 +218,23 @@ function fmtMoney(n: number): string {
 }
 
 /**
- * The item code as a CLIENT should see it, or nothing.
+ * Last-resort width guard on the item code.
  *
- * `InventoryItem.code` is two populations wearing one field. RentalWorks
- * rows carry a real catalog number a client can quote back at us
- * ("104387"); HQ-native rows carry an internal slug
- * ("COM--SURVEILLANCE-KIT", "TAB--DIRECTORS-CHAIRS-LOW") that means
- * nothing outside this database. The slugs are also long enough to
- * truncate, and a code shown as "TAB-DIRECTOR-..." is worse than no code
- * - it looks like the document is broken.
+ * Which code reaches this document is decided upstream in
+ * catalogClientCode(): the RentalWorks I-Code when the row has one,
+ * otherwise a `code` that actually looks like a catalog number,
+ * otherwise nothing. Real I-Codes are short, so this rarely fires.
  *
- * So: collapse the doubled separators, and print it only if it fits
- * whole. The description already names the item.
+ * It stays because the cell is capped to one line, and a code cut to
+ * "TAB-DIRECTOR-..." reads as a broken document rather than as an
+ * identifier. Better to print nothing — the description names the item.
+ *
+ * (The "COM--SURVEILLANCE-KIT" doubling seen while debugging this was
+ * the PDF hyphenator inserting a break hyphen next to the existing one,
+ * not the stored value: no catalog row contains a doubled dash.)
  */
 function clientItemCode(code: string | null | undefined): string {
-  const compact = (code ?? '').replace(/-{2,}/g, '-').trim()
+  const compact = (code ?? '').trim()
   if (!compact) return '\u2014'
   return compact.length <= 14 ? compact : '\u2014'
 }

@@ -73,11 +73,24 @@ export function catalogInvoiceLabel(li: {
 export function catalogClientCode(li: {
   inventoryItem?: {
     code?: string | null
+    rwICode?: string | null
     trackingMode?: string | null
   } | null
 }): string | null {
   const inv = li.inventoryItem
   if (!inv) return null
   if (inv.trackingMode === 'UNIT_TRACKED') return null
-  return inv.code ?? null
+  // The RentalWorks I-Code first. That's the number the client has on
+  // every piece of paper we've sent them for years, and 1,204 of the
+  // 1,746 active catalog rows carry one (backfilled in the 2026-06-23
+  // reconcile). This surface was printing `code` instead — HQ's own
+  // descriptive unique key — so two thirds of the imported I-Codes never
+  // reached a client document.
+  if (inv.rwICode) return inv.rwICode
+  // No I-Code: `code` is only worth printing when it looks like a
+  // catalog number. On HQ-native rows it's a descriptive slug
+  // ("TAB-DIRECTORS-CHAIRS-LOW") that means nothing outside this
+  // database, and the description column already names the item.
+  const code = inv.code ?? null
+  return code && /^[0-9][0-9A-Za-z._/-]*$/.test(code) ? code : null
 }

@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
             usageEstimated: true,
             parentLineItemId: true,
             autoKitPieceId: true,
-            inventoryItem: { select: { code: true, description: true, trackingMode: true } },
+            inventoryItem: { select: { code: true, rwICode: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
         },

@@ -33,7 +33,7 @@ export async function POST(
       jobContact: true,
       lineItems: {
         include: {
-          inventoryItem: { select: { code: true, trackingMode: true } },
+          inventoryItem: { select: { code: true, rwICode: true, trackingMode: true } },
         },
         orderBy: { sortOrder: 'asc' },
       },
