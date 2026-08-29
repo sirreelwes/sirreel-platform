@@ -31,7 +31,7 @@ export function rowNotReady(j: JobRow, state: RowState): boolean {
 }
 
 export type StatusFilter = 'all' | JobStatus | 'orphans' | 'archived'
-export type Sort = 'urgency' | 'dates' | 'value' | 'newest'
+export type Sort = 'recent' | 'urgency' | 'dates' | 'value' | 'newest'
 
 export interface ListedRow {
   job: JobRow
@@ -96,7 +96,11 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
   // wrong on the real book: ~90 Planyo-era rentals nobody ever marked
   // back pin themselves to the top as 'Not returned', burying the work
   // of the week. Recency is the honest default until those are closed.
-  const [sort, setSort] = useState<Sort>('newest')
+  // 'recent', not 'newest'. Wes, 2026-08-29: he had just built and sent
+  // a quote and the job sat thirty rows down, because 'newest' orders by
+  // when the JOB was created and sending a quote touches the ORDER. The
+  // list you look at all day should lead with what you just did.
+  const [sort, setSort] = useState<Sort>('recent')
   const [stateFilter, setStateFilter] = useState<ListFilter | null>(null)
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -157,7 +161,13 @@ export function JobsListProvider({ children }: { children: React.ReactNode }) {
       return a < b ? -1 : 1
     }
     const sorted = [...withState]
-    if (sort === 'urgency') {
+    if (sort === 'recent') {
+      // Newest of the job row and every order on it — see
+      // lastActivityAt. Falls back to createdAt for any row an older
+      // cached response served without it.
+      const touched = (r: ListedRow) => r.job.lastActivityAt ?? r.job.createdAt
+      sorted.sort((a, b) => (touched(a) < touched(b) ? 1 : touched(a) > touched(b) ? -1 : 0))
+    } else if (sort === 'urgency') {
       sorted.sort((a, b) => URGENCY.indexOf(a.state) - URGENCY.indexOf(b.state) || byDate(a.date, b.date))
     } else if (sort === 'dates') {
       sorted.sort((a, b) => byDate(a.date, b.date))

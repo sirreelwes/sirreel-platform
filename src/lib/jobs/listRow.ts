@@ -62,6 +62,15 @@ export interface JobRow {
   status: JobStatus
   startDate: string | null
   createdAt: string
+  /**
+   * When anything last HAPPENED on this job — the newest of the job row
+   * itself and every order on it.
+   *
+   * Distinct from createdAt on purpose. Sending a quote updates the
+   * ORDER, so a job Wes had just quoted sat thirty rows down a list
+   * ordered by job creation. Acting on a job has to move it.
+   */
+  lastActivityAt?: string
   endDate: string | null
   orderTotal: number
   rwInvoicedTotal: number

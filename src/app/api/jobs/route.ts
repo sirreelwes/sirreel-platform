@@ -134,6 +134,12 @@ export async function GET(req: NextRequest) {
           select: {
             status: true,
             subtotal: true,
+            // Feeds the "Recently touched" sort. Sending a quote updates
+            // the ORDER, not the Job — which is exactly why a list
+            // ordered on Job.createdAt left a just-quoted job thirty
+            // rows down.
+            updatedAt: true,
+            quoteSentAt: true,
             // Phase 7 cadence rollup — Order grain dates + status drive
             // the operational state (booked / picking up / on rental /
             // returning / returned / invoiced / wrapped) computed live
@@ -460,8 +466,19 @@ export async function GET(req: NextRequest) {
       const { orders, coiChecks: _ignoreCoi, bookings: _ignoreBookings, ...rest } = j
       void _ignoreCoi
       void _ignoreBookings
+      // Newest of: the job row, and every order on it. Sending a quote
+      // touches the ORDER, so a job-only timestamp would leave a
+      // just-quoted job sitting wherever it was created.
+      const lastActivityAt = [
+        j.updatedAt,
+        ...j.orders.flatMap((o) => [o.updatedAt, o.quoteSentAt].filter(Boolean) as Date[]),
+      ]
+        .filter(Boolean)
+        .reduce((max, d) => (d > max ? d : max), j.updatedAt)
+
       return {
         ...rest,
+        lastActivityAt,
         bookingWindow,
         hasDelivery,
         allBookingsCancelled,

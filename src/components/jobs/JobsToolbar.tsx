@@ -40,10 +40,16 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
 ]
 
 const SORT_OPTIONS: { id: Sort; label: string }[] = [
+  // "Recent" leads and is the default. "Newest" sorts by when the JOB
+  // was created, which means acting on a job — quoting it, sending it —
+  // does not move it, and the thing you just worked on stays buried
+  // wherever it was created. Recent sorts by when anything last
+  // happened on it. See lastActivityAt in src/lib/jobs/listRow.ts.
+  { id: 'recent', label: 'Recently touched' },
   { id: 'urgency', label: 'Urgency' },
   { id: 'dates', label: 'Dates' },
   { id: 'value', label: 'Value' },
-  { id: 'newest', label: 'Newest' },
+  { id: 'newest', label: 'Newest job' },
 ]
 
 export function JobsToolbar() {
