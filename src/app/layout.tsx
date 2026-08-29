@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl';
@@ -27,6 +27,18 @@ export const metadata: Metadata = {
   // already disallows those hosts wholesale, and this is the belt to that
   // braces. Public pages override it below via the (public) layout.
   robots: { index: false, follow: false },
+};
+
+// Explicit, app-wide. Next injects a width=device-width default, but
+// nothing declared themeColor (the installed PWA's status-bar tint) or
+// viewportFit (the notch safe-area). maximumScale is deliberately left
+// alone — pinch-zoom is an accessibility affordance and HQ carries a
+// lot of dense tabular data on a phone.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#1a1a1a',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -2,48 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
 import { getPermissions, getNavSections, isSalesRole, isFleetYardRole, isBillingRole } from '@/lib/permissions';
 import { readViewAsCookie, writeViewAsCookie, previewSalesOnly } from '@/lib/auth/viewAs';
 import AIChat from '@/components/ai/AIChat';
 import InboxBell from '@/components/ui/InboxBell';
-import { AdminHealthDot } from '@/components/shell/AdminHealthDot';
-import {
-  TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
-  PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
-  AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
-  CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2, Circle, Banknote, ListChecks, CreditCard, RefreshCw, type LucideIcon,
-  Inbox, FileDown, Send,
-} from 'lucide-react';
-
-// Maps the `icon` name carried by each NavItem to its lucide component.
-const NAV_ICONS: Record<string, LucideIcon> = {
-  TrendingUp, Users, CalendarDays, FileText, Briefcase, Boxes, Truck,
-  PackageOpen, FileSignature, Car, Wrench, UserPlus, ClipboardList,
-  AlertTriangle, LayoutDashboard, Radar, BarChart3, MapPin, Activity,
-  CalendarClock, IdCard, ShieldCheck, DollarSign, Receipt, Globe, Sun, Store, Building2,
-  Banknote, ListChecks, CreditCard, RefreshCw, Inbox, FileDown, Send,
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  ADMIN:      'Admin',
-  MANAGER:    'Manager',
-  AGENT:      'Sales',
-  BILLING:    'Billing',
-  FLEET_TECH: 'Fleet',
-  DISPATCHER: 'Deliveries & Pickups',
-  DRIVER:     'Driver',
-  CLIENT:     'Client',
-};
+import { NavList } from '@/components/shell/NavList';
+import { UserMenu, ROLE_LABELS } from '@/components/shell/UserMenu';
+import { MobileNav } from '@/components/shell/MobileNav';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
   const [aiOpen, setAiOpen] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [viewAsRole, setViewAsRole] = useState<UserRole | null>(null);
   // Action Items unhandled-count badge — same engine as the tab.
   const [actionItemCount, setActionItemCount] = useState(0);
@@ -152,14 +126,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.replace('/collections');
   }
 
-  const initials = user.name
-    ? user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
-    : '?';
+  // "+ New Job" is the app's ONE create entry point and as of
+  // 2026-08-28 it lives only in the /jobs toolbar — which yields the
+  // viewport on a phone whenever a job is selected. The mobile bar
+  // carries its own launcher, gated on the same thing the nav is:
+  // whether this role has Jobs at all.
+  const canCreateJob = sections.some((s2) => s2.items.some((i) => i.id === 'jobs'));
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F7F6F3]">
-      {/* Sidebar */}
-      <aside className="w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex flex-col">
+    // Column on a phone (top bar over content), row on desktop
+    // (sidebar beside content). 100dvh where supported so iOS Safari's
+    // collapsing address bar doesn't clip the last row of the nav;
+    // h-screen is the fallback for browsers without dvh.
+    <div className="flex flex-col md:flex-row h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-[#F7F6F3]">
+      <MobileNav
+        sections={sections}
+        activeHref={activeHref}
+        role={role}
+        actualRole={actualRole}
+        viewAsRole={viewAsRole}
+        actionItemCount={actionItemCount}
+        user={user}
+        canCreateJob={canCreateJob}
+      />
+
+      {/* Sidebar — desktop only; the phone gets MobileNav's sheet,
+          which renders the same NavList from the same sections. */}
+      <aside className="hidden md:flex w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex-col">
         {/* Brand — real SirReel "S" mark (white transparent PNG on the dark chrome) */}
         <div className="px-4 py-4 border-b border-white/10">
           <Link href="/" className="flex items-center gap-2.5">
@@ -174,150 +167,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Navigation — fixed groups, always expanded (no collapse). The
             body scrolls vertically if the full list runs past the viewport. */}
         <nav className="flex-1 py-2 overflow-y-auto px-2">
-          {sections.map((section, si) => (
-            <div key={si} className={si === 0 ? 'mt-1' : 'mt-4'}>
-              {/* Static section divider — NOT a toggle. */}
-              <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a24b]/75">
-                  {section.label}
-                </span>
-                {section.label === 'Admin' && role === UserRole.ADMIN && <AdminHealthDot />}
-              </div>
-              {section.items.map((item) => {
-                const Icon = NAV_ICONS[item.icon] ?? Circle;
-                const isActive = item.href === activeHref;
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg text-[13px] mb-0.5 transition-all duration-150 ${
-                      isActive
-                        ? 'bg-[#c9a24b] text-[#1a1a1a] font-semibold shadow-sm'
-                        : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'
-                    }`}
-                  >
-                    {/* Left accent bar on the active route. */}
-                    {isActive && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-[#1a1a1a]" />
-                    )}
-                    <Icon
-                      size={16}
-                      strokeWidth={2.1}
-                      className={`flex-shrink-0 ${
-                        isActive ? 'text-[#1a1a1a]' : 'text-slate-400 group-hover:text-[#c9a24b] transition-colors'
-                      }`}
-                    />
-                    <span className="truncate">{item.label}</span>
-                    {/* Unhandled-count badge, fed by the Action Items
-                        engine. Only the 'action-items' entry carries it. */}
-                    {item.id === 'action-items' && actionItemCount > 0 && (
-                      <span className={`ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                        isActive ? 'bg-[#1a1a1a] text-[#c9a24b]' : 'bg-red-500 text-white'
-                      }`}>
-                        {actionItemCount > 99 ? '99+' : actionItemCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          <NavList
+            sections={sections}
+            activeHref={activeHref}
+            role={role}
+            actionItemCount={actionItemCount}
+          />
         </nav>
 
         {/* User section */}
         <div className="border-t border-white/10 p-3">
-          <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(v => !v)}
-              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/[0.07] transition-colors"
-            >
-              {user.image ? (
-                <img src={user.image} alt={user.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-[#c9a24b] flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] flex-shrink-0">
-                  {initials}
-                </div>
-              )}
-              <div className="text-left flex-1 min-w-0">
-                <div className="text-[12px] font-semibold text-white truncate">{user.name}</div>
-                <div className="text-[10px] text-[#c9a24b]/80 truncate">{ROLE_LABELS[role] || role}</div>
-              </div>
-              <span className="text-[9px] text-slate-400">▼</span>
-            </button>
-
-            {showUserMenu && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50">
-                <div className="px-3 py-2.5 border-b border-gray-100">
-                  <div className="text-[12px] font-semibold text-gray-900">{user.name}</div>
-                  <div className="text-[10px] text-gray-400">{user.email}</div>
-                </div>
-
-                {actualRole === 'ADMIN' && (
-                  <div className="px-3 py-2.5 border-b border-gray-100 bg-amber-50/50">
-                    <label className="block text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-1">
-                      View As {viewAsRole ? `(${ROLE_LABELS[viewAsRole] || viewAsRole})` : ''}
-                    </label>
-                    <select
-                      value={viewAsRole || ''}
-                      onChange={(e) => {
-                        const val = e.target.value as UserRole | '';
-                        writeViewAsCookie(val || null);
-                        // Full reload on purpose: pages and API responses
-                        // read the cookie at request time, so this flips
-                        // nav, page controls, AND server-redacted data in
-                        // one motion — "exactly what they see".
-                        window.location.reload();
-                      }}
-                      // bg-white with no text colour inherited the menu's muted
-                      // grey, so the current selection read as light-on-white.
-                      // Both the control and the options are pinned explicitly.
-                      className="w-full px-2 py-1 text-[11px] border border-amber-300 rounded bg-white text-gray-900"
-                    >
-                      <option value="" className="text-gray-900">Admin (default)</option>
-                      <option value="MANAGER" className="text-gray-900">Manager</option>
-                      <option value="AGENT" className="text-gray-900">Sales Agent</option>
-                      <option value="BILLING" className="text-gray-900">Billing</option>
-                      <option value="FLEET_TECH" className="text-gray-900">Fleet Tech</option>
-                      <option value="WAREHOUSE" className="text-gray-900">Warehouse</option>
-                      <option value="DRIVER" className="text-gray-900">Driver</option>
-                      <option value="CLIENT" className="text-gray-900">Client</option>
-                    </select>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => signOut({ callbackUrl: '/login' })}
-                  className="w-full text-left px-3 py-2.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors font-medium"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
+          <UserMenu user={user} role={role} actualRole={actualRole} viewAsRole={viewAsRole} />
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* No global top bar (Wes 2026-08-28: "remove the new job row
-            from all pages") — the h-12 header's only content was
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        {/* No global top bar on desktop (Wes 2026-08-28: "remove the new
+            job row from all pages") — the h-12 header's only content was
             "+ New Job", which now lives in the JobsToolbar on /jobs,
             still the ONE create entry point (canonical-Job
             consolidation, 2026-07-15: quotes and reservations are
             created from INSIDE a Job — see JobQuickActions). StatBadge
-            (below) stays for the someday-KPI use it was kept for. */}
+            (below) stays for the someday-KPI use it was kept for. The
+            PHONE does get a bar — see MobileNav above — because the
+            /jobs toolbar isn't reachable from every surface there. */}
 
         {/* Content + AI */}
         <div className="flex flex-1 overflow-hidden">
-          <main className="flex-1 overflow-y-auto p-4">
+          {/* overflow-x-hidden is the app-wide sideways-scroll containment:
+              a page that overflows scrolls its own wide element, it does
+              not drag the whole shell sideways. */}
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-4">
             {/* Unmissable while previewing another role — the old tiny
                 footer label let an override go unnoticed for days. */}
             {actualRole === 'ADMIN' && viewAsRole && (
-              <div className="mb-3 flex items-center gap-3 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2">
+              <div className="mb-3 flex items-center gap-2 md:gap-3 flex-wrap rounded-lg border border-amber-400 bg-amber-50 px-3 py-2">
                 <span className="text-[12px] font-bold text-amber-900">
                   Previewing as {ROLE_LABELS[viewAsRole] || viewAsRole}
                 </span>
-                <span className="text-[11px] text-amber-800">
+                <span className="hidden sm:inline text-[11px] text-amber-800">
                   Nav, pages, and data render as that role sees them. Clears when you close the browser.
                 </span>
                 <button
@@ -325,7 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     writeViewAsCookie(null);
                     window.location.reload();
                   }}
-                  className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-500 text-white"
+                  className="ml-auto text-[11px] font-bold px-2.5 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 text-white"
                 >
                   Back to Admin
                 </button>
