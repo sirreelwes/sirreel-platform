@@ -45,6 +45,7 @@ export type Department =
   | 'EXPENDABLES'
   | 'GE'
   | 'ART'
+  | 'WARDROBE_MAKEUP'
 
 export interface QuoteLineItem {
   id?: string
@@ -159,6 +160,7 @@ const DEPT_LABELS: Record<Department, string> = {
   EXPENDABLES: 'Expendables',
   GE: 'Grip & Electric',
   ART: 'Art Department',
+  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
 }
 
 // Section ordering — shared with the internal order-detail table so the

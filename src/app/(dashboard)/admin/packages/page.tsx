@@ -21,9 +21,11 @@ import { CurrencyInput } from '@/components/ui/CurrencyInput'
 
 type Department =
   | 'COMMUNICATIONS' | 'PRO_SUPPLIES' | 'ART' | 'VEHICLES' | 'GE' | 'STAGES' | 'EXPENDABLES'
+  | 'WARDROBE_MAKEUP'
 
 const DEPARTMENTS: Department[] = [
   'COMMUNICATIONS', 'PRO_SUPPLIES', 'ART', 'VEHICLES', 'GE', 'STAGES', 'EXPENDABLES',
+  'WARDROBE_MAKEUP',
 ]
 
 interface PackageRow {

@@ -63,6 +63,7 @@ export function routeDepartment(dept: LineItemDepartment): LaneRouting {
     case 'EXPENDABLES':
     case 'GE':
     case 'ART':
+    case 'WARDROBE_MAKEUP':
       return { lane: 'WAREHOUSE', pickStatus: 'PENDING_PICK' }
     default: {
       const _exhaustive: never = dept

@@ -106,6 +106,7 @@ export function renderCatalogSnippet(catalog: CatalogProduct[]): string {
     'EXPENDABLES',
     'PRO_SUPPLIES',
     'ART',
+    'WARDROBE_MAKEUP',
   ]
   const lines: string[] = []
   for (const dept of order) {

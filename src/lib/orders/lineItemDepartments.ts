@@ -21,6 +21,7 @@ export const LINE_ITEM_DEPARTMENT_ORDER = [
   'COMMUNICATIONS',
   'STAGES',
   'PRO_SUPPLIES',
+  'WARDROBE_MAKEUP',
   'EXPENDABLES',
   'ART',
 ] as const
@@ -34,6 +35,7 @@ export const LINE_ITEM_DEPARTMENT_LABELS: Record<LineItemDepartmentKey, string> 
   COMMUNICATIONS: 'Communications',
   STAGES: 'Stages',
   PRO_SUPPLIES: 'Pro Supplies',
+  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
   EXPENDABLES: 'Expendables',
   ART: 'Art',
 }

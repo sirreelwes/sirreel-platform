@@ -207,7 +207,7 @@ async function main() {
   // Group by inferred department for a tally so we can sanity-check.
   const tally: Record<LineItemDepartment, number> = {
     VEHICLES: 0, COMMUNICATIONS: 0, STAGES: 0,
-    PRO_SUPPLIES: 0, EXPENDABLES: 0, GE: 0, ART: 0,
+    PRO_SUPPLIES: 0, EXPENDABLES: 0, GE: 0, ART: 0, WARDROBE_MAKEUP: 0,
   }
   for (const it of items) {
     const dept = inferDepartment(it.code, it.description)

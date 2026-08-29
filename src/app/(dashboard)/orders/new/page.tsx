@@ -36,6 +36,7 @@ import {
 
 const DEPARTMENTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'GE', 'EXPENDABLES', 'PRO_SUPPLIES', 'ART',
+  'WARDROBE_MAKEUP',
 ];
 
 type CatalogType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE';
@@ -246,6 +247,7 @@ const DEPT_BADGE: Record<LineItemDepartment, string> = {
   EXPENDABLES:    'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
   PRO_SUPPLIES:   'bg-lt-inner text-lt-fg2 border-lt-hairline',
   ART:            'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
+  WARDROBE_MAKEUP:'bg-chip-neutral-bg text-chip-neutral-fg border-chip-neutral-fg/30',
 };
 
 function fmtMoney(n: number) {

@@ -34,12 +34,13 @@ const DEPT_BADGE: Record<string, string> = {
   GE: "bg-chip-neutral-bg text-chip-neutral-fg",
   EXPENDABLES: "bg-chip-good-bg text-chip-good-fg",
   ART: "bg-chip-neutral-bg text-chip-neutral-fg",
+  WARDROBE_MAKEUP: "bg-chip-neutral-bg text-chip-neutral-fg",
 };
 const DEPT_LABEL: Record<string, string> = {
   VEHICLES: "Vehicles", STAGES: "Stages", PRO_SUPPLIES: "Pro Supplies",
-  COMMUNICATIONS: "Communications", GE: "Grip & Electric", EXPENDABLES: "Expendables", ART: "Art",
+  COMMUNICATIONS: "Communications", GE: "Grip & Electric", EXPENDABLES: "Expendables", ART: "Art", WARDROBE_MAKEUP: "Wardrobe & Makeup",
 };
-const DEPT_ORDER = ["VEHICLES", "STAGES", "PRO_SUPPLIES", "COMMUNICATIONS", "GE", "EXPENDABLES", "ART"];
+const DEPT_ORDER = ["VEHICLES", "STAGES", "PRO_SUPPLIES", "WARDROBE_MAKEUP", "COMMUNICATIONS", "GE", "EXPENDABLES", "ART"];
 const deptBadge = (d: string) => DEPT_BADGE[d] ?? "bg-chip-neutral-bg text-chip-neutral-fg";
 const deptLabel = (d: string) => DEPT_LABEL[d] ?? d;
 const isTest = (c: Category) => /^test\b/i.test(c.name) || c.slug.startsWith("test-");

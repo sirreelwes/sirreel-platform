@@ -31,6 +31,7 @@ const DEPARTMENT_LABEL: Record<string, string> = {
   PRO_SUPPLIES: 'Pro Supplies',
   EXPENDABLES: 'Expendables',
   ART: 'Art Department',
+  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
 };
 
 interface AddItemModalProps {

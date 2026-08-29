@@ -32,6 +32,7 @@ export const DEPARTMENT_SHORT: Record<LineItemDepartment, string> = {
   EXPENDABLES: 'EXP',
   GE: 'GE',
   ART: 'ART',
+  WARDROBE_MAKEUP: 'W&M',
 }
 
 export const DEPARTMENT_LABEL: Record<LineItemDepartment, string> = {
@@ -42,4 +43,5 @@ export const DEPARTMENT_LABEL: Record<LineItemDepartment, string> = {
   EXPENDABLES: 'Expendables',
   GE: 'GE',
   ART: 'Art',
+  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
 }

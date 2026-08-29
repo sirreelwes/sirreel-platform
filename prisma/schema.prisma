@@ -2641,6 +2641,13 @@ enum LineItemDepartment {
   EXPENDABLES
   GE
   ART
+  // Wardrobe & Makeup. One department, not two — SirReel has never had
+  // enough standalone makeup gear to carry its own section, and the
+  // public site has marketed the pair as one service ("Wardrobe &
+  // Makeup" tile) since launch. Added 2026-08-29 (Wes): the gear was
+  // scattered across PRO_SUPPLIES (the WAR-* cluster), EXPENDABLES
+  // (hangers) and COMMUNICATIONS (a wardrobe Z-rack, plainly misfiled).
+  WARDROBE_MAKEUP
 }
 
 // First-class order discounts (additive Phase). Coexists with legacy

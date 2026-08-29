@@ -35,6 +35,7 @@ const VALID_SCOPES: DiscountScope[] = ['ORDER', 'DEPARTMENT']
 const VALID_TYPES: DiscountType[] = ['PERCENT', 'FIXED', 'FLAT_TOTAL']
 const VALID_DEPTS: LineItemDepartment[] = [
   'VEHICLES', 'COMMUNICATIONS', 'STAGES', 'PRO_SUPPLIES', 'EXPENDABLES', 'GE', 'ART',
+  'WARDROBE_MAKEUP',
 ]
 
 type Params = { params: Promise<{ id: string }> }

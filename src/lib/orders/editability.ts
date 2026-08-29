@@ -105,7 +105,7 @@ export function lineEditLockReason(status: OrderStatus, department: LineItemDepa
 export function addableDepartments(status: OrderStatus): LineItemDepartment[] {
   const ALL: LineItemDepartment[] = [
     'VEHICLES', 'STAGES', 'COMMUNICATIONS',
-    'PRO_SUPPLIES', 'EXPENDABLES', 'GE', 'ART',
+    'PRO_SUPPLIES', 'EXPENDABLES', 'GE', 'ART', 'WARDROBE_MAKEUP',
   ]
   if (!POST_BOOKED_STATUSES.has(status)) return ALL
   return ALL.filter((d) => !HOLD_TRACKED_DEPTS.has(d))

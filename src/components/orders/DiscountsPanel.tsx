@@ -37,6 +37,7 @@ const DEPT_LABELS: Record<string, string> = {
   EXPENDABLES: 'Expendables',
   GE: 'Grip & Electric',
   ART: 'Art Department',
+  WARDROBE_MAKEUP: 'Wardrobe & Makeup',
 }
 
 type Scope = 'ORDER' | 'DEPARTMENT'

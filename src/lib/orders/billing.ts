@@ -25,6 +25,11 @@ export const BILLING_RULES: Record<LineItemDepartment, BillingRule> = {
   GE:             { model: 'CAP_PER_WEEK', cap: 7 },
   STAGES:         { model: 'PERCENT_DISCOUNT', weekly: 0.90, monthly: 0.75 },
   EXPENDABLES:    { model: 'PURCHASE' },
+  // Wardrobe & Makeup bills like Pro Supplies (3-day cap). Chosen so the
+  // gear that moved out of PRO_SUPPLIES into this department prices
+  // identically to what it did the day before — a reclassification
+  // should not silently reprice the book.
+  WARDROBE_MAKEUP:{ model: 'CAP_PER_WEEK', cap: 3 },
 }
 
 /**
