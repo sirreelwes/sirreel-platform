@@ -19,26 +19,11 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 
-const DEDUP_ALLOWLIST_BASE: ReadonlyArray<string> = [
-  'wes@sirreel.com',
-  'dani@sirreel.com',
-]
-
-function normalizedAllowlist(): Set<string> {
-  const set = new Set<string>(DEDUP_ALLOWLIST_BASE.map((e) => e.toLowerCase()))
-  const envRaw = process.env.DEDUP_ALLOWLIST
-  if (envRaw) {
-    for (const e of envRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
-      set.add(e)
-    }
-  }
-  return set
-}
-
-export function isAllowedDedupEmail(email: string | null | undefined): boolean {
-  if (!email) return false
-  return normalizedAllowlist().has(email.toLowerCase())
-}
+// The allowlist itself lives in dedupAllowlist.ts — no server imports there,
+// so the /crm entry point can ask the same question client-side. Re-exported
+// here so existing importers of this module are unaffected.
+export { isAllowedDedupEmail, normalizedAllowlist } from './dedupAllowlist'
+import { isAllowedDedupEmail } from './dedupAllowlist'
 
 export interface AllowedDedupUser {
   id: string

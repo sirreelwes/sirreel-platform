@@ -12,6 +12,7 @@ import { FollowUpsDueModal } from "@/components/crm/FollowUpsDueModal";
 import { BulkOutreachModal } from "@/components/crm/BulkOutreachModal";
 import { BulkSelectionBar } from "@/components/crm/BulkSelectionBar";
 import { PeopleSegmentChips, type SavedSegment } from "@/components/crm/PeopleSegmentChips";
+import { DedupeQueueLink } from "@/components/crm/DedupeQueueLink";
 import {
   isPeopleSegmentKey,
   PEOPLE_SEGMENTS,
@@ -649,6 +650,11 @@ export default function CRMPage() {
           dark-bg/white when active. */}
       {tab === 'people' && roleStats && roleStats.total > 0 && (
         <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          {/* Pushed to the end of the strip: it's a destination, not a
+              filter, so it must not read as another role chip. */}
+          <span className="order-last ml-auto">
+            <DedupeQueueLink viewerEmail={session?.user?.email ?? null} />
+          </span>
           <button
             type="button"
             onClick={() => setRoleFilter(null)}

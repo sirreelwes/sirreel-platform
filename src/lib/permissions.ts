@@ -617,6 +617,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         { id: 'site-settings', label: 'Site Settings', icon: 'Globe', href: '/admin/site-settings' },
         { id: 'assistant', label: 'Assistant', icon: 'Bot', href: '/admin/assistant' },
         { id: 'who-we-are', label: 'Who We Are', icon: 'Users', href: '/admin/who-we-are' },
+        { id: 'dedup', label: 'Duplicates', icon: 'Copy', href: '/admin/dedup' },
         { id: 'forms', label: 'Forms', icon: 'FileText', href: '/admin/forms' },
         { id: 'payment-info', label: 'Payment Info', icon: 'Banknote', href: '/admin/payment-info' },
         { id: 'gateway-calls', label: 'Gateway Calls', icon: 'CreditCard', href: '/admin/cardpointe-calls' },

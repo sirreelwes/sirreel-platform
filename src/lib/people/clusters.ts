@@ -6,11 +6,16 @@
  * Heuristic (validated against the STEP-0 report on prod):
  *   - Same phone + every member shares the same normalized last name
  *     → LIKELY_DUPE (e.g. "Krystin Braverman" x4 across job emails)
- *   - Same phone + members have ≥2 distinct normalized last names
+ *   - Same phone + members have ≥3 distinct surnames
  *     → LIKELY_OFFICE_MAINLINE (e.g. Castex Rentals reception line:
  *       Alex, Carissa, Unknown, Laura)
- *   - Mixed signal (same first name but different last names; or
+ *   - Mixed signal (same given name but different surnames; or
  *     surname variants like "Walker" vs "Elaine Walker") → UNCERTAIN
+ *
+ * "Surname" here means surnameOf(), NOT the lastName column — see its
+ * comment. More than half of this table keeps the surname inside firstName,
+ * and reading the column alone is what made three colleagues on one office
+ * line look like one person.
  *
  * Survivor pre-selection for LIKELY_DUPE clusters follows the ratified
  * priority order:
@@ -51,9 +56,18 @@ export interface ClassifiedCluster {
   rationale: string
 }
 
+/**
+ * The parenthetical strip is NOT cosmetic. Reps disambiguate a person's
+ * several rows by tagging the employer or mailbox — "Baldino (LD)",
+ * "Baldino (Gmail)", "Baldino (Normal)" — and which field the tag lands in
+ * depends only on how the name was typed. Leaving it in made one Anthony
+ * Baldino read as three distinct surnames, i.e. an office mainline.
+ * normFirstStripParens has always stripped it; this must match.
+ */
 function normLast(s: string): string {
   return s
     .toLowerCase()
+    .replace(/\(.*?\)/g, '')
     .replace(/[.,]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -70,6 +84,40 @@ function normFirstStripParens(s: string): string {
     .replace(/[.,]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/**
+ * The surname signal, wherever it actually lives.
+ *
+ * `lastName` is a placeholder ("" or ".") on 2,908 of 5,187 people — the
+ * capture pipeline routinely puts the whole name in `firstName` and a dot in
+ * `lastName`. Reading `lastName` alone is therefore silent for more than half
+ * the table, and the classifier used to delete those blanks from the surname
+ * set. That turned "we don't know this person's surname" into "these people
+ * share a surname", which is the opposite conclusion.
+ *
+ * It mislabelled real people. Three unrelated staff on the Dust Studios
+ * reception line — Sophia Acosta, Ramses Pacheco, Jeanette Bucci — came back
+ * LIKELY_DUPE with the rationale `all members share last name "bucci"`, which
+ * is not true of anyone but Bucci: the other two had their surname deleted
+ * from the set. That cluster is one merge click from destroying two contacts.
+ *
+ * So: fall back to the last token of `firstName` when `lastName` is a
+ * placeholder. Still empty (a mononym like "Taylor") means genuinely unknown,
+ * and the caller treats that as no signal rather than as agreement.
+ */
+export function surnameOf(m: { firstName: string; lastName: string }): string {
+  const last = normLast(m.lastName)
+  if (last) return last
+  const tokens = normFirstStripParens(m.firstName).split(' ').filter(Boolean)
+  return tokens.length > 1 ? tokens[tokens.length - 1] : ''
+}
+
+/** The GIVEN name — first token only. Used as the tiebreaker when two
+ *  surnames disagree, where the whole `firstName` field would compare
+ *  "rob newcome" against "rob newcombe" and call one human two. */
+export function givenNameOf(m: { firstName: string }): string {
+  return normFirstStripParens(m.firstName).split(' ').filter(Boolean)[0] ?? ''
 }
 
 function pickSurvivor(members: ClusterMember[]): ClusterMember {
@@ -100,25 +148,40 @@ export function classifyCluster(args: {
     }
   }
 
-  const lastNames = new Set(members.map((m) => normLast(m.lastName)))
-  // Treat "." and "" as the same null bucket — they're both
-  // placeholders the capture pipeline writes when the signature
-  // didn't yield a last name.
+  const lastNames = new Set(members.map((m) => surnameOf(m)))
+  // An empty surname means UNKNOWN, not "matches everyone" — dropping it from
+  // the set is only safe because the zero-surname case below no longer treats
+  // an empty set as agreement.
   lastNames.delete('')
-  lastNames.delete('.')
 
   const distinctLastNames = lastNames.size
+  const givenNames = new Set(members.map((m) => givenNameOf(m)))
+  givenNames.delete('')
 
-  if (distinctLastNames <= 1) {
-    // All same last name (or all null-last-name) → likely dupe.
+  if (distinctLastNames === 1) {
     return {
       key,
       members,
       classification: 'LIKELY_DUPE',
       survivorId: pickSurvivor(members).id,
-      rationale: distinctLastNames === 0
-        ? 'all members lack a last name; same phone — treat as dupe candidate'
-        : `all members share last name "${[...lastNames][0]}"; same phone — likely same human across emails`,
+      rationale: `all members share last name "${[...lastNames][0]}"; same phone — likely same human across emails`,
+    }
+  }
+
+  if (distinctLastNames === 0) {
+    // Nobody in the cluster has a surname anywhere. The given name is then
+    // the ONLY evidence, so it has to carry the decision on its own: two
+    // people both called "Taylor" on one line is a dupe candidate, "Merry"
+    // and "Iunia" on one line is two colleagues.
+    return {
+      key,
+      members,
+      classification: givenNames.size === 1 ? 'LIKELY_DUPE' : 'UNCERTAIN',
+      survivorId: pickSurvivor(members).id,
+      rationale:
+        givenNames.size === 1
+          ? `no surname on any member, but all are "${[...givenNames][0]}"; same phone — dupe candidate`
+          : `no surname on any member and ${givenNames.size} different given names — needs human review`,
     }
   }
 
@@ -139,8 +202,7 @@ export function classifyCluster(args: {
   //     variants), if the first names also align
   //   - two coworkers on a small team
   // Defer to first-name alignment as the tiebreaker.
-  const firstNames = new Set(members.map((m) => normFirstStripParens(m.firstName)))
-  firstNames.delete('')
+  const firstNames = givenNames
   if (firstNames.size === 1) {
     return {
       key,
