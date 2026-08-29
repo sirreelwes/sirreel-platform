@@ -161,6 +161,9 @@ type Order = {
   quotePdfKey: string | null;
   quotePdfUrl: string | null;
   quotePdfGeneratedAt: string | null;
+  /** Server-computed: the stored PDF predates the order's current line
+   *  items / discounts. See lib/orders/quotePdfFreshness.ts. */
+  quotePdfStale?: boolean;
   // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
   // progress panel + "Mark Fleet Ready" / undo buttons.
   fleetReadyAt: string | null;
@@ -3229,6 +3232,18 @@ export default function OrderDetailPage() {
               ? `Last generated ${order.quotePdfGeneratedAt ? new Date(order.quotePdfGeneratedAt).toLocaleString() : ""}`
               : "Not generated yet"}
           </div>
+          {/* Nothing re-renders the stored PDF when the order changes, so
+              Preview/Download/portal can all be showing the client a
+              document that no longer matches. A bare "Last generated"
+              timestamp doesn't read as a warning — this does. */}
+          {order.quotePdfUrl && order.quotePdfStale && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 rounded bg-amber-500/10 border border-amber-500/40 px-2 py-1">
+              <span className="text-amber-600 text-xs leading-none">⚠</span>
+              <span className="text-[11px] text-amber-700 font-medium">
+                Out of date — the order changed after this PDF was made. Regenerate before sending.
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           {order.quotePdfUrl ? (

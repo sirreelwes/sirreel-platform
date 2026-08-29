@@ -25,6 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
@@ -121,6 +122,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       lostAt: true,
       quotePdfKey: true,
       quotePdfUrl: true,
+      quotePdfGeneratedAt: true,
+      updatedAt: true,
+      lineItems: { select: { updatedAt: true } },
+      discounts: { select: { updatedAt: true } },
       portalSlug: true,
       agent: { select: { email: true } },
       job: {
@@ -140,6 +145,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!order) return bad(404, 'order not found')
   if (!order.quotePdfKey || !order.quotePdfUrl) {
     return bad(400, 'No quote PDF — regenerate from the order detail page first.')
+  }
+  // Nothing re-renders the stored PDF when the order changes, and this
+  // route only ever checked that one EXISTED. A rep could rework an
+  // order all afternoon and send the client that morning's prices. Refuse
+  // rather than send a document that no longer matches the order — the
+  // remedy is one click away on the same page.
+  if (isQuotePdfStale(order)) {
+    return bad(
+      400,
+      `This order changed after the quote PDF was generated${
+        order.quotePdfGeneratedAt ? ` (${order.quotePdfGeneratedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC)` : ''
+      }. Hit Regenerate so the client gets the current line items and totals.`,
+    )
   }
 
   const primary = preliminary.to

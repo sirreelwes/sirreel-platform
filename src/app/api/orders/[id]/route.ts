@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isQuotePdfStale } from '@/lib/orders/quotePdfFreshness'
 import { findPendingDayClaims } from '@/lib/orders/dayClaimGate';
 import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
@@ -151,7 +152,23 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // rule lives with the data, not in the component that renders the prompt.
   const deliveryRequirement = await deliveryRequirementForOrder(id);
 
-  return NextResponse.json({ ...order, deliveryRequirement });
+  // Whether the stored quote PDF still matches the order. Computed here
+  // rather than in the component because the answer depends on line-item
+  // and discount timestamps the page never loads.
+  // Discounts aren't part of the main include, but a discount change
+  // absolutely restates the client's price — fetch just their timestamps.
+  const discountStamps = await prisma.orderDiscount.findMany({
+    where: { orderId: id },
+    select: { updatedAt: true },
+  });
+  const quotePdfStale = isQuotePdfStale({
+    quotePdfGeneratedAt: order.quotePdfGeneratedAt,
+    updatedAt: order.updatedAt,
+    lineItems: order.lineItems,
+    discounts: discountStamps,
+  });
+
+  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
