@@ -159,20 +159,20 @@ export default function AdminFeesPage() {
 
   const feeForm = (
     <div className="px-4 py-3 bg-lt-inner/50 border border-lt-hairline rounded-lg space-y-3">
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-4">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        <div className="sm:col-span-4">
           <label className="block text-xs text-lt-fg3 mb-1">Name</label>
           <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder="e.g. Delivery Fee"
             className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="block text-xs text-lt-fg3 mb-1">Code</label>
           <input type="text" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}
             placeholder="DEL"
             className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 uppercase focus:outline-none focus:border-lt-fg2" />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="block text-xs text-lt-fg3 mb-1">
             {form.unit === 'PERCENT' ? 'Percent (0–100)' : 'Amount ($)'}
           </label>
@@ -180,7 +180,7 @@ export default function AdminFeesPage() {
             onChange={(e) => setForm({ ...form, amount: e.target.value })}
             className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
         </div>
-        <div className="col-span-4">
+        <div className="sm:col-span-4">
           <label className="block text-xs text-lt-fg3 mb-1">Unit</label>
           <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as FeeUnit })}
             className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">

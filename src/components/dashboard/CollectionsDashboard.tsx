@@ -284,7 +284,7 @@ export default function CollectionsDashboard() {
       {/* Log Payment Modal */}
       {newPayment && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setNewPayment(false)}>
-          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl w-[420px] shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="max-h-[85vh] supports-[max-height:85svh]:max-h-[85svh] overflow-y-auto bg-white rounded-2xl w-[420px] max-w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 flex justify-between items-center">
               <div>
                 <h2 className="text-[16px] font-bold text-gray-900">Log Payment</h2>

@@ -375,11 +375,11 @@ export default function CompanyDetailPage() {
   };
 
   if (loading || !company) {
-    return <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)] flex items-center justify-center"><p className="text-lt-fg3">Loading...</p></div>;
+    return <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)] flex items-center justify-center"><p className="text-lt-fg3">Loading...</p></div>;
   }
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
       <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
 
@@ -722,7 +722,7 @@ export default function CompanyDetailPage() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-4 mt-4 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 text-sm">
               <div><span className="text-lt-fg3">Website</span><p className="text-lt-fg mt-0.5">{company.website || '--'}</p></div>
               <div><span className="text-lt-fg3">Billing Email</span><p className="text-lt-fg mt-0.5">{company.billingEmail || '--'}</p></div>
               <div><span className="text-lt-fg3">COI</span><p className="text-lt-fg mt-0.5">{company.coiOnFile ? `On file (exp ${fmtDate(company.coiExpiry)})` : 'Missing'}</p></div>
@@ -731,7 +731,7 @@ export default function CompanyDetailPage() {
             {/* Discount profile — read-only mirror of the form group.
                 Renders only when the agent has filled anything in. */}
             {(company.discountTendency !== 'NONE' || company.typicalDiscountPct != null || company.discountNotes) && (
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-lt-hairline text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4 pt-4 border-t border-lt-hairline text-sm">
                 <div>
                   <span className="text-lt-fg3">Negotiation tendency</span>
                   <p className="text-lt-fg mt-0.5">{TENDENCY_LABEL[company.discountTendency]}</p>
@@ -788,7 +788,7 @@ export default function CompanyDetailPage() {
                   {company.negotiatedTermsSummary && (
                     <p className="text-xs text-lt-fg2 whitespace-pre-wrap mb-2">{company.negotiatedTermsSummary}</p>
                   )}
-                  <div className="grid grid-cols-4 gap-3 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                     <div>
                       <span className="text-lt-fg3">Negotiated</span>
                       <p className="text-lt-fg mt-0.5">{fmtDate(company.negotiatedTermsNegotiatedAt)}</p>
@@ -820,7 +820,7 @@ export default function CompanyDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
         {/* Left: Contacts + Orders */}
         <div className="col-span-2 space-y-6">
           {/* Contacts + Affiliations */}

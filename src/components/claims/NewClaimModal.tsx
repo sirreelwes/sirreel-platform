@@ -552,7 +552,7 @@ export function NewClaimModal({
             </Field>
 
             <SectionHeader>Money so far</SectionHeader>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <MoneyField label="Loss amount"      value={lossAmount}          onChange={setLossAmount}          ai={aiFilled.has('lossAmount')} />
               <MoneyField label="Contract billed"  value={contractAmount}      onChange={setContractAmount}      ai={false} />
               <MoneyField label="ACV received"     value={acvReceived}         onChange={setAcvReceived}         ai={aiFilled.has('acvReceived')} />

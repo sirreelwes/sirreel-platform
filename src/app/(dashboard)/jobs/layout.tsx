@@ -35,7 +35,7 @@ function JobsSplit({ children }: { children: React.ReactNode }) {
           Incoming + legend — Wes 2026-08-28) above the list|detail
           split. Both the bar and the rail read the same list context,
           so the bar filters what the rail shows. */}
-      <div className="-m-4 h-[calc(100%+2rem)] flex flex-col overflow-hidden">
+      <div className="-m-3 md:-m-4 h-[calc(100%+1.5rem)] md:h-[calc(100%+2rem)] flex flex-col overflow-hidden">
         <JobsToolbar />
         <div className="flex-1 min-h-0 flex overflow-hidden">
           <JobsSidebar />

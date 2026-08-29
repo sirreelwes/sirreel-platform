@@ -224,7 +224,7 @@ export function AssetSummaryPanel({ assetId, canEdit, onClose, onChanged }: Asse
               </div>
 
               {/* Specs */}
-              <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-2 mt-3">
                 {spec('Make / Model', [data.make, data.model].filter(Boolean).join(' ') || null)}
                 {spec('Year', data.year)}
                 {spec('Mileage', data.mileage != null ? Number(data.mileage).toLocaleString('en-US') : null)}

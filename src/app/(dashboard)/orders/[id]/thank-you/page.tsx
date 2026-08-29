@@ -375,7 +375,7 @@ export default function ThankYouComposePage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-900 font-medium">A photo from this order</div>
                     <div className="text-xs text-gray-500 mt-1 mb-2">Uploaded by the warehouse team for this specific job.</div>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {docs.filter((d) => d.type === 'JOB_PHOTO').map((d) => (
                         <button
                           key={d.id}

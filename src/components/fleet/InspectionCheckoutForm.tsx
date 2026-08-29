@@ -248,7 +248,7 @@ export function InspectionCheckoutForm({ bookingAssignmentId }: { bookingAssignm
         </div>
 
         {photos.length > 0 && (
-          <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
             {photos.map((p) => (
               <div key={p.localId} className="relative aspect-square rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -64,7 +64,7 @@ export default function NegotiatedAgreementsRegistryPage() {
   ).length
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
         <Link
           href="/admin/paperwork"

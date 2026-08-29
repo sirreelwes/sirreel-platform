@@ -416,7 +416,7 @@ export function SubRentalModal({
             <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
               Vendor cost (SirReel pays)
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <input
                 type="number"
                 step="0.01"

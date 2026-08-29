@@ -41,3 +41,33 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #bbb !i
   .label { @apply block text-[10px] font-semibold uppercase tracking-wider mb-1; color: var(--text-dim); }
   .stat-card { @apply px-3 py-1 rounded-md; background: var(--surface); border: 1px solid var(--border); }
 }
+
+/* ── Phone type floor ────────────────────────────────────────────────
+ *
+ * HQ's desktop scale bottoms out around 8px — legible on a 27" panel at
+ * arm's length, not in a truck at the yard. Rather than rewrite several
+ * thousand literal sizes (and change the desktop the team already reads
+ * fluently), the sub-11px steps are floored at 11px BELOW md and only
+ * below md. Desktop renders byte-identically.
+ *
+ * SCOPED TO .hq-shell — the authenticated staff surface only. The public
+ * marketing site and the client portal have their own mobile builds and
+ * are not ours to retype.
+ *
+ * The selectors match Tailwind's arbitrary-value classes by the literal
+ * text in the class attribute, which is why they are written this way:
+ * the generated rule is `.text-\[8px\]`, and the element carries
+ * `text-[8px]` verbatim, so the substring match is exact and stable.
+ */
+@media (max-width: 767px) {
+  .hq-shell [class*="text-[8px]"],
+  .hq-shell [class*="text-[8.5px]"],
+  .hq-shell [class*="text-[9px]"],
+  .hq-shell [class*="text-[9.5px]"],
+  .hq-shell [class*="text-[10px]"],
+  .hq-shell [class*="text-[10.5px]"] {
+    font-size: 11px !important;
+  }
+  /* Tailwind's own 12px step, one notch up for the same reason. */
+  .hq-shell .text-xs { font-size: 0.8125rem; }
+}

@@ -125,7 +125,7 @@ export default function HrEmployeePage() {
 
   if (forbidden) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-2xl mx-auto bg-lt-card border border-lt-hairline rounded-xl p-8">
           <h1 className="text-xl font-semibold text-lt-fg">Forbidden</h1>
           <p className="text-sm text-lt-fg2 mt-2">HR data is restricted to a small allowlist.</p>
@@ -136,7 +136,7 @@ export default function HrEmployeePage() {
 
   if (loading) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <p className="text-sm text-lt-fg2">Loading…</p>
       </div>
     )
@@ -144,14 +144,14 @@ export default function HrEmployeePage() {
 
   if (error || !employee) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <p className="text-sm text-chip-bad-fg">{error ?? 'Not found'}</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1100px] mx-auto space-y-6">
         <div className="flex items-baseline gap-4">
           <Link href="/hr" className="text-xs text-lt-fg3 hover:text-lt-fg">← All employees</Link>

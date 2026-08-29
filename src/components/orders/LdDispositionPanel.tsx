@@ -349,9 +349,9 @@ function AddDamageForm({
   return (
     <form
       onSubmit={submit}
-      className="mb-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 grid grid-cols-12 gap-2"
+      className="mb-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3 grid grid-cols-1 sm:grid-cols-12 gap-2"
     >
-      <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Vehicle
         <select
           value={bookingAssignmentId}
@@ -363,7 +363,7 @@ function AddDamageForm({
           ))}
         </select>
       </label>
-      <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Location
         <input
           type="text"
@@ -374,7 +374,7 @@ function AddDamageForm({
           className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
         />
       </label>
-      <label className="col-span-2 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-2 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Type
         <select
           value={damageType}
@@ -384,7 +384,7 @@ function AddDamageForm({
           {DAMAGE_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
         </select>
       </label>
-      <label className="col-span-2 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-2 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Severity
         <select
           value={severity}
@@ -394,7 +394,7 @@ function AddDamageForm({
           {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
-      <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Est. repair cost
         <input
           type="number"
@@ -406,7 +406,7 @@ function AddDamageForm({
           className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
         />
       </label>
-      <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Initial disposition
         <select
           value={disposition}
@@ -416,7 +416,7 @@ function AddDamageForm({
           {DISPOSITIONS.map((d) => <option key={d} value={d}>{d.replace('_', ' ')}</option>)}
         </select>
       </label>
-      <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+      <label className="sm:col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
         Notes
         <input
           type="text"
@@ -425,7 +425,7 @@ function AddDamageForm({
           className="mt-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-sm text-white outline-none focus:border-zinc-500 normal-case tracking-normal"
         />
       </label>
-      <label className="col-span-2 flex items-end gap-1 text-[11px] text-zinc-400 normal-case tracking-normal">
+      <label className="sm:col-span-2 flex items-end gap-1 text-[11px] text-zinc-400 normal-case tracking-normal">
         <input
           type="checkbox"
           checked={isPreExisting}
@@ -434,7 +434,7 @@ function AddDamageForm({
         />
         Pre-existing
       </label>
-      <div className="col-span-12 flex justify-end gap-2 mt-1">
+      <div className="sm:col-span-12 flex justify-end gap-2 mt-1">
         <button
           type="button"
           onClick={onCancel}

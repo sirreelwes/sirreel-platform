@@ -177,7 +177,7 @@ export default function DispatchPage() {
 
   if (error) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-6xl mx-auto">
           <div className="rounded-lg border border-chip-bad-fg/40 bg-chip-bad-bg text-chip-bad-fg text-sm px-3 py-2">{error}</div>
         </div>
@@ -187,7 +187,7 @@ export default function DispatchPage() {
 
   if (!data) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="text-sm text-lt-fg3">Loading dispatch…</div>
       </div>
     )
@@ -195,7 +195,7 @@ export default function DispatchPage() {
 
   return (
     // Light-motif page bg — matches Jobs / Orders / Order detail.
-    <div className="bg-lt-page -m-6 p-4 sm:p-6 min-h-[calc(100vh-3rem)] overflow-x-hidden">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 sm:p-6 min-h-[calc(100vh-3rem)] overflow-x-hidden">
       <div className="max-w-7xl mx-auto">
       <header className="flex items-baseline justify-between gap-4 flex-wrap mb-5">
         <div>
@@ -416,7 +416,7 @@ function LookAheadRow({ day, maxTotal }: { day: DispatchDay; maxTotal: number })
           <div className="text-[11px] text-lt-fg3">{fmtDate(day.date)}</div>
         </div>
         {/* Counts strip */}
-        <div className="flex-1 grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center text-xs">
           <LoadStat label="Out FLEET" n={outFleet} color="zinc" />
           <LoadStat label="Out WHS"   n={outWh}    color="amber" />
           <LoadStat label="In"        n={inboundN} color="emerald" />

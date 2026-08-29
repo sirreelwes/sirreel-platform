@@ -227,7 +227,7 @@ export const KitPiecesEditor = forwardRef<KitPiecesHandle, { itemId: string; ite
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
                       <label className={label}>Qty</label>
                       <input

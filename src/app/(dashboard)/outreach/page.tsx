@@ -144,7 +144,7 @@ export default function OutreachComposerPage() {
   const canDraft = !!name.trim() && !!subject.trim() && !!bodyTemplate.trim() && (a?.readyToSend ?? 0) > 0
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1100px] mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-lt-fg">Outreach</h1>

@@ -1779,7 +1779,7 @@ export default function OrderDetailPage() {
     // Light-motif page bg — overrides the dashboard shell's default
     // until the rollout converts every page. Matches the Jobs page's
     // wrapper so the two surfaces feel like one engagement.
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
         <button onClick={() => router.push("/orders")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
           &larr; Back to Orders
@@ -1913,7 +1913,7 @@ export default function OrderDetailPage() {
             />
           </div>
         )}
-        <div className="grid grid-cols-4 gap-6 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-sm">
           <div><span className="text-lt-fg3">Company</span><p className="text-lt-fg mt-0.5">{order.company.name}</p></div>
           <div><span className="text-lt-fg3">Agent</span><p className="text-lt-fg mt-0.5">{order.agent.name}</p></div>
           <div>
@@ -2195,15 +2195,15 @@ export default function OrderDetailPage() {
 
         {showAddForm && isEditable && (
           <div className="px-6 py-4 bg-lt-inner/50 border-b border-lt-hairline space-y-4">
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Type</label>
                 <select value={liType} onChange={(e) => { setLiType(e.target.value); setLiDesc(""); setLiAssetCatId(""); setLiInvItemId(""); setInvSearch(""); }}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                   {LINE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              <div className="col-span-5">
+              <div className="sm:col-span-5">
                 <label className="block text-xs text-lt-fg3 mb-1">
                   {liType === "VEHICLE" ? "Vehicle" : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? "Search Inventory" : liType === "FEE" ? "Fee" : "Description"}
                 </label>
@@ -2331,7 +2331,7 @@ export default function OrderDetailPage() {
                     className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-lt-fg2" />
                 )}
               </div>
-              <div className="col-span-5">
+              <div className="sm:col-span-5">
                 <label className="block text-xs text-lt-fg3 mb-1">Description (on invoice)</label>
                 <input type="text" value={liDesc} onChange={(e) => setLiDesc(e.target.value)}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
@@ -2358,29 +2358,29 @@ export default function OrderDetailPage() {
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
               {liCustomDates && (
                 <>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs text-lt-fg3 mb-1">Start</label>
                     <input type="date" value={liStartDate} onChange={(e) => setLiStartDate(e.target.value)}
                       className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs text-lt-fg3 mb-1">End</label>
                     <input type="date" value={liEndDate} onChange={(e) => setLiEndDate(e.target.value)}
                       className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
                   </div>
                 </>
               )}
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Rate Type</label>
                 <select value={liRateType} onChange={(e) => setLiRateType(e.target.value)}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2">
                   <option value="DAILY">Daily</option><option value="WEEKLY">Weekly</option><option value="FLAT">Flat</option>
                 </select>
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Rate</label>
                 <CurrencyInput
                   value={Number(liRate) || 0}
@@ -2390,7 +2390,7 @@ export default function OrderDetailPage() {
                   ariaLabel="Rate"
                 />
               </div>
-              <div className="col-span-1">
+              <div className="sm:col-span-1">
                 <label className="block text-xs text-lt-fg3 mb-1">Days</label>
                 <input
                   type="number" step="0.5" min="0"
@@ -2400,7 +2400,7 @@ export default function OrderDetailPage() {
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg placeholder:text-lt-fg3 placeholder:italic focus:outline-none focus:border-lt-fg2"
                 />
               </div>
-              <div className="col-span-1">
+              <div className="sm:col-span-1">
                 <label className="block text-xs text-lt-fg3 mb-1">Qty</label>
                 <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
@@ -2408,7 +2408,7 @@ export default function OrderDetailPage() {
               {/* Dynamic col-span — fewer columns are visible when
                   Custom dates is OFF, so the Add/Cancel block stretches
                   to fill the row width consistently. */}
-              <div className={`${liCustomDates ? 'col-span-3' : 'col-span-7'} flex items-end gap-2`}>
+              <div className={`${liCustomDates ? 'sm:col-span-3' : 'sm:col-span-7'} flex items-end gap-2`}>
                 <button onClick={addLineItem} disabled={!liDesc || !liRate || adding}
                   className="px-4 py-1.5 bg-cadence-on-rental-bar hover:opacity-90 disabled:bg-lt-inner disabled:text-lt-fg3 text-white text-sm font-medium rounded transition-colors">
                   {adding ? "Adding..." : "Add"}
@@ -4275,9 +4275,9 @@ function PaymentsPanel({
       {canRecord && balanceDue > 0 && (
         <form
           onSubmit={submit}
-          className="border border-lt-hairline rounded-lg p-3 grid grid-cols-12 gap-2 bg-lt-inner"
+          className="border border-lt-hairline rounded-lg p-3 grid grid-cols-1 sm:grid-cols-12 gap-2 bg-lt-inner"
         >
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Amount
             <div className="mt-1">
               <CurrencyInput
@@ -4291,7 +4291,7 @@ function PaymentsPanel({
               />
             </div>
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Method
             <select
               value={method}
@@ -4303,7 +4303,7 @@ function PaymentsPanel({
               ))}
             </select>
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Received
             <input
               type="date"
@@ -4312,7 +4312,7 @@ function PaymentsPanel({
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-3 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Reference
             <input
               type="text"
@@ -4322,7 +4322,7 @@ function PaymentsPanel({
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-9 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-9 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Notes (optional)
             <input
               type="text"
@@ -4331,7 +4331,7 @@ function PaymentsPanel({
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <div className="col-span-3 flex items-end">
+          <div className="sm:col-span-3 flex items-end">
             <button
               type="submit"
               disabled={recording || !validAmount || overpay}
@@ -4346,7 +4346,7 @@ function PaymentsPanel({
             </button>
           </div>
           {overpay && (
-            <div className="col-span-12 text-[11px] text-chip-bad-fg">
+            <div className="sm:col-span-12 text-[11px] text-chip-bad-fg">
               Amount exceeds the ${balanceDue.toLocaleString('en-US', { minimumFractionDigits: 2 })} balance due.
             </div>
           )}
@@ -4593,8 +4593,8 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
           </a>
         </div>
       ) : showForm ? (
-        <form onSubmit={submit} className="bg-lt-inner border border-lt-hairline rounded-lg p-3 grid grid-cols-12 gap-2">
-          <label className="col-span-5 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+        <form onSubmit={submit} className="bg-lt-inner border border-lt-hairline rounded-lg p-3 grid grid-cols-1 sm:grid-cols-12 gap-2">
+          <label className="sm:col-span-5 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Filed against
             <input
               type="text"
@@ -4605,7 +4605,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-4 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Incident date
             <input
               type="date"
@@ -4615,7 +4615,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <label className="col-span-12 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
+          <label className="sm:col-span-12 flex flex-col text-[10px] uppercase tracking-wider font-semibold text-lt-fg3">
             Description (≥10 chars)
             <textarea
               value={incidentDescription}
@@ -4625,7 +4625,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
               className="mt-1 px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg outline-none focus:border-lt-fg2 normal-case tracking-normal"
             />
           </label>
-          <div className="col-span-12 flex justify-end gap-2">
+          <div className="sm:col-span-12 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowForm(false)}

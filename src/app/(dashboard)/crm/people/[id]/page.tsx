@@ -386,11 +386,11 @@ export default function PersonDetailPage() {
   };
 
   if (loading || !person) {
-    return <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)] flex items-center justify-center"><p className="text-lt-fg3">Loading...</p></div>;
+    return <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)] flex items-center justify-center"><p className="text-lt-fg3">Loading...</p></div>;
   }
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
       <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
 
@@ -478,7 +478,7 @@ export default function PersonDetailPage() {
                   <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TIER_STYLES[person.tier]}`}>{person.tier}</span>
                   <span className="px-2 py-0.5 rounded bg-lt-inner text-xs text-lt-fg2">{person.role.replace(/_/g, " ")}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                   <div>
                     <span className="text-lt-fg3 text-xs">Email</span>
                     <p className="text-lt-fg mt-0.5">
@@ -556,7 +556,7 @@ export default function PersonDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
         {/* Left: Company & Production History — merged view of
             explicit affiliations + derived participation across
             Jobs / Orders / Bookings. Same company appearing in

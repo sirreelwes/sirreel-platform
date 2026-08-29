@@ -128,16 +128,16 @@ export default function CalendarPage() {
       </div>
 
       {/* Calendar grid */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="border border-gray-200 rounded-lg overflow-x-auto bg-white">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200">
+        <div className="grid grid-cols-7 border-b border-gray-200 min-w-[640px]">
           {days.map(d => (
             <div key={d} className="py-2 text-center text-[11px] font-bold text-gray-400 bg-gray-50">{d}</div>
           ))}
         </div>
 
         {/* Day cells */}
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-7 min-w-[640px]">
           {/* Empty cells before first day */}
           {Array.from({ length: firstDay }, (_, i) => (
             <div key={`e${i}`} className="min-h-[110px] bg-gray-50/50 border-b border-r border-gray-100" />

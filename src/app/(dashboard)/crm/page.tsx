@@ -513,7 +513,7 @@ export default function CRMPage() {
   };
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1400px] mx-auto">
       {selectForQuote && (
         <div className="mb-4 rounded-xl bg-chip-warn-bg border border-chip-warn-fg/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -1242,7 +1242,7 @@ function NeedsAttentionStrip({
   return (
     <div className="mb-4">
       <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3 mb-2">Needs attention</div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {cards.map((c) => {
           const isActive = active === c.key;
           const hasAny = c.count > 0;

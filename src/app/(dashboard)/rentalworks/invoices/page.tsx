@@ -140,7 +140,7 @@ function RwInvoicesPageInner() {
   const t = data?.totals;
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div>

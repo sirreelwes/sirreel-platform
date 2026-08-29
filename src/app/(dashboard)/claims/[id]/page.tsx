@@ -405,7 +405,7 @@ export default function ClaimDetailPage() {
 
   if (loadErr) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-3xl mx-auto">
           <Link href="/claims" className="text-sm text-lt-fg2 hover:text-lt-fg">← Back to claims</Link>
           <div className="mt-6 rounded-xl border border-chip-bad-fg/30 bg-chip-bad-bg/30 text-chip-bad-fg px-4 py-3">{loadErr}</div>
@@ -415,14 +415,14 @@ export default function ClaimDetailPage() {
   }
   if (!claim || !form) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-3xl mx-auto text-lt-fg3 text-sm">Loading…</div>
       </div>
     )
   }
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1100px] mx-auto">
         <Link href="/claims" className="text-sm text-lt-fg2 hover:text-lt-fg">← Back to claims</Link>
 

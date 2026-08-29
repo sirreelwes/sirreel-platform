@@ -138,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // (sidebar beside content). 100dvh where supported so iOS Safari's
     // collapsing address bar doesn't clip the last row of the nav;
     // h-screen is the fallback for browsers without dvh.
-    <div className="flex flex-col md:flex-row h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-[#F7F6F3]">
+    <div className="hq-shell flex flex-col md:flex-row h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-[#F7F6F3]">
       <MobileNav
         sections={sections}
         activeHref={activeHref}

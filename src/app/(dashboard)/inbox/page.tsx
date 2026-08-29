@@ -108,11 +108,11 @@ export default function InboxPage() {
   const usedCats = [...new Set(emails.map(e => e.category))].filter(Boolean);
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
-      <div className="flex gap-4 h-[calc(100vh-180px)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
+      <div className="flex flex-col md:flex-row gap-4 md:h-[calc(100vh-180px)]">
 
       {/* LEFT — list */}
-      <div className="w-[400px] flex-shrink-0 flex flex-col gap-3">
+      <div className="w-full md:w-[400px] flex-shrink-0 flex flex-col gap-3 min-h-[50vh] md:min-h-0">
 
         {/* Header */}
         <div className="flex items-center justify-between">

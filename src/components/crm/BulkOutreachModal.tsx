@@ -115,7 +115,7 @@ export function BulkOutreachModal({
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           <div>
             <p className="text-xs text-lt-fg3 mb-2">What happened?</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {TYPE_OPTIONS.map((o) => (
                 <button
                   key={o.value}

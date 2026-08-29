@@ -1778,7 +1778,7 @@ function NewQuotePageInner() {
   // Step 1: Input
   if (!parsed && items.length === 0) {
     return (
-      <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+      <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
         <div className="max-w-3xl mx-auto space-y-4">
         <button onClick={() => router.push('/orders')} className="text-sm text-lt-fg3 hover:text-lt-fg">
           &larr; Back to Orders
@@ -1921,7 +1921,7 @@ function NewQuotePageInner() {
 
   // Step 2: Review
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-5xl mx-auto space-y-4">
       <button onClick={() => { setParsed(null); setItems([]); }} className="text-sm text-lt-fg3 hover:text-lt-fg">
         &larr; Start Over

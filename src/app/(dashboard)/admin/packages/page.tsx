@@ -220,7 +220,7 @@ export default function AdminPackagesPage() {
   }
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-7xl mx-auto">
         <button onClick={() => router.push('/dashboard')} className="text-sm text-lt-fg3 hover:text-lt-fg mb-4 inline-block">
           &larr; Back to dashboard

@@ -190,14 +190,14 @@ export default function IncidentDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  if (loading) return <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]"><p className="text-sm text-lt-fg2">Loading…</p></div>
-  if (error || !incident) return <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]"><p className="text-sm text-chip-bad-fg">{error ?? 'Not found'}</p></div>
+  if (loading) return <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]"><p className="text-sm text-lt-fg2">Loading…</p></div>
+  if (error || !incident) return <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]"><p className="text-sm text-chip-bad-fg">{error ?? 'Not found'}</p></div>
 
   const canUpgrade = !!incident.company // server gate enforces this; UI mirrors
   const canBillRenter = !!incident.order // server returns 409 otherwise
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1100px] mx-auto space-y-6">
         <div className="flex items-baseline gap-4">
           <Link href="/incidents" className="text-xs text-lt-fg3 hover:text-lt-fg">← All incidents</Link>
@@ -221,7 +221,7 @@ export default function IncidentDetailPage() {
             </div>
           </div>
           <p className="text-sm text-lt-fg mt-4 whitespace-pre-wrap">{incident.description}</p>
-          <div className="mt-4 grid grid-cols-3 gap-4 text-xs">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
             <Field label="Client">
               {incident.company ? (
                 incident.company.name

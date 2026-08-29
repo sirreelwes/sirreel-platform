@@ -310,7 +310,7 @@ export default function WarehousePickDetailPage() {
         </div>
 
         {/* Counts strip */}
-        <div className="grid grid-cols-4 gap-3 mt-4 text-center text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center text-xs">
           <Count label="Pending"  n={counts.PENDING_PICK} highlight={counts.PENDING_PICK > 0 && picklist.status === 'PICKING'} />
           <Count label="Picked"   n={counts.PICKED} />
           <Count label="Staged"   n={counts.STAGED} />

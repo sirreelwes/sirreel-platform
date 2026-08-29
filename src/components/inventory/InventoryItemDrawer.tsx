@@ -390,7 +390,7 @@ export function InventoryItemDrawer({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <label className={label}>Qty owned</label>
               <input className={field + ' tabular-nums'} type="number" min={0} step={1} value={qtyOwned} onChange={(e) => setQtyOwned(e.target.value)} />

@@ -243,7 +243,7 @@ export function OutreachQuickLogModal({
           {/* Type chips */}
           <div>
             <div className="text-xs text-lt-fg3 mb-2">Type</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {TYPE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}

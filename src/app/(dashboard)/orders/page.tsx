@@ -154,7 +154,7 @@ export default function OrdersPage() {
   return (
     // Light-motif page bg — overrides the shell's default so this
     // page reads as the same surface as Jobs and Order detail.
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1500px] mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>

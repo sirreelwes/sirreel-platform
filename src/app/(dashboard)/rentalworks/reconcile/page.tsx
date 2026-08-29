@@ -281,7 +281,7 @@ function ReconcilePageInner() {
   const totalOpen = counts ? counts.ready + counts.needsClient + counts.noMatch : 0;
 
   return (
-    <div className="bg-lt-page -m-6 p-6 min-h-[calc(100vh-3rem)]">
+    <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1600px] mx-auto">
         {toast && (
           <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-lt-fg text-lt-card text-[13px] font-semibold px-4 py-2 rounded-lg shadow-xl">

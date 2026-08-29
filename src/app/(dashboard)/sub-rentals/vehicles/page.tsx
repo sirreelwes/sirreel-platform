@@ -135,7 +135,7 @@ function AddVehicleModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Their list rates ($)</label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <input value={daily} onChange={(e) => setDaily(e.target.value)} placeholder="Daily" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
               <input value={weekly} onChange={(e) => setWeekly(e.target.value)} placeholder="Weekly" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
               <input value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="Monthly" inputMode="decimal" className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
