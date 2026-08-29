@@ -89,6 +89,32 @@ const SEEDS: AliasSeed[] = [
     aliases: ['trash bag disposal'],
     why: 'Defensive: "trash bag" now belongs to the liners, and alias score is alias length — spelling out the full service name keeps this row reachable by its own name.',
   },
+  // ── Hanger dedupe (Wes, 2026-08-29) ─────────────────────────────
+  // Three products had grown two or three catalog rows apiece — an
+  // HQ-native EXP-HANGER-* row plus RentalWorks-era imports under the
+  // industry's longer name, at different prices, in three different
+  // departments. The duplicates are retired (isActive:false); these
+  // aliases carry their names onto the survivor so a crew asking for a
+  // "wardrobe hanger" or a "combo hanger 17 clear" still lands
+  // somewhere instead of on an empty dropdown.
+  {
+    id: '9acd220a-5604-4ae8-98ce-ed71df6b0786',
+    name: 'Hanger, Combo',
+    aliases: ['combo hanger', 'wardrobe hanger', 'clear hanger', 'combo hanger 17 clear', 'hangers'],
+    why: 'Absorbs retired HANGERC-RW ("Combo Hanger 17\" Clear, Each") and HANGERC ("Wardrobe Hanger 17\" Clear, Combo - Each"). Combo is the default hanger — a bare "hangers" means these.',
+  },
+  {
+    id: 'd66d2f98-ec4c-4f2e-9978-02c283d6868c',
+    name: 'Hanger, Pants',
+    aliases: ['pant hanger', 'pants hanger', 'trouser hanger', 'clip hanger', 'pant hanger with clips'],
+    why: 'Absorbs the retired "Wardrobe Hanger 17\" Clear, Pant w/ Clip - Each". The clip is what crews name it by.',
+  },
+  {
+    id: '27dcef43-0caf-4bf4-81d7-82a8e7544f2f',
+    name: 'Hanger, Shirts',
+    aliases: ['shirt hanger', 'dress hanger', 'shirt dress hanger', 'blouse hanger'],
+    why: 'Absorbs the retired "Wardrobe Hanger 17\" Clear, Shirt/Dress - Each".',
+  },
 ]
 
 async function main(): Promise<void> {

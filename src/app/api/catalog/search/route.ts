@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { aliasesAnswerQuery } from '@/lib/sales/aliasMatch'
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
 import { negotiated } from '@/lib/pricing/companyRate'
@@ -72,20 +73,57 @@ export async function GET(req: NextRequest) {
   const tokens = mergeMeasureTokens(q.split(/\s+/).filter(Boolean))
   const variants = tokens.map(tokenVariants)
 
+  // ── Multi-word aliases ────────────────────────────────────────────
+  //
+  // `aliases: { has: v }` is EXACT array-element equality, and the query
+  // above is split on whitespace with every token AND-ed. So a token
+  // "garment" could never match the element "garment rack", and every
+  // multi-word alias in the catalog was dead on arrival — "garment rack",
+  // "walkie talkie" and "trash can liner" all returned nothing, while the
+  // single-word "walkie" worked. That silently defeated the curated
+  // aliases in scripts/seed-catalog-aliases.ts, which exist precisely
+  // because SirReel's name for a thing and the crew's share no words.
+  //
+  // Resolve alias hits separately: pull the rows that HAVE aliases (a
+  // curated handful, not the 1800-row catalog) and substring-match each
+  // token against them in JS. A row qualifies only if EVERY token hits
+  // one of its aliases, matching the AND semantics of the main query.
+  // An alias counts only when the QUERY COVERS IT — every word of the
+  // alias has to be something the user actually typed. Substring matching
+  // is too loose in exactly the way that matters: it lets a bare "walkie"
+  // match the alias "analog walkie", which would hand back the analog
+  // radio and undo Wes's 8/17 ruling that a bare walkie means the digital
+  // one. Requiring alias ⊆ query keeps "walkie" → digital, "analog
+  // walkie" → analog, and still resolves "garment rack" and "trash can
+  // liner" the way the seed intended.
+  const aliasRows = await prisma.inventoryItem.findMany({
+    where: { isActive: true, NOT: { aliases: { isEmpty: true } } },
+    select: { id: true, aliases: true },
+  })
+  const aliasMatchIds = aliasRows
+    .filter((row) => aliasesAnswerQuery(row.aliases, variants))
+    .map((row) => row.id)
+
   const [invItems, packages] = await Promise.all([
     wantsQuantity || wantsUnitTracked
       ? prisma.inventoryItem.findMany({
           where: {
             isActive: true,
             ...(trackingFilter ? { trackingMode: trackingFilter } : {}),
-            AND: variants.map((vs) => ({
-              OR: vs.flatMap((v) => [
-                { code: { contains: v, mode: 'insensitive' as const } },
-                { description: { contains: v, mode: 'insensitive' as const } },
-                { slug: { contains: v, mode: 'insensitive' as const } },
-                { aliases: { has: v } },
-              ]),
-            })),
+            OR: [
+              // Rows whose aliases satisfied every token (resolved above).
+              ...(aliasMatchIds.length ? [{ id: { in: aliasMatchIds } }] : []),
+              {
+                AND: variants.map((vs) => ({
+                  OR: vs.flatMap((v) => [
+                    { code: { contains: v, mode: 'insensitive' as const } },
+                    { description: { contains: v, mode: 'insensitive' as const } },
+                    { slug: { contains: v, mode: 'insensitive' as const } },
+                    { aliases: { has: v } },
+                  ]),
+                })),
+              },
+            ],
           },
           select: {
             id: true, code: true, description: true, trackingMode: true,

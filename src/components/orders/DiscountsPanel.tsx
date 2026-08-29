@@ -180,6 +180,28 @@ export function DiscountsPanel({
         {departments.filter(d => d.lineSubtotal > 0).map(dept => {
           const existing = existingDeptDiscounts[dept.department]
           const open = addingDept === dept.department
+          // Expendables still LIST — they're part of the subtotal a rep is
+          // reconciling, and a silently missing row reads as a bug. They
+          // just can't be given a discount.
+          const discountable = dept.department !== 'EXPENDABLES'
+          if (!discountable) {
+            return (
+              <div key={dept.department} className="text-sm">
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-lt-fg2">
+                    <span className="font-medium text-lt-fg">{DEPT_LABELS[dept.department] ?? dept.department}</span>
+                    <span className="text-lt-fg3 ml-2 text-xs">subtotal {fmt(dept.lineSubtotal)}</span>
+                  </span>
+                  <span
+                    className="text-xs text-lt-fg3 italic"
+                    title="Expendables are a sale, not a rental — passed through at cost, so they carry no discount and are excluded from the order-wide discount base too."
+                  >
+                    not discountable
+                  </span>
+                </div>
+              </div>
+            )
+          }
           return (
             <div key={dept.department} className="text-sm">
               <div className="flex items-center justify-between py-1">

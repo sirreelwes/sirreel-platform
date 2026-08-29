@@ -134,6 +134,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'departmentKey required for DEPARTMENT scope' }, { status: 400 })
     }
     departmentKey = body.departmentKey as LineItemDepartment
+    // Expendables are a sale, not a rental — no day-rate margin to give
+    // back, so they carry no discount at either scope. computeOrderTotals
+    // zeroes any that slips through; this is where it's refused out loud.
+    if (departmentKey === 'EXPENDABLES') {
+      return NextResponse.json(
+        {
+          error: 'department not discountable',
+          reason: 'Expendables are a sale, not a rental — they\u2019re passed through at cost and carry no discount.',
+        },
+        { status: 400 },
+      )
+    }
   } else if (body.departmentKey != null && body.departmentKey !== '') {
     return NextResponse.json({ error: 'departmentKey must be null for ORDER scope' }, { status: 400 })
   }

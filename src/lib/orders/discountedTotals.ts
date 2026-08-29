@@ -83,8 +83,15 @@ export interface TotalsBreakdown {
   byDepartment: DepartmentBreakdown[]
   /** Σ byDepartment.discount. */
   departmentDiscountSum: number
-  /** rawSubtotal - departmentDiscountSum. Order discount clamps against this. */
+  /** rawSubtotal - departmentDiscountSum. */
   discountedSubtotal: number
+  /** Σ EXPENDABLES line totals — carved out of the order-scope discount
+   *  base and clamp. Expendables are a sale, not a rental (see the math
+   *  block in computeOrderTotals). */
+  expendablesSubtotal: number
+  /** discountedSubtotal - expendablesSubtotal. The base an ORDER-scope
+   *  discount is computed on AND clamped to. */
+  discountableSubtotal: number
   /** Applied ORDER-scope discount, positive, clamped. */
   orderDiscount: number
   /** Label of the applied ORDER-scope discount, or null when none. */
@@ -159,7 +166,7 @@ export function computeOrderTotals(args: {
     const lineSubtotal = round2(deptMap.get(dept) ?? 0)
     const d = deptDiscounts.get(dept) ?? null
     let discount = 0
-    if (d) {
+    if (d && dept !== 'EXPENDABLES') {
       const v = numberOf(d.value)
       discount = d.type === 'PERCENT' ? lineSubtotal * (v / 100) : v
       discount = round2(clampNonNeg(discount, lineSubtotal))
@@ -177,6 +184,23 @@ export function computeOrderTotals(args: {
 
   // ── Order-scope discount clamps against the post-dept subtotal.
   const discountedSubtotal = round2(rawSubtotal - departmentDiscountSum)
+
+  // ── EXPENDABLES are never discounted (Wes, 2026-08-29).
+  //
+  // They're a SALE, not a rental — consumables bought in for the job and
+  // passed through at cost-plus. There's no day-rate margin in them to
+  // give back, so an order-wide "30% off" that quietly took 30% off the
+  // trash liners and gaffer tape was discounting the one category that
+  // can't absorb it. Department discounts already couldn't reach them
+  // by convention (nobody ever added one); this makes the ORDER scope
+  // obey the same rule instead of relying on nobody noticing.
+  //
+  // Excluded from the BASE and from the CLAMP, so the floor under any
+  // order-scope discount is the expendables spend — including FLAT_TOTAL,
+  // where it means a target total can't be driven below what the
+  // consumables cost.
+  const expendablesSubtotal = round2(deptMap.get('EXPENDABLES') ?? 0)
+  const discountableSubtotal = round2(Math.max(0, discountedSubtotal - expendablesSubtotal))
   let orderDiscount = 0
   let orderDiscountLabel: string | null = null
   let flatTotalClamped = false
@@ -202,13 +226,13 @@ export function computeOrderTotals(args: {
         orderDiscount = 0
         flatTotalClamped = true
       } else {
-        orderDiscount = round2(clampNonNeg(rawDiscount, Math.max(0, discountedSubtotal)))
+        orderDiscount = round2(clampNonNeg(rawDiscount, discountableSubtotal))
       }
     } else {
       const calc = orderDiscountRow.type === 'PERCENT'
-        ? discountedSubtotal * (v / 100)
+        ? discountableSubtotal * (v / 100)
         : v
-      orderDiscount = round2(clampNonNeg(calc, Math.max(0, discountedSubtotal)))
+      orderDiscount = round2(clampNonNeg(calc, discountableSubtotal))
     }
     orderDiscountLabel = orderDiscountRow.label
   }
@@ -222,6 +246,8 @@ export function computeOrderTotals(args: {
     byDepartment,
     departmentDiscountSum,
     discountedSubtotal,
+    expendablesSubtotal,
+    discountableSubtotal,
     orderDiscount,
     orderDiscountLabel,
     flatTotalClamped,
