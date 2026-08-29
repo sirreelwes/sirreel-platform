@@ -1,71 +1,78 @@
 #!/usr/bin/env tsx
 /**
- * Merge the four duplicate Crazy Maple / CMS Company rows into one.
+ * Merge duplicate Company rows into one keeper.
  *
- * Background (2026-08-29, Wes):
- *   Quoting "God of Wrath & Ruin" surfaced four separate Company rows for
- *   the same client. Only one carries the RentalWorks link and therefore
- *   the spend history; the other three carry all the HQ-native rows:
+ * Written for the four Crazy Maple / CMS records (2026-08-29, Wes) and
+ * generalised on its second use, when ReelShort turned out to be a fifth
+ * record for the same client. Pass the ids; the defaults below are the
+ * original CMS run and no longer resolve.
  *
- *     KEEPER  d271ef71  CMS Media Inc / Crazy Maple Studios / ReelShort
- *             STANDARD, $52,387.22 / 30 bookings, rwCustomerId A0006RG9
- *             attached: 1 incident
- *     DUP     2593fcbb  CMS Picture Inc.        7 affiliations, 1 booking,
- *                                               1 job, 13 inquiry captures
- *     DUP     65f8e1ee  Crazy Maple Studios     1 affiliation, 1 booking, 1 job
- *     DUP     cce4d6d5  Crazy Maple Studio      8 affiliations, 1 booking, 1 job
- *
- *   Consequence: no client-level fact (standing vehicle discount, COI,
- *   negotiated terms, spend) can land in a place all four quotes will see.
- *
- * What this does:
- *   1. Repoints every Company FK on the three duplicates to the keeper.
- *      The FK list is derived from the Prisma DMMF at runtime, not
- *      hand-maintained — a new Company relation added later is picked up
+ * What it does:
+ *   1. Repoints every Company FK on the duplicates to the keeper. The FK
+ *      list is derived from the Prisma DMMF at runtime, not hand-
+ *      maintained — a Company relation added later is picked up
  *      automatically instead of being silently skipped.
- *   2. Affiliation is the one table with a unique constraint that a
- *      repoint can violate: @@unique([personId, companyId, productionName]).
- *      Six people are affiliated to two duplicates each (all with
- *      productionName = null), so those pairs collapse. The richer row
- *      wins (roleOnShow / notes / dates / spend, then oldest); the loser
- *      is deleted and its full body journalled.
- *   3. Backfills keeper fields that are null from the duplicates
- *      (never overwrites a value the keeper already has) and appends a
- *      merge note.
- *   4. Deletes the three duplicate Company rows. Any FK this script
- *      failed to move makes the delete throw — that is the safety net,
- *      not an accident.
+ *   2. Affiliation is the one table with a unique constraint a repoint
+ *      can violate: @@unique([personId, companyId, productionName]).
+ *      Colliding rows collapse; a row already on the KEEPER always wins,
+ *      otherwise the richer row does (roleOnShow / notes / dates /
+ *      spend, then oldest). The loser is deleted and its body journalled.
+ *   3. Backfills keeper fields that are null from the duplicates (never
+ *      overwrites a value the keeper already has) and appends a merge
+ *      note.
+ *   4. Deletes the duplicate Company rows. Any FK this script failed to
+ *      move makes the delete throw — that is the safety net, not an
+ *      accident.
  *   5. Writes an AuditLog row per merged company (action `company.merge`)
  *      carrying the full pre-merge body.
  *
- *   Name is NOT changed — "CMS Media Inc / Crazy Maple Studios / ReelShort"
- *   already reads as the alias list. Rename in the CRM if Wes wants.
+ *   The keeper's NAME is never changed — rename in the CRM if wanted.
  *
  *   Company.totalSpend / totalBookings / lastRentalAt are a CACHE of the
- *   RW invoice mirror keyed on rentalworksCustomerId; the duplicates have
- *   no RW id and contribute nothing, so no re-rollup is required.
+ *   RW invoice mirror keyed on rentalworksCustomerId. A duplicate with no
+ *   RW id contributes nothing; if a duplicate HAS one, re-run
+ *   scripts/rollupCompanySpend.ts after merging.
  *
  * Usage:
  *   export DATABASE_URL=$(grep DATABASE_URL .env.local | grep -v PRISMA | cut -d'"' -f2)
- *   npx tsx scripts/merge-cms-companies.ts            # dry run
- *   npx tsx scripts/merge-cms-companies.ts --write    # commit
+ *   npx tsx scripts/merge-companies.ts --keeper <id> --dup <id> [--dup <id> ...]
+ *   ... add --write to commit (omit for a dry run)
  *
- * Reverse: tmp/cms-company-merge-<ts>.json holds every duplicate Company
+ * Reverse: tmp/company-merge-<ts>.json holds every duplicate Company
  *   body, every moved row id per model, and every deleted Affiliation
  *   body. Recreate the Company rows with their original ids, then move
  *   the captured ids back. Reversal is BY CAPTURED ID only.
+ *
+ * Runs to date:
+ *   2026-08-29  CMS Media Inc / Crazy Maple Studios / ReelShort (d271ef71)
+ *               ← CMS Picture Inc. (2593fcbb), Crazy Maple Studios
+ *                 (65f8e1ee), Crazy Maple Studio (cce4d6d5)
+ *   2026-08-29  same keeper ← ReelShort (5f48e301)
  */
 
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { writeFileSync, mkdirSync } from 'node:fs'
 
-const KEEPER_ID = 'd271ef71-8261-48c1-b3c6-79b0939b9153'
-const DUP_IDS = [
-  '2593fcbb-8bb2-4bd2-8d6f-2c876d37f52e', // CMS Picture Inc.
-  '65f8e1ee-c571-48d4-b3e3-ac369f04124f', // Crazy Maple Studios
-  'cce4d6d5-6a9c-44bb-b8d3-4d3b6eab6c5d', // Crazy Maple Studio
-]
+/** Read repeated `--flag value` pairs off argv. */
+function argValues(flag: string): string[] {
+  const out: string[] = []
+  for (let i = 0; i < process.argv.length - 1; i++) {
+    if (process.argv[i] === flag) out.push(process.argv[i + 1])
+  }
+  return out
+}
+
+const KEEPER_ID = argValues('--keeper')[0]
+const DUP_IDS = argValues('--dup')
+if (!KEEPER_ID || DUP_IDS.length === 0) {
+  console.error('usage: merge-companies.ts --keeper <id> --dup <id> [--dup <id> ...] [--write]')
+  process.exit(1)
+}
+if (DUP_IDS.includes(KEEPER_ID)) {
+  console.error('the keeper cannot also be a duplicate')
+  process.exit(1)
+}
 
 const WRITE = process.argv.includes('--write')
 
@@ -97,7 +104,7 @@ function affScore(a: {
 
 async function main() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  console.log(`CMS / Crazy Maple company merge — ${WRITE ? 'LIVE WRITE' : 'DRY RUN (pass --write to apply)'}\n`)
+  console.log(`Company merge — ${WRITE ? 'LIVE WRITE' : 'DRY RUN (pass --write to apply)'}\n`)
 
   const companies = await prisma.company.findMany({ where: { id: { in: [KEEPER_ID, ...DUP_IDS] } } })
   const keeper = companies.find((c) => c.id === KEEPER_ID)
@@ -194,7 +201,7 @@ async function main() {
     backfill,
   }
   mkdirSync('tmp', { recursive: true })
-  const journalPath = `tmp/cms-company-merge-${stamp}.json`
+  const journalPath = `tmp/company-merge-${stamp}.json`
   writeFileSync(journalPath, JSON.stringify(journal, null, 2))
   console.log(`journal → ${journalPath}`)
 
