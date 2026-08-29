@@ -7,6 +7,7 @@ import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
 import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
+import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 /**
@@ -1074,6 +1075,12 @@ export default function JobPortalPage() {
             <span className="text-gray-900 font-bold">{fmtCurrency(data.order.total)}</span>
           </div>
         </section>
+
+        {/* ── Deliveries ──────────────────────────────────────────────────── */}
+        {/* What's coming TO them, above "Your drivers" (what they collect FROM
+            us). Renders nothing when the job has no deliveries, so a
+            collect-it-yourself job is unchanged. */}
+        <PortalDeliveriesSection />
 
         {/* ── Your drivers ─────────────────────────────────────────────────── */}
         <PortalDriversSection />

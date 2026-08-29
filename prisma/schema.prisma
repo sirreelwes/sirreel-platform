@@ -4795,6 +4795,30 @@ model Job {
   /// reconcile queue so the queue can actually reach zero — without it,
   /// every new HQ-native job accumulates as permanent noise. Reversible.
   rwNotApplicable         DateTime?      @map("rw_not_applicable")
+
+  // ── Report-to (client-supplied, portal "Deliveries") ────────────────
+  // Where drivers bringing units to this production should report: the
+  // gate/lot/cross-street a truck aims for, which is rarely the billing
+  // address and often not the production office either. The CLIENT owns
+  // these — they are written from /portal/job/[slug], never by staff — so
+  // this is the client's own statement of the destination, not our guess.
+  //
+  // Job-level on purpose: one production, one place to report. A per-unit
+  // override is a real case (a coach to base camp, a restroom trailer to
+  // set) but not this cut; it would hang off SubRental/DispatchTask rather
+  // than widening this.
+  //
+  // Distinct from Booking.deliveryAddress, which is Planyo-import data on a
+  // single booking. When both exist the report-to is the newer, client-
+  // asserted fact; nothing reconciles them automatically today.
+  reportToAddress         String?        @map("report_to_address") @db.Text
+  reportToAccessNotes     String?        @map("report_to_access_notes") @db.Text
+  reportToContactName     String?        @map("report_to_contact_name")
+  reportToContactPhone    String?        @map("report_to_contact_phone") @db.VarChar(30)
+  /// Last save, by anyone. Drives the "Saved <when>" line in the portal and
+  /// tells dispatch whether the address they are looking at is fresh.
+  reportToUpdatedAt       DateTime?      @map("report_to_updated_at")
+
   createdAt               DateTime       @default(now()) @map("created_at")
   updatedAt               DateTime       @updatedAt @map("updated_at")
 
