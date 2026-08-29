@@ -104,12 +104,21 @@ export async function syncOrderKitPieces(
   const sourceLines = lines.filter((l) => !l.autoKitPieceId)
   const managed = lines.filter((l) => l.autoKitPieceId)
 
+  // The order's client, so a CHARGED accessory bills at their negotiated
+  // rate rather than list. This is the path that prices auto-added kit
+  // pieces — the parse preview quotes list and is corrected here.
+  const orderForRates = await tx.order.findUnique({
+    where: { id: orderId },
+    select: { companyId: true },
+  })
+
   const desired = await deriveKitPieceLines(
     sourceLines.map((l) => ({
       inventoryItemId: l.inventoryItemId,
       quantity: l.quantity,
     })),
     tx,
+    orderForRates?.companyId ?? null,
   )
 
   // Nothing owed and nothing managed — the overwhelmingly common path.

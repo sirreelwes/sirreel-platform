@@ -13,6 +13,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { negotiated } from '@/lib/pricing/companyRate'
 import type {
   KitPieceBilling,
   LineItemDepartment,
@@ -73,6 +74,13 @@ export interface KitPieceLine {
 export async function deriveKitPieceLines(
   lines: KitInputLine[],
   db: Db = prisma,
+  /**
+   * The order's client. A CHARGED piece bills at the client's negotiated
+   * rate when they have one — without this the accessory would quietly
+   * bill at list on an order whose other lines carry the client's price.
+   * FREE pieces are $0 by policy and unaffected.
+   */
+  companyId?: string | null,
 ): Promise<KitPieceLine[]> {
   // Parent quantities, summed across lines — two radio lines are one
   // radio count as far as the charging bank is concerned.
@@ -110,6 +118,19 @@ export async function deriveKitPieceLines(
     orderBy: [{ sortOrder: 'asc' }],
   })
   if (kits.length === 0) return []
+
+  // Client rate card, keyed by piece. Only CHARGED pieces consult it.
+  const negotiatedByPiece = new Map<string, number>()
+  if (companyId) {
+    const rates = await db.companyRate.findMany({
+      where: { companyId, inventoryItemId: { in: kits.map((k) => k.pieceItemId) } },
+      select: { inventoryItemId: true, dailyRate: true },
+    })
+    for (const r of rates) {
+      const d = negotiated(r.dailyRate)
+      if (d) negotiatedByPiece.set(r.inventoryItemId, Number(d))
+    }
+  }
 
   // Already on the order — the client asked for it, so leave their line
   // alone rather than shipping and quoting it twice.
@@ -170,7 +191,10 @@ export async function deriveKitPieceLines(
       description: kit.piece.description || kit.piece.code,
       code: kit.piece.code,
       quantity,
-      rate: kit.billing === 'CHARGED' ? Number(kit.piece.dailyRate) : 0,
+      rate:
+        kit.billing === 'CHARGED'
+          ? (negotiatedByPiece.get(kit.pieceItemId) ?? Number(kit.piece.dailyRate))
+          : 0,
       billing: kit.billing,
       department: kit.piece.department,
       lineType: kit.piece.type,

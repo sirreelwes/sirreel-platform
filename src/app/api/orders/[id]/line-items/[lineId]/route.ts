@@ -37,7 +37,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // changed) must pass the check — moving a line FROM VEHICLES on
     // a BOOKED order is still a "vehicle edit" and stays locked.
     const orderForGate = await prisma.order.findUnique({
-      where: { id: orderId }, select: { status: true },
+      // companyId rides along for the client rate card — re-resolving a
+      // rate must land on THEIR negotiated price, not list.
+      where: { id: orderId }, select: { status: true, companyId: true },
     });
     const existingLineForGate = await prisma.orderLineItem.findUnique({
       where: { id: lineId }, select: { department: true },
@@ -146,6 +148,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
             rateType: effectiveRateType,
             clientRate: rate !== undefined ? rate : existing.rate,
             isPackageMember: !!(existing.packageInstanceId && !existing.isPackageHeader),
+            companyId: orderForGate?.companyId ?? null,
           });
           if (!rr) {
             return NextResponse.json({ error: "invalid rate" }, { status: 400 });

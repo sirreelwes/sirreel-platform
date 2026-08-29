@@ -372,6 +372,7 @@ export async function POST(req: NextRequest) {
           clientRate: raw.rate ?? 0,
           isPackageMember: !!(raw.packageInstanceId && !raw.isPackageHeader),
           isKitPiece: !!(raw.inventoryItemId && freeKitPieceIds.has(raw.inventoryItemId)),
+          companyId,
         }, tx)
         if (!rr) {
           throw new Error(`unparseable rate on parsed line "${raw.description}"`)

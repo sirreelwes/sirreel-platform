@@ -40,7 +40,8 @@
     "test:driver-relay": "tsx tests/sub-rentals/driver-relay.test.ts",
     "test:sub-rental-hold": "tsx tests/sub-rentals/hold-state.test.ts",
     "test:measure-tokens": "tsx tests/sales/measure-tokens.test.ts",
-    "coi:rerun": "tsx scripts/rerun-coi-reviews.ts"
+    "coi:rerun": "tsx scripts/rerun-coi-reviews.ts",
+    "test:company-rate": "tsx tests/pricing/company-rate.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

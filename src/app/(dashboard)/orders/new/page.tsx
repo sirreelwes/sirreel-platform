@@ -2343,6 +2343,7 @@ function NewQuotePageInner() {
             if (group.length === 0) return null;
             return (
               <DepartmentGroup
+                companyId={selectedClientId && selectedClientId !== '__new__' ? selectedClientId : null}
                 key={dept}
                 department={dept}
                 rows={group}
@@ -2539,9 +2540,13 @@ const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onCommit, onPickPackage, registerDescriptionRef,
+  companyId,
 }: {
   department: LineItemDepartment;
   rows: ResolvedItem[];
+  /** The client this quote is for — prices the catalog picker off their
+   *  negotiated rate card. Null for a brand-new company (no deals yet). */
+  companyId: string | null;
   onChange: (id: string, patch: Partial<ResolvedItem>) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
@@ -2655,6 +2660,7 @@ function DepartmentGroup({
       <div className="divide-y divide-lt-hairline/60">
         {rows.map((it) => (
           <LineItemRow
+            companyId={companyId}
             key={it.localId}
             item={it}
             onChange={onChange}
@@ -2692,9 +2698,12 @@ function DepartmentGroup({
 }
 
 function LineItemRow({
-  item, onChange, onDelete, onCommit, onPickPackage, descriptionRef,
+  item, onChange, onDelete, onCommit, onPickPackage, descriptionRef, companyId,
 }: {
   item: ResolvedItem;
+  /** Passed to the description combobox so a picked row pre-fills the
+   *  client's negotiated rate instead of list. */
+  companyId: string | null;
   onChange: (id: string, patch: Partial<ResolvedItem>) => void;
   onDelete: (id: string) => void;
   /** Parent-level commit: auto-append empty row + focus its
@@ -2808,6 +2817,7 @@ function LineItemRow({
               the dept, so the per-row dept badge that used to sit here
               was duplicative chrome. Removed for one calmer focal point. */}
           <LineItemDescriptionCombobox
+            companyId={companyId}
             value={item.description}
             onChange={(next) => onChange(id, { description: next })}
             onPickCatalog={(hit) => applyMatch(hit as CatalogSearchResult)}

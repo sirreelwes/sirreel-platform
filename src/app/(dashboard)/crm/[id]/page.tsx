@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { OutreachQuickLogModal } from "@/components/crm/OutreachQuickLogModal";
 import { ClientArPanel } from "@/components/crm/ClientArPanel";
 import { CopyCoiLinkButton } from "@/components/coi/CopyCoiLinkButton";
+import { NegotiatedRatesPanel } from "@/components/crm/NegotiatedRatesPanel";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -746,6 +747,15 @@ export default function CompanyDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Client rate card — unlike the discount profile above,
+                this one is WIRED INTO PRICING: a rate here becomes what
+                the line bills at on their quotes. */}
+            <NegotiatedRatesPanel
+              companyId={company.id}
+              companyName={company.name}
+              canEdit={(session?.user as any)?.role === 'ADMIN'}
+            />
 
             {/* Negotiated standing agreement — read-only block.
                 Renders only when the agreement has been approved

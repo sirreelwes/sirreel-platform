@@ -2257,6 +2257,7 @@ export default function OrderDetailPage() {
                   </select>
                 ) : liType === "EQUIPMENT" || liType === "EXPENDABLE" ? (
                   <LineItemDescriptionCombobox
+                    companyId={order?.company?.id ?? null}
                     value={invSearch}
                     onChange={(next) => setInvSearch(next)}
                     onPickCatalog={(hit) => {
@@ -2492,6 +2493,7 @@ export default function OrderDetailPage() {
                         />
                       ) : (
                         <LineItemDescriptionCombobox
+                          companyId={order?.company?.id ?? null}
                           value={editDesc}
                           onChange={(next) => setEditDesc(next)}
                           onPickCatalog={(hit) => applyEditMatch(hit)}

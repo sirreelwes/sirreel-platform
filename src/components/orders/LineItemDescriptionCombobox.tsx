@@ -59,8 +59,16 @@ export interface CatalogHit {
   type: CatalogHitType
   name: string
   department: string
+  /** What this line should bill at for the current client — the
+   *  negotiated rate when they have one, else list. */
   dailyRate: number
   weeklyRate: number
+  /** List price, present when the API was told who the client is.
+   *  Only differs from dailyRate when `negotiated` is true. */
+  listDailyRate?: number
+  listWeeklyRate?: number
+  /** True when this client's rate card priced the row. */
+  negotiated?: boolean
   /** Present only when type === 'PACKAGE'. Lists the inventory
    *  members that should be inserted as $0 child rows under the
    *  header. */
@@ -101,6 +109,10 @@ export interface LineItemDescriptionComboboxProps {
    *  package builder uses `['INVENTORY']` so the picker doesn't show
    *  asset categories or other packages while building. */
   types?: CatalogHitType[]
+  /** The order's client. Passing it prices every hit off that client's
+   *  negotiated rate card, so picking a row pre-fills THEIR rate. Omit
+   *  outside an order (e.g. the admin package builder) to get list. */
+  companyId?: string | null
 }
 
 const DEBOUNCE_MS = 200
@@ -118,7 +130,7 @@ function LineItemDescriptionComboboxInner(
 ) {
   const {
     value, onChange, onPickCatalog, catalogBinding, onClearCatalog, onCommit,
-    placeholder, autoFocus, className, hideCustomChip, types,
+    placeholder, autoFocus, className, hideCustomChip, types, companyId,
   } = props
 
   const [results, setResults] = useState<CatalogHit[]>([])
@@ -157,7 +169,10 @@ function LineItemDescriptionComboboxInner(
     setLoading(true)
     try {
       const typesQuery = typesKey ? `&types=${encodeURIComponent(typesKey)}` : ''
-      const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10${typesQuery}`)
+      const companyQuery = companyId ? `&companyId=${encodeURIComponent(companyId)}` : ''
+      const res = await fetch(
+        `/api/catalog/search?q=${encodeURIComponent(trimmed)}&limit=10${typesQuery}${companyQuery}`,
+      )
       if (!res.ok) { setResults([]); setOpen(false); return }
       const data = await res.json()
       // A newer query (or a pick) superseded this response — drop it.
@@ -183,7 +198,7 @@ function LineItemDescriptionComboboxInner(
     } finally {
       setLoading(false)
     }
-  }, [typesKey])
+  }, [typesKey, companyId])
 
   // Debounced fetch on typing.
   useEffect(() => {
@@ -423,7 +438,16 @@ function LineItemDescriptionComboboxInner(
                   )}
                 </div>
               </div>
-              <div className="text-xs font-mono text-lt-fg2 shrink-0 pt-0.5">{FORMAT_USD(r.dailyRate)}/d</div>
+              <div className="text-xs font-mono shrink-0 pt-0.5 text-right">
+                <span className={r.negotiated ? 'text-amber-500 font-semibold' : 'text-lt-fg2'}>
+                  {FORMAT_USD(r.dailyRate)}/d
+                </span>
+                {/* Their price replaced ours — show what it replaced so
+                    the rep can see the deal, not just the number. */}
+                {r.negotiated && r.listDailyRate != null && (
+                  <div className="text-[10px] text-lt-fg3 line-through">{FORMAT_USD(r.listDailyRate)}</div>
+                )}
+              </div>
             </li>
           ))}
         </ul>,

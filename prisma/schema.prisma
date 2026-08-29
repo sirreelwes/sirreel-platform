@@ -541,6 +541,7 @@ model Company {
   inquiries                       Inquiry[]
   inquiryCaptures                 InquiryCapture[]       @relation("CaptureCompany")
   outreachActivities              OutreachActivity[]     @relation("CompanyOutreach")
+  negotiatedRates                 CompanyRate[]
 
   @@index([mostCommonProductionTypeProfileId])
   @@map("companies")
@@ -2215,6 +2216,7 @@ model User {
   timelineActions          ClaimTimeline[]       @relation("TimelineActor")
   reviewedClaimMail        ClaimMail[]           @relation("ClaimMailReviewer")
   createdOrderDiscounts    OrderDiscount[]       @relation("OrderDiscountCreator")
+  createdCompanyRates      CompanyRate[]         @relation("CompanyRateCreator")
   createdIncidents         Incident[]            @relation("IncidentCreator")
   assignedIncidents        Incident[]            @relation("IncidentAssignee")
   // HR back-relations. employee is the 0-or-1 Employee row for staff
@@ -2962,6 +2964,7 @@ model InventoryItem {
   assets            Asset[]
   bookingItems      BookingItem[]
   vehicleCategories VehicleCategory[]
+  companyRates      CompanyRate[]
 
   @@index([rwId])
   @@index([needsReview])
@@ -2969,6 +2972,59 @@ model InventoryItem {
   @@index([preferredVendorId])
   @@index([trackingMode])
   @@map("inventory_items")
+}
+
+// A negotiated per-client price on ONE catalog item — the client rate
+// card (2026-08-29, Wes: "their rate on super cargo vans is $130, where
+// our primary rate is $170. How can we make sure they see that in the
+// line?").
+//
+// This is deliberately NOT a discount. An OrderDiscount is a totals-level
+// row that renders under a section subtotal, so the line above it still
+// prints the list rate; a CompanyRate replaces what the line itself bills
+// at, so the client reads "$130.00/day" and no discount row appears.
+//
+// Resolution (src/lib/pricing/companyRate.ts + resolveRate.ts): a
+// positive value here OVERLAYS the catalog rate per field — a negotiated
+// daily with no negotiated weekly still falls back to the catalog weekly.
+// Non-positive/null means "not negotiated for this unit", never "free",
+// matching the catalog's own `rate <= 0 = unpriced` rule.
+//
+// Consequence worth stating: for a client with a rate here, the negotiated
+// number becomes `resolvedRate` on the line — so billing at it is NOT a
+// rate override, and a rep typing something ELSE still trips the override
+// audit against the negotiated rate rather than against list.
+//
+// No effective-date window on purpose. A negotiated rate is current until
+// it is changed, and "as of when" is genuinely ambiguous on a quote
+// (booking date? pickup date? send date?) — better to leave the question
+// unasked than to answer it wrong in a column nothing reads.
+model CompanyRate {
+  id              String @id @default(uuid())
+  companyId       String @map("company_id")
+  inventoryItemId String @map("inventory_item_id")
+
+  // Both nullable: a deal is often struck on the daily only. Null (or
+  // <= 0) on a field means "use the catalog value for that field".
+  dailyRate  Decimal? @map("daily_rate") @db.Decimal(10, 2)
+  weeklyRate Decimal? @map("weekly_rate") @db.Decimal(10, 2)
+
+  /// Why this rate exists — "2026 season deal", "matched their Dallas
+  /// vendor". Internal only; never rendered to the client.
+  note String? @db.Text
+
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  createdBy     User?         @relation("CompanyRateCreator", fields: [createdById], references: [id])
+
+  @@unique([companyId, inventoryItemId])
+  @@index([companyId])
+  @@index([inventoryItemId])
+  @@map("sr_company_rates")
 }
 
 // How a catalog row's availability is tracked. See InventoryItem.
@@ -5506,8 +5562,8 @@ model SignedAgreement {
   /// the row keeps its own honest status (it has no signature of its own,
   /// and the signed-copy surfaces must keep saying so), and only the
   /// surfaces that ASK consult this column.
-  coveredByAgreementId String?          @map("covered_by_agreement_id")
-  coveredBy            SignedAgreement? @relation("AgreementCoverage", fields: [coveredByAgreementId], references: [id], onDelete: SetNull)
+  coveredByAgreementId String?           @map("covered_by_agreement_id")
+  coveredBy            SignedAgreement?  @relation("AgreementCoverage", fields: [coveredByAgreementId], references: [id], onDelete: SetNull)
   covers               SignedAgreement[] @relation("AgreementCoverage")
 
   createdAt DateTime @default(now()) @map("created_at")

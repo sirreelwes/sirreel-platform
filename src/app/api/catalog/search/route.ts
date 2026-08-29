@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
+import { negotiated } from '@/lib/pricing/companyRate'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,13 @@ export const dynamic = 'force-dynamic'
  * so this queries ONE table and every hit comes back type 'INVENTORY'.
  * Querying both tables here would list the 13 merged rows twice — once
  * as the frozen AssetCategory, once as its merged copy.
+ *
+ * `companyId=` applies that client's negotiated rate card, so a picked
+ * line pre-fills at THEIR price rather than at list. Callers that know
+ * the order's client must pass it — otherwise the rep is shown $170,
+ * types nothing, and the client is quoted list despite having a deal.
+ * `listDailyRate` / `listWeeklyRate` ride along so the picker can show
+ * what the negotiated number replaced.
  *
  * Hits carry `trackingMode` so the picker can tell a unit-tracked
  * vehicle or stage from warehouse gear. The legacy `types=` values still
@@ -29,6 +37,7 @@ export async function GET(req: NextRequest) {
   //   - line-item combobox: default (all three)
   //   - admin package builder's component picker: types=INVENTORY
   //   - any caller that wants to scope the typeahead
+  const companyId = (searchParams.get('companyId') || '').trim() || null
   const typesParam = searchParams.get('types')
   const types = typesParam
     ? new Set(typesParam.split(',').map((t) => t.trim().toUpperCase()))
@@ -140,6 +149,25 @@ export async function GET(req: NextRequest) {
     return an.length - bn.length
   })
 
+  // Client rate card, one query for every hit on screen. Packages are
+  // priced by their own `pricePerDay` row and have no catalog item to
+  // hang a negotiated rate off, so they stay at list — a negotiated
+  // package price would be its own kind of row.
+  const negotiatedById = new Map<string, { daily: number | null; weekly: number | null }>()
+  if (companyId && ranked.length) {
+    const rows = await prisma.companyRate.findMany({
+      where: { companyId, inventoryItemId: { in: ranked.map((i) => i.id) } },
+      select: { inventoryItemId: true, dailyRate: true, weeklyRate: true },
+    })
+    for (const r of rows) {
+      const d = negotiated(r.dailyRate)
+      const w = negotiated(r.weeklyRate)
+      if (d || w) {
+        negotiatedById.set(r.inventoryItemId, { daily: d ? Number(d) : null, weekly: w ? Number(w) : null })
+      }
+    }
+  }
+
   const results = [
     // Packages first — they're the "best" answer when they match
     // because picking one fills the most rows in a single tap.
@@ -162,15 +190,24 @@ export async function GET(req: NextRequest) {
     })),
     // Every catalog hit is an InventoryItem now, so callers bind
     // inventoryItemId and never assetCategoryId.
-    ...ranked.map((i) => ({
-      id: i.id,
-      type: 'INVENTORY' as const,
-      trackingMode: i.trackingMode,
-      name: i.description || i.code,
-      department: i.department,
-      dailyRate: Number(i.dailyRate),
-      weeklyRate: Number(i.weeklyRate),
-    })),
+    ...ranked.map((i) => {
+      const deal = negotiatedById.get(i.id)
+      const listDaily = Number(i.dailyRate)
+      const listWeekly = Number(i.weeklyRate)
+      return {
+        id: i.id,
+        type: 'INVENTORY' as const,
+        trackingMode: i.trackingMode,
+        name: i.description || i.code,
+        department: i.department,
+        // What the line should bill at for this client.
+        dailyRate: deal?.daily ?? listDaily,
+        weeklyRate: deal?.weekly ?? listWeekly,
+        listDailyRate: listDaily,
+        listWeeklyRate: listWeekly,
+        negotiated: !!deal,
+      }
+    }),
   ].slice(0, limit)
 
   return NextResponse.json({ results })

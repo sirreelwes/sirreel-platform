@@ -69,7 +69,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Phase 2's holds-sync lands. Pre-BOOKED orders allow all depts.
     const orderForGate = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { status: true },
+      // companyId rides along for the client rate card — a line added to
+      // an order for a client with a negotiated rate bills at THEIR rate.
+      select: { status: true, companyId: true },
     });
     if (!orderForGate) {
       return NextResponse.json({ error: "order not found" }, { status: 404 });
@@ -391,6 +393,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         rateType: rateType as RateType,
         clientRate: rate,
         isPackageMember: !!(packageInstanceId && !isPackageHeader),
+        companyId: orderForGate.companyId,
       });
     }
     if (!rateResolution) {
