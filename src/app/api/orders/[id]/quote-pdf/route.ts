@@ -66,9 +66,13 @@ export async function POST(
     billableDays: li.billableDays,
     computedDays: li.computedDays ?? null,
     lineTotal: Number(li.lineTotal),
+    id: li.id,
+    // A partner ancillary hangs under the unit it belongs to, so it renders
+    // inside that unit's section rather than being hoisted into "Fees".
+    parentLineItemId: li.parentLineItemId ?? null,
     isDiscount: li.type === 'DISCOUNT',
-    // Fee-catalog lines render in their own "Fees" section (last),
-    // never mixed into the department groups.
+    // Fee-catalog lines render in their own "Fees" section (last), UNLESS
+    // they belong to a parent line — see groupByDepartment.
     isFee: li.type === 'FEE',
     // Client-facing note (e.g. LED Wall A/V Tech requirement, seeded
     // from InventoryItem.clientNote at line-add time). Prints italic

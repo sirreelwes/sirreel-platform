@@ -30,7 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { flatTotalToDepartmentDiscount } from '@/lib/orders/discountedTotals'
 
 const DEPT_LABELS: Record<string, string> = {
-  VEHICLES: 'Trucking',
+  VEHICLES: 'Vehicles',
   COMMUNICATIONS: 'Communications',
   STAGES: 'Studios',
   PRO_SUPPLIES: 'Pro Supplies',

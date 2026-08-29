@@ -46,6 +46,11 @@ export type Department =
   | 'ART'
 
 export interface QuoteLineItem {
+  id?: string
+  /** Partner ancillaries hang under their unit — see groupByDepartment. */
+  parentLineItemId?: string | null
+  /** Set during grouping, not by the caller: render this row indented. */
+  isChild?: boolean
   department: Department
   description: string
   qualifier: string | null
@@ -141,7 +146,7 @@ export interface QuoteDocumentProps {
 // ─────────────────────────────────────────────────────────────────────
 
 const DEPT_LABELS: Record<Department, string> = {
-  VEHICLES: 'Trucking',
+  VEHICLES: 'Vehicles',
   COMMUNICATIONS: 'Communications',
   STAGES: 'Studios',
   PRO_SUPPLIES: 'Pro Supplies',
@@ -245,10 +250,28 @@ function groupByDepartment(items: QuoteLineItem[]): Array<{ dept: SectionKey; it
   const lineItems = items.filter((l) => !l.isDiscount)
   const buckets = new Map<Department, QuoteLineItem[]>()
   const feeLines: QuoteLineItem[] = []
+
+  // Children first: a fee that belongs to a unit renders directly beneath
+  // that unit, inside ITS section, not hoisted into "Fees" at the end of the
+  // document. Two coaches each carry their own mileage and hours, and a
+  // reader has to be able to tell whose is whose — which a single pooled
+  // Fees section cannot show.
+  const childrenOf = new Map<string, QuoteLineItem[]>()
   for (const it of lineItems) {
-    if (it.isFee) { feeLines.push(it); continue }
+    const parent = it.parentLineItemId
+    if (!parent) continue
+    const list = childrenOf.get(parent) ?? []
+    list.push({ ...it, isChild: true })
+    childrenOf.set(parent, list)
+  }
+
+  for (const it of lineItems) {
+    if (it.parentLineItemId) continue // placed under its parent below
+    const kids = (it.id && childrenOf.get(it.id)) || []
+    // A standalone fee (no parent) keeps the old behaviour.
+    if (it.isFee && kids.length === 0) { feeLines.push(it); continue }
     const list = buckets.get(it.department) ?? []
-    list.push(it)
+    list.push(it, ...kids)
     buckets.set(it.department, list)
   }
   // Order departments per DEPT_ORDER; any unexpected departments fall to the end.
@@ -391,6 +414,8 @@ const styles = StyleSheet.create({
   // Column widths sum to 100
   colCode: { width: '11%', fontSize: 9, paddingRight: 4 },
   colDesc: { width: '40%', fontSize: 9, paddingRight: 4 },
+  /** Same column, inset — partner ancillaries under their unit. */
+  colDescChild: { width: '40%', fontSize: 9, paddingRight: 4, paddingLeft: 10, color: C.muted },
   colQty: { width: '7%', fontSize: 9, textAlign: 'right' },
   colDays: { width: '8%', fontSize: 9, textAlign: 'right' },
   colRate: { width: '15%', fontSize: 9, textAlign: 'right' },
@@ -626,8 +651,8 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                   <View style={styles.colCode}>
                     <Text>{item.inventoryCode || '—'}</Text>
                   </View>
-                  <View style={styles.colDesc}>
-                    <Text>{item.description}</Text>
+                  <View style={item.isChild ? styles.colDescChild : styles.colDesc}>
+                    <Text>{item.isChild ? `\u2514  ${item.description}` : item.description}</Text>
                     {item.qualifier && <Text style={styles.qualifier}>{item.qualifier}</Text>}
                     {item.notes && item.notes.trim().length > 0 && (
                       <Text style={styles.qualifier}>{item.notes}</Text>
