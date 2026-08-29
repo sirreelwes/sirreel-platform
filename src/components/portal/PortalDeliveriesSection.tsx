@@ -1,24 +1,29 @@
 'use client'
 
 /**
- * "Deliveries" — what's arriving, who's bringing it, and where they report.
+ * "Deliveries" — what's arriving, who's bringing it, where they report, and
+ * where it goes back from.
  *
  * Sibling of PortalDriversSection, pointing the other way: that section is the
  * client naming who COLLECTS a unit from us; this one tells them who is
  * DELIVERING one to them. They sit next to each other on the job page, so the
  * copy keeps them apart — "arriving" here, "your drivers" there.
  *
- * ── One list, no sourcing tells ─────────────────────────────────────────────
- * A partner's coach and one of our own trailers render through the same JSX.
- * The API doesn't send a source field and this file never asks for one, which
- * is what keeps the sub-rental conduit intact at the last mile: the client
- * cannot tell which unit came off somebody else's yard.
+ * ── Two windows, not one ────────────────────────────────────────────────────
+ * A restroom trailer can't be towed by the client, so we drop it AND collect
+ * it (Wes 2026-08-28). Those are two separate promises: two addresses and two
+ * times. Pickup defaults to "same place" because that IS the common case, and
+ * the override is one checkbox away because the exception — a unit that moved
+ * mid-shoot, a production that struck to another lot — is what strands a truck.
  *
- * ── No phone number, anywhere ───────────────────────────────────────────────
- * The driver line is a name and a state. The relay exists precisely so neither
- * side learns the other's address, and a number here would break it in one hop
- * and move the conversation somewhere HQ can't see. Questions go to the rep,
- * whose card is already on this page.
+ * The TIME is never inherited from the delivery, even when the address is. A
+ * trailer dropped at 6am is not collected at 6am, and copying it across would
+ * state a confident wrong fact instead of an honest blank.
+ *
+ * ── One list, no sourcing tells; no phone number, anywhere ──────────────────
+ * A partner's coach and one of our own trailers render through the same JSX,
+ * and the driver line is a name and a state, never digits. See the sibling
+ * notes in src/lib/portal/deliveries.ts for why both rules exist.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -32,16 +37,23 @@ interface DeliveryUnit {
   sameDay: boolean
   driver: { name: string; assignedAt: string | null } | null
 }
-interface ReportTo {
-  address: string | null
-  accessNotes: string | null
-  contactName: string | null
-  contactPhone: string | null
-  updatedAt: string | null
-}
 interface Payload {
   units: DeliveryUnit[]
-  reportTo: ReportTo
+  reportTo: {
+    address: string | null
+    accessNotes: string | null
+    time: string | null
+    contactName: string | null
+    contactPhone: string | null
+    updatedAt: string | null
+  }
+  pickupFrom: {
+    sameAsDelivery: boolean
+    address: string | null
+    accessNotes: string | null
+    time: string | null
+  }
+  effectivePickup: { address: string | null; accessNotes: string | null; time: string | null }
   anyDriverNamed: boolean
 }
 
@@ -57,12 +69,13 @@ const fmtDay = (ymd: string | null) =>
 function fmtSaved(iso: string | null): string | null {
   if (!iso) return null
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    + ' at '
-    + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return (
+    d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) +
+    ' at ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  )
 }
 
-/** Initials for the driver avatar. Two letters max; a single-word name gives one. */
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -84,20 +97,32 @@ export function PortalDeliveriesSection() {
   const [error, setError] = useState<string | null>(null)
   const [openProfile, setOpenProfile] = useState<string | null>(null)
 
-  // Draft is separate from `data` so a save that fails leaves what they typed
-  // on screen rather than reverting it under them.
+  // Draft state is separate from `data` so a failed save leaves what they
+  // typed on screen rather than reverting it under them.
   const [address, setAddress] = useState('')
   const [accessNotes, setAccessNotes] = useState('')
+  const [time, setTime] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [pickupSame, setPickupSame] = useState(true)
+  const [pickupAddress, setPickupAddress] = useState('')
+  const [pickupAccessNotes, setPickupAccessNotes] = useState('')
+  const [pickupTime, setPickupTime] = useState('')
   const [dirty, setDirty] = useState(false)
+
+  const touch = () => setDirty(true)
 
   const hydrate = useCallback((p: Payload) => {
     setData(p)
     setAddress(p.reportTo.address ?? '')
     setAccessNotes(p.reportTo.accessNotes ?? '')
+    setTime(p.reportTo.time ?? '')
     setContactName(p.reportTo.contactName ?? '')
     setContactPhone(p.reportTo.contactPhone ?? '')
+    setPickupSame(p.pickupFrom.sameAsDelivery)
+    setPickupAddress(p.pickupFrom.address ?? '')
+    setPickupAccessNotes(p.pickupFrom.accessNotes ?? '')
+    setPickupTime(p.pickupFrom.time ?? '')
     setDirty(false)
   }, [])
 
@@ -110,7 +135,7 @@ export function PortalDeliveriesSection() {
         const j = (await r.json()) as Payload
         if (alive) hydrate(j)
       } catch {
-        /* section stays hidden — it is additive, never the reason a page fails */
+        /* additive section — never the reason a page fails */
       } finally {
         if (alive) setLoading(false)
       }
@@ -127,7 +152,17 @@ export function PortalDeliveriesSection() {
       const r = await fetch('/api/portal/job/deliveries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, accessNotes, contactName, contactPhone }),
+        body: JSON.stringify({
+          address,
+          accessNotes,
+          time,
+          contactName,
+          contactPhone,
+          pickupSameAsDelivery: pickupSame,
+          pickupAddress,
+          pickupAccessNotes,
+          pickupTime,
+        }),
       })
       const j = await r.json()
       if (!r.ok) {
@@ -142,8 +177,6 @@ export function PortalDeliveriesSection() {
     }
   }
 
-  // Nothing is coming to them: no section at all. An empty "Deliveries" card on
-  // a job where the client collects everything themselves is just confusing.
   if (loading || !data || data.units.length === 0) return null
 
   const savedAt = fmtSaved(data.reportTo.updatedAt)
@@ -155,18 +188,19 @@ export function PortalDeliveriesSection() {
         <h2 className="text-base font-bold text-gray-900">Deliveries</h2>
         <p className="text-xs text-gray-500 mt-1">
           {data.units.length === 1 ? 'One unit is' : `${data.units.length} units are`} coming to you.
-          Tell us where the drivers should report and we'll pass it straight to them.
+          Tell us where and when to drop them, and where and when to collect them — we pass it
+          straight to the drivers.
         </p>
       </div>
 
-      {/* ── Report-to ─────────────────────────────────────────────────────── */}
+      {/* ── Delivery ──────────────────────────────────────────────────────── */}
       <div className="bg-[#FBFAF8] border border-gray-200 rounded-xl p-4 space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
-            <div className="text-sm font-bold text-gray-900">Where should drivers report?</div>
+            <div className="text-sm font-bold text-gray-900">Delivery — where and when</div>
             <div className="text-xs text-gray-500 mt-0.5">
-              Include the gate, lot or cross-street a truck should aim for — not the production
-              office, if they're different.
+              Give the gate, lot or cross-street a truck should aim for — not the production
+              office, if they&apos;re different.
             </div>
           </div>
           {hasAddress && (
@@ -178,71 +212,103 @@ export function PortalDeliveriesSection() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
-            <label className={LABEL} htmlFor="rt-address">Report-to address</label>
-            <input
-              id="rt-address"
-              className={INPUT}
-              value={address}
+            <label className={LABEL} htmlFor="rt-address">Delivery address</label>
+            <input id="rt-address" className={INPUT} value={address}
               placeholder="11801 Wentworth St, Sun Valley, CA 91352"
-              onChange={(e) => { setAddress(e.target.value); setDirty(true) }}
-            />
+              onChange={(e) => { setAddress(e.target.value); touch() }} />
           </div>
           <div className="sm:col-span-2">
             <label className={LABEL} htmlFor="rt-notes">Gate, lot or access notes</label>
-            <input
-              id="rt-notes"
-              className={INPUT}
-              value={accessNotes}
+            <input id="rt-notes" className={INPUT} value={accessNotes}
               placeholder="North gate off Wentworth, code #4412 — park along the east fence"
-              onChange={(e) => { setAccessNotes(e.target.value); setDirty(true) }}
-            />
+              onChange={(e) => { setAccessNotes(e.target.value); touch() }} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={LABEL} htmlFor="rt-time">What time should they arrive?</label>
+            <input id="rt-time" className={INPUT} value={time}
+              placeholder="6:00–7:00 AM, or “first light”"
+              onChange={(e) => { setTime(e.target.value); touch() }} />
           </div>
           <div>
             <label className={LABEL} htmlFor="rt-contact">On-site contact</label>
-            <input
-              id="rt-contact"
-              className={INPUT}
-              value={contactName}
+            <input id="rt-contact" className={INPUT} value={contactName}
               placeholder="Who the driver asks for"
-              onChange={(e) => { setContactName(e.target.value); setDirty(true) }}
-            />
+              onChange={(e) => { setContactName(e.target.value); touch() }} />
           </div>
           <div>
             <label className={LABEL} htmlFor="rt-phone">Their mobile</label>
-            <input
-              id="rt-phone"
-              className={INPUT}
-              value={contactPhone}
+            <input id="rt-phone" className={INPUT} value={contactPhone}
               placeholder="(818) 555-0147"
-              onChange={(e) => { setContactPhone(e.target.value); setDirty(true) }}
-            />
+              onChange={(e) => { setContactPhone(e.target.value); touch() }} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pickup ────────────────────────────────────────────────────────── */}
+      <div className="bg-[#FBFAF8] border border-gray-200 rounded-xl p-4 space-y-3">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-gray-900">Pickup — where and when</div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            Everything we drop, we collect. Tell us if it moves before then.
           </div>
         </div>
 
-        {error && <div className="text-xs text-red-600">{error}</div>}
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" checked={pickupSame}
+            onChange={(e) => { setPickupSame(e.target.checked); touch() }}
+            className="accent-gray-900" />
+          <span>Collect from the same place we delivered</span>
+        </label>
 
-        <div className="border-t border-gray-100 pt-3 flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-xs text-gray-500">
-            {savedAt
-              ? `Saved ${savedAt}${data.anyDriverNamed ? ' — your drivers have it' : ''}`
-              : 'Not saved yet'}
-          </span>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || !dirty}
-            className="px-4 py-2 text-xs font-bold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-default transition"
-          >
-            {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-          </button>
+        <div className="grid grid-cols-1 gap-3">
+          {!pickupSame && (
+            <>
+              <div>
+                <label className={LABEL} htmlFor="pu-address">Pickup address</label>
+                <input id="pu-address" className={INPUT} value={pickupAddress}
+                  placeholder="Where the unit will be when we come for it"
+                  onChange={(e) => { setPickupAddress(e.target.value); touch() }} />
+              </div>
+              <div>
+                <label className={LABEL} htmlFor="pu-notes">Gate, lot or access notes</label>
+                <input id="pu-notes" className={INPUT} value={pickupAccessNotes}
+                  placeholder="How the driver gets to it"
+                  onChange={(e) => { setPickupAccessNotes(e.target.value); touch() }} />
+              </div>
+            </>
+          )}
+          <div>
+            <label className={LABEL} htmlFor="pu-time">What time should they collect?</label>
+            <input id="pu-time" className={INPUT} value={pickupTime}
+              placeholder="After wrap, or a time"
+              onChange={(e) => { setPickupTime(e.target.value); touch() }} />
+            <p className="mt-1 text-[11px] text-gray-500">
+              We don&apos;t assume this from the delivery time — a trailer dropped at 6am is
+              rarely collected at 6am.
+            </p>
+          </div>
         </div>
+      </div>
+
+      {error && <div className="text-xs text-red-600">{error}</div>}
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <span className="text-xs text-gray-500">
+          {savedAt
+            ? `Saved ${savedAt}${data.anyDriverNamed ? ' — your drivers have it' : ''}`
+            : 'Not saved yet'}
+        </span>
+        <button type="button" onClick={save} disabled={saving || !dirty}
+          className="px-4 py-2 text-xs font-bold rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-default transition">
+          {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+        </button>
       </div>
 
       {/* ── Units ─────────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         {data.units.map((u) => {
           const day = fmtDay(u.startDate)
-          const back = u.sameDay ? 'back same day' : fmtDay(u.endDate) ? `back ${fmtDay(u.endDate)}` : null
+          const backDay = u.sameDay ? day : fmtDay(u.endDate)
           const isOpen = openProfile === u.id
           return (
             <article key={u.id} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -260,17 +326,28 @@ export function PortalDeliveriesSection() {
                   )}
                 </div>
                 {u.unitType && <div className="text-xs text-gray-500 mt-0.5">{u.unitType}</div>}
-                {day && (
-                  <div className="text-xs text-gray-600 mt-1.5">
-                    Arriving <span className="font-semibold text-gray-900">{day}</span>
-                    {back ? ` · ${back}` : ''}
+
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="text-xs text-gray-600">
+                    <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold block">Drop off</span>
+                    <span className="font-semibold text-gray-900">{day ?? 'TBC'}</span>
+                    {data.reportTo.time && <> · {data.reportTo.time}</>}
+                    {data.reportTo.address && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">{data.reportTo.address}</div>
+                    )}
                   </div>
-                )}
-                {hasAddress && (
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Reporting to {data.reportTo.address}
+                  <div className="text-xs text-gray-600">
+                    <span className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold block">Collect</span>
+                    <span className="font-semibold text-gray-900">{backDay ?? 'TBC'}</span>
+                    {data.effectivePickup.time && <> · {data.effectivePickup.time}</>}
+                    {data.effectivePickup.address && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {data.effectivePickup.address}
+                        {data.pickupFrom.sameAsDelivery && <span className="text-gray-400"> (same as drop off)</span>}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               {u.driver ? (
@@ -280,17 +357,11 @@ export function PortalDeliveriesSection() {
                       {initials(u.driver.name)}
                     </div>
                     <div className="flex-1 min-w-[140px]">
-                      <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">
-                        Your driver
-                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Your driver</div>
                       <div className="text-sm font-bold text-gray-900">{u.driver.name}</div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setOpenProfile(isOpen ? null : u.id)}
-                      aria-expanded={isOpen}
-                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
-                    >
+                    <button type="button" onClick={() => setOpenProfile(isOpen ? null : u.id)} aria-expanded={isOpen}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
                       {isOpen ? 'Hide profile' : 'View profile'}
                     </button>
                   </div>
@@ -323,8 +394,8 @@ export function PortalDeliveriesSection() {
               ) : (
                 <div className="border-t border-gray-100 bg-[#FCFCFB] px-4 py-3 text-xs text-gray-500 leading-relaxed">
                   <span className="font-semibold text-gray-600">Drivers are named closer to the date.</span>{' '}
-                  We'll add them here as soon as they are.
-                  {hasAddress && ' Your report-to address is already on file and goes to them automatically.'}
+                  We&apos;ll add them here as soon as they are.
+                  {hasAddress && ' Your addresses are already on file and go to them automatically.'}
                 </div>
               )}
             </article>

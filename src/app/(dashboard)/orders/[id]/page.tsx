@@ -164,6 +164,14 @@ type Order = {
   deliveryRequested: boolean;
   pickupRequested: boolean;
   dispatchTasks: { id: string; type: string; status: string }[];
+  // Server-computed: does this order hold something we HAVE to deliver and
+  // collect (a restroom trailer nobody can tow themselves)? Drives the
+  // suggestion in the Delivery & pickup card. See lib/orders/requiresDelivery.
+  deliveryRequirement: {
+    reasons: string[];
+    required: boolean;
+    satisfied: boolean;
+  } | null;
   // Phase 1b — set when this Order was created via the inquiry
   // add-on triage path. Drives the small "Add-on" chip next to the
   // status pill in the header.
@@ -701,6 +709,34 @@ export default function OrderDetailPage() {
       setBlindSaving(false);
     }
   }, [orderId, blindPickup, blindReturn, blindPickupInstructions, blindReturnInstructions]);
+
+  /** Accept the tow-behind suggestion: mark both and persist in one click.
+   *  Writes directly rather than flipping the checkboxes and waiting for the
+   *  rep to hit Save — a prompt that needs a second action to take effect is
+   *  a prompt people learn to skip. */
+  const acceptDeliverySuggestion = useCallback(async () => {
+    setDispatchSaving(true);
+    setDispatchMsg(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deliveryRequested: true, pickupRequested: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.reason || data.error || `Save failed (${res.status})`);
+      }
+      setDeliveryRequested(true);
+      setPickupRequested(true);
+      setDispatchDirty(false);
+      await fetchOrder();
+    } catch (e) {
+      setDispatchMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDispatchSaving(false);
+    }
+  }, [orderId, fetchOrder]);
 
   const saveDispatchMarking = useCallback(async () => {
     setDispatchSaving(true);
@@ -2689,6 +2725,30 @@ export default function OrderDetailPage() {
         <p className="text-xs text-lt-fg3 mb-4">
           Mark whether SirReel delivers and/or picks up for this order. Marking prompts you to create the matching task on the reservations board.{!canMarkDispatch && " (Sales only.)"}
         </p>
+        {/* Tow-behind prompt. Shown only while unsatisfied — once both are
+            marked it disappears rather than turning into a green tick, because
+            the checkboxes below already say so. */}
+        {order.deliveryRequirement?.required && !order.deliveryRequirement.satisfied && (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-sm text-amber-900 font-semibold">
+              This order needs delivery and pickup
+            </p>
+            <p className="text-xs text-amber-800 mt-1">
+              {order.deliveryRequirement.reasons.join(", ")} can&apos;t be collected by the client —
+              we tow it there and we bring it back. Marking both puts the delivery and pickup
+              windows on their portal, where they tell us the address and time.
+            </p>
+            {canMarkDispatch && (
+              <button
+                onClick={acceptDeliverySuggestion}
+                disabled={dispatchSaving}
+                className="mt-2.5 px-3 py-1.5 text-xs font-semibold rounded bg-amber-700 hover:bg-amber-800 text-white disabled:opacity-40"
+              >
+                {dispatchSaving ? "Marking…" : "Mark delivery & pickup"}
+              </button>
+            )}
+          </div>
+        )}
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-lt-fg cursor-pointer">
             <input

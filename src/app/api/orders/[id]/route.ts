@@ -3,6 +3,7 @@ import { findPendingDayClaims } from '@/lib/orders/dayClaimGate';
 import type { OrderStatus } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
 import { computeQuoteStatusSync } from "@/lib/orders/quoteStatus";
@@ -145,7 +146,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  return NextResponse.json(order);
+  // Tow-behind categories (restroom trailers) can't be a will-call, so the
+  // page prompts sales to mark delivery + pickup. Computed server-side so the
+  // rule lives with the data, not in the component that renders the prompt.
+  const deliveryRequirement = await deliveryRequirementForOrder(id);
+
+  return NextResponse.json({ ...order, deliveryRequirement });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

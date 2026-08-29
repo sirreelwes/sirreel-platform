@@ -71,6 +71,16 @@ model AssetCategory {
   // existing quotes/invoices stay intact. Restore flips back to true/null.
   isActive          Boolean            @default(true) @map("is_active")
   archivedAt        DateTime?          @map("archived_at")
+  /// This category cannot be a will-call: SirReel has to deliver it and
+  /// collect it. Restroom trailers are the founding case (Wes 2026-08-28) —
+  /// a client cannot tow one, so an order holding one that isn't marked for
+  /// delivery and pickup is an order with no truck booked.
+  ///
+  /// A SUGGESTION, not a constraint. The order page prompts sales to mark
+  /// both and they click once; nothing auto-flips Order.deliveryRequested
+  /// behind them, because a silent write is how a delivery gets scheduled
+  /// that nobody meant to promise.
+  requiresDelivery  Boolean            @default(false) @map("requires_delivery")
   // Operator-facing flag for the "+ New Hold" picker on the gantt
   // /reservations page. Orthogonal to isPublished — that controls
   // storefront / quote-side visibility; this controls whether the
@@ -4845,6 +4855,23 @@ model Job {
   reportToAccessNotes     String?        @map("report_to_access_notes") @db.Text
   reportToContactName     String?        @map("report_to_contact_name")
   reportToContactPhone    String?        @map("report_to_contact_phone") @db.VarChar(30)
+  /// When the drivers should be there. Free text on purpose: productions
+  /// answer "6-7a", "first light", "after wrap", and forcing a time picker
+  /// would turn a real answer into a wrong one. Booking.deliveryTime is the
+  /// same shape for the same reason.
+  reportToTime            String?        @map("report_to_time")
+
+  // ── The pickup half ─────────────────────────────────────────────────
+  // A trailer we drop has to be collected, and the collection is not always
+  // where the drop was — a unit moves to a second location mid-shoot, or the
+  // production strikes to a different lot. Default is "same as delivery"
+  // because that IS the common case; the override exists because the
+  // exception is what strands a truck.
+  pickupSameAsDelivery    Boolean        @default(true) @map("pickup_same_as_delivery")
+  pickupAddress           String?        @map("pickup_address") @db.Text
+  pickupAccessNotes       String?        @map("pickup_access_notes") @db.Text
+  pickupTime              String?        @map("pickup_time")
+
   /// Last save, by anyone. Drives the "Saved <when>" line in the portal and
   /// tells dispatch whether the address they are looking at is fresh.
   reportToUpdatedAt       DateTime?      @map("report_to_updated_at")
