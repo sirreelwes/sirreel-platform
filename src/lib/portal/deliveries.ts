@@ -143,6 +143,11 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
         startDate: true,
         endDate: true,
         lineItems: {
+          // Only things that ARRIVE. Fees and discounts are money, not
+          // objects on a truck, and a child line is a charge belonging to
+          // the unit above it — listing either told the client a driver was
+          // bringing them a "Mileage".
+          where: { type: { notIn: ['FEE', 'DISCOUNT'] }, parentLineItemId: null },
           select: { id: true, description: true, quantity: true },
         },
       },
@@ -166,8 +171,22 @@ export async function loadDeliveries(jobId: string): Promise<DeliveriesPayload> 
     })
   }
 
+  // A partner unit reaches us TWICE: once as the sub-rental record and once
+  // as the order line that bills it ("EcoFlux" and "EcoFlux — Celebrity
+  // Motorhome"). They are one coach, and showing both would have the client
+  // expecting two. Match on normalized containment either way round, since
+  // the line usually carries the sub-rental's name plus a type suffix.
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const subNames = units.map((u) => norm(u.unitName)).filter(Boolean)
+  const duplicatesASubRental = (description: string) => {
+    const d = norm(description)
+    if (!d) return false
+    return subNames.some((n) => d.includes(n) || n.includes(d))
+  }
+
   for (const o of deliveredOrders) {
     for (const li of o.lineItems) {
+      if (duplicatesASubRental(li.description)) continue
       units.push({
         id: `line:${li.id}`,
         unitName: li.description,
