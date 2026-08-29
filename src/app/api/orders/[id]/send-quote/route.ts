@@ -29,6 +29,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { withTeamCc } from '@/lib/email/teamVisibility'
 import { mergeCc, parseCcList } from '@/lib/email/ccList'
 import { composeQuoteEmail } from '@/lib/email/preview/composeQuoteEmail'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
@@ -190,7 +191,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Auto-CC (the other job contacts) MERGED with the rep's typed CC —
     // a manual CC adds people, it never silently drops the contacts a
     // quote already copies.
-    cc: mergeCc(others.map((o) => o.email), manualCc, [primary.email]),
+    // ...then the shared desk. Wes 2026-08-28: the team should see a quote
+    // went out, so a second person doesn't quote the same job. rentals@ is
+    // right for CC and wrong for Reply-To — it's a Google Group, which is
+    // exactly why HQ can't watch it and why a client's reply must never be
+    // aimed at it (groups reject non-member mail). Reply-To stays the agent
+    // + the hello@ ingest anchor.
+    cc: withTeamCc(mergeCc(others.map((o) => o.email), manualCc, [primary.email]) ?? [], primary.email),
     subject: final.subject,
     html: final.html,
     text: final.text,
