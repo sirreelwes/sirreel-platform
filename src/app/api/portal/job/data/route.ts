@@ -146,6 +146,7 @@ export async function GET(req: NextRequest) {
             notes: true,
             usageEstimated: true,
             parentLineItemId: true,
+            autoKitPieceId: true,
             inventoryItem: { select: { code: true, description: true, trackingMode: true } },
           },
           orderBy: { sortOrder: 'asc' },
@@ -383,6 +384,10 @@ export async function GET(req: NextRequest) {
       notes: li.notes,
       usageEstimated: li.usageEstimated,
       isSubItem: !!li.parentLineItemId,
+      // An included accessory. The client is accountable for bringing it
+      // back even though it was never charged for, so the portal names it
+      // rather than showing a $0.00 rate next to a real piece of gear.
+      isIncluded: !!li.autoKitPieceId,
     })),
     paperwork: {
       // The GATED route, never the raw blob URL. quotePdfUrl is a private

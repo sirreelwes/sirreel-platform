@@ -51,6 +51,11 @@ export interface QuoteLineItem {
   parentLineItemId?: string | null
   /** Set during grouping, not by the caller: render this row indented. */
   isChild?: boolean
+  /** An included accessory (InventoryKitPiece) — gear that rides along
+   *  with the line above it at no charge. Rendered as "Included" rather
+   *  than "$0.00": the client is accountable for returning it, and a
+   *  column of zeroes reads as a pricing mistake, not as a promise. */
+  isIncludedAccessory?: boolean
   department: Department
   description: string
   qualifier: string | null
@@ -672,11 +677,17 @@ export function QuoteDocument(props: QuoteDocumentProps): React.ReactElement {
                   </View>
                   <Text style={styles.colQty}>{item.quantity}</Text>
                   <Text style={styles.colDays}>{item.billableDays ?? 'TBD'}</Text>
-                  <Text style={styles.colRate}>{fmtMoney(item.rate)}{rateUnit(item.rateType)}</Text>
+                  <Text style={styles.colRate}>
+                    {item.isIncludedAccessory && item.rate === 0
+                      ? 'Included'
+                      : `${fmtMoney(item.rate)}${rateUnit(item.rateType)}`}
+                  </Text>
                   <Text style={styles.colTotal}>
-                    {item.billableDays == null
-                      ? `${fmtMoney(item.rate)}/day`
-                      : fmtMoney(computeLineTotal(item))}
+                    {item.isIncludedAccessory && item.rate === 0
+                      ? '—'
+                      : item.billableDays == null
+                        ? `${fmtMoney(item.rate)}/day`
+                        : fmtMoney(computeLineTotal(item))}
                   </Text>
                 </View>
               )

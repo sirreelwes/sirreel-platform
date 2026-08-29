@@ -38,6 +38,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { computeLineTotal } from '@/lib/orders/billing'
 import { recalcOrderTotals } from '@/lib/orders'
+import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { randomUUID } from 'crypto'
 import { LineItemDepartment, LineItemType } from '@prisma/client'
 
@@ -290,9 +291,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     return { lines: [header, ...members], holdsCreated }
   })
 
+  // A package that contains walkies owes the walkie kit — the members
+  // are ordinary catalog lines, so the reconciler sizes their
+  // accessories exactly as it would for an à-la-carte add.
+  const kitSync = await syncOrderKitPieces(prisma, orderId)
+
   const totals = await recalcOrderTotals(orderId)
   return NextResponse.json(
-    { lines: result.lines, holds: result.holdsCreated, totals, packageInstanceId: instanceId },
+    {
+      lines: result.lines,
+      holds: result.holdsCreated,
+      totals,
+      packageInstanceId: instanceId,
+      kit: kitSync.noop ? null : kitSync,
+    },
     { status: 201 },
   )
 }

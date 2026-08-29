@@ -60,7 +60,7 @@ export async function GET(
     // lane is stamped ready. Pre-book lines (no lane yet) are all
     // remaining.
     const warehousePicked =
-      li.pickStatus === 'PICKED' || li.pickStatus === 'STAGED' || li.pickStatus === 'LOADED'
+      li.pickStatus != null && li.pickStatus !== 'PENDING_PICK'
     const fleetOut = li.fulfillmentLane === 'FLEET' && order.fleetReadyAt != null
     const isOut = warehousePicked || fleetOut
     return {
@@ -72,6 +72,7 @@ export async function GET(
       ordered: li.quantity,
       out: isOut ? li.quantity : 0,
       picked: warehousePicked,
+      includedAccessory: !!li.autoKitPieceId,
     }
   })
 

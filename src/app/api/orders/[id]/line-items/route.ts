@@ -8,6 +8,7 @@ import { computeLineTotal } from "@/lib/orders/billing";
 import { computeDays, isClaimEligible, sanitizeClaimedDays } from "@/lib/orders/days";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
 import { syncPickListOnLineAdd } from "@/lib/orders/pickListSync";
+import { syncOrderKitPieces } from "@/lib/orders/kitSync";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
 import { resolveLineRate, resolveFeeLineRate, logRateOverride, type LineRateResult } from "@/lib/pricing/resolveRate";
@@ -553,6 +554,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Included accessories. Adding 12 walkies owes a charging bank and
+    // spare batteries whether the rep typed the line by hand or the AI
+    // parsed it off an email — before this ran here, only the parsed
+    // path knew. Runs BEFORE recalc so a CHARGED piece lands in the
+    // totals it changed. Noop (one indexed query) when the item has no
+    // kit, which is almost every item.
+    const kitSync = await syncOrderKitPieces(prisma, orderId);
+
     const totals = await recalcOrderTotals(orderId);
 
     // AuditLog (#5) — fires only when the order is BOOKED+ (the
@@ -590,6 +599,8 @@ export async function POST(req: NextRequest, { params }: Params) {
           fulfillmentLane: pickSync.lane,
           pickStatus: pickSync.pickStatus,
           pickListAction: pickSync.pickListAction,
+          kitPiecesAdded: kitSync.created.map((k) => `${k.quantity} × ${k.description}`),
+          kitPiecesResized: kitSync.resized.map((k) => `${k.description} ${k.from}→${k.to}`),
         },
         userId: operatorId,
         ipAddress: extractIp(req),
@@ -599,6 +610,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({
       lineItem,
       totals,
+      // Included accessories that appeared or resized because of this
+      // add. The UI announces them — a $0 line the rep did not type
+      // reads as a bug when it shows up unannounced.
+      kit: kitSync.noop ? null : kitSync,
       // (#2 Phase 2) Holds outcome — null when not hold-tracked or no
       // Booking. coTenancy is informational only — the rep saw who
       // they share the category with but didn't need to confirm

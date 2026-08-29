@@ -10,12 +10,22 @@
  *                    picking" once nothing is PENDING_PICK
  *   READY_TO_STAGE → "Stage" (READY_TO_STAGE → STAGED, bulk PICKED→STAGED)
  *   STAGED         → "Load" (STAGED → LOADED, bulk STAGED→LOADED)
- *   LOADED         → terminal display only
+ *   LOADED         → "Start check-in" (opens the inbound pass)
+ *   CHECKING_IN    → per-item counted-back entry, "Complete check-in"
+ *                    once every line has a count
+ *   CHECKED_IN     → terminal display, with the shortfall summary
  *
  * Scan input matches the typed/scanned code against the items'
  * inventoryItem.code values. First exact-match PENDING_PICK item gets
  * picked; everything else surfaces a mismatch toast. Manual override
  * checkbox per item covers no-SKU lines and scanner-down fallback.
+ *
+ * The inbound pass counts the SAME list back. It exists because LOADED
+ * used to be terminal: included accessories — the spare batteries and
+ * charging banks that ride along free with walkies — went out on a
+ * scannable line and came back against nothing at all. A line whose
+ * count is short is flagged with what it would cost to replace; nothing
+ * is billed automatically.
  *
  * Tablet-friendly: large tap targets, scan input auto-focuses on load
  * and after each successful pick.
@@ -25,14 +35,28 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
-type ListStatus = 'DRAFT' | 'PICKING' | 'READY_TO_STAGE' | 'STAGED' | 'LOADED' | 'CANCELLED'
-type LineStatus = 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED'
+type ListStatus =
+  | 'DRAFT'
+  | 'PICKING'
+  | 'READY_TO_STAGE'
+  | 'STAGED'
+  | 'LOADED'
+  | 'CHECKING_IN'
+  | 'CHECKED_IN'
+  | 'CANCELLED'
+type LineStatus = 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | 'RETURNED' | 'SHORT'
 
 interface PickItem {
   id: string
   scannedCode: string | null
   pickedAt: string | null
   pickedBy: { id: string; name: string } | null
+  /** NULL = nobody has counted this line yet. Distinct from 0, which
+   *  means a checker looked and none of it came back. */
+  qtyReturned: number | null
+  returnedAt: string | null
+  returnNote: string | null
+  returnedBy: { id: string; name: string } | null
   orderLineItem: {
     id: string
     sortOrder: number
@@ -40,7 +64,15 @@ interface PickItem {
     quantity: number
     department: string
     pickStatus: LineStatus | null
-    inventoryItem: { id: string; code: string; description: string | null } | null
+    /** Set = an included accessory, not something the client ordered. */
+    autoKitPieceId: string | null
+    parentLineItemId: string | null
+    inventoryItem: {
+      id: string
+      code: string
+      description: string | null
+      replacementCost: string | null
+    } | null
   }
 }
 
@@ -50,7 +82,10 @@ interface PickListDetail {
   createdAt: string
   startedAt: string | null
   completedAt: string | null
+  checkInStartedAt: string | null
+  checkedInAt: string | null
   assignedTo: { id: string; name: string } | null
+  checkedInBy: { id: string; name: string } | null
   order: {
     id: string
     orderNumber: string
@@ -68,6 +103,8 @@ const STATUS_BADGE: Record<ListStatus, string> = {
   READY_TO_STAGE: 'bg-blue-900/40 text-blue-300 border-blue-800',
   STAGED:         'bg-indigo-900/40 text-indigo-300 border-indigo-800',
   LOADED:         'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  CHECKING_IN:    'bg-sky-900/40 text-sky-300 border-sky-800',
+  CHECKED_IN:     'bg-teal-900/40 text-teal-300 border-teal-800',
   CANCELLED:      'bg-red-900/40 text-red-300 border-red-800',
 }
 
@@ -145,7 +182,7 @@ export default function WarehousePickDetailPage() {
   }, [toast])
 
   const counts = useMemo(() => {
-    const c = { PENDING_PICK: 0, PICKED: 0, STAGED: 0, LOADED: 0 }
+    const c = { PENDING_PICK: 0, PICKED: 0, STAGED: 0, LOADED: 0, RETURNED: 0, SHORT: 0 }
     if (!picklist) return c
     for (const i of picklist.items) {
       const s = i.orderLineItem.pickStatus
@@ -217,11 +254,61 @@ export default function WarehousePickDetailPage() {
     }
   }
 
+  /** Count one line back in. `note` is mandatory server-side when the
+   *  count is short — the UI collects it in the same prompt rather than
+   *  bouncing the checker back with a 400. */
+  const returnItem = async (item: PickItem, qtyReturned: number) => {
+    if (busyAction) return
+    const expected = item.orderLineItem.quantity
+    let note = ''
+    if (qtyReturned < expected) {
+      const missing = expected - qtyReturned
+      const answer = window.prompt(
+        `${missing} of ${expected} × ${item.orderLineItem.description} did not come back.\n\nWhat happened? (this is what the person billing the client reads)`,
+        '',
+      )
+      if (answer === null) return
+      note = answer.trim()
+      if (!note) {
+        setToast({ kind: 'err', msg: 'A short count needs a note.' })
+        return
+      }
+    }
+    setBusyAction(`return:${item.id}`)
+    try {
+      const r = await fetch(`/api/picklists/${id}/items/${item.id}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qtyReturned, note: note || undefined }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok || !json.ok) {
+        setToast({ kind: 'err', msg: json?.reason || json?.error || `HTTP ${r.status}` })
+        return
+      }
+      setToast(
+        json.missing > 0
+          ? { kind: 'err', msg: `Logged short ${json.missing}. Flagged on the order.` }
+          : { kind: 'ok', msg: 'All back.' },
+      )
+      await fetchOne()
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   if (loading) return <div className="p-6 text-sm text-zinc-500">Loading…</div>
   if (error) return <div className="p-6 text-sm text-rose-400">{error}</div>
   if (!picklist) return <div className="p-6 text-sm text-zinc-500">Not found.</div>
 
   const allPicked = counts.PENDING_PICK === 0 && picklist.items.length > 0
+  const uncountedCount = picklist.items.filter((i) => i.qtyReturned == null).length
+  const allCounted = uncountedCount === 0 && picklist.items.length > 0
+  const shortCount = picklist.items.filter(
+    (i) => i.qtyReturned != null && i.qtyReturned < i.orderLineItem.quantity,
+  ).length
+  const checkingIn = picklist.status === 'CHECKING_IN'
+  const checkedIn = picklist.status === 'CHECKED_IN'
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto">
@@ -241,7 +328,7 @@ export default function WarehousePickDetailPage() {
                 {picklist.order.orderNumber}
               </Link>
               <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_BADGE[picklist.status]}`}>
-                {picklist.status.replace('_', ' ')}
+                {picklist.status.replaceAll('_', ' ')}
               </span>
               {picklist.assignedTo && (
                 <span className="text-[11px] text-zinc-400">· assigned to {picklist.assignedTo.name}</span>
@@ -304,18 +391,58 @@ export default function WarehousePickDetailPage() {
               </button>
             )}
             {picklist.status === 'LOADED' && (
-              <div className="text-xs text-emerald-400 font-medium">Loaded {fmtDate(picklist.completedAt)}</div>
+              <>
+                <div className="text-xs text-emerald-400 font-medium">Loaded {fmtDate(picklist.completedAt)}</div>
+                <button
+                  onClick={() => runTransition('check-in', 'checkin')}
+                  disabled={busyAction != null}
+                  className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+                >
+                  {busyAction === 'checkin' ? 'Opening…' : 'Start check-in →'}
+                </button>
+              </>
+            )}
+            {checkingIn && (
+              <button
+                onClick={() => runTransition('complete-check-in', 'completeCheckin')}
+                disabled={busyAction != null || !allCounted}
+                title={!allCounted ? `${uncountedCount} line(s) not counted yet` : undefined}
+                className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold rounded-lg disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busyAction === 'completeCheckin' ? 'Closing…' : 'Complete check-in →'}
+              </button>
+            )}
+            {checkedIn && (
+              <div className="text-right">
+                <div className="text-xs text-teal-400 font-medium">
+                  Checked in {fmtDate(picklist.checkedInAt)}
+                </div>
+                {picklist.checkedInBy && (
+                  <div className="text-[11px] text-zinc-500">by {picklist.checkedInBy.name}</div>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         {/* Counts strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center text-xs">
-          <Count label="Pending"  n={counts.PENDING_PICK} highlight={counts.PENDING_PICK > 0 && picklist.status === 'PICKING'} />
-          <Count label="Picked"   n={counts.PICKED} />
-          <Count label="Staged"   n={counts.STAGED} />
-          <Count label="Loaded"   n={counts.LOADED} />
-        </div>
+        {/* Counts strip. The inbound pass replaces the outbound
+            counters rather than adding to them — a checker counting
+            gear back has no use for how many were staged. */}
+        {checkingIn || checkedIn ? (
+          <div className="grid grid-cols-3 gap-3 mt-4 text-center text-xs">
+            <Count label="To count" n={uncountedCount} highlight={uncountedCount > 0 && checkingIn} />
+            <Count label="All back" n={counts.RETURNED} />
+            <Count label="Short"    n={shortCount} alert={shortCount > 0} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center text-xs">
+            <Count label="Pending"  n={counts.PENDING_PICK} highlight={counts.PENDING_PICK > 0 && picklist.status === 'PICKING'} />
+            <Count label="Picked"   n={counts.PICKED} />
+            <Count label="Staged"   n={counts.STAGED} />
+            <Count label="Loaded"   n={counts.LOADED} />
+          </div>
+        )}
       </div>
 
       {/* Scan input — visible only while PICKING */}
@@ -358,6 +485,15 @@ export default function WarehousePickDetailPage() {
             const canManualPick = picklist.status === 'PICKING' && status === 'PENDING_PICK'
             const isBusy = busyAction === `pick:${i.id}`
             const isPicked = status !== 'PENDING_PICK'
+            // An included accessory — the client never ordered it and was
+            // never billed for it, which is exactly the gear that used to
+            // walk off with no record. Badged so the checker knows.
+            const isAccessory = !!li.autoKitPieceId
+            const counted = i.qtyReturned != null
+            const missing = counted ? li.quantity - (i.qtyReturned ?? 0) : 0
+            const isShort = counted && missing > 0
+            const returnBusy = busyAction === `return:${i.id}`
+            const unitCost = li.inventoryItem?.replacementCost
             // Catalog name from InventoryItem.description (canonical, the
             // catalog admin-set "Surveillance Kit"-style name). Fall back
             // to the OrderLineItem.description (what sales typed) only
@@ -368,13 +504,21 @@ export default function WarehousePickDetailPage() {
             // Whole row dims when picked so remaining pending rows
             // dominate the scan. The qty chip + name stay legible —
             // we drop the row opacity, not the text contrast itself.
-            const rowOpacityCls = isPicked ? 'opacity-60' : ''
+            const rowOpacityCls =
+              checkingIn || checkedIn ? (counted && !isShort ? 'opacity-60' : '') : isPicked ? 'opacity-60' : ''
             // Qty chip is the dominant scanning column. Amber when
             // pending (eye-grabbing), emerald when picked (calm done
             // state). Big number, tiny "Qty" kicker.
-            const qtyChipCls = isPicked
-              ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-300'
-              : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+            const qtyChipCls =
+              checkingIn || checkedIn
+                ? isShort
+                  ? 'bg-rose-950/60 border-rose-700/60 text-rose-300'
+                  : counted
+                    ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-300'
+                    : 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                : isPicked
+                  ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-300'
+                  : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
             return (
               <div key={i.id} className={`p-5 flex items-center gap-4 sm:gap-5 ${rowOpacityCls}`}>
                 {/* QTY CHIP — dominant left column. Big number, tiny
@@ -404,15 +548,42 @@ export default function WarehousePickDetailPage() {
                   >
                     {primaryName}
                   </div>
-                  {skuCode && (
-                    <div className="mt-1 font-mono text-xs text-zinc-500 tracking-wide">
-                      {skuCode}
-                    </div>
-                  )}
-                  {isPicked && i.pickedBy && (
+                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                    {skuCode && (
+                      <span className="font-mono text-xs text-zinc-500 tracking-wide">{skuCode}</span>
+                    )}
+                    {isAccessory && (
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-violet-700/60 bg-violet-950/40 text-violet-300"
+                        title="Included accessory — rides along with another line at no charge"
+                      >
+                        Included
+                      </span>
+                    )}
+                  </div>
+                  {isPicked && !counted && !checkingIn && !checkedIn && i.pickedBy && (
                     <div className="mt-1.5 text-[11px] text-emerald-400 flex items-center gap-1.5">
                       <span aria-hidden>✓</span>
                       <span>picked by {i.pickedBy.name}{i.scannedCode ? ` · scanned ${i.scannedCode}` : ''}</span>
+                    </div>
+                  )}
+                  {counted && (
+                    <div className="mt-1.5 text-[11px] flex flex-col gap-0.5">
+                      <span className={isShort ? 'text-rose-400' : 'text-emerald-400'}>
+                        {isShort
+                          ? `${missing} of ${li.quantity} missing`
+                          : `all ${li.quantity} back`}
+                        {i.returnedBy ? ` · counted by ${i.returnedBy.name}` : ''}
+                      </span>
+                      {isShort && i.returnNote && (
+                        <span className="text-zinc-400 italic">“{i.returnNote}”</span>
+                      )}
+                      {isShort && unitCost && (
+                        <span className="text-zinc-500">
+                          replacement ${(Number(unitCost) * missing).toFixed(2)}
+                          {missing > 1 ? ` (${missing} × $${Number(unitCost).toFixed(2)})` : ''}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -433,12 +604,60 @@ export default function WarehousePickDetailPage() {
                 {/* Picked rows get a calm emerald check in the action
                     slot so the row's shape stays consistent down the
                     list (no jitter as items flip pending → picked). */}
-                {isPicked && (
+                {isPicked && !checkingIn && !checkedIn && (
                   <div
                     className="flex-none min-h-[56px] px-5 sm:px-6 flex items-center justify-center text-emerald-400"
                     aria-label="picked"
                   >
                     <span className="text-2xl leading-none" aria-hidden>✓</span>
+                  </div>
+                )}
+
+                {/* INBOUND — count this line back. "All back" is one tap
+                    because it is the answer nine times out of ten; the
+                    short path opens a count entry, because a checker who
+                    has to type the common case stops counting carefully. */}
+                {checkingIn && !counted && (
+                  <div className="flex-none flex items-center gap-2">
+                    <button
+                      onClick={() => returnItem(i, li.quantity)}
+                      disabled={busyAction != null}
+                      className="min-h-[56px] px-4 sm:px-5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm sm:text-base font-bold rounded-xl shadow-sm disabled:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                    >
+                      {returnBusy ? 'Saving…' : 'All back'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const answer = window.prompt(
+                          `How many of the ${li.quantity} × ${li.description} came back?`,
+                          String(li.quantity),
+                        )
+                        if (answer === null) return
+                        const n = Number(answer.trim())
+                        if (!Number.isInteger(n) || n < 0 || n > li.quantity) {
+                          setToast({
+                            kind: 'err',
+                            msg: `Enter a whole number between 0 and ${li.quantity}.`,
+                          })
+                          return
+                        }
+                        returnItem(i, n)
+                      }}
+                      disabled={busyAction != null}
+                      className="min-h-[56px] px-4 sm:px-5 border border-rose-800 bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 text-sm font-bold rounded-xl disabled:opacity-50 transition-colors"
+                    >
+                      Short…
+                    </button>
+                  </div>
+                )}
+                {(checkingIn || checkedIn) && counted && (
+                  <div
+                    className={`flex-none min-h-[56px] px-5 sm:px-6 flex items-center justify-center ${
+                      isShort ? 'text-rose-400' : 'text-emerald-400'
+                    }`}
+                    aria-label={isShort ? 'short' : 'returned'}
+                  >
+                    <span className="text-2xl leading-none" aria-hidden>{isShort ? '!' : '✓'}</span>
                   </div>
                 )}
               </div>
@@ -450,11 +669,27 @@ export default function WarehousePickDetailPage() {
   )
 }
 
-function Count({ label, n, highlight = false }: { label: string; n: number; highlight?: boolean }) {
+function Count({
+  label,
+  n,
+  highlight = false,
+  alert = false,
+}: {
+  label: string
+  n: number
+  highlight?: boolean
+  /** Rose tone for a count that means something is missing. */
+  alert?: boolean
+}) {
+  const tone = alert
+    ? { box: 'border-rose-800 bg-rose-950/30', num: 'text-rose-300' }
+    : highlight
+      ? { box: 'border-amber-700 bg-amber-950/30', num: 'text-amber-300' }
+      : { box: 'border-zinc-800 bg-zinc-950', num: 'text-zinc-200' }
   return (
-    <div className={`rounded-lg border px-3 py-2 ${highlight ? 'border-amber-700 bg-amber-950/30' : 'border-zinc-800 bg-zinc-950'}`}>
+    <div className={`rounded-lg border px-3 py-2 ${tone.box}`}>
       <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">{label}</div>
-      <div className={`text-lg font-bold ${highlight ? 'text-amber-300' : 'text-zinc-200'}`}>{n}</div>
+      <div className={`text-lg font-bold ${tone.num}`}>{n}</div>
     </div>
   )
 }

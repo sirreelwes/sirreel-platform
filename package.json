@@ -25,6 +25,7 @@
     "test:planyo-twins": "tsx tests/jobs/planyo-twins.test.ts",
     "test:planyo-adopt": "tsx tests/sync/planyo-adopt.test.ts",
     "test:kit-pieces": "tsx tests/inventory/kit-pieces.test.ts",
+    "test:kit-reconcile": "tsx tests/orders/kit-reconcile.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:role-mapping": "tsx tests/crm/role-mapping.test.ts",
     "test:cluster-classify": "tsx tests/crm/cluster-classify.test.ts",

@@ -34,6 +34,12 @@ export interface KitInputLine {
 
 /** One accessory to add, resolved against the live catalog. */
 export interface KitPieceLine {
+  /** The InventoryKitPiece row this came from. Stamped onto the created
+   *  OrderLineItem as `autoKitPieceId` — the provenance the reconciler
+   *  in src/lib/orders/kitSync.ts matches on, so it only ever resizes
+   *  and removes lines it created. Where parents were grouped by an
+   *  identical ratio, this is the representative row for the group. */
+  kitPieceId: string
   pieceItemId: string
   /** Item's display name — what the rep and the picker read. */
   description: string
@@ -159,6 +165,7 @@ export async function deriveKitPieceLines(
     )
     if (quantity <= 0) continue
     out.push({
+      kitPieceId: kit.id,
       pieceItemId: kit.pieceItemId,
       description: kit.piece.description || kit.piece.code,
       code: kit.piece.code,

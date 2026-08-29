@@ -6,6 +6,11 @@
  * description, quantity, the InventoryItem.code (used as the scan
  * target), and the authoritative OrderLineItem.pickStatus.
  *
+ * Also carries the inbound pass: the counted-back quantity per item and
+ * the accessory provenance, so the floor can tell an included charging
+ * bank apart from gear the client paid for — and the replacement cost,
+ * which is what the shortfall is actually worth.
+ *
  * Sort: items by OrderLineItem.sortOrder so the picking floor mirrors
  * the order detail page's line ordering.
  *
@@ -30,7 +35,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       createdAt: true,
       startedAt: true,
       completedAt: true,
+      checkInStartedAt: true,
+      checkedInAt: true,
       assignedTo: { select: { id: true, name: true } },
+      checkedInBy: { select: { id: true, name: true } },
       order: {
         select: {
           id: true,
@@ -47,6 +55,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           scannedCode: true,
           pickedAt: true,
           pickedBy: { select: { id: true, name: true } },
+          qtyReturned: true,
+          returnedAt: true,
+          returnNote: true,
+          returnedBy: { select: { id: true, name: true } },
           orderLineItem: {
             select: {
               id: true,
@@ -55,7 +67,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
               quantity: true,
               department: true,
               pickStatus: true,
-              inventoryItem: { select: { id: true, code: true, description: true } },
+              // Non-null = an included accessory this line never asked
+              // for. The floor badges it so a short charging bank is
+              // recognisable as the thing nobody was billed for.
+              autoKitPieceId: true,
+              parentLineItemId: true,
+              inventoryItem: {
+                select: { id: true, code: true, description: true, replacementCost: true },
+              },
             },
           },
         },

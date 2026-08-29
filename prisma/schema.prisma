@@ -299,53 +299,49 @@ model ProductionTypeProfile {
 // quote (don't render a price hint). photoUrl is admin-managed;
 // null renders a graceful placeholder.
 model VehicleCategory {
-  id                String                 @id @default(uuid())
-  name              String                 @unique
-  slug              String                 @unique
-  subtitle          String?
-  photoUrl          String?                @map("photo_url")
+  id                  String                 @id @default(uuid())
+  name                String                 @unique
+  slug                String                 @unique
+  subtitle            String?
+  photoUrl            String?                @map("photo_url")
   // dailyRate is now a FALLBACK/override only. When assetCategoryId is set,
   // the public order form reads the price LIVE from the linked
   // AssetCategory.dailyRate (Fleet Pricing — one source of truth), so owned
   // vehicles never have a second place to maintain a rate. NULL here +
   // unlinked = "price on quote" (the sub-rental trailers).
-  dailyRate         Decimal?               @map("daily_rate") @db.Decimal(10, 2)
-  sortOrder         Int                    @default(0) @map("sort_order")
-  active            Boolean                @default(true)
+  dailyRate           Decimal?               @map("daily_rate") @db.Decimal(10, 2)
+  sortOrder           Int                    @default(0) @map("sort_order")
+  active              Boolean                @default(true)
   // Structured public-site spec fields (all nullable — a missing spec is
   // simply omitted from the vehicle detail page). One set per vehicle; edited
   // in HQ (/admin/vehicle-catalog) and read LIVE by the public /vehicles pages.
-  baseVehicle       String?                @map("base_vehicle") // e.g. "Ford Transit Cargo"
-  model             String? // trim / model designation
-  fuelType          String?                @map("fuel_type") // e.g. "Gas", "Diesel"
-  lengthFt          Decimal?               @map("length_ft") @db.Decimal(6, 2) // overall length in feet
-  heightClearance   String?                @map("height_clearance") // e.g. "9' 6\""
-  interiorBoxHeight String?                @map("interior_box_height") // e.g. "6' 2\""
-  liftGateSpec      String?                @map("lift_gate_spec") // e.g. "3,000 lb hydraulic"
-  tagline           String? // short hero line
-  description       String? // longer marketing paragraph
+  baseVehicle         String?                @map("base_vehicle") // e.g. "Ford Transit Cargo"
+  model               String? // trim / model designation
+  fuelType            String?                @map("fuel_type") // e.g. "Gas", "Diesel"
+  lengthFt            Decimal?               @map("length_ft") @db.Decimal(6, 2) // overall length in feet
+  heightClearance     String?                @map("height_clearance") // e.g. "9' 6\""
+  interiorBoxHeight   String?                @map("interior_box_height") // e.g. "6' 2\""
+  liftGateSpec        String?                @map("lift_gate_spec") // e.g. "3,000 lb hydraulic"
+  tagline             String? // short hero line
+  description         String? // longer marketing paragraph
   // Publish gate for the public site: a vehicle is client-visible only when
   // published=true AND it has at least one photo (VehicleCategoryPhoto or the
   // legacy photoUrl). Unpublished rows still appear in HQ admin views.
-  published         Boolean                @default(false)
+  published           Boolean                @default(false)
   // Public-site feature bullets, one per line (rendered as a list under specs).
-  features          String?
+  features            String?
   // Link to the operational Fleet Pricing category (owned vehicles). NULL for
   // sub-rentals that have no owned fleet inventory (Wardrobe Trailer, etc.).
-  assetCategoryId   String?                @map("asset_category_id")
-  assetCategory     AssetCategory?         @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
+  assetCategoryId     String?                @map("asset_category_id")
+  assetCategory       AssetCategory?         @relation(fields: [assetCategoryId], references: [id], onDelete: SetNull)
   // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
   // through the cutover — readers prefer this one, the legacy column
   // stays populated so nothing has to be dropped. See InventoryItem.
-  catalogItemId     String?                @map("catalog_item_id")
-  catalogItem       InventoryItem?         @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
-  createdAt         DateTime               @default(now()) @map("created_at")
-  updatedAt         DateTime               @updatedAt @map("updated_at")
-  photos            VehicleCategoryPhoto[]
-
-  @@index([assetCategoryId])
-  @@index([catalogItemId])
-  @@map("vehicle_categories")
+  catalogItemId       String?                @map("catalog_item_id")
+  catalogItem         InventoryItem?         @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  photos              VehicleCategoryPhoto[]
   /// UNLISTED client page for a vehicle we do NOT publish in the catalog —
   /// same /unit/[token] surface the subcontracted units use, and deliberately
   /// indistinguishable from them: a client should not be able to tell which
@@ -354,8 +350,12 @@ model VehicleCategory {
   /// Separate from `published`, which governs the LISTED catalog at
   /// /vehicles/[slug]. A vehicle can have an unlisted page without ever
   /// appearing in the public catalog — that is the whole point of it.
-  publicToken         String?   @unique @map("public_token")
-  publicTokenMintedAt DateTime? @map("public_token_minted_at")
+  publicToken         String?                @unique @map("public_token")
+  publicTokenMintedAt DateTime?              @map("public_token_minted_at")
+
+  @@index([assetCategoryId])
+  @@index([catalogItemId])
+  @@map("vehicle_categories")
 }
 
 // Gallery photos for a public vehicle page. url points at a PRIVATE blob
@@ -467,7 +467,7 @@ model Company {
   /// invoice mirror (billingEndDate, falling back to invoiceDate).
   /// Drives the "gone quiet" signals. Null until the rollup has run, or
   /// when the client has no RW invoices at all.
-  lastRentalAt   DateTime? @map("last_rental_at")
+  lastRentalAt    DateTime? @map("last_rental_at")
   /// When totalSpend / totalBookings / lastRentalAt were last recomputed.
   /// These are a CACHE of RwInvoice, which is itself deleted and rebuilt
   /// on every RW sync — so a stale stamp means the numbers are stale, and
@@ -599,11 +599,11 @@ model Person {
   assignedAgentId String? @map("assigned_agent_id")
 
   // Lifetime stats (across ALL companies)
-  totalSpend    Decimal    @default(0) @map("total_spend") @db.Decimal(12, 2)
-  totalBookings Int        @default(0) @map("total_bookings")
+  totalSpend    Decimal        @default(0) @map("total_spend") @db.Decimal(12, 2)
+  totalBookings Int            @default(0) @map("total_bookings")
   activities    Activity[]
   dispatchTasks DispatchTask[]
-  lastBookingAt DateTime?  @map("last_booking_at")
+  lastBookingAt DateTime?      @map("last_booking_at")
 
   // "Works with" — e.g. UPM's regular coordinator
   worksWithId String? @map("works_with_id")
@@ -643,30 +643,30 @@ model Person {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  assignedAgent      User?              @relation("PersonAgent", fields: [assignedAgentId], references: [id])
-  worksWith          Person?            @relation("WorksWith", fields: [worksWithId], references: [id])
-  worksWithBack      Person[]           @relation("WorksWith")
-  affiliations       Affiliation[]
-  bookings           Booking[]          @relation("BookingContact")
-  referredBookings   Booking[]          @relation("BookingReferrer")
-  user               User?              @relation("ContactUser")
-  emailMessages      EmailMessage[]
-  jobContacts        JobContact[]
-  orderContacts      Order[]            @relation("OrderJobContact")
-  inquiries          Inquiry[]          @relation("InquiryContact")
-  portalAccesses     PortalAccess[]     @relation("PortalAccessContact")
-  welcomeInvites     WelcomeInvite[]    @relation("WelcomeInvitePerson")
-  personSessions     PersonSession[]
-  inquiryCaptures    InquiryCapture[]   @relation("CaptureContact")
-  outreachActivities OutreachActivity[] @relation("PersonOutreach")
-  suppressions       EmailSuppression[] @relation("PersonSuppressions")
-  campaignRecipients OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
-  touchPlanEnrollments TouchPlanEnrollment[] @relation("TouchPlanEnrollee")
-  emailAliases       PersonEmailAlias[] @relation("PersonAliases")
+  assignedAgent        User?                       @relation("PersonAgent", fields: [assignedAgentId], references: [id])
+  worksWith            Person?                     @relation("WorksWith", fields: [worksWithId], references: [id])
+  worksWithBack        Person[]                    @relation("WorksWith")
+  affiliations         Affiliation[]
+  bookings             Booking[]                   @relation("BookingContact")
+  referredBookings     Booking[]                   @relation("BookingReferrer")
+  user                 User?                       @relation("ContactUser")
+  emailMessages        EmailMessage[]
+  jobContacts          JobContact[]
+  orderContacts        Order[]                     @relation("OrderJobContact")
+  inquiries            Inquiry[]                   @relation("InquiryContact")
+  portalAccesses       PortalAccess[]              @relation("PortalAccessContact")
+  welcomeInvites       WelcomeInvite[]             @relation("WelcomeInvitePerson")
+  personSessions       PersonSession[]
+  inquiryCaptures      InquiryCapture[]            @relation("CaptureContact")
+  outreachActivities   OutreachActivity[]          @relation("PersonOutreach")
+  suppressions         EmailSuppression[]          @relation("PersonSuppressions")
+  campaignRecipients   OutreachCampaignRecipient[] @relation("OutreachCampaignRecipient")
+  touchPlanEnrollments TouchPlanEnrollment[]       @relation("TouchPlanEnrollee")
+  emailAliases         PersonEmailAlias[]          @relation("PersonAliases")
   // Reverse side of PersonMerge — every merge where THIS person was the
   // survivor. Loser rows are deleted at merge time (their snapshot lives
   // on PersonMerge), so there's no loser-side back-relation to model.
-  mergesAsSurvivor   PersonMerge[]      @relation("MergeSurvivor")
+  mergesAsSurvivor     PersonMerge[]               @relation("MergeSurvivor")
 
   @@map("people")
 }
@@ -818,13 +818,13 @@ model Driver {
   //    considers it good. `licenseExpired` is the one real check we can
   //    make offline (expiry date vs today). A DMV/MVR status check would
   //    need a third-party service and is deliberately not attempted.
-  licenseAiReview   Json?     @map("license_ai_review")
-  licenseReviewAt   DateTime? @map("license_review_at")
-  licenseExpired    Boolean?  @map("license_expired")
-  dateOfBirth       DateTime? @map("date_of_birth")
-  licenseClass      String?   @map("license_class") @db.VarChar(10)
-  licenseEndorsements String? @map("license_endorsements") @db.VarChar(60)
-  licenseRestrictions String? @map("license_restrictions") @db.VarChar(60)
+  licenseAiReview     Json?     @map("license_ai_review")
+  licenseReviewAt     DateTime? @map("license_review_at")
+  licenseExpired      Boolean?  @map("license_expired")
+  dateOfBirth         DateTime? @map("date_of_birth")
+  licenseClass        String?   @map("license_class") @db.VarChar(10)
+  licenseEndorsements String?   @map("license_endorsements") @db.VarChar(60)
+  licenseRestrictions String?   @map("license_restrictions") @db.VarChar(60)
 
   // Staff sign-off — a human looked at the images and accepted them.
   // Separate from the AI read, which is only ever an assist.
@@ -864,9 +864,9 @@ model Driver {
 }
 
 enum DriverAssignmentStatus {
-  INVITED   // email sent, driver hasn't opened it
-  VIEWED    // driver opened their job page
-  READY     // licence on file, checked, unexpired
+  INVITED // email sent, driver hasn't opened it
+  VIEWED // driver opened their job page
+  READY // licence on file, checked, unexpired
   PICKED_UP // handed over (CheckoutRecord carries the authoritative record)
   CANCELLED
 }
@@ -881,9 +881,9 @@ enum DriverAssignmentStatus {
 /// (this vehicle, this job, these instructions) while a licence is
 /// per-PERSON — so licence uploads from this page still write to Driver.
 model DriverAssignment {
-  id                  String  @id @default(uuid())
-  driverId            String  @map("driver_id")
-  bookingAssignmentId String  @map("booking_assignment_id")
+  id                  String @id @default(uuid())
+  driverId            String @map("driver_id")
+  bookingAssignmentId String @map("booking_assignment_id")
 
   /// No-login credential for the driver's job page. Separate from
   /// Driver.portalToken (licence-only, per-person) so revoking one
@@ -896,11 +896,11 @@ model DriverAssignment {
   /// Who named this driver. `invitedByUserId` is null when the
   /// production client did it from their own portal job page —
   /// they have no HQ User — so `invitedBySource` is the honest record.
-  invitedByUserId String?  @map("invited_by_user_id")
-  invitedBySource String   @default("STAFF") @map("invited_by_source") // STAFF | CLIENT
-  invitedAt       DateTime @default(now()) @map("invited_at")
-  emailSentTo     String?  @map("email_sent_to")
-  firstViewedAt   DateTime? @map("first_viewed_at")
+  invitedByUserId  String?   @map("invited_by_user_id")
+  invitedBySource  String    @default("STAFF") @map("invited_by_source") // STAFF | CLIENT
+  invitedAt        DateTime  @default(now()) @map("invited_at")
+  emailSentTo      String?   @map("email_sent_to")
+  firstViewedAt    DateTime? @map("first_viewed_at")
   /// First time this driver was shown the real gate code. Stamped so a
   /// leaked code can be traced to who had it and from when — the price
   /// of putting a shared secret on a page.
@@ -1051,11 +1051,11 @@ model Booking {
   /// deletes companies without re-pointing bookings). Restrict keeps the
   /// pre-2026-08-24 guarantee: you cannot delete a company that still has
   /// bookings.
-  company           Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  person            Person             @relation("BookingContact", fields: [personId], references: [id])
-  referredBy        Person?            @relation("BookingReferrer", fields: [referredById], references: [id])
-  agent             User               @relation("BookingAgent", fields: [agentId], references: [id])
-  job               Job?               @relation(fields: [jobId], references: [id])
+  company           Company?            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  person            Person              @relation("BookingContact", fields: [personId], references: [id])
+  referredBy        Person?             @relation("BookingReferrer", fields: [referredById], references: [id])
+  agent             User                @relation("BookingAgent", fields: [agentId], references: [id])
+  job               Job?                @relation(fields: [jobId], references: [id])
   items             BookingItem[]
   dispatchTasks     DispatchTask[]
   insuranceClaims   InsuranceClaim[]
@@ -1143,18 +1143,18 @@ model BookingItem {
   notes      String?           @db.Text
 
   // Relations
-  booking       Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  category      AssetCategory       @relation(fields: [categoryId], references: [id])
+  booking       Booking                @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  category      AssetCategory          @relation(fields: [categoryId], references: [id])
   // Unified catalog FK (Aug 2026). Coexists with the AssetCategory FK
   // through the cutover — readers prefer this one, the legacy column
   // stays populated so nothing has to be dropped. See InventoryItem.
-  catalogItemId String?             @map("catalog_item_id")
-  catalogItem   InventoryItem?      @relation(fields: [catalogItemId], references: [id])
+  catalogItemId String?                @map("catalog_item_id")
+  catalogItem   InventoryItem?         @relation(fields: [catalogItemId], references: [id])
   assignments   BookingAssignment[]
+  stageAreas    BookingItemStageArea[]
 
   @@index([catalogItemId])
   @@map("booking_items")
-  stageAreas    BookingItemStageArea[]
 }
 
 enum AssignmentStatus {
@@ -2202,42 +2202,42 @@ model User {
   lastLoginAt DateTime? @map("last_login_at")
 
   // Relations
-  person                   Person?             @relation("ContactUser", fields: [personId], references: [id])
-  assignedPeople           Person[]            @relation("PersonAgent")
-  agentBookings            Booking[]           @relation("BookingAgent")
-  defaultForCompanies      Company[]           @relation("DefaultAgent")
+  person                   Person?               @relation("ContactUser", fields: [personId], references: [id])
+  assignedPeople           Person[]              @relation("PersonAgent")
+  agentBookings            Booking[]             @relation("BookingAgent")
+  defaultForCompanies      Company[]             @relation("DefaultAgent")
   emailAccounts            EmailAccount[]
-  inspections              Inspection[]        @relation("InspectedBy")
-  checkoutsProcessed       CheckoutRecord[]    @relation("CheckedOutBy")
-  maintenanceCreated       MaintenanceRecord[] @relation("MaintCreatedBy")
-  assignedClaims           InsuranceClaim[]    @relation("ClaimAssignee")
-  uploadedDocs             ClaimDocument[]     @relation("DocUploader")
-  timelineActions          ClaimTimeline[]     @relation("TimelineActor")
-  reviewedClaimMail        ClaimMail[]         @relation("ClaimMailReviewer")
-  createdOrderDiscounts    OrderDiscount[]     @relation("OrderDiscountCreator")
-  createdIncidents         Incident[]          @relation("IncidentCreator")
-  assignedIncidents        Incident[]          @relation("IncidentAssignee")
+  inspections              Inspection[]          @relation("InspectedBy")
+  checkoutsProcessed       CheckoutRecord[]      @relation("CheckedOutBy")
+  maintenanceCreated       MaintenanceRecord[]   @relation("MaintCreatedBy")
+  assignedClaims           InsuranceClaim[]      @relation("ClaimAssignee")
+  uploadedDocs             ClaimDocument[]       @relation("DocUploader")
+  timelineActions          ClaimTimeline[]       @relation("TimelineActor")
+  reviewedClaimMail        ClaimMail[]           @relation("ClaimMailReviewer")
+  createdOrderDiscounts    OrderDiscount[]       @relation("OrderDiscountCreator")
+  createdIncidents         Incident[]            @relation("IncidentCreator")
+  assignedIncidents        Incident[]            @relation("IncidentAssignee")
   // HR back-relations. employee is the 0-or-1 Employee row for staff
   // who happen to also have an HQ login — most do. reviewedHrMail is
   // every HR triage decision this user stamped. Access to HR data
   // itself is gated by src/lib/hr/allowlist.ts, NOT by these
   // relations — having a login + an Employee row does NOT imply
   // permission to see other employees' HR mail.
-  employee                 Employee?           @relation("EmployeeUserLink")
-  reviewedHrMail           HrMail[]            @relation("HrMailReviewer")
-  resolvedInquiryCaptures  InquiryCapture[]    @relation("CaptureResolver")
-  outreachActivitiesLogged OutreachActivity[]  @relation("OutreachCreator")
-  contactSegments          ContactSegment[]    @relation("ContactSegmentCreator")
-  suppressionsReleased     EmailSuppression[]  @relation("SuppressionReleaser")
-  outreachCampaigns        OutreachCampaign[]  @relation("OutreachCampaignCreator")
-  touchPlansCreated        TouchPlan[]         @relation("TouchPlanCreator")
+  employee                 Employee?             @relation("EmployeeUserLink")
+  reviewedHrMail           HrMail[]              @relation("HrMailReviewer")
+  resolvedInquiryCaptures  InquiryCapture[]      @relation("CaptureResolver")
+  outreachActivitiesLogged OutreachActivity[]    @relation("OutreachCreator")
+  contactSegments          ContactSegment[]      @relation("ContactSegmentCreator")
+  suppressionsReleased     EmailSuppression[]    @relation("SuppressionReleaser")
+  outreachCampaigns        OutreachCampaign[]    @relation("OutreachCampaignCreator")
+  touchPlansCreated        TouchPlan[]           @relation("TouchPlanCreator")
   touchPlanEnrollments     TouchPlanEnrollment[] @relation("TouchPlanOwner")
-  orderDocumentsUploaded   OrderDocument[]     @relation("OrderDocumentUploader")
+  orderDocumentsUploaded   OrderDocument[]       @relation("OrderDocumentUploader")
   weeklyCandids            AgentWeeklyCandid[]
-  personMergesPerformed    PersonMerge[]       @relation("PersonMergeOperator")
-  personMergesReversed     PersonMerge[]       @relation("PersonMergeReverser")
-  rateChangesApplied       RateChangeLog[]     @relation("RateChangeApplier")
-  aiOverrides              AiDecision[]        @relation("AiOverrider")
+  personMergesPerformed    PersonMerge[]         @relation("PersonMergeOperator")
+  personMergesReversed     PersonMerge[]         @relation("PersonMergeReverser")
+  rateChangesApplied       RateChangeLog[]       @relation("RateChangeApplier")
+  aiOverrides              AiDecision[]          @relation("AiOverrider")
   auditActions             AuditLog[]
   accounts                 Account[]
   sessions                 Session[]
@@ -2264,8 +2264,10 @@ model User {
   followUpsSkipped QuoteFollowUp[] @relation("FollowUpSkippedBy")
 
   // Phase 2 warehouse lane.
-  pickListsAssigned   PickList[]     @relation("PickListAssignedTo")
-  pickListItemsPicked PickListItem[] @relation("PickListItemPickedBy")
+  pickListsAssigned     PickList[]     @relation("PickListAssignedTo")
+  pickListItemsPicked   PickListItem[] @relation("PickListItemPickedBy")
+  pickListsCheckedIn    PickList[]     @relation("PickListCheckedInBy")
+  pickListItemsReturned PickListItem[] @relation("PickListItemReturnedBy")
 
   // Phase 5 commit 3 — native payment recording.
   paymentsRecorded Payment[] @relation("PaymentRecorder")
@@ -2275,11 +2277,11 @@ model User {
 
   // Proprietary-data exports. Every export is a request Wes approves —
   // see src/lib/exports/approver.ts and the DataExportRequest model.
-  dataExportsRequested DataExportRequest[] @relation("DataExportRequester")
-  dataExportsDecided   DataExportRequest[] @relation("DataExportApprover")
+  dataExportsRequested  DataExportRequest[] @relation("DataExportRequester")
+  dataExportsDecided    DataExportRequest[] @relation("DataExportApprover")
+  detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
 
   @@map("users")
-  detailRepliesResolved ClientDetailReply[] @relation("DetailReplyResolver")
 }
 
 // ═══════════════════════════════════════
@@ -2338,10 +2340,10 @@ model DataExportRequest {
   // Null until decided. decidedById is ALWAYS the approver (Wes) — the API
   // refuses any other identity, so this column doubles as the audit record
   // of who released the data.
-  decidedById String?   @map("decided_by_id")
-  decidedBy   User?     @relation("DataExportApprover", fields: [decidedById], references: [id])
-  decidedAt   DateTime? @map("decided_at")
-  decisionNote String?  @map("decision_note") @db.Text
+  decidedById  String?   @map("decided_by_id")
+  decidedBy    User?     @relation("DataExportApprover", fields: [decidedById], references: [id])
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String?   @map("decision_note") @db.Text
 
   // Set on approval. After this instant the approval is spent.
   expiresAt DateTime? @map("expires_at")
@@ -2448,12 +2450,12 @@ model PaperworkRequest {
   stageDetails String? @map("stage_details") @db.Text
 
   // Completion tracking
-  coiReceived          Boolean @default(false) @map("coi_received")
-  wcReceived           Boolean @default(false) @map("wc_received")
-  rentalAgreement      Boolean @default(false) @map("rental_agreement")
+  coiReceived     Boolean @default(false) @map("coi_received")
+  wcReceived      Boolean @default(false) @map("wc_received")
+  rentalAgreement Boolean @default(false) @map("rental_agreement")
   /// LEGACY mirror of lcdwDecision — true only when ACCEPTED. Kept because
   /// older read paths still select it; `lcdwDecision` is the source of truth.
-  lcdwAccepted         Boolean @default(false) @map("lcdw_accepted")
+  lcdwAccepted    Boolean @default(false) @map("lcdw_accepted")
 
   // LCDW is a per-vehicle, per-day charge ($24/day) AND a liability waiver,
   // so "declined" and "never asked" are different facts with different money
@@ -2472,8 +2474,8 @@ model PaperworkRequest {
   lcdwDecidedAt        DateTime?     @map("lcdw_decided_at")
   lcdwSignatureData    String?       @map("lcdw_signature_data") @db.Text
   lcdwFuelAcknowledged Boolean?      @map("lcdw_fuel_acknowledged")
-  studioContractSigned Boolean @default(false) @map("studio_contract_signed")
-  creditCardAuth       Boolean @default(false) @map("credit_card_auth")
+  studioContractSigned Boolean       @default(false) @map("studio_contract_signed")
+  creditCardAuth       Boolean       @default(false) @map("credit_card_auth")
 
   // Workers' Comp certificate — the client's separate WC proof when it
   // isn't carried on the main COI (payroll companies like EP / Cast &
@@ -2519,18 +2521,18 @@ model PaperworkRequest {
   // MMYY. Not sensitive authentication data (unlike PAN/CVV/track), and
   // required on every auth against the token — without it a merchant-
   // initiated charge on a card on file has no expiry to send and declines.
-  ccCardExpiry          String?   @map("cc_card_expiry")
+  ccCardExpiry      String?   @map("cc_card_expiry")
   // Cardholder billing postal code. Once surcharging is enabled on the MID,
   // the CardPointe gateway REQUIRES this on every card-not-present auth: it
   // decides surcharge eligibility from the cardholder's region and waives
   // the fee where state law prohibits it (CT, MA, ...). The portal already
   // collected it and threw it away.
-  ccBillingPostal       String?   @map("cc_billing_postal")
-  ccAuthRetref          String?   @map("cc_auth_retref")
-  ccAuthRespCode        String?   @map("cc_auth_respcode")
-  ccAuthRespStat        String?   @map("cc_auth_respstat")
-  ccAuthRespText        String?   @map("cc_auth_resptext")
-  ccAuthValidatedAt     DateTime? @map("cc_auth_validated_at")
+  ccBillingPostal   String?   @map("cc_billing_postal")
+  ccAuthRetref      String?   @map("cc_auth_retref")
+  ccAuthRespCode    String?   @map("cc_auth_respcode")
+  ccAuthRespStat    String?   @map("cc_auth_respstat")
+  ccAuthRespText    String?   @map("cc_auth_resptext")
+  ccAuthValidatedAt DateTime? @map("cc_auth_validated_at")
 
   // Signer info
   signerName String? @map("signer_name")
@@ -2697,6 +2699,14 @@ enum LineItemPickStatus {
   PICKED
   STAGED
   LOADED
+  // ── Inbound pass (2026-08-29). LOADED used to be terminal, which is
+  // why nothing counted a kit back: 12 radios could go out with 6 spare
+  // batteries and come back with 2 and no surface showed it. RETURNED
+  // means the counted quantity matched; SHORT means it didn't, and the
+  // shortfall sits on the order for a human to bill. Neither state is
+  // reached automatically — a checker enters a count.
+  RETURNED
+  SHORT
 }
 
 enum RateType {
@@ -2715,11 +2725,11 @@ enum InvoiceStatus {
 }
 
 model InventoryCategory {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  slug      String   @unique
-  sortOrder Int      @default(0) @map("sort_order")
-  isActive  Boolean  @default(true) @map("is_active")
+  id         String             @id @default(uuid())
+  name       String             @unique
+  slug       String             @unique
+  sortOrder  Int                @default(0) @map("sort_order")
+  isActive   Boolean            @default(true) @map("is_active")
   // 2026-08-28 (Wes: "why do I have a category and a department?").
   // The two axes are NOT redundant — department is the billing/
   // fulfillment spine (rate rules, lane routing at book time,
@@ -2731,8 +2741,8 @@ model InventoryCategory {
   // in the column (RW imports + the supply seed wrote their own) —
   // this is the default, not a constraint.
   department LineItemDepartment @default(PRO_SUPPLIES)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
 
   items InventoryItem[]
 
@@ -2896,7 +2906,7 @@ model InventoryItem {
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
-  category     InventoryCategory? @relation(fields: [categoryId], references: [id])
+  category     InventoryCategory?  @relation(fields: [categoryId], references: [id])
   lineItems    OrderLineItem[]
   packageItems PackageItem[]
   // Included accessories (see InventoryKitPiece). `kitPieces` = what goes
@@ -2907,7 +2917,7 @@ model InventoryItem {
   kitPieceOf   InventoryKitPiece[] @relation("KitPiece")
   subRentals   SubRental[]
   rateChanges  RateChangeLog[]
-  location     Location           @default(LANKERSHIM)
+  location     Location            @default(LANKERSHIM)
 
   // New editable-location FK. Coexists with the legacy enum during transition;
   // app reads/writes prefer this when present.
@@ -3037,6 +3047,10 @@ model InventoryKitPiece {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Lines this kit row has generated. Read by the reconciler and by the
+  // item DELETE route's reference count.
+  orderLines OrderLineItem[]
 
   parent InventoryItem @relation("KitParent", fields: [parentItemId], references: [id], onDelete: Cascade)
   // Restrict, not Cascade: deleting the charger should fail loudly while
@@ -3183,8 +3197,8 @@ model Order {
   // back-link from the Inquiry it satisfied.
   addedToJobAt DateTime? @map("added_to_job_at")
 
-  booking      Booking?        @relation(fields: [bookingId], references: [id])
-  company      Company         @relation(fields: [companyId], references: [id])
+  booking            Booking? @relation(fields: [bookingId], references: [id])
+  company            Company  @relation(fields: [companyId], references: [id])
   /// Show this order's agent to the CLIENT as "Your SirReel rep".
   ///
   /// Opt-IN, default false. The agent field is always populated — self-serve
@@ -3192,7 +3206,7 @@ model Order {
   /// a relationship, and presenting one as the client's rep put the wrong
   /// name, phone and email in front of clients. Set this only when someone
   /// has actually taken the account.
-  repVisibleToClient Boolean @default(false) @map("rep_visible_to_client")
+  repVisibleToClient Boolean  @default(false) @map("rep_visible_to_client")
 
   agent        User            @relation("OrderAgent", fields: [agentId], references: [id])
   lineItems    OrderLineItem[]
@@ -3486,7 +3500,7 @@ model OrderLineItem {
   ///
   /// Day-rate ancillaries (driver, supplies) are NOT estimated — the day
   /// count is known at quote time — so they stay false.
-  usageEstimated  Boolean             @default(false) @map("usage_estimated")
+  usageEstimated Boolean @default(false) @map("usage_estimated")
 
   /// The line this one hangs UNDER — partner ancillaries beneath the vehicle
   /// they belong to (Wes 2026-08-28: "positioned as subitems to the EcoFlux
@@ -3501,9 +3515,28 @@ model OrderLineItem {
   /// Distinct from packageInstanceId, which is package PRICING — there the
   /// header carries the price and members come through at rate 0. Here every
   /// child is separately priced; only the position is inherited.
-  parentLineItemId String?            @map("parent_line_item_id")
-  parentLineItem   OrderLineItem?     @relation("LineItemChildren", fields: [parentLineItemId], references: [id], onDelete: Cascade)
-  childLineItems   OrderLineItem[]    @relation("LineItemChildren")
+  parentLineItemId String?         @map("parent_line_item_id")
+  parentLineItem   OrderLineItem?  @relation("LineItemChildren", fields: [parentLineItemId], references: [id], onDelete: Cascade)
+  childLineItems   OrderLineItem[] @relation("LineItemChildren")
+
+  /// The InventoryKitPiece that generated this line — an included accessory
+  /// the client never asked for (spare batteries with walkies, bulbs with a
+  /// makeup mirror). Provenance, not inference: the reconciler in
+  /// src/lib/orders/kitSync.ts resizes and removes ONLY lines carrying this
+  /// id, so a battery the client ordered themselves is never touched by a
+  /// radio quantity edit.
+  ///
+  /// The earlier parse-quote path re-derived "is this a kit piece?" by
+  /// checking the line's inventoryItemId against the kit table. That answers
+  /// "could this have been a kit piece", which is a different question — and
+  /// it silently swallowed the rate-override audit for a battery a rep
+  /// deliberately zeroed out.
+  ///
+  /// SetNull, not Cascade: unconfiguring a kit must leave the already-quoted
+  /// line on the order (it may already be picked and on a truck) and merely
+  /// stop the reconciler from managing it.
+  autoKitPieceId String?            @map("auto_kit_piece_id")
+  autoKitPiece   InventoryKitPiece? @relation(fields: [autoKitPieceId], references: [id], onDelete: SetNull)
 
   /// Provenance for lines created from a partner's ancillary fee schedule
   /// (src/lib/sub-rentals/orderFees.ts). Deliberately its own column rather
@@ -3511,7 +3544,7 @@ model OrderLineItem {
   /// so a provenance tag parked there would show a client an internal id.
   /// Also the idempotency key: adding the same unit's fees twice is refused,
   /// because a duplicated $550 driver fee on a sent quote is invisible.
-  partnerVehicleId String?            @map("partner_vehicle_id")
+  partnerVehicleId String? @map("partner_vehicle_id")
 
   // Package grouping. When a package is selected on a line, one
   // header line + N member lines share a single `packageInstanceId`
@@ -3545,6 +3578,8 @@ model OrderLineItem {
   subRentals    SubRental[]
 
   @@index([packageInstanceId])
+  @@index([autoKitPieceId])
+  @@index([parentLineItemId])
   @@map("sr_order_line_items")
 }
 
@@ -3696,28 +3731,38 @@ enum PickListStatus {
   PICKING // a warehouse user has started the pick session
   READY_TO_STAGE // all items picked; awaiting move to staging area
   STAGED // physically staged for loadout
-  LOADED // loaded onto outbound transport — warehouse lane terminal
+  LOADED // loaded onto outbound transport — end of the OUTBOUND pass
+  CHECKING_IN // gear is back at the dock; a checker is counting it against this list
+  CHECKED_IN // every line accounted for — returned in full or written up short
   CANCELLED // order cancelled or list voided
 }
 
 model PickList {
-  id           String         @id @default(uuid())
+  id               String         @id @default(uuid())
   // One PickList per Order — enforced by @unique. Aggregating multiple
   // orders into a single "today's pulls" view is a Phase 2.1 parking-lot
   // item that would layer over this without changing the model.
-  orderId      String         @unique @map("order_id")
-  status       PickListStatus @default(DRAFT)
+  orderId          String         @unique @map("order_id")
+  status           PickListStatus @default(DRAFT)
   // The picker who's actively working this list. Stamped on the
   // DRAFT → PICKING transition. Stays populated through subsequent
   // states for audit even after the session ends.
-  assignedToId String?        @map("assigned_to_id")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  startedAt    DateTime?      @map("started_at")
-  completedAt  DateTime?      @map("completed_at")
+  assignedToId     String?        @map("assigned_to_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  startedAt        DateTime?      @map("started_at")
+  completedAt      DateTime?      @map("completed_at")
+  // Inbound pass. `checkInStartedAt` stamps DRAFT-of-the-return (the
+  // LOADED → CHECKING_IN transition); `checkedInAt` stamps the close.
+  // Separate from startedAt/completedAt so the outbound pick timing
+  // stays readable after a return has been counted over the top of it.
+  checkInStartedAt DateTime?      @map("check_in_started_at")
+  checkedInAt      DateTime?      @map("checked_in_at")
+  checkedInById    String?        @map("checked_in_by_id")
 
-  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  assignedTo User?          @relation("PickListAssignedTo", fields: [assignedToId], references: [id])
-  items      PickListItem[]
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  assignedTo  User?          @relation("PickListAssignedTo", fields: [assignedToId], references: [id])
+  checkedInBy User?          @relation("PickListCheckedInBy", fields: [checkedInById], references: [id])
+  items       PickListItem[]
 
   @@index([status])
   @@map("pick_lists")
@@ -3737,9 +3782,24 @@ model PickListItem {
   pickedById      String?   @map("picked_by_id")
   pickedAt        DateTime? @map("picked_at")
 
+  // ── Inbound pass ────────────────────────────────────────────────
+  // How many came back. NULL = not yet counted (the only way to tell
+  // "nobody has looked at this" apart from "all of it is missing",
+  // which is why this is nullable rather than defaulted to 0).
+  // Counted against OrderLineItem.quantity, not against a copy of it —
+  // a post-book quantity edit must move the target, not orphan it.
+  qtyReturned  Int?      @map("qty_returned")
+  returnedById String?   @map("returned_by_id")
+  returnedAt   DateTime? @map("returned_at")
+  // Free text from the checker, required by the API when the count is
+  // short. "3 batteries not in the case" is the whole value of the
+  // feature to whoever bills the client a week later.
+  returnNote   String?   @map("return_note") @db.Text
+
   pickList      PickList      @relation(fields: [pickListId], references: [id], onDelete: Cascade)
   orderLineItem OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
   pickedBy      User?         @relation("PickListItemPickedBy", fields: [pickedById], references: [id])
+  returnedBy    User?         @relation("PickListItemReturnedBy", fields: [returnedById], references: [id])
 
   @@index([pickListId])
   @@map("pick_list_items")
@@ -3945,11 +4005,11 @@ model Vendor {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  subRentals     SubRental[]
+  subRentals            SubRental[]
   // Reverse relation: InventoryItems with this vendor as their
   // preferred reorder source. Same Vendor table feeds both
   // sub-rentals (Hugo's flow) and the inventory reorder picker.
-  inventoryItems InventoryItem[]
+  inventoryItems        InventoryItem[]
   // Partner-owned production vehicles this vendor sub-contracts to
   // SirReel (King Kong PV etc.) — see SubcontractedVehicle.
   subcontractedVehicles SubcontractedVehicle[]
@@ -4029,10 +4089,10 @@ model SubRental {
   /// the vendor never sees who the client is, and the client never sees whose
   /// unit it is. Later this is where location, call time and driver details
   /// get exchanged, still without the two sides talking directly.
-  vendorToken         String?   @unique @map("vendor_token")
-  vendorTokenMintedAt DateTime? @map("vendor_token_minted_at")
+  vendorToken           String?   @unique @map("vendor_token")
+  vendorTokenMintedAt   DateTime? @map("vendor_token_minted_at")
   /// When the vendor was told we had quoted these dates.
-  vendorNotifiedAt    DateTime? @map("vendor_notified_at")
+  vendorNotifiedAt      DateTime? @map("vendor_notified_at")
   /// When the vendor was asked to actually HOLD the dates — stamped on the
   /// client-approval hook, and only once that notice really left. Distinct
   /// from the status flip on purpose: approval moves the row to REQUESTED
@@ -4063,12 +4123,12 @@ model SubRental {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  order         Order?         @relation(fields: [orderId], references: [id])
-  job           Job?           @relation(fields: [jobId], references: [id])
+  order                Order?                @relation(fields: [orderId], references: [id])
+  job                  Job?                  @relation(fields: [jobId], references: [id])
   subcontractedVehicle SubcontractedVehicle? @relation(fields: [subcontractedVehicleId], references: [id])
-  orderLineItem OrderLineItem? @relation(fields: [orderLineItemId], references: [id])
-  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
-  vendor        Vendor         @relation(fields: [vendorId], references: [id])
+  orderLineItem        OrderLineItem?        @relation(fields: [orderLineItemId], references: [id])
+  inventoryItem        InventoryItem?        @relation(fields: [inventoryItemId], references: [id])
+  vendor               Vendor                @relation(fields: [vendorId], references: [id])
 
   /// Returns board sort + filter: status × end-date so the "due back
   /// soonest" view is a single index seek.
@@ -4154,11 +4214,11 @@ model SubcontractedVehicle {
   /// is exactly the sentence a client must never read. Rendering description
   /// on the public page failed OPEN — every future unit would leak whatever
   /// note someone happened to type. NULL renders no blurb at all.
-  publicDescription   String?   @map("public_description") @db.Text
+  publicDescription String? @map("public_description") @db.Text
 
-  vendor Vendor                      @relation(fields: [vendorId], references: [id])
-  fees   SubcontractedFee[]
-  photos SubcontractedVehiclePhoto[]
+  vendor     Vendor                      @relation(fields: [vendorId], references: [id])
+  fees       SubcontractedFee[]
+  photos     SubcontractedVehiclePhoto[]
   subRentals SubRental[]
 
   @@index([vendorId])
@@ -4347,13 +4407,13 @@ model TouchPlan {
 /// reordering or editing one step cannot silently shift everything after
 /// it into a different week.
 model TouchPlanStep {
-  id     String @id @default(uuid())
-  planId String @map("plan_id")
+  id     String    @id @default(uuid())
+  planId String    @map("plan_id")
   plan   TouchPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   /// Days after enrolment this step becomes due. Step one is normally 0.
-  dayOffset Int    @map("day_offset")
-  subject   String
+  dayOffset    Int    @map("day_offset")
+  subject      String
   /// Same merge syntax as a campaign — see src/lib/outreach/mergeFields.ts.
   bodyTemplate String @map("body_template") @db.Text
 
@@ -4398,8 +4458,8 @@ enum EnrollmentExitReason {
 
 /// One person's run through one plan.
 model TouchPlanEnrollment {
-  id     String @id @default(uuid())
-  planId String @map("plan_id")
+  id     String    @id @default(uuid())
+  planId String    @map("plan_id")
   plan   TouchPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   personId String @map("person_id")
@@ -4434,14 +4494,14 @@ model TouchPlanEnrollment {
 /// Exists so a step can never be sent twice: the unique key is the
 /// idempotency guarantee, the same way campaign recipients work.
 model TouchPlanSend {
-  id           String @id @default(uuid())
-  enrollmentId String @map("enrollment_id")
+  id           String              @id @default(uuid())
+  enrollmentId String              @map("enrollment_id")
   enrollment   TouchPlanEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  stepId       String @map("step_id")
-  step         TouchPlanStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  stepId       String              @map("step_id")
+  step         TouchPlanStep       @relation(fields: [stepId], references: [id], onDelete: Cascade)
 
-  sentAt          DateTime  @default(now()) @map("sent_at")
-  resendMessageId String?   @map("resend_message_id")
+  sentAt          DateTime @default(now()) @map("sent_at")
+  resendMessageId String?  @map("resend_message_id")
   /// Null on success; the failure reason otherwise.
   error           String?
 
@@ -4480,18 +4540,18 @@ enum OutreachRecipientStatus {
 /// be answerable months later, when the segment would return a different
 /// set entirely.
 model OutreachCampaign {
-  id     String                  @id @default(uuid())
+  id     String                 @id @default(uuid())
   name   String
-  status OutreachCampaignStatus  @default(DRAFT)
+  status OutreachCampaignStatus @default(DRAFT)
 
   /// What the rep picked, kept for provenance. The recipient rows are
   /// the truth about who was mailed; these say where they came from.
-  segmentKey   String? @map("segment_key")
-  roleKey      String? @map("role_key")
-  search       String?
+  segmentKey     String? @map("segment_key")
+  roleKey        String? @map("role_key")
+  search         String?
   savedSegmentId String? @map("saved_segment_id")
 
-  subject String
+  subject      String
   /// Body with merge tokens still in it, exactly as written. Rendering
   /// happens per recipient at send time so a template edit before
   /// release changes every unsent copy and nothing already sent.
@@ -4506,9 +4566,9 @@ model OutreachCampaign {
   createdById String @map("created_by_id")
   createdBy   User   @relation("OutreachCampaignCreator", fields: [createdById], references: [id])
 
-  releasedAt   DateTime? @map("released_at")
-  completedAt  DateTime? @map("completed_at")
-  cancelledAt  DateTime? @map("cancelled_at")
+  releasedAt  DateTime? @map("released_at")
+  completedAt DateTime? @map("completed_at")
+  cancelledAt DateTime? @map("cancelled_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -4531,9 +4591,9 @@ model OutreachCampaign {
 /// me", the answer has to be the bytes they received, not a template we
 /// would re-render today against data that has since changed.
 model OutreachCampaignRecipient {
-  id         String                  @id @default(uuid())
-  campaignId String                  @map("campaign_id")
-  campaign   OutreachCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id         String           @id @default(uuid())
+  campaignId String           @map("campaign_id")
+  campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   personId String @map("person_id")
   person   Person @relation("OutreachCampaignRecipient", fields: [personId], references: [id], onDelete: Cascade)
@@ -4876,15 +4936,15 @@ model Job {
   // Distinct from Booking.deliveryAddress, which is Planyo-import data on a
   // single booking. When both exist the report-to is the newer, client-
   // asserted fact; nothing reconciles them automatically today.
-  reportToAddress         String?        @map("report_to_address") @db.Text
-  reportToAccessNotes     String?        @map("report_to_access_notes") @db.Text
-  reportToContactName     String?        @map("report_to_contact_name")
-  reportToContactPhone    String?        @map("report_to_contact_phone") @db.VarChar(30)
+  reportToAddress      String? @map("report_to_address") @db.Text
+  reportToAccessNotes  String? @map("report_to_access_notes") @db.Text
+  reportToContactName  String? @map("report_to_contact_name")
+  reportToContactPhone String? @map("report_to_contact_phone") @db.VarChar(30)
   /// When the drivers should be there. Free text on purpose: productions
   /// answer "6-7a", "first light", "after wrap", and forcing a time picker
   /// would turn a real answer into a wrong one. Booking.deliveryTime is the
   /// same shape for the same reason.
-  reportToTime            String?        @map("report_to_time")
+  reportToTime         String? @map("report_to_time")
 
   // ── The pickup half ─────────────────────────────────────────────────
   // A trailer we drop has to be collected, and the collection is not always
@@ -4892,17 +4952,17 @@ model Job {
   // production strikes to a different lot. Default is "same as delivery"
   // because that IS the common case; the override exists because the
   // exception is what strands a truck.
-  pickupSameAsDelivery    Boolean        @default(true) @map("pickup_same_as_delivery")
-  pickupAddress           String?        @map("pickup_address") @db.Text
-  pickupAccessNotes       String?        @map("pickup_access_notes") @db.Text
-  pickupTime              String?        @map("pickup_time")
+  pickupSameAsDelivery Boolean @default(true) @map("pickup_same_as_delivery")
+  pickupAddress        String? @map("pickup_address") @db.Text
+  pickupAccessNotes    String? @map("pickup_access_notes") @db.Text
+  pickupTime           String? @map("pickup_time")
 
   /// Last save, by anyone. Drives the "Saved <when>" line in the portal and
   /// tells dispatch whether the address they are looking at is fresh.
-  reportToUpdatedAt       DateTime?      @map("report_to_updated_at")
+  reportToUpdatedAt DateTime? @map("report_to_updated_at")
 
-  createdAt               DateTime       @default(now()) @map("created_at")
-  updatedAt               DateTime       @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   company               Company                @relation(fields: [companyId], references: [id])
   agent                 User                   @relation("JobAgent", fields: [agentId], references: [id])
@@ -4918,15 +4978,15 @@ model Job {
   documents             JobDocument[]
   rwOrders              JobRwOrder[]
   fromInquiry           Inquiry?               @relation("ConvertedFromInquiry")
+  finalInvoices         JobFinalInvoice[]
+  /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
+  subRentals            SubRental[]
 
   @@index([companyId])
   @@index([status])
   @@index([agentId])
   @@index([productionTypeProfileId])
   @@map("sr_jobs")
-  finalInvoices JobFinalInvoice[]
-  /// Sub-rentals quoted or booked against this job (see SubRental.jobId).
-  subRentals SubRental[]
 }
 
 // ============================================================
@@ -4980,10 +5040,10 @@ model Inquiry {
   // practice: the new-Job path sets convertedJobId, the add-on path
   // sets convertedOrderId. @unique mirrors convertedJobId so each
   // Order can satisfy at most one inquiry.
-  convertedOrderId String?    @unique @map("converted_order_id")
-  convertedOrder   Order?     @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
+  convertedOrderId String?             @unique @map("converted_order_id")
+  convertedOrder   Order?              @relation("ConvertedFromInquiryToOrder", fields: [convertedOrderId], references: [id])
   // COIs dropped via the client upload link before a job exists.
-  coiChecks        CoiCheck[] @relation("InquiryCoiChecks")
+  coiChecks        CoiCheck[]          @relation("InquiryCoiChecks")
   // Company / project name the client typed on the no-login details link.
   detailReplies    ClientDetailReply[] @relation("InquiryDetailReplies")
 
@@ -5466,8 +5526,8 @@ model AgreementReissue {
   /// Company the superseded paper was papered under, and the company the
   /// re-issue goes out under. Snapshotted as NAMES (not FKs) — the point of
   /// the record is what the document said at the time.
-  priorCompanyName String? @map("prior_company_name")
-  newCompanyName   String? @map("new_company_name")
+  priorCompanyName       String?   @map("prior_company_name")
+  newCompanyName         String?   @map("new_company_name")
 
   /// Actor is stored as scalars rather than a User relation: this is an
   /// append-only snapshot, and a deactivated/deleted staff row must not be
@@ -6359,7 +6419,7 @@ model PlanyoSyncEvent {
 /// them through the public proxy /api/public/site-media/[slot], never
 /// as a raw blob src.
 model SiteSetting {
-  id                 String  @id @default("singleton")
+  id                  String  @id @default("singleton")
   /// The rep a self-serve job is assigned to when no agent is involved —
   /// shown to the client in the portal as "Your SirReel rep".
   ///
@@ -6370,11 +6430,11 @@ model SiteSetting {
   defaultSalesAgentId String? @map("default_sales_agent_id")
   /// Required poster / static-background JPG for the Home hero, and the
   /// <video poster> shown before/if the video plays (private blob URL).
-  heroPosterUrl      String? @map("hero_poster_url")
+  heroPosterUrl       String? @map("hero_poster_url")
   /// Muted-loop MP4 background for the Home hero (private blob URL).
-  heroVideoUrl       String? @map("hero_video_url")
+  heroVideoUrl        String? @map("hero_video_url")
   /// Optional lighter MP4 served under ~768px (private blob URL).
-  heroVideoMobileUrl String? @map("hero_video_mobile_url")
+  heroVideoMobileUrl  String? @map("hero_video_mobile_url")
 
   /// Standing lot GATE CODE — the single code shared by all drivers until
   /// it's physically reprogrammed at the gate. This field only RECORDS the
@@ -6430,8 +6490,8 @@ model SiteSetting {
   /// was offered ACH, wire and card but not a method SirReel actually
   /// accepts. It belongs with the other payment fields, not inside a PDF
   /// component.
-  paymentZelleHandle String? @map("payment_zelle_handle")
-  paymentZelleName   String? @map("payment_zelle_name")
+  paymentZelleHandle      String? @map("payment_zelle_handle")
+  paymentZelleName        String? @map("payment_zelle_name")
   /// Two PRIVATE-Blob PDF attachments for the payment-info email —
   /// "ACH Payment Information Form (bank)" and "ACH / Wire Banking
   /// Information (SirReel)". Stored blobKey (server-side fetch) +
@@ -6616,7 +6676,7 @@ model RwInvoicePaidObservation {
   rwCustomerId   String?   @map("rw_customer_id")
   invoiceDate    DateTime? @map("invoice_date")
   dueDate        DateTime? @map("due_date")
-  invoiceTotal   Decimal   @default(0) @db.Decimal(12, 2) @map("invoice_total")
+  invoiceTotal   Decimal   @default(0) @map("invoice_total") @db.Decimal(12, 2)
   observedPaidAt DateTime  @default(now()) @map("observed_paid_at")
   preTracking    Boolean   @default(false) @map("pre_tracking")
 
@@ -6748,10 +6808,10 @@ model RwOrderRef {
 /// Areas do NOT consume capacity. Selecting six rooms on a Standing Sets
 /// hold still occupies exactly one stage.
 model StageArea {
-  id        String   @id @default(uuid())
-  name      String   @unique
+  id          String   @id @default(uuid())
+  name        String   @unique
   /// ROOM (interior set/office) or PARKING (exterior lot). Groups the picker.
-  kind      String   @default("ROOM")
+  kind        String   @default("ROOM")
   /// The stage this area lives INSIDE, by unit name — e.g. Hospital,
   /// Police/Jail and Morgue are sets within Standing Sets (Wes
   /// 2026-08-24: "Lankershim Studios has three main stages within the
@@ -6759,9 +6819,9 @@ model StageArea {
   /// rooms, offices, parking). Scoped by NAME rather than assetId so a
   /// retired/re-created stage Asset can't orphan the mapping.
   parentStage String?  @map("parent_stage")
-  sortOrder Int      @default(0) @map("sort_order")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   bookingItems BookingItemStageArea[]
 
@@ -6815,23 +6875,23 @@ model JobRwOrder {
 /// Interim shape. When billing moves into HQ this is replaced by a "finalize"
 /// action on the HQ invoice itself, and the PDF upload goes away.
 model JobFinalInvoice {
-  id            String   @id @default(uuid())
-  jobId         String   @map("job_id")
+  id            String    @id @default(uuid())
+  jobId         String    @map("job_id")
   /// Optional pointer at the RW mirror row this settles. String, not a
   /// relation — the mirror is recreated on every sync.
-  rwInvoiceId   String?  @map("rw_invoice_id")
-  invoiceNumber String?  @map("invoice_number")
+  rwInvoiceId   String?   @map("rw_invoice_id")
+  invoiceNumber String?   @map("invoice_number")
   /// The agreed final amount. What Ana charges unless she overrides it.
-  amount        Decimal  @db.Decimal(12, 2)
-  pdfUrl        String?  @map("pdf_url")
-  pdfKey        String?  @map("pdf_key")
+  amount        Decimal   @db.Decimal(12, 2)
+  pdfUrl        String?   @map("pdf_url")
+  pdfKey        String?   @map("pdf_key")
   /// READY (awaiting collection) | COLLECTED | VOID. Not an enum: this whole
   /// model is interim, and a Postgres enum is the one thing that makes
   /// retiring it awkward.
-  status        String   @default("READY")
+  status        String    @default("READY")
   note          String?
-  uploadedById  String?  @map("uploaded_by_id")
-  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  uploadedById  String?   @map("uploaded_by_id")
+  uploadedAt    DateTime  @default(now()) @map("uploaded_at")
   /// Payment-options email: when it last went out and to whom. Stamped on
   /// every send including manual resends — this is delivery state, not an
   /// audit log (EmailDelivery keeps the per-send record). Null = never sent,
@@ -6904,14 +6964,14 @@ model RwCollectionCharge {
   /// decides which is possible, we record which happened. Kept on the charge
   /// rather than as a negative row so a reversed charge reads as one event,
   /// matching how Payment tracks voidedAt instead of negative amounts.
-  reversals       RwCollectionReversal[]
+  reversals RwCollectionReversal[]
 
-  reversedAt      DateTime? @map("reversed_at")
-  reversalKind    String?   @map("reversal_kind")
-  reversalRetref  String?   @map("reversal_retref")
-  reversalAmount  Decimal?  @map("reversal_amount") @db.Decimal(12, 2)
-  reversalReason  String?   @map("reversal_reason")
-  reversedById    String?   @map("reversed_by_id")
+  reversedAt     DateTime? @map("reversed_at")
+  reversalKind   String?   @map("reversal_kind")
+  reversalRetref String?   @map("reversal_retref")
+  reversalAmount Decimal?  @map("reversal_amount") @db.Decimal(12, 2)
+  reversalReason String?   @map("reversal_reason")
+  reversedById   String?   @map("reversed_by_id")
 
   @@index([rwInvoiceId])
   @@index([chargedAt])
@@ -6981,18 +7041,18 @@ model PaymentDetailsShare {
 /// Those columns remain for the rows written before this table existed (they
 /// were backfilled here) but are no longer the source of truth — read this.
 model RwCollectionReversal {
-  id        String   @id @default(uuid())
-  chargeId  String   @map("charge_id")
+  id          String   @id @default(uuid())
+  chargeId    String   @map("charge_id")
   /// VOID annuls the whole authorization pre-settlement and is therefore
   /// never partial. REFUND returns money post-settlement and may be.
-  kind      String
+  kind        String
   /// Gateway reference for the reversal. A void returns the ORIGINAL retref
   /// (it annuls that transaction); a refund returns a new one.
-  retref    String?
-  amount    Decimal  @db.Decimal(12, 2)
-  reason    String?
-  createdById String? @map("created_by_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  retref      String?
+  amount      Decimal  @db.Decimal(12, 2)
+  reason      String?
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   charge RwCollectionCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
 
@@ -7016,40 +7076,39 @@ model RwCollectionReversal {
 /// CODES, not cardholder data, and are the fields worth keeping — they answer
 /// "what did we send, and what did the network think of it".
 model CardpointeGatewayCall {
-  id        String   @id @default(cuid())
+  id         String   @id @default(cuid())
   /// auth | void | refund | inquire
-  operation String
-  merchid   String?
-  retref    String?
+  operation  String
+  merchid    String?
+  retref     String?
   /// Authoritative approval flag: A approved, B retry, C declined.
-  respstat  String?
-  respcode  String?
-  resptext  String?
+  respstat   String?
+  respcode   String?
+  resptext   String?
   /// Amount the gateway reports acting on — with surcharging enabled this
   /// can exceed what we sent.
-  amount    String?
+  amount     String?
   /// CVV match result. The VALUE, not the presence, says whether a CVV
   /// reached the gateway: M/N mean one was submitted and judged, P means it
   /// was not processed at all, S means the card carries none. A gateway that
   /// received no CVV still answers "P", so presence proves nothing. M or N on
   /// a merchant-initiated charge is the thing that must never happen.
   /// See src/lib/cardpointe/callFlags.ts for the measurements behind this.
-  cvvresp   String?
+  cvvresp    String?
   /// Address/postal verification result.
-  avsresp   String?
+  avsresp    String?
   /// HTTP status, so a gateway outage is distinguishable from a decline.
-  httpStatus Int?    @map("http_status")
+  httpStatus Int?     @map("http_status")
   /// Redacted request and response payloads.
-  request   Json?
-  response  Json?
-  createdAt DateTime @default(now()) @map("created_at")
+  request    Json?
+  response   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([retref])
   @@index([operation, createdAt])
   @@index([createdAt])
   @@map("sr_cardpointe_gateway_calls")
 }
-
 
 enum ClientDetailReplyStatus {
   PENDING

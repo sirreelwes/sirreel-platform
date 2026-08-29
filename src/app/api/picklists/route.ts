@@ -19,8 +19,13 @@ import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
 
 export const dynamic = 'force-dynamic'
 
-const OPEN_STATES = ['DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED'] as const
-const ALL_STATES = [...OPEN_STATES, 'LOADED', 'CANCELLED'] as const
+// LOADED and CHECKING_IN are OPEN, not terminal. They used to be the
+// end of the line — the gear was on the truck and the warehouse was
+// done thinking about it. The inbound pass starts from LOADED, so a
+// list parked there is work the queue still owes: hiding it behind
+// ?includeTerminal=1 would make check-in unreachable from the floor.
+const OPEN_STATES = ['DRAFT', 'PICKING', 'READY_TO_STAGE', 'STAGED', 'LOADED', 'CHECKING_IN'] as const
+const ALL_STATES = [...OPEN_STATES, 'CHECKED_IN', 'CANCELLED'] as const
 
 export async function GET(req: NextRequest) {
   const auth = await requirePickerRole()

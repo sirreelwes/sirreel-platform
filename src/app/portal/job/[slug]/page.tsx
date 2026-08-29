@@ -71,6 +71,8 @@ interface PortalData {
     notes: string | null;
     usageEstimated: boolean;
     isSubItem: boolean;
+    /** Included accessory — rides along free with the line above it. */
+    isIncluded?: boolean;
   }[];
   agreement: {
     status: string;
@@ -1086,8 +1088,16 @@ export default function JobPortalPage() {
                     )}
                   </div>
                   <div className="text-[11px] text-gray-500 text-right flex-shrink-0">
-                    {fmtCurrency(li.rate)}
-                    <div className="text-[10px] text-gray-400">{li.rateType.toLowerCase()}</div>
+                    {li.isIncluded && Number(li.rate) === 0 ? (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        Included
+                      </span>
+                    ) : (
+                      <>
+                        {fmtCurrency(li.rate)}
+                        <div className="text-[10px] text-gray-400">{li.rateType.toLowerCase()}</div>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

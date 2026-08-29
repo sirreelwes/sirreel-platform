@@ -37,9 +37,16 @@ type LineItem = {
   id: string;
   sortOrder: number;
   type: string;
-  /** Set on partner ancillaries — they render indented under their unit so
-   *  two coaches on one order each show their own mileage and hours. */
+  /** Set on partner ancillaries and on included accessories — they render
+   *  indented under the line they belong to, so two coaches on one order
+   *  each show their own mileage and hours, and the spare batteries sit
+   *  under the radios that pulled them in. */
   parentLineItemId?: string | null;
+  /** Set on included accessories (InventoryKitPiece). These lines are
+   *  MANAGED: src/lib/orders/kitSync.ts resizes them when the parent
+   *  quantity changes and removes them when the parent goes. Editing the
+   *  quantity by hand is pointless — the next parent edit overwrites it. */
+  autoKitPieceId?: string | null;
   description: string;
   rateType: string;
   rate: string;
@@ -2457,6 +2464,14 @@ export default function OrderDetailPage() {
                       li.type === "FEE" ? "bg-chip-neutral-bg text-chip-neutral-fg" :
                       "bg-lt-inner text-lt-fg2"
                     }`}>{li.type}</span>
+                    {li.autoKitPieceId && (
+                      <span
+                        className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-chip-neutral-bg text-chip-neutral-fg"
+                        title="Included accessory — quantity is derived from the parent line and re-derived whenever it changes"
+                      >
+                        incl
+                      </span>
+                    )}
                   </td>
                   {editingLineId === li.id ? (
                     <td className="px-4 py-2">

@@ -165,8 +165,10 @@ export async function syncPickListOnLineDelete(
       pickedAt: Date | null
     } | null
     /** OrderLineItem.pickStatus at delete time. Drives the
-     *  un-pick audit row. */
-    pickStatusAtDelete: 'PENDING_PICK' | 'PICKED' | 'STAGED' | 'LOADED' | null
+     *  un-pick audit row. Anything past PENDING_PICK means the gear
+     *  physically moved — including the inbound RETURNED / SHORT
+     *  states, where deleting the line would erase a completed count. */
+    pickStatusAtDelete: LineItemPickStatus | null
     /** Operator id (for AuditLog.userId). Nullable — AuditLog allows
      *  null userId. */
     userId: string | null
@@ -188,11 +190,7 @@ export async function syncPickListOnLineDelete(
   // Only emitted when the line was already physically picked. A
   // PENDING_PICK deletion has nothing to track on this side; step 1's
   // OrderLineItem audit row covers the metadata.
-  if (
-    args.pickStatusAtDelete === 'PICKED' ||
-    args.pickStatusAtDelete === 'STAGED' ||
-    args.pickStatusAtDelete === 'LOADED'
-  ) {
+  if (args.pickStatusAtDelete && args.pickStatusAtDelete !== 'PENDING_PICK') {
     try {
       await tx.auditLog.create({
         data: {

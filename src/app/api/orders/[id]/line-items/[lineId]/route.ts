@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
 import { recalcOrderTotals, estimateRentalDays } from "@/lib/orders";
+import { syncOrderKitPieces } from "@/lib/orders/kitSync";
 import { computeLineTotal } from "@/lib/orders/billing";
 import { computeDays } from "@/lib/orders/days";
 import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/auditLineItemEdit";
@@ -434,6 +435,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // all stay valid.
     }
 
+    // A quantity edit resizes the kit: 12 radios down to 6 owes one
+    // charging bank, not two. Only lines this reconciler created move —
+    // a battery the client ordered themselves is left alone.
+    const kitSync = await syncOrderKitPieces(prisma, orderId);
+
     const totals = await recalcOrderTotals(orderId);
 
     if (parentOrder && preUpdate) {
@@ -468,7 +474,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       });
     }
 
-    return NextResponse.json({ lineItem, totals });
+    return NextResponse.json({ lineItem, totals, kit: kitSync.noop ? null : kitSync });
   } catch (error) {
     console.error("Update line item error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -610,6 +616,11 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Removing the radios takes their charging bank with them. Pieces
+  // already PICKED or beyond stay put — that gear is on a cart, and
+  // silently dropping the line would erase the only record of it.
+  const kitSync = await syncOrderKitPieces(prisma, orderId);
+
   const totals = await recalcOrderTotals(orderId);
 
   if (parentOrder && preDelete) {
@@ -647,6 +658,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   return NextResponse.json({
     success: true,
     totals,
+    kit: kitSync.noop ? null : kitSync,
     // (#3b) Surface what happened on the warehouse side so the UI
     // can render a toast — e.g. "Item returned to stock; pick list
     // updated" vs the silent before.

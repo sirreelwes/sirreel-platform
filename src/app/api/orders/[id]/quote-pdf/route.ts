@@ -70,6 +70,9 @@ export async function POST(
     // A partner ancillary hangs under the unit it belongs to, so it renders
     // inside that unit's section rather than being hoisted into "Fees".
     parentLineItemId: li.parentLineItemId ?? null,
+    // Included accessory — prints "Included" instead of $0.00 so the
+    // client can see what they are responsible for bringing back.
+    isIncludedAccessory: !!li.autoKitPieceId,
     isDiscount: li.type === 'DISCOUNT',
     // Fee-catalog lines render in their own "Fees" section (last), UNLESS
     // they belong to a parent line — see groupByDepartment.

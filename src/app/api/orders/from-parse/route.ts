@@ -62,6 +62,7 @@ import { nextOrderNumber, recalcOrderTotals, estimateRentalDays } from '@/lib/or
 import { computeLineTotal } from '@/lib/orders/billing'
 import { computeDays, isClaimEligible, sanitizeClaimedDays } from '@/lib/orders/days'
 import { syncPickListOnLineAdd } from '@/lib/orders/pickListSync'
+import { syncOrderKitPieces } from '@/lib/orders/kitSync'
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 
@@ -126,6 +127,12 @@ interface ResolvedItemInput {
   packageId?: string | null
   isPackageHeader?: boolean
   isPackageModified?: boolean
+  /** How the preview matched this line. 'AUTO_KIT' means the parser
+   *  added it as an included accessory — skipped on persist and rebuilt
+   *  by the kit reconciler, which stamps the provenance the preview
+   *  cannot. Absent on older clients: those lines persist as before,
+   *  and `suppressIfOrdered` keeps the reconciler from doubling them. */
+  matchSource?: 'AI' | 'ALIAS_FALLBACK' | 'AUTO_KIT' | null
 }
 
 interface FromParseBody {
@@ -347,6 +354,12 @@ export async function POST(req: NextRequest) {
 
       let sortOrder = 0
       for (const raw of itemsSafe) {
+        // Included accessories from the parse preview are dropped here
+        // and rebuilt by the reconciler below. Persisting the preview's
+        // copy would create a line with no autoKitPieceId — invisible to
+        // the reconciler, so a later quantity edit on the radios would
+        // leave a stale battery count sitting on the quote forever.
+        if (raw.matchSource === 'AUTO_KIT') continue
         const quantity = raw.quantity != null ? Math.max(1, Math.floor(Number(raw.quantity))) : 1
         const rateType = (raw.rateType ?? 'DAILY') as RateType
         // Sprint 1 — a parsed-PDF rate is an override REQUEST like any
@@ -562,6 +575,18 @@ export async function POST(req: NextRequest) {
             pickupDate: orderStart ?? new Date(),
             returnDate: orderEnd ?? orderStart ?? new Date(),
           },
+        })
+      }
+
+      // Included accessories, built against the saved order. Every
+      // catalog line is in place by now, so the ratios see the real
+      // radio count (analog + digital summed) rather than one line at
+      // a time, and each piece nests under the parent that pulled it.
+      const kitSync = await syncOrderKitPieces(tx, order.id)
+      for (const k of kitSync.created) {
+        warnings.push({
+          lineDescription: k.description,
+          reason: `Included accessory added automatically — ${k.quantity} × ${k.description}`,
         })
       }
 

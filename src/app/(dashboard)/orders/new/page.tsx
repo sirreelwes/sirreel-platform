@@ -1660,6 +1660,12 @@ function NewQuotePageInner() {
             inventoryItemId: it.catalogType === 'INVENTORY' ? it.catalogProductId : null,
             assetCategoryId: it.catalogType === 'ASSET_CATEGORY' ? it.catalogProductId : null,
             catalogType: it.catalogType ?? null,
+            // Included accessories are NOT persisted from the preview.
+            // from-parse skips them and lets the kit reconciler build
+            // them against the saved order, so the line carries real
+            // provenance (autoKitPieceId) and nests under its parent
+            // instead of landing flat and unmanaged.
+            matchSource: it.matchSource ?? null,
             pickupDate: it.pickupDate,
             returnDate: it.returnDate,
             billableDays: it.billableDays,

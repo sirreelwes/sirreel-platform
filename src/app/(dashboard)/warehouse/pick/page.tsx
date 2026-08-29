@@ -19,7 +19,15 @@ import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
 interface QueueItem {
   id: string
-  status: 'DRAFT' | 'PICKING' | 'READY_TO_STAGE' | 'STAGED' | 'LOADED' | 'CANCELLED'
+  status:
+    | 'DRAFT'
+    | 'PICKING'
+    | 'READY_TO_STAGE'
+    | 'STAGED'
+    | 'LOADED'
+    | 'CHECKING_IN'
+    | 'CHECKED_IN'
+    | 'CANCELLED'
   createdAt: string
   startedAt: string | null
   completedAt: string | null
@@ -42,6 +50,8 @@ const STATUS_BADGE: Record<QueueItem['status'], string> = {
   READY_TO_STAGE: 'bg-blue-900/40 text-blue-300 border-blue-800',
   STAGED:         'bg-indigo-900/40 text-indigo-300 border-indigo-800',
   LOADED:         'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  CHECKING_IN:    'bg-sky-900/40 text-sky-300 border-sky-800',
+  CHECKED_IN:     'bg-teal-900/40 text-teal-300 border-teal-800',
   CANCELLED:      'bg-red-900/40 text-red-300 border-red-800',
 }
 
@@ -133,7 +143,7 @@ function WarehousePickQueuePageInner() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-[12px] text-zinc-500">{p.order.orderNumber}</span>
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${STATUS_BADGE[p.status]}`}>
-                        {p.status.replace('_', ' ')}
+                        {p.status.replaceAll('_', ' ')}
                       </span>
                       {p.assignedTo && (
                         <span className="text-[11px] text-zinc-400">· {p.assignedTo.name}</span>

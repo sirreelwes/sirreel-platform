@@ -57,6 +57,12 @@ export interface PickListLine {
    *  picked — prints a ✓ in the Picked box instead of leaving it
    *  blank for handwriting. */
   picked: boolean
+  /** An included accessory (InventoryKitPiece) — gear that rides along
+   *  free with another line. Prefixed on the printed sheet so the
+   *  picker pulls it and the checker counts it back: it is the gear
+   *  nobody was billed for, which is precisely the gear that used to
+   *  disappear without anyone noticing. */
+  includedAccessory?: boolean
 }
 
 export interface PickListDocumentProps {
@@ -458,7 +464,10 @@ export function PickListDocument(props: PickListDocumentProps) {
               <View key={idx} wrap={false}>
                 <View style={[styles.row, ...(idx % 2 === 1 ? [styles.rowAlt] : [])]}>
                   <Text style={styles.colCode}>{line.code ?? '—'}</Text>
-                  <Text style={styles.colDesc}>{line.description}</Text>
+                  <Text style={styles.colDesc}>
+                    {line.includedAccessory ? '\u2514 ' : ''}{line.description}
+                    {line.includedAccessory ? ' (incl.)' : ''}
+                  </Text>
                   <Text style={styles.colType}>{line.type}</Text>
                   <Text style={styles.colOrdered}>{line.ordered}</Text>
                   <Text style={styles.colOut}>{line.out}</Text>
