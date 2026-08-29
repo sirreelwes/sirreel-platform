@@ -8,7 +8,12 @@
  * dormant (publicVisible=false) and are out of scope here.
  *
  * Idempotent. Re-runs upsert by:
- *   InventoryCategory.slug    (create-if-missing; update name + sortOrder)
+ *   InventoryCategory.slug    (create-if-missing; update name only —
+ *                              sortOrder and isActive are HQ's, and
+ *                              categories now exist that this JSON
+ *                              doesn't name: client-vip, vehicles,
+ *                              stages. Renumbering from JSON position
+ *                              would fight them.)
  *   InventoryItem.code        (create-if-missing; update fields below)
  *
  * Per item, the script sets:
@@ -21,6 +26,25 @@
  * Anything NOT in the JSON is untouched — never written, never
  * deleted. The reconciliation report at the end lists what
  * changed.
+ *
+ * Aliases (2026-08-29). scripts/seed-catalog-aliases.ts OWNS the
+ * aliases column — pinned by id, UNIONed on, with an explicit
+ * `remove` list for taking one off, precisely so nothing curated gets
+ * dropped. This script was replacing that column wholesale from its
+ * own JSON, where most rows carry an empty list — so running it wiped
+ * six curated lists including the flagship "walkies" → CP200 that the
+ * schema comment cites as the example. It now only writes aliases
+ * when the row has NONE (initial population) or on create; a row that
+ * already has aliases keeps them.
+ *
+ * Visibility (2026-08-29). Same rule, same reason: the seed wrote
+ * publicVisible=true on every update, so hiding an item from the
+ * client form didn't stick either. Wes hid 27 covid-era rows on
+ * 2026-07-05 (docs/cleanup/2026-07-05-covid-stock-hide.csv) — N95
+ * masks, isolation gowns, face shields, sanitizing stations — and this
+ * script would have put every one of them back on the public form. A
+ * CREATE still lands publicVisible=true (a brand-new row carries no
+ * operator decision); an UPDATE never flips false → true.
  *
  * Archiving (2026-08-29). Archiving a seed-owned item used to be
  * pointless: the next run wrote isActive=true unconditionally, so the
@@ -130,16 +154,21 @@ async function main() {
     // An existing category's department is DB-owned — never overwritten
     // from the JSON. Items filed here inherit whatever it currently is.
     categoryDeptBySlug.set(c.slug, existing.department)
-    const needsUpdate = existing.name !== c.name || existing.sortOrder !== sortOrder || !existing.isActive
+    // sortOrder and isActive on an EXISTING category are HQ's, not the
+    // seed's — same rule as an item's publicVisible/isActive. Display
+    // order especially: client-vip, vehicles and stages were created
+    // outside this JSON, so numbering from JSON position would shuffle
+    // the list every run. Only the display name is reconciled.
+    const needsUpdate = existing.name !== c.name
     if (!needsUpdate) {
       catUnchanged++
       continue
     }
-    console.log(`  [update-cat] ${c.slug.padEnd(28)} sortOrder ${existing.sortOrder}→${sortOrder}  name "${existing.name}"→"${c.name}"`)
+    console.log(`  [update-cat] ${c.slug.padEnd(28)} name "${existing.name}"→"${c.name}"`)
     if (!dryRun) {
       await prisma.inventoryCategory.update({
         where: { id: existing.id },
-        data: { name: c.name, sortOrder, isActive: true },
+        data: { name: c.name },
       })
     }
     catUpdated++
@@ -154,6 +183,9 @@ async function main() {
   // Seed-owned codes an operator has archived. Counted, reported, and
   // never un-archived — the seed refreshes their data and moves on.
   const archivedKept: string[] = []
+  // Seed-owned codes an operator has hidden from the client form.
+  // Same contract as archivedKept — reported, never re-exposed.
+  const hiddenKept: string[] = []
 
   for (const it of seed.items) {
     const categoryId = categoryIdBySlug.get(it.categorySlug)
@@ -206,27 +238,33 @@ async function main() {
     }
 
     // Compare every field we own. Aliases compared as sets so order doesn't matter.
-    const aliasSame =
-      existing.aliases.length === it.aliases.length &&
-      existing.aliases.every((a) => it.aliases.includes(a))
-    // An archived row's isActive/publicVisible are the operator's, not
-    // the seed's — excluded from both the comparison and the write.
+    // Aliases are the alias seed's, not ours — only populate an empty
+    // column. A row that already carries curated synonyms is left
+    // alone, so this script can never be the thing that drops one.
+    const seedAliases = existing.aliases.length === 0
+    const aliasSame = !seedAliases ||
+      (existing.aliases.length === it.aliases.length &&
+        existing.aliases.every((a) => it.aliases.includes(a)))
+    // isActive and publicVisible are operator-owned on any row that
+    // already exists — archiving and hiding are decisions made in HQ,
+    // and the seed's job is the catalog DATA, not the shelf it sits on.
+    // Neither is compared, and neither is written on an update.
     const archived = !existing.isActive
     if (archived) archivedKept.push(it.code)
+    if (!existing.publicVisible) hiddenKept.push(it.code)
     const needsUpdate =
       existing.description !== it.description ||
       existing.categoryId !== categoryId ||
       Number(existing.dailyRate) !== it.rate ||
       existing.department !== itemDept ||
       existing.type !== liType ||
-      !aliasSame ||
-      (!archived && existing.publicVisible !== true)
+      !aliasSame
 
     if (!needsUpdate) {
       itemUnchanged++
       continue
     }
-    console.log(`  [${archived ? 'update-archived' : 'update-item'}] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}${existing.department !== itemDept ? ` (was ${existing.department})` : ''}${archived ? '  [stays archived]' : ''}`)
+    console.log(`  [${archived ? 'update-archived' : 'update-item'}] ${it.code.padEnd(34)} ${liType.padEnd(10)} $${it.rate}/${it.unit}  cat=${it.categorySlug}  dept=${itemDept}${existing.department !== itemDept ? ` (was ${existing.department})` : ''}${archived ? '  [stays archived]' : ''}${!existing.publicVisible && !archived ? '  [stays hidden]' : ''}`)
     if (!dryRun) {
       await prisma.inventoryItem.update({
         where: { code: it.code },
@@ -236,16 +274,21 @@ async function main() {
           dailyRate: it.rate,
           department: itemDept,
           type: liType,
-          aliases: it.aliases,
-          // Archive state is operator-owned — an archived row keeps
-          // isActive=false, its archivedAt, and its publicVisible.
-          ...(archived ? {} : { publicVisible: true, isActive: true }),
+          ...(seedAliases ? { aliases: it.aliases } : {}),
+          // NOT written on an existing row: publicVisible, isActive,
+          // archivedAt, and aliases that are already curated. See the
+          // Aliases / Visibility / Archiving notes up top.
         },
       })
     }
     itemUpdated++
   }
   console.log(`  items — created: ${itemCreated}, updated: ${itemUpdated}, unchanged: ${itemUnchanged}, orphan-skipped: ${missingCategory}\n`)
+  if (hiddenKept.length) {
+    console.log(`  ${hiddenKept.length} seed item(s) hidden from the client form in HQ — left hidden, data refreshed:`)
+    for (const c of hiddenKept) console.log(`    ${c}`)
+    console.log('')
+  }
   if (archivedKept.length) {
     console.log(`  ${archivedKept.length} seed item(s) archived in HQ — left archived, data refreshed:`)
     for (const c of archivedKept) console.log(`    ${c}`)

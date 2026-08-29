@@ -71,6 +71,11 @@
     {
       "name": "Health & Safety",
       "slug": "health-safety"
+    },
+    {
+      "name": "Client/VIP",
+      "slug": "client-vip",
+      "department": "PRO_SUPPLIES"
     }
   ],
   "items": [
@@ -94,7 +99,7 @@
       "code": "BAS-BUTT-CANS",
       "description": "Butt Cans",
       "categorySlug": "basecamp-basics",
-      "rate": 1.5,
+      "rate": 2,
       "unit": "day",
       "aliases": []
     },
@@ -102,7 +107,7 @@
       "code": "BAS-FURNITURE-PADS",
       "description": "Furniture Pads",
       "categorySlug": "basecamp-basics",
-      "rate": 1.5,
+      "rate": 2,
       "unit": "day",
       "aliases": []
     },
@@ -110,7 +115,7 @@
       "code": "BAS-RUBBER-MATS-3X5",
       "description": "Rubber Mats, 3'x5'",
       "categorySlug": "basecamp-basics",
-      "rate": 3,
+      "rate": 5,
       "unit": "day",
       "aliases": []
     },
@@ -118,7 +123,7 @@
       "code": "BAS-TARP-LARGE",
       "description": "Tarp, Large",
       "categorySlug": "basecamp-basics",
-      "rate": 2,
+      "rate": 5,
       "unit": "day",
       "aliases": []
     },
@@ -126,7 +131,7 @@
       "code": "BAS-TARP-MEDIUM",
       "description": "Tarp, Medium",
       "categorySlug": "basecamp-basics",
-      "rate": 1,
+      "rate": 5,
       "unit": "day",
       "aliases": []
     },
@@ -142,7 +147,7 @@
       "code": "CLI-HEATER-DISH",
       "description": "Heater, Dish",
       "categorySlug": "climate-controls",
-      "rate": 6,
+      "rate": 6.5,
       "unit": "day",
       "aliases": []
     },
@@ -150,7 +155,7 @@
       "code": "CLI-PROPANE-TANK-EXTRA",
       "description": "Propane Tank, extra",
       "categorySlug": "climate-controls",
-      "rate": 5,
+      "rate": 25,
       "unit": "day",
       "aliases": []
     },
@@ -190,7 +195,7 @@
       "code": "CLI-HOSE-50-GARDEN",
       "description": "Hose, 50' garden",
       "categorySlug": "climate-controls",
-      "rate": 4,
+      "rate": 7.5,
       "unit": "day",
       "aliases": []
     },
@@ -895,7 +900,7 @@
       "code": "TAB-DIRECTORS-CHAIRS-TALL",
       "description": "Director's Chairs, Tall",
       "categorySlug": "tables-chairs",
-      "rate": 4,
+      "rate": 7,
       "unit": "day",
       "aliases": []
     },
@@ -910,7 +915,7 @@
     {
       "code": "TAB-CLIENT-LOUNGE-STANDARD",
       "description": "Client Lounge, Standard",
-      "categorySlug": "tables-chairs",
+      "categorySlug": "client-vip",
       "rate": 250,
       "unit": "day",
       "aliases": []
@@ -918,7 +923,7 @@
     {
       "code": "TAB-CLIENT-LOUNGE-SOLO-LINE",
       "description": "Client Lounge, SOLO Line",
-      "categorySlug": "tables-chairs",
+      "categorySlug": "client-vip",
       "rate": 400,
       "unit": "day",
       "aliases": []
@@ -1551,7 +1556,7 @@
     {
       "code": "PPE-SAFETY-GLASSES",
       "description": "Safety Glasses",
-      "categorySlug": "ppe",
+      "categorySlug": "tools-cleaning",
       "rate": 2,
       "unit": "ea",
       "aliases": []
