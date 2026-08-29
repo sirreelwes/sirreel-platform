@@ -8,6 +8,7 @@ import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
+import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
 import { TSX, TSX_SERIF } from '@/lib/brand/tsxTokens';
 
 /**
@@ -849,9 +850,15 @@ export default function JobPortalPage() {
                         can tell us which company is actually renting — and
                         finding out at pickup is too late. */}
                     {data.paperwork.coi.insuredNotice && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
-                        {data.paperwork.coi.insuredNotice}
-                      </div>
+                      <>
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 leading-relaxed">
+                          {data.paperwork.coi.insuredNotice}
+                        </div>
+                        {/* Flagged certificate — they have to go back to the
+                            broker, so give them the same tools as someone
+                            who hasn't uploaded yet. */}
+                        <CoiRequirementsBlock />
+                      </>
                     )}
                   </div>
                 ) : (
@@ -891,6 +898,12 @@ export default function JobPortalPage() {
                     >
                       {coiUploading ? 'Uploading & reviewing…' : 'Submit COI'}
                     </button>
+
+                    {/* Don't have one yet? This is the block that gets the
+                        right certificate issued the first time — the
+                        requirements, the sample, and a direct line to the
+                        broker who writes it. */}
+                    <CoiRequirementsBlock />
                   </div>
                 )}
               </PaperworkRow>
