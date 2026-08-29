@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 interface CategoryOption {
   id: string;
   name: string;
+  /** Billing/fulfillment department this category bills under.
+   *  The modal no longer asks for it separately — see below. */
+  department?: string;
 }
 interface LocationOption {
   id: string;
@@ -12,19 +15,15 @@ interface LocationOption {
   code: string;
 }
 
-const DEPARTMENTS = [
-  'VEHICLES',
-  'COMMUNICATIONS',
-  'STAGES',
-  'GE',
-  'PRO_SUPPLIES',
-  'EXPENDABLES',
-  'ART',
-] as const;
-
-type Department = (typeof DEPARTMENTS)[number];
-
-const DEPARTMENT_LABEL: Record<Department, string> = {
+// Display names for the seven LineItemDepartment values. Kept only to
+// render the derived department back to the operator as a hint — the
+// modal does NOT let them pick one (2026-08-28, Wes: "why do I have a
+// category and a department?"). The two axes are different things —
+// department drives rate rules, book-time lane routing and
+// department-scoped discounts; category drives browsing and the public
+// catalog's sections — but only one of them needs typing in. Category
+// owns the department; an item's department follows from it.
+const DEPARTMENT_LABEL: Record<string, string> = {
   VEHICLES: 'Vehicles',
   COMMUNICATIONS: 'Communications',
   STAGES: 'Stages',
@@ -58,7 +57,6 @@ export function AddItemModal({
 }: AddItemModalProps) {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
-  const [department, setDepartment] = useState<Department | ''>('');
   const [categoryId, setCategoryId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [qtyOwned, setQtyOwned] = useState('1');
@@ -76,12 +74,15 @@ export function AddItemModal({
     setLocationId(defaultLocationId || (locations[0]?.id ?? ''));
   }, [open, defaultCategoryId, defaultLocationId, locations]);
 
+  // Department is DERIVED, never typed. Shown back as a hint so the
+  // operator can see which billing lane the category puts the item in.
+  const derivedDepartment = categories.find((c) => c.id === categoryId)?.department ?? '';
+
   if (!open) return null;
 
   const reset = () => {
     setCode('');
     setDescription('');
-    setDepartment('');
     setCategoryId(defaultCategoryId || '');
     setLocationId(defaultLocationId || (locations[0]?.id ?? ''));
     setQtyOwned('1');
@@ -96,8 +97,8 @@ export function AddItemModal({
       setError('Code is required.');
       return;
     }
-    if (!department) {
-      setError('Department is required.');
+    if (!categoryId) {
+      setError('Category is required.');
       return;
     }
     setSubmitting(true);
@@ -109,8 +110,7 @@ export function AddItemModal({
         body: JSON.stringify({
           code: code.trim(),
           description: description.trim() || null,
-          department,
-          categoryId: categoryId || null,
+          categoryId,
           locationId: locationId || null,
           qtyOwned: qtyOwned || 0,
           dailyRate: dailyRate || 0,
@@ -184,36 +184,25 @@ export function AddItemModal({
             />
           </div>
 
-          <div>
+          <div className="col-span-2">
             <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-              Department <span className="text-amber-500">*</span>
-            </label>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value as Department)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-amber-500"
-            >
-              <option value="">— pick one —</option>
-              {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>{DEPARTMENT_LABEL[d]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-              Category
+              Category <span className="text-amber-500">*</span>
             </label>
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-amber-500"
             >
-              <option value="">(no category)</option>
+              <option value="">— pick one —</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              {derivedDepartment
+                ? <>Bills as <span className="text-zinc-300">{DEPARTMENT_LABEL[derivedDepartment] ?? derivedDepartment}</span> — the category sets the department.</>
+                : 'The category sets the billing department.'}
+            </p>
           </div>
 
           <div>

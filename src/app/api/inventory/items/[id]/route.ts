@@ -69,7 +69,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (description !== undefined) data.description = description;
   if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
   if (locationId !== undefined) data.locationId = locationId || null;
-  if (categoryId !== undefined) data.categoryId = categoryId || null;
+  // Category owns department (2026-08-28). Moving an item to a
+  // different category moves its billing/fulfillment department with
+  // it — that's the whole point of collapsing the two pickers into
+  // one. Items nobody re-categorizes keep whatever department they
+  // already carry; this never rewrites a row that isn't being edited.
+  if (categoryId !== undefined) {
+    data.categoryId = categoryId || null;
+    if (categoryId) {
+      const cat = await prisma.inventoryCategory.findUnique({
+        where: { id: categoryId },
+        select: { department: true },
+      });
+      if (!cat) {
+        return NextResponse.json({ error: 'category not found' }, { status: 400 });
+      }
+      data.department = cat.department;
+    }
+  }
 
   // Archive / restore via isActive. Archiving stamps archivedAt;
   // restoring clears it. (The list/catalog/pickers already exclude

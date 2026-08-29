@@ -40,20 +40,35 @@ export async function POST(req: NextRequest) {
   if (!code || typeof code !== "string" || !code.trim()) {
     return NextResponse.json({ error: "code is required" }, { status: 400 });
   }
-  if (!department || !VALID_DEPARTMENTS.includes(department)) {
-    return NextResponse.json(
-      { error: `department is required (one of: ${VALID_DEPARTMENTS.join(", ")})` },
-      { status: 400 },
-    );
+
+  // Category OWNS department (2026-08-28). Operators pick one thing;
+  // the billing/fulfillment department is derived from the chosen
+  // category. An explicit `department` in the body still wins — RW
+  // sync and the catalog seeds set it directly — but the UI no longer
+  // asks twice. Category is required precisely because it is now the
+  // only way the modal can name a department.
+  let resolvedDepartment: LineItemDepartment | null =
+    department && VALID_DEPARTMENTS.includes(department) ? (department as LineItemDepartment) : null;
+
+  if (!categoryId || typeof categoryId !== "string") {
+    return NextResponse.json({ error: "category is required" }, { status: 400 });
   }
+  const category = await prisma.inventoryCategory.findUnique({
+    where: { id: categoryId },
+    select: { id: true, department: true },
+  });
+  if (!category) {
+    return NextResponse.json({ error: "category not found" }, { status: 400 });
+  }
+  if (!resolvedDepartment) resolvedDepartment = category.department;
 
   try {
     const item = await prisma.inventoryItem.create({
       data: {
         code: code.trim(),
         description: description?.trim() || null,
-        department: department as LineItemDepartment,
-        categoryId: categoryId || null,
+        department: resolvedDepartment,
+        categoryId: category.id,
         locationId: locationId || null,
         qtyOwned: qtyOwned != null ? Math.max(0, Math.floor(Number(qtyOwned))) : 0,
         // Decimal-safe money writes (audit §7) — no parseFloat into
@@ -118,7 +133,7 @@ export async function GET(req: NextRequest) {
     prisma.inventoryItem.count({ where }),
     prisma.inventoryCategory.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, _count: { select: { items: true } } },
+      select: { id: true, name: true, department: true, _count: { select: { items: true } } },
       orderBy: { sortOrder: "asc" },
     }),
     prisma.inventoryLocation.findMany({

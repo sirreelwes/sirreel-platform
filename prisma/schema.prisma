@@ -2710,6 +2710,17 @@ model InventoryCategory {
   slug      String   @unique
   sortOrder Int      @default(0) @map("sort_order")
   isActive  Boolean  @default(true) @map("is_active")
+  // 2026-08-28 (Wes: "why do I have a category and a department?").
+  // The two axes are NOT redundant — department is the billing/
+  // fulfillment spine (rate rules, lane routing at book time,
+  // department-scoped discounts) while category is the browse +
+  // public-catalog-sectioning axis. They were redundant to TYPE IN,
+  // though: the add-item modal asked for both. Category now OWNS the
+  // department, so operators pick one thing and InventoryItem
+  // .department is derived on create. Per-item overrides still exist
+  // in the column (RW imports + the supply seed wrote their own) —
+  // this is the default, not a constraint.
+  department LineItemDepartment @default(PRO_SUPPLIES)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

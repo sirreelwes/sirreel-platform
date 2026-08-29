@@ -45,7 +45,21 @@ export interface DrawerItem {
   archivedAt?: string | null
 }
 
-interface CategoryOption { id: string; name: string }
+interface CategoryOption { id: string; name: string; department?: string }
+
+// Display names for LineItemDepartment. The drawer doesn't offer a
+// department picker — the category carries it (2026-08-28), and the
+// PUT route moves department with the category. Rendered read-only so
+// a re-categorization can't move an item's billing lane invisibly.
+const DEPARTMENT_LABEL: Record<string, string> = {
+  VEHICLES: 'Vehicles',
+  COMMUNICATIONS: 'Communications',
+  STAGES: 'Stages',
+  GE: 'Grip & Electric',
+  PRO_SUPPLIES: 'Pro Supplies',
+  EXPENDABLES: 'Expendables',
+  ART: 'Art Department',
+}
 interface LocationOption { id: string; name: string; code: string }
 interface VendorOption { id: string; name: string; website: string | null }
 
@@ -354,6 +368,18 @@ export function InventoryItemDrawer({
                 <option value="">Uncategorized</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {(() => {
+                const dept = categories.find((c) => c.id === categoryId)?.department
+                if (!dept) return null
+                const moving = categoryId !== (item.category?.id ?? '')
+                return (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {moving ? 'Will bill as ' : 'Bills as '}
+                    <span className="text-gray-200">{DEPARTMENT_LABEL[dept] ?? dept}</span>
+                    {moving ? ' once saved.' : '.'}
+                  </p>
+                )
+              })()}
             </div>
             <div>
               <label className={label}>Location</label>

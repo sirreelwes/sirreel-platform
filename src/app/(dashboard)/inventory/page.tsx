@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AddItemModal } from "@/components/inventory/AddItemModal";
 import { InventoryItemDrawer, type DrawerItem } from "@/components/inventory/InventoryItemDrawer";
 
-type Category = { id: string; name: string; _count: { items: number } };
+type Category = { id: string; name: string; department: string; _count: { items: number } };
 type InventoryStats = {
   activeCount: number;
   dailyTotal: string;
