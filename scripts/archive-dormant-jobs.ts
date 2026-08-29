@@ -43,15 +43,17 @@
 
 import { PrismaClient } from '@prisma/client'
 import { writeFileSync, mkdirSync } from 'fs'
+// ONE definition of dormancy, shared with /api/cron/archive-dormant-jobs.
+// If these drifted, the cron would archive jobs this script calls live.
+import { scanDormantJobs, STALE_DAYS as SHARED_STALE_DAYS } from '../src/lib/jobs/dormancy'
 
 const prisma = new PrismaClient()
 const APPLY = process.argv.includes('--apply')
 const daysArg = process.argv.indexOf('--days')
-const STALE_DAYS = daysArg >= 0 ? Number(process.argv[daysArg + 1]) : 30
+const STALE_DAYS = daysArg >= 0 ? Number(process.argv[daysArg + 1]) : SHARED_STALE_DAYS
 
 const OPERATOR_EMAIL = 'wes@sirreel.com'
 const AUDIT_ACTION = 'job.archive_dormant'
-const DAY = 86_400_000
 
 async function main() {
   console.log(APPLY ? '=== APPLYING ===' : '=== DRY RUN (pass --apply to archive) ===')
@@ -64,69 +66,22 @@ async function main() {
   if (!operator) throw new Error(`No User row for ${OPERATOR_EMAIL} — refusing to write unattributed rows`)
 
   const now = new Date()
-  const cutoff = new Date(now.getTime() - STALE_DAYS * DAY)
-  const today = new Date(now.toISOString().slice(0, 10))
+  const scan = await scanDormantJobs(now, STALE_DAYS)
+  console.log(`Live (non-archived) jobs: ${scan.total}`)
 
-  const jobs = await prisma.job.findMany({
-    where: { archivedAt: null },
-    select: {
-      id: true, jobCode: true, name: true, status: true,
-      createdAt: true, updatedAt: true, startDate: true, endDate: true,
-      orders: {
-        select: {
-          status: true, updatedAt: true, quoteSentAt: true, startDate: true, endDate: true,
-          invoices: { select: { balanceDue: true, status: true } },
-        },
-      },
-      bookings: { select: { status: true, startDate: true, endDate: true } },
-    },
-  })
-  console.log(`Live (non-archived) jobs: ${jobs.length}`)
-
-  type J = (typeof jobs)[number]
-  const lastActivity = (j: J) =>
-    [j.updatedAt, ...j.orders.flatMap((o) => [o.updatedAt, o.quoteSentAt].filter(Boolean) as Date[])]
-      .reduce((max, d) => (d > max ? d : max), j.updatedAt)
-
-  const hasFutureDate = (j: J) =>
-    ([
-      j.startDate, j.endDate,
-      ...j.orders.flatMap((o) => [o.startDate, o.endDate]),
-      ...j.bookings.filter((b) => b.status !== 'CANCELLED').flatMap((b) => [b.startDate, b.endDate]),
-    ].filter(Boolean) as Date[]).some((d) => d >= today)
-
-  const hasOpenOrder = (j: J) =>
-    j.orders.some((o) => o.status !== 'CANCELLED' && o.status !== 'CLOSED')
-
-  const owesMoney = (j: J) =>
-    j.orders.some((o) =>
-      o.invoices.some((inv) => Number(inv.balanceDue ?? 0) > 0 && inv.status !== 'VOID'),
-    )
-
-  const eligible: { id: string; jobCode: string; name: string; last: string }[] = []
-  const kept = { recentActivity: 0, futureDates: 0, openOrder: 0, owesMoney: 0 }
-
-  for (const j of jobs) {
-    if (lastActivity(j) >= cutoff) { kept.recentActivity += 1; continue }
-    if (hasFutureDate(j)) { kept.futureDates += 1; continue }
-    if (hasOpenOrder(j)) { kept.openOrder += 1; continue }
-    if (owesMoney(j)) { kept.owesMoney += 1; continue }
-    eligible.push({
-      id: j.id, jobCode: j.jobCode, name: j.name,
-      last: lastActivity(j).toISOString().slice(0, 10),
-    })
-  }
+  const eligible = scan.dormant
+  const kept = scan.kept
 
   console.log('\nKEPT on the main page:')
-  console.log(`  active in the last ${STALE_DAYS} days : ${kept.recentActivity}`)
-  console.log(`  stale but has FUTURE DATES      : ${kept.futureDates}`)
-  console.log(`  stale but has an OPEN ORDER     : ${kept.openOrder}`)
-  console.log(`  stale but MONEY IS OWED         : ${kept.owesMoney}`)
+  console.log(`  active in the last ${STALE_DAYS} days : ${kept['recent-activity']}`)
+  console.log(`  stale but has FUTURE DATES      : ${kept['future-dates']}`)
+  console.log(`  stale but has an OPEN ORDER     : ${kept['open-order']}`)
+  console.log(`  stale but MONEY IS OWED         : ${kept['owes-money']}`)
   console.log(`\nTO ARCHIVE: ${eligible.length}`)
   eligible.slice(0, 15).forEach((e) =>
-    console.log(`  ${e.jobCode}  ${e.name.slice(0, 40).padEnd(40)} last activity ${e.last}`))
+    console.log(`  ${e.jobCode}  ${e.name.slice(0, 40).padEnd(40)} last activity ${e.lastActivity}`))
   if (eligible.length > 15) console.log(`  … and ${eligible.length - 15} more`)
-  console.log(`\nMain page would show ${jobs.length - eligible.length} of ${jobs.length}.`)
+  console.log(`\nMain page would show ${scan.total - eligible.length} of ${scan.total}.`)
 
   if (!APPLY) {
     console.log('\nDry run complete. Re-run with --apply to archive.')
