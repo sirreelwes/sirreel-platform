@@ -119,11 +119,15 @@ export function renderEmailShell(o: EmailShellOptions): string {
 
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;">
 
-          <!-- header -->
+          <!-- header — wordmark centred. Belt and braces on purpose:
+               the align="center" ATTRIBUTE is what Outlook's Word engine
+               actually honours, text-align covers the rest, and
+               margin:0 auto centres the block-level img itself. Any one
+               of the three alone leaves it left-aligned somewhere. -->
           <tr>
-            <td style="background:${INK};border-radius:10px 10px 0 0;padding:22px 28px;">
+            <td align="center" style="background:${INK};border-radius:10px 10px 0 0;padding:22px 28px;text-align:center;">
               <img src="${logo}" alt="SirReel Studio Services" width="150"
-                   style="display:block;width:150px;max-width:150px;height:auto;border:0;">
+                   style="display:block;width:150px;max-width:150px;height:auto;border:0;margin:0 auto;">
             </td>
           </tr>
 
